@@ -13,7 +13,15 @@ try {
 }
 
 const refiner = createGeminiRefiner(config.gemini);
-const server = await startServer({ host: config.host, port: config.port, refiner, log });
+let server;
+try {
+  server = await startServer({ host: config.host, port: config.port, refiner, log });
+} catch (error) {
+  if (error.code !== "EADDRINUSE") throw error;
+  // 最常见的原因是已经开着一个了，给一句人话，不甩调用栈
+  console.error(`端口 ${config.port} 已经被占用：服务端可能已经在运行。要另开一个就用 PORT 换端口。`);
+  process.exit(1);
+}
 log.info("listening", {
   url: `ws://${config.host}:${server.port}${WS_PATH}`,
   model: config.gemini.model,
