@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# 本机配置：凭据名、加载器路径、GitHub 账号，每台机器不一样（样板 .machine.env.example 照常入库）
+.machine.env
+
 # 系统与编辑器
 .DS_Store
 .idea/
