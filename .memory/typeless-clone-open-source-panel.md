@@ -1,11 +1,11 @@
 ---
 name: typeless-clone-open-source-panel
-description: 仿刻定名 SpeakMore，在 speakmore/ 下；现阶段按开源标准打磨，先做成 CLI 驱动（一条命令启动、填 key 就能用），桌面端 App 以后用 Tauri 做
+description: 仿刻定名 SpeakMore，代码在仓库根（一个 npm 包）；现阶段按开源标准打磨，先做成 CLI 驱动（一条命令启动、填 key 就能用），桌面端 App 以后用 Tauri 做
 metadata:
   type: project
 ---
 
-Typeless 的仿刻定名 **SpeakMore**，代码在仓库根的 `speakmore/`（一个 npm 包，命令 `speakmore`）。用户 2026-10-13 起的名，原话："给这个产品起个名,speakmore,和typeless反着来"。记忆文件名里的 "typeless-clone" 指的都是它。
+Typeless 的仿刻定名 **SpeakMore**，代码就在仓库根（一个 npm 包，命令 `speakmore`：`bin/`、`src/`、`native/`、`test/`、`scripts/`）；逆向分析在 `targets/typeless/`。用户 2026-10-13 起的名，原话："给这个产品起个名,speakmore,和typeless反着来"。记忆文件名里的 "typeless-clone" 指的都是它。
 
 现阶段的目标是达到能开源的标准。用户 2026-10-13 的原话：
 
@@ -23,6 +23,6 @@ Typeless 的仿刻定名 **SpeakMore**，代码在仓库根的 `speakmore/`（�
 - 开源前他定下的几件事：`.memory/` 保留并随项目迁移，工作习惯可以公开，逆向文档保留，本机情况改成配置驱动（[[machine-facts-stay-local]]），git 历史里泄露隐私的内容要抹掉。
 - 仓库 2026-10-13 已公开，在 GitHub 上叫 `speakmore`（名字是他定的；本地目录名没改，仍是 reverse-anything），许可证 MIT。公开前旧的私有仓库由他本人删掉，改写过的历史推到了新仓库。
 - 包仍标着 `private`，还没有发到 npm。发布他点过头，但要他先登录 npm；我提醒过两点（npm 会公开发布者账号的邮箱、这一版还没有人用真键盘和麦克风试过），什么时候发等他说。
-- 仓库叫 speakmore 之后，产品却在 `speakmore/` 子目录里（克隆下来是 `speakmore/speakmore`）。要不要把产品挪到仓库根，我提过，他没定之前不动。
+- 产品原来在 `speakmore/` 子目录里（克隆下来是 `speakmore/speakmore`），2026-10-13 他同意后挪到了仓库根。仓库根现在既是 npm 包又放着逆向资料和协作文件：进 npm 包的东西靠 `package.json` 的 `files` 白名单，打 .app 靠 `scripts/package.mjs` 里只拷指定的几样，往这两处加东西时别把 `targets/`、`.memory/` 带进去。
 
 相关：[[typeless-clone-as-real-product]]、[[typeless-clone-real-recordings-ok]]、[[typeless-clone-gemini-key]]。
