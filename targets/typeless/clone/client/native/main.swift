@@ -1,20 +1,36 @@
-// 仿刻客户端的原生小帮手：听 fn 键、把文字贴进当前输入框。
+// 仿刻客户端的原生小帮手：听热键、把文字贴进当前输入框。
 // 这两件事 Electron 自己做不了，原版也是交给 Swift 写的库和子进程（docs/07-native-helpers.md）。
 //
 // 和父进程用"一行一个 JSON"通信：
 //   标准输出  {"event":"ready","listen":true,"trusted":true}   启动完成，附两项权限的状态
-//             {"event":"fn","down":true}                        fn 按下 / 松开
-//             {"event":"other_key"}                             fn 按住时又按了别的键（是组合键，不是听写）
+//             {"event":"hotkey","down":true}                    热键按下 / 松开
+//             {"event":"other_key"}                             热键按住时又按了别的键（是组合键，不是听写）
 //             {"event":"pasted","id":1,"ok":true}               贴完了；ok 为 false 时文字留在剪贴板里
 //   标准输入  {"cmd":"paste","id":1,"text":"…"}
 // 父进程退出（标准输入关闭）时自己也退出。
 //
-// 按键内容不出这个进程：除了 fn 的按下松开，只报"有别的键"，不报是哪个键。
+// 热键用 --key 指定，是单独一个修饰键：right_option（默认）、right_command、right_control、fn。
+// 原版用 fn；仿刻要和原版同时开着用，所以默认换成右 Option。
+//
+// 按键内容不出这个进程：除了热键的按下松开，只报"有别的键"，不报是哪个键。
 
 import AppKit
 import ApplicationServices
 
-let fnKeyCode: Int64 = 63
+/// 一个修饰键：键码用来认"是不是这个键的事件"，标志位用来认"它现在是按下还是松开"。
+/// 左右两个 Option 共用 maskAlternate，要用设备相关的标志位（IOLLEvent.h 里的 NX_DEVICER*KEYMASK）才分得开。
+struct Hotkey {
+    let keyCode: Int64
+    let flagMask: UInt64
+}
+
+let hotkeys: [String: Hotkey] = [
+    "right_option": Hotkey(keyCode: 61, flagMask: 0x40),
+    "right_command": Hotkey(keyCode: 54, flagMask: 0x10),
+    "right_control": Hotkey(keyCode: 62, flagMask: 0x2000),
+    "fn": Hotkey(keyCode: 63, flagMask: CGEventFlags.maskSecondaryFn.rawValue),
+]
+var hotkey = hotkeys["right_option"]!
 let vKeyCode: CGKeyCode = 9
 /// 剪贴板管理工具之间的约定：带这个类型的内容是临时的，不要记进历史
 let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
@@ -92,7 +108,7 @@ func paste(id: Int, text: String) {
 
 // MARK: - 按键监听
 
-var fnIsDown = false
+var hotkeyIsDown = false
 var reportedOtherKey = false
 var eventTap: CFMachPort?
 
@@ -102,23 +118,31 @@ let onKeyEvent: CGEventTapCallBack = { _, type, event, _ in
         // 系统会在回调太慢或用户切换安全输入时停掉监听，要自己重新打开
         if let tap = eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
     case .flagsChanged:
-        // 方向键等也会带上 fn 标志位，所以只认 fn 键自己的键码
-        guard event.getIntegerValueField(.keyboardEventKeycode) == fnKeyCode else { break }
-        let down = event.flags.contains(.maskSecondaryFn)
-        if down != fnIsDown {
-            fnIsDown = down
+        // 别的键的事件也可能带着同一个标志位（比如方向键带 fn 的），所以先认键码
+        guard event.getIntegerValueField(.keyboardEventKeycode) == hotkey.keyCode else {
+            // 热键按住时又按了别的修饰键，同样是组合键
+            reportOtherKeyIfHeld()
+            break
+        }
+        let down = event.flags.rawValue & hotkey.flagMask != 0
+        if down != hotkeyIsDown {
+            hotkeyIsDown = down
             reportedOtherKey = false
-            emit(["event": "fn", "down": down])
+            emit(["event": "hotkey", "down": down])
         }
     case .keyDown:
-        if fnIsDown && !reportedOtherKey {
-            reportedOtherKey = true
-            emit(["event": "other_key"])
-        }
+        reportOtherKeyIfHeld()
     default:
         break
     }
     return Unmanaged.passUnretained(event)
+}
+
+func reportOtherKeyIfHeld() {
+    if hotkeyIsDown && !reportedOtherKey {
+        reportedOtherKey = true
+        emit(["event": "other_key"])
+    }
 }
 
 func startKeyListener() -> Bool {
@@ -154,7 +178,15 @@ func selfTest() -> Bool {
 
 // MARK: - 入口
 
-let arguments = CommandLine.arguments.dropFirst()
+let arguments = Array(CommandLine.arguments.dropFirst())
+if let flag = arguments.firstIndex(of: "--key") {
+    let name = flag + 1 < arguments.count ? arguments[flag + 1] : ""
+    guard let chosen = hotkeys[name] else {
+        emit(["event": "error", "message": "不认识的热键 \(name)，可选：\(hotkeys.keys.sorted().joined(separator: "、"))"])
+        exit(2)
+    }
+    hotkey = chosen
+}
 if arguments.contains("--check") {
     emit(["event": "check", "listen": CGPreflightListenEventAccess(), "trusted": AXIsProcessTrusted()])
     exit(0)

@@ -3,11 +3,11 @@ import { EventEmitter, once } from "node:events";
 import { test } from "node:test";
 import { startHelper } from "../src/main/helper.mjs";
 
-// 用一小段 Node 脚本冒充原生小帮手：启动时报 ready 和一次 fn，收到 paste 就按文字内容决定怎么回
+// 用一小段 Node 脚本冒充原生小帮手：启动时报 ready 和一次热键按下，收到 paste 就按文字内容决定怎么回
 const FAKE_HELPER = `
 const emit = (o) => console.log(JSON.stringify(o));
 emit({ event: "ready", listen: true, trusted: true });
-emit({ event: "fn", down: true });
+emit({ event: "hotkey", down: true });
 console.log("这一行不是 JSON");
 require("node:readline").createInterface({ input: process.stdin }).on("line", (line) => {
   const { id, text } = JSON.parse(line);
@@ -34,10 +34,10 @@ function start() {
 
 test("转发按键事件；不是 JSON 的行记一条警告，不影响后面", async () => {
   const { helper, events, seen, warnings } = start();
-  await once(events, "fn");
+  await once(events, "hotkey");
   assert.deepEqual(seen, [
     { event: "ready", listen: true, trusted: true },
-    { event: "fn", down: true },
+    { event: "hotkey", down: true },
   ]);
   assert.deepEqual(await helper.paste("你好"), { ok: true, reason: null });
   assert.deepEqual(warnings, ["helper_bad_line"]);

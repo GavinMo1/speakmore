@@ -1,6 +1,7 @@
 // 听写的状态机，纯函数：给当前状态和一个事件，得到新状态和要执行的动作。
 // 照原版 2.8.1 的单击流程做（docs/10-interaction-state-machine.md）：
-// 按一下 fn 开始，再按一下结束；按住超过 600 ms 取消（这一版不支持按住说话）。
+// 按一下热键开始，再按一下结束；按住超过 600 ms 取消（这一版不支持按住说话）。
+// 原版的热键是 fn，这里是哪个键由主进程决定，状态机不关心。
 
 export const LONG_PRESS_MS = 600;
 
@@ -21,8 +22,8 @@ export const Action = Object.freeze({
 });
 
 /**
- * held：fn 从"开始这次录音的那一下"起一直没松开。松开之前还不确定是单击，
- * 可能是长按，也可能是 fn 加别的键的组合键。
+ * held：热键从"开始这次录音的那一下"起一直没松开。松开之前还不确定是单击，
+ * 可能是长按，也可能是热键加别的键的组合键。
  * message：出错原因或给用户的提示，只在 error 和带提示回到 idle 时有。
  */
 export const initialState = Object.freeze({ phase: Phase.IDLE, held: false, message: null });
@@ -33,7 +34,7 @@ const unchanged = (state) => ({ state, actions: [] });
 export function transition(state, event) {
   const { phase, held } = state;
   switch (event.type) {
-    case "FN_DOWN":
+    case "KEY_DOWN":
       if (phase === Phase.IDLE || phase === Phase.ERROR) {
         return {
           state: { phase: Phase.STARTING, held: true, message: null },
@@ -48,12 +49,12 @@ export function transition(state, event) {
       if (phase === Phase.STARTING && !held) return { state: idle(), actions: [Action.CANCEL] };
       return unchanged(state);
 
-    case "FN_UP":
+    case "KEY_UP":
       if (!held) return unchanged(state);
       return { state: { ...state, held: false }, actions: [Action.CLEAR_HOLD_TIMER] };
 
     case "OTHER_KEY":
-      // fn 还按着就来了别的键，说明用户按的是 fn 组合键（比如 fn+方向键），不是听写
+      // 热键还按着就来了别的键，说明用户按的是组合键（比如 Option+字母），不是听写
       if (!held) return unchanged(state);
       return { state: idle(), actions: [Action.CANCEL, Action.CLEAR_HOLD_TIMER] };
 

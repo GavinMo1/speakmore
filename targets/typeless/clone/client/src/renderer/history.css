@@ -1,0 +1,147 @@
+/* 历史窗口是普通的应用窗口，跟随系统的深浅色。 */
+
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.985 0.002 262);
+  --ink: oklch(0.24 0.014 262);
+  --ink-2: oklch(0.47 0.014 262);
+  --border: oklch(0.9 0.006 262);
+  --raised: oklch(0.95 0.005 262);
+  --primary: oklch(0.47 0.15 262);
+  --problem: oklch(0.5 0.15 40);
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.2 0.012 262);
+    --ink: oklch(0.94 0.005 262);
+    --ink-2: oklch(0.72 0.012 262);
+    --border: oklch(0.32 0.014 262);
+    --raised: oklch(0.27 0.014 262);
+    --primary: oklch(0.78 0.12 262);
+    --problem: oklch(0.8 0.12 55);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    0.9375rem / 1.7 -apple-system,
+    BlinkMacSystemFont,
+    "PingFang SC",
+    system-ui,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+header,
+main {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding-top: 1.5rem;
+  padding-bottom: 0.75rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+
+.summary {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+.empty {
+  margin: 3rem 0;
+  color: var(--ink-2);
+}
+
+.problem {
+  color: var(--problem);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 2rem;
+}
+
+.entry {
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.failed {
+  color: var(--problem);
+  font-weight: 600;
+}
+
+.copy {
+  margin-left: auto;
+  padding: 0.15rem 0.65rem;
+  font: inherit;
+  color: var(--primary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease-out);
+}
+
+.copy:hover {
+  background: var(--raised);
+}
+
+.copy:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.text {
+  margin: 0.3rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.is-failed .text {
+  color: var(--problem);
+}
+
+.is-silent .text {
+  color: var(--ink-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copy {
+    transition: none;
+  }
+}

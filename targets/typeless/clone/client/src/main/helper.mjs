@@ -8,7 +8,7 @@ const PASTE_TIMEOUT_MS = 3_000;
  * @param {string} command 可执行文件
  * @param {object} options
  * @param {string[]} [options.args]
- * @param {(event: object) => void} options.onEvent 收到 ready / fn / other_key，以及小帮手退出时的 exit
+ * @param {(event: object) => void} options.onEvent 收到 ready / hotkey / other_key，以及小帮手退出时的 exit
  * @param {{ warn: Function, error: Function }} options.log
  */
 export function startHelper(command, { args = [], onEvent, log }) {
