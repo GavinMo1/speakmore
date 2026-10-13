@@ -1,3 +1,4 @@
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   app,
@@ -12,7 +13,7 @@ import {
   systemPreferences,
   Tray,
 } from "electron";
-import { startControlServer } from "../control.mjs";
+import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { openHistory } from "../history.mjs";
 import { alsoLogTo, log } from "../log.mjs";
 import { resolvePaths } from "../paths.mjs";
@@ -62,9 +63,12 @@ app.setPath("userData", PATHS.dataDir);
 // 打成应用后没有终端，日志自己写文件。由命令启动时标准输出已经被接到同一个文件里了
 if (app.isPackaged) alsoLogTo(PATHS.logFile);
 
-if (!app.requestSingleInstanceLock()) {
+// 同一个数据目录只跑一个。这里给的数据会随 second-instance 事件送到已经在运行的那一个手里
+const isOnlyInstance = app.requestSingleInstanceLock({ byCli: LAUNCHED_BY_CLI });
+if (!isOnlyInstance) {
   console.error("已经有一个在运行了");
-  app.exit(1);
+  // 约定的退出码：启动它的 speakmore 命令据此知道"不是没起来，是有别的先起来了"，接着等那一个
+  app.exit(ALREADY_RUNNING_EXIT_CODE);
 }
 
 const sourceDir = join(app.getAppPath(), "src");
@@ -72,17 +76,25 @@ const webPreferences = { preload: join(sourceDir, "preload", "preload.cjs"), san
 
 // 不能写成顶层的 await app.whenReady()：Electron 要等主模块加载完才会就绪，
 // 而顶层 await 让模块一直加载不完，两边互相等（Electron 44.7 实测如此）。
-app
-  .whenReady()
-  .then(main)
-  .catch((error) => {
-    // 启动失败时没有窗口可以报错，记下来并以非零码退出，不留一个什么都不干的进程
-    log.error("startup_failed", { error: String(error?.stack ?? error) });
-    app.exit(1);
-  });
+// 没抢到锁的那个正在退出，不往下走：数据目录里的东西（进程号、控制通道）都是先到的那个的
+if (isOnlyInstance) {
+  app
+    .whenReady()
+    .then(main)
+    .catch((error) => {
+      // 启动失败时没有窗口可以报错，记下来并以非零码退出，不留一个什么都不干的进程
+      log.error("startup_failed", { error: String(error?.stack ?? error) });
+      app.exit(1);
+    });
+}
 
 async function main() {
   app.dock?.hide();
+
+  // 记下进程号：万一卡住了不答话，speakmore stop 靠它找到这个进程。要赶在控制通道开始听之前写好，
+  // 这样只要通道连得上，文件里记的就一定是通道那头的进程
+  mkdirSync(PATHS.dataDir, { recursive: true });
+  writeFileSync(PATHS.pidFile, `${process.pid}\n`);
 
   const userData = PATHS.dataDir;
   const startedAt = new Date().toISOString();
@@ -95,8 +107,12 @@ async function main() {
   const e2e = process.env.SPEAKMORE_E2E_OUT ? await import("./e2e.mjs") : null;
 
   const keys = createKeyManager({ service, keyStore, env: process.env, log, onChange: () => setupChanged() });
-  /** 小帮手报上来的两项权限；null 表示它还没启动好 */
+  /** 按键监听的小帮手：starting（还没报上来）/ running / stopped（退出了，或者根本没起来） */
+  let helperState = "starting";
+  /** 小帮手报上来的两项权限；它没在 running 时是 null */
   let helperPermissions = null;
+  /** 控制通道，启动到后面才开；端到端测试时一直是 null */
+  let control = null;
   /** 启动时对麦克风和 key 的检查做完了没有 */
   let startupChecked = false;
   let historyWindow = null;
@@ -117,6 +133,7 @@ async function main() {
 
   const currentSetup = () => ({
     key: keys.current,
+    helper: helperState,
     permissions: {
       microphone: systemPreferences.getMediaAccessStatus("microphone"),
       listen: helperPermissions?.listen ?? null,
@@ -188,11 +205,16 @@ async function main() {
   /** 每启动一个小帮手加一；旧的那个退出时发来的事件靠它认出来并丢掉 */
   let helperGeneration = 0;
 
-  function launchHelper() {
+  /**
+   * @param {{ prompt: boolean }} options prompt：两项权限没给时让不让系统弹授权框。只在应用启动时弹一次；
+   *   之后重新检查权限靠的是重启小帮手，那时再弹的话每查一次弹一次
+   */
+  function launchHelper({ prompt }) {
     const generation = ++helperGeneration;
     helperPermissions = null;
+    helperState = "starting";
     helper = startHelper(join(app.getAppPath(), "build", "key-helper"), {
-      args: ["--key", HOTKEY],
+      args: ["--key", HOTKEY, ...(prompt ? [] : ["--no-prompt"])],
       onEvent: (event) => {
         if (generation === helperGeneration) onHelperEvent(event);
       },
@@ -203,6 +225,7 @@ async function main() {
   function onHelperEvent(event) {
     switch (event.event) {
       case "ready":
+        helperState = "running";
         helperPermissions = { listen: event.listen, trusted: event.trusted };
         log.info("helper_ready", helperPermissions);
         setupChanged();
@@ -218,6 +241,7 @@ async function main() {
         break;
       }
       case "exit":
+        helperState = "stopped";
         helperPermissions = null;
         log.error("helper_exited", { code: event.code, signal: event.signal });
         setupChanged();
@@ -230,7 +254,7 @@ async function main() {
 
   // 端到端测试时不启动小帮手：不听真键盘，也绝不往用户当前的窗口里贴字
   if (e2e) helper = e2e.fakeHelper;
-  else launchHelper();
+  else launchHelper({ prompt: true });
 
   // ---------- 页面要主进程代办的事 ----------
 
@@ -293,11 +317,11 @@ async function main() {
     }
     await shell.openExternal(PRIVACY_PANES[permission]);
   });
-  /** 两项系统权限是小帮手启动时查的，授权之后要重启它才看得到 */
+  /** 两项系统权限是小帮手启动时查的，授权之后要重启它才看得到。它停了的话，这也是把它重新拉起来的办法 */
   function recheckPermissions() {
     if (!e2e) {
       helper.stop();
-      launchHelper();
+      launchHelper({ prompt: false });
     }
     setupChanged();
   }
@@ -384,9 +408,13 @@ async function main() {
 
   // 没有窗口时也继续待在菜单栏里
   app.on("window-all-closed", () => {});
-  // 已经开着时又启动了一次（比如又双击了一下图标）：把设置窗口亮出来，让人知道它在哪
-  app.on("second-instance", showSettings);
+  // 已经开着时又启动了一次。双击图标来的：把设置窗口亮出来，让人知道它在哪。
+  // speakmore 命令来的（两条命令同时启动，后到的那个）：那个人正看着终端，不弹窗口
+  app.on("second-instance", (_event, _argv, _cwd, additionalData) => {
+    if (!additionalData?.byCli) showSettings();
+  });
   app.on("before-quit", () => {
+    rmSync(PATHS.pidFile, { force: true });
     // 先让小帮手的事件作废：它接下来的退出是我们自己关的，不该再报"按键监听停了"
     helperGeneration++;
     helper.stop();
@@ -399,9 +427,9 @@ async function main() {
   // ---------- 命令行要主进程代办的事 ----------
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  /** 等小帮手把两项权限报上来；它起不来时最多等 3 秒 */
+  /** 等小帮手把两项权限报上来，或者确定它起不来；最多等 3 秒 */
   async function helperReported() {
-    for (let waited = 0; helperPermissions === null && waited < 3_000; waited += 50) await sleep(50);
+    for (let waited = 0; helperState === "starting" && waited < 3_000; waited += 50) await sleep(50);
   }
 
   function describeStatus() {
@@ -414,13 +442,18 @@ async function main() {
       starting: !startupChecked,
       hotkey: HOTKEY,
       hotkeyLabel: HOTKEY_LABEL,
+      // 连着单独启动的服务端时，用哪个模型由那边定
+      model: service ? SETTINGS.model.value : null,
+      thinking: service ? SETTINGS.thinking.value : null,
+      // 装成应用的和命令启动的，权限和 key 各是一套：命令行据此决定该不该代它重启
+      packaged: app.isPackaged,
       ...setup,
       summary: summarizeSetup(setup),
     };
   }
 
   // 端到端测试不开控制通道：它自己驱动整个流程，没有命令行参与
-  const control = e2e
+  control = e2e
     ? null
     : await startControlServer({
         socketPath: PATHS.controlSocket,
@@ -429,7 +462,8 @@ async function main() {
           /** recheck：把会自己变的几样重新看一遍再回答（用户刚去系统设置里改过、网刚连上时用） */
           async status({ recheck = false }) {
             if (recheck) {
-              if (Object.values(helperPermissions ?? {}).includes(false)) recheckPermissions();
+              const denied = Object.values(helperPermissions ?? {}).includes(false);
+              if (denied || helperState === "stopped") recheckPermissions();
               reverifyKeyInBackground();
             }
             await helperReported();

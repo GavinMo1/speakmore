@@ -11,6 +11,7 @@
 //
 // 热键用 --key 指定，是单独一个修饰键：right_option（默认）、right_command、right_control、fn。
 // 原版用 fn；仿刻要和原版同时开着用，所以默认换成右 Option。
+// --no-prompt：缺权限时不让系统弹授权提示，只照实报。
 //
 // 按键内容不出这个进程：除了热键的按下松开，只报"有别的键"，不报是哪个键。
 
@@ -195,9 +196,13 @@ if arguments.contains("--selftest") {
     exit(selfTest() ? 0 : 1)
 }
 
-// 第一次运行时让系统弹出授权提示，并把应用加进"输入监控"和"辅助功能"的列表里
-let listenAllowed = CGPreflightListenEventAccess() || CGRequestListenEventAccess()
-let trusted = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+// 没给权限时让系统弹出授权提示，并把应用加进"输入监控"和"辅助功能"的列表里。
+// --no-prompt：只查不弹。父进程重新检查权限靠的是重启本进程，那时再弹的话每查一次就弹一次
+let mayPrompt = !arguments.contains("--no-prompt")
+let listenAllowed = CGPreflightListenEventAccess() || (mayPrompt && CGRequestListenEventAccess())
+let trusted = mayPrompt
+    ? AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+    : AXIsProcessTrusted()
 let listening = listenAllowed && startKeyListener()
 emit(["event": "ready", "listen": listening, "trusted": trusted])
 
