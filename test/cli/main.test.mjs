@@ -161,6 +161,7 @@ function harness({
       return confirms.shift() ?? false;
     },
     removeKeychainKey: keychain,
+    sharedPreferencesFile: join(dir, "com.github.Electron.plist"),
     packageDir: paths.appDir,
   };
   return { io, output, asked, tails, confirmed, daemon, speakmore: (...argv) => run(argv, io) };
@@ -665,6 +666,18 @@ test("uninstall --yes：停掉后台，整个目录、家目录以外的命令�
   assert.match(output.out, /钥匙串/);
   // 删不了的也照实说
   assert.match(output.out, /权限/);
+  assert.doesNotMatch(output.out, /com\.github\.Electron/);
+});
+
+test("uninstall：运行环境在别处留的那个共用的偏好文件，有的话提一句，不删", async () => {
+  seedInstalled();
+  const { speakmore, output, io } = harness();
+  // 测试里家目录就是临时目录本身，所以这个文件放在别处
+  io.sharedPreferencesFile = join(outside, "com.github.Electron.plist");
+  writeFileSync(io.sharedPreferencesFile, "plist");
+  assert.equal(await speakmore("uninstall", "--yes"), 0);
+  assert.match(output.out, /com\.github\.Electron\.plist 没有动/);
+  assert.equal(existsSync(io.sharedPreferencesFile), true);
 });
 
 test("uninstall --keep-data：只删程序，设置、key、历史和录音留着，钥匙串也不动（留着的 key 要靠它解开）", async () => {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// speakmore 命令的入口。这里只做两件必须抢在加载其余代码之前的事，命令本身在 src/cli/main.mjs。
+// speakmore 命令的入口。这里只做几件必须抢在加载其余代码之前的事，命令本身在 src/cli/main.mjs。
 import { nodeVersionProblem } from "../src/cli/node-version.mjs";
 
 if (process.platform !== "darwin") {
@@ -19,6 +19,14 @@ process.emitWarning = (warning, ...rest) => {
   if (String(warning?.message ?? warning).includes("SQLite")) return;
   emitWarning.call(process, warning, ...rest);
 };
+
+// 输出接到 head 这类程序上时，那头读够了就把管道关掉，这边再写会报 EPIPE。这是正常结束，不是出错
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on("error", (error) => {
+    if (error.code === "EPIPE") process.exit(0);
+    throw error;
+  });
+}
 
 const { main } = await import("../src/cli/main.mjs");
 process.exitCode = await main(process.argv.slice(2));

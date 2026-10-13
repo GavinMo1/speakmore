@@ -1,5 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, lstatSync, readFileSync, readlinkSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
@@ -485,6 +486,11 @@ async function uninstall(args, io) {
   leftovers.push(
     "给终端的麦克风、输入监控、辅助功能权限没有动：它们记在终端名下，在“系统设置 → 隐私与安全性”里可以关掉",
   );
+  if (existsSync(io.sharedPreferencesFile)) {
+    leftovers.push(
+      `${io.sharedPreferencesFile} 没有动：运行环境记窗口大小之类的一个小文件，所有用原版 Electron 的程序共用`,
+    );
+  }
   // 从源码目录运行的那种，程序不在我们的目录里
   if (!io.packageDir.startsWith(paths.home + sep)) leftovers.push(`源码目录没有动：${io.packageDir}`);
   io.out("  还留在系统里的：");
@@ -581,6 +587,8 @@ export function createIo({ packageDir, env = process.env }) {
     confirm,
     // 钥匙串里那一条的名字是 Electron 按应用名起的
     removeKeychainKey: () => removeKeychainKey(manifest.productName),
+    // 自带的是原版 Electron，系统按它的应用标识在这里记了一份偏好。卸载时只提一句，不删：别的程序也在用
+    sharedPreferencesFile: join(homedir(), "Library", "Preferences", "com.github.Electron.plist"),
     tail: (args) =>
       new Promise((resolveExit, reject) => {
         const child = spawn("tail", args, { stdio: "inherit" });
