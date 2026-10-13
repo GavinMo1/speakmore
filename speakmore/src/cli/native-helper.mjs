@@ -71,9 +71,13 @@ export function buildHelper(
   for (const slice of slices) remove(slice, { force: true });
 }
 
-/** 需要的话编译一次。@returns {boolean} 这次有没有编 */
-export function ensureHelper(packageDir, { stat = statOrNull, ...buildOptions } = {}) {
+/**
+ * 需要的话编译一次。编译要十几秒，所以动手之前先调 onBuild，让调用方有机会说一声。
+ * @returns {boolean} 这次有没有编
+ */
+export function ensureHelper(packageDir, { stat = statOrNull, onBuild = () => {}, ...buildOptions } = {}) {
   if (!helperNeedsBuild(helperPaths(packageDir), stat)) return false;
+  onBuild();
   buildHelper(packageDir, buildOptions);
   return true;
 }

@@ -11,13 +11,18 @@ let logFile = null;
  * 启动时文件超过 5 MB 就改名成 .old 留作上一份，重新开始写。
  */
 export function alsoLogTo(file) {
+  rotateIfLarge(file);
+  logFile = file;
+}
+
+/** 准备好往这个文件里追加日志：目录没有就建，文件太大就把它改名留作上一份 */
+export function rotateIfLarge(file) {
   mkdirSync(dirname(file), { recursive: true });
   try {
     if (statSync(file).size > MAX_LOG_BYTES) renameSync(file, `${file}.old`);
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  logFile = file;
 }
 
 function write(stream, level, event, fields) {

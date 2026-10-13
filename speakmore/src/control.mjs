@@ -17,7 +17,8 @@ export class NotRunningError extends Error {
   }
 }
 
-const NOT_RUNNING_CODES = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK"]);
+// 前三个是根本没人在听；后两个是连上了又被掐断，只在它正在退出的那一瞬间会遇到
+const NOT_RUNNING_CODES = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK", "ECONNRESET", "EPIPE"]);
 
 /**
  * 发一条命令，等它的回答。
@@ -45,6 +46,11 @@ export function requestControl(socketPath, cmd, params = {}, { timeoutMs = DEFAU
     socket.on("error", fail);
     socket.on("end", () => {
       clearTimeout(timer);
+      // 接了连接却一句没回就断开：它正在退出，这次没来得及答
+      if (received === "") {
+        reject(new NotRunningError());
+        return;
+      }
       let reply;
       try {
         reply = JSON.parse(received);

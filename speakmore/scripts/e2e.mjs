@@ -2,8 +2,8 @@
 // 端到端测试：真的 Electron、真的录音编码、真的服务端和模型，只有两头是假的——
 // 麦克风换成一个 WAV 文件，贴字换成"记下来"。不会碰真实的键盘、剪贴板和历史记录。
 //
-// 用法：GEMINI_API_KEY 经按需加载器喂进来（应用会用它启动内置的服务），然后
-//   node scripts/e2e.mjs <一段 16 位 PCM 的 WAV>
+// 用法：环境里要有 GEMINI_API_KEY（后台应用用它起内置的服务）
+//   ../scripts/with-gemini-key.sh node scripts/e2e.mjs <一段 16 位 PCM 的 WAV>
 // 录音时长默认 7.5 秒（跨过两个 3 秒的分块边界），可用 SPEAKMORE_E2E_RECORD_MS 改。
 
 import { spawn } from "node:child_process";
@@ -19,7 +19,8 @@ if (!wav || !existsSync(wav)) {
 }
 
 const electron = createRequire(import.meta.url)("electron");
-const workDir = mkdtempSync(join(tmpdir(), "speakmore-e2e-"));
+// 名字起得短：数据目录里要放控制通道的套接字，路径有长度上限
+const workDir = mkdtempSync(join(tmpdir(), "sm-e2e-"));
 const outPath = join(workDir, "result.json");
 
 const child = spawn(
@@ -35,7 +36,7 @@ const child = spawn(
   ],
   {
     cwd: resolve(import.meta.dirname, ".."),
-    env: { ...process.env, SPEAKMORE_E2E_OUT: outPath, SPEAKMORE_HOME: join(workDir, "userData") },
+    env: { ...process.env, SPEAKMORE_E2E_OUT: outPath, SPEAKMORE_HOME: join(workDir, "home") },
     stdio: ["ignore", "inherit", "inherit"],
   },
 );

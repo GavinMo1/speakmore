@@ -126,3 +126,17 @@ test("收到的不是一行 JSON 时回一句错误，不让服务挂掉", async
   assert.equal(JSON.parse(reply).ok, false);
   assert.equal(await requestControl(socketPath, "ping"), "pong");
 });
+
+test("对方接了连接却一句没回就断开（正在退出），算作没有在运行", async () => {
+  // 两种断法都会遇到：客气地收尾，或者直接掐掉
+  const ways = [(socket) => socket.resume().end(), (socket) => socket.destroy()];
+  for (const hangUp of ways) {
+    const quitting = createServer(hangUp);
+    await new Promise((resolve) => quitting.listen(socketPath, resolve));
+    try {
+      await assert.rejects(requestControl(socketPath, "status"), NotRunningError);
+    } finally {
+      await new Promise((resolve) => quitting.close(resolve));
+    }
+  }
+});
