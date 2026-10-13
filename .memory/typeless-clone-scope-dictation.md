@@ -1,6 +1,6 @@
 ---
 name: typeless-clone-scope-dictation
-description: Typeless 仿刻只做语音转写（单击 fn 听写），用户已明确，其他模式不做
+description: 仿刻（SpeakMore）只做语音转写（单击热键听写加历史），用户已明确，其他模式不做
 metadata:
   node_type: memory
   type: project

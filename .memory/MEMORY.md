@@ -7,10 +7,10 @@
 - [REA 项目级安装](rea-project-level-install.md) — MCP 与 skill 只装在本项目、不写全局；升级校验命令与体检的已知假失败
 - [REA 是主干工具](rea-is-the-primary-tool.md) — 逆向以 REA 的 MCP 和 skill 为主，自写脚本只补缺口并喂回 REA
 - [Ghidra 在项目内](ghidra-project-local.md) — 装在 .tools/，MCP 没带路径，原生分析走 REA 命令行并先 lipo 切单架构
-- [Typeless 仿刻范围](typeless-clone-scope-dictation.md) — 已定只做语音转写（单击 fn 听写加历史），其他模式不做
+- [SpeakMore 的范围](typeless-clone-scope-dictation.md) — 已定只做语音转写（单击热键听写加历史），其他模式不做
 - [请用户配合时只给步骤](user-action-requests-plain-steps.md) — 需要他动手时列两三步动作，技术细节留到事后总结
 - [开发用的 Gemini key](typeless-clone-gemini-key.md) — 要真调 Gemini 的命令写成 scripts/with-gemini-key.sh <命令>，用哪把凭据在 .machine.env；产品里的 key 由用户自己填
 - [本机情况不进仓库](machine-facts-stay-local.md) — 凭据名、路径、账号、姓名邮箱只放 .machine.env，仓库里只认变量名；提交前跑 scripts/check-no-machine-facts.sh
-- [可以用真实录音调提示词](typeless-clone-real-recordings-ok.md) — 用户已同意把 Typeless 历史录音发给 Gemini 调仿刻的提示词；再调时用 eval-prompt.mjs 对比，别把温度设回 0
-- [仿刻按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节；启动已改成装进应用程序的应用
-- [仿刻下一阶段：按开源标准打磨](typeless-clone-open-source-panel.md) — 装上填 key 就能用、要有直观的面板、桌面端 App 先不做；动手前先确认本机打包和词典的范围
+- [可以用真实录音调提示词](typeless-clone-real-recordings-ok.md) — 用户已同意把 Typeless 历史录音发给 Gemini 调 SpeakMore 的提示词；再调时用 eval-prompt.mjs 对比，别把温度设回 0
+- [SpeakMore 按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节
+- [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，在 speakmore/；按开源标准打磨，先做 CLI（一条命令启动、填 key 就能用），桌面端 App 以后用 Tauri；发 npm、公开仓库、选许可证要他点头
