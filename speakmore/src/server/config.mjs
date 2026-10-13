@@ -4,12 +4,30 @@ export const THINKING_LEVELS = ["MINIMAL", "LOW", "MEDIUM", "HIGH"];
 export const DEFAULT_MODEL = "gemini-3.5-flash";
 export const DEFAULT_THINKING_LEVEL = "MINIMAL";
 
+const MAX_KEY_LENGTH = 512;
+
+/**
+ * key 的样子对不对（不联网）。不对时返回一句接在"这把 key"后面的说明，句子里不带 key 本身。
+ * 要在交给 SDK 之前拦下：带换行的 key 会让它报"Headers.append: "…" is an invalid header value"，
+ * 引号里是整段输入（实测），这句报错再进日志和终端，key 就漏了。
+ * @returns {string | null} 没问题时是 null
+ */
+export function apiKeyProblem(key) {
+  if (key.length > MAX_KEY_LENGTH) return `太长了（${key.length} 个字符），像是复制错了东西`;
+  if (/\s/.test(key)) return "里有空格或换行，像是多复制了别的内容";
+  // 只该有看得见的英文字符：别的字符放不进请求头
+  if (!/^[\x21-\x7e]+$/.test(key)) return "里有不该出现的字符，像是复制错了东西";
+  return null;
+}
+
 /** 从环境变量读配置。写错了就报错退出，不悄悄换成默认值。 */
 export function loadConfig(env) {
   const apiKey = env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("缺少环境变量 GEMINI_API_KEY");
   }
+  const keyProblem = apiKeyProblem(apiKey);
+  if (keyProblem) throw new Error(`GEMINI_API_KEY ${keyProblem}`);
 
   const port = env.PORT === undefined ? 8790 : Number(env.PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
