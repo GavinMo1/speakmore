@@ -1,0 +1,16 @@
+# 密钥与本地环境变量（示例文件照常入库）
+.env
+.env.*
+!.env.example
+
+# 系统与编辑器
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# 浏览器自动化（playwright MCP）的截图与日志
+.playwright-mcp/
+
+# Claude Code 本机设置（里面的自动记忆目录是本机绝对路径）
+.claude/settings.local.json
