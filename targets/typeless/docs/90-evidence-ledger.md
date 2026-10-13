@@ -87,6 +87,9 @@ arm64 切片的 sha256 前 16 位：Context `1ec75d0d3fc5845c`、Input `f28cd221
 | F30 | 悬浮条统计最近 60 秒在可编辑输入框里的击键，超过 60 个触发提示；仅在内存 | 观察 | readable:qA149QP2.mjs:7886-7960 |
 | F31 | 状态机时间参数：长按 600 ms、单次录音上限 9 分钟、分块 3 秒、WebSocket 空闲 1 小时断开等 | 观察 | readable:qA149QP2.mjs:4191、4546、6101-6104、6181-6200 |
 | F32 | 认不出输入框时上报应用名、bundle id、网页网址和域名（每个应用加网址一次） | 观察 | readable:main/index.js `error_monitoring_undetectable_textbox_found` 处 |
+| F34 | 麦克风约束关闭回声消除、降噪、自动增益；AudioContext 16 kHz；worklet 每次 1024 采样 | 观察 | readable:UfR9-a2Z.js:11848、14360-14379；`renderer/static/js/C7lI2ZxR.js` |
+| F35 | 分块编码会话：码率 32000、复杂度 9 | 观察 | readable:main/worker/chunkSessionWorker.js:12-14、113、133 |
+| F36 | "无声"检测阈值为 8 位波形偏离 1，检测的是麦克风无信号而非语音活动 | 观察 | readable:qA149QP2.mjs:4367-4440 |
 | F33 | 按下功能键即开始录音；松开后进入免提录音，再按一次结束；`long_pressing` 状态会停止录音并提示不要按住 | 观察（状态定义）；"按住说话"是否仍可用未定 | readable:qA149QP2.mjs:6812-7160 |
 
 ## 工具与限制

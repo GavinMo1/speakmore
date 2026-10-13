@@ -25,14 +25,14 @@
 | Q12 | 历史云同步引擎（约 1500 行，6 个类）：推拉协议、冲突处理、墓碑 |
 | Q13 | 状态机里 `stopping`、`finishing`、`retrying` 的内部细节（主干状态图已在 [10](10-interaction-state-machine.md)） |
 | Q14 | `delivery`、`external_action`、`web_metadata` 的实现，结果卡片窗口 |
-| Q15 | 录音器内部：AudioWorklet 的重采样、分块、静音检测、"麦克风动态降级" |
+| Q15 | 录音器里分块边界怎么切、"麦克风动态降级"的实现（采样与编码参数、无声检测已在 [11](11-audio-recorder.md)） |
 | Q16 | 快捷键会话 reducer：`LONG_HOLD` 何时发出、何时进 `pushToTalk`，即"按住说话"当前是否支持；原生层 `ShortcutDetector` 的规则 |
 | Q17 | 统计事件的完整清单和各自属性（字面量搜到 13 个，是下限） |
 | Q18 | 更新流程；`enterprise-policy:updated` 是什么 |
 | Q19 | 主界面大包（DNMdpbnK.mjs）里对 `global-keyboard` 的那处订阅做什么 |
 | Q20 | 剪贴板恢复的延时；`bottomUpURLTraversalWhitelist` 的内容；黑白名单里"白名单"的作用 |
 | Q21 | `desktopCapturer`、摄像头、蓝牙、屏幕录制的用途说明对应什么功能 |
-| Q22 | 两个 Opus 库的参数（`session_create` 的四个 int 是什么） |
+| Q22 | `libopuschunk_session_create` 第四个参数的含义（前三个是采样率、声道数、码率）；`opus_convert_advanced` 的参数 |
 
 ## 客户端里看不到
 
