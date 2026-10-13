@@ -12,3 +12,4 @@
 - [Typeless 仿刻的 Gemini key](typeless-clone-gemini-key.md) — 开发和评估用凭据 <GEMINI_CREDENTIAL> 经 withkey 加载，不用 <另一把凭据>；应用里的 key 由用户自己填
 - [可以用真实录音调提示词](typeless-clone-real-recordings-ok.md) — 用户已同意把 Typeless 历史录音发给 Gemini 调仿刻的提示词；再调时用 eval-prompt.mjs 对比，别把温度设回 0
 - [仿刻按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节；启动已改成装进应用程序的应用
+- [仿刻下一阶段：按开源标准打磨](typeless-clone-open-source-panel.md) — 装上填 key 就能用、要有直观的面板、桌面端 App 先不做；动手前先确认本机打包和词典的范围
