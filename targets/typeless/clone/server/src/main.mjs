@@ -12,7 +12,7 @@ try {
   process.exit(2);
 }
 
-const refiner = createGeminiRefiner(config.gemini);
+const refiner = createGeminiRefiner({ ...config.gemini, log });
 let server;
 try {
   server = await startServer({ host: config.host, port: config.port, refiner, log });
