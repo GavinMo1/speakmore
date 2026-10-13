@@ -12,17 +12,20 @@ try {
   process.exit(2);
 }
 
-const server = await startServer({
-  host: config.host,
-  port: config.port,
-  refiner: createGeminiRefiner(config.gemini),
-  log,
-});
+const refiner = createGeminiRefiner(config.gemini);
+const server = await startServer({ host: config.host, port: config.port, refiner, log });
 log.info("listening", {
   url: `ws://${config.host}:${server.port}${WS_PATH}`,
   model: config.gemini.model,
   thinking_level: config.gemini.thinkingLevel,
 });
+
+// 不等它：预热失败不该拦着服务启动，但要让人看得见
+const warmUpStartedAt = performance.now();
+refiner.warmUp().then(
+  () => log.info("warmed_up", { ms: Math.round(performance.now() - warmUpStartedAt) }),
+  (error) => log.error("warm_up_failed", { model: config.gemini.model, error: String(error?.message ?? error) }),
+);
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, async () => {

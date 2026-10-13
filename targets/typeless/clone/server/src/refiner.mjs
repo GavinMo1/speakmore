@@ -10,6 +10,19 @@ export function createGeminiRefiner({ apiKey, model, thinkingLevel, timeoutMs })
 
   return {
     /**
+     * 启动时发一个最小的请求。实测进程里第一次整理要 3.4–4.1 秒，之后稳定在 1.7–1.9 秒
+     * （闲置 3 分钟后也是）；先发这一个，慢的那一次就不会落在用户的第一句话上。
+     * key 无效或模型名写错也会在这里暴露，不用等到第一次听写。
+     */
+    async warmUp() {
+      await client.models.generateContent({
+        model,
+        contents: "1",
+        config: { maxOutputTokens: 1, thinkingConfig: { thinkingLevel }, abortSignal: AbortSignal.timeout(timeoutMs) },
+      });
+    },
+
+    /**
      * @param {Buffer} audio 合并后的整段录音
      * @param {{ mimeType: string, signal?: AbortSignal }} options signal 在客户端断开时用来取消
      * @returns {Promise<string>} 整理好的文字；没有人声时是空字符串
