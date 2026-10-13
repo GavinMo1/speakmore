@@ -156,7 +156,7 @@ git clone https://github.com/zephyr4123/speakmore.git
 cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
-npm run check                 # 代码检查 + 全部测试（269 条，不联网、不开窗口）
+npm run check                 # 代码检查 + 全部测试（271 条，不联网、不开窗口）
 npm run release               # 打发布包：dist/release/ 下两种芯片各一个，外加 install.sh
 ```
 
@@ -205,7 +205,7 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 
 ### 验证到哪一步
 
-- 自动测试 269 条，在 Node 22.13、24.21、26.0 上都跑过。其中 15 条是拿假的发布包真的跑安装脚本：全新安装、升级、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
+- 自动测试 271 条，在 Node 22.13、24.21、26.0 上都跑过。其中 15 条是拿假的发布包真的跑安装脚本：全新安装、升级、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
 - 用真的发布包走过一遍，装在临时目录里，`PATH` 里没有 Node：
   - 安装脚本从管道读入，装完直接启动并问 key，输入不显示。
   - 启动、状态、设置、重启、停止；合成的语音经过录音编码、Gemini、存历史，成品正确。

@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { ALREADY_RUNNING_EXIT_CODE, NotRunningError, requestControl, TimeoutError } from "../control.mjs";
 import { rotateIfLarge } from "../log.mjs";
+import { ensureHome } from "../paths.mjs";
 import { ensureHelper as defaultEnsureHelper } from "./native-helper.mjs";
 
 // 后台应用（src/app，跑在 Electron 里）的起停。它脱离终端运行：关掉终端窗口它还在，
@@ -152,6 +153,8 @@ export function createDaemon({
       ensureHelper(packageDir, { onBuild: () => onProgress("第一次启动，正在编译按键监听的小程序…") });
       const electron = resolveElectron(onProgress);
 
+      // 日志要写进家目录。先按规矩把它建出来：顺着日志的路径一路建的话，目录的权限会是默认的那种
+      ensureHome(paths);
       rotateIfLarge(paths.logFile);
       const logFd = openSync(paths.logFile, "a");
       // 带着 ELECTRON_RUN_AS_NODE 的话 Electron 会把自己当成普通的 Node，窗口和热键都不会有

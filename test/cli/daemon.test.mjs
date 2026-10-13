@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -109,6 +109,13 @@ test("启动：用 Electron 跑这个包，脱离终端，输出接到日志文�
   // 带着这个变量 Electron 会把自己当成普通的 Node，窗口和热键都不会有
   assert.equal("ELECTRON_RUN_AS_NODE" in options.env, false);
   assert.match(readFileSync(paths.logFile, "utf8"), /"started"/);
+});
+
+test("启动时把家目录建出来，只有自己进得去（里面会有录音和 key）", async () => {
+  rmSync(dir, { recursive: true });
+  const spawn = fakeSpawn(() => startFakeApp(() => RUNNING));
+  await daemonWith({ spawn }).start({ onProgress() {} });
+  assert.equal(statSync(paths.home).mode & 0o777, 0o700);
 });
 
 test("启动前先确保小帮手编好了；编了的话说一声", async () => {

@@ -8,7 +8,7 @@ import { ControlError, TimeoutError } from "../control.mjs";
 import { openHistory } from "../history.mjs";
 import { migrateLegacyData } from "../legacy.mjs";
 import { log } from "../log.mjs";
-import { resolvePaths } from "../paths.mjs";
+import { ensureHome, resolvePaths } from "../paths.mjs";
 import { apiKeyProblem } from "../server/config.mjs";
 import { resolveSettings, SETTINGS, saveSetting, unsetSetting } from "../settings.mjs";
 import { askSecret, Cancelled } from "./ask-secret.mjs";
@@ -335,6 +335,8 @@ async function config(args, io) {
   if (action === "set" && name !== undefined && value !== undefined && extra.length === 0) {
     let saved;
     try {
+      // 可能是这个目录里的第一个文件
+      ensureHome(io.paths);
       saved = saveSetting(file, name, value);
     } catch (error) {
       throw new ConfigError(error.message);

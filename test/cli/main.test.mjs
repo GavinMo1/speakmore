@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -518,6 +527,13 @@ test("config set：重启时没连上 Gemini，新设置对不对还不知道：
   assert.equal(await speakmore("config", "set", "model", "gemini-next"), 0);
   assert.doesNotMatch(output.out, /已经生效/);
   assert.match(output.out, /还没验证.*speakmore status/);
+});
+
+test("config set：还没启动过就先改设置时，建出来的目录同样只有自己进得去", async () => {
+  rmSync(dir, { recursive: true });
+  const { speakmore } = harness();
+  assert.equal(await speakmore("config", "set", "hotkey", "fn"), 0);
+  assert.equal(statSync(paths.home).mode & 0o777, 0o700);
 });
 
 test("config set：填错时说能填什么，不动文件，以 2 退出", async () => {
