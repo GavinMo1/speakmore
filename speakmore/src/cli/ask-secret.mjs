@@ -60,8 +60,9 @@ export function askSecret(prompt, { input = process.stdin, output = process.stde
       }
     };
 
-    output.write(prompt);
+    // 先关掉回显再给提示：手快的人（或者粘贴得快）在提示出来的同时就开始输入了
     input.setRawMode(true);
+    output.write(prompt);
     input.resume();
     input.on("data", onData);
   });

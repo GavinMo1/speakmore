@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 // 原生小帮手（native/main.swift：听热键、贴字）的可执行文件从哪来。
@@ -10,27 +11,36 @@ const MIN_MACOS = "12.0";
 const UNIVERSAL_ARCHS = ["arm64", "x86_64"];
 
 export function helperPaths(packageDir) {
-  return { source: join(packageDir, "native", "main.swift"), binary: join(packageDir, "build", "key-helper") };
+  const binary = join(packageDir, "build", "key-helper");
+  return {
+    source: join(packageDir, "native", "main.swift"),
+    binary,
+    /** 可执行文件是从哪份源码编出来的：那份源码的 SHA-256 */
+    stamp: `${binary}.source-sha256`,
+  };
 }
 
-function statOrNull(file) {
+function readOrNull(file) {
   try {
-    return statSync(file);
+    return readFileSync(file);
   } catch (error) {
     if (error.code === "ENOENT") return null;
     throw error;
   }
 }
 
+const fingerprint = (source) => createHash("sha256").update(source).digest("hex");
+
 /**
- * 要不要（重新）编译：没有可执行文件，或者源码比它新。
- * 装好的包里两个文件的时间是一样的，不会触发编译，所以用的人不需要装编译工具。
+ * 要不要（重新）编译：没有可执行文件，或者它不是从现在这份源码编出来的。
+ * 不比文件的修改时间：npm 装包、git 检出都会把时间改成当时，实测装好的包里源码反而比可执行文件"新"，
+ * 结果在没装编译工具的机器上白白去编一次然后失败。
  */
-export function helperNeedsBuild({ source, binary }, stat = statOrNull) {
-  const built = stat(binary);
-  if (!built) return true;
-  const written = stat(source);
-  return written !== null && written.mtimeMs > built.mtimeMs;
+export function helperNeedsBuild({ source, binary, stamp }, read = readOrNull) {
+  if (read(binary) === null) return true;
+  const written = read(source);
+  if (written === null) return false;
+  return read(stamp)?.toString().trim() !== fingerprint(written);
 }
 
 function compile(run, args) {
@@ -48,36 +58,44 @@ function compile(run, args) {
 }
 
 /**
- * 编译小帮手。
+ * 编译小帮手，并记下它是从哪份源码来的。
  * @param {string} packageDir
  * @param {object} [options]
  * @param {boolean} [options.universal] 两种芯片各编一份再合成一个文件，发布时用
  */
 export function buildHelper(
   packageDir,
-  { universal = false, run = execFileSync, mkdir = mkdirSync, remove = rmSync } = {},
+  {
+    universal = false,
+    run = execFileSync,
+    mkdir = mkdirSync,
+    remove = rmSync,
+    read = readOrNull,
+    write = writeFileSync,
+  } = {},
 ) {
-  const { source, binary } = helperPaths(packageDir);
+  const { source, binary, stamp } = helperPaths(packageDir);
   mkdir(dirname(binary), { recursive: true });
-  if (!universal) {
+  if (universal) {
+    const slices = UNIVERSAL_ARCHS.map((arch) => `${binary}-${arch}`);
+    UNIVERSAL_ARCHS.forEach((arch, index) => {
+      compile(run, ["-O", "-target", `${arch}-apple-macos${MIN_MACOS}`, "-o", slices[index], source]);
+    });
+    run("lipo", ["-create", "-output", binary, ...slices]);
+    for (const slice of slices) remove(slice, { force: true });
+  } else {
     compile(run, ["-O", "-o", binary, source]);
-    return;
   }
-  const slices = UNIVERSAL_ARCHS.map((arch) => `${binary}-${arch}`);
-  UNIVERSAL_ARCHS.forEach((arch, index) => {
-    compile(run, ["-O", "-target", `${arch}-apple-macos${MIN_MACOS}`, "-o", slices[index], source]);
-  });
-  run("lipo", ["-create", "-output", binary, ...slices]);
-  for (const slice of slices) remove(slice, { force: true });
+  write(stamp, `${fingerprint(read(source))}\n`);
 }
 
 /**
  * 需要的话编译一次。编译要十几秒，所以动手之前先调 onBuild，让调用方有机会说一声。
  * @returns {boolean} 这次有没有编
  */
-export function ensureHelper(packageDir, { stat = statOrNull, onBuild = () => {}, ...buildOptions } = {}) {
-  if (!helperNeedsBuild(helperPaths(packageDir), stat)) return false;
+export function ensureHelper(packageDir, { read = readOrNull, onBuild = () => {}, ...buildOptions } = {}) {
+  if (!helperNeedsBuild(helperPaths(packageDir), read)) return false;
   onBuild();
-  buildHelper(packageDir, buildOptions);
+  buildHelper(packageDir, { read, ...buildOptions });
   return true;
 }

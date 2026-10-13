@@ -102,12 +102,21 @@ async function ensureRunning(io) {
   return io.daemon.start({ onProgress: io.out });
 }
 
-function explainKey(io) {
-  io.out("");
-  io.out("需要一把 Gemini API key：录音是发给 Gemini 整理成文字的。");
-  io.out(`没有的话在这里申请一把：${KEY_PAGE_URL}`);
-  io.out("它会用系统钥匙串加密后存在这台电脑上，不会显示出来，也不会发到别处。");
-}
+const KEY_PROMPT = "粘贴 key 后按回车（输入不会显示出来）：";
+/**
+ * 问 key 之前的那几句说明。它不单独打印，而是和提示一起交给 askSecret：
+ * 那一步会先关掉终端的回显再显示文字。否则手快的人看到"要 key 了"就粘贴，
+ * 而回显还没关，key 会被终端原样显示出来（在伪终端里实测到过）。
+ */
+const keyPreamble = (skippable) =>
+  [
+    "",
+    "需要一把 Gemini API key：录音是发给 Gemini 整理成文字的。",
+    `没有的话在这里申请一把：${KEY_PAGE_URL}`,
+    "它会用系统钥匙串加密后存在这台电脑上，不会发到别处。",
+    ...(skippable ? ["现在不想填就直接按回车。"] : []),
+    KEY_PROMPT,
+  ].join("\n");
 
 /** 把一把 key 交给后台应用验证并保存。@returns {Promise<boolean>} 通过了没有 */
 async function submitKey(io, value) {
@@ -121,12 +130,10 @@ async function submitKey(io, value) {
 /** 启动后发现没有能用的 key：在终端里问。不填或取消都不纠缠，面板里会说还差它 */
 async function offerKey(io, status) {
   if (!io.interactive || !["missing", "unreadable", "rejected"].includes(status.key.state)) return;
-  explainKey(io);
-  io.out("现在不想填就直接按回车。");
   for (let attempt = 0; attempt < MAX_KEY_ATTEMPTS; attempt++) {
     let value;
     try {
-      value = await io.askSecret("粘贴 key 后按回车（不会显示出来）：");
+      value = await io.askSecret(attempt === 0 ? keyPreamble(true) : KEY_PROMPT);
     } catch (error) {
       if (error instanceof Cancelled) return;
       throw error;
@@ -192,10 +199,9 @@ async function key(args, io) {
     return 0;
   }
 
-  if (io.interactive) explainKey(io);
   let value;
   try {
-    value = await io.askSecret("粘贴 key 后按回车（不会显示出来）：");
+    value = await io.askSecret(keyPreamble(false));
   } catch (error) {
     if (!(error instanceof Cancelled)) throw error;
     io.err("已取消，key 没有改动。");

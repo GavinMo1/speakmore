@@ -143,7 +143,10 @@ test("第一次用：没有 key 就在终端里问，存好了直接能用；key
   assert.equal(await speakmore(), 0);
   assert.deepEqual(saved, ["AIza-my-secret"]);
   assert.equal(asked.length, 1);
-  assert.match(output.out, /aistudio\.google\.com\/apikey/);
+  // 去哪申请、存在哪，是和提示一起交给"不回显地问"的那一步的：要先关掉回显再让人看到"要 key 了"，
+  // 否则手快的人在提示出来之前就粘贴，key 会被终端原样显示出来
+  assert.match(asked[0], /aistudio\.google\.com\/apikey/);
+  assert.doesNotMatch(output.out, /aistudio/);
   assert.match(output.out, /已保存，验证通过/);
   assert.match(output.out, /运行中/);
   assert.ok(!(output.out + output.err).includes("AIza-my-secret"));
