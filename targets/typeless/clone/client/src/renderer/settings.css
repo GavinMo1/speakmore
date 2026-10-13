@@ -1,0 +1,238 @@
+/* 设置窗口。颜色、字体、按钮在 window.css 里。 */
+
+main {
+  padding-bottom: 2rem;
+}
+
+section {
+  padding: 1.1rem 0 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+h2 {
+  margin: 0 0 0.35rem;
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+
+p {
+  margin: 0;
+}
+
+.hint,
+.state,
+footer {
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+.hint {
+  margin-top: 0.6rem;
+  max-width: 34rem;
+}
+
+/* ---------- 最上面的一句结论 ---------- */
+
+.status {
+  padding-top: 0.9rem;
+}
+
+.status-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 1.0625rem;
+  font-weight: 650;
+}
+
+.status-title::before {
+  content: "";
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--ink-2);
+}
+
+.status[data-state="ready"] .status-title::before {
+  background: var(--ok);
+}
+
+.status[data-state="incomplete"] .status-title::before {
+  background: var(--problem);
+}
+
+.status-detail {
+  margin-top: 0.15rem;
+  padding-left: 1.15rem;
+  color: var(--ink-2);
+}
+
+/* ---------- key ---------- */
+
+.state[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.state[data-tone="problem"] {
+  color: var(--problem);
+}
+
+.key-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.key-form input {
+  flex: 1 1 14rem;
+  min-width: 0;
+  padding: 0.3rem 0.65rem;
+  font: inherit;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.key-form input::placeholder {
+  color: var(--ink-2);
+}
+
+.key-form input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.button.primary {
+  color: var(--on-primary);
+  background: var(--primary);
+  border-color: var(--primary);
+  font-weight: 600;
+}
+
+.button.primary:hover {
+  background: var(--primary);
+  filter: brightness(1.08);
+}
+
+.button.primary:disabled {
+  color: var(--ink-2);
+  background: var(--raised);
+  border-color: var(--border);
+  filter: none;
+}
+
+#key-problem {
+  margin-top: 0.5rem;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.link {
+  padding: 0;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ---------- 权限 ---------- */
+
+.permissions {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+}
+
+.permissions li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.55rem 0;
+}
+
+.permissions li + li {
+  border-top: 1px solid var(--border);
+}
+
+.what {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.45;
+}
+
+.what strong {
+  font-weight: 600;
+}
+
+.what span {
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+.granted {
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.granted[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.granted[data-tone="problem"] {
+  color: var(--problem);
+  font-weight: 600;
+}
+
+/* ---------- 启动和页脚 ---------- */
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.check input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.check:has(input:disabled) {
+  color: var(--ink-2);
+}
+
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+footer code {
+  font: inherit;
+  overflow-wrap: anywhere;
+  user-select: text;
+}

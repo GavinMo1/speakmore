@@ -1,0 +1,115 @@
+/* 历史和设置这两个普通窗口共用的底子：颜色、字体、标题、按钮。跟随系统的深浅色。 */
+
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.985 0.002 262);
+  --ink: oklch(0.24 0.014 262);
+  --ink-2: oklch(0.47 0.014 262);
+  --border: oklch(0.9 0.006 262);
+  --raised: oklch(0.95 0.005 262);
+  --primary: oklch(0.47 0.15 262);
+  --on-primary: oklch(0.985 0.002 262);
+  --ok: oklch(0.5 0.12 155);
+  --problem: oklch(0.5 0.15 40);
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.2 0.012 262);
+    --ink: oklch(0.94 0.005 262);
+    --ink-2: oklch(0.72 0.012 262);
+    --border: oklch(0.32 0.014 262);
+    --raised: oklch(0.27 0.014 262);
+    --primary: oklch(0.78 0.12 262);
+    --on-primary: oklch(0.2 0.012 262);
+    --ok: oklch(0.8 0.13 155);
+    --problem: oklch(0.8 0.12 55);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    0.9375rem / 1.7 -apple-system,
+    BlinkMacSystemFont,
+    "PingFang SC",
+    system-ui,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+header,
+main {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding-top: 1.5rem;
+  padding-bottom: 0.75rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+
+.summary {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+.problem {
+  color: var(--problem);
+}
+
+.button {
+  padding: 0.15rem 0.65rem;
+  font: inherit;
+  color: var(--primary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 160ms var(--ease-out);
+}
+
+.button:hover {
+  background: var(--raised);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  color: var(--ink-2);
+  cursor: default;
+}
+
+.button:disabled:hover {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+}

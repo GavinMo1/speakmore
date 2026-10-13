@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { startService } from "../src/main/service.mjs";
+import { describeKeyError, startService } from "../src/main/service.mjs";
 
 const quietLog = { info() {}, warn() {}, error() {} };
 const OGG_CHUNK = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(60)]);
@@ -84,4 +84,16 @@ test("forgetKey 之后回到没有 key 的状态", async (t) => {
   service.forgetKey();
   assert.equal(service.ready, false);
   assert.equal((await dictateOnce(service.url)).K, "audio_processing_error");
+});
+
+test("key 验证失败的原因说成人话；实测到的两种错误各有一句，别的照原样截短", () => {
+  // 这两条是拿假 key 和 1 毫秒超时实测到的错误
+  const invalid = new Error(
+    '{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}',
+  );
+  assert.match(describeKeyError(invalid), /无效/);
+  const aborted = new DOMException("This operation was aborted", "AbortError");
+  assert.match(describeKeyError(aborted), /连不上/);
+  assert.match(describeKeyError(new TypeError("fetch failed")), /连不上/);
+  assert.equal(describeKeyError(new Error("x".repeat(500))).length, 200);
 });

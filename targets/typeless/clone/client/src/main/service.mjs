@@ -60,3 +60,13 @@ export async function startService({ log, createRefiner = createGeminiRefiner })
     close: () => server.close(),
   };
 }
+
+/** useKey 抛出的错误 → 给用户看的一句话。前两种是拿假 key 和超时实测到的 */
+export function describeKeyError(error) {
+  const message = String(error?.message ?? error);
+  if (/API key not valid|API_KEY_INVALID/.test(message)) return "这把 key 无效，检查有没有复制完整";
+  if (error?.name === "AbortError" || error?.name === "TimeoutError" || /fetch failed/.test(message)) {
+    return "连不上 Gemini，检查网络后再试";
+  }
+  return message.slice(0, 200);
+}
