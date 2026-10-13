@@ -48,3 +48,7 @@ speakmore stop       # 停掉
 | `AGENTS.md`、`.memory/` | 和 AI 编程助手协作时用的工作约定和项目记忆 |
 | `scripts/`、`.machine.env.example` | 开发时用的脚本：按每台机器自己的配置加载 key、核对 GitHub 账号、检查本机信息有没有漏进仓库 |
 | `.claude/`、`.mcp.json` | 逆向用的工具 [REA](https://github.com/morluto/rea) 的项目级配置 |
+
+## 许可
+
+[MIT](LICENSE)

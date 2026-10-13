@@ -4,6 +4,20 @@
   "version": "0.1.0",
   "private": true,
   "description": "macOS 上的语音输入：按一下热键说话，整理好的文字贴进当前输入框。用你自己的 Gemini key",
+  "license": "MIT",
+  "keywords": [
+    "dictation",
+    "voice-input",
+    "speech-to-text",
+    "macos",
+    "gemini"
+  ],
+  "homepage": "https://github.com/zephyr4123/reverse-anything/tree/main/speakmore#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zephyr4123/reverse-anything.git",
+    "directory": "speakmore"
+  },
   "type": "module",
   "main": "src/app/main.mjs",
   "bin": {
