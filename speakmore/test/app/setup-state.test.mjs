@@ -28,6 +28,19 @@ test("key 验证没通过：把原因带给用户", () => {
   assert.match(summary.blocker, /这把 key 无效/);
 });
 
+test("Gemini 拒绝了请求（模型名或档位写错）：不说成是 key 的问题", () => {
+  const summary = summarizeSetup(
+    withKey({ state: "rejected", cause: "other", problem: "Gemini 拒绝了请求：models/x is not found" }),
+  );
+  assert.equal(summary.ready, false);
+  assert.deepEqual(summary.missing, ["Gemini 验证"]);
+  assert.match(summary.blocker, /^Gemini 验证没通过：.*models\/x is not found/);
+});
+
+test("启动时没连上网、先用着的 key：算可以用", () => {
+  assert.equal(summarizeSetup(withKey({ state: "ready", source: "stored", verified: false })).ready, true);
+});
+
 test("key 还在验证：不能用，但不算缺东西", () => {
   const summary = summarizeSetup(withKey({ state: "checking" }));
   assert.equal(summary.ready, false);
@@ -57,4 +70,10 @@ test("只缺辅助功能：照样能用，只是要自己按粘贴", () => {
   assert.equal(summary.ready, true);
   assert.deepEqual(summary.missing, []);
   assert.match(summary.degraded, /剪贴板/);
+});
+
+test("按键监听的小程序停了：不再说成“正在准备”，明说缺它", () => {
+  const summary = summarizeSetup({ ...withPermissions({ listen: null, trusted: null }), helper: "stopped" });
+  assert.equal(summary.ready, false);
+  assert.deepEqual(summary.missing, ["按键监听"]);
 });
