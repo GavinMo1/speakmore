@@ -24,4 +24,7 @@ targets/*/_work/
 
 # 项目局部的分析引擎（Ghidra 等），体积大且可重新下载
 .tools/
+
+# 各子项目自己装的依赖，靠锁文件还原
+node_modules/
 __pycache__/

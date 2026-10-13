@@ -1,0 +1,23 @@
+{
+  "name": "typeless-clone-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typeless 听写仿刻的服务端：收分块音频，交给 Gemini 整理成文字",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/main.mjs",
+    "test": "node --test --test-timeout=5000",
+    "lint": "biome check .",
+    "check": "biome check . && npm test"
+  },
+  "dependencies": {
+    "@google/genai": "2.29.0",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15"
+  }
+}
