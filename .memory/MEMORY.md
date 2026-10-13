@@ -13,4 +13,4 @@
 - [本机情况不进仓库](machine-facts-stay-local.md) — 凭据名、路径、账号、姓名邮箱只放 .machine.env，仓库里只认变量名；提交前跑 scripts/check-no-machine-facts.sh
 - [可以用真实录音调提示词](typeless-clone-real-recordings-ok.md) — 用户已同意把 Typeless 历史录音发给 Gemini 调 SpeakMore 的提示词；再调时用 eval-prompt.mjs 对比，别把温度设回 0
 - [SpeakMore 按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节
-- [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，代码在仓库根；仓库已公开（GitHub 上叫 speakmore，MIT）；先做 CLI（一条命令启动、填 key 就能用），桌面端 App 以后用 Tauri；发 npm 等他说
+- [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，代码在仓库根，已公开（MIT）；一行命令安装并启动，装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端以后用 Tauri

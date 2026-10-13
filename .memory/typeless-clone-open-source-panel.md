@@ -1,6 +1,6 @@
 ---
 name: typeless-clone-open-source-panel
-description: 仿刻定名 SpeakMore，代码在仓库根（一个 npm 包）；现阶段按开源标准打磨，先做成 CLI 驱动（一条命令启动、填 key 就能用），桌面端 App 以后用 Tauri 做
+description: 仿刻定名 SpeakMore，代码在仓库根；按开源标准打磨：一行命令安装并启动、装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端 App 以后用 Tauri
 metadata:
   type: project
 ---
@@ -13,16 +13,24 @@ Typeless 的仿刻定名 **SpeakMore**，代码就在仓库根（一个 npm 包�
 
 > 要先做成 CLI 驱动的方式。在这个 CLI 里可以启动、可以查看历史（就像 Typeless 一样），也可以看一些配置之类的。先把 CLI 系统搭起来，这是产品的第一步，之后再去做桌面端 App 的事。
 
+同一天稍后他把"一行命令"的标准又提了一层，原话：
+
+> 需要彻底调整一下咱们这个项目的运行时状态，就是要像 Claude Code 一样，要把所有产生和需要配置的东西都放到同一个隔离环境里，像 .speakmore/。这样子它一下子就能装到对应的位置，而且之后如果需要删除，它也能一下子彻底删除干净。
+
+> onboarding 要做好，不要让用户自己 npm，把这些 onboarding 流程都做好，让用户一行命令就能安装+启动，并且有安装的预检查，让用户有一个好的体验。以及要有环境隔离的思想，无论是 key、安装的包都在 .speakmore 之下，就像 claude code 一样。
+
 **Why:** 上一轮做成了"打包成应用 + 设置窗口"，他看过后把衡量标准换成"陌生人从仓库拿到就能跑起来"，并且认为当时只打包了客户端、不够彻底。图形界面的主窗口他打算以后用 Tauri 另做，所以现在不在 Electron 上继续堆界面。
 
 **How to apply:**
 
 - 评判每个决定时问"一个刚拿到仓库的人，要几步才能说出第一句话"。安装步骤、报错、README 都按这个人写；自己照陌生人的路径真跑一遍（打成包装到别处、在伪终端里走第一次使用），2026-10-13 这样跑出了三个单看代码发现不了的问题。
+- 一切落在 `~/.speakmore/` 一个目录里（程序 `bin/ app/ runtime/`，用户的东西 `settings.json gemini-key.bin data/`，运行时的 `logs/ run/ cache/`），布局定在 `src/paths.mjs`。新加任何会落盘的东西都放进这里；非放在目录以外不可的（命令链接、钥匙串条目），要让 `speakmore uninstall` 删得掉，删不掉的要在卸载时照实列出来。往 `~/Library`、全局 npm、shell 配置文件里写东西都算走偏。
+- 给用户的安装方式是 `curl … install.sh | bash`：预检查 → 下载校验 → 装好 → 直接启动。不要求用户有 Node、npm、Xcode（包里自带 Electron，命令行也拿它当 Node 跑）。让用户自己敲 `npm install`/`npm link` 的步骤只留给"从源码开发"那一节。发 npm 这条路因此不再走（我的判断：它会把程序装到 `.speakmore` 以外；他没有单独说过"不发 npm"）。
 - 入口是 `speakmore` 命令。新功能先想它在命令行里是什么样；不要往 Electron 的窗口里加新界面，那部分等 Tauri。现有的悬浮条、菜单栏、设置窗口保留，打成 .app 的脚本也还在，但都不是主路径。
 - 范围仍受 [[typeless-clone-scope-dictation]] 约束，只做语音转写。原版主窗口的三张截图（首页的统计、历史、词典）存在 `targets/typeless/_work/ui-reference/`，不进 git；词典还没做，它对应现在和原版差得最多的地方（专有名词听错），做之前问一句。
 - 开源前他定下的几件事：`.memory/` 保留并随项目迁移，工作习惯可以公开，逆向文档保留，本机情况改成配置驱动（[[machine-facts-stay-local]]），git 历史里泄露隐私的内容要抹掉。
 - 仓库 2026-10-13 已公开，在 GitHub 上叫 `speakmore`（名字是他定的；本地目录名没改，仍是 reverse-anything），许可证 MIT。公开前旧的私有仓库由他本人删掉，改写过的历史推到了新仓库。
-- 包仍标着 `private`，还没有发到 npm。发布他点过头，但要他先登录 npm；我提醒过两点（npm 会公开发布者账号的邮箱、这一版还没有人用真键盘和麦克风试过），什么时候发等他说。
+- 发布包放在 GitHub Release 上（`npm run release` 打出两种芯片各一个，外加 `install.sh`）。建 Release、传文件和 push 一样是往外发东西，每次都要先问他。
 - 产品原来在 `speakmore/` 子目录里（克隆下来是 `speakmore/speakmore`），2026-10-13 他同意后挪到了仓库根。仓库根现在既是 npm 包又放着逆向资料和协作文件：进 npm 包的东西靠 `package.json` 的 `files` 白名单，打 .app 靠 `scripts/package.mjs` 里只拷指定的几样，往这两处加东西时别把 `targets/`、`.memory/` 带进去。
 
 相关：[[typeless-clone-as-real-product]]、[[typeless-clone-real-recordings-ok]]、[[typeless-clone-gemini-key]]。
