@@ -6,8 +6,9 @@ if (process.platform !== "darwin") {
   process.exit(1);
 }
 const [major, minor] = process.versions.node.split(".").map(Number);
-if (major < 22 || (major === 22 && minor < 12)) {
-  console.error(`SpeakMore 需要 Node 22.12 或更新的版本，现在是 ${process.versions.node}。`);
+// 22.13 起自带的 SQLite 才不用额外加启动参数（22.12 上实测会报"没有 node:sqlite 这个模块"）
+if (major < 22 || (major === 22 && minor < 13)) {
+  console.error(`SpeakMore 需要 Node 22.13 或更新的版本，现在是 ${process.versions.node}。`);
   process.exit(1);
 }
 

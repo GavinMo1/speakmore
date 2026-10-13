@@ -21,7 +21,7 @@
     "darwin"
   ],
   "engines": {
-    "node": ">=22.12"
+    "node": ">=22.13"
   },
   "scripts": {
     "start": "node bin/speakmore.mjs",
