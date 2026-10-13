@@ -9,3 +9,4 @@
 - [Ghidra 在项目内](ghidra-project-local.md) — 装在 .tools/，MCP 没带路径，原生分析走 REA 命令行并先 lipo 切单架构
 - [Typeless 仿刻范围](typeless-clone-scope-dictation.md) — 已定只做语音转写（单击 fn 听写加历史），其他模式不做
 - [请用户配合时只给步骤](user-action-requests-plain-steps.md) — 需要他动手时列两三步动作，技术细节留到事后总结
+- [Typeless 仿刻的 Gemini key](typeless-clone-gemini-key.md) — 用凭据 <GEMINI_CREDENTIAL>，经 withkey 加载，不要用 <另一把凭据>
