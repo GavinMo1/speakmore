@@ -31,7 +31,7 @@ targets/*/_work/
 # 各子项目自己装的依赖，靠锁文件还原
 node_modules/
 
-# 仿刻客户端本机编译出来的原生小程序
-targets/*/clone/*/build/
+# SpeakMore 本机编译出来的原生小程序和打出来的应用
+speakmore/build/
+speakmore/dist/
 __pycache__/
-targets/*/clone/*/dist/

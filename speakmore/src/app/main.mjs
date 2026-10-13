@@ -1,0 +1,524 @@
+import { join } from "node:path";
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  ipcMain,
+  Menu,
+  nativeImage,
+  safeStorage,
+  screen,
+  shell,
+  systemPreferences,
+  Tray,
+} from "electron";
+import { startControlServer } from "../control.mjs";
+import { openHistory } from "../history.mjs";
+import { alsoLogTo, log } from "../log.mjs";
+import { resolvePaths } from "../paths.mjs";
+import { HOTKEYS, resolveSettings } from "../settings.mjs";
+import { createDelivery } from "./delivery.mjs";
+import { startHelper } from "./helper.mjs";
+import { createKeyStore } from "./key-store.mjs";
+import { describeKeyError, startService } from "./service.mjs";
+import { summarizeSetup } from "./setup-state.mjs";
+
+// 后台应用的主进程：三个窗口（悬浮条、历史、设置）、菜单栏图标、原生小帮手、内置的听写服务，
+// 以及页面和命令行要它代办的事。平时由 speakmore 命令启动（src/cli），也可以打成应用双击启动。
+// 结构对应原版的"主进程 + 悬浮条 + 键盘子进程"（targets/typeless/docs/03-process-architecture.md）。
+
+/** 调试用：设了就连这个地址上单独启动的服务端，不启动内置的那个 */
+const EXTERNAL_SERVER_URL = process.env.SPEAKMORE_SERVER_URL ?? null;
+/** 是 speakmore 命令启动的：日志由它接到文件里，缺什么也由它在终端里说，这边不自己弹设置窗口 */
+const LAUNCHED_BY_CLI = process.env.SPEAKMORE_CLI === "1";
+
+let PATHS;
+let SETTINGS;
+try {
+  PATHS = resolvePaths(process.env);
+  SETTINGS = resolveSettings({ file: PATHS.settingsFile, env: process.env });
+} catch (error) {
+  // 路径或设置写错是使用上的问题，说一句人话就退出，不留一个按了热键没反应的进程
+  console.error(error.message);
+  process.exit(2);
+}
+const HOTKEY = SETTINGS.hotkey.value;
+const HOTKEY_LABEL = HOTKEYS[HOTKEY];
+const BAR_SIZE = { width: 380, height: 64 };
+const BAR_BOTTOM_GAP = 28;
+const KEY_PAGE_URL = "https://aistudio.google.com/apikey";
+/** 系统设置里三项权限各自的页面 */
+const PRIVACY_PANES = {
+  microphone: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+  listen: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent",
+  trusted: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+};
+
+// 数据目录由 paths.mjs 定，命令行和这里用同一处；不交给 Electron 按应用名去猜，
+// 否则命令启动的和打成应用的会各存一份历史
+app.setPath("userData", PATHS.dataDir);
+
+// 打成应用后没有终端，日志自己写文件。由命令启动时标准输出已经被接到同一个文件里了
+if (app.isPackaged) alsoLogTo(PATHS.logFile);
+
+if (!app.requestSingleInstanceLock()) {
+  console.error("已经有一个在运行了");
+  app.exit(1);
+}
+
+const sourceDir = join(app.getAppPath(), "src");
+const webPreferences = { preload: join(sourceDir, "preload", "preload.cjs"), sandbox: true, contextIsolation: true };
+
+// 不能写成顶层的 await app.whenReady()：Electron 要等主模块加载完才会就绪，
+// 而顶层 await 让模块一直加载不完，两边互相等（Electron 44.7 实测如此）。
+app
+  .whenReady()
+  .then(main)
+  .catch((error) => {
+    // 启动失败时没有窗口可以报错，记下来并以非零码退出，不留一个什么都不干的进程
+    log.error("startup_failed", { error: String(error?.stack ?? error) });
+    app.exit(1);
+  });
+
+async function main() {
+  app.dock?.hide();
+
+  const userData = PATHS.dataDir;
+  const startedAt = new Date().toISOString();
+  const history = openHistory(PATHS.historyDb);
+  const keyStore = createKeyStore({ file: app.isPackaged ? PATHS.appKeyFile : PATHS.keyFile, safeStorage });
+  const service = EXTERNAL_SERVER_URL
+    ? null
+    : await startService({ log, model: SETTINGS.model.value, thinkingLevel: SETTINGS.thinking.value });
+  const serverUrl = EXTERNAL_SERVER_URL ?? service.url;
+  const e2e = process.env.SPEAKMORE_E2E_OUT ? await import("./e2e.mjs") : null;
+
+  /** key 的状态：missing / unreadable / checking / rejected / ready；source 是 env、stored 或 external */
+  let key = { state: "missing", source: null, problem: null };
+  /** 小帮手报上来的两项权限；null 表示它还没启动好 */
+  let helperPermissions = null;
+  /** 启动时对麦克风和 key 的检查做完了没有 */
+  let startupChecked = false;
+  let historyWindow = null;
+  let settingsWindow = null;
+  log.info("started", {
+    version: app.getVersion(),
+    hotkey: HOTKEY,
+    model: SETTINGS.model.value,
+    thinking: SETTINGS.thinking.value,
+    user_data: userData,
+    server_url: serverUrl,
+    packaged: app.isPackaged,
+    by_cli: LAUNCHED_BY_CLI,
+    e2e: Boolean(e2e),
+  });
+
+  // ---------- 能不能用、还差什么 ----------
+
+  const currentSetup = () => ({
+    key,
+    permissions: {
+      microphone: systemPreferences.getMediaAccessStatus("microphone"),
+      listen: helperPermissions?.listen ?? null,
+      trusted: helperPermissions?.trusted ?? null,
+    },
+  });
+
+  let offeredSettings = LAUNCHED_BY_CLI;
+  /**
+   * 还缺东西就把设置窗口打开，第一次启动的人不用猜下一步该干什么。只主动弹一次。
+   * 由命令启动时不弹：那个人正看着终端，突然冒出一个窗口还会把他正要粘贴 key 的焦点抢走。
+   * 几样检查是先后到的（key 要验证、小帮手要启动），都有了结论才判断，免得刚启动就误报。
+   */
+  function offerSettingsIfIncomplete() {
+    const setup = currentSetup();
+    if (offeredSettings || !startupChecked || setup.key.state === "checking" || setup.permissions.listen === null)
+      return;
+    const summary = summarizeSetup(setup);
+    if (summary.missing.length === 0 && summary.degraded === null) return;
+    offeredSettings = true;
+    log.info("settings_offered", { missing: summary.missing, degraded: summary.degraded !== null });
+    showSettings();
+  }
+
+  /** 上面任何一样变了都调一次：菜单栏和设置窗口跟着更新 */
+  function setupChanged() {
+    refreshTrayMenu();
+    settingsWindow?.webContents.send("setup:changed");
+  }
+
+  /** 拿一把 key 去验证，通过了才开始用。不抛错：结果记在 key 的状态里 */
+  async function adoptKey(apiKey, source) {
+    key = { state: "checking", source, problem: null };
+    setupChanged();
+    try {
+      await service.useKey(apiKey);
+      key = { state: "ready", source, problem: null };
+      log.info("key_ready", { source });
+    } catch (error) {
+      key = { state: "rejected", source, problem: describeKeyError(error) };
+      log.error("key_rejected", { source, error: String(error?.message ?? error).slice(0, 300) });
+    }
+    setupChanged();
+    return key;
+  }
+
+  /** 启动时找 key：环境变量优先（从终端用按需加载器启动时），其次是存在钥匙串里的那把 */
+  function loadKeyAtStartup() {
+    if (!service) {
+      key = { state: "ready", source: "external", problem: null };
+      return Promise.resolve(key);
+    }
+    const fromEnv = process.env.GEMINI_API_KEY?.trim();
+    if (fromEnv) return adoptKey(fromEnv, "env");
+    let stored;
+    try {
+      stored = keyStore.load();
+    } catch (error) {
+      // 换了签名或钥匙串里的密钥没了都会这样，只能请用户重新填
+      log.error("key_unreadable", { error: String(error?.message ?? error) });
+      key = { state: "unreadable", source: "stored", problem: "存着的 key 读不出来了，重新填一次" };
+      return Promise.resolve(key);
+    }
+    return stored ? adoptKey(stored, "stored") : Promise.resolve(key);
+  }
+
+  // ---------- 悬浮条 ----------
+
+  function createBar() {
+    const { workArea } = screen.getPrimaryDisplay();
+    const bar = new BrowserWindow({
+      ...BAR_SIZE,
+      x: Math.round(workArea.x + (workArea.width - BAR_SIZE.width) / 2),
+      y: workArea.y + workArea.height - BAR_SIZE.height - BAR_BOTTOM_GAP,
+      show: false,
+      frame: false,
+      transparent: true,
+      hasShadow: false,
+      resizable: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      // 不能抢焦点：焦点一旦离开用户正在用的输入框，文字就贴不进去了
+      focusable: false,
+      webPreferences,
+    });
+    bar.setIgnoreMouseEvents(true);
+    bar.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    bar.loadFile(join(sourceDir, "renderer", "bar.html"));
+    return bar;
+  }
+
+  const bar = createBar();
+  ipcMain.on("bar:set-visible", (_event, visible) => {
+    if (visible) bar.showInactive();
+    else bar.hide();
+  });
+  const notify = (message) => {
+    // 退出途中窗口已经销毁，这时再发消息会抛错
+    if (!bar.isDestroyed()) bar.webContents.send("notice", message);
+  };
+
+  // ---------- 按键和贴字 ----------
+
+  let helper = null;
+  /** 每启动一个小帮手加一；旧的那个退出时发来的事件靠它认出来并丢掉 */
+  let helperGeneration = 0;
+
+  function launchHelper() {
+    const generation = ++helperGeneration;
+    helperPermissions = null;
+    helper = startHelper(join(app.getAppPath(), "build", "key-helper"), {
+      args: ["--key", HOTKEY],
+      onEvent: (event) => {
+        if (generation === helperGeneration) onHelperEvent(event);
+      },
+      log,
+    });
+  }
+
+  function onHelperEvent(event) {
+    switch (event.event) {
+      case "ready":
+        helperPermissions = { listen: event.listen, trusted: event.trusted };
+        log.info("helper_ready", helperPermissions);
+        setupChanged();
+        offerSettingsIfIncomplete();
+        break;
+      case "hotkey":
+      case "other_key": {
+        // 热键不灵时先看这条日志有没有：没有就是小帮手没收到按键（权限或键选错了）
+        log.info("key_event", { event: event.event, down: event.down });
+        const { blocker } = summarizeSetup(currentSetup());
+        if (blocker === null) bar.webContents.send("hotkey", event);
+        else if (event.event === "hotkey" && event.down) notify(blocker);
+        break;
+      }
+      case "exit":
+        helperPermissions = null;
+        log.error("helper_exited", { code: event.code, signal: event.signal });
+        setupChanged();
+        notify(`按键监听停了，${HOTKEY_LABEL}不会生效：重新启动试试`);
+        break;
+      default:
+        log.warn("helper_unknown_event", { event: event.event });
+    }
+  }
+
+  // 端到端测试时不启动小帮手：不听真键盘，也绝不往用户当前的窗口里贴字
+  if (e2e) helper = e2e.fakeHelper;
+  else launchHelper();
+
+  // ---------- 页面要主进程代办的事 ----------
+
+  const delivery = createDelivery({
+    recordingsDir: PATHS.recordingsDir,
+    history,
+    paste: (text) => helper.paste(text),
+    writeClipboard: (text) => clipboard.writeText(text),
+    log,
+  });
+  const historyChanged = () => historyWindow?.webContents.send("history:changed");
+
+  ipcMain.handle("config:get", () => ({ serverUrl, hotkeyLabel: HOTKEY_LABEL }));
+  ipcMain.handle("dictation:deliver", async (_event, payload) => {
+    const result = await delivery.completed(payload);
+    // 只记长度：成品是用户说的话，不进日志
+    log.info("delivered", { audio_id: payload.audioId, text_length: payload.text.length, notice: result.notice });
+    historyChanged();
+    e2e?.onFinished({ delivered: payload.text, notice: result.notice });
+    return result;
+  });
+  ipcMain.handle("dictation:failed", (_event, payload) => {
+    delivery.failed(payload);
+    log.warn("dictation_failed", { audio_id: payload.audioId, error: payload.error });
+    historyChanged();
+    e2e?.onFinished({ failed: payload.error });
+  });
+  ipcMain.handle("history:list", () => history.list());
+  ipcMain.handle("history:show", () => showHistory());
+  ipcMain.handle("clipboard:write", (_event, text) => {
+    if (typeof text !== "string") throw new TypeError("要复制的不是文字");
+    clipboard.writeText(text);
+  });
+
+  // ---------- 设置窗口要主进程代办的事 ----------
+
+  ipcMain.handle("setup:get", () => {
+    const setup = currentSetup();
+    return {
+      ...setup,
+      summary: summarizeSetup(setup),
+      hotkeyLabel: HOTKEY_LABEL,
+      // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
+      openAtLogin: { supported: app.isPackaged, enabled: app.getLoginItemSettings().openAtLogin },
+      dataDir: userData,
+    };
+  });
+  /** 验证并保存一把 key。设置窗口和 speakmore key 走的是这同一个函数 */
+  async function saveKey(value) {
+    if (typeof value !== "string" || value.trim() === "") return { ok: false, problem: "还没有填 key" };
+    if (!service) return { ok: false, problem: "现在连的是单独启动的服务端（SPEAKMORE_SERVER_URL），key 在那边配" };
+    const apiKey = value.trim();
+    const previous = key;
+    const result = await adoptKey(apiKey, "stored");
+    if (result.state !== "ready") {
+      // 服务里原来能用的那把还在用（useKey 失败不会换掉它），状态也要跟着还原
+      if (previous.state === "ready") {
+        key = previous;
+        setupChanged();
+      }
+      return { ok: false, problem: result.problem };
+    }
+    try {
+      keyStore.save(apiKey);
+    } catch (error) {
+      // 验证过了但存不下来：这次运行照样能用，下次启动要重填，如实告诉用户
+      log.error("key_save_failed", { error: String(error?.message ?? error) });
+      return { ok: false, problem: `key 能用，但没存下来（${error.message}），退出后要重新填` };
+    }
+    return { ok: true };
+  }
+
+  function forgetKey() {
+    keyStore.clear();
+    service?.forgetKey();
+    key = { state: "missing", source: null, problem: null };
+    log.info("key_forgotten");
+    setupChanged();
+  }
+
+  ipcMain.handle("setup:save-key", (_event, value) => saveKey(value));
+  ipcMain.handle("setup:forget-key", forgetKey);
+  ipcMain.handle("setup:read-clipboard", () => clipboard.readText());
+  ipcMain.handle("setup:open-key-page", () => shell.openExternal(KEY_PAGE_URL));
+  ipcMain.handle("setup:open-privacy", async (_event, permission) => {
+    if (!Object.hasOwn(PRIVACY_PANES, permission)) throw new TypeError(`不认识的权限：${permission}`);
+    // 麦克风从没问过时，系统设置的列表里还没有这个应用，要先让系统弹一次授权框
+    if (permission === "microphone" && systemPreferences.getMediaAccessStatus("microphone") === "not-determined") {
+      await systemPreferences.askForMediaAccess("microphone");
+      setupChanged();
+      return;
+    }
+    await shell.openExternal(PRIVACY_PANES[permission]);
+  });
+  /** 两项系统权限是小帮手启动时查的，授权之后要重启它才看得到 */
+  function recheckPermissions() {
+    if (!e2e) {
+      helper.stop();
+      launchHelper();
+    }
+    setupChanged();
+  }
+  ipcMain.handle("setup:recheck", recheckPermissions);
+  ipcMain.handle("setup:set-open-at-login", (_event, enabled) => {
+    if (!app.isPackaged) throw new Error("从终端启动时不能设置开机启动");
+    app.setLoginItemSettings({ openAtLogin: Boolean(enabled) });
+    log.info("open_at_login", { enabled: Boolean(enabled) });
+    setupChanged();
+  });
+
+  // ---------- 菜单栏和两个普通窗口 ----------
+
+  function showWindow(existing, create) {
+    const window = existing ?? create();
+    window.show();
+    // 这是个没有程序坞图标的应用，不主动要一下焦点的话窗口会开在别的应用后面
+    app.focus({ steal: true });
+    return window;
+  }
+
+  function showHistory() {
+    historyWindow = showWindow(historyWindow, () => {
+      const window = new BrowserWindow({ width: 560, height: 680, minWidth: 380, title: "历史记录", webPreferences });
+      window.loadFile(join(sourceDir, "renderer", "history.html"));
+      window.on("closed", () => {
+        historyWindow = null;
+      });
+      return window;
+    });
+  }
+
+  function showSettings() {
+    settingsWindow = showWindow(settingsWindow, () => {
+      const window = new BrowserWindow({
+        width: 560,
+        height: 720,
+        minWidth: 460,
+        minHeight: 480,
+        title: "听写设置",
+        webPreferences,
+      });
+      window.loadFile(join(sourceDir, "renderer", "settings.html"));
+      // 用户去系统设置里改完权限再切回来时，状态跟着刷新
+      window.on("focus", () => window.webContents.send("setup:changed"));
+      window.on("closed", () => {
+        settingsWindow = null;
+      });
+      return window;
+    });
+  }
+
+  // 菜单栏上只放文字，不放图标
+  const tray = new Tray(nativeImage.createEmpty());
+  tray.setTitle("听写");
+
+  function refreshTrayMenu() {
+    const summary = summarizeSetup(currentSetup());
+    const headline = summary.ready
+      ? `可以用了：按一下${HOTKEY_LABEL}开始说话`
+      : summary.missing.length > 0
+        ? `还差：${summary.missing.join("、")}`
+        : "正在准备…";
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: headline, enabled: false },
+        ...(summary.degraded ? [{ label: summary.degraded, enabled: false }] : []),
+        { type: "separator" },
+        { label: "设置…", click: showSettings },
+        { label: "历史记录…", click: showHistory },
+        { type: "separator" },
+        { label: "退出", click: () => app.quit() },
+      ]),
+    );
+  }
+  refreshTrayMenu();
+
+  // 没有窗口时也继续待在菜单栏里
+  app.on("window-all-closed", () => {});
+  // 已经开着时又启动了一次（比如又双击了一下图标）：把设置窗口亮出来，让人知道它在哪
+  app.on("second-instance", showSettings);
+  app.on("before-quit", () => {
+    // 先让小帮手的事件作废：它接下来的退出是我们自己关的，不该再报"按键监听停了"
+    helperGeneration++;
+    helper.stop();
+    history.close();
+    // 应用正在退出，这两样关不干净也不拦着；记一笔方便排查
+    service?.close().catch((error) => log.warn("service_close_failed", { error: String(error) }));
+    control?.close().catch((error) => log.warn("control_close_failed", { error: String(error) }));
+  });
+
+  // ---------- 命令行要主进程代办的事 ----------
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  /** 等小帮手把两项权限报上来；它起不来时最多等 3 秒 */
+  async function helperReported() {
+    for (let waited = 0; helperPermissions === null && waited < 3_000; waited += 50) await sleep(50);
+  }
+
+  function describeStatus() {
+    const setup = currentSetup();
+    return {
+      pid: process.pid,
+      version: app.getVersion(),
+      startedAt,
+      // 启动时要等 key 验证完、麦克风的授权框有了回应，才算准备好
+      starting: !startupChecked,
+      hotkey: HOTKEY,
+      hotkeyLabel: HOTKEY_LABEL,
+      ...setup,
+      summary: summarizeSetup(setup),
+    };
+  }
+
+  // 端到端测试不开控制通道：它自己驱动整个流程，没有命令行参与
+  const control = e2e
+    ? null
+    : await startControlServer({
+        socketPath: PATHS.controlSocket,
+        log,
+        handlers: {
+          /** recheck：先重新查一遍系统权限再回答（用户刚去系统设置里改过时用） */
+          async status({ recheck = false }) {
+            if (recheck && Object.values(helperPermissions ?? {}).includes(false)) recheckPermissions();
+            await helperReported();
+            return describeStatus();
+          },
+          "set-key": ({ key: value }) => saveKey(value),
+          "forget-key": forgetKey,
+          "show-settings": showSettings,
+          "show-history": showHistory,
+          // 先把这次的回答发出去再退出
+          quit: () => void setImmediate(() => app.quit()),
+        },
+      });
+
+  // ---------- 启动时的检查 ----------
+
+  const keyLoaded = loadKeyAtStartup();
+  if (e2e) {
+    const loaded = await keyLoaded;
+    if (loaded.state !== "ready") throw new Error(`端到端测试需要能用的 key：${loaded.problem ?? loaded.state}`);
+    await e2e.run({ bar, history, quit: (code) => app.exit(code) });
+    return;
+  }
+
+  const granted = await systemPreferences.askForMediaAccess("microphone");
+  log.info("microphone_access", { granted });
+  await keyLoaded;
+  startupChecked = true;
+  setupChanged();
+  offerSettingsIfIncomplete();
+  // 已经开着时又去双击应用图标，系统不会再起一个，而是"重新打开"这一个：同样把设置窗口亮出来。
+  // 等启动检查做完才挂上，免得把启动本身也当成一次重新打开
+  app.on("activate", showSettings);
+}

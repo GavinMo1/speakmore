@@ -1,0 +1,128 @@
+import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, test } from "node:test";
+import { NotRunningError, requestControl, startControlServer } from "../src/control.mjs";
+
+let dir;
+let socketPath;
+let server;
+let logged;
+const log = {
+  info: (event, fields) => logged.push({ level: "info", event, ...fields }),
+  warn: (event, fields) => logged.push({ level: "warn", event, ...fields }),
+  error: (event, fields) => logged.push({ level: "error", event, ...fields }),
+};
+
+beforeEach(() => {
+  // 套接字路径有长度上限，临时目录用短名字
+  dir = mkdtempSync(join(tmpdir(), "sm-"));
+  socketPath = join(dir, "control.sock");
+  server = null;
+  logged = [];
+});
+afterEach(async () => {
+  await server?.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("问一句答一句，参数原样交给处理函数", async () => {
+  server = await startControlServer({
+    socketPath,
+    log,
+    handlers: { greet: async ({ name }) => ({ text: `你好，${name}` }), ping: () => "pong" },
+  });
+  assert.deepEqual(await requestControl(socketPath, "greet", { name: "世界" }), { text: "你好，世界" });
+  assert.equal(await requestControl(socketPath, "ping"), "pong");
+});
+
+test("处理函数抛错时，对方收到那句错误说明", async () => {
+  server = await startControlServer({
+    socketPath,
+    log,
+    handlers: {
+      fail: () => {
+        throw new Error("这把 key 无效");
+      },
+    },
+  });
+  await assert.rejects(requestControl(socketPath, "fail"), /这把 key 无效/);
+});
+
+test("不认识的命令被拒绝", async () => {
+  server = await startControlServer({ socketPath, log, handlers: {} });
+  await assert.rejects(requestControl(socketPath, "dance"), /dance/);
+});
+
+test("出错时日志里只记命令名，不记参数（参数里可能是 key）", async () => {
+  server = await startControlServer({
+    socketPath,
+    log,
+    handlers: {
+      "set-key": () => {
+        throw new Error("不行");
+      },
+    },
+  });
+  await assert.rejects(requestControl(socketPath, "set-key", { key: "SECRET-VALUE" }));
+  assert.ok(logged.some((entry) => entry.cmd === "set-key"));
+  assert.ok(!JSON.stringify(logged).includes("SECRET-VALUE"));
+});
+
+test("没有在运行时抛 NotRunningError：没有套接字文件，或者只剩一个没人听的", async () => {
+  await assert.rejects(requestControl(socketPath, "ping"), NotRunningError);
+  writeFileSync(socketPath, "");
+  await assert.rejects(requestControl(socketPath, "ping"), NotRunningError);
+});
+
+test("启动时遇到上次没清掉的套接字文件，清掉重建", async () => {
+  // 先起一个再粗暴地关掉监听但留下文件，模拟进程被杀
+  const stale = createServer();
+  await new Promise((resolve) => stale.listen(socketPath, resolve));
+  stale.unref();
+  await new Promise((resolve) => {
+    // close 会顺手删文件，所以关掉后再补一个同名的普通文件
+    stale.close(() => resolve());
+  });
+  writeFileSync(socketPath, "");
+  server = await startControlServer({ socketPath, log, handlers: { ping: () => "pong" } });
+  assert.equal(await requestControl(socketPath, "ping"), "pong");
+});
+
+test("已经有一个在听时拒绝再启动，也不去动它的套接字", async () => {
+  server = await startControlServer({ socketPath, log, handlers: { ping: () => "first" } });
+  await assert.rejects(startControlServer({ socketPath, log, handlers: { ping: () => "second" } }), /已经有一个在运行/);
+  assert.equal(await requestControl(socketPath, "ping"), "first");
+});
+
+test("套接字只有自己能读写；关闭后文件被删掉", async () => {
+  server = await startControlServer({ socketPath, log, handlers: {} });
+  assert.equal(statSync(socketPath).mode & 0o777, 0o600);
+  await server.close();
+  server = null;
+  assert.equal(existsSync(socketPath), false);
+});
+
+test("对方一直不回话时按时放弃", async () => {
+  server = await startControlServer({ socketPath, log, handlers: { hang: () => new Promise(() => {}) } });
+  await assert.rejects(requestControl(socketPath, "hang", {}, { timeoutMs: 100 }), /没有在 0\.1 秒内回话/);
+});
+
+test("收到的不是一行 JSON 时回一句错误，不让服务挂掉", async () => {
+  server = await startControlServer({ socketPath, log, handlers: { ping: () => "pong" } });
+  const { connect } = await import("node:net");
+  const reply = await new Promise((resolve, reject) => {
+    const socket = connect(socketPath);
+    let data = "";
+    socket.on("data", (chunk) => {
+      data += chunk;
+    });
+    socket.on("end", () => resolve(data));
+    socket.on("error", reject);
+    socket.write("这不是 JSON\n");
+  });
+  assert.equal(JSON.parse(reply).ok, false);
+  assert.equal(await requestControl(socketPath, "ping"), "pong");
+});

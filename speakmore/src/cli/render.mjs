@@ -1,0 +1,253 @@
+import { HOTKEYS, SETTINGS } from "../settings.mjs";
+
+// 命令行各个画面的排版：状态面板、历史、设置。都是"数据进、一段文字出"，不碰终端也不读文件。
+
+const INDENT = "  ";
+
+/** @param {boolean} color 输出的是不是一个支持颜色的终端 */
+function paint(color) {
+  const wrap = (code) => (text) => (color ? `\x1b[${code}m${text}\x1b[0m` : text);
+  return { bold: wrap(1), dim: wrap(2), green: wrap(32), red: wrap(31), yellow: wrap(33) };
+}
+
+/** 一个汉字或全角标点在终端里占两格 */
+function displayWidth(text) {
+  let width = 0;
+  for (const char of text) width += char.codePointAt(0) >= 0x2e80 ? 2 : 1;
+  return width;
+}
+
+const padEnd = (text, width) => text + " ".repeat(Math.max(0, width - displayWidth(text)));
+const row = (label, value) => `${INDENT}${padEnd(label, 10)}${value}`;
+const count = (number) => number.toLocaleString("zh-CN");
+
+function duration(seconds) {
+  const total = Math.round(seconds);
+  if (total < 60) return `${total} 秒`;
+  const minutes = Math.floor(total / 60);
+  if (total < 3600) return total % 60 === 0 ? `${minutes} 分钟` : `${minutes} 分 ${total % 60} 秒`;
+  return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`;
+}
+
+// ---------- 状态面板 ----------
+
+function keyLine(key) {
+  switch (key.state) {
+    case "ready":
+      if (key.source === "env") return "这次运行用的是环境变量 GEMINI_API_KEY 里的，没有保存";
+      if (key.source === "external") return "连的是单独启动的服务端，key 在那边配";
+      return "已保存，验证通过";
+    case "checking":
+      return "正在验证…";
+    case "rejected":
+      return `不能用：${key.problem}。运行 speakmore key 换一把`;
+    case "unreadable":
+      return `${key.problem}：运行 speakmore key`;
+    default:
+      return "还没有填：运行 speakmore key";
+  }
+}
+
+function statsLine({ dictations, characters, seconds }, { withPace }) {
+  const parts = [`${count(dictations)} 次`, `${count(characters)} 字`, duration(seconds)];
+  // 每分钟多少字只在累计里给：一天里说得少时这个数跳得厉害，没有参考价值
+  if (withPace && seconds >= 60) parts.push(`每分钟 ${count(Math.round(characters / (seconds / 60)))} 字`);
+  return parts.join(" · ");
+}
+
+/**
+ * @param {object} view
+ * @param {object | null} view.status 后台应用报的状态；没有在运行时是 null
+ * @param {string} view.version 这个命令自己的版本，没有在运行时用它
+ * @param {Record<string, { value: string }>} view.settings
+ * @param {{ today: object | null, total: object | null }} view.stats 没有历史库时两项都是 null
+ * @param {{ color: boolean }} options
+ */
+export function renderStatus({ status, version, settings, stats }, { color }) {
+  const c = paint(color);
+  if (status === null) {
+    return [`${c.bold(`SpeakMore ${version}`)} · 没有运行`, "", `${INDENT}运行 ${c.bold("speakmore")} 启动。`, ""].join(
+      "\n",
+    );
+  }
+
+  const { summary, permissions } = status;
+  const state = status.starting
+    ? "正在启动"
+    : summary.ready
+      ? c.green("运行中")
+      : summary.missing.length > 0
+        ? c.yellow(`运行中，还差 ${summary.missing.length} 样`)
+        : "运行中，正在准备";
+  const lines = [`${c.bold(`SpeakMore ${status.version}`)} · ${state}`, ""];
+
+  if (summary.ready) {
+    lines.push(
+      `${INDENT}可以用了：点进任意输入框，按一下${status.hotkeyLabel}开始说话，再按一下结束，文字会贴进去。`,
+      "",
+    );
+  } else if (!status.starting && summary.missing.length > 0) {
+    lines.push(`${INDENT}还差：${summary.missing.join("、")}。`, "");
+  }
+
+  const mark = (granted) => (granted === null ? c.dim("…") : granted ? c.green("✓") : c.red("✗"));
+  const cells = [
+    `麦克风 ${mark(permissions.microphone === "granted")}`,
+    `输入监控 ${mark(permissions.listen)}`,
+    `辅助功能 ${mark(permissions.trusted)}`,
+  ];
+  lines.push(
+    row("key", keyLine(status.key)),
+    row("权限", cells.join("   ")),
+    row("热键", status.hotkeyLabel),
+    row("模型", `${settings.model.value}（${settings.thinking.value}）`),
+  );
+  if (stats.total && stats.total.dictations > 0) {
+    lines.push(
+      row("今天", statsLine(stats.today, { withPace: false })),
+      row("累计", statsLine(stats.total, { withPace: true })),
+    );
+  }
+
+  const permissionMissing =
+    permissions.microphone !== "granted" || permissions.listen === false || permissions.trusted === false;
+  if (permissionMissing) {
+    lines.push("");
+    if (summary.degraded) lines.push(`${INDENT}${summary.degraded}。`);
+    lines.push(
+      `${INDENT}运行 ${c.bold("speakmore settings")} 打开设置窗口：每项权限旁边有去系统设置的按钮，开关打开后点"重新检查"。`,
+      `${INDENT}${c.dim("权限记在启动 SpeakMore 的那个终端程序名下（比如“终端”或 iTerm），在系统设置的列表里找它。")}`,
+    );
+  }
+
+  lines.push(
+    "",
+    c.dim(`${INDENT}speakmore history  看说过的话     speakmore config  看和改设置`),
+    c.dim(`${INDENT}speakmore stop     停掉           speakmore help    全部命令`),
+    "",
+  );
+  return lines.join("\n");
+}
+
+// ---------- 历史 ----------
+
+const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+/** 按给定时区拆出年月日、星期和"时:分" */
+function localParts(date, timeZone) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(date)
+      .map(({ type, value }) => [type, value]),
+  );
+  return {
+    dayKey: `${parts.year}-${parts.month}-${parts.day}`,
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    weekday: WEEKDAYS[["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday)],
+    time: `${parts.hour}:${parts.minute}`,
+  };
+}
+
+function dayHeading(parts, now, timeZone) {
+  const date = `${parts.month} 月 ${parts.day} 日`;
+  const today = localParts(now, timeZone);
+  if (parts.dayKey === today.dayKey) return `今天 · ${date}`;
+  if (parts.dayKey === localParts(new Date(now.getTime() - 86_400_000), timeZone).dayKey) return `昨天 · ${date}`;
+  // 不是今年的要带上年份，否则分不清是哪一年的 10 月 8 日
+  return `${parts.year === today.year ? "" : `${parts.year} 年 `}${date} ${parts.weekday}`;
+}
+
+/**
+ * @param {object} view
+ * @param {Array<object>} view.rows 新的在前（历史库 list() 给的顺序）
+ * @param {number} view.total 库里一共多少条
+ * @param {{ color: boolean, now: Date, timeZone?: string }} options timeZone 不给就用系统的
+ */
+export function renderHistory({ rows, total }, { color, now, timeZone }) {
+  const c = paint(color);
+  if (rows.length === 0) {
+    return `还没有听写记录。运行 ${c.bold("speakmore")} 启动之后，按一下热键说句话试试。\n`;
+  }
+
+  // "  14:32  " 之后才是文字，续行缩进到同一列
+  const continuation = " ".repeat(INDENT.length + 5 + 2);
+  const lines = [];
+  let currentDay = null;
+  for (const entry of rows) {
+    const parts = localParts(new Date(entry.createdAt), timeZone);
+    if (parts.dayKey !== currentDay) {
+      if (currentDay !== null) lines.push("");
+      lines.push(c.bold(dayHeading(parts, now, timeZone)));
+      currentDay = parts.dayKey;
+    }
+    const body =
+      entry.status === "completed"
+        ? entry.refinedText.split("\n")
+        : [
+            c.red(`✗ 没有成功：${entry.error ?? "原因不明"}`),
+            c.dim(`录音 ${entry.duration.toFixed(1)} 秒，留在 ${entry.audioLocalPath ?? "（没存下来）"}`),
+          ];
+    body.forEach((line, index) => {
+      if (index === 0) lines.push(`${INDENT}${c.dim(parts.time)}  ${line}`);
+      // 段落之间的空行不带缩进，免得行尾留一串空格
+      else lines.push(line === "" ? "" : `${continuation}${line}`);
+    });
+  }
+
+  if (rows.length < total) {
+    lines.push("", c.dim(`显示最近 ${rows.length} 条，共 ${total} 条。speakmore history -n ${total} 看全部。`));
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+// ---------- 设置 ----------
+
+const SOURCES = {
+  default: () => "默认",
+  file: () => "存在设置文件里",
+  env: (setting) => `这次运行来自环境变量 ${setting.env}`,
+};
+
+/**
+ * @param {object} view
+ * @param {Record<string, { value: string, source: "env" | "file" | "default" }>} view.settings
+ * @param {{ dataDir: string, settingsFile: string, logFile: string }} view.paths
+ * @param {{ color: boolean }} options
+ */
+export function renderConfig({ settings, paths }, { color }) {
+  const c = paint(color);
+  const valueWidth = Math.max(...Object.values(settings).map(({ value }) => displayWidth(value))) + 2;
+  const lines = ["设置", ""];
+  for (const [name, setting] of Object.entries(SETTINGS)) {
+    const { value, source } = settings[name];
+    const meaning = name === "hotkey" ? `${HOTKEYS[value]} · ` : "";
+    lines.push(
+      row(name, `${c.bold(value)}${" ".repeat(valueWidth - displayWidth(value))}${meaning}${SOURCES[source](setting)}`),
+      row("", c.dim(`${setting.describe}${setting.choices ? `。能填：${setting.choices.join(" / ")}` : ""}`)),
+    );
+  }
+  lines.push(
+    "",
+    `${INDENT}改一项：speakmore config set hotkey fn`,
+    `${INDENT}回到默认：speakmore config unset hotkey`,
+    `${INDENT}换 key：speakmore key`,
+    "",
+    row("数据目录", paths.dataDir),
+    row("设置文件", paths.settingsFile),
+    row("日志", paths.logFile),
+    "",
+  );
+  return lines.join("\n");
+}
