@@ -71,12 +71,19 @@ test("小帮手中途退出：等着的粘贴失败，之后的粘贴直接失�
   await assert.rejects(helper.paste("再来"), /没有在运行/);
 });
 
-test("可执行文件不存在时，粘贴失败而不是一直等", async () => {
+test("可执行文件不存在时，粘贴失败而不是一直等；并且照样报一次“退出了”，上面才知道它没在", async () => {
   const errors = [];
+  const seen = [];
   const helper = startHelper("/不存在/的/程序", {
-    onEvent() {},
+    onEvent: (event) => seen.push(event),
     log: { warn() {}, error: (name) => errors.push(name) },
   });
   await assert.rejects(helper.paste("x"));
   assert.ok(errors.includes("helper_spawn_failed"));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.deepEqual(
+    seen.map((event) => event.event),
+    ["exit"],
+  );
+  await assert.rejects(helper.paste("再来"), /没有在运行/);
 });

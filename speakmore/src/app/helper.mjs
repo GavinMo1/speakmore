@@ -8,7 +8,7 @@ const PASTE_TIMEOUT_MS = 3_000;
  * @param {string} command 可执行文件
  * @param {object} options
  * @param {string[]} [options.args]
- * @param {(event: object) => void} options.onEvent 收到 ready / hotkey / other_key，以及小帮手退出时的 exit
+ * @param {(event: object) => void} options.onEvent 收到 ready / hotkey / other_key，以及小帮手不在了（退出或根本没起来）时的 exit，只报一次
  * @param {{ warn: Function, error: Function }} options.log
  */
 export function startHelper(command, { args = [], onEvent, log }) {
@@ -48,15 +48,20 @@ export function startHelper(command, { args = [], onEvent, log }) {
   });
   createInterface({ input: child.stderr }).on("line", (line) => log.warn("helper_stderr", { line }));
 
-  child.on("error", (error) => {
-    log.error("helper_spawn_failed", { command, error: String(error) });
-    rejectAll(error);
-  });
-  child.on("exit", (code, signal) => {
+  /** 它不在了：等着的粘贴全部失败，并往上报一次。启动不起来和中途退出都走这里 */
+  const gone = (reason, code = null, signal = null) => {
+    if (exited) return;
     exited = true;
-    rejectAll(new Error("原生小帮手退出了"));
+    rejectAll(reason);
     onEvent({ event: "exit", code, signal });
+  };
+
+  child.on("error", (error) => {
+    // 可执行文件不存在或没有执行权限时只有这个事件，不会再有 exit
+    log.error("helper_spawn_failed", { command, error: String(error) });
+    gone(error);
   });
+  child.on("exit", (code, signal) => gone(new Error("原生小帮手退出了"), code, signal));
 
   return {
     /**
