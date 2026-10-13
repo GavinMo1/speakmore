@@ -19,8 +19,9 @@ import { resolvePaths } from "../paths.mjs";
 import { HOTKEYS, resolveSettings } from "../settings.mjs";
 import { createDelivery } from "./delivery.mjs";
 import { startHelper } from "./helper.mjs";
+import { createKeyManager } from "./key-manager.mjs";
 import { createKeyStore } from "./key-store.mjs";
-import { describeKeyError, startService } from "./service.mjs";
+import { startService } from "./service.mjs";
 import { summarizeSetup } from "./setup-state.mjs";
 
 // 后台应用的主进程：三个窗口（悬浮条、历史、设置）、菜单栏图标、原生小帮手、内置的听写服务，
@@ -93,8 +94,7 @@ async function main() {
   const serverUrl = EXTERNAL_SERVER_URL ?? service.url;
   const e2e = process.env.SPEAKMORE_E2E_OUT ? await import("./e2e.mjs") : null;
 
-  /** key 的状态：missing / unreadable / checking / rejected / ready；source 是 env、stored 或 external */
-  let key = { state: "missing", source: null, problem: null };
+  const keys = createKeyManager({ service, keyStore, env: process.env, log, onChange: () => setupChanged() });
   /** 小帮手报上来的两项权限；null 表示它还没启动好 */
   let helperPermissions = null;
   /** 启动时对麦克风和 key 的检查做完了没有 */
@@ -116,7 +116,7 @@ async function main() {
   // ---------- 能不能用、还差什么 ----------
 
   const currentSetup = () => ({
-    key,
+    key: keys.current,
     permissions: {
       microphone: systemPreferences.getMediaAccessStatus("microphone"),
       listen: helperPermissions?.listen ?? null,
@@ -145,42 +145,6 @@ async function main() {
   function setupChanged() {
     refreshTrayMenu();
     settingsWindow?.webContents.send("setup:changed");
-  }
-
-  /** 拿一把 key 去验证，通过了才开始用。不抛错：结果记在 key 的状态里 */
-  async function adoptKey(apiKey, source) {
-    key = { state: "checking", source, problem: null };
-    setupChanged();
-    try {
-      await service.useKey(apiKey);
-      key = { state: "ready", source, problem: null };
-      log.info("key_ready", { source });
-    } catch (error) {
-      key = { state: "rejected", source, problem: describeKeyError(error) };
-      log.error("key_rejected", { source, error: String(error?.message ?? error).slice(0, 300) });
-    }
-    setupChanged();
-    return key;
-  }
-
-  /** 启动时找 key：环境变量优先（从终端用按需加载器启动时），其次是存在钥匙串里的那把 */
-  function loadKeyAtStartup() {
-    if (!service) {
-      key = { state: "ready", source: "external", problem: null };
-      return Promise.resolve(key);
-    }
-    const fromEnv = process.env.GEMINI_API_KEY?.trim();
-    if (fromEnv) return adoptKey(fromEnv, "env");
-    let stored;
-    try {
-      stored = keyStore.load();
-    } catch (error) {
-      // 换了签名或钥匙串里的密钥没了都会这样，只能请用户重新填
-      log.error("key_unreadable", { error: String(error?.message ?? error) });
-      key = { state: "unreadable", source: "stored", problem: "存着的 key 读不出来了，重新填一次" };
-      return Promise.resolve(key);
-    }
-    return stored ? adoptKey(stored, "stored") : Promise.resolve(key);
   }
 
   // ---------- 悬浮条 ----------
@@ -314,41 +278,9 @@ async function main() {
       dataDir: userData,
     };
   });
-  /** 验证并保存一把 key。设置窗口和 speakmore key 走的是这同一个函数 */
-  async function saveKey(value) {
-    if (typeof value !== "string" || value.trim() === "") return { ok: false, problem: "还没有填 key" };
-    if (!service) return { ok: false, problem: "现在连的是单独启动的服务端（SPEAKMORE_SERVER_URL），key 在那边配" };
-    const apiKey = value.trim();
-    const previous = key;
-    const result = await adoptKey(apiKey, "stored");
-    if (result.state !== "ready") {
-      // 服务里原来能用的那把还在用（useKey 失败不会换掉它），状态也要跟着还原
-      if (previous.state === "ready") {
-        key = previous;
-        setupChanged();
-      }
-      return { ok: false, problem: result.problem };
-    }
-    try {
-      keyStore.save(apiKey);
-    } catch (error) {
-      // 验证过了但存不下来：这次运行照样能用，下次启动要重填，如实告诉用户
-      log.error("key_save_failed", { error: String(error?.message ?? error) });
-      return { ok: false, problem: `key 能用，但没存下来（${error.message}），退出后要重新填` };
-    }
-    return { ok: true };
-  }
-
-  function forgetKey() {
-    keyStore.clear();
-    service?.forgetKey();
-    key = { state: "missing", source: null, problem: null };
-    log.info("key_forgotten");
-    setupChanged();
-  }
-
-  ipcMain.handle("setup:save-key", (_event, value) => saveKey(value));
-  ipcMain.handle("setup:forget-key", forgetKey);
+  // 设置窗口和 speakmore key 存 key、删 key，走的是同一处
+  ipcMain.handle("setup:save-key", (_event, value) => keys.save(value));
+  ipcMain.handle("setup:forget-key", () => keys.forget());
   ipcMain.handle("setup:read-clipboard", () => clipboard.readText());
   ipcMain.handle("setup:open-key-page", () => shell.openExternal(KEY_PAGE_URL));
   ipcMain.handle("setup:open-privacy", async (_event, permission) => {
@@ -369,7 +301,14 @@ async function main() {
     }
     setupChanged();
   }
-  ipcMain.handle("setup:recheck", recheckPermissions);
+  /** 启动时没连上网、先用着的 key，在后台再验一次。不等结果：没网时一等就是几十秒 */
+  function reverifyKeyInBackground() {
+    keys.reverify().catch((error) => log.error("key_reverify_failed", { error: String(error?.stack ?? error) }));
+  }
+  ipcMain.handle("setup:recheck", () => {
+    recheckPermissions();
+    reverifyKeyInBackground();
+  });
   ipcMain.handle("setup:set-open-at-login", (_event, enabled) => {
     if (!app.isPackaged) throw new Error("从终端启动时不能设置开机启动");
     app.setLoginItemSettings({ openAtLogin: Boolean(enabled) });
@@ -487,14 +426,17 @@ async function main() {
         socketPath: PATHS.controlSocket,
         log,
         handlers: {
-          /** recheck：先重新查一遍系统权限再回答（用户刚去系统设置里改过时用） */
+          /** recheck：把会自己变的几样重新看一遍再回答（用户刚去系统设置里改过、网刚连上时用） */
           async status({ recheck = false }) {
-            if (recheck && Object.values(helperPermissions ?? {}).includes(false)) recheckPermissions();
+            if (recheck) {
+              if (Object.values(helperPermissions ?? {}).includes(false)) recheckPermissions();
+              reverifyKeyInBackground();
+            }
             await helperReported();
             return describeStatus();
           },
-          "set-key": ({ key: value }) => saveKey(value),
-          "forget-key": forgetKey,
+          "set-key": ({ key }) => keys.save(key),
+          "forget-key": () => keys.forget(),
           "show-settings": showSettings,
           "show-history": showHistory,
           // 先把这次的回答发出去再退出
@@ -504,7 +446,7 @@ async function main() {
 
   // ---------- 启动时的检查 ----------
 
-  const keyLoaded = loadKeyAtStartup();
+  const keyLoaded = keys.loadAtStartup();
   if (e2e) {
     const loaded = await keyLoaded;
     if (loaded.state !== "ready") throw new Error(`端到端测试需要能用的 key：${loaded.problem ?? loaded.state}`);

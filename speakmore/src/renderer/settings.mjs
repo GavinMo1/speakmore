@@ -11,14 +11,28 @@ const keyProblem = $("key-problem");
 let saving = false;
 
 function keyText(key) {
+  // 启动时够不着 Gemini 的话先用着，如实说还没验证
+  const unverified = key.verified === false ? "启动时没连上 Gemini，还没验证这把能不能用。" : "";
   switch (key.state) {
     case "ready":
-      if (key.source === "env") return ["这次运行用的是环境变量 GEMINI_API_KEY 里的 key，没有保存。", "ok"];
+      if (key.source === "env") {
+        return [`这次运行用的是环境变量 GEMINI_API_KEY 里的 key，没有保存。${unverified}`, "ok"];
+      }
       if (key.source === "external") return ["现在连的是单独启动的服务端，key 在那边配。", "ok"];
-      return ["已保存，验证通过。", "ok"];
+      return unverified ? [`已保存。${unverified}`, "pending"] : ["已保存，验证通过。", "ok"];
     case "checking":
       return ["正在验证…", "pending"];
     case "rejected":
+      // 三种情况要做的事不一样：只有最后一种是在下面换一把就能解决的
+      if (key.cause === "other") {
+        return [`验证没通过：${key.problem}。key 未必有问题，先看模型和思考档位的设置。`, "problem"];
+      }
+      if (key.source === "env") {
+        return [
+          `环境变量 GEMINI_API_KEY 里的 key 不能用：${key.problem}。改对它，或者去掉这个环境变量，再重新启动。`,
+          "problem",
+        ];
+      }
       return [`现在这把不能用：${key.problem}`, "problem"];
     case "unreadable":
       return [key.problem, "problem"];
