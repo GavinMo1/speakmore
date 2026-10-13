@@ -10,3 +10,5 @@
 - [Typeless 仿刻范围](typeless-clone-scope-dictation.md) — 已定只做语音转写（单击 fn 听写加历史），其他模式不做
 - [请用户配合时只给步骤](user-action-requests-plain-steps.md) — 需要他动手时列两三步动作，技术细节留到事后总结
 - [Typeless 仿刻的 Gemini key](typeless-clone-gemini-key.md) — 用凭据 <GEMINI_CREDENTIAL>，经 withkey 加载，不要用 <另一把凭据>
+- [可以用真实录音调提示词](typeless-clone-real-recordings-ok.md) — 用户已同意把 Typeless 历史录音发给 Gemini 调仿刻的提示词，先解决换行分点
+- [仿刻按真实产品打磨](typeless-clone-as-real-product.md) — 启动方式等从用户层面考虑，不再用"玩具"当理由省环节
