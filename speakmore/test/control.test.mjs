@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { NotRunningError, requestControl, startControlServer } from "../src/control.mjs";
+import { ControlError, NotRunningError, requestControl, startControlServer, TimeoutError } from "../src/control.mjs";
 
 let dir;
 let socketPath;
@@ -107,7 +107,44 @@ test("套接字只有自己能读写；关闭后文件被删掉", async () => {
 
 test("对方一直不回话时按时放弃", async () => {
   server = await startControlServer({ socketPath, log, handlers: { hang: () => new Promise(() => {}) } });
-  await assert.rejects(requestControl(socketPath, "hang", {}, { timeoutMs: 100 }), /没有在 0\.1 秒内回话/);
+  await assert.rejects(
+    requestControl(socketPath, "hang", {}, { timeoutMs: 100 }),
+    (error) => error instanceof TimeoutError && /没有在 0\.1 秒内回话/.test(error.message),
+  );
+});
+
+test("没在运行和不答话都是 ControlError，调用方可以一并当成说得清的失败来处理", () => {
+  assert.ok(new NotRunningError() instanceof ControlError);
+  assert.ok(new TimeoutError("status", 5000) instanceof ControlError);
+});
+
+test("一条连接只处理一条命令：处理途中又来数据，不会把同一条命令再执行一遍", async () => {
+  let calls = 0;
+  let finish;
+  server = await startControlServer({
+    socketPath,
+    log,
+    handlers: {
+      slow: () => {
+        calls++;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    },
+  });
+  const { connect } = await import("node:net");
+  const socket = connect(socketPath);
+  const closed = new Promise((resolve) => socket.on("close", resolve));
+  socket.on("data", () => {});
+  socket.write('{"cmd":"slow"}\n');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  socket.write("\n");
+  socket.write("\n");
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  finish("done");
+  await closed;
+  assert.equal(calls, 1);
 });
 
 test("收到的不是一行 JSON 时回一句错误，不让服务挂掉", async () => {

@@ -11,6 +11,7 @@ test("默认都在家目录的 Application Support/SpeakMore 下", () => {
   assert.equal(paths.controlSocket, "/Users/someone/Library/Application Support/SpeakMore/control.sock");
   assert.equal(paths.logFile, "/Users/someone/Library/Application Support/SpeakMore/logs/main.log");
   assert.equal(paths.keyFile, "/Users/someone/Library/Application Support/SpeakMore/gemini-key.bin");
+  assert.equal(paths.pidFile, "/Users/someone/Library/Application Support/SpeakMore/daemon.pid");
   assert.equal(paths.appKeyFile, "/Users/someone/Library/Application Support/SpeakMore/gemini-key.app.bin");
 });
 
@@ -29,4 +30,10 @@ test("SPEAKMORE_HOME 是空字符串时当作没设，不把文件写到当前�
 test("控制通道的路径太长时报错并说明怎么办，不等到监听时才失败", () => {
   const long = `/tmp/${"x".repeat(100)}`;
   assert.throws(() => resolvePaths({ SPEAKMORE_HOME: long }, "/Users/someone"), /SPEAKMORE_HOME/);
+});
+
+test("SPEAKMORE_HOME 要是绝对路径：相对路径会随着在哪个目录运行命令而变，找不到同一个后台应用", () => {
+  for (const relative of ["data", "./data", "../data"]) {
+    assert.throws(() => resolvePaths({ SPEAKMORE_HOME: relative }, "/Users/someone"), /绝对路径/);
+  }
 });

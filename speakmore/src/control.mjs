@@ -9,13 +9,27 @@ import { connect, createServer } from "node:net";
 const MAX_REQUEST_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 5_000;
 
+/** 控制通道这一层说得清原因的失败。调用方照着 message 告诉用户就行，不需要调用栈 */
+export class ControlError extends Error {}
+
 /** 后台应用没有在运行 */
-export class NotRunningError extends Error {
+export class NotRunningError extends ControlError {
   constructor() {
     super("SpeakMore 没有在运行");
     this.name = "NotRunningError";
   }
 }
+
+/** 有人在听，但限时内没有回话：多半是卡住了 */
+export class TimeoutError extends ControlError {
+  constructor(cmd, timeoutMs) {
+    super(`SpeakMore 没有在 ${timeoutMs / 1000} 秒内回话（命令 ${cmd}）`);
+    this.name = "TimeoutError";
+  }
+}
+
+/** 后台应用启动时发现已经有一个在运行，用这个退出码告诉启动它的命令："不是我坏了，是有别人在了" */
+export const ALREADY_RUNNING_EXIT_CODE = 3;
 
 // 前三个是根本没人在听；后两个是连上了又被掐断，只在它正在退出的那一瞬间会遇到
 const NOT_RUNNING_CODES = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK", "ECONNRESET", "EPIPE"]);
@@ -31,7 +45,7 @@ export function requestControl(socketPath, cmd, params = {}, { timeoutMs = DEFAU
     let received = "";
     const timer = setTimeout(() => {
       socket.destroy();
-      reject(new Error(`SpeakMore 没有在 ${timeoutMs / 1000} 秒内回话（命令 ${cmd}）`));
+      reject(new TimeoutError(cmd, timeoutMs));
     }, timeoutMs);
     const fail = (error) => {
       clearTimeout(timer);
@@ -91,6 +105,8 @@ export async function startControlServer({ socketPath, handlers, log }) {
   const server = createServer((socket) => {
     let received = "";
     let answered = false;
+    /** 已经收下一条命令、正在处理。一条连接只办一件事，之后再来的数据不看 */
+    let handling = false;
     const answer = (reply) => {
       if (answered) return;
       answered = true;
@@ -101,7 +117,7 @@ export async function startControlServer({ socketPath, handlers, log }) {
     // 对方中途断开时这里会报错，没什么可做的，但不处理的话整个进程会被带崩
     socket.on("error", () => {});
     socket.on("data", async (chunk) => {
-      if (answered) return;
+      if (answered || handling) return;
       received += chunk;
       if (Buffer.byteLength(received) > MAX_REQUEST_BYTES) {
         answer({ ok: false, error: "请求太长" });
@@ -109,6 +125,7 @@ export async function startControlServer({ socketPath, handlers, log }) {
       }
       const end = received.indexOf("\n");
       if (end === -1) return;
+      handling = true;
 
       let request;
       try {
