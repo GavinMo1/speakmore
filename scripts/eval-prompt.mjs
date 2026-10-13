@@ -51,7 +51,7 @@ async function main() {
   const { values: args } = parseArgs({
     options: {
       label: { type: "string" },
-      out: { type: "string", default: resolve(import.meta.dirname, "../../targets/typeless/_work/prompt-eval") },
+      out: { type: "string", default: resolve(import.meta.dirname, "../targets/typeless/_work/prompt-eval") },
       concurrency: { type: "string", default: "4" },
       "report-only": { type: "boolean", default: false },
     },

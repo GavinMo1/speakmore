@@ -3,7 +3,7 @@
 // 麦克风换成一个 WAV 文件，贴字换成"记下来"。不会碰真实的键盘、剪贴板和历史记录。
 //
 // 用法：环境里要有 GEMINI_API_KEY（后台应用用它起内置的服务）
-//   ../scripts/with-gemini-key.sh node scripts/e2e.mjs <一段 16 位 PCM 的 WAV>
+//   scripts/with-gemini-key.sh node scripts/e2e.mjs <一段 16 位 PCM 的 WAV>
 // 录音时长默认 7.5 秒（跨过两个 3 秒的分块边界），可用 SPEAKMORE_E2E_RECORD_MS 改。
 
 import { spawn } from "node:child_process";

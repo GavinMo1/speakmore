@@ -31,7 +31,10 @@ targets/*/_work/
 # 各子项目自己装的依赖，靠锁文件还原
 node_modules/
 
-# SpeakMore 本机编译出来的原生小程序和打出来的应用
-speakmore/build/
-speakmore/dist/
+# SpeakMore 本机编译出来的原生小程序和打出来的应用（只认仓库根下的这两个目录）
+/build/
+/dist/
+
+# Claude Code 给子任务临时建的工作副本
+.claude/worktrees/
 __pycache__/

@@ -5,49 +5,197 @@
   macOS 上的开源语音输入，用你自己的 Gemini API key。
 </p>
 
-这个仓库里有两样东西：
+口头禅、改口、重复会被整理掉，长一点的话会分段、分点。只做语音转写这一件事：不采集屏幕和输入框里的内容，没有账号，没有云同步。
 
-| 目录 | 是什么 |
-| --- | --- |
-| [speakmore/](speakmore/README.md) | **SpeakMore 本身。** 一条命令启动，填一把 Gemini key 就能用 |
-| [targets/typeless/](targets/typeless/README.md) | 对语音输入工具 Typeless 的逆向分析，18 篇文档。SpeakMore 是照着它做的 |
+名字和 Typeless 反着来：它是照着对 Typeless 的[逆向分析](targets/typeless/README.md)做的独立实现，和 Typeless 官方没有关系。
 
-## 一分钟跑起来
+## 装和用
 
-需要 macOS 12 以上、Node 22.13 以上（用 23 的话要 23.4 以上）、Xcode 命令行工具，以及一把 [Gemini API key](https://aistudio.google.com/apikey)。
+需要 macOS 12 以上、Node 22.13 以上（用 23 的话要 23.4 以上）、Xcode 命令行工具（`xcode-select --install`），以及一把 [Gemini API key](https://aistudio.google.com/apikey)。
 
 ```bash
 git clone https://github.com/zephyr4123/speakmore.git
-cd speakmore/speakmore
+cd speakmore
 npm install
-npm link
+npm link        # 把 speakmore 命令装进 PATH
 speakmore
 ```
 
-`speakmore` 会在终端里问你要 key（输入不会显示出来），然后在后台运行。点进任意输入框，按一下右 Option，说话，再按一下。
+第一次运行 `speakmore` 会依次做这几件事，都不用你另外操作：
 
-```bash
-speakmore history    # 看说过的话
-speakmore status     # 在不在运行、还差什么
-speakmore config     # 热键、模型、数据放在哪
-speakmore stop       # 停掉
+1. 在终端里问你要 key。粘贴后按回车，输入不会显示出来。
+2. 编译一个听热键、贴文字的小程序，下载运行环境 Electron（约 100 MB），然后在后台启动。
+3. 系统弹出麦克风授权框，点“允许”。
+4. 验证 key，通过后用系统钥匙串加密存在本机。
+5. 显示状态。还缺系统权限的话会顺手打开设置窗口，每一项旁边有去系统设置的按钮。
+
+看到下面这样就可以用了：点进任意输入框，按一下右 Option，说话，再按一下。
+
+```text
+SpeakMore 0.1.0 · 运行中
+
+  可以用了：点进任意输入框，按一下右 Option 键开始说话，再按一下结束，文字会贴进去。
+
+  key       已保存，验证通过
+  权限      麦克风 ✓   输入监控 ✓   辅助功能 ✓
+  热键      右 Option 键
+  模型      gemini-3.5-flash（MINIMAL）
+  今天      12 次 · 1,024 字 · 3 分 20 秒
+  累计      132 次 · 12,480 字 · 48 分钟 · 每分钟 260 字
 ```
 
-系统权限怎么给、数据存在哪、发了什么出去、和 Typeless 比还差什么，都在 [speakmore/README.md](speakmore/README.md) 里。
+它在后台运行，关掉终端窗口也还在，菜单栏上有“听写”两个字。电脑重启后要再运行一次 `speakmore`。
+
+不想把命令装进 PATH 的话，在这个目录里用 `npm start` 代替 `speakmore`，子命令写在 `--` 后面，比如 `npm start -- history`。
+
+## 命令
+
+| 命令 | 做什么 |
+| --- | --- |
+| `speakmore` | 启动。已经在运行就只显示状态；没有 key 时问你要 |
+| `speakmore stop` / `restart` | 停掉 / 重启。它卡住不答话时也停得掉 |
+| `speakmore status [--json]` | 在不在运行、key、三项权限、今天和累计说了多少。能用时退出码是 0 |
+| `speakmore history [-n 条数] [--json]` | 看说过的话，按天分组，新的在前。失败的那条会写原因，录音还留着 |
+| `speakmore key` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key`。别把 key 写在命令后面，那样会进 shell 的历史记录 |
+| `speakmore key --forget` | 删掉存着的 key |
+| `speakmore config` | 看设置，以及数据和日志在哪 |
+| `speakmore config set <名字> <值>` | 改一项设置，正在运行的话自动重启，并告诉你新的值能不能用。`unset` 回到默认 |
+| `speakmore settings` | 打开设置窗口（去系统设置授权时用） |
+| `speakmore logs [-n 行数] [-f]` | 看日志 |
+
+## 三项系统权限
+
+| 权限 | 用来做什么 | 没有时的表现 |
+| --- | --- | --- |
+| 麦克风 | 录音 | 按热键时屏幕下方提示没有麦克风权限 |
+| 输入监控 | 听热键。只认你选的那一个键，别的按键不记录 | 热键没反应，`speakmore status` 里标出来 |
+| 辅助功能 | 模拟 ⌘V 把文字贴进去 | 照样能用，文字放进剪贴板，自己按 ⌘V |
+
+用 `speakmore` 命令启动时，这三项权限**记在你运行命令的那个终端程序名下**（“终端”、iTerm、Ghostty 等），在系统设置的列表里要找的是它，不是 SpeakMore。换一个终端程序启动，就要给那个终端再授权一次。
+
+在系统设置里打开开关之后，运行 `speakmore status`，它会重新检查一遍。
+
+## 设置
+
+```bash
+speakmore config set hotkey fn        # 换热键
+speakmore config unset hotkey         # 回到默认
+```
+
+| 名字 | 默认值 | 能填什么 |
+| --- | --- | --- |
+| `hotkey` | `right_option` | `right_option` / `right_command` / `right_control` / `fn`，都是单独按一下。Typeless 用的是 `fn`，默认避开它，两个可以同时开着 |
+| `model` | `gemini-3.5-flash` | Gemini 的模型名。换模型时留意下一项 |
+| `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`，越高越慢。有的模型不接受 `MINIMAL` |
+
+设置存在数据目录的 `settings.json` 里。只想临时换一次，可以用环境变量 `SPEAKMORE_HOTKEY`、`GEMINI_MODEL`、`GEMINI_THINKING_LEVEL`，它们优先于文件。`GEMINI_API_KEY` 也一样：设着的话这次用它，不读存着的那把。
+
+环境变量要写在**启动它的那条命令**上才算数。SpeakMore 已经在运行时，先 `speakmore stop`，再带着环境变量运行 `speakmore`。状态面板上的热键和模型，写的是正在运行的那个实际在用的。
+
+带着 `GEMINI_API_KEY` 运行时再执行 `speakmore key`，新的那把会存下来并立刻换上；但只要环境变量还在，下次启动用的仍是环境变量里的那把。
+
+## 出了状况
+
+| 看到的 | 怎么办 |
+| --- | --- |
+| 面板上 key 那一行写着“还没验证” | 启动时没连上 Gemini，存着的 key 先用着。连上网后再运行一次 `speakmore status` |
+| “还差：Gemini 验证” | Gemini 拒绝了请求，多半是模型名或思考档位不对，key 未必有问题。`speakmore config` 看一眼，`speakmore config unset model` 回到默认 |
+| “还差：按键监听” | 听热键的小程序停了。`speakmore restart`，还不行就看 `speakmore logs` |
+| 命令说它“没有在 5 秒内回话” | 后台卡住了。`speakmore stop` 会强行结束它，再运行 `speakmore` |
+
+## 你的数据
+
+**发出去的只有录音**，直接发给 Google 的 Gemini 接口，用的是你自己的 key。没有别的服务器，没有统计上报，也不读屏幕和输入框里的内容。
+
+留在本机的都在 `~/Library/Application Support/SpeakMore/`：
+
+| 东西 | 说明 |
+| --- | --- |
+| `history.db`、`Recordings/` | 说过的话和录音。失败的听写也存录音，话不会白说 |
+| `gemini-key.bin` | 加密后的 key，权限 600。解密用的密钥在系统钥匙串的“SpeakMore Safe Storage”里 |
+| `gemini-key.app.bin` | 同上，打成 .app 运行时存的那一份。钥匙串里的密钥是按应用分的，两种启动方式互相解不开，所以各存各的 |
+| `settings.json` | 上面那几项设置 |
+| `logs/main.log` | 日志，一行一条 JSON。只记长度和耗时，不记说的话，也不记 key |
+| `control.sock`、`daemon.pid` | 运行时才有：命令和后台应用之间的通道，以及后台应用的进程号 |
+
+想换个地方放，设环境变量 `SPEAKMORE_HOME`。想彻底删干净，停掉之后删这个目录，再在“钥匙串访问”里删掉“SpeakMore Safe Storage”。
 
 ## 它是怎么来的
 
 先对 Typeless 的 macOS 客户端做了一遍逆向：拆安装包、读还原出来的代码、看本机数据、抓自己账号的流量，弄清楚它为什么快、发了什么出去、文字是怎么贴进输入框的。结论写成了 [targets/typeless/docs/](targets/typeless/docs/00-overview.md) 下的文档，出处记在[证据台账](targets/typeless/docs/90-evidence-ledger.md)里。
 
-然后照着文档里的协议和交互重新写了一个，只保留语音转写：服务端换成自己的（一次 Gemini 调用完成识别和整理），不采集屏幕和输入框内容，不需要账号。SpeakMore 和 Typeless 官方没有关系，仓库里也不含 Typeless 的代码和密钥。
+然后照着文档里的协议和交互重新写了一个，只保留语音转写：服务端换成自己的（一次 Gemini 调用完成识别和整理），不采集屏幕和输入框内容，不需要账号。仓库里不含 Typeless 的代码和密钥。
 
-## 仓库里的其他东西
+## 现在的不足
 
-| 路径 | 是什么 |
+和 Typeless 比：
+
+- **专有名词和人名会听错。** Typeless 会把当前应用和屏幕上的文字一起上传当上下文，这里只有录音，也还没有个人词典。
+- **列表用得比它少**，口吃偶尔删不干净（约每 60 条 1 条）。
+- 只有听写，没有翻译和“问任何事”。
+
+还没做的：
+
+- 登录时自动启动。现在重启电脑后要再运行一次 `speakmore`。
+- 失败的听写重试。录音留着，但还不能一键重新整理。
+- 图形界面的主窗口，会用 Tauri 另做。现在的入口是命令行，加一个菜单栏图标和设置窗口。
+- Windows 和 Linux。
+
+## 开发
+
+```bash
+npm run check                 # 代码检查 + 全部测试（236 条，不联网、不开窗口）
+npm run build:native          # 只重新编译原生小程序；平时不用管，启动时会按需编译
+```
+
+要真调 Gemini 的命令需要环境里有 `GEMINI_API_KEY`。`scripts/with-gemini-key.sh` 可以按你自己机器上的配置把它只喂给一条命令，见 `.machine.env.example`：
+
+```bash
+scripts/with-gemini-key.sh node scripts/e2e.mjs 一段录音.wav   # 端到端：真的 Electron、录音编码、Gemini；麦克风和贴字是假的
+scripts/with-gemini-key.sh node scripts/eval-prompt.mjs --label v1   # 拿自己 Typeless 的历史录音评估提示词
+scripts/with-gemini-key.sh node src/server/main.mjs           # 单独启动听写服务，配合 SPEAKMORE_SERVER_URL 调试
+node scripts/replay.mjs 块1.ogg 块2.ogg                           # 把现成的录音发给单独启动的服务
+```
+
+| 目录 | 内容 |
 | --- | --- |
+| `bin/`、`src/cli/` | `speakmore` 命令 |
+| `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、设置和历史窗口 |
+| `src/renderer/`、`src/preload/` | 各个窗口的页面：状态机、录音、听写协议的客户端 |
+| `src/server/` | 听写服务：收分块音频，交给 Gemini 整理。平时跑在后台应用的进程里 |
+| `native/` | 听热键和贴字的小程序（Swift） |
+| `src/*.mjs` | 命令和后台应用共用的：数据位置、设置、历史库、控制通道、日志 |
+| `test/` | 自动测试，目录和 `src/` 对应 |
+| `scripts/` | 开发用的脚本：编译小程序、打包、端到端、评估提示词；按每台机器自己的配置加载 key、核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
+| `docs/` | [实现笔记](docs/implementation-notes.md) |
+| `targets/typeless/` | 对 Typeless 的[逆向分析](targets/typeless/README.md)，18 篇文档。SpeakMore 是照着它做的 |
 | `AGENTS.md`、`.memory/` | 和 AI 编程助手协作时用的工作约定和项目记忆 |
-| `scripts/`、`.machine.env.example` | 开发时用的脚本：按每台机器自己的配置加载 key、核对 GitHub 账号、检查本机信息有没有漏进仓库 |
 | `.claude/`、`.mcp.json` | 逆向用的工具 [REA](https://github.com/morluto/rea) 的项目级配置。`.claude/skills/` 下是 REA 自带的说明文件，版权归它的作者，MIT 许可 |
+
+和原版的对应关系、模型怎么选的、提示词怎么调的，在[实现笔记](docs/implementation-notes.md)里。
+
+### 打成 .app
+
+平时用命令启动就够了。打成应用的区别是三项权限记在“SpeakMore”自己名下，并且可以在设置窗口里勾选登录时自动启动：
+
+```bash
+npm run install-app     # 打包并装进“应用程序”，然后打开
+```
+
+用的是不带身份的本机签名，所以每次重新打包系统都会把它当成一个新应用，权限要重新给，key 要重新填。
+
+.app 在运行时，`speakmore status`、`history`、`key`、`stop` 照常能用。`speakmore restart` 和 `config set` 不会代它重启：从命令行起来的是终端启动的那一个，权限和 key 是另一套。按提示从菜单栏退出，再打开一次。
+
+### 验证到哪一步
+
+- 自动测试 236 条，在 Node 22.13、24.21、26.0 上都跑过。
+- 真的启动过后台应用并用命令走了一遍：启动、重复启动、两条命令同时启动、状态、重启后读回 key、错的 key 被拒、删 key、停止、连续重启。
+- 出状况时的几条路也在真机上走过：从管道喂进多行内容被当场拒绝，日志和数据目录里找不到它；把后台进程暂停来模拟卡住，`speakmore status` 说清楚是卡住了，`speakmore stop` 能强行结束；模型名写错时 `config set` 报错并能撤回。
+- 在伪终端里走过第一次使用的流程：先问 key 再启动，key 不会显示在屏幕上，没通过会再问一次。
+- 把它打成 npm 包装到另一个目录，在找不到 Swift 编译器的环境下能启动（包里带着编好的小程序）。
+- 端到端：合成的一段语音当麦克风输入，经过真的录音编码、Gemini、存历史，命令启动的和打成 .app 的都通过。
+- **还没有人按着真键盘、对着真麦克风用这一版试过。** 上一版（开两个终端启动）试过，后台的代码是同一套，但启动方式变了。Intel 芯片的 Mac 上也没有跑过。
+- 只有自动测试、没在真机上试的：启动时断网（存着的 key 先用着）、.app 在运行时命令行的提示、重新检查权限时不再反复弹系统授权框（试的这台机器三项权限都已经给了，弹不出来）。
 
 ## 许可
 

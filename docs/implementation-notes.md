@@ -2,7 +2,7 @@
 
 给想改代码的人看的：它和 Typeless 原版怎么对应、模型是怎么选的、提示词是怎么调出来的。只想用的话看 [README](../README.md) 就够了。
 
-SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../../targets/typeless/README.md)做的，只做语音转写这一件事。下面提到的“原版”都指它。
+SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../targets/typeless/README.md)做的，只做语音转写这一件事。下面提到的“原版”都指它。
 
 ## 用法上照着原版的地方
 
@@ -14,7 +14,7 @@ SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../../targets/typeless/R
 
 ## 和原版的对应关系
 
-协议照抄抓包看到的消息名和字段名（[05 网络协议](../../targets/typeless/docs/05-network-protocol.md#websocketwsrt_voice_flow)），只实现听写用到、并且SpeakMore 的客户端会发的那几条。
+协议照抄抓包看到的消息名和字段名（[05 网络协议](../targets/typeless/docs/05-network-protocol.md#websocketwsrt_voice_flow)），只实现听写用到、并且SpeakMore 的客户端会发的那几条。
 
 | 方向 | 消息 | SpeakMore |
 | --- | --- | --- |
@@ -34,7 +34,7 @@ SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../../targets/typeless/R
 - **没有登录和签名。** 服务只听本机端口，握手时拒绝带网页来源（`Origin` 为 `http(s)://…`）的连接，防止浏览器里的网页连进来花模型额度。
 - **识别和整理是一次模型调用。** 原版服务端内部怎么做的看不到。各块首尾相接后整段发给 Gemini，不重新编码。
 - **容器多认一种 WebM。** 原版用自带的编码库出 Ogg；浏览器自带的录音接口出的是 WebM，里面同样是 Opus。服务端按文件头判断是哪一种，实测 Gemini 两种都收。
-- **不采集上下文。** 原版会把当前应用、输入框内容、屏幕可见文字一起上传（[06](../../targets/typeless/docs/06-context-capture-and-privacy.md)），这里只上传录音。
+- **不采集上下文。** 原版会把当前应用、输入框内容、屏幕可见文字一起上传（[06](../targets/typeless/docs/06-context-capture-and-privacy.md)），这里只上传录音。
 
 ## 选型时测到的数
 
@@ -90,15 +90,15 @@ SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../../targets/typeless/R
 | `bin/speakmore.mjs`、`src/cli/` | `speakmore` 命令：起停后台应用、问 key、看历史、改设置 | 原版没有命令行 |
 | `src/control.mjs` | 命令和后台应用之间的控制通道（数据目录里的 Unix 套接字，一问一答） | |
 | `src/paths.mjs`、`src/settings.mjs` | 数据放哪、有哪些设置。命令和后台应用共用 | |
-| `src/history.mjs` | 历史库。后台应用写，命令只读着看 | `history_v2` 表的子集（[08](../../targets/typeless/docs/08-local-data.md)） |
-| `native/main.swift` | 听热键（只听不改，不报是哪个键）、贴字 | 键盘子进程和 Swift 库（[07](../../targets/typeless/docs/07-native-helpers.md)） |
-| `src/app/main.mjs` | 后台应用的主进程：窗口、菜单栏、和小帮手对接，把下面几样接起来 | 主进程（[03](../../targets/typeless/docs/03-process-architecture.md)） |
+| `src/history.mjs` | 历史库。后台应用写，命令只读着看 | `history_v2` 表的子集（[08](../targets/typeless/docs/08-local-data.md)） |
+| `native/main.swift` | 听热键（只听不改，不报是哪个键）、贴字 | 键盘子进程和 Swift 库（[07](../targets/typeless/docs/07-native-helpers.md)） |
+| `src/app/main.mjs` | 后台应用的主进程：窗口、菜单栏、和小帮手对接，把下面几样接起来 | 主进程（[03](../targets/typeless/docs/03-process-architecture.md)） |
 | `src/app/service.mjs` | 把 `src/server` 跑在主进程里；换 key 先验证再生效 | 原版的服务端在云上 |
 | `src/app/key-manager.mjs` | 这次运行用哪把 key、它是什么状态：启动时去哪找，怎么换、怎么删。启动时只是够不着 Gemini 的话先用着 | 原版用登录态，没有这一项 |
 | `src/app/key-store.mjs` | key 用系统钥匙串加密后存成文件 | 原版用登录态，没有这一项 |
 | `src/app/setup-state.mjs` | “能不能用、还差什么”的统一结论 | |
-| `src/app/delivery.mjs` | 存录音、记历史、贴字，贴不进去时退到剪贴板 | 结果投递（[14](../../targets/typeless/docs/14-result-delivery.md)） |
-| `src/renderer/machine.mjs` | 状态机 | 悬浮条的状态机（[10](../../targets/typeless/docs/10-interaction-state-machine.md)） |
-| `src/renderer/recorder.mjs` | 录音，每 3 秒一块 | 录音与编码（[11](../../targets/typeless/docs/11-audio-recorder.md)） |
-| `src/renderer/voice-socket.mjs` | 听写协议的客户端一侧 | 网络协议（[05](../../targets/typeless/docs/05-network-protocol.md)） |
+| `src/app/delivery.mjs` | 存录音、记历史、贴字，贴不进去时退到剪贴板 | 结果投递（[14](../targets/typeless/docs/14-result-delivery.md)） |
+| `src/renderer/machine.mjs` | 状态机 | 悬浮条的状态机（[10](../targets/typeless/docs/10-interaction-state-machine.md)） |
+| `src/renderer/recorder.mjs` | 录音，每 3 秒一块 | 录音与编码（[11](../targets/typeless/docs/11-audio-recorder.md)） |
+| `src/renderer/voice-socket.mjs` | 听写协议的客户端一侧 | 网络协议（[05](../targets/typeless/docs/05-network-protocol.md)） |
 | `src/server/` | 听写服务：收分块音频，交给 Gemini 整理成文字 | 原版的服务端（内部看不到，只照着协议做） |

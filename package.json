@@ -12,11 +12,10 @@
     "macos",
     "gemini"
   ],
-  "homepage": "https://github.com/zephyr4123/speakmore/tree/main/speakmore#readme",
+  "homepage": "https://github.com/zephyr4123/speakmore#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zephyr4123/speakmore.git",
-    "directory": "speakmore"
+    "url": "git+https://github.com/zephyr4123/speakmore.git"
   },
   "type": "module",
   "main": "src/app/main.mjs",
