@@ -1,6 +1,6 @@
 # 04 语音主链路
 
-从按下快捷键到文字出现在输入框。本篇是静态阅读的结论，时间参数里标"实测"的来自本机数据库的真实记录，其余来自代码。
+从按下快捷键到文字出现在输入框。主体是静态阅读的结论；普通听写的消息顺序、字段和耗时已经用抓包对过（[09](09-runtime-capture.md#结果)，2026-10-13，4 次听写），下面的时序图按抓包结果画。标"实测"的来自抓包或本机数据库的真实记录，其余来自代码。
 
 ## 时序
 
@@ -18,22 +18,25 @@ sequenceDiagram
   B->>B: 开麦克风（getUserMedia + AudioWorklet）
   B->>M: 取轻量上下文
   M->>N: 读焦点应用、输入框、光标前后文字
-  B->>S: WS start_audio（音频参数 + 模式）
+  B->>S: WS start_audio（音频参数 + 模式 + 第一份上下文）
+  B->>S: WS set_mode_config
+  S-->>B: audio_session_started
   par 录音期间
     loop 每 3 秒
       B->>M: 编码一块（Opus）
       B->>S: WS set_audio_chunk_info + 二进制音频块
-      S-->>B: received_audio_chunk_count / transcription
+      S-->>B: received_audio_chunk_count
     end
   and
     B->>M: 取完整上下文（可见文字 10000、周围各 1000，超时 500 ms）
     M->>N: 遍历辅助功能树
     B->>S: WS replace_audio_context（加密）
   end
-  K->>M: 快捷键松开
+  K->>M: 再按一次快捷键
   B->>S: 最后一块 + WS end_audio
+  S-->>B: audio_session_ending
   par 赛跑
-    S-->>B: refine_completed（成品文字）
+    S-->>B: audio_processing_completed（成品文字），随后 debug_info
   and
     B->>M: 压缩整段音频，等待若干秒
     M->>S: POST /ai/voice_flow（WS 先回则取消）
@@ -80,10 +83,12 @@ Opus 编码不在渲染进程做，交给主进程的 worker 线程池：
 
 | 时机 | 参数 | 内容 |
 | --- | --- | --- |
-| 开始录音时 | `inputStateParams: []` | 应用、输入框、光标前后文字。随 `start_audio` 流程保存为会话初值 |
+| 开始录音时 | `inputStateParams: []` | 应用、输入框、光标前后文字。保存为会话初值，并放进 `start_audio` 消息一起发出（实测） |
 | 录音过程中 | `visibleTextParams: [10000, {timeout: 500}]`、`relatedContentParams: [1000, 1000, {timeout: 500}]` | 追加屏幕可见文字和输入框周围内容。取到后与初值合并，经 `replace_audio_context` 消息发给服务端 |
 
 合并时光标状态以**开始时**那份为准（因为录音中光标可能动了），选中文字优先用会话开始时记下的。字段清单见 [06](06-context-capture-and-privacy.md)。
+
+实测第二份在 `start_audio` 之后 50–250 ms 发出，是整份替换，不是增量。`end_audio` 里还带一个 `audio_context`，内容是空对象。
 
 ### 5. 模式
 
@@ -93,19 +98,21 @@ Opus 编码不在渲染进程做，交给主进程的 worker 线程池：
 | `voice_command` | `ask_anything` | `selected_text`：选中的文字（没有选区时尝试模拟复制来取） |
 | `voice_translation` | `translation` | `output_language`：目标语言 |
 
-非默认模式会在开始后发一条 `set_mode_config` 消息。
+`start_audio` 里的 `mode` 用内部名，紧跟的 `set_mode_config` 用发给服务端的名字。实测默认的听写模式也发 `set_mode_config`，内容是 `{mode: "transcript", parameters: {}}`。
 
 ### 6. 结束与赛跑
 
-松开按键后（readable:UfR9-a2Z.js:11142-11330）：
+再按一次快捷键之后（readable:UfR9-a2Z.js:11142-11330）：
 
 1. 录音不足 0.5 秒且一块都没发出去：直接结束，结果为空。
 2. 否则发最后一块和 `end_audio`，同时启动两个 Promise 赛跑：
-   - **WebSocket 路**：等服务端推 `refine_completed`。
+   - **WebSocket 路**：等服务端推成品。实测听写时这条消息叫 `audio_processing_completed`；代码里 `refine_completed`、`refine_selected_text` 也按成品处理，这次没出现。
    - **HTTP 兜底路**：先把整段音频压成 Opus，同时等一个延时，两者都好了且 WebSocket 还没回，就 `POST /ai/voice_flow`。
 3. 先到的生效。WebSocket 赢了就取消 HTTP 请求。
 
-延时取 `client_metadata.taking_longer_alert_delay_ms`，代码默认 6000 ms，本机最新记录是 7000 ms（实测；这个值由谁改成 7000 没查）。
+延时取 `client_metadata.taking_longer_alert_delay_ms`，是按录音时长和选中文字长度算出来的：基数 6000 ms，每 30 秒录音加 500，公式见 [14](14-result-delivery.md#成品里的时间参数)。实测 4 次 13 秒以内的听写都是 6500。
+
+实测 4 次都是 WebSocket 先回，成品在 `end_audio` 之后 1.4–1.9 秒到，没有发出 `/ai/voice_flow`。HTTP 这条路这次没有观察到。
 
 **弱网降级**：两个计数之差达到阈值（从变量用法推断是已发块数与服务端已确认块数），或调试开关打开时，标记 `need_weak_network_downgrade`，这时不发 `end_audio`，延时为 0，直接走 HTTP。
 
@@ -122,9 +129,24 @@ Opus 编码不在渲染进程做，交给主进程的 worker 线程池：
 - 写历史：`db:history-upsert`，音频存成 `Recordings/<audio_id>.ogg`。
 - 开始修改跟踪：`track-edit-text:start-track`，见 [06](06-context-capture-and-privacy.md#插入后的修改跟踪)。
 
+## 实测耗时
+
+4 次普通听写（2.5–12.8 秒），完整表格在 [09](09-runtime-capture.md#耗时)：
+
+| 阶段 | 耗时 |
+| --- | --- |
+| 按下到拿到第一个音频采样 | 87–97 ms |
+| 按下到 `start_audio` 发出 | 103–184 ms；连接已断时要先重连，那一次是 1158 ms |
+| `start_audio` 到服务端确认会话开始 | 256–323 ms |
+| `end_audio` 到成品 | 1447–1925 ms |
+
+耗时里含本机代理软件和抓包代理这两跳。
+
+录音过程中服务端只回每一块的收到确认，不回识别文字。所以"快"来自音频提前传完，而不是边说边出字：结束时服务端手里已经有除最后一块外的全部音频。
+
 ## 回包里的其他字段
 
-除了 `refine_text`，服务端还可能返回：
+成品文字在 WebSocket 里叫 `refined_text`，在 HTTP 兜底的回包里叫 `refine_text`。除了它，服务端还可能返回：
 
 | 字段 | 推断用途 |
 | --- | --- |
@@ -133,5 +155,6 @@ Opus 编码不在渲染进程做，交给主进程的 worker 线程池：
 | `web_metadata` | 联网回答的来源信息；代码里出现过 `vertexaisearch.cloud.google.com/grounding-api-redirect/`，推断联网搜索用的是 Google 的 grounding 服务 |
 | `external_action` | 触发外部动作；代码里有 X、Reddit、Gmail 的发帖/写信链接，推断是"帮我发一条推"这类指令 |
 | `important_notification` | 付费墙或额度提醒，可中断会话 |
+| `status`、`run_index`、`action` | 抓包看到的三个字段。听写时分别是 `true`、1、`null`，用途没有查 |
 
-这几项都只看了字段名和零散字符串，没读实现。
+这几项都只看了字段名和零散字符串，没读实现（`delivery` 的分流已在 [14](14-result-delivery.md) 读过）。听写时 `delivery`、`user_prompt`、`web_metadata`、`external_action` 实测都是 `null`。

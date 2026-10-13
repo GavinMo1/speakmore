@@ -103,8 +103,8 @@ stateDiagram-v2
 | 单次录音上限 | 9 分钟，最后 1 分钟倒计时 | `MAX_DURATION_MS: 540000`、`COUNTDOWN_BUFFER_MS: 60000`，4191 |
 | 音频分块 | 3000 ms | 4546；可用 localStorage `debug_audio_chunk_interval` 覆盖 |
 | 发送检查间隔 | 100 ms | `socketTickTimer`，6193 |
-| WebSocket 空闲断开 | 1 小时 | `socketIdleTimer`，6181 |
-| HTTP 兜底延时 | 6000 ms + 每 30 秒录音 500 ms + 每 1000 字选中文字 500 ms（时长单位推断为秒） | qA149QP2.mjs:5422-5429，基数在 UfR9-a2Z.js:10457。作为 `taking_longer_alert_delay_ms` 随消息发给服务端 |
+| WebSocket 空闲断开 | 1 小时 | `socketIdleTimer`，6181。这是客户端自己的定时器；抓包看到服务端在连接空闲 60 秒时就先断了（[09](09-runtime-capture.md#语音通道不是常连的)） |
+| HTTP 兜底延时 | 6000 ms + 每 30 秒录音 500 ms + 每 1000 字选中文字 500 ms。抓包里 4 次不到 30 秒的听写都是 6500，时长单位是秒 | qA149QP2.mjs:5422-5429，基数在 UfR9-a2Z.js:10457。作为 `taking_longer_alert_delay_ms` 随消息发给服务端 |
 | 听写键防抖 | 300 ms | qA149QP2.mjs:7551 |
 | HTTP 兜底超时 | 40 秒 | main/index.js:17905 |
 | 按键广播节流 | 16 ms，另有 50 ms 周期补发 | main/index.js:12699-12701 |

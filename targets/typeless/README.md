@@ -12,8 +12,8 @@
 | JS 层（主进程、预加载、渲染层）静态分析 | 主链路、上下文采集、状态机、录音器、登录、云同步、结果投递、更新与权限已读；引导页、结果卡片窗口内部、排障向导没有读 |
 | 原生库（4 个 Swift 动态库） | 接口与机制完成；逐函数只看了 3 个关键函数 |
 | 本机数据 | 完成（上下文与调试信息是服务端密钥加密的，读不出明文） |
-| 运行时抓包 | 工具就绪，**待执行**（需要你配合说几段话，见 [09](docs/09-runtime-capture.md)） |
-| 可视化（HTML 阅读版） | 待抓包结果并入后生成 |
+| 运行时抓包 | 做过一次（2026-10-13，4 次普通听写），消息序列、上下文明文、耗时已回填各篇；翻译、"问任何事"、修改跟踪、按住和取消还没有抓，见 [09](docs/09-runtime-capture.md#结果) |
+| 可视化（HTML 阅读版） | 未开始 |
 
 ## 文档
 
@@ -24,11 +24,11 @@
 | 02 | [代码还原](docs/02-code-recovery.md) | 混淆形态、还原方法、REA 输入的选择 |
 | 03 | [进程与窗口架构](docs/03-process-architecture.md) | 进程、窗口、IPC 通道、本地存储 |
 | 04 | [语音主链路](docs/04-voice-pipeline.md) | 从按键到文字落进输入框的全过程 |
-| 05 | [网络协议](docs/05-network-protocol.md) | 签名、WebSocket 消息、HTTP 接口表 |
-| 06 | [上下文采集与隐私](docs/06-context-capture-and-privacy.md) | 采了什么、什么时候采、黑名单管到哪 |
+| 05 | [网络协议](docs/05-network-protocol.md) | 签名、WebSocket 消息（含实测字段）、HTTP 接口表 |
+| 06 | [上下文采集与隐私](docs/06-context-capture-and-privacy.md) | 采了什么、什么时候采、黑名单管到哪、实测发出去多少 |
 | 07 | [原生库](docs/07-native-helpers.md) | 4 个动态库的接口、用到的系统 API、关键伪代码 |
 | 08 | [本机数据](docs/08-local-data.md) | 数据库、录音、配置文件 |
-| 09 | [运行时抓包](docs/09-runtime-capture.md) | 抓包方案、操作步骤、结果（待补） |
+| 09 | [运行时抓包](docs/09-runtime-capture.md) | 抓包方案、操作步骤、2026-10-13 的结果、被纠正的静态结论 |
 | 10 | [交互状态机与按键](docs/10-interaction-state-machine.md) | 按键事件流向、听写状态图、全部时间参数、统计事件 |
 | 11 | [录音与编码](docs/11-audio-recorder.md) | 麦克风约束、采样与编码参数、无声检测 |
 | 12 | [账号与登录](docs/12-account-and-login.md) | 登录流程、令牌刷新、本地令牌文件的加密 |
@@ -65,7 +65,11 @@ tools/build-readable-tree.sh          # 生成 _work/readable/dist，作为 REA 
 # 3. REA 分析（在 Claude Code 里走 MCP，或用命令行）
 npx -y rea-agents@6.4.0 analyze-javascript-application _work/readable/dist --json
 
-# 4. 原生库（需要 Ghidra 12.1.4，见 docs/07）
+# 4. 抓包（步骤见 docs/09；mitmproxy 装在 <仓库>/.tools/venv-mitm）
+tools/capture.sh start --decrypt-context   # 另开终端：退出 Typeless → capture.sh on → 启动 → 使用 → 退出 → capture.sh off
+tools/capture.sh har _work/capture/<时间>   # 导出隐去凭据的 HAR 给 REA
+
+# 5. 原生库（需要 Ghidra 12.1.4，见 docs/07）
 export GHIDRA_INSTALL_DIR=<仓库>/.tools/ghidra_12.1.4_PUBLIC
 lipo -thin arm64 <库> -output _work/native-thin/<库>.arm64.dylib
 npx -y rea-agents@6.4.0 function _work/native-thin/libInputHelper.arm64.dylib _insertText --provider ghidra
@@ -73,4 +77,4 @@ npx -y rea-agents@6.4.0 function _work/native-thin/libInputHelper.arm64.dylib _i
 
 ## 边界
 
-只做静态分析和对自己账号的流量观察。不做绕过订阅或额度，不碰别人的数据。服务端加密的内容（调试信息）不尝试破解。
+只做静态分析和对自己账号的流量观察。抓包原件里有本人说的话和当时屏幕上的文字，只留在 `_work/`，文档里只记结构、长度和时间。不做绕过订阅或额度，不碰别人的数据。服务端加密的内容（调试信息）不尝试破解。

@@ -4,7 +4,7 @@
 
 ## 成品里有什么
 
-HTTP 兜底的回包里读这几个字段（readable:main/index.js:17919-17927）；悬浮条对成品做归一化时读的也是同一组（readable:qA149QP2.mjs:5414-5421），所以推断 WebSocket 的完成消息带的是同样的内容，待抓包确认。
+HTTP 兜底的回包里读这几个字段（readable:main/index.js:17919-17927）；悬浮条对成品做归一化时读的也是同一组（readable:qA149QP2.mjs:5414-5421）。抓包确认了 WebSocket 的完成消息带的是同一组（[09](09-runtime-capture.md#一次听写的消息序列)）：`audio_processing_completed` 的内容是 `{audio_id, refined_text, status, run_index, web_metadata, delivery, action, user_prompt, external_action}`。抓到的 4 次都是普通听写，`delivery` 等几项全是 `null`，所以 `delivery` 的三个取值仍然只来自代码。
 
 | 字段 | 含义 |
 | --- | --- |
@@ -13,7 +13,8 @@ HTTP 兜底的回包里读这几个字段（readable:main/index.js:17919-17927�
 | `user_prompt` | 服务端理解到的你的指令 |
 | `web_metadata` | 回答附带的网页信息，交给结果卡片显示 |
 | `external_action` | 要打开的外部目标，用到的是其中的 `target` |
-| `debug` | 调试信息（服务端加密，见 [08](08-local-data.md)） |
+| `debug` | 调试信息（服务端加密，见 [08](08-local-data.md)）。WebSocket 里它是单独一条 `debug_info` 消息，在成品之后到 |
+| `status`、`run_index`、`action` | 只在抓包里见到。听写时是 `true`、1、`null`，用途没有查 |
 
 **怎么投递是服务端决定的。** 客户端不判断你说的是"改写这段话"还是"帮我查一下"，它只看 `delivery`。
 
@@ -73,7 +74,9 @@ flowchart TD
 
 录音越长、选中的文字越多，等得越久才判定"比平时慢"。同一个值也是 HTTP 兜底请求的启动延时（readable:UfR9-a2Z.js:11221-11244）：兜底请求要等音频整段压缩完、并且这段延时走完才发。如果消息里带了 `need_weak_network_downgrade`（弱网降级），延时直接取 0，压缩完立刻发。
 
-这回答了 [91](91-open-questions.md) 的 Q10：本机记录里看到的 7000 是公式算出来的，比如一段 30 到 60 秒、没有选中文字的录音。录音时长的单位推断为秒，没有拿那条记录的实际时长去核对。
+这回答了 [91](91-open-questions.md) 的 Q10：本机记录里看到的 7000 是公式算出来的，比如一段 30 到 60 秒、没有选中文字的录音。
+
+抓包核对过第一档：4 次听写的时长是 2.5–12.8 秒，`end_audio` 里的值都是 6500，`start_audio` 里的是 6000（那时时长还是 0）。时长的单位是秒。30 秒以上的档位和选中文字那一项没有样本。
 
 ## 给仿写的备忘
 

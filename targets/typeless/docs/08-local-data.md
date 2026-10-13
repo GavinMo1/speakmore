@@ -42,10 +42,10 @@
 | `audio_metadata` | text | 音频参数 JSON |
 | `app_version` | text | 如 `mac_2.8.1` |
 | `mic_device`、`mic_device_info` | text、JSON | 麦克风 |
-| `client_metadata` | JSON | 客户端侧的时间参数 |
+| `client_metadata` | JSON | 客户端侧的时间参数。实测就是 `end_audio` 消息里的那份 |
 | `mode_meta` | JSON | 模式参数和结果（`ai_result`） |
-| `debug_info` | text | 服务端回传的调试信息，加密 |
-| `audio_context` | text | 上下文，RSA 信封加密 |
+| `debug_info` | text | 服务端回传的调试信息，加密。实测是 `debug_info` 消息的整个内容对象 |
+| `audio_context` | text | 上下文，RSA 信封加密。实测是第二份（`replace_audio_context` 那份） |
 
 旧表 `history` 多出 `audio`（BLOB，音频直接存库）、`edited_text` 系列、`ax_text`、`ax_html`、`focused_app_*` 等列。代码里有一个把旧表搬到新表的迁移任务（类 `wg`，`db:history-v2-migration-start`），会把旧的 AES 加密上下文重新包成 RSA 信封。
 
@@ -67,6 +67,8 @@
 ### 三个加密/不透明字段
 
 **`audio_context`**：3120 条全部是 RSA 信封（`{"_encrypted":true,"_v":1,"_type":"json","_key":…,"_data":…}`），平均 21.8 KB。包括 1.5.1 时期的老记录，说明旧格式已被迁移重新加密。公钥对应的私钥只在服务端，**本机读不出明文**。客户端等于把一份只有服务端能读的副本存在了本地，用途推断是重试和云同步时原样带上。
+
+例外：2026-10-13 抓包期间产生的 4 条，上下文是用抓包代理的临时公钥加密的（[09](09-runtime-capture.md#上下文是密文的问题)），服务端也解不开。
 
 **`debug_info`**：2862 条有值，平均 64 KB。外层是 `{audio_id, app_version, debug_info}`，内层 `debug_info` 是一个 `U2FsdGVkX1…` 开头的口令式 AES 密文。用包里写死的两个常量都解不开，客户端代码里也没有解密它的逻辑，只在提交反馈和诊断报告时原样传回服务端。内容未知，没有进一步尝试。
 
