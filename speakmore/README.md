@@ -1,253 +1,165 @@
-# Typeless 听写仿刻
+<h1 align="center">SpeakMore</h1>
 
-照着[逆向文档](../docs/00-overview.md)做的语音输入，只做一件事：按一下热键开始说话，再按一下结束，整理好的文字贴进当前输入框，并存进历史。翻译、问任何事、云同步都不做。
+<p align="center">
+  按一下热键说话，再按一下，整理好的文字就贴进你正在用的输入框。<br>
+  macOS 上的语音输入，用你自己的 Gemini API key。
+</p>
 
-原版的热键是 fn。这里默认换成**右 Option**，这样两个可以同时开着用。
+口头禅、改口、重复会被整理掉，长一点的话会分段、分点。只做语音转写这一件事：不采集屏幕和输入框里的内容，没有账号，没有云同步。
 
-| 部分 | 说明 |
-| --- | --- |
-| [client/](client/) | 应用本体：Electron 加一个 Swift 小程序，管热键、录音、贴字、历史、设置。服务端内置在里面 |
-| [server/](server/) | 听写服务：收分块音频，交给 Gemini 整理成文字。平时跑在应用进程里，也可以单独启动来调试 |
+名字和 Typeless 反着来：它是照着对 Typeless 的[逆向分析](../targets/typeless/README.md)做的独立实现，和 Typeless 官方没有关系。
 
 ## 装和用
 
-需要 Node 22.12 以上、Xcode 命令行工具，以及一把 Gemini 的 API key。
+需要 macOS 12 以上、Node 22.13 以上、Xcode 命令行工具（`xcode-select --install`），以及一把 [Gemini API key](https://aistudio.google.com/apikey)。
 
 ```bash
-cd server && npm ci
-cd ../client && npm ci
-npm run install-app      # 打包，装进"应用程序"，然后打开
+git clone https://github.com/zephyr4123/reverse-anything.git
+cd reverse-anything/speakmore
+npm install
+npm link        # 把 speakmore 命令装进 PATH
+speakmore
 ```
 
-第一次打开会弹出设置窗口，照着做两件事：
+第一次运行 `speakmore` 会依次做这几件事，都不用你另外操作：
 
-1. **填 key。** 粘贴进去点"保存并验证"。验证通过后用系统钥匙串加密存在本机，以后不用再填。
-2. **给三项权限。** 麦克风（录音）、输入监控（听热键）、辅助功能（把文字贴进输入框）。每一项旁边有去系统设置的按钮，打开开关后回来点"重新检查"。
+1. 编译一个听热键、贴文字的小程序，下载运行环境 Electron（约 100 MB）。
+2. 在终端里问你要 key。粘贴后按回车，输入不会显示出来；验证通过后用系统钥匙串加密存在本机。
+3. 系统弹出麦克风授权框，点“允许”。
+4. 显示状态。还缺系统权限的话会顺手打开设置窗口，每一项旁边有去系统设置的按钮。
 
-窗口最上面显示"可以用了"之后：点进任意输入框，按一下右 Option，说话，再按一下，文字会贴进去。之后它待在菜单栏的"听写"里，设置和历史都从那里进。想让它开机就在，在设置里勾上"登录这台电脑时自动启动"。
+看到下面这样就可以用了：点进任意输入框，按一下右 Option，说话，再按一下。
 
-| 东西 | 在哪 |
+```text
+SpeakMore 0.1.0 · 运行中
+
+  可以用了：点进任意输入框，按一下右 Option 键开始说话，再按一下结束，文字会贴进去。
+
+  key       已保存，验证通过
+  权限      麦克风 ✓   输入监控 ✓   辅助功能 ✓
+  热键      右 Option 键
+  模型      gemini-3.5-flash（MINIMAL）
+  今天      12 次 · 1,024 字 · 3 分 20 秒
+  累计      132 次 · 12,480 字 · 48 分钟 · 每分钟 260 字
+```
+
+它在后台运行，关掉终端窗口也还在，菜单栏上有“听写”两个字。电脑重启后要再运行一次 `speakmore`。
+
+不想把命令装进 PATH 的话，在这个目录里用 `npm start` 代替 `speakmore`，子命令写在 `--` 后面，比如 `npm start -- history`。
+
+## 命令
+
+| 命令 | 做什么 |
 | --- | --- |
-| 历史和录音 | `~/Library/Application Support/typeless-clone-client/`（`history.db`、`Recordings/<audio_id>.webm`，失败的听写也存录音） |
-| 加密后的 key | 同一个目录下的 `gemini-key.bin`；解密用的密钥在钥匙串的"Typeless Clone Safe Storage"里 |
-| 日志 | `~/Library/Logs/Typeless Clone/main.log`，一行一条 JSON。只记长度和耗时，不记说的话，也不记 key |
+| `speakmore` | 启动。已经在运行就只显示状态；没有 key 时问你要 |
+| `speakmore stop` / `restart` | 停掉 / 重启 |
+| `speakmore status [--json]` | 在不在运行、key、三项权限、今天和累计说了多少。能用时退出码是 0 |
+| `speakmore history [-n 条数] [--json]` | 看说过的话，按天分组，新的在前。失败的那条会写原因，录音还留着 |
+| `speakmore key` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key` |
+| `speakmore key --forget` | 删掉存着的 key |
+| `speakmore config` | 看设置，以及数据和日志在哪 |
+| `speakmore config set <名字> <值>` | 改一项设置，正在运行的话自动重启生效。`unset` 回到默认 |
+| `speakmore settings` | 打开设置窗口（去系统设置授权时用） |
+| `speakmore logs [-n 行数] [-f]` | 看日志 |
 
-应用用的是不带身份的本机签名，所以**每次重新打包，系统都会把它当成一个新应用**：三项权限要重新给（旧的授权记的是旧签名，可能要先在系统设置的列表里删掉再加），key 也可能要重新填。日常使用不受影响，只有更新版本时会遇到。
-
-## 服务端
-
-平时不用单独启动它：应用启动时会把它跑在自己的进程里，端口由系统分配。下面是调试时单独启动的办法。
-
-### 单独启动
-
-key 通过环境变量 `GEMINI_API_KEY` 给。不要写进任何文件，也不要 `export` 到全局，用按需加载器只喂给这一个进程：
-
-```bash
-cd server
-npm ci
-withkey <凭据名> npm start
-```
-
-启动后监听 `ws://127.0.0.1:8790/ws/rt_voice_flow`，只接受本机连接。要让客户端连它而不是用内置的，启动客户端时设 `CLONE_SERVER_URL`。
-
-| 环境变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `GEMINI_API_KEY` | 无，必填 | |
-| `GEMINI_MODEL` | `gemini-3.5-flash` | 换模型时注意下一项 |
-| `GEMINI_THINKING_LEVEL` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`。`gemini-3.7-flash`、`gemini-3.8-flash` 不接受 `MINIMAL` |
-| `PORT` | `8790` | |
-
-### 不用客户端就能试
-
-`scripts/replay.mjs` 把现成的录音文件（Ogg 或 WebM）当成一次录音发给服务端，每个文件算一块，打印每条回包、耗时和成品文字：
-
-```bash
-node scripts/replay.mjs 块1.ogg 块2.ogg
-```
-
-没有录音文件时可以用系统朗读合成一段：
-
-```bash
-say -v Tingting -o a.aiff "嗯，那个，我们明天，不对，后天下午开会"
-ffmpeg -i a.aiff -ar 16000 -ac 1 -c:a libopus -b:a 32k a.ogg
-```
-
-### 拿真实录音评估提示词
-
-`scripts/eval-prompt.mjs` 从本机 Typeless 的历史里按时长分层抽 60 条录音，用当前的提示词跑一遍，和原版当时给出的成品比：分没分段、用没用列表、字数、文字出入，并数出写坏的成品。改提示词前后各跑一次，用 `--label` 区分。
-
-```bash
-withkey <凭据名> node scripts/eval-prompt.mjs --label v1
-node scripts/eval-prompt.mjs --label v1 --report-only   # 不调模型，重新出一遍统计
-```
-
-录音会发给 Gemini。抽样清单和结果里有说话的原文，默认写到 `targets/typeless/_work/prompt-eval/`（不进 git）；终端上只打印统计数字。
-
-### 检查
-
-```bash
-npm run check   # 代码检查 + 全部测试
-```
-
-测试不联网，模型那一步换成假的。
-
-## 客户端
-
-### 开发时从终端启动
-
-```bash
-cd client
-npm start        # 会先编译 native/main.swift，再启动
-```
-
-和装好的应用是同一套代码、同一个数据目录，所以两个不能同时开。区别有三处：
-
-- 权限记在启动它的那个终端程序名下，不在"Typeless Clone"名下。
-- key 可以直接用环境变量给（`withkey <凭据名> npm start`），这时不读也不写钥匙串。不给的话和应用一样在设置窗口里填，密文存成 `gemini-key.dev.bin`，和装好的应用各存各的。
-- 不能设开机启动，日志只打在终端里。
-
-| 环境变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `GEMINI_API_KEY` | 无 | 有就用它，优先于设置窗口里存的那把 |
-| `GEMINI_MODEL`、`GEMINI_THINKING_LEVEL` | 同服务端 | 传给内置的服务 |
-| `CLONE_HOTKEY` | `right_option` | `right_option` / `right_command` / `right_control` / `fn`，都是单独按一下 |
-| `CLONE_SERVER_URL` | 无 | 设了就连这个地址上单独启动的服务端，不启动内置的 |
-
-### 三项权限
+## 三项系统权限
 
 | 权限 | 用来做什么 | 没有时的表现 |
 | --- | --- | --- |
-| 麦克风 | 录音 | 按热键时悬浮条提示没有麦克风权限 |
-| 输入监控 | 听热键 | 热键没反应，设置窗口和菜单里标出来 |
-| 辅助功能 | 模拟 ⌘V 把文字贴进去 | 照样能用，文字放进剪贴板，提示自己按 ⌘V |
+| 麦克风 | 录音 | 按热键时屏幕下方提示没有麦克风权限 |
+| 输入监控 | 听热键。只认你选的那一个键，别的按键不记录 | 热键没反应，`speakmore status` 里标出来 |
+| 辅助功能 | 模拟 ⌘V 把文字贴进去 | 照样能用，文字放进剪贴板，自己按 ⌘V |
 
-缺 key、缺麦克风或输入监控权限时，启动后会自动打开设置窗口；菜单栏"听写"的第一行是同一句结论。
+用 `speakmore` 命令启动时，这三项权限**记在你运行命令的那个终端程序名下**（“终端”、iTerm、Ghostty 等），在系统设置的列表里要找的是它，不是 SpeakMore。换一个终端程序启动，就要给那个终端再授权一次。
 
-### 打包
+在系统设置里打开开关之后，运行 `speakmore status`，它会重新检查一遍。
 
-```bash
-npm run dist            # 只打包，产物在 dist/Typeless Clone-darwin-<架构>/
-npm run install-app     # 打包并装进"应用程序"
-sh scripts/make-icon.sh # 改了 assets/icon.svg 之后重新生成图标（需要 rsvg-convert）
-```
-
-应用包里是这个目录的 `src`、编译好的小程序，以及 `../server` 的源码和运行时依赖（放在 `Resources/server`）。应用名只写在 `package.json` 的 `productName` 里。
-
-### 用法和原版一样的地方
-
-- 按一下开始、再按一下结束。按住超过 600 毫秒会取消并提示（原版 2.8.1 不支持按住说话）。
-- 热键按着的时候又按了别的键，当作组合键处理，悄悄取消。
-- 等成品最多 20 秒；单次录音最长 9 分钟。
-- 贴字只有粘贴一条路：存剪贴板、写入带"临时内容"标记的文字、模拟 ⌘V、0.3 秒后恢复剪贴板。
-- 麦克风完全没信号时（设备被静音、选错输入）不上传，直接报错。
-
-### 检查
+## 设置
 
 ```bash
-npm run check                                        # 代码检查 + 单元测试（53 条，不联网、不开窗口）
-withkey <凭据名> node scripts/e2e.mjs 一段录音.wav    # 端到端，key 给内置的服务用
+speakmore config set hotkey fn        # 换热键
+speakmore config unset hotkey         # 回到默认
 ```
 
-端到端测试用真的 Electron、真的录音编码、真的服务端和模型，只有两头是假的：麦克风换成一个 WAV 文件，贴字换成"记下来"。它用临时目录存数据，不碰真实的键盘、剪贴板和历史。
-
-### 各文件
-
-| 文件 | 做什么 | 对应原版 |
+| 名字 | 默认值 | 能填什么 |
 | --- | --- | --- |
-| `native/main.swift` | 听热键（只听不改，不报是哪个键）、贴字 | 键盘子进程和 Swift 库（[07](../docs/07-native-helpers.md)） |
-| `src/main/main.mjs` | 窗口、菜单栏、和小程序对接，把下面几样接起来 | 主进程（[03](../docs/03-process-architecture.md)） |
-| `src/main/service.mjs` | 把 `../server` 跑在主进程里；换 key 先验证再生效 | 原版的服务端在云上 |
-| `src/main/key-store.mjs` | key 用系统钥匙串加密后存成文件 | 原版用登录态，没有这一项 |
-| `src/main/setup-state.mjs` | "能不能用、还差什么"的统一结论 | |
-| `src/main/delivery.mjs` | 存录音、记历史、贴字，贴不进去时退到剪贴板 | 结果投递（[14](../docs/14-result-delivery.md)） |
-| `src/main/history.mjs` | 历史库 | `history_v2` 表的子集（[08](../docs/08-local-data.md)） |
-| `src/renderer/machine.mjs` | 状态机 | 悬浮条的状态机（[10](../docs/10-interaction-state-machine.md)） |
-| `src/renderer/recorder.mjs` | 录音，每 3 秒一块 | 录音与编码（[11](../docs/11-audio-recorder.md)） |
-| `src/renderer/voice-socket.mjs` | 听写协议的客户端一侧 | 网络协议（[05](../docs/05-network-protocol.md)） |
+| `hotkey` | `right_option` | `right_option` / `right_command` / `right_control` / `fn`，都是单独按一下。Typeless 用的是 `fn`，默认避开它，两个可以同时开着 |
+| `model` | `gemini-3.5-flash` | Gemini 的模型名。换模型时留意下一项 |
+| `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`，越高越慢。有的模型不接受 `MINIMAL` |
 
-## 和原版的对应关系
+设置存在数据目录的 `settings.json` 里。只想临时换一次，可以用环境变量 `SPEAKMORE_HOTKEY`、`GEMINI_MODEL`、`GEMINI_THINKING_LEVEL`，它们优先于文件；`GEMINI_API_KEY` 设着的话，这次运行用它，不读也不写存着的那把。
 
-协议照抄抓包看到的消息名和字段名（[05 网络协议](../docs/05-network-protocol.md#websocketwsrt_voice_flow)），只实现听写用到、并且仿刻客户端会发的那几条。
+## 你的数据
 
-| 方向 | 消息 | 仿刻 |
-| --- | --- | --- |
-| 客户端 → 服务端 | `start_audio` | 只用 `audio_id`，其余字段收下不用 |
-| | `set_audio_chunk_info` + 二进制帧 | 序号从 1 开始，按序收；第一块的文件头必须是 Ogg 或 WebM |
-| | `end_audio` | 只用 `audio_id` |
-| | `set_mode_config`、`replace_audio_context` | 不实现（不采集上下文，只有一种模式） |
-| 服务端 → 客户端 | `audio_session_started` | `{audio_id, start_time}` |
-| | `received_audio_chunk_count` | `{index, server_t, size}` |
-| | `audio_session_ending` | `{audio_id, total_chunks, completed_chunks, failed_chunks}`，这里数的是上传的块 |
-| | `audio_processing_completed` | 九个字段与实测相同，听写用不到的五个固定为 `null` |
-| | `audio_processing_error`、`error` | `{audio_id, code, detail}` |
-| | `debug_info` | 不发 |
+**发出去的只有录音**，直接发给 Google 的 Gemini 接口，用的是你自己的 key。没有别的服务器，没有统计上报，也不读屏幕和输入框里的内容。
 
-和原版不一样的地方：
+留在本机的都在 `~/Library/Application Support/SpeakMore/`：
 
-- **没有登录和签名。** 服务只听本机端口，握手时拒绝带网页来源（`Origin` 为 `http(s)://…`）的连接，防止浏览器里的网页连进来花模型额度。
-- **识别和整理是一次模型调用。** 原版服务端内部怎么做的看不到。各块首尾相接后整段发给 Gemini，不重新编码。
-- **容器多认一种 WebM。** 原版用自带的编码库出 Ogg；浏览器自带的录音接口出的是 WebM，里面同样是 Opus。服务端按文件头判断是哪一种，实测 Gemini 两种都收。
-- **不采集上下文。** 原版会把当前应用、输入框内容、屏幕可见文字一起上传（[06](../docs/06-context-capture-and-privacy.md)），这里只上传录音。
+| 东西 | 说明 |
+| --- | --- |
+| `history.db`、`Recordings/` | 说过的话和录音。失败的听写也存录音，话不会白说 |
+| `gemini-key.bin` | 加密后的 key，权限 600。解密用的密钥在系统钥匙串的“SpeakMore Safe Storage”里 |
+| `settings.json` | 上面那几项设置 |
+| `logs/main.log` | 日志，一行一条 JSON。只记长度和耗时，不记说的话，也不记 key |
 
-## 选型时测到的数
+想换个地方放，设环境变量 `SPEAKMORE_HOME`。想彻底删干净，停掉之后删这个目录，再在“钥匙串访问”里删掉“SpeakMore Safe Storage”。
 
-测试音频是系统朗读合成的一段 20.7 秒中英混说，带口头禅和一次改口；不是真人录音，结论只能当起点（真实录音的结果见下一节）。耗时是从本机经代理到 Gemini 的整次请求。
+## 现在的不足
 
-| 模型 | 思考档位 | 连接复用后的耗时 | 整理效果 |
-| --- | --- | --- | --- |
-| `gemini-3.5-flash-lite` | 默认 | 1.2–1.5 秒 | 口头禅删了，改口的痕迹（"不对，应该…"）留着 |
-| `gemini-3.5-flash` | `MINIMAL` | 1.6–1.8 秒 | 改口处理对了，"就是说"有时留着 |
-| `gemini-3.6-flash` | `MINIMAL` | 1.9–3.6 秒 | 同上 |
-| `gemini-3.8-flash` | `LOW` | 2.3–3.3 秒 | 最干净 |
-| `gemini-3.8-flash` | 默认 | 6–8 秒 | 最干净，思考用掉了大部分时间 |
+和 Typeless 比：
 
-原版实测是 `end_audio` 之后 1.4–1.9 秒出成品，所以默认选了 `gemini-3.5-flash`。
+- **专有名词和人名会听错。** Typeless 会把当前应用和屏幕上的文字一起上传当上下文，这里只有录音，也还没有个人词典。
+- **列表用得比它少**，口吃偶尔删不干净（约每 60 条 1 条）。
+- 只有听写，没有翻译和“问任何事”。
 
-另外三个结论：
+还没做的：
 
-- **分块不用重新编码。** 7 个独立编码的 3 秒 Ogg 流首尾相接，Gemini 能从头识别到尾。
-- **不能让模型在没有人声时"什么都不输出"。** 那样写时，3 秒静音 6 次里有 4 次编出了一句话。改成输出固定标记 `<无人声>` 后，静音和噪声各 6 次全部输出标记，服务端再把标记换成空字符串。
-- **慢的只有进程里的第一次。** 第一次整理要 3.4–4.1 秒，之后稳定在 1.7–1.9 秒，闲置 70 秒和 180 秒后再测也一样，连接没有断。所以服务端只在启动时发一个最小的请求预热，不在每次录音前预热。这一步顺带验证了 key，无效时启动日志里会有 `warm_up_failed`。
-- **要求 JSON 输出会让整理变差。** 用 JSON 字段表达"有没有人声"时，模型不再处理改口，所以没有采用。
+- 登录时自动启动。现在重启电脑后要再运行一次 `speakmore`。
+- 失败的听写重试。录音留着，但还不能一键重新整理。
+- 图形界面的主窗口，会用 Tauri 另做。现在的入口是命令行，加一个菜单栏图标和设置窗口。
+- Windows 和 Linux。
 
-## 用真实录音调过之后
+## 开发
 
-2026-10-13 用主人 Typeless 历史里的 60 条真实录音（2026-08 之后的，2 秒到 121 秒）调了提示词，原版当时的成品当参照。
+```bash
+npm run check                 # 代码检查 + 全部测试（181 条，不联网、不开窗口）
+npm run build:native          # 只重新编译原生小程序；平时不用管，启动时会按需编译
+```
 
-先核对了原版的排版规律（2853 条成品的统计）：62% 有换行，几乎都是空一行分段；15% 用了 `1.` 这种编号列表，列表前有一句以冒号结尾的话，项与项之间不空行；没有粗体和标题。跟时长强相关：10 秒内几乎不换行，20–40 秒 83% 分段，40 秒以上几乎全分。近两个月以陈述句收尾的成品有八成多不带最后那个句号。
+要真调 Gemini 的命令需要环境里有 `GEMINI_API_KEY`。仓库根目录的 `scripts/with-gemini-key.sh` 可以按你自己机器上的配置把它只喂给一条命令，见根目录的 `.machine.env.example`：
 
-| | 写坏的成品 | 原版分段的 38 条里也分了 | 原版用列表的 16 条里也用了 | 耗时中位 |
-| --- | --- | --- | --- | --- |
-| 调之前 | 10 条 | 6 条 | 0 条 | 2.1 秒 |
-| 定稿（跑了 5 遍，每遍 60 条） | 0–1 条 | 33–35 条 | 7–9 条 | 1.9–2.0 秒 |
+```bash
+../scripts/with-gemini-key.sh node scripts/e2e.mjs 一段录音.wav   # 端到端：真的 Electron、录音编码、Gemini；麦克风和贴字是假的
+../scripts/with-gemini-key.sh node scripts/eval-prompt.mjs --label v1   # 拿自己 Typeless 的历史录音评估提示词
+../scripts/with-gemini-key.sh node src/server/main.mjs           # 单独启动听写服务，配合 SPEAKMORE_SERVER_URL 调试
+node scripts/replay.mjs 块1.ogg 块2.ogg                           # 把现成的录音发给单独启动的服务
+```
 
-原版没分段而这里分了的是 0–3 条（共 22 条），原版没用列表而这里用了的是 0–1 条（共 44 条）。5 遍里后 2 遍是最终版，前 3 遍只差一条"列表从 1 开始编号"的规则。
+| 目录 | 内容 |
+| --- | --- |
+| `bin/`、`src/cli/` | `speakmore` 命令 |
+| `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、设置和历史窗口 |
+| `src/renderer/`、`src/preload/` | 各个窗口的页面：状态机、录音、听写协议的客户端 |
+| `src/server/` | 听写服务：收分块音频，交给 Gemini 整理。平时跑在后台应用的进程里 |
+| `native/` | 听热键和贴字的小程序（Swift） |
+| `src/*.mjs` | 命令和后台应用共用的：数据位置、设置、历史库、控制通道、日志 |
 
-"写坏的成品"指一眼能看出不对的：开头多出一个不相干的外文词、只输出了开头一小截、中间一长串下划线、整段写成繁体、正文里夹着时间戳。改了这几处：
+和原版的对应关系、模型怎么选的、提示词怎么调的，在[实现笔记](docs/implementation-notes.md)里。
 
-- **不再把温度设成 0。** 只去掉这一项，同一批录音写坏的就从 10 条降到 5 条，截断和下划线没再出现。
-- **录音后面跟一句文字。** 只给录音时成品开头偶尔会多出一个外文词，加上之后少了很多。
-- **提示词加了排版规则和三个长例子**（分段、列表、隔了几句才改口）。
-- **剩下压不住的在代码里兜底**：繁体字转成简体（[opencc-js](https://github.com/nk2028/opencc-js)）；开头多出的外文词去掉；成品里夹着时间戳就重新请求一次；最后一个句号去掉。前两条规则拿原版 2853 条成品验过误伤：分别是 0 条和 1 条。
+### 打成 .app
 
-还比不上原版的地方：
+平时用命令启动就够了。打成应用的区别是三项权限记在“SpeakMore”自己名下，并且可以在设置窗口里勾选登录时自动启动：
 
-- **专有名词和人名会听错。** 原版会把当前应用和屏幕文字一起上传当上下文，这里只有录音。去掉标点后和原版成品的文字相似度，5 遍的中位在 0.80–0.82 之间。
-- **列表用得比原版少。** 没说"第一、第二"但并列了几件事的话，原版更常整理成列表。
-- **口吃偶尔删不干净**，约每 60 条 1 条。
+```bash
+npm run install-app     # 打包并装进“应用程序”，然后打开
+```
 
-## 真机试用
+用的是不带身份的本机签名，所以每次重新打包系统都会把它当成一个新应用，权限要重新给，key 要重新填。
 
-2026-10-13 主人用真键盘和真麦克风试过：右 Option 单击开始和结束、贴进输入框都走通，客户端历史库里留下 2 条完成的记录（7.0 秒和 15.2 秒）。他对速度和整理效果的评价是超出预期。自动测试覆盖不到的三步（真键盘、真麦克风、真的贴字）靠的是这一次试用，没有别的佐证。
+### 验证到哪一步
 
-2026-10-13 之后改成了"装成应用、服务端内置、设置窗口里填 key"。这一版验证过的和没验证过的：
-
-- 验证过：装好的应用用假麦克风跑通了整条链路（内置服务、录音、整理、贴字替身、存历史）；不带 key 启动时自动打开设置窗口；收到退出信号 0.5 秒内退干净；设置窗口四种状态的截图。
-- 没验证过，要真人点一遍才知道：从"应用程序"里双击启动后三项权限的系统弹窗是不是都落在"Typeless Clone"名下；在设置窗口里粘贴 key 并保存；授权后点"重新检查"不重启应用能不能生效；开机启动；应用已经开着时再双击图标会不会亮出设置窗口。
-
-## 还没做的
-
-- 稳定的签名身份。现在每次重新打包，三项权限都要重新给。
-- 设置窗口里换热键。现在只能用环境变量换，装好的应用固定是右 Option。
-- 个人词典或上下文。专有名词和人名听错是现在和原版差得最多的地方。
-- 闲置超过 3 分钟后的耗时没有测过（见下）。
+- 自动测试 181 条，在 Node 22.13、24.21、26.0 上都跑过。
+- 真的启动过后台应用并用命令走了一遍：启动、重复启动、状态、从管道存 key、重启后读回、错的 key 被拒、删 key、停止。在伪终端里走过第一次使用时问 key 的流程，确认 key 不会显示在屏幕上。
+- 把它打成 npm 包装到另一个目录，在找不到 Swift 编译器的环境下能启动（包里带着编好的小程序）。
+- 端到端：合成的一段语音当麦克风输入，经过真的录音编码、Gemini、存历史，命令启动的和打成 .app 的都通过。
+- **还没有人按着真键盘、对着真麦克风用这一版试过。** 上一版（开两个终端启动）试过，后台的代码是同一套，但启动方式变了。Intel 芯片的 Mac 上也没有跑过。
