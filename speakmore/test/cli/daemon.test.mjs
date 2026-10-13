@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { createDaemon } from "../../src/cli/daemon.mjs";
-import { startControlServer } from "../../src/control.mjs";
+import { ALREADY_RUNNING_EXIT_CODE, startControlServer, TimeoutError } from "../../src/control.mjs";
 import { resolvePaths } from "../../src/paths.mjs";
 
 const quietLog = { info() {}, warn() {}, error() {} };
@@ -16,6 +16,7 @@ let paths;
 let app;
 let spawned;
 let progress;
+let processes;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "sm-"));
@@ -23,6 +24,7 @@ beforeEach(() => {
   app = null;
   spawned = [];
   progress = [];
+  processes = fakeProcesses();
 });
 afterEach(async () => {
   await app?.close();
@@ -48,6 +50,25 @@ function fakeSpawn(behave) {
   };
 }
 
+/**
+ * 假的进程表：alive 里有的进程号算活着；发过的信号记在 signals 里，onSignal 决定进程怎么反应。
+ * 信号 0 和真的一样只是问"还在不在"。
+ */
+function fakeProcesses() {
+  const table = {
+    alive: new Set(),
+    signals: [],
+    onSignal: () => {},
+    kill(pid, signal) {
+      if (!table.alive.has(pid)) throw Object.assign(new Error("kill ESRCH"), { code: "ESRCH" });
+      if (signal === 0) return;
+      table.signals.push([pid, signal]);
+      table.onSignal(pid, signal);
+    },
+  };
+  return table;
+}
+
 function daemonWith(overrides = {}) {
   return createDaemon({
     paths,
@@ -55,6 +76,8 @@ function daemonWith(overrides = {}) {
     env: { PATH: "/usr/bin", ELECTRON_RUN_AS_NODE: "1" },
     resolveElectron: () => "/pkg/node_modules/electron/dist/Electron",
     ensureHelper: () => false,
+    kill: processes.kill,
+    commandOf: () => "/pkg/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron /pkg",
     pollMs: 10,
     ...overrides,
   });
@@ -137,23 +160,84 @@ test("应用一直不答话时按时放弃，并说去哪看日志", async () =>
   await assert.rejects(daemonWith({ spawn, connectTimeoutMs: 60 }).start({ onProgress() {} }), /logs\/main\.log/);
 });
 
-test("停止：让它自己退出，等它真的不在了", async () => {
-  await startFakeApp(() => RUNNING, { quit: () => void setTimeout(() => app.close(), 30) });
-  assert.equal(await daemonWith().stop(), true);
-  assert.equal(await daemonWith().status(), null);
+test("同时启动了两个：后到的发现已经有一个就退出，这不算失败，接着等先到的那个答话", async () => {
+  const spawn = fakeSpawn((child) => {
+    setTimeout(() => child.emit("exit", ALREADY_RUNNING_EXIT_CODE, null), 10);
+    setTimeout(() => startFakeApp(() => RUNNING), 50);
+  });
+  const status = await daemonWith({ spawn }).start({ onProgress() {} });
+  assert.equal(status.pid, 4321);
+});
+
+test("停止：让它自己退出，等到进程真的不在了才算停掉", async () => {
+  processes.alive.add(4321);
+  await startFakeApp(() => RUNNING, {
+    quit: () => {
+      // 控制通道先关，进程晚一些才退干净：这段时间里新的还起不来
+      setTimeout(() => app.close(), 20);
+      setTimeout(() => processes.alive.delete(4321), 90);
+    },
+  });
+  assert.equal(await daemonWith().stop(), "quit");
+  assert.equal(processes.alive.has(4321), false);
+  assert.deepEqual(processes.signals, []);
 });
 
 test("本来就没有在运行时，停止什么都不做", async () => {
-  assert.equal(await daemonWith().stop(), false);
+  assert.equal(await daemonWith().stop(), "not-running");
 });
 
-test("说了退出却一直不退时，直接结束那个进程", async () => {
-  const killed = [];
+test("说了退出却一直不退：先请它结束，再不行就强行结束", async () => {
+  processes.alive.add(4321);
   await startFakeApp(() => RUNNING, { quit: () => {} });
-  const kill = (pid, signal) => {
-    killed.push([pid, signal]);
-    app.close();
+  processes.onSignal = (pid, signal) => {
+    if (signal === "SIGKILL") processes.alive.delete(pid);
   };
-  assert.equal(await daemonWith({ kill, quitTimeoutMs: 60 }).stop(), true);
-  assert.deepEqual(killed, [[4321, "SIGTERM"]]);
+  assert.equal(await daemonWith({ quitTimeoutMs: 40 }).stop(), "killed");
+  assert.deepEqual(processes.signals, [
+    [4321, "SIGTERM"],
+    [4321, "SIGKILL"],
+  ]);
+});
+
+/** 一个卡住的后台应用：连得上，但问什么都不答 */
+const startHungApp = () => startFakeApp(() => new Promise(() => {}));
+
+test("卡住不答话时也停得掉：照它启动时记下的进程号结束它；命令启动的和装成应用的都认", async () => {
+  for (const command of [
+    "/pkg/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron /pkg",
+    "/Applications/SpeakMore.app/Contents/MacOS/SpeakMore",
+  ]) {
+    processes = fakeProcesses();
+    processes.alive.add(4321);
+    processes.onSignal = (pid) => processes.alive.delete(pid);
+    writeFileSync(paths.pidFile, "4321\n");
+    await startHungApp();
+    assert.equal(await daemonWith({ statusTimeoutMs: 60, commandOf: () => command }).stop(), "killed");
+    assert.deepEqual(processes.signals, [[4321, "SIGTERM"]]);
+    await app.close();
+  }
+});
+
+test("卡住不答话，进程号又对不上（没记下来，或者那个号现在是别的程序）：不乱结束别人的进程，说清楚怎么办", async () => {
+  processes.alive.add(4321);
+  await startHungApp();
+  const stuck = (overrides) => daemonWith({ statusTimeoutMs: 60, ...overrides }).stop();
+
+  await assert.rejects(stuck(), /活动监视器/);
+  writeFileSync(paths.pidFile, "4321\n");
+  await assert.rejects(stuck({ commandOf: () => "/usr/bin/vim notes.txt" }), /活动监视器/);
+  // 别的 Electron 应用的辅助进程，路径里也带着 Electron 字样
+  const otherApp =
+    "/Applications/Other.app/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler";
+  await assert.rejects(stuck({ commandOf: () => otherApp }), /活动监视器/);
+  await assert.rejects(stuck({ commandOf: () => null }), /活动监视器/);
+  writeFileSync(paths.pidFile, "不是数字");
+  await assert.rejects(stuck(), /活动监视器/);
+  assert.deepEqual(processes.signals, []);
+});
+
+test("卡住不答话时查状态：报的是“不答话”，不当成没在运行", async () => {
+  await startHungApp();
+  await assert.rejects(daemonWith({ statusTimeoutMs: 60 }).status(), TimeoutError);
 });
