@@ -22,7 +22,8 @@ flowchart LR
   2. **修改跟踪**：见 [06](06-context-capture-and-privacy.md#插入后的修改跟踪)。它用一个固定集合（字母、数字、标点、回车、Tab、空格、删除）判断"用户在编辑"（readable:main/index.js:17221）。
   3. **打字提示计数**：见下。
 - 设置页里录制快捷键的控件也订阅这个通道（CeQePRHT.js:31869）。
-- 在这几处都没有看到把按键内容写盘或上传的代码。DNMdpbnK.mjs（主界面的大包）里还有一处订阅，没有读。
+- 主界面大包里的那处订阅（readable:DNMdpbnK.mjs:53654-53686）是**排障向导第 3 步“快捷键检测”**：让你按一下听写键，看能不能收到。测试期间保留最近 30 条按键事件（键名、按下/松开、时间）。向导数据打包时先过一个脱敏函数，把这份按键记录删掉，同时删掉的还有麦克风设备名、听写日志和测试时的识别结果（readable:DNMdpbnK.mjs:7538-7590）。打包后的数据发往哪里没有读。
+- 在这几处都没有看到把按键内容写盘或上传的代码。
 
 ### 打字提示计数
 
@@ -47,7 +48,6 @@ stateDiagram-v2
     translationModeHandsFree
   }
   handsFree --> stopping: 再按一次 / 点完成 / Esc
-  pushToTalk --> stopping: 松开主键
   recording_active --> stopping: 录音到上限 / 检测到全程无声
   stopping --> finishing
   stopping --> error
@@ -65,10 +65,32 @@ stateDiagram-v2
 
 - **按下就开始录**。进入 `initializing*` 的入口动作里就有 `startRecording`，不等判定是点按还是长按。
 - **松开进入免提录音**：`awaiting_long_press_or_tap` 里收到按键抬起，转到 `recording_active.handsFree`，之后再按一次任意功能键结束。
-- **`long_pressing` 的入口动作是"提示不要按住、只需按一下"并停止录音**（`showDoNotHoldJustPressAlertAction`、`stopRecording`）。
-- `recording_active` 另有一个 `pushToTalk` 子状态（松开主键即结束），它是该复合状态的初始子状态，但上面的转移都显式指向 `handsFree`。什么情况下进 `pushToTalk`、`LONG_HOLD` 事件在什么条件下发出，取决于快捷键会话那个 reducer，没有读完。**所以"按住说话"在当前版本里到底是支持还是被劝阻，这里不下结论**，你用一下就能确认。
+- **`long_pressing` 的入口动作是"提示不要按住、只需按一下"、停止录音、清掉本次的音频编号**（`showDoNotHoldJustPressAlertAction`、`stopRecording`、`WEBSOCKET.CLEAR_AUDIO_ID`，readable:qA149QP2.mjs:7018-7037）。之后松开按键回到 `idle`，这次录音作废。
+- **2.8.1 不支持"按住说话"**，见下一节。
 - `recording_active` 期间：每 100 ms 一个 tick 检查有没有该发的音频块；进入 1 秒后开始音量检测，判定全程无声则以"未检测到语音"结束。
 - `finishing` 等成品，有超时定时器。
+
+## "按住说话"在这一版里不存在
+
+结论：按住听写键超过 600 ms，录音被取消并提示"不要按住，按一下就行"。只有"按一下开始、再按一下结束"这一种用法。静态结论，建议抓包时顺手按住试一次（[09](09-runtime-capture.md) 场景 12）。
+
+依据有三条：
+
+1. **`LONG_HOLD` 的发出条件**（快捷键会话 reducer，readable:qA149QP2.mjs:7390-7525）。命中快捷键时建立一个会话并启动 600 ms 定时器；按键全部松开会结束会话，定时器随之取消。定时器到点时会话还在，就发 `longHold`，并把会话标成"等待松开"，之后的按键变化一律忽略，直到松开。所以 `longHold` 的含义就是"按下后 600 ms 还没松"。
+2. **状态机对它的处理**（readable:qA149QP2.mjs:6972-6976）。只有 `awaiting_long_press_or_tap` 接 `LONG_HOLD`，目标是 `long_pressing`，也就是上面说的取消加提示。
+3. **`pushToTalk` 子状态没有入边**。它是 `recording_active` 的初始子状态（7039），但全文件进入 `recording_active` 的 6 处转移都显式写了子状态：4 处 `handsFree`、2 处 `translationModeHandsFree`（6862、6913、6949、6996、7002、7008）。没有一处指向不带子状态的 `recording_active`，所以初始子状态永远用不上。
+
+`pushToTalk` 是旧版留下的代码。主进程的设置迁移里能看到来历（readable:main/index.js:20627-20628）：旧设置项 `pushToTalk` 改名成了 `dictationMode`，`handlesFreeMode` 改名成了 `askAnythingMode`。也就是说早期版本的听写键是"按住说话"，另一个键是"免提"；现在两个键都是免提，状态机里的事件名 `PRIMARY_KEY` / `HANDSFREE_KEY` 是那时的叫法。
+
+一个边界情况：麦克风初始化期间（`initializingFor*`）不接 `LONG_HOLD`。如果初始化本身超过 600 ms，`longHold` 会被丢掉，之后松开按键照常进入免提录音。推断这是有意的——不因为设备慢而误判用户在长按。
+
+### 快捷键会话的其他规则
+
+同一段 reducer 里还有：
+
+- 会话进行中又命中一个快捷键（比如先按住 `Fn` 再加 `Space`），只接受一次"升级"，功能切到新命中的那个；第三次起忽略。
+- 会话进行中按了不属于任何候选快捷键的键，发 `wrongKeyDown`，状态机取消本次录音回到 `idle`。这是"按着 Fn 又去按别的键"时不误触发的原因。
+- 听写键两次按下间隔不到 300 ms 的，第二次忽略（7551、7757-7763）。
 
 ## 时间参数
 
@@ -82,7 +104,8 @@ stateDiagram-v2
 | 音频分块 | 3000 ms | 4546；可用 localStorage `debug_audio_chunk_interval` 覆盖 |
 | 发送检查间隔 | 100 ms | `socketTickTimer`，6193 |
 | WebSocket 空闲断开 | 1 小时 | `socketIdleTimer`，6181 |
-| HTTP 兜底延时 | 默认 6000 ms | UfR9-a2Z.js:10457 |
+| HTTP 兜底延时 | 6000 ms + 每 30 秒录音 500 ms + 每 1000 字选中文字 500 ms（时长单位推断为秒） | qA149QP2.mjs:5422-5429，基数在 UfR9-a2Z.js:10457。作为 `taking_longer_alert_delay_ms` 随消息发给服务端 |
+| 听写键防抖 | 300 ms | qA149QP2.mjs:7551 |
 | HTTP 兜底超时 | 40 秒 | main/index.js:17905 |
 | 按键广播节流 | 16 ms，另有 50 ms 周期补发 | main/index.js:12699-12701 |
 | 修改跟踪 | 15 秒无编辑则结束 | main/index.js:17224 |

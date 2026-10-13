@@ -128,7 +128,7 @@ Opus 编码不在渲染进程做，交给主进程的 worker 线程池：
 
 | 字段 | 推断用途 |
 | --- | --- |
-| `delivery` | 结果的投递方式（贴进输入框还是弹卡片），未读实现 |
+| `delivery` | 结果的投递方式：`replace` 贴进输入框、`reply` 弹卡片、`external` 打开外链，见 [14](14-result-delivery.md) |
 | `user_prompt` | "问任何事"模式下识别出的用户指令 |
 | `web_metadata` | 联网回答的来源信息；代码里出现过 `vertexaisearch.cloud.google.com/grounding-api-redirect/`，推断联网搜索用的是 Google 的 grounding 服务 |
 | `external_action` | 触发外部动作；代码里有 X、Reddit、Gmail 的发帖/写信链接，推断是"帮我发一条推"这类指令 |

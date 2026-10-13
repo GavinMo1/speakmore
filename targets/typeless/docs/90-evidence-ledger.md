@@ -90,7 +90,20 @@ arm64 切片的 sha256 前 16 位：Context `1ec75d0d3fc5845c`、Input `f28cd221
 | F34 | 麦克风约束关闭回声消除、降噪、自动增益；AudioContext 16 kHz；worklet 每次 1024 采样 | 观察 | readable:UfR9-a2Z.js:11848、14360-14379；`renderer/static/js/C7lI2ZxR.js` |
 | F35 | 分块编码会话：码率 32000、复杂度 9 | 观察 | readable:main/worker/chunkSessionWorker.js:12-14、113、133 |
 | F36 | "无声"检测阈值为 8 位波形偏离 1，检测的是麦克风无信号而非语音活动 | 观察 | readable:qA149QP2.mjs:4367-4440 |
-| F33 | 按下功能键即开始录音；松开后进入免提录音，再按一次结束；`long_pressing` 状态会停止录音并提示不要按住 | 观察（状态定义）；"按住说话"是否仍可用未定 | readable:qA149QP2.mjs:6812-7160 |
+| F33 | 按下功能键即开始录音；松开后进入免提录音，再按一次结束；`long_pressing` 状态会停止录音并提示不要按住 | 观察（状态定义） | readable:qA149QP2.mjs:6812-7160 |
+| F37 | 2.8.1 不支持"按住说话"：按下 600 ms 未松即发 `LONG_HOLD` 并取消录音；`pushToTalk` 子状态没有入边 | 观察（代码）；运行时未验证 | readable:qA149QP2.mjs:6972-7039、7390-7525；6 处进入 `recording_active` 的转移均带子状态 |
+| F38 | 登录是系统浏览器加 PKCE 加 `typeless://auth/google/success` 回调，换令牌接口 `/oauth/exchange_app_login_code` | 观察 | readable:main/index.js:10001-10096、14027-14118 |
+| F39 | `user-data.json` 的加密密钥由操作系统、架构、应用名和固定盐派生；主进程里没有 `safeStorage` | 观察；否定结论的范围是 `main/index.js` 字面量搜索 | readable:main/index.js:9890-9896 |
+| F40 | 云同步只推文字字段，不含录音和上下文；每批 200 条、失败重试上限 3、拉取每页 500 最多 5 页 | 观察（代码）；本机未开启，无运行时观察 | readable:main/index.js:8587-8610、8926-8946、9092-9105 |
+| F41 | 同步冲突云端优先：`server_version_mismatch` 的记录直接标为已同步 | 观察 | readable:main/index.js:8975-8986 |
+| F42 | "问任何事"的投递方式由服务端的 `delivery` 决定：`replace` 插入、`reply` 卡片、`external` 打开外链 | 观察 | readable:qA149QP2.mjs:5238-5258 |
+| F43 | 打开外链只放行 `http:`、`https:`、`mailto:` | 观察 | readable:main/index.js:19048-19066 |
+| F44 | 黑名单在悬浮条里叫 `isBestEffortInsertion`，白名单叫 `isGuaranteedWritable`；输入框不可编辑且不在两份名单里才给兜底提示 | 观察（名字与分支）；含义为推断 | readable:qA149QP2.mjs:5290-5311、5373-5404 |
+| F45 | HTTP 兜底延时 = 6000 + ceil(时长/30)×500 + ceil(选中文字长度/1000)×500 毫秒，弱网降级时为 0 | 观察；时长单位为推断 | readable:qA149QP2.mjs:5422-5429；UfR9-a2Z.js:11221-11244 |
+| F46 | 更新源是 `https://typeless-static.com/desktop-release/`（electron-updater generic），不自动下载、不允许降级 | 观察 | 包内 `Resources/app-update.yml`；readable:main/index.js:19967-19969 |
+| F47 | `desktopCapturer` 全包只有一处调用，用来触发屏幕录制授权框；JS 里没有 `getDisplayMedia`，也没有摄像头和蓝牙的使用处 | 观察；否定结论的范围是可读树全部 JS 的字面量搜索，原生库未查 | readable:main/index.js:19282-19302 |
+| F48 | 主界面对 `global-keyboard` 的订阅是排障向导的快捷键检测，保留最近 30 条，打包前删除 | 观察；打包后的去向未读 | readable:DNMdpbnK.mjs:53654-53686、7538-7590 |
+| F49 | 企业策略：`retention_policy.transcription` 限本地历史保留上限，`cloud_sync_policy.allow_member_cloud_sync` 管云同步许可 | 观察；不许可分支未读完 | readable:main/index.js:18373-18425 |
 
 ## 工具与限制
 
@@ -100,3 +113,4 @@ arm64 切片的 sha256 前 16 位：Context `1ec75d0d3fc5845c`、Input `f28cd221
 - REA 的 `recover_javascript_sources` 仅支持 Linux x64，去混淆用了 **webcrack 2.16.0**。
 - Ghidra 官方包不带 macOS 原生反编译器，用它自带的 `support/gradle/gradlew buildNatives` 在本机编了一份（安装包 sha256 已与官方发布值核对一致）。
 - 没有用 REA 完成的两处：fuse 读取、本机数据库查询。
+- F37–F49 是在 REA 给出的应用图（`ev_675220c1fc7d…`）基础上直接读可读树得到的，引用的是 `文件:行号`。试过用 `trace_application_feature` 以 `exchange_app_login_code` 为种子追登录链路，没有命中（`ev_543fc8f37f12…`，覆盖状态 no-match）：这个端点是以对象属性的形式定义再拼接的，不在图的字面量节点里。

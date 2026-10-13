@@ -78,6 +78,8 @@ tools/capture.sh off         # 移除开关
 | 9 | 翻译模式（Fn+左 Shift）说一句 | `output_language` |
 | 10 | 听写后，手动改掉结果里的一个词，等 15 秒以上 | `/user/traits` 上报的内容 |
 | 11 | 按一下快捷键立刻松开（不到半秒） | 短录音的处理 |
+| 12 | 按住听写键 2 秒再松开（不要说话） | 静态结论"不支持按住说话"是否成立：预期出现"不要按住"提示，且不产生识别请求（[10](10-interaction-state-machine.md)） |
+| 13 | 不选中任何文字，用"问任何事"说"帮我搜一下今天的天气" | `delivery` 的取值，`external_action`、`web_metadata` 的实际内容（[14](14-result-delivery.md)） |
 
 ## 输出
 

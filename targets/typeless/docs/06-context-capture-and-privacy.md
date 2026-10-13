@@ -69,7 +69,7 @@ Windows 端的黑名单长得多（终端、Office、Zoom、WhatsApp、JetBrains
 - `collectFocusedAppInfo`：被拦截时跳过 `getFocusedVisibleTextAsync`，即不采可见文字。
 - `collectFocusedInputInfo`：被拦截时跳过 `getFocusedElementRelatedContentAsync`，即不采输入框周围内容。但 `getCurrentInputState`（光标前后文字、选中文字）的调用条件里**没有**黑名单这一项。
 
-所以从代码看，在微信里听写时，聊天窗口里别人的消息（可见文字）不会被采，但你正在输入的那一框文字会。这一条待抓包确认。黑名单的判断依据从列表内容推测更像"这些应用里读辅助功能树又慢又不准"，而不是隐私分级——微信和 Excel 在黑名单，Slack 和邮件在白名单。白名单的作用没有读到。
+所以从代码看，在微信里听写时，聊天窗口里别人的消息（可见文字）不会被采，但你正在输入的那一框文字会。这一条待抓包确认。**两份名单的本意是"辅助功能靠不靠得住"，不是隐私分级。** 悬浮条在把文字落进输入框之后会再查一次这两份名单，那里用的名字说得很直白（readable:qA149QP2.mjs:5373-5404）：黑名单叫 `isBestEffortInsertion`（只能尽力插入），白名单叫 `isGuaranteedWritable`（保证可写）。意思是：黑名单里的应用，辅助功能给出的信息不可信；白名单里的应用，即使辅助功能说"这里不可编辑"，粘贴也一定能成。两份名单在这里的用途见 [14](14-result-delivery.md#落进输入框之后)。这也解释了名单的内容：微信、Excel、谷歌文档这类自绘界面的在黑名单，Cursor、Slack、邮件在白名单。主进程里黑名单另有 `isTextCaptureBlockedByBlacklist` 这个名字，所以"不读取可见文字"是它的第二个用途，没看到白名单在采集环节起作用。
 
 查黑名单出错时按"已拦截"处理。
 
