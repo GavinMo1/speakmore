@@ -11,7 +11,7 @@
 
 ## 装和用
 
-需要 macOS 12 以上、Node 22.13 以上、Xcode 命令行工具（`xcode-select --install`），以及一把 [Gemini API key](https://aistudio.google.com/apikey)。
+需要 macOS 12 以上、Node 22.13 以上（用 23 的话要 23.4 以上）、Xcode 命令行工具（`xcode-select --install`），以及一把 [Gemini API key](https://aistudio.google.com/apikey)。
 
 ```bash
 git clone https://github.com/zephyr4123/speakmore.git
@@ -23,10 +23,11 @@ speakmore
 
 第一次运行 `speakmore` 会依次做这几件事，都不用你另外操作：
 
-1. 编译一个听热键、贴文字的小程序，下载运行环境 Electron（约 100 MB）。
-2. 在终端里问你要 key。粘贴后按回车，输入不会显示出来；验证通过后用系统钥匙串加密存在本机。
+1. 在终端里问你要 key。粘贴后按回车，输入不会显示出来。
+2. 编译一个听热键、贴文字的小程序，下载运行环境 Electron（约 100 MB），然后在后台启动。
 3. 系统弹出麦克风授权框，点“允许”。
-4. 显示状态。还缺系统权限的话会顺手打开设置窗口，每一项旁边有去系统设置的按钮。
+4. 验证 key，通过后用系统钥匙串加密存在本机。
+5. 显示状态。还缺系统权限的话会顺手打开设置窗口，每一项旁边有去系统设置的按钮。
 
 看到下面这样就可以用了：点进任意输入框，按一下右 Option，说话，再按一下。
 
@@ -52,13 +53,13 @@ SpeakMore 0.1.0 · 运行中
 | 命令 | 做什么 |
 | --- | --- |
 | `speakmore` | 启动。已经在运行就只显示状态；没有 key 时问你要 |
-| `speakmore stop` / `restart` | 停掉 / 重启 |
+| `speakmore stop` / `restart` | 停掉 / 重启。它卡住不答话时也停得掉 |
 | `speakmore status [--json]` | 在不在运行、key、三项权限、今天和累计说了多少。能用时退出码是 0 |
 | `speakmore history [-n 条数] [--json]` | 看说过的话，按天分组，新的在前。失败的那条会写原因，录音还留着 |
-| `speakmore key` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key` |
+| `speakmore key` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key`。别把 key 写在命令后面，那样会进 shell 的历史记录 |
 | `speakmore key --forget` | 删掉存着的 key |
 | `speakmore config` | 看设置，以及数据和日志在哪 |
-| `speakmore config set <名字> <值>` | 改一项设置，正在运行的话自动重启生效。`unset` 回到默认 |
+| `speakmore config set <名字> <值>` | 改一项设置，正在运行的话自动重启，并告诉你新的值能不能用。`unset` 回到默认 |
 | `speakmore settings` | 打开设置窗口（去系统设置授权时用） |
 | `speakmore logs [-n 行数] [-f]` | 看日志 |
 
@@ -87,7 +88,20 @@ speakmore config unset hotkey         # 回到默认
 | `model` | `gemini-3.5-flash` | Gemini 的模型名。换模型时留意下一项 |
 | `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`，越高越慢。有的模型不接受 `MINIMAL` |
 
-设置存在数据目录的 `settings.json` 里。只想临时换一次，可以用环境变量 `SPEAKMORE_HOTKEY`、`GEMINI_MODEL`、`GEMINI_THINKING_LEVEL`，它们优先于文件；`GEMINI_API_KEY` 设着的话，这次运行用它，不读也不写存着的那把。
+设置存在数据目录的 `settings.json` 里。只想临时换一次，可以用环境变量 `SPEAKMORE_HOTKEY`、`GEMINI_MODEL`、`GEMINI_THINKING_LEVEL`，它们优先于文件。`GEMINI_API_KEY` 也一样：设着的话这次用它，不读存着的那把。
+
+环境变量要写在**启动它的那条命令**上才算数。SpeakMore 已经在运行时，先 `speakmore stop`，再带着环境变量运行 `speakmore`。状态面板上的热键和模型，写的是正在运行的那个实际在用的。
+
+带着 `GEMINI_API_KEY` 运行时再执行 `speakmore key`，新的那把会存下来并立刻换上；但只要环境变量还在，下次启动用的仍是环境变量里的那把。
+
+## 出了状况
+
+| 看到的 | 怎么办 |
+| --- | --- |
+| 面板上 key 那一行写着“还没验证” | 启动时没连上 Gemini，存着的 key 先用着。连上网后再运行一次 `speakmore status` |
+| “还差：Gemini 验证” | Gemini 拒绝了请求，多半是模型名或思考档位不对，key 未必有问题。`speakmore config` 看一眼，`speakmore config unset model` 回到默认 |
+| “还差：按键监听” | 听热键的小程序停了。`speakmore restart`，还不行就看 `speakmore logs` |
+| 命令说它“没有在 5 秒内回话” | 后台卡住了。`speakmore stop` 会强行结束它，再运行 `speakmore` |
 
 ## 你的数据
 
@@ -99,8 +113,10 @@ speakmore config unset hotkey         # 回到默认
 | --- | --- |
 | `history.db`、`Recordings/` | 说过的话和录音。失败的听写也存录音，话不会白说 |
 | `gemini-key.bin` | 加密后的 key，权限 600。解密用的密钥在系统钥匙串的“SpeakMore Safe Storage”里 |
+| `gemini-key.app.bin` | 同上，打成 .app 运行时存的那一份。钥匙串里的密钥是按应用分的，两种启动方式互相解不开，所以各存各的 |
 | `settings.json` | 上面那几项设置 |
 | `logs/main.log` | 日志，一行一条 JSON。只记长度和耗时，不记说的话，也不记 key |
+| `control.sock`、`daemon.pid` | 运行时才有：命令和后台应用之间的通道，以及后台应用的进程号 |
 
 想换个地方放，设环境变量 `SPEAKMORE_HOME`。想彻底删干净，停掉之后删这个目录，再在“钥匙串访问”里删掉“SpeakMore Safe Storage”。
 
@@ -122,7 +138,7 @@ speakmore config unset hotkey         # 回到默认
 ## 开发
 
 ```bash
-npm run check                 # 代码检查 + 全部测试（181 条，不联网、不开窗口）
+npm run check                 # 代码检查 + 全部测试（236 条，不联网、不开窗口）
 npm run build:native          # 只重新编译原生小程序；平时不用管，启动时会按需编译
 ```
 
@@ -156,13 +172,18 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 
 用的是不带身份的本机签名，所以每次重新打包系统都会把它当成一个新应用，权限要重新给，key 要重新填。
 
+.app 在运行时，`speakmore status`、`history`、`key`、`stop` 照常能用。`speakmore restart` 和 `config set` 不会代它重启：从命令行起来的是终端启动的那一个，权限和 key 是另一套。按提示从菜单栏退出，再打开一次。
+
 ### 验证到哪一步
 
-- 自动测试 181 条，在 Node 22.13、24.21、26.0 上都跑过。
-- 真的启动过后台应用并用命令走了一遍：启动、重复启动、状态、从管道存 key、重启后读回、错的 key 被拒、删 key、停止。在伪终端里走过第一次使用时问 key 的流程，确认 key 不会显示在屏幕上。
+- 自动测试 236 条，在 Node 22.13、24.21、26.0 上都跑过。
+- 真的启动过后台应用并用命令走了一遍：启动、重复启动、两条命令同时启动、状态、重启后读回 key、错的 key 被拒、删 key、停止、连续重启。
+- 出状况时的几条路也在真机上走过：从管道喂进多行内容被当场拒绝，日志和数据目录里找不到它；把后台进程暂停来模拟卡住，`speakmore status` 说清楚是卡住了，`speakmore stop` 能强行结束；模型名写错时 `config set` 报错并能撤回。
+- 在伪终端里走过第一次使用的流程：先问 key 再启动，key 不会显示在屏幕上，没通过会再问一次。
 - 把它打成 npm 包装到另一个目录，在找不到 Swift 编译器的环境下能启动（包里带着编好的小程序）。
 - 端到端：合成的一段语音当麦克风输入，经过真的录音编码、Gemini、存历史，命令启动的和打成 .app 的都通过。
 - **还没有人按着真键盘、对着真麦克风用这一版试过。** 上一版（开两个终端启动）试过，后台的代码是同一套，但启动方式变了。Intel 芯片的 Mac 上也没有跑过。
+- 只有自动测试、没在真机上试的：启动时断网（存着的 key 先用着）、.app 在运行时命令行的提示、重新检查权限时不再反复弹系统授权框（试的这台机器三项权限都已经给了，弹不出来）。
 
 ## 许可
 

@@ -14,7 +14,7 @@
 
 ## 一分钟跑起来
 
-需要 macOS 12 以上、Node 22.13 以上、Xcode 命令行工具，以及一把 [Gemini API key](https://aistudio.google.com/apikey)。
+需要 macOS 12 以上、Node 22.13 以上（用 23 的话要 23.4 以上）、Xcode 命令行工具，以及一把 [Gemini API key](https://aistudio.google.com/apikey)。
 
 ```bash
 git clone https://github.com/zephyr4123/speakmore.git

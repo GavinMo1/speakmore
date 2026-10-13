@@ -94,6 +94,7 @@ SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../../targets/typeless/R
 | `native/main.swift` | 听热键（只听不改，不报是哪个键）、贴字 | 键盘子进程和 Swift 库（[07](../../targets/typeless/docs/07-native-helpers.md)） |
 | `src/app/main.mjs` | 后台应用的主进程：窗口、菜单栏、和小帮手对接，把下面几样接起来 | 主进程（[03](../../targets/typeless/docs/03-process-architecture.md)） |
 | `src/app/service.mjs` | 把 `src/server` 跑在主进程里；换 key 先验证再生效 | 原版的服务端在云上 |
+| `src/app/key-manager.mjs` | 这次运行用哪把 key、它是什么状态：启动时去哪找，怎么换、怎么删。启动时只是够不着 Gemini 的话先用着 | 原版用登录态，没有这一项 |
 | `src/app/key-store.mjs` | key 用系统钥匙串加密后存成文件 | 原版用登录态，没有这一项 |
 | `src/app/setup-state.mjs` | “能不能用、还差什么”的统一结论 | |
 | `src/app/delivery.mjs` | 存录音、记历史、贴字，贴不进去时退到剪贴板 | 结果投递（[14](../../targets/typeless/docs/14-result-delivery.md)） |
