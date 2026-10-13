@@ -4,3 +4,4 @@
 - [通用 skill 路由](skill-routing-general.md) — 密钥、多仓、云运维、Multica、编排、长任务、去 AI 腔用哪个 skill
 - [iOS skill 路由](skill-routing-ios.md) — SwiftUI 视图、iOS 验证闭环用哪个 skill
 - [GitHub 双账号核对](github-account-check.md) — 本项目走个人号 zephyr4123，每次 GitHub 操作前先核对激活账号
+- [REA 项目级安装](rea-project-level-install.md) — MCP 与 skill 只装在本项目、不写全局；升级校验命令与体检的已知假失败
