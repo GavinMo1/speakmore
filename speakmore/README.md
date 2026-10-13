@@ -14,8 +14,8 @@
 需要 macOS 12 以上、Node 22.13 以上、Xcode 命令行工具（`xcode-select --install`），以及一把 [Gemini API key](https://aistudio.google.com/apikey)。
 
 ```bash
-git clone https://github.com/zephyr4123/reverse-anything.git
-cd reverse-anything/speakmore
+git clone https://github.com/zephyr4123/speakmore.git
+cd speakmore/speakmore
 npm install
 npm link        # 把 speakmore 命令装进 PATH
 speakmore

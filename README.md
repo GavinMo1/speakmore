@@ -17,8 +17,8 @@
 需要 macOS 12 以上、Node 22.13 以上、Xcode 命令行工具，以及一把 [Gemini API key](https://aistudio.google.com/apikey)。
 
 ```bash
-git clone https://github.com/zephyr4123/reverse-anything.git
-cd reverse-anything/speakmore
+git clone https://github.com/zephyr4123/speakmore.git
+cd speakmore/speakmore
 npm install
 npm link
 speakmore
@@ -47,8 +47,8 @@ speakmore stop       # 停掉
 | --- | --- |
 | `AGENTS.md`、`.memory/` | 和 AI 编程助手协作时用的工作约定和项目记忆 |
 | `scripts/`、`.machine.env.example` | 开发时用的脚本：按每台机器自己的配置加载 key、核对 GitHub 账号、检查本机信息有没有漏进仓库 |
-| `.claude/`、`.mcp.json` | 逆向用的工具 [REA](https://github.com/morluto/rea) 的项目级配置 |
+| `.claude/`、`.mcp.json` | 逆向用的工具 [REA](https://github.com/morluto/rea) 的项目级配置。`.claude/skills/` 下是 REA 自带的说明文件，版权归它的作者，MIT 许可 |
 
 ## 许可
 
-[MIT](LICENSE)
+[MIT](LICENSE)。`.claude/skills/reverse-engineer-anything/` 来自 REA，按它自己的 MIT 许可。

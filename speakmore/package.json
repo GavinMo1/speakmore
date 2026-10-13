@@ -12,10 +12,10 @@
     "macos",
     "gemini"
   ],
-  "homepage": "https://github.com/zephyr4123/reverse-anything/tree/main/speakmore#readme",
+  "homepage": "https://github.com/zephyr4123/speakmore/tree/main/speakmore#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zephyr4123/reverse-anything.git",
+    "url": "git+https://github.com/zephyr4123/speakmore.git",
     "directory": "speakmore"
   },
   "type": "module",
