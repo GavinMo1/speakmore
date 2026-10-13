@@ -151,7 +151,7 @@ test("连的是单独启动的服务端：key 在那边，这里不管", async (
   const { keys } = setup({ external: true, stored: "stored-key" });
   assert.deepEqual(await keys.loadAtStartup(), { state: "ready", source: "external", problem: null });
   assert.match((await keys.save("new-key")).problem, /SPEAKMORE_SERVER_URL/);
-  keys.forget();
+  await keys.forget();
   assert.equal(keys.current.source, "external");
 });
 
@@ -263,10 +263,32 @@ test("启动时的验证还没回来又存了一把不能用的：回到的是�
 test("删掉：存着的没了，服务也不再用它", async () => {
   const { keys, service, keyStore } = setup({ stored: "stored-key" });
   await keys.loadAtStartup();
-  keys.forget();
+  await keys.forget();
   assert.equal(keyStore.value, null);
   assert.equal(service.using, null);
   assert.deepEqual(keys.current, { state: "missing", source: null, problem: null });
+});
+
+test("启动时的验证还没回来就点了删掉：验证回来之后 key 仍然是删掉的，不会又被启用", async () => {
+  const { keys, service, keyStore } = setup({ stored: "stored-key" });
+  const release = holdStartup(service);
+  const pending = [keys.loadAtStartup(), keys.forget()];
+  await release();
+  await Promise.all(pending);
+  assert.equal(service.using, null);
+  assert.equal(keyStore.value, null);
+  assert.equal(keys.current.state, "missing");
+});
+
+test("删的时候出了错（文件删不掉）：照实抛出来，后面再存 key 不受连累", async () => {
+  const { keys, service, keyStore } = setup({ stored: "stored-key" });
+  await keys.loadAtStartup();
+  keyStore.clear = () => {
+    throw new Error("删不掉");
+  };
+  await assert.rejects(keys.forget(), /删不掉/);
+  assert.deepEqual(await keys.save("new-key"), { ok: true });
+  assert.equal(service.using, "new-key");
 });
 
 // ---------- 启动时没验证成的，之后补上 ----------

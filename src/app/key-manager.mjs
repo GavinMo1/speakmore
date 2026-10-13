@@ -23,9 +23,20 @@ const MISSING = { state: "missing", source: null, problem: null };
  */
 export function createKeyManager({ service, keyStore, env, log, onChange }) {
   let current = MISSING;
-  /** 验证一把 key 要等 Gemini 回话。前一把还没验完又来一把时排队，免得先来的后到、把后来的盖掉 */
+  /** 排在最后的那件事做完的时候。只用来排队，不带结果也不带错误 */
   let queue = Promise.resolve();
   let reverifying = false;
+
+  /**
+   * 换 key、删 key 一件一件来。验证一把 key 要等 Gemini 回话，这期间又来一件的话排在后面：
+   * 否则先来的后到，会把后来的盖掉（比如验证途中点了删除，验证回来又把它启用了）。
+   */
+  function enqueue(task) {
+    const result = queue.then(task);
+    // 一件事出了错由它自己的调用方处理，不连累排在后面的
+    queue = result.catch(() => {});
+    return result;
+  }
 
   function become(next) {
     current = next;
@@ -46,7 +57,7 @@ export function createKeyManager({ service, keyStore, env, log, onChange }) {
    * @returns {Promise<null | { cause: string, problem: string }>} 通过了是 null，没通过是原因
    */
   function adopt(apiKey, source, { atStartup }) {
-    const run = async () => {
+    return enqueue(async () => {
       // 排到自己了再记"原来的状态"：排队期间前一把可能刚验完
       const previous = current;
       become({ state: "checking", source, problem: null });
@@ -64,9 +75,7 @@ export function createKeyManager({ service, keyStore, env, log, onChange }) {
         }
         return { cause, problem };
       }
-    };
-    queue = queue.then(run);
-    return queue;
+    });
   }
 
   return {
@@ -126,11 +135,13 @@ export function createKeyManager({ service, keyStore, env, log, onChange }) {
     },
 
     forget() {
-      keyStore.clear();
-      log.info("key_forgotten");
-      if (!service) return;
-      service.forgetKey();
-      become(MISSING);
+      return enqueue(() => {
+        keyStore.clear();
+        log.info("key_forgotten");
+        if (!service) return;
+        service.forgetKey();
+        become(MISSING);
+      });
     },
 
     /** 启动时够不着 Gemini、还没验证的那把，再验一次。别的情况什么都不做 */
