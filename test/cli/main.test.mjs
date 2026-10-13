@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -54,11 +54,17 @@ const NO_PERMISSIONS = {
 
 let dir;
 let paths;
+/** 有的测试要在家目录以外放东西 */
+let outside = null;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "sm-"));
   paths = resolvePaths({ SPEAKMORE_HOME: dir });
 });
-afterEach(() => rmSync(dir, { recursive: true, force: true }));
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true });
+  if (outside) rmSync(outside, { recursive: true, force: true });
+  outside = null;
+});
 
 /**
  * 假的后台应用。running 是它现在的状态（null 表示没在运行），afterStart 是启动之后的状态，
@@ -111,10 +117,18 @@ function fakeDaemon({
 }
 
 /** secrets：每次问 key 时依次给出的回答。可以是文字、要抛的错误，或者一个现算的函数 */
-function harness({ daemon = fakeDaemon(), interactive = true, env = {}, secrets = [] } = {}) {
+function harness({
+  daemon = fakeDaemon(),
+  interactive = true,
+  env = {},
+  secrets = [],
+  confirms = [],
+  keychain = () => true,
+} = {}) {
   const output = { out: "", err: "" };
   const asked = [];
   const tails = [];
+  const confirmed = [];
   const io = {
     out: (text) => {
       output.out += `${text}\n`;
@@ -142,8 +156,14 @@ function harness({ daemon = fakeDaemon(), interactive = true, env = {}, secrets 
       tails.push(args);
       return 0;
     },
+    async confirm(question) {
+      confirmed.push(question);
+      return confirms.shift() ?? false;
+    },
+    removeKeychainKey: keychain,
+    packageDir: paths.appDir,
   };
-  return { io, output, asked, tails, daemon, speakmore: (...argv) => run(argv, io) };
+  return { io, output, asked, tails, confirmed, daemon, speakmore: (...argv) => run(argv, io) };
 }
 
 /** 假装以前存过一把 key */
@@ -595,6 +615,119 @@ test("有历史时面板里带上今天和累计的数", async () => {
   assert.match(output.out, /累计\s+2 次 · 8 字 · 8 秒/);
 });
 
+// ---------- 卸载 ----------
+
+/** 摆出装好并用过之后的样子，外加家目录以外的一个命令链接 */
+function seedInstalled() {
+  for (const file of [
+    join(paths.binDir, "speakmore"),
+    join(paths.appDir, "package.json"),
+    join(paths.runtimeDir, "Electron.app", "Info.plist"),
+    paths.settingsFile,
+    paths.keyFile,
+    paths.historyDb,
+    join(paths.recordingsDir, "a.webm"),
+    paths.logFile,
+    join(paths.cacheDir, "GPUCache", "data_0"),
+  ]) {
+    mkdirSync(join(file, ".."), { recursive: true });
+    writeFileSync(file, "x");
+  }
+  // 家目录以外的一处（比如 ~/.local/bin）
+  outside = mkdtempSync(join(tmpdir(), "sm-bin-"));
+  const link = join(outside, "speakmore");
+  symlinkSync(join(paths.binDir, "speakmore"), link);
+  // 同一个位置上不是我们的东西：别人的同名文件
+  const foreign = join(outside, "not-ours");
+  writeFileSync(foreign, "别人的");
+  writeFileSync(paths.linksFile, `${link}\n${foreign}\n`);
+  return { link, foreign };
+}
+
+test("uninstall --yes：停掉后台，整个目录、家目录以外的命令链接、钥匙串里的条目，一次删干净", async () => {
+  const { link, foreign } = seedInstalled();
+  const removedFromKeychain = [];
+  const { speakmore, output, daemon } = harness({
+    daemon: fakeDaemon({ running: READY }),
+    keychain: () => {
+      removedFromKeychain.push(true);
+      return true;
+    },
+  });
+  assert.equal(await speakmore("uninstall", "--yes"), 0);
+  assert.deepEqual(daemon.calls, ["stop"]);
+  assert.equal(existsSync(paths.home), false);
+  assert.equal(existsSync(link), false);
+  assert.equal(removedFromKeychain.length, 1);
+  // 记在清单里、但不是指向我们的链接的东西，不碰
+  assert.equal(readFileSync(foreign, "utf8"), "别人的");
+  assert.match(output.out, /已经卸载/);
+  assert.match(output.out, /钥匙串/);
+  // 删不了的也照实说
+  assert.match(output.out, /权限/);
+});
+
+test("uninstall --keep-data：只删程序，设置、key、历史和录音留着，钥匙串也不动（留着的 key 要靠它解开）", async () => {
+  const { link } = seedInstalled();
+  const { speakmore, output } = harness({ keychain: () => assert.fail("不该动钥匙串") });
+  assert.equal(await speakmore("uninstall", "--keep-data", "--yes"), 0);
+  for (const kept of [paths.settingsFile, paths.keyFile, paths.historyDb, join(paths.recordingsDir, "a.webm")]) {
+    assert.equal(existsSync(kept), true, kept);
+  }
+  for (const gone of [paths.binDir, paths.appDir, paths.runtimeDir, paths.cacheDir, paths.logFile, link]) {
+    assert.equal(existsSync(gone), false, gone);
+  }
+  assert.match(output.out, /留着/);
+});
+
+test("uninstall：先说清楚要删什么再问一句；不答应就什么都不动", async () => {
+  seedInstalled();
+  const declined = harness({ daemon: fakeDaemon({ running: READY }), confirms: [false] });
+  assert.equal(await declined.speakmore("uninstall"), 1);
+  assert.equal(declined.confirmed.length, 1);
+  assert.match(declined.output.out, /历史和录音/);
+  assert.deepEqual(declined.daemon.calls, []);
+  assert.equal(existsSync(paths.historyDb), true);
+
+  const agreed = harness({ confirms: [true] });
+  assert.equal(await agreed.speakmore("uninstall"), 0);
+  assert.equal(existsSync(paths.home), false);
+});
+
+test("uninstall：不在终端里运行又没给 --yes 时不动手", async () => {
+  seedInstalled();
+  const { speakmore, output, confirmed } = harness({ interactive: false });
+  assert.equal(await speakmore("uninstall"), 2);
+  assert.equal(confirmed.length, 0);
+  assert.match(output.err, /--yes/);
+  assert.equal(existsSync(paths.historyDb), true);
+});
+
+test("uninstall：后台停不掉时不往下删（它还开着那些文件）", async () => {
+  seedInstalled();
+  const daemon = fakeDaemon({ running: READY });
+  daemon.stop = async () => {
+    throw new Error("SpeakMore 停不掉（进程号 4321）");
+  };
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore("uninstall", "--yes"), 1);
+  assert.match(output.err, /停不掉/);
+  assert.equal(existsSync(paths.appDir), true);
+});
+
+test("uninstall：钥匙串里的条目删不掉时照样把别的删完，并说清楚剩了什么", async () => {
+  seedInstalled();
+  const { speakmore, output } = harness({
+    keychain: () => {
+      throw new Error("钥匙串锁着");
+    },
+  });
+  assert.equal(await speakmore("uninstall", "--yes"), 0);
+  assert.equal(existsSync(paths.home), false);
+  assert.match(output.out, /钥匙串锁着/);
+  assert.match(output.out, /钥匙串访问/);
+});
+
 // ---------- 其余 ----------
 
 test("logs：把日志文件的最后几行打出来，-f 一直跟着；还没有日志时照实说", async () => {
@@ -626,7 +759,18 @@ test("help 和 --help 列出全部命令；--version 给版本号", async () => 
   for (const argv of [["help"], ["--help"], ["-h"]]) {
     const { speakmore, output } = harness();
     assert.equal(await speakmore(...argv), 0);
-    for (const command of ["start", "stop", "restart", "status", "key", "config", "history", "logs", "settings"]) {
+    for (const command of [
+      "start",
+      "stop",
+      "restart",
+      "status",
+      "key",
+      "config",
+      "history",
+      "logs",
+      "settings",
+      "uninstall",
+    ]) {
       assert.match(output.out, new RegExp(`speakmore ${command}`));
     }
   }

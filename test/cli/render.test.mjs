@@ -242,7 +242,11 @@ test("设置逐项列出现在的值、从哪来、能填什么，后面是文�
         hotkey: { value: "fn", source: "file" },
         model: { value: "gemini-3.8-flash", source: "env" },
       },
-      paths: { dataDir: "/data", settingsFile: "/data/settings.json", logFile: "/data/logs/main.log" },
+      paths: {
+        home: "/home/.speakmore",
+        settingsFile: "/home/.speakmore/settings.json",
+        logFile: "/home/.speakmore/logs/main.log",
+      },
     },
     plain,
   );
@@ -251,7 +255,9 @@ test("设置逐项列出现在的值、从哪来、能填什么，后面是文�
   assert.match(text, /model\s+gemini-3\.8-flash\s+.*环境变量 GEMINI_MODEL/);
   assert.match(text, /thinking\s+MINIMAL\s+.*默认/);
   assert.match(text, /speakmore config set hotkey fn/);
-  assert.match(text, /\/data\/logs\/main\.log/);
+  assert.match(text, /目录\s+\/home\/\.speakmore\n/);
+  assert.match(text, /\/home\/\.speakmore\/logs\/main\.log/);
+  assert.match(text, /speakmore uninstall/);
 });
 
 test("开了颜色时对勾和叉带颜色，关了就是纯文字", () => {

@@ -95,7 +95,7 @@ function render(setup) {
   openAtLogin.disabled = !setup.openAtLogin.supported;
   $("open-at-login-hint").hidden = setup.openAtLogin.supported;
 
-  $("data-dir").textContent = setup.dataDir;
+  $("data-dir").textContent = setup.home;
 }
 
 async function refresh() {

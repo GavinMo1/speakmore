@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   app,
@@ -15,8 +15,9 @@ import {
 } from "electron";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { openHistory } from "../history.mjs";
+import { migrateLegacyData } from "../legacy.mjs";
 import { alsoLogTo, log } from "../log.mjs";
-import { resolvePaths } from "../paths.mjs";
+import { ensureHome, resolvePaths } from "../paths.mjs";
 import { HOTKEYS, resolveSettings } from "../settings.mjs";
 import { createDelivery } from "./delivery.mjs";
 import { startHelper } from "./helper.mjs";
@@ -56,9 +57,9 @@ const PRIVACY_PANES = {
   trusted: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
 };
 
-// 数据目录由 paths.mjs 定，命令行和这里用同一处；不交给 Electron 按应用名去猜，
-// 否则命令启动的和打成应用的会各存一份历史
-app.setPath("userData", PATHS.dataDir);
+// 所有东西都放在 paths.mjs 定的那一个目录里，命令行和这里用同一处。Electron 默认会按应用名在
+// ~/Library/Application Support 下另开一个目录放 Chromium 的缓存和状态，把它也收进来，和我们的数据分开放
+app.setPath("userData", PATHS.cacheDir);
 
 // 打成应用后没有终端，日志自己写文件。由命令启动时标准输出已经被接到同一个文件里了
 if (app.isPackaged) alsoLogTo(PATHS.logFile);
@@ -91,12 +92,13 @@ if (isOnlyInstance) {
 async function main() {
   app.dock?.hide();
 
+  ensureHome(PATHS);
   // 记下进程号：万一卡住了不答话，speakmore stop 靠它找到这个进程。要赶在控制通道开始听之前写好，
   // 这样只要通道连得上，文件里记的就一定是通道那头的进程
-  mkdirSync(PATHS.dataDir, { recursive: true });
   writeFileSync(PATHS.pidFile, `${process.pid}\n`);
+  // 0.1 版的数据在别处。平时是 speakmore 命令在启动之前搬好的；直接双击应用启动时由这里搬
+  await migrateLegacyData({ paths: PATHS, log });
 
-  const userData = PATHS.dataDir;
   const startedAt = new Date().toISOString();
   const history = openHistory(PATHS.historyDb);
   const keyStore = createKeyStore({ file: app.isPackaged ? PATHS.appKeyFile : PATHS.keyFile, safeStorage });
@@ -122,7 +124,7 @@ async function main() {
     hotkey: HOTKEY,
     model: SETTINGS.model.value,
     thinking: SETTINGS.thinking.value,
-    user_data: userData,
+    home: PATHS.home,
     server_url: serverUrl,
     packaged: app.isPackaged,
     by_cli: LAUNCHED_BY_CLI,
@@ -299,7 +301,7 @@ async function main() {
       hotkeyLabel: HOTKEY_LABEL,
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
       openAtLogin: { supported: app.isPackaged, enabled: app.getLoginItemSettings().openAtLogin },
-      dataDir: userData,
+      home: PATHS.home,
     };
   });
   // 设置窗口和 speakmore key 存 key、删 key，走的是同一处

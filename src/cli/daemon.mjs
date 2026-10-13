@@ -11,8 +11,14 @@ import { ensureHelper as defaultEnsureHelper } from "./native-helper.mjs";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** electron 这个包导出的就是可执行文件的路径；没下载过的话它会在这一步自己去下载 */
+/**
+ * 后台应用用哪个 Electron 来跑。
+ * 装好的 SpeakMore 自带一份，这条命令本身就是拿它当 Node 跑起来的，所以正在跑我们的这个可执行文件就是它。
+ * 从源码仓库跑（开发时）用的是系统的 Node，这时去依赖里找：electron 这个包导出的就是可执行文件的路径，
+ * 没下载过的话它会在这一步自己去下载。
+ */
 function resolveElectronBinary(packageDir, onProgress) {
+  if (process.versions.electron) return process.execPath;
   const require = createRequire(join(packageDir, "package.json"));
   let electronDir;
   try {

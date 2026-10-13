@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { createDaemon } from "../../src/cli/daemon.mjs";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer, TimeoutError } from "../../src/control.mjs";
-import { resolvePaths } from "../../src/paths.mjs";
+import { ensureHome, resolvePaths } from "../../src/paths.mjs";
 
 const quietLog = { info() {}, warn() {}, error() {} };
 const RUNNING = { pid: 4321, starting: false, permissions: { microphone: "granted" }, key: { state: "ready" } };
@@ -21,6 +21,8 @@ let processes;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "sm-"));
   paths = resolvePaths({ SPEAKMORE_HOME: dir });
+  // 后台应用启动时自己会建；这里的假应用没有这一步
+  ensureHome(paths);
   app = null;
   spawned = [];
   progress = [];

@@ -1,39 +1,76 @@
+import { chmodSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 
-// 数据、设置、日志、控制通道各在哪。命令行和后台应用是两个进程，靠这一份约定找到同一批文件。
-// 全都放在一个目录里：想看、想备份、想删干净，只用找这一处。
+// SpeakMore 的家：程序、运行环境、设置、key、历史、录音、日志，全在这一个目录里。
+// 装的时候往里放，删的时候删掉它就干净了。命令行和后台应用是两个进程，靠这一份约定找到同一批文件。
+//
+//   ~/.speakmore/
+//     bin/ app/ runtime/           程序本身：安装时放进去，升级时整个换掉
+//     settings.json gemini-key.bin data/    你的东西
+//     logs/ run/ cache/            运行时产生的，删了会自己再建
 
 /** macOS 上 Unix 套接字的路径最长 103 个字节（sockaddr_un.sun_path 是 104，含结尾的 0） */
 const MAX_SOCKET_PATH_BYTES = 103;
 
 /**
  * @param {Record<string, string | undefined>} env
- * @param {string} home 家目录，测试时换掉
+ * @param {string} userHome 用户的家目录，测试时换掉
  */
-export function resolvePaths(env = process.env, home = homedir()) {
-  // SPEAKMORE_HOME：把全部数据换到别处。测试用它指到临时目录，不碰真实的历史
-  const dataDir = env.SPEAKMORE_HOME || join(home, "Library", "Application Support", "SpeakMore");
+export function resolvePaths(env = process.env, userHome = homedir()) {
+  // SPEAKMORE_HOME：把整个目录换到别处。测试用它指到临时目录，不碰真实的历史
+  const home = env.SPEAKMORE_HOME || join(userHome, ".speakmore");
   // 相对路径会随着"在哪个目录运行命令"而变：换个目录就找不到正在运行的那个，还会再起一个
-  if (!isAbsolute(dataDir)) {
-    throw new Error(`环境变量 SPEAKMORE_HOME 要写绝对路径，现在是 ${JSON.stringify(dataDir)}`);
+  if (!isAbsolute(home)) {
+    throw new Error(`环境变量 SPEAKMORE_HOME 要写绝对路径，现在是 ${JSON.stringify(home)}`);
   }
-  const controlSocket = join(dataDir, "control.sock");
+  const controlSocket = join(home, "run", "control.sock");
   if (Buffer.byteLength(controlSocket) > MAX_SOCKET_PATH_BYTES) {
-    throw new Error(`数据目录的路径太长，控制通道建不起来：${dataDir}\n用环境变量 SPEAKMORE_HOME 换一个短一些的目录。`);
+    throw new Error(
+      `SpeakMore 的目录路径太长，控制通道建不起来：${home}\n用环境变量 SPEAKMORE_HOME 换一个短一些的目录。`,
+    );
   }
   return {
-    dataDir,
-    historyDb: join(dataDir, "history.db"),
-    recordingsDir: join(dataDir, "Recordings"),
-    settingsFile: join(dataDir, "settings.json"),
-    controlSocket,
-    logFile: join(dataDir, "logs", "main.log"),
-    /** 正在运行的后台应用的进程号。只在它卡住不答话、要强行结束时才用得上 */
-    pidFile: join(dataDir, "daemon.pid"),
+    home,
+
+    /** speakmore 命令（一个启动脚本）。PATH 里的那个是指向它的链接 */
+    binDir: join(home, "bin"),
+    /** 安装时在家目录以外建了哪些指向这条命令的链接，一行一个。卸载时照着删 */
+    linksFile: join(home, "bin", "links"),
+    /** 程序的代码和依赖 */
+    appDir: join(home, "app"),
+    /** 运行环境：自带的 Electron，命令行和后台应用都用它跑 */
+    runtimeDir: join(home, "runtime"),
+
+    settingsFile: join(home, "settings.json"),
     // 加密后的 key。加密用的密钥在钥匙串里是按应用存的：命令启动的和打成应用的是两个应用，
     // 互相解不开对方的密文，所以各存各的文件
-    keyFile: join(dataDir, "gemini-key.bin"),
-    appKeyFile: join(dataDir, "gemini-key.app.bin"),
+    keyFile: join(home, "gemini-key.bin"),
+    appKeyFile: join(home, "gemini-key.app.bin"),
+    historyDb: join(home, "data", "history.db"),
+    recordingsDir: join(home, "data", "Recordings"),
+
+    logFile: join(home, "logs", "main.log"),
+    controlSocket,
+    /** 正在运行的后台应用的进程号。只在它卡住不答话、要强行结束时才用得上 */
+    pidFile: join(home, "run", "daemon.pid"),
+    /** 运行环境（Chromium）自己的缓存和状态，和我们的数据分开放。停掉之后可以随时删 */
+    cacheDir: join(home, "cache"),
   };
+}
+
+/**
+ * 把家目录建出来。里面有录音和 key，所以只有自己进得去。
+ * @param {ReturnType<typeof resolvePaths>} paths
+ */
+export function ensureHome(paths) {
+  mkdirSync(paths.home, { recursive: true, mode: 0o700 });
+  // 目录早就在的话 mkdir 不会改它的权限
+  chmodSync(paths.home, 0o700);
+  mkdirSync(dirname(paths.controlSocket), { recursive: true });
+}
+
+/** 0.1 版把数据放在这里。现在只在第一次运行时用来把旧数据搬过来（见 legacy.mjs） */
+export function legacyDataDir(userHome = homedir()) {
+  return join(userHome, "Library", "Application Support", "SpeakMore");
 }

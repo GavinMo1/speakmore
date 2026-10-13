@@ -258,7 +258,7 @@ const SOURCES = {
 /**
  * @param {object} view
  * @param {Record<string, { value: string, source: "env" | "file" | "default" }>} view.settings
- * @param {{ dataDir: string, settingsFile: string, logFile: string }} view.paths
+ * @param {{ home: string, settingsFile: string, logFile: string }} view.paths
  * @param {{ color: boolean }} options
  */
 export function renderConfig({ settings, paths }, { color }) {
@@ -279,9 +279,12 @@ export function renderConfig({ settings, paths }, { color }) {
     `${INDENT}回到默认：speakmore config unset hotkey`,
     `${INDENT}换 key：speakmore key`,
     "",
-    row("数据目录", paths.dataDir),
+    row("目录", paths.home),
     row("设置文件", paths.settingsFile),
     row("日志", paths.logFile),
+    "",
+    c.dim(`${INDENT}程序、设置、key、历史、录音都在这一个目录里。`),
+    c.dim(`${INDENT}不想用了：speakmore uninstall 会停掉后台，把它整个删掉。`),
     "",
   );
   return lines.join("\n");
