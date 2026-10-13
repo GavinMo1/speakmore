@@ -1,0 +1,204 @@
+/* 颜色变量由 build.mjs 生成在本文件之前，这里只引用。 */
+
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --topbar-h: 3rem;
+  --sidebar-w: 16.5rem;
+  --rail-w: 15rem;
+  /* 中文一行 42 字左右最好读；表格和图不受这个限制 */
+  --measure: 42rem;
+  --z-sticky: 10;
+  --z-backdrop: 20;
+  --z-drawer: 30;
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--topbar-h) + 1rem); }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 1rem/1.8 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--primary-weak); }
+
+a { color: var(--primary); text-decoration-thickness: 1px; text-underline-offset: 0.22em; }
+a:hover { text-decoration-thickness: 2px; }
+
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+/* 标题只是跳转落点，不需要焦点框 */
+[tabindex="-1"]:focus { outline: none; }
+
+.skip {
+  position: absolute; left: 0.75rem; top: -4rem; z-index: var(--z-drawer);
+  padding: 0.4rem 0.8rem; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 6px;
+}
+.skip:focus { top: 0.5rem; }
+
+/* ---------- 顶栏 ---------- */
+
+.topbar {
+  position: sticky; top: 0; z-index: var(--z-sticky);
+  display: flex; align-items: center; gap: 1rem;
+  height: var(--topbar-h); padding: 0 1rem;
+  background: var(--bg); border-bottom: 1px solid var(--border);
+}
+.brand { color: var(--ink); font-weight: 650; text-decoration: none; white-space: nowrap; }
+.brand:hover { color: var(--primary); }
+.stamp { color: var(--ink-2); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.theme-toggle { margin-left: auto; }
+
+.topbar button, .diagram-zoom {
+  font: inherit; font-size: 0.875rem; line-height: 1.4; color: var(--ink);
+  padding: 0.3rem 0.75rem; background: transparent;
+  border: 1px solid var(--border-strong); border-radius: 6px; cursor: pointer;
+  transition: background-color 160ms var(--ease-out);
+}
+:is(.topbar button, .diagram-zoom):hover { background: var(--raised); }
+:is(.topbar button, .diagram-zoom):active { background: var(--border); }
+.nav-toggle { display: none; }
+
+/* ---------- 三栏 ---------- */
+
+.layout {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--rail-w);
+  align-items: start;
+}
+
+.sidebar, .rail {
+  position: sticky; top: var(--topbar-h);
+  height: calc(100vh - var(--topbar-h)); overflow-y: auto; overscroll-behavior: contain;
+}
+
+.sidebar { padding: 0.5rem 0.75rem 2rem; background: var(--surface); border-right: 1px solid var(--border); }
+.nav-group h2 { margin: 1.1rem 0 0.3rem 0.6rem; font-size: 0.8125rem; font-weight: 600; color: var(--ink-2); }
+.nav-group ul { list-style: none; margin: 0; padding: 0; }
+.nav-group a {
+  display: flex; gap: 0.6rem; align-items: baseline;
+  padding: 0.3rem 0.6rem; border-radius: 6px;
+  color: var(--ink); font-size: 0.9375rem; line-height: 1.5; text-decoration: none;
+  transition: background-color 160ms var(--ease-out), color 160ms var(--ease-out);
+}
+.nav-group a:hover { background: var(--raised); }
+.nav-group a[aria-current="true"] { background: var(--primary-weak); color: var(--primary); font-weight: 600; }
+.nav-num { flex: none; width: 1.4rem; font: 0.8125rem/1.5 var(--mono); color: var(--ink-2); }
+.nav-group a[aria-current="true"] .nav-num { color: inherit; }
+
+.rail { padding: 2.6rem 1rem 2rem 0.5rem; font-size: 0.8438rem; line-height: 1.55; }
+.rail-title { margin: 0 0 0.5rem; font-weight: 600; color: var(--ink); }
+.rail ol { list-style: none; margin: 0; padding: 0; }
+.rail li { margin: 0.3rem 0; }
+.rail li.lv3 { padding-left: 0.9rem; }
+.rail a { color: var(--ink-2); text-decoration: none; transition: color 160ms var(--ease-out); }
+.rail a:hover { color: var(--ink); }
+.rail a[aria-current="true"] { color: var(--primary); font-weight: 600; }
+
+/* ---------- 正文 ---------- */
+
+main { min-width: 0; padding: 0 clamp(1.25rem, 4vw, 3.5rem) 6rem; }
+
+/* 正文里有不带代码格式的长路径和哈希，窄屏下不折行会把整页撑出横向滚动 */
+.doc { max-width: 60rem; margin: 0 auto; padding: 2.75rem 0 1rem; overflow-wrap: break-word; }
+.doc + .doc { margin-top: 2.5rem; border-top: 1px solid var(--border); }
+.doc > :is(p, ul, ol, h2, h3, h4, h5, blockquote) { max-width: var(--measure); }
+
+h2, h3, h4, h5 { font-weight: 650; line-height: 1.35; text-wrap: balance; }
+.doc-title { margin: 0 0 1.25rem; font-size: 1.75rem; letter-spacing: -0.01em; }
+.doc-num { margin-right: 0.7rem; font: 500 1.05rem/1 var(--mono); color: var(--ink-2); letter-spacing: 0; vertical-align: 0.2em; }
+h3 { margin: 2.75rem 0 0.75rem; font-size: 1.3rem; }
+h4 { margin: 2rem 0 0.5rem; font-size: 1.075rem; }
+h5 { margin: 1.5rem 0 0.4rem; font-size: 1rem; }
+
+p { margin: 0 0 1rem; text-wrap: pretty; }
+ul, ol { margin: 0 0 1rem; padding-left: 1.4rem; }
+li { margin: 0.3rem 0; }
+li > ul, li > ol { margin: 0.3rem 0 0; }
+li > p { margin-bottom: 0.4rem; }
+strong { font-weight: 650; }
+
+blockquote {
+  margin: 1.25rem 0; padding: 0.75rem 1rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--ink-2);
+}
+blockquote > :last-child { margin-bottom: 0; }
+
+code { font: 0.875em/1.5 var(--mono); }
+:not(pre) > code {
+  padding: 0.1em 0.35em; background: var(--raised); border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+pre.code, .diagram-src {
+  margin: 1.25rem 0; padding: 0.9rem 1rem; overflow-x: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  font-size: 0.9375rem; tab-size: 2;
+}
+pre code { font-size: 0.875em; line-height: 1.65; }
+
+.table-wrap { margin: 1.25rem 0; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9063rem; line-height: 1.6; }
+th, td { padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+th { background: var(--surface); font-weight: 600; white-space: nowrap; }
+tr:last-child > td { border-bottom: 0; }
+/* 表格里的长标识符只在迫不得已时折行，免得把窄列挤成一字一行 */
+td :not(pre) > code, td > code { overflow-wrap: break-word; }
+td { min-width: 5.5rem; }
+
+.diagram { margin: 1.5rem 0; }
+.diagram-out {
+  padding: 1.25rem 1rem; overflow-x: auto; text-align: center;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+}
+.diagram-out:empty { display: none; }
+.diagram-out svg { max-width: 100%; height: auto; }
+.diagram[data-zoom="in"] .diagram-out { text-align: left; }
+.diagram-zoom { margin-top: 0.5rem; }
+.diagram[data-state="done"] .diagram-src { display: none; }
+.diagram-note { margin: 0.5rem 0 0; font-size: 0.875rem; color: var(--ink-2); }
+
+/* ---------- 窄屏 ---------- */
+
+.backdrop { display: none; }
+
+@media (max-width: 1180px) {
+  .layout { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+  .rail { display: none; }
+}
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .nav-toggle { display: inline-block; }
+  .stamp { display: none; }
+  .sidebar {
+    position: fixed; left: 0; top: var(--topbar-h); z-index: var(--z-drawer);
+    width: min(19rem, 86vw);
+    transform: translateX(-100%); visibility: hidden;
+    transition: transform 220ms var(--ease-out), visibility 0s 220ms;
+  }
+  body[data-nav="open"] .sidebar { transform: none; visibility: visible; transition: transform 220ms var(--ease-out); }
+  body[data-nav="open"] .backdrop {
+    display: block; position: fixed; inset: var(--topbar-h) 0 0 0; z-index: var(--z-backdrop);
+    background: oklch(0.2 0.02 252 / 0.45); border: 0; padding: 0;
+  }
+  .doc-title { font-size: 1.5rem; }
+  h3 { font-size: 1.2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; }
+}
+
+@media print {
+  .topbar, .sidebar, .rail, .skip { display: none; }
+  .layout { display: block; }
+  main { padding: 0; }
+  .doc { max-width: none; break-before: page; }
+  .table-wrap, pre.code { overflow: visible; }
+  a { color: inherit; }
+}

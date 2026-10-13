@@ -13,7 +13,7 @@
 | 原生库（4 个 Swift 动态库） | 接口与机制完成；逐函数只看了 3 个关键函数 |
 | 本机数据 | 完成（上下文与调试信息是服务端密钥加密的，读不出明文） |
 | 运行时抓包 | 做过一次（2026-10-13，4 次普通听写），消息序列、上下文明文、耗时已回填各篇；翻译、"问任何事"、修改跟踪、按住和取消还没有抓，见 [09](docs/09-runtime-capture.md#结果) |
-| 可视化（HTML 阅读版） | 未开始 |
+| 可视化 | 各篇里共 9 张 Mermaid 图（GitHub 上直接渲染）；另有单页 HTML 阅读版，由 `tools/site/build.mjs` 生成到 `_work/site/index.html` |
 
 ## 文档
 
@@ -44,8 +44,8 @@
 targets/typeless/
 ├── README.md
 ├── docs/          文档（进仓库）
-├── tools/         自写脚本（进仓库）
-└── _work/         原始产物：解包代码、还原代码、REA 证据、抓包、切片库（不进仓库）
+├── tools/         自写脚本（进仓库）；tools/site/ 是 HTML 阅读版的生成脚本、样式和交互
+└── _work/         原始产物：解包代码、还原代码、REA 证据、抓包、切片库、生成的阅读版（不进仓库）
 ```
 
 `_work/` 里是从 Typeless 拆出来的代码和你本人的数据，被 `.gitignore` 挡住。文档只写机制和结构，不贴大段原始代码，不记录包内写死的密钥值。
@@ -58,7 +58,7 @@ cd targets/typeless
 # 1. 解包（只取应用自己的代码，跳过 node_modules）
 node tools/asar-extract.mjs /Applications/Typeless.app/Contents/Resources/app.asar _work/asar dist package.json
 
-# 2. 去混淆（一次性准备：mkdir -p _work/tooling && cd _work/tooling && npm init -y && npm i node@24 webcrack@2.16.0）
+# 2. 去混淆（一次性准备：mkdir -p _work/tooling && cd _work/tooling && npm init -y && npm i node@24 webcrack@2.16.0 markdown-it@14.1.0）
 tools/deobfuscate.sh
 tools/build-readable-tree.sh          # 生成 _work/readable/dist，作为 REA 的输入
 
@@ -69,7 +69,10 @@ npx -y rea-agents@6.4.0 analyze-javascript-application _work/readable/dist --jso
 tools/capture.sh start --decrypt-context   # 另开终端：退出 Typeless → capture.sh on → 启动 → 使用 → 退出 → capture.sh off
 tools/capture.sh har _work/capture/<时间>   # 导出隐去凭据的 HAR 给 REA
 
-# 5. 原生库（需要 Ghidra 12.1.4，见 docs/07）
+# 5. HTML 阅读版（文档改过之后重跑；图在打开时联网渲染，文字离线可读）
+node tools/site/build.mjs && open _work/site/index.html
+
+# 6. 原生库（需要 Ghidra 12.1.4，见 docs/07）
 export GHIDRA_INSTALL_DIR=<仓库>/.tools/ghidra_12.1.4_PUBLIC
 lipo -thin arm64 <库> -output _work/native-thin/<库>.arm64.dylib
 npx -y rea-agents@6.4.0 function _work/native-thin/libInputHelper.arm64.dylib _insertText --provider ghidra
