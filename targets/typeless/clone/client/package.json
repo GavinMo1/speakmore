@@ -1,17 +1,20 @@
 {
   "name": "typeless-clone-client",
+  "productName": "Typeless Clone",
   "version": "0.1.0",
   "private": true,
-  "description": "Typeless 听写仿刻的客户端：按 fn 录音，把整理好的文字贴进当前输入框",
+  "description": "Typeless 听写仿刻的客户端：按一下热键录音，把整理好的文字贴进当前输入框",
   "type": "module",
   "main": "src/main/main.mjs",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "scripts": {
     "build:native": "mkdir -p build && swiftc -O -o build/key-helper native/main.swift",
     "prestart": "npm run build:native",
     "start": "electron .",
+    "dist": "node scripts/package.mjs",
+    "install-app": "sh scripts/install.sh",
     "test": "node --test --test-timeout=5000 \"test/*.test.mjs\"",
     "test:e2e": "node scripts/e2e.mjs",
     "lint": "biome check .",
@@ -19,6 +22,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
+    "@electron/packager": "20.3.0",
     "electron": "44.7.0"
   }
 }

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- macOS 图标的画法：1024 的画布里放一个 824 的圆角方块，四周留白 -->
+  <defs>
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3f66d6" />
+      <stop offset="1" stop-color="#2743a6" />
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#face)" />
+  <!-- 五根竖条：一段声音的波形 -->
+  <g fill="#ffffff">
+    <rect x="262" y="432" width="68" height="160" rx="34" />
+    <rect x="370" y="352" width="68" height="320" rx="34" />
+    <rect x="478" y="272" width="68" height="480" rx="34" />
+    <rect x="586" y="372" width="68" height="280" rx="34" />
+    <rect x="694" y="442" width="68" height="140" rx="34" />
+  </g>
+</svg>

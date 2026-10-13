@@ -16,7 +16,7 @@ import { createDelivery } from "./delivery.mjs";
 import { startHelper } from "./helper.mjs";
 import { openHistory } from "./history.mjs";
 import { createKeyStore } from "./key-store.mjs";
-import { log } from "./log.mjs";
+import { alsoLogTo, log } from "./log.mjs";
 import { describeKeyError, startService } from "./service.mjs";
 import { summarizeSetup } from "./setup-state.mjs";
 
@@ -53,6 +53,9 @@ const PRIVACY_PANES = {
 // 端到端测试时换到临时目录，不碰真实的历史
 app.setPath("userData", process.env.CLONE_USER_DATA ?? join(app.getPath("appData"), "typeless-clone-client"));
 
+// 装成应用后没有终端，日志写到 ~/Library/Logs/<应用名>/main.log
+if (app.isPackaged) alsoLogTo(join(app.getPath("logs"), "main.log"));
+
 if (!app.requestSingleInstanceLock()) {
   console.error("已经有一个在运行了");
   app.exit(1);
@@ -77,7 +80,10 @@ async function main() {
 
   const userData = app.getPath("userData");
   const history = openHistory(join(userData, "history.db"));
-  const keyStore = createKeyStore({ file: join(userData, "gemini-key.bin"), safeStorage });
+  // 加密用的密钥在钥匙串里是按应用存的：装好的应用和从终端启动的开发版是两个应用，互相解不开对方的密文。
+  // 两边共用一个数据目录，所以密文各存各的文件
+  const keyFile = app.isPackaged ? "gemini-key.bin" : "gemini-key.dev.bin";
+  const keyStore = createKeyStore({ file: join(userData, keyFile), safeStorage });
   const service = EXTERNAL_SERVER_URL ? null : await startService({ log });
   const serverUrl = EXTERNAL_SERVER_URL ?? service.url;
   const e2e = process.env.CLONE_E2E_OUT ? await import("./e2e.mjs") : null;
@@ -450,4 +456,7 @@ async function main() {
   startupChecked = true;
   setupChanged();
   offerSettingsIfIncomplete();
+  // 已经开着时又去双击应用图标，系统不会再起一个，而是"重新打开"这一个：同样把设置窗口亮出来。
+  // 等启动检查做完才挂上，免得把启动本身也当成一次重新打开
+  app.on("activate", showSettings);
 }

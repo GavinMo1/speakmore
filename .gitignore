@@ -31,3 +31,4 @@ node_modules/
 # 仿刻客户端本机编译出来的原生小程序
 targets/*/clone/*/build/
 __pycache__/
+targets/*/clone/*/dist/
