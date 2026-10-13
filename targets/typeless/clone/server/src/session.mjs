@@ -1,6 +1,15 @@
 import { ProtocolError } from "./protocol.mjs";
 
-const OGG_MAGIC = Buffer.from("OggS");
+// 靠文件头认容器，不信客户端在 start_audio 里自报的格式
+const CONTAINERS = [
+  { magic: Buffer.from("OggS"), mimeType: "audio/ogg" },
+  { magic: Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), mimeType: "audio/webm" },
+];
+
+function mimeTypeOf(firstChunk) {
+  const found = CONTAINERS.find(({ magic }) => firstChunk.subarray(0, magic.length).equals(magic));
+  return found?.mimeType ?? null;
+}
 
 /**
  * 一次录音在服务端的状态：按序收下各个音频块，最后合并成一段。
@@ -11,6 +20,7 @@ export class RecordingSession {
   #announced = null;
   #totalBytes = 0;
   #maxTotalBytes;
+  #mimeType = null;
 
   constructor(audioId, { maxTotalBytes }) {
     this.audioId = audioId;
@@ -23,6 +33,11 @@ export class RecordingSession {
 
   get totalBytes() {
     return this.#totalBytes;
+  }
+
+  /** 第一块到了才知道；之前是 null */
+  get mimeType() {
+    return this.#mimeType;
   }
 
   /** 记下"下一个二进制帧是第几块、多大"。序号从 1 开始（抓包实测） */
@@ -50,20 +65,24 @@ export class RecordingSession {
         `第 ${announced.index} 块声明 ${announced.size} 字节，实际 ${data.length} 字节`,
       );
     }
-    if (!data.subarray(0, OGG_MAGIC.length).equals(OGG_MAGIC)) {
-      throw new ProtocolError("chunk_not_ogg", `第 ${announced.index} 块不是以 OggS 开头的 Ogg 流`);
+    // 只认第一块的文件头：浏览器录的 WebM 后面各块是接着写的数据，没有文件头
+    const mimeType = this.#mimeType ?? mimeTypeOf(data);
+    if (!mimeType) {
+      throw new ProtocolError("unsupported_audio", "录音的开头既不是 Ogg 也不是 WebM");
     }
     if (this.#totalBytes + data.length > this.#maxTotalBytes) {
       throw new ProtocolError("audio_too_large", `录音超过了 ${this.#maxTotalBytes} 字节的上限`);
     }
+    this.#mimeType = mimeType;
     this.#chunks.push(data);
     this.#totalBytes += data.length;
     return announced;
   }
 
   /**
-   * 每一块都是独立的 Ogg 流，首尾相接就是合法的"链式 Ogg"，解码器会一段接一段读下去。
-   * 实测 7 块相接的文件 Gemini 能从头识别到尾，所以不需要重新编码。
+   * 各块首尾相接就是完整的录音，不需要重新编码：
+   * - WebM（浏览器 MediaRecorder 分片输出）本来就是一个文件被切开。
+   * - Ogg 每块是独立的流时，相接得到"链式 Ogg"；实测 7 块相接的文件 Gemini 能从头识别到尾。
    */
   merge() {
     return Buffer.concat(this.#chunks, this.#totalBytes);

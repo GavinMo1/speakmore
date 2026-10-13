@@ -49,8 +49,8 @@ async function sendChunk(client, audioId, index, buffer) {
 test("一次完整的听写：消息顺序和成品字段与抓包一致", async () => {
   const received = [];
   const port = await start({
-    async refine(audio) {
-      received.push(audio);
+    async refine(audio, { mimeType }) {
+      received.push({ audio, mimeType });
       return "整理好的文字";
     },
   });
@@ -95,7 +95,7 @@ test("一次完整的听写：消息顺序和成品字段与抓包一致", async
   assert.equal(completed.K, "audio_processing_completed");
 
   assert.equal(received.length, 1);
-  assert.deepEqual(received[0], Buffer.concat(chunks));
+  assert.deepEqual(received[0], { audio: Buffer.concat(chunks), mimeType: "audio/ogg" });
 });
 
 test("同一条连接上可以接着做第二次听写", async () => {

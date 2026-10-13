@@ -113,7 +113,10 @@ function handleConnection(socket, { refiner, log, maxAudioBytes }) {
     refining.add(abort);
     const startedAt = performance.now();
     try {
-      const refinedText = await refiner.refine(finished.merge(), { signal: abort.signal });
+      const refinedText = await refiner.refine(finished.merge(), {
+        mimeType: finished.mimeType,
+        signal: abort.signal,
+      });
       // 日志只记长度：成品是用户说的话，不该留在日志里
       log.info("refined", {
         ...context,

@@ -10,17 +10,15 @@ export function createGeminiRefiner({ apiKey, model, thinkingLevel, timeoutMs })
 
   return {
     /**
-     * @param {Buffer} audio 合并后的 Ogg/Opus 录音
-     * @param {{ signal?: AbortSignal }} [options] 客户端断开时用来取消
+     * @param {Buffer} audio 合并后的整段录音
+     * @param {{ mimeType: string, signal?: AbortSignal }} options signal 在客户端断开时用来取消
      * @returns {Promise<string>} 整理好的文字；没有人声时是空字符串
      */
-    async refine(audio, { signal } = {}) {
+    async refine(audio, { mimeType, signal }) {
       const timeout = AbortSignal.timeout(timeoutMs);
       const response = await client.models.generateContent({
         model,
-        contents: [
-          { role: "user", parts: [{ inlineData: { mimeType: "audio/ogg", data: audio.toString("base64") } }] },
-        ],
+        contents: [{ role: "user", parts: [{ inlineData: { mimeType, data: audio.toString("base64") } }] }],
         config: {
           systemInstruction: SYSTEM_PROMPT,
           temperature: 0,

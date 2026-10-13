@@ -50,10 +50,26 @@ test("实际字节数和声明的不一样", () => {
   assert.equal(session.chunkCount, 0);
 });
 
-test("不是 Ogg 开头的数据不收", () => {
-  const session = newSession();
-  session.announceChunk({ index: 1, size: 5 });
-  fails(() => session.addChunk(Buffer.from("RIFFx")), "chunk_not_ogg");
+test("第一块决定容器格式：Ogg 或 WebM，别的不收", () => {
+  const oggSession = newSession();
+  oggSession.announceChunk({ index: 1, size: 5 });
+  oggSession.addChunk(ogg("a"));
+  assert.equal(oggSession.mimeType, "audio/ogg");
+
+  const webm = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f]);
+  const webmSession = newSession();
+  webmSession.announceChunk({ index: 1, size: webm.length });
+  webmSession.addChunk(webm);
+  assert.equal(webmSession.mimeType, "audio/webm");
+  // 浏览器录的 WebM 只有第一块带文件头，后面的块是接着往下写的数据
+  webmSession.announceChunk({ index: 2, size: 3 });
+  webmSession.addChunk(Buffer.from([1, 2, 3]));
+  assert.equal(webmSession.chunkCount, 2);
+
+  const wavSession = newSession();
+  wavSession.announceChunk({ index: 1, size: 5 });
+  fails(() => wavSession.addChunk(Buffer.from("RIFFx")), "unsupported_audio");
+  assert.equal(wavSession.mimeType, null);
 });
 
 test("总量超过上限", () => {

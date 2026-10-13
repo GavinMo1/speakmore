@@ -30,7 +30,7 @@ withkey <凭据名> npm start
 
 ### 不用客户端就能试
 
-`scripts/replay.mjs` 把现成的 Ogg/Opus 文件当成一次录音发给服务端，每个文件算一块，打印每条回包、耗时和成品文字：
+`scripts/replay.mjs` 把现成的录音文件（Ogg 或 WebM）当成一次录音发给服务端，每个文件算一块，打印每条回包、耗时和成品文字：
 
 ```bash
 node scripts/replay.mjs 块1.ogg 块2.ogg
@@ -58,7 +58,7 @@ npm run check   # 代码检查 + 全部测试
 | 方向 | 消息 | 仿刻 |
 | --- | --- | --- |
 | 客户端 → 服务端 | `start_audio` | 只用 `audio_id`，其余字段收下不用 |
-| | `set_audio_chunk_info` + 二进制帧 | 序号从 1 开始，按序收；每块必须是独立的 Ogg 流 |
+| | `set_audio_chunk_info` + 二进制帧 | 序号从 1 开始，按序收；第一块的文件头必须是 Ogg 或 WebM |
 | | `end_audio` | 只用 `audio_id` |
 | | `set_mode_config`、`replace_audio_context` | 不实现（不采集上下文，只有一种模式） |
 | 服务端 → 客户端 | `audio_session_started` | `{audio_id, start_time}` |
@@ -72,6 +72,7 @@ npm run check   # 代码检查 + 全部测试
 
 - **没有登录和签名。** 服务只听本机端口，握手时拒绝带网页来源（`Origin` 为 `http(s)://…`）的连接，防止浏览器里的网页连进来花模型额度。
 - **识别和整理是一次模型调用。** 原版服务端内部怎么做的看不到。各块首尾相接后整段发给 Gemini，不重新编码。
+- **容器多认一种 WebM。** 原版用自带的编码库出 Ogg；浏览器自带的录音接口出的是 WebM，里面同样是 Opus。服务端按文件头判断是哪一种，实测 Gemini 两种都收。
 - **不采集上下文。** 原版会把当前应用、输入框内容、屏幕可见文字一起上传（[06](../docs/06-context-capture-and-privacy.md)），这里只上传录音。
 
 ## 选型时测到的数
