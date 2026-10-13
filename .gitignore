@@ -14,3 +14,14 @@
 
 # Claude Code 本机设置（里面的自动记忆目录是本机绝对路径）
 .claude/settings.local.json
+
+# 逆向目标的工作目录：拆出来的原始代码、抓包、本机数据副本，一律不进仓库
+targets/*/_work/
+*.har
+*.pcap
+*.pcapng
+*.mitm
+
+# 项目局部的分析引擎（Ghidra 等），体积大且可重新下载
+.tools/
+__pycache__/
