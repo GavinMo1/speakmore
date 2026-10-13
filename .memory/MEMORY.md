@@ -8,3 +8,4 @@
 - [REA 是主干工具](rea-is-the-primary-tool.md) — 逆向以 REA 的 MCP 和 skill 为主，自写脚本只补缺口并喂回 REA
 - [Ghidra 在项目内](ghidra-project-local.md) — 装在 .tools/，MCP 没带路径，原生分析走 REA 命令行并先 lipo 切单架构
 - [Typeless 仿刻范围](typeless-clone-scope-dictation.md) — 用户日常只用单击 fn 听写加历史记录，其他模式做不做先问
+- [请用户配合时只给步骤](user-action-requests-plain-steps.md) — 需要他动手时列两三步动作，技术细节留到事后总结
