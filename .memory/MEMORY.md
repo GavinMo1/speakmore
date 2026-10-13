@@ -3,13 +3,14 @@
 - [前端 skill 路由](skill-routing-frontend.md) — 网页 UI、动效、手势交互用哪个 skill（impeccable 主导）
 - [通用 skill 路由](skill-routing-general.md) — 密钥、多仓、云运维、Multica、编排、长任务、去 AI 腔用哪个 skill
 - [iOS skill 路由](skill-routing-ios.md) — SwiftUI 视图、iOS 验证闭环用哪个 skill
-- [GitHub 双账号核对](github-account-check.md) — 本项目走个人号 zephyr4123，每次 GitHub 操作前先核对激活账号
+- [GitHub 账号核对](github-account-check.md) — 每次 GitHub 操作前跑 scripts/check-gh-account.sh，该用哪个账号在 .machine.env
 - [REA 项目级安装](rea-project-level-install.md) — MCP 与 skill 只装在本项目、不写全局；升级校验命令与体检的已知假失败
 - [REA 是主干工具](rea-is-the-primary-tool.md) — 逆向以 REA 的 MCP 和 skill 为主，自写脚本只补缺口并喂回 REA
 - [Ghidra 在项目内](ghidra-project-local.md) — 装在 .tools/，MCP 没带路径，原生分析走 REA 命令行并先 lipo 切单架构
 - [Typeless 仿刻范围](typeless-clone-scope-dictation.md) — 已定只做语音转写（单击 fn 听写加历史），其他模式不做
 - [请用户配合时只给步骤](user-action-requests-plain-steps.md) — 需要他动手时列两三步动作，技术细节留到事后总结
-- [Typeless 仿刻的 Gemini key](typeless-clone-gemini-key.md) — 开发和评估用凭据 <GEMINI_CREDENTIAL> 经 withkey 加载，不用 <另一把凭据>；应用里的 key 由用户自己填
+- [开发用的 Gemini key](typeless-clone-gemini-key.md) — 要真调 Gemini 的命令写成 scripts/with-gemini-key.sh <命令>，用哪把凭据在 .machine.env；产品里的 key 由用户自己填
+- [本机情况不进仓库](machine-facts-stay-local.md) — 凭据名、路径、账号、姓名邮箱只放 .machine.env，仓库里只认变量名；提交前跑 scripts/check-no-machine-facts.sh
 - [可以用真实录音调提示词](typeless-clone-real-recordings-ok.md) — 用户已同意把 Typeless 历史录音发给 Gemini 调仿刻的提示词；再调时用 eval-prompt.mjs 对比，别把温度设回 0
 - [仿刻按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节；启动已改成装进应用程序的应用
 - [仿刻下一阶段：按开源标准打磨](typeless-clone-open-source-panel.md) — 装上填 key 就能用、要有直观的面板、桌面端 App 先不做；动手前先确认本机打包和词典的范围
