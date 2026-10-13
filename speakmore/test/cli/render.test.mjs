@@ -13,7 +13,11 @@ const ready = {
   starting: false,
   hotkey: "right_option",
   hotkeyLabel: "右 Option 键",
-  key: { state: "ready", source: "stored", problem: null },
+  model: "gemini-3.5-flash",
+  thinking: "MINIMAL",
+  packaged: false,
+  helper: "running",
+  key: { state: "ready", source: "stored", problem: null, verified: true },
   permissions: { microphone: "granted", listen: true, trusted: true },
   summary: { ready: true, missing: [], blocker: null, degraded: null },
 };
@@ -65,10 +69,83 @@ test("缺东西时标题说还差几样，逐项标出，并说权限记在终�
 test("key 的各种状态各有一句话", () => {
   const withKey = (key) =>
     renderStatus({ status: { ...ready, key }, version: "0.1.0", settings, stats: noStats }, plain);
-  assert.match(withKey({ state: "ready", source: "env", problem: null }), /环境变量 GEMINI_API_KEY/);
+  assert.match(withKey({ state: "ready", source: "env", problem: null, verified: true }), /环境变量 GEMINI_API_KEY/);
   assert.match(withKey({ state: "checking", source: "stored", problem: null }), /正在验证/);
-  assert.match(withKey({ state: "rejected", source: "stored", problem: "这把 key 无效" }), /不能用：这把 key 无效/);
   assert.match(withKey({ state: "unreadable", source: "stored", problem: "读不出来了" }), /读不出来了/);
+  // 启动时没连上网：先用着，如实说还没验证
+  assert.match(withKey({ state: "ready", source: "stored", problem: null, verified: false }), /已保存.*还没验证/);
+});
+
+test("key 不能用时，按原因说该怎么办：换 key、改环境变量、还是去看模型设置", () => {
+  const rejected = (key) =>
+    renderStatus(
+      { status: { ...ready, key: { state: "rejected", ...key } }, version: "0.1.0", settings, stats: noStats },
+      plain,
+    );
+  const revoked = rejected({ source: "stored", cause: "key", problem: "这把 key 无效" });
+  assert.match(revoked, /不能用：这把 key 无效。运行 speakmore key 换一把/);
+
+  // 环境变量里的那把不对：存一把新的没用，下次启动用的还是环境变量
+  const badEnv = rejected({ source: "env", cause: "key", problem: "这把 key 无效" });
+  assert.match(badEnv, /环境变量 GEMINI_API_KEY 里的 key 不能用：这把 key 无效/);
+  assert.doesNotMatch(badEnv, /换一把/);
+
+  // Gemini 拒绝了请求：多半是模型名或档位，不该让人去换 key
+  const wrongModel = rejected({
+    source: "stored",
+    cause: "other",
+    problem: "Gemini 拒绝了请求：models/x is not found",
+  });
+  assert.match(wrongModel, /验证没通过：Gemini 拒绝了请求：models\/x is not found/);
+  assert.match(wrongModel, /speakmore config/);
+  assert.doesNotMatch(wrongModel, /换一把/);
+});
+
+test("模型和热键写的是后台应用正在用的；设置改过还没生效时提醒重启", () => {
+  // 后台应用是带着别的设置启动的（比如启动它的那条命令上有环境变量），和现在的设置不一样
+  const status = { ...ready, model: "gemini-3.8-flash", thinking: "LOW" };
+  const stale = renderStatus({ status, version: "0.1.0", settings, stats: noStats }, plain);
+  assert.match(stale, /模型\s+gemini-3\.8-flash（LOW）/);
+  assert.match(stale, /model、thinking.*speakmore restart/);
+
+  const same = renderStatus({ status: ready, version: "0.1.0", settings, stats: noStats }, plain);
+  assert.doesNotMatch(same, /speakmore restart/);
+
+  const external = {
+    ...ready,
+    model: null,
+    thinking: null,
+    key: { state: "ready", source: "external", problem: null },
+  };
+  assert.match(
+    renderStatus({ status: external, version: "0.1.0", settings, stats: noStats }, plain),
+    /模型\s+由单独启动的服务端决定/,
+  );
+});
+
+test("按键监听的小程序停了：明说热键不会生效，以及怎么办", () => {
+  const status = {
+    ...ready,
+    helper: "stopped",
+    permissions: { microphone: "granted", listen: null, trusted: null },
+    summary: { ready: false, missing: ["按键监听"], blocker: null, degraded: null },
+  };
+  const text = renderStatus({ status, version: "0.1.0", settings, stats: noStats }, plain);
+  assert.match(text, /还差 1 样/);
+  assert.match(text, /热键不会生效/);
+  assert.match(text, /speakmore restart/);
+});
+
+test("装成应用运行时，权限记在 SpeakMore 自己名下，不说成终端", () => {
+  const status = {
+    ...ready,
+    packaged: true,
+    permissions: { microphone: "granted", listen: false, trusted: true },
+    summary: { ready: false, missing: ["输入监控权限"], blocker: null, degraded: null },
+  };
+  const text = renderStatus({ status, version: "0.1.0", settings, stats: noStats }, plain);
+  assert.match(text, /在系统设置的列表里找“SpeakMore”/);
+  assert.doesNotMatch(text, /终端/);
 });
 
 test("还在启动时如实说，不提前报就绪", () => {

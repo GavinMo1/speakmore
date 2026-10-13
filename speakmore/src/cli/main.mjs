@@ -2,8 +2,10 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { ControlError, TimeoutError } from "../control.mjs";
 import { openHistory } from "../history.mjs";
 import { resolvePaths } from "../paths.mjs";
+import { apiKeyProblem } from "../server/config.mjs";
 import { resolveSettings, SETTINGS, saveSetting, unsetSetting } from "../settings.mjs";
 import { askSecret, Cancelled } from "./ask-secret.mjs";
 import { createDaemon } from "./daemon.mjs";
@@ -118,6 +120,31 @@ const keyPreamble = (skippable) =>
     KEY_PROMPT,
   ].join("\n");
 
+/**
+ * 在终端里一把一把地问 key：每调一次给出一把样子没问题的，样子不对的当场说、当场再问。
+ * 前后一共最多问 MAX_KEY_ATTEMPTS 次。
+ * @returns {() => Promise<string | null>} null：没填、按了 Ctrl-C，或者已经问够了次数
+ */
+function keyPrompter(io) {
+  let asked = 0;
+  return async function nextKey() {
+    while (asked < MAX_KEY_ATTEMPTS) {
+      let value;
+      try {
+        value = await io.askSecret(asked++ === 0 ? keyPreamble(true) : KEY_PROMPT);
+      } catch (error) {
+        if (error instanceof Cancelled) return null;
+        throw error;
+      }
+      if (value === "") return null;
+      const problem = apiKeyProblem(value);
+      if (problem === null) return value;
+      io.err(`这把 key ${problem}。`);
+    }
+    return null;
+  };
+}
+
 /** 把一把 key 交给后台应用验证并保存。@returns {Promise<boolean>} 通过了没有 */
 async function submitKey(io, value) {
   io.out("正在验证…");
@@ -127,29 +154,44 @@ async function submitKey(io, value) {
   return result.ok;
 }
 
-/** 启动后发现没有能用的 key：在终端里问。不填或取消都不纠缠，面板里会说还差它 */
-async function offerKey(io, status) {
-  if (!io.interactive || !["missing", "unreadable", "rejected"].includes(status.key.state)) return;
-  for (let attempt = 0; attempt < MAX_KEY_ATTEMPTS; attempt++) {
-    let value;
-    try {
-      value = await io.askSecret(attempt === 0 ? keyPreamble(true) : KEY_PROMPT);
-    } catch (error) {
-      if (error instanceof Cancelled) return;
-      throw error;
-    }
-    if (value === "" || (await submitKey(io, value))) return;
-  }
-}
+/** 启动之前就看得出有 key 可用：存过、环境变量给了，或者 key 归单独启动的服务端管 */
+const hasKeyAlready = (io) =>
+  existsSync(io.paths.keyFile) || Boolean(io.env.GEMINI_API_KEY?.trim()) || Boolean(io.env.SPEAKMORE_SERVER_URL);
+
+/**
+ * 这种状态是不是填一把新的 key 就能解决。有两种不是：Gemini 拒绝了请求（多半是模型名或档位写错），
+ * 和环境变量里的那把不对（存一把新的也没用，下次启动用的还是环境变量）。
+ */
+const needsNewKey = (key) =>
+  key.state === "missing" ||
+  key.state === "unreadable" ||
+  (key.state === "rejected" && key.cause !== "other" && key.source !== "env");
+
+const PACKAGED_NOTE = "现在运行的是装在“应用程序”里的 SpeakMore.app。";
+const PACKAGED_RELAUNCH = "在菜单栏点“听写”→“退出”，再打开一次 SpeakMore.app";
 
 // ---------- 各个子命令 ----------
 
 async function start(args, io) {
   noPositionals(parse(args).positionals, "speakmore start");
   const settings = currentSettings(io);
+  const nextKey = keyPrompter(io);
 
-  const started = await ensureRunning(io);
-  await offerKey(io, started);
+  let started = await io.daemon.status();
+  /** 问到的第一把 key。undefined：还没问过；null：问了，没填 */
+  let firstKey;
+  if (started === null) {
+    // 哪儿都没有 key 的话先问、再启动：启动要等一阵（第一次还要下载、点授权框），那段时间终端是照常回显的，
+    // 到那时才问的话，提前粘贴的人会看到 key 显示在屏幕上
+    if (io.interactive && !hasKeyAlready(io)) firstKey = await nextKey();
+    io.out("正在启动 SpeakMore…");
+    started = await io.daemon.start({ onProgress: io.out });
+  }
+  if (firstKey === undefined && io.interactive && needsNewKey(started.key)) firstKey = await nextKey();
+  // 不填或取消都不纠缠，面板里会说还差它
+  for (let value = firstKey ?? null; value !== null; value = await nextKey()) {
+    if (await submitKey(io, value)) break;
+  }
   // 重新查一遍系统权限：用户可能刚去系统设置里改过
   const status = (await io.daemon.status({ recheck: true })) ?? started;
 
@@ -161,15 +203,33 @@ async function start(args, io) {
   return 0;
 }
 
+const STOPPED = {
+  "not-running": "SpeakMore 本来就没有在运行。",
+  quit: "SpeakMore 已经停掉。",
+  killed: "SpeakMore 卡住了没有回应，已经强行结束。",
+};
+
 async function stop(args, io) {
   noPositionals(parse(args).positionals, "speakmore stop");
-  io.out((await io.daemon.stop()) ? "SpeakMore 已经停掉。" : "SpeakMore 本来就没有在运行。");
+  io.out(STOPPED[await io.daemon.stop()]);
   return 0;
 }
 
 async function restart(args, io) {
   noPositionals(parse(args).positionals, "speakmore restart");
   currentSettings(io);
+  let current = null;
+  try {
+    current = await io.daemon.status();
+  } catch (error) {
+    // 卡住不答话：正是要重启的时候，下面的 stop 会把它强行结束
+    if (!(error instanceof TimeoutError)) throw error;
+  }
+  if (current?.packaged) {
+    io.err(`${PACKAGED_NOTE}从命令行重启会把它换成终端启动的那一个，权限和 key 都是另一套。`);
+    io.err(`要重启它：${PACKAGED_RELAUNCH}。`);
+    return 1;
+  }
   await io.daemon.stop();
   return start([], io);
 }
@@ -189,12 +249,18 @@ async function status(args, io) {
 
 async function key(args, io) {
   const { values, positionals } = parse(args, { forget: { type: "boolean", default: false } });
-  noPositionals(positionals, "speakmore key [--forget]");
+  if (positionals.length > 0) {
+    // 多出来的参数多半就是一把 key：不照做，也不把它再打一遍
+    throw new UsageError(
+      "key 不要写在命令后面：那样它会留在 shell 的历史记录里。运行 speakmore key 再粘贴，或者从管道喂：pbpaste | speakmore key",
+    );
+  }
 
   if (values.forget) {
-    // 没在运行时不必为了删一个文件把它启动起来
+    // 在运行的话让它把正在用的那把也放下；没在运行时不必为了删文件把它启动起来
     if ((await io.daemon.status()) !== null) await io.daemon.request("forget-key");
-    else rmSync(io.paths.keyFile, { force: true });
+    // 命令启动的和装成应用的各存各的一份，都删
+    for (const file of [io.paths.keyFile, io.paths.appKeyFile]) rmSync(file, { force: true });
     io.out("存着的 key 已经删掉。");
     return 0;
   }
@@ -211,20 +277,45 @@ async function key(args, io) {
     io.err("没有读到 key，原来的没有改动。");
     return 1;
   }
+  const problem = apiKeyProblem(value);
+  if (problem !== null) {
+    io.err(`这把 key ${problem}。原来的没有改动。`);
+    return 1;
+  }
   await ensureRunning(io);
   return (await submitKey(io, value)) ? 0 : 1;
 }
 
-/** 设置改完之后：在运行就重启让它生效 */
-async function applySettings(io) {
-  if ((await io.daemon.status()) === null) {
+/**
+ * 设置改完之后让它生效：在运行就重启，并看重启之后的结果。
+ * @param {string | null} undo 这次改动怎么撤回，重启后不能用时告诉用户；没有可撤回的时为 null
+ * @returns {Promise<number>} 退出码
+ */
+async function applySettings(io, undo) {
+  const current = await io.daemon.status();
+  if (current === null) {
     io.out("下次启动生效。");
-    return;
+    return 0;
+  }
+  if (current.packaged) {
+    // 从这里重启的话，起来的会是终端启动的那一个，不是它
+    io.out(`${PACKAGED_NOTE}要让新设置生效：${PACKAGED_RELAUNCH}。`);
+    return 0;
   }
   io.out("正在重启 SpeakMore 让它生效…");
   await io.daemon.stop();
-  await io.daemon.start({ onProgress: io.out });
-  io.out("已经生效。");
+  const restarted = await io.daemon.start({ onProgress: io.out });
+  // 模型名、思考档位写得对不对，要问过 Gemini 才知道
+  if (restarted.key.state === "rejected" && restarted.key.cause === "other") {
+    io.err(`重启了，但现在不能用：${restarted.key.problem}`);
+    if (undo) io.err(`想撤回这次改动：${undo}`);
+    return 1;
+  }
+  if (restarted.starting) io.out("重启了，还没准备好：运行 speakmore status 看看。");
+  else if (restarted.key.verified === false) {
+    io.out("重启了，但没连上 Gemini，新设置对不对还没验证：过一会儿运行 speakmore status 看看。");
+  } else io.out("已经生效。");
+  return 0;
 }
 
 async function config(args, io) {
@@ -246,8 +337,7 @@ async function config(args, io) {
     if (io.env[SETTINGS[name].env] !== undefined) {
       io.out(`注意：环境变量 ${SETTINGS[name].env} 现在设着，它会盖过这个值。`);
     }
-    await applySettings(io);
-    return 0;
+    return applySettings(io, `speakmore config unset ${name}`);
   }
   if (action === "unset" && name !== undefined && value === undefined) {
     try {
@@ -256,8 +346,7 @@ async function config(args, io) {
       throw new ConfigError(error.message);
     }
     io.out(`${name} 回到了默认值 ${SETTINGS[name].default}。`);
-    await applySettings(io);
-    return 0;
+    return applySettings(io, null);
   }
   throw new UsageError("用法：speakmore config | speakmore config set <名字> <值> | speakmore config unset <名字>");
 }
@@ -341,6 +430,13 @@ export async function run(argv, io) {
     if (error instanceof ConfigError) {
       io.err(error.message);
       return 2;
+    }
+    if (error instanceof ControlError) {
+      io.err(error.message);
+      if (error instanceof TimeoutError) {
+        io.err("它可能卡住了。运行 speakmore stop 可以把它强行停掉，再运行 speakmore 重新启动。");
+      }
+      return 1;
     }
     // 自己抛出来的、带着一句人话的错误照直说；其余的是程序本身的毛病，连调用栈一起留给排查的人
     if (error?.constructor !== Error) throw error;

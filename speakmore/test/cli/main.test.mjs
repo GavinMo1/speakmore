@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { Cancelled } from "../../src/cli/ask-secret.mjs";
 import { run } from "../../src/cli/main.mjs";
+import { NotRunningError, TimeoutError } from "../../src/control.mjs";
 import { openHistory } from "../../src/history.mjs";
 import { resolvePaths } from "../../src/paths.mjs";
 
@@ -14,9 +15,31 @@ const READY = {
   starting: false,
   hotkey: "right_option",
   hotkeyLabel: "右 Option 键",
-  key: { state: "ready", source: "stored", problem: null },
+  model: "gemini-3.5-flash",
+  thinking: "MINIMAL",
+  packaged: false,
+  helper: "running",
+  key: { state: "ready", source: "stored", problem: null, verified: true },
   permissions: { microphone: "granted", listen: true, trusted: true },
   summary: { ready: true, missing: [], blocker: null, degraded: null },
+};
+/** 存着的那把被撤销了 */
+const REVOKED_KEY = {
+  ...READY,
+  key: { state: "rejected", source: "stored", cause: "key", problem: "这把 key 无效，检查有没有复制完整" },
+  summary: { ready: false, missing: ["Gemini API key"], blocker: "API key 不能用", degraded: null },
+};
+/** 模型名写错：Gemini 拒绝了请求，key 本身没问题 */
+const WRONG_MODEL = {
+  ...READY,
+  model: "gemini-nope",
+  key: {
+    state: "rejected",
+    source: "stored",
+    cause: "other",
+    problem: "Gemini 拒绝了请求：models/gemini-nope is not found",
+  },
+  summary: { ready: false, missing: ["Gemini 验证"], blocker: "Gemini 验证没通过", degraded: null },
 };
 const NO_KEY = {
   ...READY,
@@ -39,13 +62,22 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 /**
  * 假的后台应用。running 是它现在的状态（null 表示没在运行），afterStart 是启动之后的状态，
- * saveKey 决定存 key 的结果。calls 记下命令行对它做过什么。
+ * saveKey 决定存 key 的结果，stopped 是停止时的说法，hung 为 true 表示它卡住了不答话。
+ * calls 记下命令行对它做过什么。
  */
-function fakeDaemon({ running = null, afterStart = READY, saveKey = () => ({ ok: true }) } = {}) {
+function fakeDaemon({
+  running = null,
+  afterStart = READY,
+  saveKey = () => ({ ok: true }),
+  stopped = "quit",
+  hung = false,
+} = {}) {
   const daemon = {
     calls: [],
     current: running,
+    hung,
     async status(params = {}) {
+      if (daemon.hung) throw new TimeoutError("status", 5_000);
       if (params.recheck) daemon.calls.push("recheck");
       return daemon.current;
     },
@@ -58,12 +90,14 @@ function fakeDaemon({ running = null, afterStart = READY, saveKey = () => ({ ok:
     },
     async stop() {
       daemon.calls.push("stop");
-      const was = daemon.current !== null;
+      const was = daemon.current !== null || daemon.hung;
       daemon.current = null;
-      return was;
+      daemon.hung = false;
+      return was ? stopped : "not-running";
     },
     async request(cmd, params) {
       daemon.calls.push(cmd);
+      if (daemon.current === null) throw new NotRunningError();
       if (cmd === "set-key") {
         const result = saveKey(params.key);
         if (result.ok) daemon.current = { ...daemon.current, ...READY };
@@ -76,6 +110,7 @@ function fakeDaemon({ running = null, afterStart = READY, saveKey = () => ({ ok:
   return daemon;
 }
 
+/** secrets：每次问 key 时依次给出的回答。可以是文字、要抛的错误，或者一个现算的函数 */
 function harness({ daemon = fakeDaemon(), interactive = true, env = {}, secrets = [] } = {}) {
   const output = { out: "", err: "" };
   const asked = [];
@@ -99,8 +134,9 @@ function harness({ daemon = fakeDaemon(), interactive = true, env = {}, secrets 
     async askSecret(prompt) {
       asked.push(prompt);
       const next = secrets.shift();
-      if (next instanceof Error) throw next;
-      return next ?? "";
+      const answer = typeof next === "function" ? next() : next;
+      if (answer instanceof Error) throw answer;
+      return answer ?? "";
     },
     async tail(args) {
       tails.push(args);
@@ -109,6 +145,9 @@ function harness({ daemon = fakeDaemon(), interactive = true, env = {}, secrets 
   };
   return { io, output, asked, tails, daemon, speakmore: (...argv) => run(argv, io) };
 }
+
+/** 假装以前存过一把 key */
+const haveStoredKey = () => writeFileSync(paths.keyFile, "密文");
 
 // ---------- 启动 ----------
 
@@ -130,7 +169,7 @@ test("已经在运行时不再启动一次，只给面板；start 和不带参�
   }
 });
 
-test("第一次用：没有 key 就在终端里问，存好了直接能用；key 不出现在任何输出里", async () => {
+test("第一次用：先问 key，再启动；存好了直接能用；key 不出现在任何输出里", async () => {
   const saved = [];
   const daemon = fakeDaemon({
     afterStart: NO_KEY,
@@ -139,17 +178,76 @@ test("第一次用：没有 key 就在终端里问，存好了直接能用；key
       return { ok: true };
     },
   });
-  const { speakmore, output, asked } = harness({ daemon, secrets: ["AIza-my-secret"] });
+  // 等启动的那段时间里终端是照常回显的：要是到那时才想起来要 key，提前粘贴的人会看到 key 显示在屏幕上
+  const whenAsked = () => {
+    assert.deepEqual(daemon.calls, [], "问 key 的时候还没开始启动");
+    return "AIza-my-secret";
+  };
+  const { speakmore, output, asked } = harness({ daemon, secrets: [whenAsked] });
   assert.equal(await speakmore(), 0);
+  assert.deepEqual(daemon.calls, ["start", "set-key", "recheck"]);
   assert.deepEqual(saved, ["AIza-my-secret"]);
   assert.equal(asked.length, 1);
-  // 去哪申请、存在哪，是和提示一起交给"不回显地问"的那一步的：要先关掉回显再让人看到"要 key 了"，
-  // 否则手快的人在提示出来之前就粘贴，key 会被终端原样显示出来
+  // 去哪申请、存在哪，是和提示一起交给"不回显地问"的那一步的：要先关掉回显再让人看到"要 key 了"
   assert.match(asked[0], /aistudio\.google\.com\/apikey/);
   assert.doesNotMatch(output.out, /aistudio/);
   assert.match(output.out, /已保存，验证通过/);
   assert.match(output.out, /运行中/);
   assert.ok(!(output.out + output.err).includes("AIza-my-secret"));
+});
+
+test("已经有 key（存着的，或者环境变量给的）时直接启动，不问", async () => {
+  haveStoredKey();
+  const stored = harness();
+  assert.equal(await stored.speakmore(), 0);
+  assert.equal(stored.asked.length, 0);
+  rmSync(paths.keyFile);
+
+  const fromEnv = harness({ env: { GEMINI_API_KEY: "AIza-env" } });
+  assert.equal(await fromEnv.speakmore(), 0);
+  assert.equal(fromEnv.asked.length, 0);
+});
+
+test("问到的 key 样子不对（带换行、空格）：当场说、当场再问，不发给后台，内容不出现在输出里", async () => {
+  const saved = [];
+  const daemon = fakeDaemon({
+    afterStart: NO_KEY,
+    saveKey: (key) => {
+      saved.push(key);
+      return { ok: true };
+    },
+  });
+  const { speakmore, output, asked } = harness({ daemon, secrets: ["two\nlines-SECRET", "AIza-good"] });
+  assert.equal(await speakmore(), 0);
+  assert.equal(asked.length, 2);
+  assert.deepEqual(saved, ["AIza-good"]);
+  assert.match(output.err, /这把 key 里有空格或换行/);
+  assert.doesNotMatch(output.out + output.err, /SECRET/);
+});
+
+test("存着的 key 启动后发现已经不能用了：这时再问一把", async () => {
+  haveStoredKey();
+  const daemon = fakeDaemon({ afterStart: REVOKED_KEY });
+  const { speakmore, asked, output } = harness({ daemon, secrets: ["AIza-new"] });
+  assert.equal(await speakmore(), 0);
+  assert.deepEqual(daemon.calls, ["start", "set-key", "recheck"]);
+  assert.equal(asked.length, 1);
+  assert.match(output.out, /运行中/);
+});
+
+test("不是 key 的问题时不问 key：模型名写错、环境变量里的 key 不对，都只在面板里说", async () => {
+  haveStoredKey();
+  const wrongModel = harness({ daemon: fakeDaemon({ afterStart: WRONG_MODEL }) });
+  assert.equal(await wrongModel.speakmore(), 0);
+  assert.equal(wrongModel.asked.length, 0);
+  assert.match(wrongModel.output.out, /gemini-nope is not found/);
+  assert.match(wrongModel.output.out, /speakmore config/);
+
+  const badEnv = { ...REVOKED_KEY, key: { ...REVOKED_KEY.key, source: "env" } };
+  const fromEnv = harness({ daemon: fakeDaemon({ afterStart: badEnv }), env: { GEMINI_API_KEY: "AIza-env" } });
+  assert.equal(await fromEnv.speakmore(), 0);
+  assert.equal(fromEnv.asked.length, 0);
+  assert.match(fromEnv.output.out, /环境变量 GEMINI_API_KEY/);
 });
 
 test("key 不对时说明原因再问一次", async () => {
@@ -165,8 +263,10 @@ test("key 不对时说明原因再问一次", async () => {
 test("问 key 时什么都没填或者按了 Ctrl-C：不纠缠，面板里说还差 key", async () => {
   for (const secret of ["", new Cancelled()]) {
     const daemon = fakeDaemon({ afterStart: NO_KEY });
-    const { speakmore, output } = harness({ daemon, secrets: [secret] });
+    const { speakmore, output, asked } = harness({ daemon, secrets: [secret] });
     assert.equal(await speakmore(), 0);
+    // 启动前问过一次、他没填，启动后就不再问第二遍
+    assert.equal(asked.length, 1);
     assert.ok(!daemon.calls.includes("set-key"));
     assert.match(output.out, /还差 1 样/);
     assert.match(output.out, /speakmore key/);
@@ -199,13 +299,16 @@ test("启动不起来时把原因说出来，以非零退出", async () => {
 
 // ---------- 停止、重启、状态 ----------
 
-test("stop：在运行就停掉，没在运行就照实说", async () => {
+test("stop：在运行就停掉，没在运行就照实说，是强行结束的也照实说", async () => {
   const running = harness({ daemon: fakeDaemon({ running: READY }) });
   assert.equal(await running.speakmore("stop"), 0);
   assert.match(running.output.out, /已经停掉/);
   const idle = harness();
   assert.equal(await idle.speakmore("stop"), 0);
   assert.match(idle.output.out, /没有在运行/);
+  const stuck = harness({ daemon: fakeDaemon({ hung: true, stopped: "killed" }) });
+  assert.equal(await stuck.speakmore("stop"), 0);
+  assert.match(stuck.output.out, /强行结束/);
 });
 
 test("restart：先停再起", async () => {
@@ -213,6 +316,49 @@ test("restart：先停再起", async () => {
   assert.equal(await speakmore("restart"), 0);
   assert.deepEqual(daemon.calls.slice(0, 2), ["stop", "start"]);
   assert.match(output.out, /运行中/);
+});
+
+test("restart：它卡住不答话时照样能重启", async () => {
+  haveStoredKey();
+  const { speakmore, daemon, output } = harness({ daemon: fakeDaemon({ hung: true, stopped: "killed" }) });
+  assert.equal(await speakmore("restart"), 0);
+  assert.deepEqual(daemon.calls.slice(0, 2), ["stop", "start"]);
+  assert.match(output.out, /运行中/);
+});
+
+test("正在运行的是装成应用的那一个：不代它重启（会被换成终端启动的，权限和 key 是另一套），说怎么办", async () => {
+  const packaged = { ...READY, packaged: true };
+  const restarting = harness({ daemon: fakeDaemon({ running: packaged }) });
+  assert.equal(await restarting.speakmore("restart"), 1);
+  assert.deepEqual(restarting.daemon.calls, []);
+  assert.match(restarting.output.err, /SpeakMore\.app/);
+  assert.match(restarting.output.err, /退出/);
+
+  const configuring = harness({ daemon: fakeDaemon({ running: packaged }) });
+  assert.equal(await configuring.speakmore("config", "set", "hotkey", "fn"), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { hotkey: "fn" });
+  assert.deepEqual(configuring.daemon.calls, []);
+  assert.match(configuring.output.out, /SpeakMore\.app/);
+  assert.doesNotMatch(configuring.output.out, /已经生效/);
+});
+
+test("它卡住不答话时，别的命令说清楚是卡住了、怎么停，不甩一屏调用栈", async () => {
+  for (const argv of [[], ["status"], ["settings"]]) {
+    const { speakmore, output } = harness({ daemon: fakeDaemon({ hung: true }) });
+    assert.equal(await speakmore(...argv), 1);
+    assert.match(output.err, /没有在 5 秒内回话/);
+    assert.match(output.err, /speakmore stop/);
+  }
+});
+
+test("命令做到一半它没了：照实说没有在运行", async () => {
+  const daemon = fakeDaemon({ running: READY });
+  daemon.request = async () => {
+    throw new NotRunningError();
+  };
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore("settings"), 1);
+  assert.match(output.err, /没有在运行/);
 });
 
 test("status：只看不动；能用是 0，没在运行或还差东西是 1", async () => {
@@ -277,15 +423,38 @@ test("key：什么都没读到时不去打扰后台应用", async () => {
   assert.match(output.err, /没有读到 key/);
 });
 
-test("key --forget：在运行时让它忘掉；没在运行时直接删掉存着的文件", async () => {
+test("key：从管道喂进来的内容样子不对（比如多行）：不启动、不发给后台，内容不出现在输出里", async () => {
+  const { speakmore, output, daemon } = harness({ secrets: ["line-one-SECRET\nline-two-SECRET"] });
+  assert.equal(await speakmore("key"), 1);
+  assert.deepEqual(daemon.calls, []);
+  assert.match(output.err, /这把 key 里有空格或换行/);
+  assert.doesNotMatch(output.out + output.err, /SECRET/);
+});
+
+test("key 后面直接跟着一把 key：不照做，也不把它再打一遍，提醒这样写会进 shell 历史", async () => {
+  const { speakmore, output, daemon, asked } = harness({ daemon: fakeDaemon({ running: READY }) });
+  assert.equal(await speakmore("key", "AIza-typed-SECRET"), 2);
+  assert.deepEqual(daemon.calls, []);
+  assert.equal(asked.length, 0);
+  assert.match(output.err, /历史/);
+  assert.doesNotMatch(output.out + output.err, /SECRET/);
+});
+
+test("key --forget：两种启动方式各存的那一份都删掉；在运行的话让它也忘掉", async () => {
+  const seed = () => {
+    writeFileSync(paths.keyFile, "密文");
+    writeFileSync(paths.appKeyFile, "密文");
+  };
+  seed();
   const running = harness({ daemon: fakeDaemon({ running: READY }) });
   assert.equal(await running.speakmore("key", "--forget"), 0);
   assert.deepEqual(running.daemon.calls, ["forget-key"]);
+  assert.deepEqual([existsSync(paths.keyFile), existsSync(paths.appKeyFile)], [false, false]);
 
-  writeFileSync(paths.keyFile, "密文");
+  seed();
   const idle = harness();
   assert.equal(await idle.speakmore("key", "--forget"), 0);
-  assert.equal(existsSync(paths.keyFile), false);
+  assert.deepEqual([existsSync(paths.keyFile), existsSync(paths.appKeyFile)], [false, false]);
   assert.deepEqual(idle.daemon.calls, []);
   assert.match(idle.output.out, /已经删掉/);
 });
@@ -305,11 +474,29 @@ test("config set：存进文件；在运行的话重启让它生效", async () =
   assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { hotkey: "fn" });
   assert.deepEqual(daemon.calls.slice(0, 2), ["stop", "start"]);
   assert.match(output.out, /hotkey 改成了 fn/);
+  assert.match(output.out, /已经生效/);
 
   const idle = harness();
   assert.equal(await idle.speakmore("config", "set", "thinking", "low"), 0);
   assert.deepEqual(idle.daemon.calls, []);
   assert.match(idle.output.out, /下次启动生效/);
+});
+
+test("config set：重启之后 Gemini 不认这个值（比如模型名写错）：不说“已经生效”，说原因和怎么撤回", async () => {
+  const daemon = fakeDaemon({ running: READY, afterStart: WRONG_MODEL });
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore("config", "set", "model", "gemini-nope"), 1);
+  assert.doesNotMatch(output.out, /已经生效/);
+  assert.match(output.err, /gemini-nope is not found/);
+  assert.match(output.err, /speakmore config unset model/);
+});
+
+test("config set：重启时没连上 Gemini，新设置对不对还不知道：不说“已经生效”", async () => {
+  const unverified = { ...READY, key: { ...READY.key, verified: false } };
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: READY, afterStart: unverified }) });
+  assert.equal(await speakmore("config", "set", "model", "gemini-next"), 0);
+  assert.doesNotMatch(output.out, /已经生效/);
+  assert.match(output.out, /还没验证.*speakmore status/);
 });
 
 test("config set：填错时说能填什么，不动文件，以 2 退出", async () => {
