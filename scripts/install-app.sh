@@ -9,7 +9,7 @@ target="/Applications/$name.app"
 npm run dist
 built="dist/$name-darwin-$(node -p process.arch)/$name.app"
 
-# 正在运行的要先退出：是装成应用的那个的话不退换不掉；是命令启动的那个的话，它占着同一个数据目录，
+# 正在运行的要先退出：是装成应用的那个的话不退换不掉；是命令启动的那个的话，它占着同一个家目录，
 # 新装的应用会发现"已经有一个在运行"而起不来。speakmore stop 两种都管，并且等进程真的退干净才返回
 node bin/speakmore.mjs stop
 rm -rf "$target"

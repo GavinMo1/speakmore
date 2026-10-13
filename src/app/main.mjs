@@ -64,7 +64,7 @@ app.setPath("userData", PATHS.cacheDir);
 // 打成应用后没有终端，日志自己写文件。由命令启动时标准输出已经被接到同一个文件里了
 if (app.isPackaged) alsoLogTo(PATHS.logFile);
 
-// 同一个数据目录只跑一个。这里给的数据会随 second-instance 事件送到已经在运行的那一个手里
+// 同一个家目录只跑一个。这里给的数据会随 second-instance 事件送到已经在运行的那一个手里
 const isOnlyInstance = app.requestSingleInstanceLock({ byCli: LAUNCHED_BY_CLI });
 if (!isOnlyInstance) {
   console.error("已经有一个在运行了");
@@ -77,7 +77,7 @@ const webPreferences = { preload: join(sourceDir, "preload", "preload.cjs"), san
 
 // 不能写成顶层的 await app.whenReady()：Electron 要等主模块加载完才会就绪，
 // 而顶层 await 让模块一直加载不完，两边互相等（Electron 44.7 实测如此）。
-// 没抢到锁的那个正在退出，不往下走：数据目录里的东西（进程号、控制通道）都是先到的那个的
+// 没抢到锁的那个正在退出，不往下走：家目录里的东西（进程号、控制通道）都是先到的那个的
 if (isOnlyInstance) {
   app
     .whenReady()

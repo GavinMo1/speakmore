@@ -19,7 +19,7 @@ if (!wav || !existsSync(wav)) {
 }
 
 const electron = createRequire(import.meta.url)("electron");
-// 名字起得短：数据目录里要放控制通道的套接字，路径有长度上限
+// 名字起得短：家目录里要放控制通道的套接字，路径有长度上限
 const workDir = mkdtempSync(join(tmpdir(), "sm-e2e-"));
 const outPath = join(workDir, "result.json");
 

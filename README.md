@@ -11,28 +11,22 @@
 
 ## 装和用
 
-需要 macOS 12 以上、Node 22.13 以上（用 23 的话要 23.4 以上）、Xcode 命令行工具（`xcode-select --install`），以及一把 [Gemini API key](https://aistudio.google.com/apikey)。
+需要 macOS 12 以上，和一把 [Gemini API key](https://aistudio.google.com/apikey)。别的都不用装：不需要 Node、npm，也不需要 sudo。
 
 ```bash
-git clone https://github.com/zephyr4123/speakmore.git
-cd speakmore
-npm install
-npm link        # 把 speakmore 命令装进 PATH
-speakmore
+curl -fsSL https://github.com/zephyr4123/speakmore/releases/latest/download/install.sh | bash
 ```
 
-第一次运行 `speakmore` 会依次做这几件事，都不用你另外操作：
+这一行做三件事：
 
-1. 在终端里问你要 key。粘贴后按回车，输入不会显示出来。
-2. 编译一个听热键、贴文字的小程序，下载运行环境 Electron（约 100 MB），然后在后台启动。
-3. 系统弹出麦克风授权框，点“允许”。
-4. 验证 key，通过后用系统钥匙串加密存在本机。
-5. 显示状态。还缺系统权限的话会顺手打开设置窗口，每一项旁边有去系统设置的按钮。
+1. **预检查**：系统版本、芯片、磁盘空间、下载地址和 Gemini 连不连得上。哪一项不行会说清楚原因和怎么办，不行就什么都不装。
+2. **安装**：下载、核对校验值，把程序和它自带的运行环境放进 `~/.speakmore`，在 `~/.local/bin` 建一个 `speakmore` 命令。
+3. **启动**：在终端里问你要 key（粘贴后回车，输入不会显示出来），系统弹出麦克风授权框时点“允许”，然后显示状态。还缺系统权限的话会顺手打开设置窗口，每一项旁边有去系统设置的按钮。
 
 看到下面这样就可以用了：点进任意输入框，按一下右 Option，说话，再按一下。
 
 ```text
-SpeakMore 0.1.0 · 运行中
+SpeakMore 0.2.0 · 运行中
 
   可以用了：点进任意输入框，按一下右 Option 键开始说话，再按一下结束，文字会贴进去。
 
@@ -46,7 +40,9 @@ SpeakMore 0.1.0 · 运行中
 
 它在后台运行，关掉终端窗口也还在，菜单栏上有“听写”两个字。电脑重启后要再运行一次 `speakmore`。
 
-不想把命令装进 PATH 的话，在这个目录里用 `npm start` 代替 `speakmore`，子命令写在 `--` 后面，比如 `npm start -- history`。
+**升级**：把安装那一行再运行一次。程序换成新的，设置、key、历史和录音不动。
+
+**卸载**：`speakmore uninstall`。它停掉后台，把 `~/.speakmore`、那个命令链接、钥匙串里的那一条一起删掉。只想删程序、留下自己的东西，加 `--keep-data`。
 
 ## 命令
 
@@ -58,10 +54,11 @@ SpeakMore 0.1.0 · 运行中
 | `speakmore history [-n 条数] [--json]` | 看说过的话，按天分组，新的在前。失败的那条会写原因，录音还留着 |
 | `speakmore key` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key`。别把 key 写在命令后面，那样会进 shell 的历史记录 |
 | `speakmore key --forget` | 删掉存着的 key |
-| `speakmore config` | 看设置，以及数据和日志在哪 |
+| `speakmore config` | 看设置，以及东西都放在哪 |
 | `speakmore config set <名字> <值>` | 改一项设置，正在运行的话自动重启，并告诉你新的值能不能用。`unset` 回到默认 |
 | `speakmore settings` | 打开设置窗口（去系统设置授权时用） |
 | `speakmore logs [-n 行数] [-f]` | 看日志 |
+| `speakmore uninstall [--keep-data]` | 卸载。先说清楚要删什么，问一句再动手 |
 
 ## 三项系统权限
 
@@ -88,7 +85,7 @@ speakmore config unset hotkey         # 回到默认
 | `model` | `gemini-3.5-flash` | Gemini 的模型名。换模型时留意下一项 |
 | `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`，越高越慢。有的模型不接受 `MINIMAL` |
 
-设置存在数据目录的 `settings.json` 里。只想临时换一次，可以用环境变量 `SPEAKMORE_HOTKEY`、`GEMINI_MODEL`、`GEMINI_THINKING_LEVEL`，它们优先于文件。`GEMINI_API_KEY` 也一样：设着的话这次用它，不读存着的那把。
+设置存在 `~/.speakmore/settings.json` 里。只想临时换一次，可以用环境变量 `SPEAKMORE_HOTKEY`、`GEMINI_MODEL`、`GEMINI_THINKING_LEVEL`，它们优先于文件。`GEMINI_API_KEY` 也一样：设着的话这次用它，不读存着的那把。
 
 环境变量要写在**启动它的那条命令**上才算数。SpeakMore 已经在运行时，先 `speakmore stop`，再带着环境变量运行 `speakmore`。状态面板上的热键和模型，写的是正在运行的那个实际在用的。
 
@@ -103,22 +100,30 @@ speakmore config unset hotkey         # 回到默认
 | “还差：按键监听” | 听热键的小程序停了。`speakmore restart`，还不行就看 `speakmore logs` |
 | 命令说它“没有在 5 秒内回话” | 后台卡住了。`speakmore stop` 会强行结束它，再运行 `speakmore` |
 
-## 你的数据
+## 都放在哪
 
 **发出去的只有录音**，直接发给 Google 的 Gemini 接口，用的是你自己的 key。没有别的服务器，没有统计上报，也不读屏幕和输入框里的内容。
 
-留在本机的都在 `~/Library/Application Support/SpeakMore/`：
+留在本机的全在 `~/.speakmore/` 这一个目录里，只有你自己进得去：
 
-| 东西 | 说明 |
+| 里面的东西 | 说明 |
 | --- | --- |
-| `history.db`、`Recordings/` | 说过的话和录音。失败的听写也存录音，话不会白说 |
-| `gemini-key.bin` | 加密后的 key，权限 600。解密用的密钥在系统钥匙串的“SpeakMore Safe Storage”里 |
-| `gemini-key.app.bin` | 同上，打成 .app 运行时存的那一份。钥匙串里的密钥是按应用分的，两种启动方式互相解不开，所以各存各的 |
 | `settings.json` | 上面那几项设置 |
+| `gemini-key.bin` | 加密后的 key。解密用的密钥在系统钥匙串的“SpeakMore Safe Storage”里，文件被拷走也解不开 |
+| `data/history.db`、`data/Recordings/` | 说过的话和录音。失败的听写也存录音，话不会白说 |
 | `logs/main.log` | 日志，一行一条 JSON。只记长度和耗时，不记说的话，也不记 key |
-| `control.sock`、`daemon.pid` | 运行时才有：命令和后台应用之间的通道，以及后台应用的进程号 |
+| `run/`、`cache/` | 运行时产生的：命令和后台之间的通道、进程号、运行环境自己的缓存。删了会自己再建 |
+| `bin/`、`app/`、`runtime/` | 程序本身：`speakmore` 命令、代码和依赖、自带的运行环境（Electron）。升级时整个换掉 |
 
-想换个地方放，设环境变量 `SPEAKMORE_HOME`。想彻底删干净，停掉之后删这个目录，再在“钥匙串访问”里删掉“SpeakMore Safe Storage”。
+目录以外只有三样东西：
+
+- `~/.local/bin/speakmore`，一个指向 `~/.speakmore/bin/speakmore` 的链接。
+- 钥匙串里的“SpeakMore Safe Storage”，加密 key 用的。
+- 你给终端的三项系统权限。
+
+`speakmore uninstall` 会删掉前两样和整个目录。系统权限记在终端名下，要你自己去系统设置里关。
+
+想装到别处，安装时设环境变量 `SPEAKMORE_HOME`，装好的命令会记住这个位置。0.1 版把数据放在 `~/Library/Application Support/SpeakMore`，装上这一版后第一次运行会自动搬过来。
 
 ## 它是怎么来的
 
@@ -144,10 +149,18 @@ speakmore config unset hotkey         # 回到默认
 
 ## 开发
 
+从源码跑需要 Node 22.13 以上（用 23 的话要 23.4 以上）和 Xcode 命令行工具（`xcode-select --install`）：
+
 ```bash
-npm run check                 # 代码检查 + 全部测试（238 条，不联网、不开窗口）
-npm run build:native          # 只重新编译原生小程序；平时不用管，启动时会按需编译
+git clone https://github.com/zephyr4123/speakmore.git
+cd speakmore
+npm install
+npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
+npm run check                 # 代码检查 + 全部测试（269 条，不联网、不开窗口）
+npm run release               # 打发布包：dist/release/ 下两种芯片各一个，外加 install.sh
 ```
+
+从源码跑的和装好的用的是同一个 `~/.speakmore`，想分开就设 `SPEAKMORE_HOME`。
 
 要真调 Gemini 的命令需要环境里有 `GEMINI_API_KEY`。`scripts/with-gemini-key.sh` 可以按你自己机器上的配置把它只喂给一条命令，见 `.machine.env.example`：
 
@@ -158,16 +171,19 @@ scripts/with-gemini-key.sh node src/server/main.mjs           # 单独启动听�
 node scripts/replay.mjs 块1.ogg 块2.ogg                           # 把现成的录音发给单独启动的服务
 ```
 
+不发布也可以试安装脚本：`SPEAKMORE_INSTALL_BASE=$PWD/dist/release SPEAKMORE_HOME=/tmp/sm bash install.sh`，装进一个临时目录。
+
 | 目录 | 内容 |
 | --- | --- |
+| `install.sh` | 安装脚本：预检查、下载、校验、装进 `~/.speakmore`、启动 |
 | `bin/`、`src/cli/` | `speakmore` 命令 |
 | `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、设置和历史窗口 |
 | `src/renderer/`、`src/preload/` | 各个窗口的页面：状态机、录音、听写协议的客户端 |
 | `src/server/` | 听写服务：收分块音频，交给 Gemini 整理。平时跑在后台应用的进程里 |
 | `native/` | 听热键和贴字的小程序（Swift） |
-| `src/*.mjs` | 命令和后台应用共用的：数据位置、设置、历史库、控制通道、日志 |
+| `src/*.mjs` | 命令和后台应用共用的：东西放在哪、设置、历史库、控制通道、日志、旧数据的迁移 |
 | `test/` | 自动测试，目录和 `src/` 对应 |
-| `scripts/` | 开发用的脚本：编译小程序、打包、端到端、评估提示词；按每台机器自己的配置加载 key、核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
+| `scripts/` | 开发用的脚本：编译小程序、打发布包、端到端、评估提示词；按每台机器自己的配置加载 key、核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
 | `docs/` | [实现笔记](docs/implementation-notes.md) |
 | `targets/typeless/` | 对 Typeless 的[逆向分析](targets/typeless/README.md)，18 篇文档。SpeakMore 是照着它做的 |
 | `AGENTS.md`、`.memory/` | 和 AI 编程助手协作时用的工作约定和项目记忆 |
@@ -177,26 +193,28 @@ node scripts/replay.mjs 块1.ogg 块2.ogg                           # 把现成�
 
 ### 打成 .app
 
-平时用命令启动就够了。打成应用的区别是三项权限记在“SpeakMore”自己名下，并且可以在设置窗口里勾选登录时自动启动：
+装好的 SpeakMore 是从终端启动的，三项权限记在终端名下。想让它们记在“SpeakMore”自己名下、并且能勾选登录时自动启动，可以从源码打成应用：
 
 ```bash
 npm run install-app     # 打包并装进“应用程序”，然后打开
 ```
 
-用的是不带身份的本机签名，所以每次重新打包系统都会把它当成一个新应用，权限要重新给，key 要重新填。
+用的是不带身份的本机签名，所以每次重新打包系统都会把它当成一个新应用，权限要重新给，key 要重新填。它不在 `~/.speakmore` 里，`speakmore uninstall` 不会删它。
 
 .app 在运行时，`speakmore status`、`history`、`key`、`stop` 照常能用。`speakmore restart` 和 `config set` 不会代它重启：从命令行起来的是终端启动的那一个，权限和 key 是另一套。按提示从菜单栏退出，再打开一次。
 
 ### 验证到哪一步
 
-- 自动测试 238 条，在 Node 22.13、24.21、26.0 上都跑过。
-- 真的启动过后台应用并用命令走了一遍：启动、重复启动、两条命令同时启动、状态、重启后读回 key、错的 key 被拒、删 key、停止、连续重启。
-- 出状况时的几条路也在真机上走过：从管道喂进多行内容被当场拒绝，日志和数据目录里找不到它；把后台进程暂停来模拟卡住，`speakmore status` 说清楚是卡住了，`speakmore stop` 能强行结束；模型名写错时 `config set` 报错并能撤回。
-- 在伪终端里走过第一次使用的流程：先问 key 再启动，key 不会显示在屏幕上，没通过会再问一次。
-- 把它打成 npm 包装到另一个目录，在找不到 Swift 编译器的环境下能启动（包里带着编好的小程序）。
-- 端到端：合成的一段语音当麦克风输入，经过真的录音编码、Gemini、存历史，命令启动的和打成 .app 的都通过。
-- **还没有人按着真键盘、对着真麦克风用这一版试过。** 上一版（开两个终端启动）试过，后台的代码是同一套，但启动方式变了。Intel 芯片的 Mac 上也没有跑过。
-- 只有自动测试、没在真机上试的：启动时断网（存着的 key 先用着）、.app 在运行时命令行的提示、重新检查权限时不再反复弹系统授权框（试的这台机器三项权限都已经给了，弹不出来）。
+- 自动测试 269 条，在 Node 22.13、24.21、26.0 上都跑过。其中 15 条是拿假的发布包真的跑安装脚本：全新安装、升级、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
+- 用真的发布包走过一遍，装在临时目录里，`PATH` 里没有 Node：
+  - 安装脚本从管道读入，装完直接启动并问 key，输入不显示。
+  - 启动、状态、设置、重启、停止；合成的语音经过录音编码、Gemini、存历史，成品正确。
+  - 再装一次（升级），历史还在。
+  - `speakmore uninstall` 之后目录、命令链接、后台进程、钥匙串里的那一条都没了。
+- Intel 的那一份只在 Apple 芯片的机器上借 Rosetta 跑过（命令、后台、小程序都起得来），**没有在真的 Intel 机器上试过**。
+- 上一版在真机上走过的那些路（多行 key 被拒、后台卡住时强行结束、同时启动、模型名写错）这一版重跑了自动测试，没有逐条重走。
+- **还没有人按着真键盘、对着真麦克风用这一版试过。** 也还没有从 GitHub 上真的下载安装过：安装脚本是拿本机打好的包试的。
+- 只有自动测试、没在真机上试的：启动时断网、从 0.1 版搬数据、重新检查权限时不再反复弹系统授权框。
 
 ## 许可
 

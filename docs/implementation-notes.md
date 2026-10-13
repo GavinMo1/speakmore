@@ -83,13 +83,27 @@ SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../targets/typeless/READ
 - **列表用得比原版少。** 没说"第一、第二"但并列了几件事的话，原版更常整理成列表。
 - **口吃偶尔删不干净**，约每 60 条 1 条。
 
+## 安装和运行环境
+
+目标是一行命令装好并启动，装的人不需要 Node、npm、Xcode，装的和产生的东西都在 `~/.speakmore` 一个目录里。
+
+- **运行环境是包里自带的原版 Electron，命令行也用它跑。** Electron 里本来就有一个 Node，设上 `ELECTRON_RUN_AS_NODE=1` 它就当普通的 Node 用（VS Code 的 `code` 命令是同一个做法）。这样只带一份运行环境，不依赖系统里有没有 Node、是哪个版本。实测 Electron 44.7 里是 Node 24.21，带着 `node:sqlite`；跑 `speakmore --version` 要 41–43 毫秒，系统的 Node 26 是 51–57 毫秒。
+- **发布包自带一切。** `scripts/release.mjs` 在打包的机器上把运行时依赖装好、小帮手按两种芯片编好合成一个文件，再配上对应芯片的 Electron，打成 `speakmore-darwin-<芯片>.tar.gz`（约 135 MB）。Electron 的压缩包按 `electron` 这个 npm 包里带的校验值核对过才用。
+- **安装脚本只做搬运。** `install.sh` 先做预检查，下载后核对 SHA-256，解到家目录里的临时位置并原地试跑一次，都没问题才停掉正在运行的、把 `app/` 和 `runtime/` 换进去。两样要么都换成，要么都不换。
+- **启动脚本里的路径是写死的。** `~/.speakmore/bin/speakmore` 由安装脚本生成，家目录的位置直接写在里面：它会被 `~/.local/bin` 里的链接指着，不能靠“我在哪”来猜。
+- **目录以外的东西有清单。** 安装时在别处建的链接记在 `bin/links` 里，卸载时照着删，删之前再确认一遍它还指着我们。删不了的（记在终端名下的系统权限、所有原版 Electron 程序共用的 `com.github.Electron.plist`）在卸载时列出来。
+- **权限仍记在终端名下。** 后台应用是命令的子进程，系统把麦克风、输入监控、辅助功能算在启动它的终端头上。好处是升级不用重新授权；坏处是系统设置的列表里看不到“SpeakMore”这个名字。想换成记在应用自己名下，要把它做成一个有固定签名的应用，这留到以后做桌面端时一起解决。
+- **退回 0.1 版**：0.1 版的数据在 `~/Library/Application Support/SpeakMore`。这一版第一次运行时把其中的历史、录音、设置、加密后的 key 搬进了 `~/.speakmore`（历史和录音在 `data/` 下）。要退回，把这几样搬回原处即可；历史里记的录音位置会指着新地方，只影响失败记录里“录音留在哪”那句话。
+
 ## 各文件
 
 | 文件 | 做什么 | 对应原版 |
 | --- | --- | --- |
-| `bin/speakmore.mjs`、`src/cli/` | `speakmore` 命令：起停后台应用、问 key、看历史、改设置 | 原版没有命令行 |
-| `src/control.mjs` | 命令和后台应用之间的控制通道（数据目录里的 Unix 套接字，一问一答） | |
-| `src/paths.mjs`、`src/settings.mjs` | 数据放哪、有哪些设置。命令和后台应用共用 | |
+| `install.sh`、`scripts/release.mjs` | 安装脚本和打发布包的脚本，见下面“安装和运行环境” | 原版是一个 .dmg |
+| `bin/speakmore.mjs`、`src/cli/` | `speakmore` 命令：起停后台应用、问 key、看历史、改设置、卸载 | 原版没有命令行 |
+| `src/control.mjs` | 命令和后台应用之间的控制通道（家目录里的 Unix 套接字，一问一答） | |
+| `src/paths.mjs`、`src/settings.mjs` | 东西放哪、有哪些设置。命令和后台应用共用 | |
+| `src/legacy.mjs` | 把 0.1 版放在别处的数据搬进现在的家目录 | |
 | `src/history.mjs` | 历史库。后台应用写，命令只读着看 | `history_v2` 表的子集（[08](../targets/typeless/docs/08-local-data.md)） |
 | `native/main.swift` | 听热键（只听不改，不报是哪个键）、贴字 | 键盘子进程和 Swift 库（[07](../targets/typeless/docs/07-native-helpers.md)） |
 | `src/app/main.mjs` | 后台应用的主进程：窗口、菜单栏、和小帮手对接，把下面几样接起来 | 主进程（[03](../targets/typeless/docs/03-process-architecture.md)） |
