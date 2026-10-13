@@ -83,6 +83,11 @@ arm64 切片的 sha256 前 16 位：Context `1ec75d0d3fc5845c`、Input `f28cd221
 | F26 | 音频参数：Opus/Ogg、16 kHz、单声道、32 kbps VBR、3 秒一块 | 观察 | 本机数据（最新记录 `audio_metadata`）；readable:qA149QP2.mjs:6426-6436 |
 | F27 | 模式映射：`voice_transcript`→`transcript`、`voice_command`→`ask_anything`、`voice_translation`→`translation` | 观察 | readable:main/index.js:6879-6881、17211-17215 |
 | F28 | 经本机 mitmproxy 反向代理转发的免登录请求能得到服务端正常回包 | 观察 | 2026-10-12 自测：`GET /app/get_blacklist_domain` → 405 |
+| F29 | 原生层每次按键变化都上报"当前按住的全部键"，主进程广播给四个窗口 | 观察 | readable:main/index.js:11833-11880、12754-12764 |
+| F30 | 悬浮条统计最近 60 秒在可编辑输入框里的击键，超过 60 个触发提示；仅在内存 | 观察 | readable:qA149QP2.mjs:7886-7960 |
+| F31 | 状态机时间参数：长按 600 ms、单次录音上限 9 分钟、分块 3 秒、WebSocket 空闲 1 小时断开等 | 观察 | readable:qA149QP2.mjs:4191、4546、6101-6104、6181-6200 |
+| F32 | 认不出输入框时上报应用名、bundle id、网页网址和域名（每个应用加网址一次） | 观察 | readable:main/index.js `error_monitoring_undetectable_textbox_found` 处 |
+| F33 | 按下功能键即开始录音；松开后进入免提录音，再按一次结束；`long_pressing` 状态会停止录音并提示不要按住 | 观察（状态定义）；"按住说话"是否仍可用未定 | readable:qA149QP2.mjs:6812-7160 |
 
 ## 工具与限制
 

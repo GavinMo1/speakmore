@@ -80,7 +80,7 @@ wss://api.typeless.com/ws/rt_voice_flow?v=mac_2.8.1&t=<加密串>&m=0
 
 `t` 是把 `{ token, s, t, d }` 用同一个写死口令 AES 加密后的串：`token` 是访问令牌，`s` 是对路径 `/ws/rt_voice_flow` 做的同款 HMAC-SHA1 签名，`t` 是时间戳，`d` 是设备 ID（readable:UfR9-a2Z.js:10783-10800）。
 
-有 `ping`/`pong` 保活，断网后上线会自动重连，发消息时发现没连上也会先连。是否应用一启动就建立并一直保持，待抓包确认。
+有 `ping`/`pong` 保活，断网后上线会自动重连，发消息时发现没连上也会先连。状态机在空闲满 1 小时后主动断开（[10](10-interaction-state-machine.md#时间参数)）。所以它是"用过之后保持一小时"的长连接，下一次按键时通常已经连着，省掉建连时间。
 
 ### 客户端 → 服务端
 

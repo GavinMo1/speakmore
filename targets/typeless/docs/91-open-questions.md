@@ -10,7 +10,7 @@
 | Q02 | 黑名单应用（微信）里，光标前后文字和整框内容是否真的照发 | 代码里黑名单条件不覆盖 `getCurrentInputState` |
 | Q03 | `visible_screen_content` 实际有多长、长什么样 | 上限参数 10000 |
 | Q04 | `device_environment` 有哪些字段 | 未展开 |
-| Q05 | WebSocket 是常驻还是按需建立，保活间隔 | 有 `ping`/`pong`、有上线自动重连 |
+| Q05 | WebSocket 首次建立的时机、保活间隔 | 已知空闲 1 小时断开、发消息时按需连接 |
 | Q06 | 从 `end_audio` 到 `refine_completed` 的实际耗时；`transcription` 逐块消息的内容和延迟 | 无 |
 | Q07 | WebSocket 与 HTTP 赛跑，实际谁赢的比例 | 本机记录里没有这个字段 |
 | Q08 | `/user/traits` 实际上报的内容和触发频率 | 代码 |
@@ -23,13 +23,13 @@
 | --- | --- |
 | Q11 | 登录流程：`typeless://` 回调、`exchange_app_login_code`、令牌刷新、`user-data.json` 的加密方式 |
 | Q12 | 历史云同步引擎（约 1500 行，6 个类）：推拉协议、冲突处理、墓碑 |
-| Q13 | 悬浮条状态机的完整状态图 |
+| Q13 | 状态机里 `stopping`、`finishing`、`retrying` 的内部细节（主干状态图已在 [10](10-interaction-state-machine.md)） |
 | Q14 | `delivery`、`external_action`、`web_metadata` 的实现，结果卡片窗口 |
 | Q15 | 录音器内部：AudioWorklet 的重采样、分块、静音检测、"麦克风动态降级" |
-| Q16 | 快捷键匹配规则（`ShortcutDetector`）：单按、长按、双击分别怎么判 |
-| Q17 | 统计事件清单：发了哪些事件、各带什么属性 |
+| Q16 | 快捷键会话 reducer：`LONG_HOLD` 何时发出、何时进 `pushToTalk`，即"按住说话"当前是否支持；原生层 `ShortcutDetector` 的规则 |
+| Q17 | 统计事件的完整清单和各自属性（字面量搜到 13 个，是下限） |
 | Q18 | 更新流程；`enterprise-policy:updated` 是什么 |
-| Q19 | 按键事件在 JS 层的全部去向（现在只确认了两个用途） |
+| Q19 | 主界面大包（DNMdpbnK.mjs）里对 `global-keyboard` 的那处订阅做什么 |
 | Q20 | 剪贴板恢复的延时；`bottomUpURLTraversalWhitelist` 的内容；黑白名单里"白名单"的作用 |
 | Q21 | `desktopCapturer`、摄像头、蓝牙、屏幕录制的用途说明对应什么功能 |
 | Q22 | 两个 Opus 库的参数（`session_create` 的四个 int 是什么） |

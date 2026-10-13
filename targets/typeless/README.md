@@ -29,6 +29,7 @@
 | 07 | [原生库](docs/07-native-helpers.md) | 4 个动态库的接口、用到的系统 API、关键伪代码 |
 | 08 | [本机数据](docs/08-local-data.md) | 数据库、录音、配置文件 |
 | 09 | [运行时抓包](docs/09-runtime-capture.md) | 抓包方案、操作步骤、结果（待补） |
+| 10 | [交互状态机与按键](docs/10-interaction-state-machine.md) | 按键事件流向、听写状态图、全部时间参数、统计事件 |
 | 90 | [证据台账](docs/90-evidence-ledger.md) | Evidence ID 与结论对照 |
 | 91 | [未决问题](docs/91-open-questions.md) | 还不知道的、还没验证的 |
 
