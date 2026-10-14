@@ -33,7 +33,7 @@ SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../targets/typeless/READ
 和原版不一样的地方：
 
 - **没有登录和签名。** 服务只听本机端口，握手时拒绝带网页来源（`Origin` 为 `http(s)://…`）的连接，防止浏览器里的网页连进来花模型额度。
-- **识别和整理是一次模型调用。** 原版服务端内部怎么做的看不到。各块首尾相接后整段发给 Gemini，不重新编码。
+- **识别和整理是一次模型调用。** 原版服务端内部怎么做的看不到。各块首尾相接后整段发给选的那一家模型（默认 Gemini），Gemini 不用重新编码；OpenAI 不收 Opus，先在本机转成 WAV，见下面[不止一家模型](#不止一家模型)。
 - **容器多认一种 WebM。** 原版用自带的编码库出 Ogg；浏览器自带的录音接口出的是 WebM，里面同样是 Opus。服务端按文件头判断是哪一种，实测 Gemini 两种都收。
 - **不采集上下文。** 原版会把当前应用、输入框内容、屏幕可见文字一起上传（[06](../targets/typeless/docs/06-context-capture-and-privacy.md)），这里只上传录音。
 
@@ -84,6 +84,60 @@ SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../targets/typeless/READ
 - **列表用得比原版少。** 没说"第一、第二"但并列了几件事的话，原版更常整理成列表。
 - **口吃偶尔删不干净**，约每 60 条 1 条。
 
+## 不止一家模型
+
+录音交给哪一家整理是一个策略：每家一个适配器，管"请求怎么拼、收哪些录音格式、报错怎么认"；提示词、收尾（繁转简、去句号、夹时间戳重来）、转格式是各家共用的一条流程。
+
+```text
+设置里的 model（openai/gpt-audio-mini）
+   │
+   ▼
+src/server/providers/index.mjs   厂商清单：名字、key 的环境变量、申请页、默认模型、有没有思考档位。不加载 SDK
+   │ load()
+   ▼
+providers/gemini.mjs、openai.mjs 适配器：ping()、generate()、AUDIO_TYPES、classifyError()
+   │
+   ▼
+src/server/refine/refiner.mjs     共用的流程：这家不收录音的格式就先转（src/server/audio/），拿原文，统一收尾
+   │                              出错一律抛 ModelError，分成 key / unavailable / other 三类（providers/errors.mjs）
+   ▼
+src/server/server.mjs             听写协议那一侧不知道背后是哪一家
+```
+
+每家一把 key，存成 `<厂商>-key.bin`；Gemini 的文件名和以前一样，所以不用迁移。设置里的 `model` 写成 `厂商/模型`，以前只写 Gemini 模型名的照样认。
+
+加厂商的规矩：作者点名要哪家才加。2026-10-13 先查了 DeepSeek：官方文档里它的对话接口只收文字、图片和文件（文件也只认图片格式），没有收音频的地方，也没有单独的语音识别接口，所以没接。除了 Gemini，官方文档写明能"收音频、按提示词一次出成品"的是 OpenAI（`gpt-audio` 系列）和阿里通义（Qwen-Omni）；作者选了先接 OpenAI。
+
+### OpenAI 那边实测到的
+
+用的是作者的实验用 key，2026-10-13 从西雅图测的。录音是作者自己用 SpeakMore 时的 6 段测试录音（1.7–33.7 秒），没有用 Typeless 的历史录音（发给 OpenAI 这件事没问过作者）。
+
+- **只收 wav 和 mp3。** 传 webm、ogg 都回 400："Supported values are: 'wav' and 'mp3'"。悬浮条录的是 WebM（Electron 的录音接口录不了 Ogg，实测 `MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")` 是 false），所以服务端先解码（[@audio/decode-webm](https://www.npmjs.com/package/@audio/decode-webm)、[@audio/decode-opus](https://www.npmjs.com/package/@audio/decode-opus)）、降到 16 kHz、封成 WAV。降采样和封 WAV 是自己写的（`src/server/audio/pcm.mjs`），一分钟的录音约 60 毫秒。
+- **采样率要降。** 同一段 90 秒的录音，48 kHz 的 WAV 要 18 秒，24 kHz 和 16 kHz 是 6–9 秒；三种算出来的音频 token 一样多（907），所以降采样只省上传、不省钱。
+- **验证 key 不能发纯文字。** 这几个模型要求输入或输出里有音频，纯文字的请求回 400；所以带一段 0.1 秒静音、只要 1 个 token，约 0.7 秒。
+- **报错**：假 key 回 401 `invalid_api_key`，写错的模型名回 404 `model_not_found`，都按实测写进了分类。账号没额度（429 `insufficient_quota`）照官方文档写的，没测到。
+- **选哪个模型。** 同 6 段录音、同一份提示词：
+
+  | 模型 | 结果 | 耗时 |
+  | --- | --- | --- |
+  | `gpt-audio-mini` | 6 段都正常，静音那段输出了 `<无人声>` 标记；口头禅偶尔留着（"就是"） | 1.9–4.9 秒 |
+  | `gpt-audio-1.5` | 两段把成品包成了 `{"final_text": "…"}` 或 `{"…"}`，两段开头多了换行；另一次同一段录音回了 500 "The model produced invalid content" | 1.7–4.1 秒 |
+
+  所以默认用 `gpt-audio-mini`。提示词是对着 Gemini 调的，还没拿成批的真实录音对 OpenAI 调过；`eval-prompt.mjs` 已经能选模型，要调的话先问作者能不能把 Typeless 的历史录音发给 OpenAI。
+
+### Gemini 的回归
+
+换成策略之后 Gemini 的请求和以前一样。同一批 60 条 Typeless 录音又跑了一遍（v8），和之前同一份提示词的两遍（v7-1、v7-2）比：
+
+| | v7-1 | v7-2 | v8 |
+| --- | --- | --- | --- |
+| 成功 / 写坏 | 60 / 1 | 60 / 0 | 60 / 0 |
+| 文字相似度中位 | 0.80 | 0.82 | 0.80 |
+| 原版用列表的 16 条里也用了 | 7 | 9 | 7 |
+| 耗时中位 | 1.9 秒 | 1.9 秒 | 2.3 秒 |
+
+v8 在前两遍之间。耗时多了 0.4 秒，原因没查实：每次请求的代码路径没有多出步骤，两次测的时候网络环境可能不一样。
+
 ## 界面：主题和悬浮条
 
 **主题是数据，不是代码。** 三套主题只在颜色的值上不一样，没有哪一套要有自己的行为，所以没有做成“每套主题一个带方法的对象”。做成的是一份约定加一张登记表：
@@ -128,7 +182,7 @@ SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../targets/typeless/READ
 | 文件 | 做什么 | 对应原版 |
 | --- | --- | --- |
 | `install.sh`、`scripts/release/release.mjs` | 安装脚本和打发布包的脚本，见下面“安装和运行环境” | 原版是一个 .dmg |
-| `bin/speakmore.mjs`、`src/cli/` | `speakmore` 命令：起停后台应用、问 key、看历史、改设置、卸载 | 原版没有命令行 |
+| `bin/speakmore.mjs`、`src/cli/` | `speakmore` 命令：起停后台应用、问 key、换模型、看历史、改设置、卸载。每个子命令在 `commands/` 里一个文件，画面在 `render/` | 原版没有命令行 |
 | `src/control.mjs` | 命令和后台应用之间的控制通道（家目录里的 Unix 套接字，一问一答） | |
 | `src/storage/paths.mjs`、`src/storage/settings.mjs` | 东西放哪、有哪些设置。命令和后台应用共用 | |
 | `src/themes/` | 主题：界面要哪些颜色、每套主题的值、合不合格怎么查。见上面“界面：主题和悬浮条” | 原版只有一套外观 |
@@ -137,7 +191,7 @@ SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../targets/typeless/READ
 | `native/main.swift` | 听热键（只听不改，不报是哪个键）、贴字；说话时截住 `esc` 和悬浮条上的点击 | 键盘子进程和 Swift 库（[07](../targets/typeless/docs/07-native-helpers.md)） |
 | `src/app/main.mjs` | 后台应用的主进程：窗口、菜单栏、和小帮手对接，把下面几样接起来 | 主进程（[03](../targets/typeless/docs/03-process-architecture.md)） |
 | `src/app/service.mjs` | 把 `src/server` 跑在主进程里；换 key 先验证再生效 | 原版的服务端在云上 |
-| `src/app/keys/key-manager.mjs` | 这次运行用哪把 key、它是什么状态：启动时去哪找，怎么换、怎么删。启动时只是够不着 Gemini 的话先用着 | 原版用登录态，没有这一项 |
+| `src/app/keys/key-manager.mjs` | 每家一把 key：正在用的那家用哪把、是什么状态，启动时去哪找，怎么换、怎么删；给别家存 key、查某个模型能不能用。启动时只是够不着那一家的话先用着 | 原版用登录态，没有这一项 |
 | `src/app/keys/key-store.mjs` | key 用系统钥匙串加密后存成文件 | 原版用登录态，没有这一项 |
 | `src/app/setup-state.mjs` | “能不能用、还差什么”的统一结论 | |
 | `src/app/delivery.mjs` | 存录音、记历史、贴字，贴不进去时退到剪贴板 | 结果投递（[14](../targets/typeless/docs/14-result-delivery.md)） |
@@ -146,4 +200,4 @@ SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../targets/typeless/READ
 | `src/renderer/shared/tokens.css` | 三个页面共用、不随主题变的：字号、间距、圆角、动效 | |
 | `src/renderer/bar/recorder.mjs` | 录音，每 3 秒一块 | 录音与编码（[11](../targets/typeless/docs/11-audio-recorder.md)） |
 | `src/renderer/bar/voice-socket.mjs` | 听写协议的客户端一侧 | 网络协议（[05](../targets/typeless/docs/05-network-protocol.md)） |
-| `src/server/` | 听写服务：收分块音频，交给 Gemini 整理成文字 | 原版的服务端（内部看不到，只照着协议做） |
+| `src/server/` | 听写服务：收分块音频（`protocol/`），交给选的那一家模型整理成文字（`refine/`、`providers/`、`audio/`），见上面“不止一家模型” | 原版的服务端（内部看不到，只照着协议做） |

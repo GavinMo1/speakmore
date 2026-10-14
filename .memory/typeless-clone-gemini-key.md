@@ -1,13 +1,13 @@
 ---
 name: typeless-clone-gemini-key
-description: 开发和评估时调 Gemini 的 key 经 scripts/dev/with-gemini-key.sh 加载，用哪把凭据写在本机配置 .machine.env；产品里的 key 由用户自己填
+description: 开发和评估时调模型的 key 经 scripts/dev/with-key.sh <gemini|openai> 加载，各家用哪把凭据写在本机配置 .machine.env；产品里的 key 由用户自己填
 metadata:
   type: project
 ---
 
-开发、端到端测试、跑评估脚本这类要真调 Gemini 的命令，一律写成 `scripts/dev/with-gemini-key.sh <命令…>`（路径从仓库根算）。它读不进 git 的本机配置 `.machine.env`：用 `SECRETS_LOADER` 指的按需加载器，把 `GEMINI_CREDENTIAL` 那把凭据只喂给这一条命令。环境里已经有 `GEMINI_API_KEY` 时它直接用。
+开发、端到端测试、跑评估脚本这类要真调模型的命令，一律写成 `scripts/dev/with-key.sh <gemini|openai> <命令…>`（路径从仓库根算；2026-10-13 以前叫 with-gemini-key.sh）。它读不进 git 的本机配置 `.machine.env`：用 `SECRETS_LOADER` 指的按需加载器，把 `GEMINI_CREDENTIAL` / `OPENAI_CREDENTIAL` 那把凭据只喂给这一条命令。环境里已经有那一家的 key（`GEMINI_API_KEY`、`OPENAI_API_KEY`）时它直接用。
 
-**Why:** 用哪把凭据是用户 2026-10-13 在本机几把 Gemini key 里点名选的，每把有各自登记的用途范围，不能混用，所以我不自己换别的。凭据名和加载器路径每台机器不一样，同一天他要求把这些从仓库里抹掉、改成配置驱动，见 [[machine-facts-stay-local]]。
+**Why:** 用哪把凭据是用户点名选的：Gemini 那把是 2026-10-13 在本机几把里选的；OpenAI 那把他同一天说"应该是一把用于实验的 key，就用它了"。每把有各自登记的用途范围，不能混用，所以我不自己换别的。凭据名和加载器路径每台机器不一样，同一天他要求把这些从仓库里抹掉、改成配置驱动，见 [[machine-facts-stay-local]]。
 
 **How to apply:**
 - 不要打印 key，不要写进文件，不要放进命令行参数。要确认它在不在，只看长度。

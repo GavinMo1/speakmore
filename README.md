@@ -2,7 +2,7 @@
 
 <p align="center">
   按一下热键说话，再按一下，整理好的文字就贴进你正在用的输入框。<br>
-  macOS 上的开源语音输入，用你自己的 Gemini API key。
+  macOS 上的开源语音输入，用你自己的 Gemini 或 OpenAI 的 API key。
 </p>
 
 口头禅、改口、重复会被整理掉，长一点的话会分段、分点。只做语音转写这一件事：不采集屏幕和输入框里的内容，没有账号，没有云同步。
@@ -11,7 +11,7 @@
 
 ## 装和用
 
-需要 macOS 12 以上，和一把 [Gemini API key](https://aistudio.google.com/apikey)。别的都不用装：不需要 Node、npm，也不需要 sudo。
+需要 macOS 12 以上，和一把 [Gemini API key](https://aistudio.google.com/apikey)（想用 OpenAI 的模型也行，见下面的[换模型](#换模型)）。别的都不用装：不需要 Node、npm，也不需要 sudo。
 
 ```bash
 curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
@@ -33,7 +33,7 @@ SpeakMore 0.3.0 · 运行中
   key       已保存，验证通过
   权限      麦克风 ✓   输入监控 ✓   辅助功能 ✓
   热键      右 Option 键
-  模型      gemini-3.5-flash（MINIMAL）
+  模型      Gemini 的 gemini-3.5-flash（MINIMAL）
   主题      墨（ink）
   今天      12 次 · 1,024 字 · 3 分 20 秒
   累计      132 次 · 12,480 字 · 48 分钟 · 每分钟 260 字
@@ -55,8 +55,11 @@ SpeakMore 0.3.0 · 运行中
 | `speakmore stop` / `restart` | 停掉 / 重启。它卡住不答话时也停得掉 |
 | `speakmore status [--json]` | 在不在运行、key、三项权限、今天和累计说了多少。能用时退出码是 0 |
 | `speakmore history [-n 条数] [--json]` | 看说过的话，按天分组，新的在前。失败的那条会写原因，录音还留着 |
-| `speakmore key` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key`。别把 key 写在命令后面，那样会进 shell 的历史记录 |
-| `speakmore key --forget` | 删掉存着的 key |
+| `speakmore model` | 看能用哪几家的模型、各家的 key 有没有、现在用的哪个。见[换模型](#换模型) |
+| `speakmore model <厂商>[/<模型>]` | 换一家或换个模型，正在运行的话自动重启。还没有那一家的 key 会先问 |
+| `speakmore model check [<厂商>[/<模型>]]` | 检查能不能用：拿那一家的 key 发一个最小的请求，说能不能用、来回多久。不写就查现在用的 |
+| `speakmore key [<厂商>]` | 换一把 key，不写厂商就是现在用的那家。也可以从管道喂：`pbpaste \| speakmore key`。别把 key 写在命令后面，那样会进 shell 的历史记录 |
+| `speakmore key --forget [<厂商>]` | 删掉存着的 key |
 | `speakmore config` | 看设置，以及东西都放在哪 |
 | `speakmore config set <名字> <值>` | 改一项设置，正在运行的话自动重启，并告诉你新的值能不能用。`unset` 回到默认 |
 | `speakmore theme [名字]` | 不带名字：看有哪几套主题、现在用的哪套。带名字：换一套，当场生效，不用重启 |
@@ -86,15 +89,35 @@ speakmore config unset hotkey         # 回到默认
 | 名字 | 默认值 | 能填什么 |
 | --- | --- | --- |
 | `hotkey` | `right_option` | `right_option` / `right_command` / `right_control` / `fn`，都是单独按一下。Typeless 用的是 `fn`，默认避开它，两个可以同时开着 |
-| `model` | `gemini-3.5-flash` | Gemini 的模型名。换模型时留意下一项 |
-| `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`，越高越慢。有的模型不接受 `MINIMAL` |
+| `model` | `gemini/gemini-3.5-flash` | `厂商/模型`，只写厂商就用它的默认模型。用 `speakmore model` 换更方便，见下面 |
+| `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`，越高越慢。只有 Gemini 用得上，有的 Gemini 模型不接受 `MINIMAL` |
 | `theme` | `ink` | 界面的主题，见下面 |
 
-设置存在 `~/.speakmore/settings.json` 里。只想临时换一次，可以用环境变量 `SPEAKMORE_HOTKEY`、`GEMINI_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_THEME`，它们优先于文件。`GEMINI_API_KEY` 也一样：设着的话这次用它，不读存着的那把。
+设置存在 `~/.speakmore/settings.json` 里。只想临时换一次，可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_THEME`，它们优先于文件。0.3 的 `GEMINI_MODEL`（只能写 Gemini 的模型名）还认，两个都设着时 `SPEAKMORE_MODEL` 优先。key 也一样：`GEMINI_API_KEY`、`OPENAI_API_KEY` 设着的话，用到那一家时用它，不读存着的那把。
 
 环境变量要写在**启动它的那条命令**上才算数。SpeakMore 已经在运行时，先 `speakmore stop`，再带着环境变量运行 `speakmore`。状态面板上的热键和模型，写的是正在运行的那个实际在用的。
 
 带着 `GEMINI_API_KEY` 运行时再执行 `speakmore key`，新的那把会存下来并立刻换上；但只要环境变量还在，下次启动用的仍是环境变量里的那把。
+
+### 换模型
+
+默认用 Gemini。也可以换成 OpenAI：
+
+```bash
+speakmore model                          # 有哪几家、各用哪个模型、key 有没有、现在用的哪个
+speakmore model openai                   # 换成 OpenAI（默认 gpt-audio-mini）。还没有它的 key 会先问
+speakmore model openai/gpt-audio-1.5     # 指定模型
+speakmore model check                    # 现在用的这个能不能用；也可以查别的：speakmore model check openai
+speakmore key openai                     # 只给 OpenAI 存一把 key，不换过去
+speakmore model gemini                   # 换回来
+```
+
+| 厂商 | 默认模型 | key 去哪申请 | 说明 |
+| --- | --- | --- | --- |
+| `gemini`（默认） | `gemini-3.5-flash` | [Google AI Studio](https://aistudio.google.com/apikey) | 录音原样发过去。提示词是对着它调的，整理得最干净，一般 2 秒左右出成品 |
+| `openai` | `gpt-audio-mini` | [OpenAI 开发者平台](https://platform.openai.com/api-keys) | 它只收 WAV 和 MP3，录音先在本机转成 16 kHz 的 WAV 再发（一分钟的录音转一次约 60 毫秒）。实测 2–5 秒出成品，口头禅删得没有 Gemini 干净。`gpt-audio-1.5` 有时把成品包成 `{"…"}` 的样子，不建议用 |
+
+每家的 key 各存一份，来回换不用重新填。换模型要重启后台，`speakmore model` 会替你重启。
 
 ### 主题
 
@@ -118,20 +141,20 @@ speakmore theme cinnabar      # 换一套，写中文名也行：speakmore theme
 | 看到的 | 怎么办 |
 | --- | --- |
 | 面板上 key 那一行写着“还没验证” | 启动时没连上 Gemini，存着的 key 先用着。连上网后再运行一次 `speakmore status` |
-| “还差：Gemini 验证” | Gemini 拒绝了请求，多半是模型名或思考档位不对，key 未必有问题。`speakmore config` 看一眼，`speakmore config unset model` 回到默认 |
+| “还差：Gemini 验证”（或 OpenAI 验证） | 那一家拒绝了请求，多半是模型名或思考档位不对，key 未必有问题。`speakmore model check` 看它怎么说，`speakmore config unset model` 回到默认 |
 | “还差：按键监听” | 听热键的小程序停了。`speakmore restart`，还不行就看 `speakmore logs` |
 | 命令说它“没有在 5 秒内回话” | 后台卡住了。`speakmore stop` 会强行结束它，再运行 `speakmore` |
 
 ## 都放在哪
 
-**发出去的只有录音**，直接发给 Google 的 Gemini 接口，用的是你自己的 key。没有别的服务器，没有统计上报，也不读屏幕和输入框里的内容。
+**发出去的只有录音**，直接发给你选的那一家（Google 的 Gemini 或 OpenAI）的接口，用的是你自己的 key。没有别的服务器，没有统计上报，也不读屏幕和输入框里的内容。
 
 留在本机的全在 `~/.speakmore/` 这一个目录里，只有你自己进得去：
 
 | 里面的东西 | 说明 |
 | --- | --- |
 | `settings.json` | 上面那几项设置 |
-| `gemini-key.bin` | 加密后的 key。解密用的密钥在系统钥匙串的“SpeakMore Safe Storage”里，文件被拷走也解不开 |
+| `gemini-key.bin`、`openai-key.bin` | 加密后的 key，每家一个。解密用的密钥在系统钥匙串的“SpeakMore Safe Storage”里，文件被拷走也解不开 |
 | `data/history.db`、`data/Recordings/` | 说过的话和录音。失败的听写也存录音，话不会白说 |
 | `logs/main.log` | 日志，一行一条 JSON。只记长度和耗时，不记说的话，也不记 key |
 | `run/`、`cache/` | 运行时产生的：命令和后台之间的通道、进程号、运行环境自己的缓存。删了会自己再建 |
@@ -151,7 +174,7 @@ speakmore theme cinnabar      # 换一套，写中文名也行：speakmore theme
 
 先对 Typeless 的 macOS 客户端做了一遍逆向：拆安装包、读还原出来的代码、看本机数据、抓自己账号的流量，弄清楚它为什么快、发了什么出去、文字是怎么贴进输入框的。结论写成了 [targets/typeless/docs/](targets/typeless/docs/00-overview.md) 下的文档，出处记在[证据台账](targets/typeless/docs/90-evidence-ledger.md)里。
 
-然后照着文档里的协议和交互重新写了一个，只保留语音转写：服务端换成自己的（一次 Gemini 调用完成识别和整理），不采集屏幕和输入框内容，不需要账号。仓库里不含 Typeless 的代码和密钥。
+然后照着文档里的协议和交互重新写了一个，只保留语音转写：服务端换成自己的（一次模型调用完成识别和整理，默认 Gemini，也可以换 OpenAI），不采集屏幕和输入框内容，不需要账号。仓库里不含 Typeless 的代码和密钥。
 
 ## 现在的不足
 
@@ -159,6 +182,7 @@ speakmore theme cinnabar      # 换一套，写中文名也行：speakmore theme
 
 - **专有名词和人名会听错。** Typeless 会把当前应用和屏幕上的文字一起上传当上下文，这里只有录音，也还没有个人词典。
 - **列表用得比它少**，口吃偶尔删不干净（约每 60 条 1 条）。
+- **换成 OpenAI 时整理得比 Gemini 粗。** 提示词是对着 Gemini 调的，还没拿真实录音对 OpenAI 调过。
 - **话说到一半就按停，模型可能自己把后半句补上。** 实测过一次：录音在“大家记得”处被截断，成品里多出了没说过的“准时参加”；同一段话录完整时成品是对的。还没有针对它调提示词。
 - 只有听写，没有翻译和“问任何事”。
 
@@ -180,7 +204,7 @@ git clone https://github.com/zephyr4123/speakmore.git
 cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
-npm run check                 # 代码检查 + 全部测试（315 条，不联网、不开窗口）
+npm run check                 # 代码检查 + 全部测试（390 条，不联网、不开窗口）
 npm run release               # 打发布包：dist/release/ 下两种芯片各一个，外加 install.sh，摆成下载地址上的样子
 ```
 
@@ -188,14 +212,17 @@ npm run release               # 打发布包：dist/release/ 下两种芯片各�
 
 从源码跑的和装好的用的是同一个 `~/.speakmore`，想分开就设 `SPEAKMORE_HOME`。
 
-要真调 Gemini 的命令需要环境里有 `GEMINI_API_KEY`。`scripts/dev/with-gemini-key.sh` 可以按你自己机器上的配置把它只喂给一条命令，见 `.machine.env.example`：
+要真调模型的命令需要环境里有那一家的 key（`GEMINI_API_KEY`、`OPENAI_API_KEY`）。`scripts/dev/with-key.sh <厂商>` 可以按你自己机器上的配置把它只喂给一条命令，见 `.machine.env.example`。用哪家哪个模型由 `SPEAKMORE_MODEL` 定，默认 Gemini：
 
 ```bash
-scripts/dev/with-gemini-key.sh node scripts/dev/e2e.mjs 一段录音.wav   # 端到端：真的 Electron、录音编码、Gemini；麦克风和贴字是假的
-scripts/dev/with-gemini-key.sh node scripts/dev/eval-prompt.mjs --label v1   # 拿自己 Typeless 的历史录音评估提示词
-scripts/dev/with-gemini-key.sh node src/server/main.mjs           # 单独启动听写服务，配合 SPEAKMORE_SERVER_URL 调试
-node scripts/dev/replay.mjs 块1.ogg 块2.ogg                           # 把现成的录音发给单独启动的服务
+scripts/dev/with-key.sh gemini node scripts/dev/e2e.mjs 一段录音.wav   # 端到端：真的 Electron、录音编码、模型；麦克风和贴字是假的
+SPEAKMORE_MODEL=openai scripts/dev/with-key.sh openai node scripts/dev/e2e.mjs 一段录音.wav   # 同上，换成 OpenAI
+scripts/dev/with-key.sh gemini node scripts/dev/eval-prompt.mjs --label v1   # 拿自己 Typeless 的历史录音评估提示词
+scripts/dev/with-key.sh gemini node src/server/main.mjs           # 单独启动听写服务，配合 SPEAKMORE_SERVER_URL 调试
+node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现成的录音发给单独启动的服务
 ```
+
+加一家模型：在 `src/server/providers/` 下写一个适配器（请求怎么拼、收哪些录音格式、报错怎么认），在同目录的 `index.mjs` 里登记一行。整理流程（提示词、收尾、重试、转格式）各家共用，在 `src/server/refine/`。
 
 不发布也可以试安装脚本：`SPEAKMORE_INSTALL_BASE=$PWD/dist/release SPEAKMORE_HOME=/tmp/sm bash install.sh`，装进一个临时目录。
 
@@ -206,7 +233,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                           # 把现
 | `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、设置和历史窗口；`keys/` 是 key 的保存和启用 |
 | `src/renderer/`、`src/preload/` | 各个窗口的页面，一个窗口一个目录：`bar/`（悬浮条：状态机、录音、听写协议的客户端、画面）、`history/`、`settings/`，共用的样式在 `shared/` |
 | `src/themes/` | 主题：界面要哪些颜色（一组 token）、每套主题给的值、合不合格怎么查。加一套主题是加一个文件、登记一行 |
-| `src/server/` | 听写服务：`protocol/` 收分块音频，`refine/` 交给模型整理。平时跑在后台应用的进程里 |
+| `src/server/` | 听写服务：`protocol/` 收分块音频，`refine/` 交给模型整理（各家共用的流程），`providers/` 每家模型一个适配器，`audio/` 把录音转成别家收的格式。平时跑在后台应用的进程里 |
 | `native/` | 听热键、贴字、说话时截住 `esc` 和悬浮条上点击的小程序（Swift） |
 | `src/storage/` | `~/.speakmore` 里的东西：放在哪、设置、历史库、旧数据的迁移。命令和后台应用共用 |
 | `src/control.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道、日志 |
@@ -234,7 +261,7 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 
 ### 验证到哪一步
 
-- 自动测试 315 条，在 Node 26.0 上全过；Node 22.13、24.21 上跑过其中 269 条（后加的 46 条没在这两个版本上重跑）。其中 17 条是拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
+- 自动测试 390 条，在 Node 26.0 上全过；Node 24.21（CI 用的版本）上跑过其中 373 条单测，全过；Node 22.13 上跑过的是更早的 269 条（之后加的没在 22 上重跑）。其中 17 条是拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
 - 用真的发布包走过一遍，装在临时目录里，`PATH` 里没有 Node：
   - 安装脚本从管道读入，装完直接启动并问 key，输入不显示。
   - 启动、状态、设置、重启、停止；合成的语音经过录音编码、Gemini、存历史，成品正确。
@@ -251,6 +278,11 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
   - 合成的语音经过新的悬浮条、录音编码、Gemini、存历史，成品正确。
   - 按着真键盘、对着真麦克风、用真鼠标试过一轮：说了三段都贴进了输入框，点 ✓ 完成、点 ✕ 取消各一次都截到了，日志里没有警告和错误。声波的高度是照这三段录音的音量标定的（原来的算法下竖条大多只有两三成高）。
   - 真键盘按 `esc` 取消也试过：截到了，这一次没有进历史，取消之后监听是关着的。
+- 换模型（从源码跑的，发布包里还没试过）：
+  - 合成的语音经过悬浮条、录音编码、模型、存历史，Gemini 和 OpenAI 各走通一遍；OpenAI 那一遍录音在本机从 WebM 转成 WAV 用了 56 毫秒。
+  - 在临时目录里用真的后台和真的 key 走过一遍命令：列模型、查 Gemini、查没有 key 的 OpenAI、从管道给 OpenAI 存 key、查两个 OpenAI 模型（一个能用、一个不存在）、换到 OpenAI 并重启、看状态、没有 Gemini 的 key 时换回去被拦下、删 key。
+  - 设置窗口里 key 那一块的说法，用真页面离屏截图核对过两家。
+  - 换成策略之后，Gemini 拿同一批 60 条真实录音回归过，和之前两次的数字在同一个波动范围里（见[实现笔记](docs/implementation-notes.md#不止一家模型)）。
 - 只有自动测试、没在真机上试的：启动时断网、从 0.1 版搬数据、重新检查权限时不再反复弹系统授权框。
 
 ## 许可

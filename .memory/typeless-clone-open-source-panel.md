@@ -24,7 +24,7 @@ Typeless 的仿刻定名 **SpeakMore**，代码就在仓库根（一个 npm 包�
 **How to apply:**
 
 - 评判每个决定时问"一个刚拿到仓库的人，要几步才能说出第一句话"。安装步骤、报错、README 都按这个人写；自己照陌生人的路径真跑一遍（打成包装到别处、在伪终端里走第一次使用），2026-10-13 这样跑出了三个单看代码发现不了的问题。
-- 一切落在 `~/.speakmore/` 一个目录里（程序 `bin/ app/ runtime/`，用户的东西 `settings.json gemini-key.bin data/`，运行时的 `logs/ run/ cache/`），布局定在 `src/storage/paths.mjs`。新加任何会落盘的东西都放进这里；非放在目录以外不可的（命令链接、钥匙串条目），要让 `speakmore uninstall` 删得掉，删不掉的要在卸载时照实列出来。往 `~/Library`、全局 npm、shell 配置文件里写东西都算走偏。
+- 一切落在 `~/.speakmore/` 一个目录里（程序 `bin/ app/ runtime/`，用户的东西 `settings.json <厂商>-key.bin data/`，运行时的 `logs/ run/ cache/`），布局定在 `src/storage/paths.mjs`。新加任何会落盘的东西都放进这里；非放在目录以外不可的（命令链接、钥匙串条目），要让 `speakmore uninstall` 删得掉，删不掉的要在卸载时照实列出来。往 `~/Library`、全局 npm、shell 配置文件里写东西都算走偏。
 - 给用户的安装方式是 `curl … install.sh | bash`：预检查 → 下载校验 → 装好 → 直接启动。不要求用户有 Node、npm、Xcode（包里自带 Electron，命令行也拿它当 Node 跑）。让用户自己敲 `npm install`/`npm link` 的步骤只留给"从源码开发"那一节。发 npm 这条路因此不再走（我的判断：它会把程序装到 `.speakmore` 以外；他没有单独说过"不发 npm"）。
 - 入口是 `speakmore` 命令。新功能先想它在命令行里是什么样；不要往 Electron 的窗口里加新界面，那部分等 Tauri。现有的悬浮条、菜单栏、设置窗口保留，打成 .app 的脚本也还在，但都不是主路径。
 - 范围仍受 [[typeless-clone-scope-dictation]] 约束，只做语音转写。原版主窗口的三张截图（首页的统计、历史、词典）存在 `targets/typeless/_work/ui-reference/`，不进 git；词典还没做，它对应现在和原版差得最多的地方（专有名词听错），做之前问一句。
