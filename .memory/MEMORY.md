@@ -19,3 +19,4 @@
 - [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship），GitHub 不再发；发过的版本不覆盖；证书 2027-01-12 到期要续
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
+- [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、改完就收，不再派第二轮，除非他点名
