@@ -56,7 +56,7 @@ export function renderUsage(report, { color }) {
         waiting(it.latency),
       ]),
     ],
-    ["left", "left", "right", "right", "left"],
+    ["left", "right", "right", "right", "left"],
   );
   const models = columns(
     report.models.map((it) => [
@@ -66,7 +66,7 @@ export function renderUsage(report, { color }) {
       `${it.dictations} 次`,
       it.latency ? `一般 ${formatSeconds(it.latency.medianMs)}` : "",
     ]),
-    ["left", "left", "right", "right", "left"],
+    ["left", "right", "right", "right", "left"],
   );
 
   const notes = [

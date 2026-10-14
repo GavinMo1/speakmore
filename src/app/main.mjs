@@ -24,6 +24,7 @@ import { HOTKEY_KEYCAPS, HOTKEYS, overridingEnv, resolveSettings, saveSetting } 
 import { toHex } from "../themes/color.mjs";
 import { themeCss } from "../themes/contract.mjs";
 import { findTheme } from "../themes/index.mjs";
+import { usageReport } from "../usage/report.mjs";
 import { createDelivery } from "./delivery.mjs";
 import { startHelper } from "./helper.mjs";
 import { createKeyManager } from "./keys/key-manager.mjs";
@@ -120,10 +121,19 @@ async function main() {
       createKeyStore({ file: keyFile(PATHS, id, { packaged: app.isPackaged }), safeStorage }),
     ]),
   );
-  // 档位按设置原样给：正在用的那家用不上，但拿 Gemini 的 key 去检查、给 Gemini 存 key 时要用它
+  // 档位按设置原样给：正在用的那家用不上，但拿 Gemini 的 key 去检查、给 Gemini 存 key 时要用它。
+  // 每次调模型记一笔账，开着的历史窗口跟着更新花费（记账出错由整理流程写日志，不连累听写）
   const service = EXTERNAL_SERVER_URL
     ? null
-    : await startService({ log, model: MODEL, thinkingLevel: SETTINGS.thinking.value });
+    : await startService({
+        log,
+        model: MODEL,
+        thinkingLevel: SETTINGS.thinking.value,
+        onModelCall: (call) => {
+          history.addCall(call);
+          historyChanged();
+        },
+      });
   const serverUrl = EXTERNAL_SERVER_URL ?? service.url;
   const e2e = process.env.SPEAKMORE_E2E_OUT ? await import("./e2e.mjs") : null;
 
@@ -371,7 +381,9 @@ async function main() {
     writeClipboard: (text) => clipboard.writeText(text),
     log,
   });
-  const historyChanged = () => historyWindow?.webContents.send("history:changed");
+  function historyChanged() {
+    historyWindow?.webContents.send("history:changed");
+  }
 
   ipcMain.handle("config:get", () => ({ serverUrl, hotkeyKeycap: HOTKEY_KEYCAPS[HOTKEY], barControls }));
   ipcMain.handle("dictation:deliver", async (_event, payload) => {
@@ -389,6 +401,7 @@ async function main() {
     e2e?.onFinished({ failed: payload.error });
   });
   ipcMain.handle("history:list", () => history.list());
+  ipcMain.handle("usage:report", () => usageReport(history, { now: new Date() }));
   ipcMain.handle("history:show", () => showHistory());
   ipcMain.handle("clipboard:write", (_event, text) => {
     if (typeof text !== "string") throw new TypeError("要复制的不是文字");

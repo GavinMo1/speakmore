@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld("speakmore", {
 
   // 历史窗口
   listHistory: () => ipcRenderer.invoke("history:list"),
+  usageReport: () => ipcRenderer.invoke("usage:report"),
   copyText: (text) => ipcRenderer.invoke("clipboard:write", text),
   onHistoryChanged: (callback) => ipcRenderer.on("history:changed", () => callback()),
 

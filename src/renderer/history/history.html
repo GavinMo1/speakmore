@@ -15,6 +15,22 @@
       <p id="summary" class="summary"></p>
     </header>
     <main>
+      <section id="usage" class="usage" aria-labelledby="usage-title" hidden>
+        <h2 id="usage-title" class="visually-hidden">用量</h2>
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <td></td>
+              <th scope="col">花费</th>
+              <th scope="col">token</th>
+              <th scope="col">听写</th>
+              <th scope="col">模型回话</th>
+            </tr>
+          </thead>
+          <tbody id="usage-rows"></tbody>
+        </table>
+        <p id="usage-note" class="usage-note"></p>
+      </section>
       <p id="empty" class="empty" hidden>还没有记录。按一下热键开始说话，再按一下结束。</p>
       <p id="load-error" class="empty problem" hidden></p>
       <ol id="list" class="list"></ol>
@@ -24,6 +40,7 @@
         <div class="meta">
           <time></time>
           <span class="duration"></span>
+          <span class="spent" hidden></span>
           <span class="failed" hidden>失败</span>
           <button type="button" class="button copy">复制</button>
         </div>

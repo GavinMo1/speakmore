@@ -18,11 +18,17 @@
 
 .meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.1rem 0.75rem;
   font-size: var(--text-small);
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
+}
+
+/* 窗口窄的时候整项换行，不把"录音 3 秒"拆成两行 */
+.meta > * {
+  white-space: nowrap;
 }
 
 .failed {
@@ -47,4 +53,60 @@
 
 .is-silent .text {
   color: var(--ink-2);
+}
+
+/* ---------- 用量：今天、本月、累计花了多少，和命令行 speakmore usage 是同一张表 ---------- */
+
+.usage {
+  padding: 0.35rem 0 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.usage-table {
+  border-collapse: collapse;
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-table th,
+.usage-table td {
+  padding: 0.2rem 0 0.2rem 1.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.usage-table :is(th, td):first-child {
+  padding-left: 0;
+  text-align: left;
+}
+
+.usage-table thead th {
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.usage-table tbody th {
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+/* 累计那一行是最常看的：钱加粗一点 */
+.usage-table tbody tr:last-child .cost {
+  font-weight: 600;
+}
+
+.usage-note {
+  margin: 0.35rem 0 0;
+  max-width: 36rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
