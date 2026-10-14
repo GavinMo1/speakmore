@@ -102,6 +102,42 @@ test("出错：录音阶段要收掉麦克风，等成品阶段不用；之后�
   assert.equal(retry.state.message, null);
 });
 
+test("录音中取消（点 ✕ 或按 esc）：丢掉这次录音回到空闲，不提示；麦克风还没就绪时也能取消", () => {
+  const recording = run("KEY_DOWN", "MIC_READY", "KEY_UP", "USER_CANCEL");
+  assert.deepEqual(recording.state, initialState);
+  assert.deepEqual(recording.steps.at(-1), [Action.CANCEL, Action.CLEAR_HOLD_TIMER]);
+
+  const starting = run("KEY_DOWN", "USER_CANCEL");
+  assert.deepEqual(starting.state, initialState);
+  assert.deepEqual(starting.steps.at(-1), [Action.CANCEL, Action.CLEAR_HOLD_TIMER]);
+  // 取消之后才松开热键，不能再触发任何事
+  assert.deepEqual(transition(starting.state, { type: "KEY_UP" }), { state: starting.state, actions: [] });
+});
+
+test("取消只在说话的时候管用：等成品时取消不了，空闲和出错之后按了也没事", () => {
+  const finishing = run("KEY_DOWN", "MIC_READY", "KEY_UP", "KEY_DOWN", "USER_CANCEL");
+  assert.equal(finishing.state.phase, Phase.FINISHING);
+  assert.deepEqual(finishing.steps.at(-1), []);
+  assert.deepEqual(run("USER_CANCEL").state, initialState);
+  const failed = run("KEY_DOWN", { type: "FAILED", message: "麦克风打不开" }, "USER_CANCEL");
+  assert.equal(failed.state.phase, Phase.ERROR);
+  assert.deepEqual(failed.steps.at(-1), []);
+});
+
+test("点完成等于再按一下热键：结束录音、要成品；麦克风没就绪或已经在等成品时点了不算", () => {
+  const { state, steps } = run("KEY_DOWN", "MIC_READY", "KEY_UP", "USER_CONFIRM");
+  assert.deepEqual(state, { phase: Phase.FINISHING, held: false, message: null });
+  assert.deepEqual(steps.at(-1), [Action.STOP]);
+
+  const starting = run("KEY_DOWN", "KEY_UP", "USER_CONFIRM");
+  assert.equal(starting.state.phase, Phase.STARTING);
+  assert.deepEqual(starting.steps.at(-1), []);
+  const twice = run("KEY_DOWN", "MIC_READY", "KEY_UP", "USER_CONFIRM", "USER_CONFIRM");
+  assert.equal(twice.state.phase, Phase.FINISHING);
+  assert.deepEqual(twice.steps.at(-1), []);
+  assert.deepEqual(run("USER_CONFIRM").state, initialState);
+});
+
 test("空闲时来的成品和报错都忽略；不认识的事件直接报错", () => {
   assert.deepEqual(run("RESULT").state, initialState);
   assert.deepEqual(run({ type: "FAILED", message: "x" }).state, initialState);

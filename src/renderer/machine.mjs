@@ -1,6 +1,7 @@
 // 听写的状态机，纯函数：给当前状态和一个事件，得到新状态和要执行的动作。
 // 照原版 2.8.1 的单击流程做（docs/10-interaction-state-machine.md）：
 // 按一下热键开始，再按一下结束；按住超过 600 ms 取消（这一版不支持按住说话）。
+// 说话的时候可以取消（按 esc 或点悬浮条上的 ✕），点 ✓ 等于再按一下热键。
 // 原版的热键是 fn，这里是哪个键由主进程决定，状态机不关心。
 
 export const LONG_PRESS_MS = 600;
@@ -61,6 +62,15 @@ export function transition(state, event) {
     case "LONG_HOLD":
       if (!held) return unchanged(state);
       return { state: idle("不支持按住说话：按一下开始，再按一下结束"), actions: [Action.CANCEL] };
+
+    case "USER_CANCEL":
+      // 用户不要这一次了。等成品时已经取消不了：录音已经交出去了
+      if (phase !== Phase.STARTING && phase !== Phase.RECORDING) return unchanged(state);
+      return { state: idle(), actions: [Action.CANCEL, Action.CLEAR_HOLD_TIMER] };
+
+    case "USER_CONFIRM":
+      if (phase !== Phase.RECORDING) return unchanged(state);
+      return { state: { phase: Phase.FINISHING, held: false, message: null }, actions: [Action.STOP] };
 
     case "MIC_READY":
       return phase === Phase.STARTING ? unchanged({ ...state, phase: Phase.RECORDING }) : unchanged(state);
