@@ -1,7 +1,7 @@
 #!/bin/bash
 # SpeakMore 的安装脚本：检查环境、下载、校验、装进 ~/.speakmore，然后启动。
 #
-#   curl -fsSL https://github.com/zephyr4123/speakmore/releases/latest/download/install.sh | bash
+#   curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 #
 # 所有东西都装在 ~/.speakmore 这一个目录里（程序、运行环境，以及之后的设置、key、历史和录音），
 # 目录以外只建一个指向命令的链接。不需要 Node、npm、Xcode，也不需要 sudo。
@@ -10,7 +10,7 @@
 # 可以用环境变量调整：
 #   SPEAKMORE_HOME          装到哪（默认 ~/.speakmore）
 #   SPEAKMORE_VERSION       装哪个版本，比如 v0.2.0（默认最新的）
-#   SPEAKMORE_INSTALL_BASE  从哪下载：一个网址前缀，或者本机的一个目录（放着发布包的）
+#   SPEAKMORE_INSTALL_BASE  从哪下载：一个网址前缀，或者本机的一个目录（npm run release 打出来的 dist/release）
 #   SPEAKMORE_BIN_DIR       命令的链接建在哪个目录（默认 ~/.local/bin）
 # 加 --no-start 只装不启动：curl … | bash -s -- --no-start
 #
@@ -20,6 +20,9 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/zephyr4123/speakmore"
+# 发布包放在这里。根上是这个脚本和 latest（一行，最新的版本号），每个版本的包在各自的目录里：
+# <版本号>/speakmore-darwin-<芯片>.tar.gz 和同名的 .sha256
+DOWNLOAD_URL="https://dl.zephyrxiang.com/speakmore"
 GEMINI_HOST="generativelanguage.googleapis.com"
 MIN_MACOS_MAJOR=12
 # 下载的包约 120 MB，解开约 350 MB；升级时旧的要等新的放好才删
@@ -118,12 +121,30 @@ check_home() {
   fi
 }
 
+# 定下装哪个版本：指定了就用指定的，没指定就问下载地址最新的是哪个
+resolve_version() {
+  local version="${SPEAKMORE_VERSION:-}"
+  if [ -n "$version" ]; then
+    case "$version" in v*) ;; *) version="v$version" ;; esac
+  else
+    version="$(curl -fsSL --max-time 20 "$DOWNLOAD_BASE/latest" 2>/dev/null | head -n 1 | tr -d '[:space:]')" || version=""
+    [ -n "$version" ] || fail "问不到最新版本是哪个" "地址：$DOWNLOAD_BASE/latest" "检查网络，过一会儿再运行一次。"
+  fi
+  # 版本号要拼进下载地址：不像版本号的不往下走（比如问到的其实是一个报错的网页）
+  if ! [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.-]+)?$ ]]; then
+    [ -n "${SPEAKMORE_VERSION:-}" ] && fail "SPEAKMORE_VERSION 不像版本号：$SPEAKMORE_VERSION" "写成 v0.2.0 这样的。"
+    fail "下载地址给的最新版本号不对" "地址：$DOWNLOAD_BASE/latest" "过一会儿再运行一次；一直这样的话请到 $REPO_URL/issues 说一声。"
+  fi
+  BASE_URL="$DOWNLOAD_BASE/$version"
+}
+
 check_network() {
+  resolve_version
   # 顺带确认了这个版本、这种芯片的发布包确实存在
   curl -fsSL --max-time 20 -o /dev/null "$BASE_URL/$ARCHIVE.sha256" 2>/dev/null ||
     fail "下载不到发布包" \
       "地址：$BASE_URL/$ARCHIVE" \
-      "检查网络。访问 GitHub 要走代理的话，终端里也要设上，比如：export https_proxy=http://127.0.0.1:7890"
+      "检查网络。指定了 SPEAKMORE_VERSION 的话，确认有这个版本。"
   ok "下载地址连得上"
 
   # 装得上不等于用得了：整理文字要连 Gemini。连不上只提醒，不拦着
@@ -266,15 +287,9 @@ main() {
   done
 
   HOME_DIR="${SPEAKMORE_HOME:-$HOME/.speakmore}"
-  if [ -n "${SPEAKMORE_INSTALL_BASE:-}" ]; then
-    BASE_URL="$SPEAKMORE_INSTALL_BASE"
-    # 本机的一个目录也可以当下载地址
-    case "$BASE_URL" in /*) BASE_URL="file://$BASE_URL" ;; esac
-  elif [ -n "${SPEAKMORE_VERSION:-}" ]; then
-    BASE_URL="$REPO_URL/releases/download/$SPEAKMORE_VERSION"
-  else
-    BASE_URL="$REPO_URL/releases/latest/download"
-  fi
+  DOWNLOAD_BASE="${SPEAKMORE_INSTALL_BASE:-$DOWNLOAD_URL}"
+  # 本机的一个目录也可以当下载地址
+  case "$DOWNLOAD_BASE" in /*) DOWNLOAD_BASE="file://$DOWNLOAD_BASE" ;; esac
 
   printf '\n  %sSpeakMore 安装%s\n' "$BOLD" "$RESET"
   trap cleanup EXIT

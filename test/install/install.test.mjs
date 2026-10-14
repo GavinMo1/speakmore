@@ -63,10 +63,13 @@ function makeArchive(arch, version = "9.9.9") {
   mkdirSync(join(staging, "app", "bin"), { recursive: true });
   writeFileSync(join(staging, "app", "bin", "speakmore.mjs"), "// 假的\n");
   writeFileSync(join(staging, "app", "package.json"), `{\n  "name": "speakmore",\n  "version": "${version}"\n}\n`);
-  const archive = join(release, `speakmore-darwin-${arch}.tar.gz`);
+  // 和真的下载地址一个样子：每个版本的包在各自的目录里，根上的 latest 记着最新的是哪个
+  mkdirSync(join(release, `v${version}`), { recursive: true });
+  const archive = join(release, `v${version}`, `speakmore-darwin-${arch}.tar.gz`);
   execFileSync("tar", ["-czf", archive, "-C", staging, "app", "runtime"]);
   const digest = createHash("sha256").update(readFileSync(archive)).digest("hex");
   writeFileSync(`${archive}.sha256`, `${digest}  speakmore-darwin-${arch}.tar.gz\n`);
+  writeFileSync(join(release, "latest"), `v${version}\n`);
   rmSync(staging, { recursive: true });
 }
 
@@ -217,6 +220,28 @@ test("Intel 芯片下的是 x64 的包；这个版本没有那种包时在下载
   assert.equal(install({ env: { FAKE_ARCH: "x86_64" } }).code, 0);
 });
 
+test("默认装下载地址上标着最新的那个版本；SPEAKMORE_VERSION 可以指定另一个，带不带 v 都行", () => {
+  makeArchive("arm64", "10.0.0");
+  assert.equal(install().code, 0);
+  assert.equal(installedVersion(), "10.0.0");
+
+  assert.equal(install({ env: { SPEAKMORE_VERSION: "v9.9.9" } }).code, 0);
+  assert.equal(installedVersion(), "9.9.9");
+  assert.equal(install({ env: { SPEAKMORE_VERSION: "10.0.0" } }).code, 0);
+  assert.equal(installedVersion(), "10.0.0");
+});
+
+test("问不到最新版本、问到的不像版本号、指定的版本不存在：都在下载之前说清楚，不装", () => {
+  writeFileSync(join(release, "latest"), "<html>出错了</html>\n");
+  assertRefused(install(), /下载地址给的最新版本号不对/);
+
+  rmSync(join(release, "latest"));
+  assertRefused(install(), /问不到最新版本/);
+
+  assertRefused(install({ env: { SPEAKMORE_VERSION: "v1.2.3" } }), /下载不到发布包[\s\S]*v1\.2\.3/);
+  assertRefused(install({ env: { SPEAKMORE_VERSION: "../../etc" } }), /SPEAKMORE_VERSION 不像版本号/);
+});
+
 test("连不上 Gemini 只提醒，不拦着安装", () => {
   const { code, out } = install({ env: { FAKE_GEMINI_EXIT: "7" } });
   assert.equal(code, 0);
@@ -227,7 +252,7 @@ test("连不上 Gemini 只提醒，不拦着安装", () => {
 test("下到的包和发布时的不一样（校验不过）：不装，已经装着的那一份不动", () => {
   assert.equal(install().code, 0);
   makeArchive("arm64", "10.0.0");
-  writeFileSync(join(release, "speakmore-darwin-arm64.tar.gz.sha256"), `${"0".repeat(64)}  x\n`);
+  writeFileSync(join(release, "v10.0.0", "speakmore-darwin-arm64.tar.gz.sha256"), `${"0".repeat(64)}  x\n`);
   assertRefused(install(), /校验没通过/);
   assert.equal(installedVersion(), "9.9.9");
   assert.deepEqual(readdirSync(home()).sort(), ["app", "bin", "runtime"]);
