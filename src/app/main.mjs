@@ -316,7 +316,8 @@ async function main() {
       case "escape":
       case "click":
         // 只在听写进行中才会有：那时页面让小帮手把它们截下来了
-        log.info("bar_input", { event: event.event, id: event.id });
+        // 字段不能叫 event：日志这一条的名字就记在 event 里，会被盖掉
+        log.info("bar_input", { input: event.event, id: event.id });
         tellBar("input", event);
         break;
       case "exit":
