@@ -65,6 +65,16 @@ child.on("exit", (code) => {
     } else {
       console.log(`录音 ${row.duration.toFixed(1)} 秒，文件 ${statSync(row.audioLocalPath).size} 字节`);
     }
+    // 记账：这一次听写调模型的账对得上这条历史
+    const { usage } = row ?? {};
+    if (!usage || usage.calls < 1 || !(usage.inputTokens > 0) || !(usage.latencyMs > 0)) {
+      problems.push(`这条历史没有对上账：${JSON.stringify(usage)}`);
+    } else {
+      const cost = usage.costUsd === null ? "价格不明" : `$${usage.costUsd.toPrecision(2)}`;
+      console.log(
+        `调了 ${usage.calls} 次模型：输入 ${usage.inputTokens} token、输出 ${usage.outputTokens} token，${cost}，模型 ${usage.latencyMs} 毫秒`,
+      );
+    }
   }
   if (result?.delivered) console.log(`成品：${result.delivered}`);
   rmSync(workDir, { recursive: true, force: true });
@@ -72,5 +82,5 @@ child.on("exit", (code) => {
     for (const problem of problems) console.error(`✖ ${problem}`);
     process.exit(1);
   }
-  console.log("✔ 录音、分块上传、整理、贴字、存历史都走通了");
+  console.log("✔ 录音、分块上传、整理、贴字、存历史、记账都走通了");
 });
