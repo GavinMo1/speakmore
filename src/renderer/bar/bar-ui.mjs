@@ -1,8 +1,9 @@
-// 悬浮条的画面：告诉它现在该是什么样子，它把样子画出来、让条出现和消失、把音量画成向左流的声波。
+// 悬浮条的画面：告诉它现在该是什么样子，它把样子画出来、让条出现和消失、把音量画成声波。
 // 该是什么样子由 bar-view.mjs 算，这里只管画。它不知道录音和网络的事，也不直接找主进程：
 // 要宿主代办的两件事由调用方给。以后换一个壳时，这个文件和 bar.css 不用动，换掉那两个函数就行。
 
-import { barHeight, controlsIn, hintFor, LINGER_MS, View, WAVE_BARS } from "./bar-view.mjs";
+import { controlsIn, hintFor, LINGER_MS, View } from "./bar-view.mjs";
+import { createWave, REST, WAVE_BARS } from "./wave.mjs";
 
 /** 整理中那道波有几根竖条 */
 const THINK_BARS = 11;
@@ -10,8 +11,8 @@ const THINK_BARS = 11;
 const FADE_OUT_MS = 200;
 /** 按钮点得到的范围比看到的圆大一圈，正好撑满条的高度 */
 const HIT_SLOP = 6;
-/** 系统开了"减弱动态效果"时，声波每几次音量才动一下 */
-const REDUCED_MOTION_STRIDE = 4;
+/** 系统开了"减弱动态效果"时，声波隔这么久才画一次 */
+const REDUCED_MOTION_MS = 200;
 
 /**
  * @param {object} options
@@ -27,7 +28,8 @@ export function createBarUi({ document, host, keycap }) {
   const hint = document.getElementById("hint");
   const message = document.getElementById("message");
   const buttons = { cancel: document.getElementById("cancel"), confirm: document.getElementById("confirm") };
-  const reducedMotion = document.defaultView.matchMedia("(prefers-reduced-motion: reduce)");
+  const window = document.defaultView;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   const makeBars = (id, count) => {
     const bars = Array.from({ length: count }, () => document.createElement("i"));
@@ -42,16 +44,42 @@ export function createBarUi({ document, host, keycap }) {
   let view = View.HIDDEN;
   /** 两个按钮点不点得动 */
   let controls = false;
-  /** 最近的音量，旧的在前。每来一个新的，最旧的那个出去 */
-  let levels = Array(WAVE_BARS).fill(0);
-  let samples = 0;
+  const wave = createWave({ bars: WAVE_BARS });
+  /** 正在听时每帧画一次声波；不在听是 null */
+  let waveFrame = null;
+  /** 上一次画声波的时间 */
+  let drawnAt = -Infinity;
   /** 让宿主截着的那几块，写成一行文字方便比较；没在截是 null */
   let captured = null;
   /** 到时间把条收起来的定时器 */
   let hideTimer = null;
 
-  function drawWave() {
-    for (const [index, bar] of waveBars.entries()) bar.style.setProperty("--h", barHeight(levels[index]).toFixed(3));
+  function drawWave(heights) {
+    for (const [index, bar] of waveBars.entries()) bar.style.setProperty("--h", heights[index].toFixed(3));
+  }
+
+  function animateWave(now) {
+    const heights = wave.frame(now);
+    // 减弱动态效果时声波还是要动（它在告诉人"听到你了"），只是画得慢
+    if (!reducedMotion.matches || now - drawnAt >= REDUCED_MOTION_MS) {
+      drawWave(heights);
+      drawnAt = now;
+    }
+    waveFrame = window.requestAnimationFrame(animateWave);
+  }
+
+  /** 进了"正在听"从伏着开始一帧一帧画；出来就停下、全部伏着。收起来的时候只停下，照着停下时的样子淡出去 */
+  function syncWave() {
+    if (view === View.RECORDING) {
+      if (waveFrame === null) {
+        wave.reset();
+        waveFrame = window.requestAnimationFrame(animateWave);
+      }
+      return;
+    }
+    if (waveFrame !== null) window.cancelAnimationFrame(waveFrame);
+    waveFrame = null;
+    if (view !== View.HIDDEN) drawWave(Array(WAVE_BARS).fill(REST));
   }
 
   function drawHint() {
@@ -88,6 +116,7 @@ export function createBarUi({ document, host, keycap }) {
   function hide() {
     view = View.HIDDEN;
     syncCapture();
+    syncWave();
     // 样子先不换：照着现在的样子淡出去，淡完再把窗口收起来
     body.dataset.shown = "false";
     hideTimer = setTimeout(() => {
@@ -114,10 +143,7 @@ export function createBarUi({ document, host, keycap }) {
       body.dataset.view = next;
       message.textContent = text ?? "";
       drawHint();
-      if (next !== View.RECORDING) {
-        levels = Array(WAVE_BARS).fill(0);
-        drawWave();
-      }
+      syncWave();
       if (body.dataset.shown !== "true") {
         host.setVisible(true);
         body.dataset.shown = "true";
@@ -130,11 +156,7 @@ export function createBarUi({ document, host, keycap }) {
     /** 正在听时的一个瞬时音量（0–1） */
     level(value) {
       if (view !== View.RECORDING) return;
-      levels.push(value);
-      levels.shift();
-      // 减弱动态效果时声波还是要动（它在告诉人"听到你了"），只是动得慢
-      if (reducedMotion.matches && ++samples % REDUCED_MOTION_STRIDE !== 0) return;
-      drawWave();
+      wave.hear(value, window.performance.now());
     },
 
     /** 两个按钮点不点得动、esc 截不截得住（要辅助功能权限）。点不动时不画按钮，提示里也不提 esc */

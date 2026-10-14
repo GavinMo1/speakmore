@@ -68,33 +68,3 @@ export function controlsIn(view) {
   if (view === View.RECORDING) return ["cancel", "confirm"];
   return [];
 }
-
-/** 声波里一共多少根竖条。每 50 ms 进一根新的，所以这也是它记得多久的声音 */
-export const WAVE_BARS = 16;
-
-/** 低于这个就当没声音：页面拿到的波形是 8 位的，这是它分辨得出的最小一格 */
-const QUIET = 1 / 128;
-/**
- * 到这个音量就画满。按真实录音定的（三段共 35 秒，每 50 ms 一个音量）：
- * 中位数 0.023，九成的时候不超过 0.094，最响到过 0.2。
- */
-const LOUD = 0.19;
-/**
- * 对数之后再拉开一点：只用对数时说话的竖条都在六七成上下，字和字之间差得少，看着平。
- * 拿一段真实录音连同 50 ms 的过渡模拟过：说话时竖条九成和一成的高度差从 0.44 到 0.71，
- * 每 50 ms 平均变化从 0.10 到 0.17，说话时的中位高度没怎么变（0.73 到 0.72）。
- */
-const CONTRAST = 1.5;
-
-/**
- * 一个瞬时音量画成多高的竖条。
- * @param {number} level 0–1
- * @returns {number} 0.1–1，占声波区域高度的比例
- */
-export function barHeight(level) {
-  if (level <= QUIET) return 0.1;
-  // 按"比最小的声音响多少倍"来画（对数），不按音量本身：说话的音量挤在很低的一段，
-  // 直接画的话竖条大部分时候只有两三成高，看不出在跟着声音动（开方也不够，试过）
-  const loudness = Math.log(level / QUIET) / Math.log(LOUD / QUIET);
-  return 0.1 + Math.min(1, loudness) ** CONTRAST * 0.9;
-}

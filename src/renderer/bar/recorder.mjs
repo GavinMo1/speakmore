@@ -4,7 +4,7 @@
 
 const CHUNK_MS = 3_000;
 const MIME_TYPE = "audio/webm;codecs=opus";
-/** 悬浮条的声波每来一个音量往左流一格，这个间隔就是它流的快慢 */
+/** 悬浮条的声波每来一个音量就可能从中间起一道波，这个间隔就是它起波的节奏 */
 const LEVEL_INTERVAL_MS = 50;
 
 /**

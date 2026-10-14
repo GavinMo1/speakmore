@@ -177,7 +177,8 @@ body[data-controls="false"] .bar {
   border-radius: 2px;
 }
 
-/* 声波：每根竖条是一个瞬间的音量，新的从右边进来，整排向左流 */
+/* 声波：竖条原地不动，字从中间激起一道波传到两边（wave.mjs）。每帧都重画，不要过渡，
+   过渡会把一帧一帧的抖动抹平。改高度不用 scaleY：压扁了圆头就没了，伏着时该是一排小圆点 */
 .wave {
   gap: 2px;
 }
@@ -185,20 +186,10 @@ body[data-controls="false"] .bar {
 .wave i {
   --h: 0.1;
   width: 2px;
+  height: calc(var(--h) * 100%);
+  min-height: 2px;
+  border-radius: 1px;
   background: var(--bar-live);
-  transform: scaleY(var(--h));
-  /* 和两次音量之间的 50 ms 一样长：长了竖条总在半路被下一个音量拉走，够不到该有的高度，波就平了。
-     先快后慢，起落干脆 */
-  transition: transform 50ms var(--ease-out);
-}
-
-/* 越往左是越早的声音，淡下去 */
-.wave i:nth-child(-n + 6) {
-  opacity: 0.45;
-}
-
-.wave i:nth-child(-n + 3) {
-  opacity: 0.2;
 }
 
 .think {
@@ -324,14 +315,13 @@ body[data-view="notice"] .warning {
   display: none;
 }
 
-/* 系统开了"减弱动态效果"：不位移、不缩放、不滚动，只留明暗的变化。声波照样跟着声音动，但不做过渡 */
+/* 系统开了"减弱动态效果"：不位移、不缩放、不滚动，只留明暗的变化。声波照样跟着声音动，只是画得慢（bar-ui.mjs） */
 @media (prefers-reduced-motion: reduce) {
   body[data-shown="true"] .shell {
     animation: appear var(--dur-base) linear;
   }
 
-  .control,
-  .wave i {
+  .control {
     transition: none;
   }
 
