@@ -9,14 +9,15 @@ import {
   readStats,
   showStatus,
 } from "../common.mjs";
-import { hasKeyAlready, keyPrompter, needsNewKey, submitKey } from "./key.mjs";
+import { currentProvider, hasKeyAlready, keyPrompter, needsNewKey, submitKey } from "./key.mjs";
 
 // 起停和看状态：speakmore（start）、stop、restart、status。
 
 export async function start(args, io) {
   noPositionals(parse(args).positionals, "speakmore start");
   const settings = currentSettings(io);
-  const nextKey = keyPrompter(io);
+  const provider = currentProvider(io);
+  const nextKey = keyPrompter(io, provider);
 
   let started = await io.daemon.status();
   /** 问到的第一把 key。undefined：还没问过；null：问了，没填 */
@@ -31,7 +32,7 @@ export async function start(args, io) {
   if (firstKey === undefined && io.interactive && needsNewKey(started.key)) firstKey = await nextKey();
   // 不填或取消都不纠缠，面板里会说还差它
   for (let value = firstKey ?? null; value !== null; value = await nextKey()) {
-    if (await submitKey(io, value)) break;
+    if (await submitKey(io, value, provider)) break;
   }
   // 重新查一遍系统权限：用户可能刚去系统设置里改过
   const status = (await io.daemon.status({ recheck: true })) ?? started;

@@ -11,7 +11,7 @@ export function themeTitle(id) {
   return theme ? `${theme.name}（${theme.id}）` : id;
 }
 
-const SOURCES = {
+export const SOURCES = {
   default: () => "默认",
   file: () => "存在设置文件里",
   // 来自改名前的环境变量（GEMINI_MODEL）时，entry.env 写着是哪一个

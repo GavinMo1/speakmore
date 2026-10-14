@@ -1,15 +1,26 @@
+import { findProvider, parseModelChoice } from "../../server/providers/index.mjs";
 import { SETTINGS } from "../../storage/settings.mjs";
 import { themeTitle } from "./settings.mjs";
 import { count, duration, INDENT, paint, row } from "./text.mjs";
 
 // 状态面板（speakmore、speakmore status）。和别的画面一样是"数据进、一段文字出"，不碰终端也不读文件。
 
-function keyLine(key) {
-  // 启动时够不着 Gemini 的话先用着，如实说还没验证
-  const unverified = key.verified === false ? "；启动时没连上 Gemini，还没验证这把能不能用" : "";
+/**
+ * 后台应用正在用的模型。0.3 的后台应用报的是不带厂商的 Gemini 模型名，也不报 provider，照样认；
+ * 连着单独启动的服务端时报 null，返回 null
+ */
+function modelInUse(status, settings) {
+  if (status.model === null) return null;
+  // 更旧的版本连 model 都不报
+  return parseModelChoice(status.model ?? settings.model.value);
+}
+
+function keyLine(key, provider) {
+  // 启动时够不着的话先用着，如实说还没验证
+  const unverified = key.verified === false ? `；启动时没连上 ${provider.name}，还没验证这把能不能用` : "";
   switch (key.state) {
     case "ready":
-      if (key.source === "env") return `这次运行用的是环境变量 GEMINI_API_KEY 里的，没有保存${unverified}`;
+      if (key.source === "env") return `这次运行用的是环境变量 ${provider.keyEnv} 里的，没有保存${unverified}`;
       if (key.source === "external") return "连的是单独启动的服务端，key 在那边配";
       return unverified ? `已保存${unverified}` : "已保存，验证通过";
     case "checking":
@@ -17,10 +28,11 @@ function keyLine(key) {
     case "rejected":
       // 三种情况要做的事不一样，不能都说成"换一把"
       if (key.cause === "other") {
-        return `验证没通过：${key.problem}。key 未必有问题，先看模型和档位：speakmore config`;
+        const what = provider.thinkingLevels ? "模型和档位" : "模型";
+        return `验证没通过：${key.problem}。key 未必有问题，先看${what}：speakmore config`;
       }
       if (key.source === "env") {
-        return `环境变量 GEMINI_API_KEY 里的 key 不能用：${key.problem}。改对它，或者去掉这个环境变量，再重新启动`;
+        return `环境变量 ${provider.keyEnv} 里的 key 不能用：${key.problem}。改对它，或者去掉这个环境变量，再重新启动`;
       }
       return `不能用：${key.problem}。运行 speakmore key 换一把`;
     case "unreadable":
@@ -32,8 +44,16 @@ function keyLine(key) {
 
 /** 设置里现在写的，和后台应用启动时带着的不一样的那几项 */
 function pendingSettings(status, settings) {
-  // 后台应用没报的项（连着单独启动的服务端时的模型）不比
-  return Object.keys(SETTINGS).filter((name) => status[name] != null && status[name] !== settings[name].value);
+  // 后台应用没报的项（连着单独启动的服务端时的模型、用不上思考档位的模型）不比；
+  // 两边按同一个规矩写过再比，0.3 的后台应用报的旧写法（不带厂商的模型名）不算不一样
+  const same = (name, reported) => {
+    try {
+      return SETTINGS[name].parse(String(reported)) === settings[name].value;
+    } catch {
+      return false;
+    }
+  };
+  return Object.keys(SETTINGS).filter((name) => status[name] != null && !same(name, status[name]));
 }
 
 function statsLine({ dictations, characters, seconds }, { withPace }) {
@@ -86,13 +106,16 @@ export function renderStatus({ status, version, settings, stats }, { color }) {
     `辅助功能 ${mark(permissions.trusted)}`,
   ];
   // 写后台应用正在用的，不是现在设置里的：设置改了还没重启、或者启动它的那条命令上带着环境变量时，两者不一样
+  const inUse = modelInUse(status, settings);
+  const provider = findProvider(inUse?.provider ?? parseModelChoice(settings.model.value).provider);
+  // 旧版本的后台应用不报思考档位；用不上档位的模型（报 null）就不写
+  const thinking = provider.thinkingLevels ? (status.thinking ?? settings.thinking.value) : null;
   const model =
-    status.model === null
+    inUse === null
       ? "由单独启动的服务端决定"
-      : // 旧版本的后台应用不报这两项
-        `${status.model ?? settings.model.value}（${status.thinking ?? settings.thinking.value}）`;
+      : `${provider.name} 的 ${inUse.model}${thinking ? `（${thinking}）` : ""}`;
   lines.push(
-    row("key", keyLine(status.key)),
+    row("key", keyLine(status.key, provider)),
     row("权限", cells.join("   ")),
     row("热键", status.hotkeyLabel),
     row("模型", model),

@@ -1,5 +1,6 @@
+import { findProvider, parseModelChoice } from "../../server/providers/index.mjs";
 import { ensureHome } from "../../storage/paths.mjs";
-import { SETTINGS, saveSetting, unsetSetting } from "../../storage/settings.mjs";
+import { overridingEnv, SETTINGS, saveSetting, unsetSetting } from "../../storage/settings.mjs";
 import { THEMES } from "../../themes/index.mjs";
 import {
   ConfigError,
@@ -34,15 +35,23 @@ export async function applySettings(io, undo) {
   io.out("正在重启 SpeakMore 让它生效…");
   await io.daemon.stop();
   const restarted = await io.daemon.start({ onProgress: io.out });
-  // 模型名、思考档位写得对不对，要问过 Gemini 才知道
+  // 0.3 的后台应用不报 provider，那时只有 Gemini
+  const provider = findProvider(restarted.provider ?? parseModelChoice(restarted.model ?? "gemini").provider);
+  // 模型名、思考档位写得对不对，要问过那一家才知道
   if (restarted.key.state === "rejected" && restarted.key.cause === "other") {
     io.err(`重启了，但现在不能用：${restarted.key.problem}`);
     if (undo) io.err(`想撤回这次改动：${undo}`);
     return 1;
   }
+  // 换成了还没有 key 的那一家（config set model 不先问 key）
+  if (restarted.key.state === "missing" || restarted.key.state === "unreadable") {
+    io.err(`重启了，但还没有 ${provider.name} 的 key，现在不能用：运行 speakmore key ${provider.id}`);
+    if (undo) io.err(`想撤回这次改动：${undo}`);
+    return 1;
+  }
   if (restarted.starting) io.out("重启了，还没准备好：运行 speakmore status 看看。");
   else if (restarted.key.verified === false) {
-    io.out("重启了，但没连上 Gemini，新设置对不对还没验证：过一会儿运行 speakmore status 看看。");
+    io.out(`重启了，但没连上 ${provider.name}，新设置对不对还没验证：过一会儿运行 speakmore status 看看。`);
   } else io.out("已经生效。");
   return 0;
 }
@@ -87,9 +96,8 @@ export function storeSetting(io, name, value) {
 }
 
 export function warnIfEnvOverrides(io, name) {
-  if (io.env[SETTINGS[name].env] !== undefined) {
-    io.out(`注意：环境变量 ${SETTINGS[name].env} 现在设着，它会盖过这个值。`);
-  }
+  const variable = overridingEnv(name, io.env);
+  if (variable !== null) io.out(`注意：环境变量 ${variable} 现在设着，它会盖过这个值。`);
 }
 
 export async function config(args, io) {

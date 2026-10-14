@@ -17,7 +17,7 @@ test("一切就绪时说怎么用，并列出 key、权限、热键、模型", (
   assert.match(text, /key\s+已保存，验证通过/);
   assert.match(text, /麦克风 ✓\s+输入监控 ✓\s+辅助功能 ✓/);
   assert.match(text, /热键\s+右 Option 键/);
-  assert.match(text, /模型\s+gemini-3\.5-flash（MINIMAL）/);
+  assert.match(text, /模型\s+Gemini 的 gemini-3\.5-flash（MINIMAL）/);
 });
 
 test("缺东西时标题说还差几样，逐项标出，并说权限记在终端名下", () => {
@@ -78,9 +78,9 @@ test("key 不能用时，按原因说该怎么办：换 key、改环境变量、
 
 test("模型和热键写的是后台应用正在用的；设置改过还没生效时提醒重启", () => {
   // 后台应用是带着别的设置启动的（比如启动它的那条命令上有环境变量），和现在的设置不一样
-  const status = { ...ready, model: "gemini-3.8-flash", thinking: "LOW" };
+  const status = { ...ready, model: "gemini/gemini-3.8-flash", thinking: "LOW" };
   const stale = renderStatus({ status, version: "0.1.0", settings, stats: noStats }, plain);
-  assert.match(stale, /模型\s+gemini-3\.8-flash（LOW）/);
+  assert.match(stale, /模型\s+Gemini 的 gemini-3\.8-flash（LOW）/);
   assert.match(stale, /model、thinking.*speakmore restart/);
 
   const same = renderStatus({ status: ready, version: "0.1.0", settings, stats: noStats }, plain);
@@ -172,4 +172,38 @@ test("开了颜色时对勾和叉带颜色，关了就是纯文字", () => {
   const view = { status: ready, version: "0.1.0", settings, stats: noStats };
   assert.ok(renderStatus(view, { ...plain, color: true }).includes("\x1b[32m✓\x1b[0m"));
   assert.ok(!renderStatus(view, plain).includes("\x1b["));
+});
+
+test("用的是 OpenAI：模型写清是哪一家，没有思考档位就不写；key 来自哪个环境变量也照实写", () => {
+  const status = {
+    ...ready,
+    provider: "openai",
+    model: "openai/gpt-audio-mini",
+    thinking: null,
+    key: { state: "ready", source: "env", problem: null, verified: true },
+  };
+  const openaiSettings = { ...settings, model: { value: "openai/gpt-audio-mini", source: "file" } };
+  const text = renderStatus({ status, version: "0.1.0", settings: openaiSettings, stats: noStats }, plain);
+  assert.match(text, /模型\s+OpenAI 的 gpt-audio-mini\n/);
+  assert.match(text, /环境变量 OPENAI_API_KEY/);
+  // 设置里的思考档位它用不上，不能因此说"还没生效"
+  assert.doesNotMatch(text, /speakmore restart/);
+
+  const offline = renderStatus(
+    {
+      status: { ...status, key: { ...status.key, verified: false } },
+      version: "0.1.0",
+      settings: openaiSettings,
+      stats: noStats,
+    },
+    plain,
+  );
+  assert.match(offline, /启动时没连上 OpenAI/);
+});
+
+test("0.3 的后台应用报的模型名不带厂商：照样认成 Gemini 的，不误报设置没生效", () => {
+  const legacy = { ...ready, provider: undefined, model: "gemini-3.5-flash" };
+  const text = renderStatus({ status: legacy, version: "0.1.0", settings, stats: noStats }, plain);
+  assert.match(text, /模型\s+Gemini 的 gemini-3\.5-flash（MINIMAL）/);
+  assert.doesNotMatch(text, /speakmore restart/);
 });

@@ -25,7 +25,8 @@ const READY = {
   starting: false,
   hotkey: "right_option",
   hotkeyLabel: "右 Option 键",
-  model: "gemini-3.5-flash",
+  provider: "gemini",
+  model: "gemini/gemini-3.5-flash",
   thinking: "MINIMAL",
   packaged: false,
   helper: "running",
@@ -42,7 +43,7 @@ const REVOKED_KEY = {
 /** 模型名写错：Gemini 拒绝了请求，key 本身没问题 */
 const WRONG_MODEL = {
   ...READY,
-  model: "gemini-nope",
+  model: "gemini/gemini-nope",
   key: {
     state: "rejected",
     source: "stored",
@@ -86,12 +87,15 @@ function fakeDaemon({
   running = null,
   afterStart = READY,
   saveKey = () => ({ ok: true }),
+  checkModel = () => ({ ok: true, source: "stored", ms: 812 }),
   stopped = "quit",
   hung = false,
   reloadTheme = () => ({ theme: resolveSettings({ file: paths.settingsFile, env: {} }).theme.value }),
 } = {}) {
   const daemon = {
     calls: [],
+    /** 每条命令带的参数 */
+    requests: [],
     current: running,
     hung,
     async status(params = {}) {
@@ -115,9 +119,11 @@ function fakeDaemon({
     },
     async request(cmd, params) {
       daemon.calls.push(cmd);
+      daemon.requests.push({ cmd, params });
       if (daemon.current === null) throw new NotRunningError();
+      if (cmd === "check-model") return checkModel(params.model);
       if (cmd === "set-key") {
-        const result = saveKey(params.key);
+        const result = saveKey(params.key, params.provider);
         if (result.ok) daemon.current = { ...daemon.current, ...READY };
         return result;
       }
@@ -911,4 +917,199 @@ test("不认识的命令和不认识的选项：说一声并指向 help，以 2 
   assert.match(output.err, /speakmore help/);
   assert.equal(await speakmore("status", "--loud"), 2);
   assert.deepEqual(daemon.calls, []);
+});
+
+// ---------- 模型 ----------
+
+/** 假装以前给 OpenAI 存过一把 key */
+const haveOpenAIKey = () => writeFileSync(keyFile(paths, "openai"), "密文");
+const savedModel = () => resolveSettings({ file: paths.settingsFile, env: {} }).model.value;
+
+test("model：列出有哪几家、各用哪个模型、key 有没有、现在用的哪个", async () => {
+  haveStoredKey();
+  const { speakmore, output } = harness({ env: { OPENAI_API_KEY: "sk-env" } });
+  assert.equal(await speakmore("model"), 0);
+  assert.match(output.out, /● gemini\s+Gemini\s+gemini-3\.5-flash\s+key 存着/);
+  assert.match(output.out, /openai\s+OpenAI\s+gpt-audio-mini（默认）\s+key 来自环境变量 OPENAI_API_KEY/);
+});
+
+test("model <厂商>：有它的 key 就直接换，在运行的话重启让它生效", async () => {
+  haveOpenAIKey();
+  const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
+  assert.equal(await speakmore("model", "openai"), 0);
+  assert.equal(savedModel(), "openai/gpt-audio-mini");
+  assert.match(output.out, /换成了 OpenAI 的 gpt-audio-mini/);
+  assert.deepEqual(daemon.calls, ["stop", "start"]);
+  assert.match(output.out, /已经生效/);
+
+  const notRunning = harness();
+  assert.equal(await notRunning.speakmore("model", "openai/gpt-audio-1.5"), 0);
+  assert.equal(savedModel(), "openai/gpt-audio-1.5");
+  assert.match(notRunning.output.out, /下次启动生效/);
+});
+
+test("model <厂商>：还没有它的 key 时先问；问到的交给后台验证，存进它那一份，再换", async () => {
+  const saved = [];
+  const daemon = fakeDaemon({
+    running: READY,
+    saveKey: (key, provider) => {
+      saved.push({ key, provider });
+      return { ok: true };
+    },
+  });
+  const { speakmore, output, asked } = harness({ daemon, secrets: ["sk-my-secret"] });
+  assert.equal(await speakmore("model", "openai"), 0);
+  assert.deepEqual(saved, [{ key: "sk-my-secret", provider: "openai" }]);
+  // 说的是 OpenAI 的 key、去哪申请
+  assert.match(asked[0], /OpenAI API key/);
+  assert.match(asked[0], /platform\.openai\.com\/api-keys/);
+  assert.equal(savedModel(), "openai/gpt-audio-mini");
+  assert.ok(!(output.out + output.err).includes("sk-my-secret"));
+});
+
+test("model <厂商>：没有它的 key 又没法问（不在终端里）、或者问了没给：不换，说清先做什么", async () => {
+  const quiet = harness({ interactive: false });
+  assert.equal(await quiet.speakmore("model", "openai"), 1);
+  assert.match(quiet.output.err, /还没有 OpenAI 的 key.*speakmore key openai/);
+  assert.equal(savedModel(), "gemini/gemini-3.5-flash");
+
+  const declined = harness({ daemon: fakeDaemon({ running: READY }), secrets: [""] });
+  assert.equal(await declined.speakmore("model", "openai"), 1);
+  assert.match(declined.output.err, /没有换/);
+  assert.equal(savedModel(), "gemini/gemini-3.5-flash");
+
+  const rejected = harness({
+    daemon: fakeDaemon({ running: READY, saveKey: () => ({ ok: false, problem: "这把 key 无效" }) }),
+    secrets: ["sk-bad", "", ""],
+  });
+  assert.equal(await rejected.speakmore("model", "openai"), 1);
+  assert.match(rejected.output.err, /这把 key 没有通过：这把 key 无效/);
+  assert.equal(savedModel(), "gemini/gemini-3.5-flash");
+});
+
+test("model：不认识的厂商、写错的模型名，以 2 退出并说能填什么", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("model", "deepseek"), 2);
+  assert.match(output.err, /gemini \/ openai/);
+  assert.equal(await speakmore("model", "openai/gpt audio"), 2);
+  assert.equal(await speakmore("model", "openai", "extra"), 2);
+});
+
+test("model check：查现在用的那个，说能不能用、key 从哪来、来回多久", async () => {
+  haveStoredKey();
+  const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
+  assert.equal(await speakmore("model", "check"), 0);
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "check-model", params: { model: "gemini/gemini-3.5-flash" } });
+  assert.match(output.out, /能用：Gemini 的 gemini-3\.5-flash.*0\.8 秒/);
+});
+
+test("model check <模型>：查别的；不能用时说原因和下一步，以 1 退出", async () => {
+  const missing = harness({
+    daemon: fakeDaemon({
+      running: READY,
+      checkModel: () => ({ ok: false, cause: "missing", problem: "还没有 OpenAI 的 key：运行 speakmore key openai" }),
+    }),
+  });
+  assert.equal(await missing.speakmore("model", "check", "openai"), 1);
+  assert.deepEqual(missing.daemon.requests.at(-1).params, { model: "openai/gpt-audio-mini" });
+  assert.match(missing.output.err, /不能用：还没有 OpenAI 的 key/);
+
+  const wrong = harness({
+    daemon: fakeDaemon({
+      running: READY,
+      checkModel: () => ({ ok: false, cause: "other", problem: "OpenAI 没有这个模型，或者这把 key 用不了它：…" }),
+    }),
+  });
+  assert.equal(await wrong.speakmore("model", "check", "openai/gpt-audio-9"), 1);
+  assert.match(wrong.output.err, /不能用：OpenAI 没有这个模型/);
+});
+
+test("model check：没在运行就先启动；正在运行的是旧版本、不认识这条命令时说要重启", async () => {
+  const fresh = harness();
+  assert.equal(await fresh.speakmore("model", "check"), 0);
+  assert.deepEqual(fresh.daemon.calls, ["start", "check-model"]);
+
+  const old = fakeDaemon({ running: READY });
+  old.request = async (cmd) => {
+    throw new Error(`不认识的命令：${cmd}`);
+  };
+  const outdated = harness({ daemon: old });
+  assert.equal(await outdated.speakmore("model", "check"), 1);
+  assert.match(outdated.output.err, /旧版本.*speakmore restart/);
+});
+
+// ---------- 每家一把 key ----------
+
+test("key <厂商>：问的是那一家的 key，存进它那一份；不是正在用的那家时提示怎么换过去", async () => {
+  const saved = [];
+  const daemon = fakeDaemon({
+    running: READY,
+    saveKey: (key, provider) => {
+      saved.push({ key, provider });
+      return { ok: true };
+    },
+  });
+  const { speakmore, output, asked } = harness({ daemon, secrets: ["sk-new"] });
+  assert.equal(await speakmore("key", "openai"), 0);
+  assert.deepEqual(saved, [{ key: "sk-new", provider: "openai" }]);
+  assert.match(asked[0], /OpenAI API key/);
+  assert.match(output.out, /要换成用它：speakmore model openai/);
+});
+
+test("key 后面写的不是厂商名：多半是把 key 本身写在了命令里，不照做也不把它打出来", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("key", "sk-proj-SECRET"), 2);
+  assert.doesNotMatch(output.out + output.err, /SECRET/);
+  assert.match(output.err, /shell 的历史记录/);
+});
+
+test("key --forget <厂商>：只删那一家的；不写就删正在用的那家", async () => {
+  haveStoredKey();
+  haveOpenAIKey();
+  writeFileSync(keyFile(paths, "openai", { packaged: true }), "密文");
+  const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
+  assert.equal(await speakmore("key", "--forget", "openai"), 0);
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "forget-key", params: { provider: "openai" } });
+  assert.equal(existsSync(keyFile(paths, "openai")), false);
+  assert.equal(existsSync(keyFile(paths, "openai", { packaged: true })), false);
+  assert.equal(existsSync(keyFile(paths, "gemini")), true);
+  assert.match(output.out, /OpenAI 的 key 已经删掉/);
+});
+
+test("正在用 OpenAI 时第一次启动：问的是 OpenAI 的 key", async () => {
+  writeFileSync(paths.settingsFile, JSON.stringify({ model: "openai/gpt-audio-mini" }));
+  const daemon = fakeDaemon({ afterStart: { ...NO_KEY, provider: "openai", model: "openai/gpt-audio-mini" } });
+  const { speakmore, asked } = harness({ daemon, secrets: ["sk-first"] });
+  assert.equal(await speakmore(), 0);
+  assert.match(asked[0], /OpenAI API key/);
+  assert.deepEqual(daemon.requests.find(({ cmd }) => cmd === "set-key").params, {
+    key: "sk-first",
+    provider: "openai",
+  });
+});
+
+test("改了模型、重启之后发现那家没有 key：说清还差它，不说已经生效", async () => {
+  const daemon = fakeDaemon({
+    running: READY,
+    afterStart: { ...NO_KEY, provider: "openai", model: "openai/gpt-audio-mini" },
+  });
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore("config", "set", "model", "openai"), 1);
+  assert.match(output.err, /还没有 OpenAI 的 key.*speakmore key openai/);
+  assert.doesNotMatch(output.out, /已经生效/);
+});
+
+test("改模型时 GEMINI_MODEL（旧名字）设着：提醒它盖着新值", async () => {
+  haveOpenAIKey();
+  const { speakmore, output } = harness({ env: { GEMINI_MODEL: "gemini-3.5-flash" } });
+  assert.equal(await speakmore("model", "openai"), 0);
+  assert.match(output.out, /环境变量 GEMINI_MODEL 现在设着/);
+});
+
+test("model：key 是启动后台时从环境变量给的（命令行这边没有）也照实写，不说成还没有", async () => {
+  const fromEnv = { ...READY, key: { state: "ready", source: "env", problem: null, verified: true } };
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: fromEnv }) });
+  assert.equal(await speakmore("model"), 0);
+  assert.match(output.out, /● gemini\s+Gemini\s+gemini-3\.5-flash\s+key 来自环境变量 GEMINI_API_KEY/);
+  assert.match(output.out, /openai\s+OpenAI\s+gpt-audio-mini（默认）\s+还没有 key/);
 });

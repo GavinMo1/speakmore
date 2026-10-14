@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { ControlError, TimeoutError } from "../control.mjs";
 import { log } from "../log.mjs";
+import { PROVIDERS } from "../server/providers/index.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
 import { resolvePaths } from "../storage/paths.mjs";
@@ -15,6 +16,7 @@ import { DEFAULT_HISTORY_LIMIT, history } from "./commands/history.mjs";
 import { key } from "./commands/key.mjs";
 import { restart, start, status, stop } from "./commands/lifecycle.mjs";
 import { logs } from "./commands/logs.mjs";
+import { model } from "./commands/model.mjs";
 import { uninstall } from "./commands/uninstall.mjs";
 import { ConfigError, UsageError } from "./common.mjs";
 import { createDaemon } from "./daemon.mjs";
@@ -25,7 +27,7 @@ import { createDaemon } from "./daemon.mjs";
 
 const HELP = `SpeakMore：按一下热键说话，整理好的文字贴进当前输入框。
 
-  speakmore                     启动（已经在运行就只显示状态）。第一次会问你要一把 Gemini API key
+  speakmore                     启动（已经在运行就只显示状态）。第一次会问你要一把 API key（默认用 Gemini）
   speakmore start               同上
   speakmore stop                停掉
   speakmore restart             重启
@@ -33,8 +35,14 @@ const HELP = `SpeakMore：按一下热键说话，整理好的文字贴进当前
 
   speakmore history [-n 条数] [--json]
                                 看说过的话，按天分组，新的在前（默认最近 ${DEFAULT_HISTORY_LIMIT} 条）
-  speakmore key                 换一把 key（输入不会显示出来；也可以从管道喂进来）
-  speakmore key --forget        删掉存着的 key
+  speakmore model               看能用哪几家的模型（${PROVIDERS.map(({ id }) => id).join(" / ")}）、各家的 key 有没有、现在用的哪个
+  speakmore model <厂商>[/<模型>]
+                                换一家或换个模型，比如 speakmore model openai。没有它的 key 会先问
+  speakmore model check [<厂商>[/<模型>]]
+                                检查能不能用：拿那一家的 key 发一个最小的请求。不写就查现在用的
+  speakmore key [<厂商>]         换一把 key，不写厂商就是现在用的那家（输入不会显示出来；也可以从管道喂进来）
+  speakmore key --forget [<厂商>]
+                                删掉存着的 key
   speakmore config              看设置：热键、模型、思考档位、主题，以及数据和日志在哪
   speakmore config set <名字> <值>
   speakmore config unset <名字>  回到默认值
@@ -49,7 +57,7 @@ const HELP = `SpeakMore：按一下热键说话，整理好的文字贴进当前
   speakmore --version           版本号
 `;
 
-const COMMANDS = { start, stop, restart, status, key, config, theme, history, logs, settings, uninstall };
+const COMMANDS = { start, stop, restart, status, key, model, config, theme, history, logs, settings, uninstall };
 
 /**
  * 执行一条命令。
