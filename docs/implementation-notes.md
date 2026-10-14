@@ -89,6 +89,7 @@ SpeakMore 是照着对 Typeless 2.8.1 的[逆向分析](../targets/typeless/READ
 
 - **运行环境是包里自带的原版 Electron，命令行也用它跑。** Electron 里本来就有一个 Node，设上 `ELECTRON_RUN_AS_NODE=1` 它就当普通的 Node 用（VS Code 的 `code` 命令是同一个做法）。这样只带一份运行环境，不依赖系统里有没有 Node、是哪个版本。实测 Electron 44.7 里是 Node 24.21，带着 `node:sqlite`；跑 `speakmore --version` 要 41–43 毫秒，系统的 Node 26 是 51–57 毫秒。
 - **发布包自带一切。** `scripts/release.mjs` 在打包的机器上把运行时依赖装好、小帮手按两种芯片编好合成一个文件，再配上对应芯片的 Electron，打成 `speakmore-darwin-<芯片>.tar.gz`（约 135 MB）。Electron 的压缩包按 `electron` 这个 npm 包里带的校验值核对过才用。
+- **发布包放在自己的下载地址上，不用 GitHub Release**（那边在国内太慢）。腾讯云 COS 的一个私有桶，前面挡一层 CDN（`dl.zephyrxiang.com`），桶只让 CDN 读。上面的样子定在 `scripts/release-layout.mjs`：每个版本的包在各自的目录里，传上去就不再变（长期缓存）；根上的 `install.sh` 和 `latest`（一行，最新的版本号）每次发布会换，只缓存一分钟。上传时先传包、最后才改 `latest`，所以任何时刻照着 `latest` 去取，包都已经在了；同一个版本号已经在上面而内容不一样时拒绝覆盖。推一个版本标签就由 CI 发布，它用的密钥只能往这一个桶里传文件。
 - **安装脚本只做搬运。** `install.sh` 先做预检查，下载后核对 SHA-256，解到家目录里的临时位置并原地试跑一次，都没问题才停掉正在运行的、把 `app/` 和 `runtime/` 换进去。两样要么都换成，要么都不换。
 - **启动脚本里的路径是写死的。** `~/.speakmore/bin/speakmore` 由安装脚本生成，家目录的位置直接写在里面：它会被 `~/.local/bin` 里的链接指着，不能靠“我在哪”来猜。
 - **目录以外的东西有清单。** 安装时在别处建的链接记在 `bin/links` 里，卸载时照着删，删之前再确认一遍它还指着我们。删不了的（记在终端名下的系统权限、所有原版 Electron 程序共用的 `com.github.Electron.plist`）在卸载时列出来。

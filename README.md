@@ -14,10 +14,8 @@
 需要 macOS 12 以上，和一把 [Gemini API key](https://aistudio.google.com/apikey)。别的都不用装：不需要 Node、npm，也不需要 sudo。
 
 ```bash
-curl -fsSL https://github.com/zephyr4123/speakmore/releases/latest/download/install.sh | bash
+curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 ```
-
-> 发布包的下载地址还在搭，这一行暂时不通。现在想用，先照下面“开发”一节从源码跑。
 
 这一行做三件事：
 
@@ -158,9 +156,11 @@ git clone https://github.com/zephyr4123/speakmore.git
 cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
-npm run check                 # 代码检查 + 全部测试（271 条，不联网、不开窗口）
-npm run release               # 打发布包：dist/release/ 下两种芯片各一个，外加 install.sh
+npm run check                 # 代码检查 + 全部测试（280 条，不联网、不开窗口）
+npm run release               # 打发布包：dist/release/ 下两种芯片各一个，外加 install.sh，摆成下载地址上的样子
 ```
+
+**发布新版本**：改 `package.json` 里的版本号，推一个同名的标签（比如 `v0.2.1`），CI（`.github/workflows/release.yml`）会检查、打包，并传到下载地址 `dl.zephyrxiang.com/speakmore/`（腾讯云 COS + CDN）。发布过的版本号不会被覆盖，要改就升版本号。想从本机发：`scripts/with-cos-key.sh npm run publish-release`，桶和密钥从哪来写在 `.machine.env` 里。
 
 从源码跑的和装好的用的是同一个 `~/.speakmore`，想分开就设 `SPEAKMORE_HOME`。
 
@@ -185,7 +185,8 @@ node scripts/replay.mjs 块1.ogg 块2.ogg                           # 把现成�
 | `native/` | 听热键和贴字的小程序（Swift） |
 | `src/*.mjs` | 命令和后台应用共用的：东西放在哪、设置、历史库、控制通道、日志、旧数据的迁移 |
 | `test/` | 自动测试，目录和 `src/` 对应 |
-| `scripts/` | 开发用的脚本：编译小程序、打发布包、端到端、评估提示词；按每台机器自己的配置加载 key、核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
+| `.github/workflows/` | 推版本标签时自动发布 |
+| `scripts/` | 开发用的脚本：编译小程序、打发布包并传到下载地址、端到端、评估提示词；按每台机器自己的配置加载 key、核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
 | `docs/` | [实现笔记](docs/implementation-notes.md) |
 | `targets/typeless/` | 对 Typeless 的[逆向分析](targets/typeless/README.md)，18 篇文档。SpeakMore 是照着它做的 |
 | `AGENTS.md`、`.memory/` | 和 AI 编程助手协作时用的工作约定和项目记忆 |
@@ -207,7 +208,7 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 
 ### 验证到哪一步
 
-- 自动测试 271 条，在 Node 26.0 上全过；Node 22.13、24.21 上跑过其中 269 条（最后加的 2 条没在这两个版本上重跑）。其中 15 条是拿假的发布包真的跑安装脚本：全新安装、升级、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
+- 自动测试 280 条，在 Node 26.0 上全过；Node 22.13、24.21 上跑过其中 269 条（后加的 11 条没在这两个版本上重跑）。其中 17 条是拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
 - 用真的发布包走过一遍，装在临时目录里，`PATH` 里没有 Node：
   - 安装脚本从管道读入，装完直接启动并问 key，输入不显示。
   - 启动、状态、设置、重启、停止；合成的语音经过录音编码、Gemini、存历史，成品正确。
@@ -215,7 +216,8 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
   - `speakmore uninstall` 之后目录、命令链接、后台进程、钥匙串里的那一条都没了。
 - Intel 的那一份只在 Apple 芯片的机器上借 Rosetta 跑过（命令、后台、小程序都起得来），**没有在真的 Intel 机器上试过**。
 - 上一版在真机上走过的那些路（多行 key 被拒、后台卡住时强行结束、同时启动、模型名写错）这一版重跑了自动测试，没有逐条重走。
-- **还没有人按着真键盘、对着真麦克风用这一版试过。** 也还没有从 GitHub 上真的下载安装过：安装脚本是拿本机打好的包试的。
+- 照上面那一行从真的下载地址装过一遍（预发版本 `v0.2.0-rc.1`，装进临时目录，`PATH` 里没有 Node）：下载、校验、安装、`--version`、卸载都正常。
+- **还没有人按着真键盘、对着真麦克风用这一版试过。**
 - 只有自动测试、没在真机上试的：启动时断网、从 0.1 版搬数据、重新检查权限时不再反复弹系统授权框。
 
 ## 许可

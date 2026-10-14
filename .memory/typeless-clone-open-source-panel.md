@@ -30,7 +30,7 @@ Typeless 的仿刻定名 **SpeakMore**，代码就在仓库根（一个 npm 包�
 - 范围仍受 [[typeless-clone-scope-dictation]] 约束，只做语音转写。原版主窗口的三张截图（首页的统计、历史、词典）存在 `targets/typeless/_work/ui-reference/`，不进 git；词典还没做，它对应现在和原版差得最多的地方（专有名词听错），做之前问一句。
 - 开源前他定下的几件事：`.memory/` 保留并随项目迁移，工作习惯可以公开，逆向文档保留，本机情况改成配置驱动（[[machine-facts-stay-local]]），git 历史里泄露隐私的内容要抹掉。
 - 仓库 2026-10-13 已公开，在 GitHub 上叫 `speakmore`（名字是他定的；本地目录名没改，仍是 reverse-anything），许可证 MIT。公开前旧的私有仓库由他本人删掉，改写过的历史推到了新仓库。
-- 发布包放在 GitHub Release 上（`npm run release` 打出两种芯片各一个，外加 `install.sh`）。建 Release、传文件和 push 一样是往外发东西，每次都要先问他。
+- 发布包不放 GitHub Release（他嫌太慢），放他腾讯云的 COS，经 CDN 域名 `dl.zephyrxiang.com/speakmore/` 取；以后官网的下载链接也从这里取。怎么发见 [[speakmore-release-on-cos]]。推标签、传文件和 push 一样是往外发东西，每次都要先问他。
 - 产品原来在 `speakmore/` 子目录里（克隆下来是 `speakmore/speakmore`），2026-10-13 他同意后挪到了仓库根。仓库根现在既是 npm 包又放着逆向资料和协作文件：进 npm 包的东西靠 `package.json` 的 `files` 白名单，打 .app 靠 `scripts/package.mjs` 里只拷指定的几样，往这两处加东西时别把 `targets/`、`.memory/` 带进去。
 
 相关：[[typeless-clone-as-real-product]]、[[typeless-clone-real-recordings-ok]]、[[typeless-clone-gemini-key]]。
