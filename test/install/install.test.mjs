@@ -244,9 +244,14 @@ test("问不到最新版本、问到的不像版本号、指定的版本不存�
 
 test("安装脚本里查的几家，和程序里登记的模型厂商是同一份", async () => {
   const { PROVIDERS } = await import("../../src/server/providers/index.mjs");
-  const listed = readFileSync(INSTALLER, "utf8").match(/^MODEL_HOSTS=\((.*)\)$/m)[1].match(/"[^"]*"/g);
+  const listed = readFileSync(INSTALLER, "utf8")
+    .match(/^MODEL_HOSTS=\((.*)\)$/m)[1]
+    .match(/"[^"]*"/g);
   const names = listed.filter((_, index) => index % 2 === 0).map((quoted) => quoted.slice(1, -1));
-  assert.deepEqual(names, PROVIDERS.map(({ name }) => name));
+  assert.deepEqual(
+    names,
+    PROVIDERS.map(({ name }) => name),
+  );
 });
 
 test("能用的几家模型都查一遍连不连得上：连得上的打勾，连不上的只提醒，不拦着安装", () => {

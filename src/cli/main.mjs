@@ -119,7 +119,11 @@ async function ask(question) {
   const prompt = createInterface({ input: process.stdin, output: process.stderr });
   try {
     return await new Promise((resolve, reject) => {
-      prompt.once("SIGINT", () => reject(new Cancelled()));
+      // ^C 之后光标还停在提问那一行，换个行，后面的话不接在它后面
+      prompt.once("SIGINT", () => {
+        process.stderr.write("\n");
+        reject(new Cancelled());
+      });
       prompt.question(question).then(resolve, reject);
     });
   } finally {

@@ -15,7 +15,7 @@
 
 ## 装和用
 
-需要 macOS 12 以上，和一把 [Gemini API key](https://aistudio.google.com/apikey)（想用 OpenAI 的模型也行，见下面的[换模型](#换模型)）。别的都不用装：不需要 Node、npm，也不需要 sudo。
+需要 macOS 12 以上，和一把 Gemini 或 OpenAI 的 API key（[Gemini 的在这申请](https://aistudio.google.com/apikey)，[OpenAI 的在这申请](https://platform.openai.com/api-keys)，两家的区别见[换模型](#换模型)）。别的都不用装：不需要 Node、npm，也不需要 sudo。
 
 ```bash
 curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
@@ -23,9 +23,9 @@ curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 
 这一行做三件事：
 
-1. **预检查**：系统版本、芯片、磁盘空间、下载地址和 Gemini 连不连得上。哪一项不行会说清楚原因和怎么办，不行就什么都不装。
+1. **预检查**：系统版本、芯片、磁盘空间、下载地址连不连得上，以及 Gemini、OpenAI 各自连不连得上（连不上只提醒，不拦着）。哪一项不行会说清楚原因和怎么办，不行就什么都不装。
 2. **安装**：下载、核对校验值，把程序和它自带的运行环境放进 `~/.speakmore`，在 `~/.local/bin` 建一个 `speakmore` 命令。
-3. **启动**：在终端里问你要 key（粘贴后回车，输入不会显示出来），系统弹出麦克风授权框时点“允许”，然后显示状态。还缺系统权限的话会顺手打开设置窗口，每一项旁边有去系统设置的按钮。
+3. **启动**：在终端里先问你用哪一家的模型（Gemini 或 OpenAI，直接回车是 Gemini），再要那一家的 key（粘贴后回车，输入不会显示出来），系统弹出麦克风授权框时点“允许”，然后显示状态。还缺系统权限的话会顺手打开设置窗口，每一项旁边有去系统设置的按钮。
 
 看到下面这样就可以用了：点进任意输入框，按一下右 Option，说话，再按一下。
 
@@ -107,7 +107,7 @@ speakmore config unset hotkey         # 回到默认
 
 ### 换模型
 
-默认用 Gemini。也可以换成 OpenAI：
+默认用 Gemini，第一次启动时可以直接选 OpenAI。之后要换，在设置窗口的"用哪家的模型"里点那一家：已经有它的 key 就点"改用"，没有就在下面粘贴一把，验证过当场换过去，不用重启。命令行也行：
 
 ```bash
 speakmore model                          # 有哪几家、各用哪个模型、key 有没有、现在用的哪个
@@ -123,7 +123,7 @@ speakmore model gemini                   # 换回来
 | `gemini`（默认） | `gemini-3.5-flash` | [Google AI Studio](https://aistudio.google.com/apikey) | 录音原样发过去。提示词是对着它调的，整理得最干净，一般 2 秒左右出成品 |
 | `openai` | `gpt-audio-mini` | [OpenAI 开发者平台](https://platform.openai.com/api-keys) | 它只收 WAV 和 MP3，录音先在本机转成 16 kHz 的 WAV 再发（一分钟的录音转一次约 60 毫秒）。实测 2–5 秒出成品，口头禅删得没有 Gemini 干净。转出来的 WAV 比原录音大七八倍，长录音慢：悬浮条最多等成品 20 秒，按 90 秒的录音要 6–9 秒推算，三分钟以上的可能等不到（没实测；录音留着）。`gpt-audio-1.5` 有时把成品包成 `{"…"}` 的样子，不建议用 |
 
-每家的 key 各存一份，来回换不用重新填。换模型要重启后台，`speakmore model` 会替你重启。要退回 0.3：先 `speakmore model gemini` 换回 Gemini，0.3 认得这样存下的设置。
+每家的 key 各存一份，来回换不用重新填。用命令换模型要重启后台，`speakmore model` 会替你重启；设置窗口里换的只换厂商、用它的默认模型，要指定模型还是用命令。要退回 0.3：先 `speakmore model gemini` 换回 Gemini，0.3 认得这样存下的设置。
 
 ### 主题
 
@@ -210,7 +210,7 @@ git clone https://github.com/zephyr4123/speakmore.git
 cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
-npm run check                 # 代码检查 + 全部测试（406 条，不联网、不开窗口）
+npm run check                 # 代码检查 + 全部测试（420 条，不联网、不开窗口）
 npm run release               # 打发布包：dist/release/ 下两种芯片各一个，外加 install.sh，摆成下载地址上的样子
 ```
 
@@ -267,7 +267,7 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 
 ### 验证到哪一步
 
-- 自动测试 406 条，在 Node 26.0 上全过；其中 389 条单测在 Node 24.21（Electron 自带的版本，程序就跑在它上面）上也全过；Node 22.13 上跑过的是更早的 269 条（之后加的没在 22 上重跑）。其中 17 条是拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
+- 自动测试 420 条，在 Node 26.0 上全过；其中 402 条单测在 Node 24.21（Electron 自带的版本，程序就跑在它上面）上也全过；Node 22.13 上跑过的是更早的 269 条（之后加的没在 22 上重跑）。其中 18 条是安装脚本的，17 条拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
 - 用真的发布包走过一遍，装在临时目录里，`PATH` 里没有 Node：
   - 安装脚本从管道读入，装完直接启动并问 key，输入不显示。
   - 启动、状态、设置、重启、停止；合成的语音经过录音编码、Gemini、存历史，成品正确。
@@ -294,6 +294,10 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
   - 菜单栏图标在真的 Electron 里读得出来，16 和 32 两种尺寸都在，系统认作随菜单栏深浅反色的那种。在临时目录里起了一个真的后台，菜单栏上它那一项没有文字、宽 34 点（写着"听写"的旧样子是 48 点）；没有截屏亲眼看，因为终端没有录屏权限。
   - 设置和历史窗口顶部的图标和产品名，用真页面离屏截图看过浅色深色。
   - 按发布包的清单实际摆过一遍，`assets/` 在里面。
+- 第一次用时选哪家、设置窗口里换一家（从源码跑的，临时目录、右 Control 当热键）：
+  - 在伪终端里跑第一次启动：选 2（OpenAI）、粘贴 key，启动后用的是 OpenAI，设置文件里记着它，key 没有出现在屏幕上；选的时候按 Ctrl-C，key 也不问了，照默认的 Gemini 启动，面板里说还差 key。
+  - 用调试协议驱动真的设置窗口：两家都有 key 时点"改用 OpenAI"，命令行看到的、设置文件里的都换成了 OpenAI，接着发一段录音给内置服务，先转成 WAV 再交给 OpenAI，4 秒回来；换回 Gemini；删掉 OpenAI 的 key 后粘贴一把错的，说 key 无效、还是 Gemini；粘贴对的，存好并换过去。重启后台后用的仍是 OpenAI。
+  - 安装脚本的预检查真跑过一次（本机打的包、临时目录、只装不启动）：两家都打了勾。两家连不上时的样子只在自动测试里（假的 curl）看过。
 - 只有自动测试、没在真机上试的：启动时断网、从 0.1 版搬数据、重新检查权限时不再反复弹系统授权框。
 
 ## 许可
