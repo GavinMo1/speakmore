@@ -13,5 +13,7 @@ SpeakMore 的模型层是策略：每家一个适配器（`src/server/providers/
 - 不主动加新厂商。他提到某家时，先查官方文档确认它能不能收音频、收哪些格式，再动手；只能转写不能整理的要说清会变成两步、多一截延迟。
 - 再提通义时，适配器可以照 OpenAI 的写（请求格式几乎一样），但它的地址按地区和工作空间变，要先问他用哪个地区。
 - OpenAI 默认用 gpt-audio-mini：同 6 段录音实测，gpt-audio-1.5 会把成品包成 JSON、偶尔回 500 "invalid content"。数字在 `docs/implementation-notes.md` 的"不止一家模型"。
+- OpenAI 的提示词不拿成批录音评估，边用边调。他 2026-10-13 的原话："相似度差不多就好,不用了,更多的是边用边调"。
+- 发布包里不带 GPL、LGPL 的包，不开例外：同一天他没让 codec-parser（LGPL，拆 Ogg 用）进发布包，所以服务端只把 WebM 转成 WAV，Ogg 不转。以后接不收 Opus 的厂商（比如通义）也只能从 WebM 转；要转 Ogg 得先找许可证合适的库或问他。
 
 相关：[[typeless-clone-gemini-key]]、[[typeless-clone-real-recordings-ok]]、[[typeless-clone-scope-dictation]]。

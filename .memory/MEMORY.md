@@ -10,9 +10,9 @@
 - [SpeakMore 的范围](typeless-clone-scope-dictation.md) — 已定只做语音转写（单击热键听写加历史），其他模式不做
 - [请用户配合时只给步骤](user-action-requests-plain-steps.md) — 需要他动手时列两三步动作，技术细节留到事后总结
 - [开发用的模型 key](typeless-clone-gemini-key.md) — 要真调模型的命令写成 scripts/dev/with-key.sh <gemini|openai> <命令>，用哪把凭据在 .machine.env；产品里的 key 由用户自己填
-- [模型厂商由他点名](speakmore-model-providers.md) — 只接他点名的；DeepSeek 不收音频已放弃，OpenAI 已接（默认 gpt-audio-mini），通义 Qwen-Omni 是候选
+- [模型厂商由他点名](speakmore-model-providers.md) — 只接他点名的；DeepSeek 不收音频已放弃，OpenAI 已接（默认 gpt-audio-mini），通义 Qwen-Omni 是候选；发布包不带 GPL/LGPL，只转 WebM
 - [本机情况不进仓库](machine-facts-stay-local.md) — 凭据名、路径、账号、姓名邮箱只放 .machine.env，仓库里只认变量名；提交前跑 scripts/checks/check-no-machine-facts.sh
-- [可以用真实录音调提示词](typeless-clone-real-recordings-ok.md) — 用户已同意把 Typeless 历史录音发给 Gemini 调 SpeakMore 的提示词（发给别家先问）；再调时用 eval-prompt.mjs 对比，别把温度设回 0
+- [可以用真实录音调提示词](typeless-clone-real-recordings-ok.md) — Typeless 历史录音只发给 Gemini 调提示词，OpenAI 的边用边调；再调时用 eval-prompt.mjs 对比，别把温度设回 0
 - [SpeakMore 按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节
 - [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，代码在仓库根，已公开（MIT）；一行命令安装并启动，装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端以后用 Tauri
 - [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，推标签由 CI 发，发过的版本不覆盖；证书 2027-01-12 到期要续
