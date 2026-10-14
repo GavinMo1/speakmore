@@ -1,6 +1,13 @@
 import { WebSocket, WebSocketServer } from "ws";
-import { ClientType, envelope, MAX_CHUNK_BYTES, ProtocolError, parseClientMessage, ServerType } from "./protocol.mjs";
-import { RecordingSession } from "./session.mjs";
+import {
+  ClientType,
+  envelope,
+  MAX_CHUNK_BYTES,
+  ProtocolError,
+  parseClientMessage,
+  ServerType,
+} from "./protocol/protocol.mjs";
+import { RecordingSession } from "./protocol/session.mjs";
 
 export const WS_PATH = "/ws/rt_voice_flow";
 

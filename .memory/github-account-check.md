@@ -1,11 +1,11 @@
 ---
 name: github-account-check
-description: 每次 GitHub 操作前用 scripts/check-gh-account.sh 核对激活账号；本项目该用哪个账号写在本机配置 .machine.env
+description: 每次 GitHub 操作前用 scripts/checks/check-gh-account.sh 核对激活账号；本项目该用哪个账号写在本机配置 .machine.env
 metadata:
   type: feedback
 ---
 
-每次做 GitHub 操作前，先核对 `gh` 当前激活的账号是不是本项目该用的那个：`scripts/check-gh-account.sh && <操作>`。该用哪个账号写在不进 git 的 `.machine.env` 里（`GITHUB_ACCOUNT`），不对时脚本会拦下并给出切换命令。
+每次做 GitHub 操作前，先核对 `gh` 当前激活的账号是不是本项目该用的那个：`scripts/checks/check-gh-account.sh && <操作>`。该用哪个账号写在不进 git 的 `.machine.env` 里（`GITHUB_ACCOUNT`），不对时脚本会拦下并给出切换命令。
 
 **Why:** 用户 2026-10-12 的要求。一台机器上可能登录了不止一个 GitHub 账号，而 gh 的"激活账号"是整台机器共享的状态，他平时同时开多个会话，别的会话一操作就可能把它切走。git 远端走 https 时凭据也取自 gh 的激活账号，所以切错了不只是 `gh` 命令建错地方，`git push` 也会带错身份。
 

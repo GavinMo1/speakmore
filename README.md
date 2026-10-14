@@ -184,17 +184,17 @@ npm run check                 # 代码检查 + 全部测试（315 条，不联�
 npm run release               # 打发布包：dist/release/ 下两种芯片各一个，外加 install.sh，摆成下载地址上的样子
 ```
 
-**发布新版本**：改 `package.json` 里的版本号，推一个同名的标签（比如 `v0.2.1`），CI（`.github/workflows/release.yml`）会检查、打包，并传到下载地址 `dl.zephyrxiang.com/speakmore/`（腾讯云 COS + CDN）。发布过的版本号不会被覆盖，要改就升版本号。想从本机发：`scripts/with-cos-key.sh npm run publish-release`，桶和密钥从哪来写在 `.machine.env` 里。
+**发布新版本**：改 `package.json` 里的版本号，推一个同名的标签（比如 `v0.2.1`），CI（`.github/workflows/release.yml`）会检查、打包，并传到下载地址 `dl.zephyrxiang.com/speakmore/`（腾讯云 COS + CDN）。发布过的版本号不会被覆盖，要改就升版本号。想从本机发：`scripts/release/with-cos-key.sh npm run publish-release`，桶和密钥从哪来写在 `.machine.env` 里。
 
 从源码跑的和装好的用的是同一个 `~/.speakmore`，想分开就设 `SPEAKMORE_HOME`。
 
-要真调 Gemini 的命令需要环境里有 `GEMINI_API_KEY`。`scripts/with-gemini-key.sh` 可以按你自己机器上的配置把它只喂给一条命令，见 `.machine.env.example`：
+要真调 Gemini 的命令需要环境里有 `GEMINI_API_KEY`。`scripts/dev/with-gemini-key.sh` 可以按你自己机器上的配置把它只喂给一条命令，见 `.machine.env.example`：
 
 ```bash
-scripts/with-gemini-key.sh node scripts/e2e.mjs 一段录音.wav   # 端到端：真的 Electron、录音编码、Gemini；麦克风和贴字是假的
-scripts/with-gemini-key.sh node scripts/eval-prompt.mjs --label v1   # 拿自己 Typeless 的历史录音评估提示词
-scripts/with-gemini-key.sh node src/server/main.mjs           # 单独启动听写服务，配合 SPEAKMORE_SERVER_URL 调试
-node scripts/replay.mjs 块1.ogg 块2.ogg                           # 把现成的录音发给单独启动的服务
+scripts/dev/with-gemini-key.sh node scripts/dev/e2e.mjs 一段录音.wav   # 端到端：真的 Electron、录音编码、Gemini；麦克风和贴字是假的
+scripts/dev/with-gemini-key.sh node scripts/dev/eval-prompt.mjs --label v1   # 拿自己 Typeless 的历史录音评估提示词
+scripts/dev/with-gemini-key.sh node src/server/main.mjs           # 单独启动听写服务，配合 SPEAKMORE_SERVER_URL 调试
+node scripts/dev/replay.mjs 块1.ogg 块2.ogg                           # 把现成的录音发给单独启动的服务
 ```
 
 不发布也可以试安装脚本：`SPEAKMORE_INSTALL_BASE=$PWD/dist/release SPEAKMORE_HOME=/tmp/sm bash install.sh`，装进一个临时目录。
@@ -203,15 +203,16 @@ node scripts/replay.mjs 块1.ogg 块2.ogg                           # 把现成�
 | --- | --- |
 | `install.sh` | 安装脚本：预检查、下载、校验、装进 `~/.speakmore`、启动 |
 | `bin/`、`src/cli/` | `speakmore` 命令 |
-| `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、设置和历史窗口 |
-| `src/renderer/`、`src/preload/` | 各个窗口的页面：状态机、录音、听写协议的客户端、悬浮条的画面 |
+| `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、设置和历史窗口；`keys/` 是 key 的保存和启用 |
+| `src/renderer/`、`src/preload/` | 各个窗口的页面，一个窗口一个目录：`bar/`（悬浮条：状态机、录音、听写协议的客户端、画面）、`history/`、`settings/`，共用的样式在 `shared/` |
 | `src/themes/` | 主题：界面要哪些颜色（一组 token）、每套主题给的值、合不合格怎么查。加一套主题是加一个文件、登记一行 |
-| `src/server/` | 听写服务：收分块音频，交给 Gemini 整理。平时跑在后台应用的进程里 |
+| `src/server/` | 听写服务：`protocol/` 收分块音频，`refine/` 交给模型整理。平时跑在后台应用的进程里 |
 | `native/` | 听热键、贴字、说话时截住 `esc` 和悬浮条上点击的小程序（Swift） |
-| `src/*.mjs` | 命令和后台应用共用的：东西放在哪、设置、历史库、控制通道、日志、旧数据的迁移 |
+| `src/storage/` | `~/.speakmore` 里的东西：放在哪、设置、历史库、旧数据的迁移。命令和后台应用共用 |
+| `src/control.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道、日志 |
 | `test/` | 自动测试，目录和 `src/` 对应 |
 | `.github/workflows/` | 推版本标签时自动发布 |
-| `scripts/` | 开发用的脚本：编译小程序、打发布包并传到下载地址、端到端、评估提示词；按每台机器自己的配置加载 key、核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
+| `scripts/` | 开发用的脚本，按用途分四组：`build/` 编译小程序、打 .app；`release/` 打发布包、传到下载地址；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
 | `docs/` | [实现笔记](docs/implementation-notes.md) |
 | `targets/typeless/` | 对 Typeless 的[逆向分析](targets/typeless/README.md)，18 篇文档。SpeakMore 是照着它做的 |
 | `AGENTS.md`、`.memory/` | 和 AI 编程助手协作时用的工作约定和项目记忆 |

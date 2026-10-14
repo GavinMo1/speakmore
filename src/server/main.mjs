@@ -1,6 +1,6 @@
 import { log } from "../log.mjs";
 import { loadConfig } from "./config.mjs";
-import { createGeminiRefiner } from "./refiner.mjs";
+import { createGeminiRefiner } from "./refine/refiner.mjs";
 import { startServer, WS_PATH } from "./server.mjs";
 
 let config;

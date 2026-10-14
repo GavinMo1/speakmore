@@ -1,4 +1,4 @@
-import { SETTINGS } from "../settings.mjs";
+import { SETTINGS } from "../storage/settings.mjs";
 import { toRgb } from "../themes/color.mjs";
 import { findTheme } from "../themes/index.mjs";
 

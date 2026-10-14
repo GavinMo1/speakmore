@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 
 // 端到端测试时由主进程加载（设了 SPEAKMORE_E2E_OUT 才会）。它代替人做两件事：
 // 模拟"按一下热键、说几秒、再按一下"，以及在该贴字的时候只记下文字、不真的去贴。
-// 麦克风由 Chromium 的假设备提供（scripts/e2e.mjs 传的启动参数），整条链路其余部分都是真的。
+// 麦克风由 Chromium 的假设备提供（scripts/dev/e2e.mjs 传的启动参数），整条链路其余部分都是真的。
 
 const OUT_PATH = process.env.SPEAKMORE_E2E_OUT;
 const RECORD_MS = Number(process.env.SPEAKMORE_E2E_RECORD_MS ?? 7_500);

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { createDaemon } from "../../src/cli/daemon.mjs";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer, TimeoutError } from "../../src/control.mjs";
-import { ensureHome, resolvePaths } from "../../src/paths.mjs";
+import { ensureHome, resolvePaths } from "../../src/storage/paths.mjs";
 
 const quietLog = { info() {}, warn() {}, error() {} };
 const RUNNING = { pid: 4321, starting: false, permissions: { microphone: "granted" }, key: { state: "ready" } };

@@ -12,7 +12,7 @@ metadata:
 **How to apply:**
 - 写记忆时，机器相关的事实只写"在 `.machine.env` 的哪个变量里"，不写值。引用他的原话时，原话里带这类名字的，换成变量名并说明换过。
 - 新增一项因机器而异的配置时，同时改 `.machine.env.example` 和读它的脚本，不在别处写死。
-- 提交前跑 `scripts/check-no-machine-facts.sh`，它拿 `.machine.env` 里的值、本机用户名和家目录、全局 git 邮箱去查会进 git 的文件和提交信息，有命中就不通过。
+- 提交前跑 `scripts/checks/check-no-machine-facts.sh`，它拿 `.machine.env` 里的值、本机用户名和家目录、全局 git 邮箱去查会进 git 的文件和提交信息，有命中就不通过。
 - 本仓库的提交邮箱已设成 GitHub 的匿名邮箱，是仓库本地配置，没有动全局。重新克隆后要再设一次，上面的脚本会查出来。
 
 相关：[[typeless-clone-gemini-key]]、[[github-account-check]]。

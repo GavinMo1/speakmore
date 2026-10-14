@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { ALREADY_RUNNING_EXIT_CODE, NotRunningError, requestControl, TimeoutError } from "../control.mjs";
 import { rotateIfLarge } from "../log.mjs";
-import { ensureHome } from "../paths.mjs";
+import { ensureHome } from "../storage/paths.mjs";
 import { ensureHelper as defaultEnsureHelper } from "./native-helper.mjs";
 
 // 后台应用（src/app，跑在 Electron 里）的起停。它脱离终端运行：关掉终端窗口它还在，
@@ -65,7 +65,7 @@ function startingHint(status) {
 
 /**
  * @param {object} options
- * @param {ReturnType<import("../paths.mjs").resolvePaths>} options.paths
+ * @param {ReturnType<import("../storage/paths.mjs").resolvePaths>} options.paths
  * @param {string} options.packageDir 这个包装在哪：Electron 以它为应用目录启动
  * @param {Record<string, string | undefined>} options.env 传给后台应用的环境
  */

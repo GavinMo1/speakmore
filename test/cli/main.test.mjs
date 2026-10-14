@@ -15,9 +15,9 @@ import { afterEach, beforeEach, test } from "node:test";
 import { Cancelled } from "../../src/cli/ask-secret.mjs";
 import { run } from "../../src/cli/main.mjs";
 import { NotRunningError, TimeoutError } from "../../src/control.mjs";
-import { openHistory } from "../../src/history.mjs";
-import { resolvePaths } from "../../src/paths.mjs";
-import { resolveSettings } from "../../src/settings.mjs";
+import { openHistory } from "../../src/storage/history.mjs";
+import { resolvePaths } from "../../src/storage/paths.mjs";
+import { resolveSettings } from "../../src/storage/settings.mjs";
 
 const READY = {
   pid: 4321,

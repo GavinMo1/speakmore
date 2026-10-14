@@ -8,7 +8,8 @@ import { THEME_CSS_VARIABLES } from "../../src/themes/contract.mjs";
 
 const rendererDir = resolve(import.meta.dirname, "../../src/renderer");
 const read = (name) => readFileSync(join(rendererDir, name), "utf8");
-const files = readdirSync(rendererDir);
+// 每个窗口一个子目录，共用的样式在 shared/ 里：要连子目录一起找，漏掉一处这里的检查就形同虚设
+const files = readdirSync(rendererDir, { recursive: true });
 const sheets = files.filter((name) => name.endsWith(".css")).map((name) => ({ name, css: read(name) }));
 const pages = files.filter((name) => name.endsWith(".html")).map((name) => ({ name, html: read(name) }));
 
@@ -56,6 +57,6 @@ test("每个页面都引入共用的 token，而且排在别的样式前面", ()
   assert.ok(pages.length >= 3);
   for (const { name, html } of pages) {
     const links = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((match) => match[1]);
-    assert.equal(links[0], "tokens.css", name);
+    assert.equal(links[0], "../shared/tokens.css", name);
   }
 });

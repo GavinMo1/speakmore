@@ -4,8 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
-import { openHistory } from "../../src/history.mjs";
-import { resolvePaths } from "../../src/paths.mjs";
+import { openHistory } from "../../src/storage/history.mjs";
+import { resolvePaths } from "../../src/storage/paths.mjs";
 
 const BIN = resolve(import.meta.dirname, "..", "..", "bin", "speakmore.mjs");
 

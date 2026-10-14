@@ -1,7 +1,7 @@
 // 内置的听写服务：就是 ../server 那个服务端，跑在主进程里，这样用的人不用另开一个终端。
 // 页面和它之间仍然走 WebSocket，服务端照旧可以单独启动（调试、回放录音、评估提示词）。
 import { loadConfig } from "../server/config.mjs";
-import { createGeminiRefiner } from "../server/refiner.mjs";
+import { createGeminiRefiner } from "../server/refine/refiner.mjs";
 import { startServer, WS_PATH } from "../server/server.mjs";
 
 const NO_KEY_MESSAGE = "还没有填 Gemini API key：在终端运行 speakmore key，或者点菜单栏的“听写”打开设置";

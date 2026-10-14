@@ -1,5 +1,5 @@
 # 推一个版本标签（比如 v0.2.0）就自动发布：检查、打包、传到下载地址。
-# 标签要和 package.json 里的版本号一致；同一个版本号发过了就不会再覆盖（见 scripts/release-layout.mjs）。
+# 标签要和 package.json 里的版本号一致；同一个版本号发过了就不会再覆盖（见 scripts/release/release-layout.mjs）。
 #
 # 要在仓库的 Settings → Secrets and variables → Actions 里配四个 secret：
 #   TENCENTCLOUD_SECRET_ID、TENCENTCLOUD_SECRET_KEY  只能写发布桶的那把密钥

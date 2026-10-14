@@ -15,18 +15,18 @@ import {
   Tray,
 } from "electron";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
-import { openHistory } from "../history.mjs";
-import { migrateLegacyData } from "../legacy.mjs";
 import { alsoLogTo, log } from "../log.mjs";
-import { ensureHome, resolvePaths } from "../paths.mjs";
-import { HOTKEY_KEYCAPS, HOTKEYS, resolveSettings } from "../settings.mjs";
+import { openHistory } from "../storage/history.mjs";
+import { migrateLegacyData } from "../storage/legacy.mjs";
+import { ensureHome, resolvePaths } from "../storage/paths.mjs";
+import { HOTKEY_KEYCAPS, HOTKEYS, resolveSettings } from "../storage/settings.mjs";
 import { toHex } from "../themes/color.mjs";
 import { themeCss } from "../themes/contract.mjs";
 import { findTheme } from "../themes/index.mjs";
 import { createDelivery } from "./delivery.mjs";
 import { startHelper } from "./helper.mjs";
-import { createKeyManager } from "./key-manager.mjs";
-import { createKeyStore } from "./key-store.mjs";
+import { createKeyManager } from "./keys/key-manager.mjs";
+import { createKeyStore } from "./keys/key-store.mjs";
 import { startService } from "./service.mjs";
 import { summarizeSetup } from "./setup-state.mjs";
 
@@ -215,7 +215,7 @@ async function main() {
     // 所以点击是原生小帮手在事件到达任何窗口之前截下来的，见下面的 bar:capture
     bar.setIgnoreMouseEvents(true);
     bar.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    bar.loadFile(join(sourceDir, "renderer", "bar.html"));
+    bar.loadFile(join(sourceDir, "renderer", "bar", "bar.html"));
     return bar;
   }
 
@@ -441,7 +441,7 @@ async function main() {
         backgroundColor: windowBackground(),
         webPreferences,
       });
-      window.loadFile(join(sourceDir, "renderer", "history.html"));
+      window.loadFile(join(sourceDir, "renderer", "history", "history.html"));
       window.on("closed", () => {
         historyWindow = null;
       });
@@ -460,7 +460,7 @@ async function main() {
         backgroundColor: windowBackground(),
         webPreferences,
       });
-      window.loadFile(join(sourceDir, "renderer", "settings.html"));
+      window.loadFile(join(sourceDir, "renderer", "settings", "settings.html"));
       // 用户去系统设置里改完权限再切回来时，状态跟着刷新
       window.on("focus", () => window.webContents.send("setup:changed"));
       window.on("closed", () => {
