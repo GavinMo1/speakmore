@@ -1,6 +1,6 @@
 import { log } from "../log.mjs";
 import { loadConfig } from "./config.mjs";
-import { formatModelChoice } from "./providers/index.mjs";
+import { findProvider, formatModelChoice } from "./providers/index.mjs";
 import { createModelRefiner } from "./refine/refiner.mjs";
 import { startServer, WS_PATH } from "./server.mjs";
 
@@ -32,7 +32,8 @@ try {
 log.info("listening", {
   url: `ws://${config.host}:${server.port}${WS_PATH}`,
   model,
-  thinking_level: config.thinkingLevel,
+  // 思考档位只有 Gemini 用得上，别家不写，免得看日志的人以为它起了作用
+  ...(findProvider(config.model.provider).thinkingLevels ? { thinking_level: config.thinkingLevel } : {}),
 });
 
 // 不等它：预热失败不该拦着服务启动，但要让人看得见

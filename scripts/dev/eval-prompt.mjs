@@ -3,12 +3,13 @@
 // 和原版当时给出的成品比排版（分没分段、用没用列表、长短、文字出入），并数出明显的异常。
 // 改提示词前后各跑一次，用 --label 区分，两次的数字就能直接对比。
 //
-// 用法：GEMINI_API_KEY 经按需加载器喂进来，然后
-//   node scripts/dev/eval-prompt.mjs --label <名字> [--out <目录>] [--concurrency 4]
+// 用法：用哪一家的哪个模型由 SPEAKMORE_MODEL 定（默认 Gemini），那一家的 key 经 with-key.sh 喂进来：
+//   scripts/dev/with-key.sh gemini node scripts/dev/eval-prompt.mjs --label <名字> [--out <目录>] [--concurrency 4]
+//   SPEAKMORE_MODEL=openai/gpt-audio-1.5 scripts/dev/with-key.sh openai node scripts/dev/eval-prompt.mjs --label <名字>
 // 第一次运行会抽样，把清单写进 <目录>/samples.json，之后每次都用这同一批。
 // 加 --report-only 时不调模型，只拿这个标签上次的结果重新出一遍统计。
 //
-// 录音会发给 Gemini。清单和结果文件里有说话的原文，所以输出目录必须在 git 之外，
+// 录音会发给选的那一家。清单和结果文件里有说话的原文，所以输出目录必须在 git 之外，
 // 默认是 targets/typeless/_work/prompt-eval。终端上只打印统计数字，不打印文字。
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -17,7 +18,8 @@ import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { parseArgs } from "node:util";
 import { loadConfig } from "../../src/server/config.mjs";
-import { createGeminiRefiner } from "../../src/server/refine/refiner.mjs";
+import { formatModelChoice } from "../../src/server/providers/index.mjs";
+import { createModelRefiner } from "../../src/server/refine/refiner.mjs";
 
 const TYPELESS_DB = join(homedir(), "Library/Application Support/Typeless/typeless.db");
 /** 按录音时长分层抽样：[下限秒, 上限秒, 抽几条]。长录音才会分段分点，所以往长的那头多抽 */
@@ -73,10 +75,16 @@ async function main() {
     results = JSON.parse(readFileSync(resultsPath, "utf8"));
     console.log(`样本 ${samples.length} 条，标签 ${args.label}（用上次的结果，没有调模型）`);
   } else {
-    const { gemini } = loadConfig(process.env);
+    const config = loadConfig(process.env);
     let retries = 0;
-    const refiner = createGeminiRefiner({ ...gemini, log: { warn: () => retries++ } });
-    console.log(`样本 ${samples.length} 条，模型 ${gemini.model} / ${gemini.thinkingLevel}，标签 ${args.label}`);
+    const refiner = await createModelRefiner({
+      choice: config.model,
+      apiKey: config.apiKey,
+      thinkingLevel: config.thinkingLevel,
+      log: { info() {}, warn: () => retries++ },
+    });
+    const thinking = config.model.provider === "gemini" ? ` / ${config.thinkingLevel}` : "";
+    console.log(`样本 ${samples.length} 条，模型 ${formatModelChoice(config.model)}${thinking}，标签 ${args.label}`);
     // 进程里的第一次请求要多花一两秒建连接，先发掉，免得算进第一条样本的耗时
     await refiner.warmUp();
     results = await mapWithLimit(samples, concurrency, (sample) => runOne(refiner, sample));

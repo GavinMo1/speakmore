@@ -27,7 +27,7 @@ needles=()
 # 太短的字样会到处误报，不查
 add() { [ ${#1} -ge 4 ] && needles+=("$1"); return 0; }
 
-for name in SECRETS_LOADER GEMINI_CREDENTIAL COS_SECRETS_LOADER COS_CREDENTIAL COS_BUCKET; do
+for name in SECRETS_LOADER GEMINI_CREDENTIAL OPENAI_CREDENTIAL COS_SECRETS_LOADER COS_CREDENTIAL COS_BUCKET; do
   value="$(setting "$name")"
   add "$value"
   # 路径有两种写法，都查：写成 ~ 开头的，和展开成家目录的

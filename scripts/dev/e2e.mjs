@@ -2,8 +2,9 @@
 // 端到端测试：真的 Electron、真的录音编码、真的服务端和模型，只有两头是假的——
 // 麦克风换成一个 WAV 文件，贴字换成"记下来"。不会碰真实的键盘、剪贴板和历史记录。
 //
-// 用法：环境里要有 GEMINI_API_KEY（后台应用用它起内置的服务）
-//   scripts/dev/with-gemini-key.sh node scripts/dev/e2e.mjs <一段 16 位 PCM 的 WAV>
+// 用法：环境里要有所选那一家的 key（后台应用用它起内置的服务）。默认用 Gemini，SPEAKMORE_MODEL 可以换：
+//   scripts/dev/with-key.sh gemini node scripts/dev/e2e.mjs <一段 16 位 PCM 的 WAV>
+//   SPEAKMORE_MODEL=openai scripts/dev/with-key.sh openai node scripts/dev/e2e.mjs <一段 16 位 PCM 的 WAV>
 // 录音时长默认 7.5 秒（跨过两个 3 秒的分块边界），可用 SPEAKMORE_E2E_RECORD_MS 改。
 
 import { spawn } from "node:child_process";
