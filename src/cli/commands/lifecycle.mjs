@@ -9,27 +9,38 @@ import {
   readStats,
   showStatus,
 } from "../common.mjs";
-import { currentProvider, hasKeyAlready, keyPrompter, needsNewKey, submitKey } from "./key.mjs";
+import { currentProvider, hasKeyAlready, keyPrompter, keySource, needsNewKey, submitKey } from "./key.mjs";
+import { chooseProvider } from "./model.mjs";
 
 // 起停和看状态：speakmore（start）、stop、restart、status。
 
 export async function start(args, io) {
   noPositionals(parse(args).positionals, "speakmore start");
-  const settings = currentSettings(io);
-  const provider = currentProvider(io);
-  const nextKey = keyPrompter(io, provider);
+  // 先读一遍：设置文件坏了的话，在问任何问题之前就说清楚
+  currentSettings(io);
+  let provider = currentProvider(io);
 
   let started = await io.daemon.status();
+  // 第一次用：用哪家、key 都在启动之前问。启动要等一阵（第一次还要下载、点授权框），那段时间终端是照常回显的，
+  // 到那时才问的话，提前粘贴的人会看到 key 显示在屏幕上
+  const firstRun = started === null && io.interactive && !hasKeyAlready(io);
+  /** 选哪家时按了 Ctrl-C：后面的 key 也不问了 */
+  let declined = false;
+  // 设置里（或者环境变量）已经定了用哪家的，就是那家，不再问
+  if (firstRun && currentSettings(io).model.source === "default") {
+    const chosen = await chooseProvider(io);
+    if (chosen === null) declined = true;
+    else provider = chosen;
+  }
+  const nextKey = keyPrompter(io, provider);
   /** 问到的第一把 key。undefined：还没问过；null：问了，没填 */
   let firstKey;
   if (started === null) {
-    // 哪儿都没有 key 的话先问、再启动：启动要等一阵（第一次还要下载、点授权框），那段时间终端是照常回显的，
-    // 到那时才问的话，提前粘贴的人会看到 key 显示在屏幕上
-    if (io.interactive && !hasKeyAlready(io)) firstKey = await nextKey();
+    if (firstRun && !declined && keySource(io, provider) === null) firstKey = await nextKey();
     io.out("正在启动 SpeakMore…");
     started = await io.daemon.start({ onProgress: io.out });
   }
-  if (firstKey === undefined && io.interactive && needsNewKey(started.key)) firstKey = await nextKey();
+  if (firstKey === undefined && !declined && io.interactive && needsNewKey(started.key)) firstKey = await nextKey();
   // 不填或取消都不纠缠，面板里会说还差它
   for (let value = firstKey ?? null; value !== null; value = await nextKey()) {
     if (await submitKey(io, value, provider)) break;
@@ -40,7 +51,8 @@ export async function start(args, io) {
   const openSettings = io.interactive && !status.starting && permissionMissing(status);
   if (openSettings) await io.daemon.request("show-settings");
   io.out("");
-  showStatus(io, status, settings);
+  // 刚才可能选了别家，设置变了
+  showStatus(io, status, currentSettings(io));
   if (openSettings) io.out("已经打开设置窗口，照着把缺的权限补上。补完运行 speakmore status 再看一眼。");
   return 0;
 }

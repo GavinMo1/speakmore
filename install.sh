@@ -23,7 +23,8 @@ REPO_URL="https://github.com/zephyr4123/speakmore"
 # 发布包放在这里。根上是这个脚本和 latest（一行，最新的版本号），每个版本的包在各自的目录里：
 # <版本号>/speakmore-darwin-<芯片>.tar.gz 和同名的 .sha256
 DOWNLOAD_URL="https://dl.zephyrxiang.com/speakmore"
-GEMINI_HOST="generativelanguage.googleapis.com"
+# 能用的几家模型（名字和地址成对），整理文字要连其中一家。和 src/server/providers/index.mjs 里登记的一致
+MODEL_HOSTS=("Gemini" "generativelanguage.googleapis.com" "OpenAI" "api.openai.com")
 MIN_MACOS_MAJOR=12
 # 下载的包约 120 MB，解开约 350 MB；升级时旧的要等新的放好才删
 NEEDED_MB=1000
@@ -147,12 +148,18 @@ check_network() {
       "检查网络。指定了 SPEAKMORE_VERSION 的话，确认有这个版本。"
   ok "下载地址连得上"
 
-  # 装得上不等于用得了：整理文字要连 Gemini。连不上只提醒，不拦着
-  if curl -s --max-time 8 -o /dev/null "https://$GEMINI_HOST/" 2>/dev/null; then
-    ok "连得上 Gemini"
-  else
-    warn "现在连不上 Gemini（$GEMINI_HOST）"
-    note "不影响安装。用的时候要能连上它；需要代理的话，启动 speakmore 的那个终端里要设好。"
+  # 装得上不等于用得了：整理文字要连用的那一家，装的时候还不知道用哪家，所以都查。连不上只提醒，不拦着
+  local i unreachable=0
+  for ((i = 0; i < ${#MODEL_HOSTS[@]}; i += 2)); do
+    if curl -s --max-time 8 -o /dev/null "https://${MODEL_HOSTS[i + 1]}/" 2>/dev/null; then
+      ok "连得上 ${MODEL_HOSTS[i]}"
+    else
+      warn "现在连不上 ${MODEL_HOSTS[i]}（${MODEL_HOSTS[i + 1]}）"
+      unreachable=1
+    fi
+  done
+  if [ "$unreachable" = 1 ]; then
+    note "不影响安装。用哪一家就要能连上哪一家；需要代理的话，启动 speakmore 的那个终端里要设好。"
   fi
 }
 

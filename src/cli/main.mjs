@@ -10,7 +10,7 @@ import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
 import { resolvePaths } from "../storage/paths.mjs";
 import { THEMES } from "../themes/index.mjs";
-import { askSecret } from "./ask-secret.mjs";
+import { askSecret, Cancelled } from "./ask-secret.mjs";
 import { config, settings, theme } from "./commands/config.mjs";
 import { DEFAULT_HISTORY_LIMIT, history } from "./commands/history.mjs";
 import { key } from "./commands/key.mjs";
@@ -114,6 +114,19 @@ function removeKeychainKey(productName) {
   }
 }
 
+/** 问一句普通的话（会回显，比如选用哪一家）。按 Ctrl-C 和问 key 时一样抛 Cancelled */
+async function ask(question) {
+  const prompt = createInterface({ input: process.stdin, output: process.stderr });
+  try {
+    return await new Promise((resolve, reject) => {
+      prompt.once("SIGINT", () => reject(new Cancelled()));
+      prompt.question(question).then(resolve, reject);
+    });
+  } finally {
+    prompt.close();
+  }
+}
+
 async function confirm(question) {
   const prompt = createInterface({ input: process.stdin, output: process.stderr });
   try {
@@ -145,6 +158,7 @@ export function createIo({ packageDir, env = process.env }) {
     timeZone: undefined,
     openHistory,
     askSecret,
+    ask,
     confirm,
     // 钥匙串里那一条的名字是 Electron 按应用名起的
     removeKeychainKey: () => removeKeychainKey(manifest.productName),

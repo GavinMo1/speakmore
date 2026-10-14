@@ -1,8 +1,9 @@
 import { findProvider, formatModelChoice, PROVIDERS, parseModelChoice } from "../../server/providers/index.mjs";
+import { Cancelled } from "../ask-secret.mjs";
 import { ConfigError, currentSettings, ensureRunning, parse, renderOptions, UsageError } from "../common.mjs";
 import { renderModels } from "../render/models.mjs";
 import { applySettings, storeSetting, warnIfEnvOverrides } from "./config.mjs";
-import { keyPrompter, keySourceFor, submitKey } from "./key.mjs";
+import { currentProvider, keyPrompter, keySource, keySourceFor, submitKey } from "./key.mjs";
 
 // speakmore model：看有哪几家、换用哪一家的哪个模型、检查某个模型现在能不能用。
 // 换模型其实就是改设置里的 model，和 speakmore config set model 是一回事；这里多做两件事：
@@ -29,6 +30,44 @@ function choiceFrom(value) {
 }
 
 const describe = ({ provider, model }) => `${findProvider(provider).name} 的 ${model}`;
+
+const MAX_CHOICE_ATTEMPTS = 3;
+
+/**
+ * 第一次启动、还没有 key 时先问用哪一家：手里有哪家的 key，因人而异。
+ * 选的不是现在设置里那家就记进设置；别家已经有 key 的标出来，选它就不用再填。
+ * @returns {Promise<object | null>} 选定的那一家；按了 Ctrl-C、或者问够了次数还没选上时是 null（不纠缠）
+ */
+export async function chooseProvider(io) {
+  const current = currentProvider(io);
+  const options = PROVIDERS.map((provider, index) => {
+    const notes = [`默认用 ${provider.defaultModel}`, ...(keySource(io, provider) ? ["已经有 key"] : [])];
+    return `  ${index + 1}  ${provider.name.padEnd(8)}${notes.join("，")}`;
+  });
+  const fallback = PROVIDERS.indexOf(current) + 1;
+  const question = [
+    "",
+    "先选用哪一家的模型把录音整理成文字（以后可以用 speakmore model 换）：",
+    ...options,
+    `输入编号后按回车（直接回车选 ${fallback}）：`,
+  ].join("\n");
+  for (let attempt = 0; attempt < MAX_CHOICE_ATTEMPTS; attempt++) {
+    let answer;
+    try {
+      answer = (await io.ask(attempt === 0 ? question : "输入编号后按回车：")).trim();
+    } catch (error) {
+      if (error instanceof Cancelled) return null;
+      throw error;
+    }
+    const chosen = answer === "" ? current : (PROVIDERS[Number(answer) - 1] ?? findProvider(answer));
+    if (chosen) {
+      if (chosen.id !== current.id) storeSetting(io, "model", chosen.id);
+      return chosen;
+    }
+    io.err(`没有 ${answer} 这一项，能选 ${PROVIDERS.map(({ name }, index) => `${index + 1}（${name}）`).join("、")}。`);
+  }
+  return null;
+}
 
 async function list(io) {
   // 正在用的那家的 key 可能是启动后台应用时从环境变量给的，命令行这边看不到：问一下在运行的那个

@@ -19,7 +19,7 @@ import { join, resolve } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 
 // 安装脚本的测试：拿一个假的发布包（里面的"Electron"是个记下自己怎么被调用的小脚本）真的跑 install.sh，
-// 装进临时的家目录。系统信息（系统版本、芯片、磁盘、是不是 root、连不连得上 Gemini）用排在 PATH 前面的
+// 装进临时的家目录。系统信息（系统版本、芯片、磁盘、是不是 root、连不连得上各家模型）用排在 PATH 前面的
 // 同名小脚本冒充，所以不联网，也不碰真的 ~/.speakmore。
 // 每条都要真的执行几个刚生成的脚本，macOS 第一次执行新文件时会先检查它，一次安装要 3–6 秒，
 // 所以这一组单独跑、限时放得宽（npm run test:install），不拖慢平时的那一组。
@@ -50,8 +50,8 @@ const SHIMS = {
   uname: `#!/bin/sh\ncase "$1" in -s) echo "\${FAKE_OS:-Darwin}" ;; -m) echo "\${FAKE_ARCH:-arm64}" ;; *) exec /usr/bin/uname "$@" ;; esac\n`,
   id: `#!/bin/sh\n[ "$1" = "-u" ] && [ -n "$FAKE_UID" ] && { echo "$FAKE_UID"; exit 0; }\nexec /usr/bin/id "$@"\n`,
   df: `#!/bin/sh\n[ -n "$FAKE_FREE_KB" ] && { echo "Filesystem 1024-blocks Used Available Capacity Mounted on"; echo "/dev/x 9 9 $FAKE_FREE_KB 1% /"; exit 0; }\nexec /bin/df "$@"\n`,
-  // 只有问 Gemini 连不连得上的那一次是假的；下载用的 file:// 照常交给真的 curl
-  curl: `#!/bin/sh\ncase "$*" in *generativelanguage.googleapis.com*) exit "\${FAKE_GEMINI_EXIT:-0}" ;; esac\nexec /usr/bin/curl "$@"\n`,
+  // 只有问各家模型连不连得上的那几次是假的；下载用的 file:// 照常交给真的 curl
+  curl: `#!/bin/sh\ncase "$*" in *generativelanguage.googleapis.com*) exit "\${FAKE_GEMINI_EXIT:-0}" ;; *api.openai.com*) exit "\${FAKE_OPENAI_EXIT:-0}" ;; esac\nexec /usr/bin/curl "$@"\n`,
 };
 
 function makeArchive(arch, version = "9.9.9") {
@@ -242,10 +242,30 @@ test("问不到最新版本、问到的不像版本号、指定的版本不存�
   assertRefused(install({ env: { SPEAKMORE_VERSION: "../../etc" } }), /SPEAKMORE_VERSION 不像版本号/);
 });
 
-test("连不上 Gemini 只提醒，不拦着安装", () => {
-  const { code, out } = install({ env: { FAKE_GEMINI_EXIT: "7" } });
-  assert.equal(code, 0);
-  assert.match(out, /! 现在连不上 Gemini/);
+test("安装脚本里查的几家，和程序里登记的模型厂商是同一份", async () => {
+  const { PROVIDERS } = await import("../../src/server/providers/index.mjs");
+  const listed = readFileSync(INSTALLER, "utf8").match(/^MODEL_HOSTS=\((.*)\)$/m)[1].match(/"[^"]*"/g);
+  const names = listed.filter((_, index) => index % 2 === 0).map((quoted) => quoted.slice(1, -1));
+  assert.deepEqual(names, PROVIDERS.map(({ name }) => name));
+});
+
+test("能用的几家模型都查一遍连不连得上：连得上的打勾，连不上的只提醒，不拦着安装", () => {
+  const both = install();
+  assert.equal(both.code, 0);
+  assert.match(both.out, /✓ 连得上 Gemini/);
+  assert.match(both.out, /✓ 连得上 OpenAI/);
+
+  const noGemini = install({ env: { FAKE_GEMINI_EXIT: "7" } });
+  assert.equal(noGemini.code, 0);
+  assert.match(noGemini.out, /! 现在连不上 Gemini/);
+  assert.match(noGemini.out, /✓ 连得上 OpenAI/);
+
+  const neither = install({ env: { FAKE_GEMINI_EXIT: "7", FAKE_OPENAI_EXIT: "7" } });
+  assert.equal(neither.code, 0);
+  assert.match(neither.out, /! 现在连不上 Gemini/);
+  assert.match(neither.out, /! 现在连不上 OpenAI/);
+  // 怎么办只说一遍
+  assert.equal(neither.out.match(/需要代理的话/g)?.length, 1);
   assert.equal(installedVersion(), "9.9.9");
 });
 

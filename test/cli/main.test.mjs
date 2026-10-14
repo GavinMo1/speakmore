@@ -124,7 +124,8 @@ function fakeDaemon({
       if (cmd === "check-model") return checkModel(params.model);
       if (cmd === "set-key") {
         const result = saveKey(params.key, params.provider);
-        if (result.ok) daemon.current = { ...daemon.current, ...READY };
+        // 存 key 只改 key 的状态，用的是哪一家不变
+        if (result.ok) daemon.current = { ...daemon.current, key: READY.key, summary: READY.summary };
         return result;
       }
       if (cmd === "forget-key") daemon.current = NO_KEY;
@@ -141,11 +142,14 @@ function harness({
   interactive = true,
   env = {},
   secrets = [],
+  answers = [],
   confirms = [],
   keychain = () => true,
 } = {}) {
   const output = { out: "", err: "" };
   const asked = [];
+  /** 普通提问（会回显的，比如选用哪一家）问过的话 */
+  const questions = [];
   const tails = [];
   const confirmed = [];
   const io = {
@@ -171,6 +175,13 @@ function harness({
       if (answer instanceof Error) throw answer;
       return answer ?? "";
     },
+    async ask(question) {
+      questions.push(question);
+      const next = answers.shift();
+      const answer = typeof next === "function" ? next() : next;
+      if (answer instanceof Error) throw answer;
+      return answer ?? "";
+    },
     async tail(args) {
       tails.push(args);
       return 0;
@@ -183,7 +194,7 @@ function harness({
     sharedPreferencesFile: join(dir, "com.github.Electron.plist"),
     packageDir: paths.appDir,
   };
-  return { io, output, asked, tails, confirmed, daemon, speakmore: (...argv) => run(argv, io) };
+  return { io, output, asked, questions, tails, confirmed, daemon, speakmore: (...argv) => run(argv, io) };
 }
 
 /** 假装以前存过一把 key */
@@ -234,6 +245,92 @@ test("第一次用：先问 key，再启动；存好了直接能用；key 不出
   assert.match(output.out, /已保存，验证通过/);
   assert.match(output.out, /运行中/);
   assert.ok(!(output.out + output.err).includes("AIza-my-secret"));
+});
+
+test("第一次用：先问用哪一家，选 OpenAI 就记进设置、问 OpenAI 的 key，问完才启动", async () => {
+  const saved = [];
+  const daemon = fakeDaemon({
+    afterStart: { ...NO_KEY, provider: "openai", model: "openai/gpt-audio-mini" },
+    saveKey: (key, provider) => {
+      saved.push([key, provider]);
+      return { ok: true };
+    },
+  });
+  const whenChosen = () => {
+    assert.deepEqual(daemon.calls, [], "选的时候还没开始启动");
+    return "2";
+  };
+  const { speakmore, questions, asked, output } = harness({ daemon, answers: [whenChosen], secrets: ["sk-my-secret"] });
+  assert.equal(await speakmore(), 0);
+  assert.equal(questions.length, 1);
+  assert.match(questions[0], /1.*Gemini/);
+  assert.match(questions[0], /2.*OpenAI/);
+  // 以后怎么换也说一句，免得以为选了就定死了
+  assert.match(questions[0], /speakmore model/);
+  assert.equal(resolveSettings({ file: paths.settingsFile, env: {} }).model.value, "openai/gpt-audio-mini");
+  assert.equal(asked.length, 1);
+  assert.match(asked[0], /platform\.openai\.com\/api-keys/);
+  assert.deepEqual(saved, [["sk-my-secret", "openai"]]);
+  assert.deepEqual(daemon.calls, ["start", "set-key", "recheck"]);
+  assert.match(output.out, /OpenAI/);
+  assert.ok(!(output.out + output.err).includes("sk-my-secret"));
+});
+
+test("第一次用：直接回车就是 Gemini，设置文件不动", async () => {
+  const daemon = fakeDaemon({ afterStart: NO_KEY });
+  const { speakmore, questions, asked } = harness({ daemon, answers: [""], secrets: ["AIza-key"] });
+  assert.equal(await speakmore(), 0);
+  assert.equal(questions.length, 1);
+  assert.ok(!existsSync(paths.settingsFile));
+  assert.match(asked[0], /aistudio\.google\.com/);
+});
+
+test("选的时候写名字也认；写错了说能选什么，再问", async () => {
+  const daemon = fakeDaemon({ afterStart: { ...NO_KEY, provider: "openai" } });
+  const { speakmore, questions, output } = harness({ daemon, answers: ["deepseek", "OpenAI"], secrets: ["sk-key"] });
+  assert.equal(await speakmore(), 0);
+  assert.equal(questions.length, 2);
+  assert.match(output.err, /deepseek/);
+  assert.match(output.err, /1.*2/);
+  assert.equal(resolveSettings({ file: paths.settingsFile, env: {} }).model.value, "openai/gpt-audio-mini");
+});
+
+test("别家已经有 key 时标出来；选它就不用再填，直接用它启动", async () => {
+  writeFileSync(keyFile(paths, "openai"), "密文");
+  const daemon = fakeDaemon({ afterStart: { ...READY, provider: "openai", model: "openai/gpt-audio-mini" } });
+  const { speakmore, questions, asked } = harness({ daemon, answers: ["2"] });
+  assert.equal(await speakmore(), 0);
+  assert.match(questions[0], /OpenAI.*已经有 key/);
+  assert.equal(asked.length, 0);
+  assert.ok(!daemon.calls.includes("set-key"));
+  assert.equal(resolveSettings({ file: paths.settingsFile, env: {} }).model.value, "openai/gpt-audio-mini");
+});
+
+test("设置里或环境变量里已经定了用哪家：不再问选哪家，直接问那一家的 key", async () => {
+  writeFileSync(paths.settingsFile, JSON.stringify({ model: "openai/gpt-audio-1.5" }));
+  const fromFile = harness({ daemon: fakeDaemon({ afterStart: NO_KEY }), secrets: ["sk-key"] });
+  assert.equal(await fromFile.speakmore(), 0);
+  assert.equal(fromFile.questions.length, 0);
+  assert.match(fromFile.asked[0], /OpenAI/);
+  rmSync(paths.settingsFile);
+
+  const fromEnv = harness({
+    daemon: fakeDaemon({ afterStart: NO_KEY }),
+    env: { SPEAKMORE_MODEL: "gemini" },
+    secrets: ["AIza"],
+  });
+  assert.equal(await fromEnv.speakmore(), 0);
+  assert.equal(fromEnv.questions.length, 0);
+});
+
+test("选哪家时按了 Ctrl-C：不问 key，照默认的启动，面板里说还差 key", async () => {
+  const daemon = fakeDaemon({ afterStart: NO_KEY });
+  const { speakmore, questions, asked, output } = harness({ daemon, answers: [new Cancelled()] });
+  assert.equal(await speakmore(), 0);
+  assert.equal(questions.length, 1);
+  assert.equal(asked.length, 0);
+  assert.deepEqual(daemon.calls, ["start", "recheck"]);
+  assert.match(output.out, /还差 1 样/);
 });
 
 test("已经有 key（存着的，或者环境变量给的）时直接启动，不问", async () => {
@@ -315,9 +412,10 @@ test("问 key 时什么都没填或者按了 Ctrl-C：不纠缠，面板里说�
 
 test("不是在终端里运行（脚本、管道）时不问 key，也不弹窗口", async () => {
   const daemon = fakeDaemon({ afterStart: { ...NO_KEY, ...{ permissions: NO_PERMISSIONS.permissions } } });
-  const { speakmore, asked } = harness({ daemon, interactive: false });
+  const { speakmore, asked, questions } = harness({ daemon, interactive: false });
   assert.equal(await speakmore(), 0);
   assert.equal(asked.length, 0);
+  assert.equal(questions.length, 0);
   assert.ok(!daemon.calls.includes("show-settings"));
 });
 
