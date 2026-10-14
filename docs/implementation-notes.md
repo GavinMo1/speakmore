@@ -112,7 +112,7 @@ src/server/server.mjs             听写协议那一侧不知道背后是哪一�
 
 用的是作者的实验用 key，2026-10-13 从西雅图测的。录音是作者自己用 SpeakMore 时的 6 段测试录音（1.7–33.7 秒），没有用 Typeless 的历史录音（发给 OpenAI 这件事没问过作者）。
 
-- **只收 wav 和 mp3。** 传 webm、ogg 都回 400："Supported values are: 'wav' and 'mp3'"。悬浮条录的是 WebM（Electron 的录音接口录不了 Ogg，实测 `MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")` 是 false），所以服务端先解码（[@audio/decode-webm](https://www.npmjs.com/package/@audio/decode-webm)、[@audio/decode-opus](https://www.npmjs.com/package/@audio/decode-opus)）、降到 16 kHz、封成 WAV。降采样和封 WAV 是自己写的（`src/server/audio/pcm.mjs`），一分钟的录音约 60 毫秒。
+- **只收 wav 和 mp3。** 传 webm、ogg 都回 400："Supported values are: 'wav' and 'mp3'"。悬浮条录的是 WebM（Electron 的录音接口录不了 Ogg，实测 `MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")` 是 false），所以服务端先解码（[@audio/decode-webm](https://www.npmjs.com/package/@audio/decode-webm)）、降到 16 kHz、封成 WAV。降采样和封 WAV 是自己写的（`src/server/audio/pcm.mjs`），一分钟的录音约 60 毫秒。
 - **采样率要降。** 同一段 90 秒的录音，48 kHz 的 WAV 要 18 秒，24 kHz 和 16 kHz 是 6–9 秒；三种算出来的音频 token 一样多（907），所以降采样只省上传、不省钱。
 - **验证 key 不能发纯文字。** 这几个模型要求输入或输出里有音频，纯文字的请求回 400；所以带一段 0.1 秒静音、只要 1 个 token，约 0.7 秒。
 - **报错**：假 key 回 401 `invalid_api_key`，写错的模型名回 404 `model_not_found`，都按实测写进了分类。账号没额度（429 `insufficient_quota`）、所在地区不支持（403 `unsupported_country_region_territory`，归成"暂时用不了"、提示查代理，不叫人换 key）照官方文档的错误码写的，没测到。
@@ -124,7 +124,7 @@ src/server/server.mjs             听写协议那一侧不知道背后是哪一�
   | `gpt-audio-mini` | 6 段都正常，静音那段输出了 `<无人声>` 标记；口头禅偶尔留着（"就是"） | 1.9–4.9 秒 |
   | `gpt-audio-1.5` | 两段把成品包成了 `{"final_text": "…"}` 或 `{"…"}`，两段开头多了换行；另一次同一段录音回了 500 "The model produced invalid content" | 1.7–4.1 秒 |
 
-  所以默认用 `gpt-audio-mini`。提示词是对着 Gemini 调的，还没拿成批的真实录音对 OpenAI 调过；`eval-prompt.mjs` 已经能选模型，要调的话先问作者能不能把 Typeless 的历史录音发给 OpenAI。
+  所以默认用 `gpt-audio-mini`。提示词是对着 Gemini 调的，没拿成批的真实录音对 OpenAI 调过，作者定了边用边调。Typeless 的历史录音只发给 Gemini，而且它们是 Ogg：拆 Ogg 要用 LGPL 的 codec-parser，作者定了不随程序分发，所以服务端只把 WebM 转成 WAV，Ogg 交给 OpenAI 会直接报错。
 
 ### Gemini 的回归
 

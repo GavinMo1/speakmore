@@ -9,8 +9,9 @@ const NPM_FLAGS = ["--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"];
 
 /**
  * 装上了、但程序从来不加载的包，不随程序分发。@audio/decode-webm 声明依赖了另外几种解码器（AAC、AC-3、DTS、
- * E-AC-3、FLAC、MP3、Vorbis），其中 AAC、AC-3、DTS 是 GPL，E-AC-3 是 LGPL，和本项目的 MIT 不兼容；
- * 而它打包好的代码只用自带的 Opus 解码。实测把这几个挪走，WebM 和 Ogg 照样转得出来（test/server/audio）。
+ * E-AC-3、FLAC、MP3、Opus、Vorbis），其中 AAC、AC-3、DTS 是 GPL，E-AC-3 是 LGPL，和本项目的 MIT 不兼容；
+ * 而它打包好的代码只用自带的 Opus 解码。codec-parser（LGPL）是拆 Ogg 用的，程序不转 Ogg（见 src/server/audio/transcode.mjs）。
+ * 实测把这几个挪走，WebM 照样转得出来（test/server/audio）。
  */
 export const UNUSED_PACKAGES = [
   "@audio/decode-aac",
@@ -19,22 +20,14 @@ export const UNUSED_PACKAGES = [
   "@audio/decode-eac3",
   "@audio/decode-flac",
   "@audio/decode-mp3",
+  "@audio/decode-opus",
   "@audio/decode-vorbis",
+  "codec-parser",
 ];
 
 export function pruneUnused(stagingDir) {
   for (const name of UNUSED_PACKAGES) rmSync(join(stagingDir, "node_modules", name), { recursive: true, force: true });
 }
-
-/**
- * 查出来、但确认过可以随程序分发的包，以及按哪个许可证。许可证一变就不再放行。
- * codec-parser：@audio/decode-opus 拆 Ogg 要用（WebM 那条路不用它）。LGPL 允许不改动地作为独立的库和别的程序一起分发，
- * 它原样放在 node_modules 里、带着自己的许可证文件，用的人可以换掉它。2026-10-13 加进来，作者还没有确认这一条。
- */
-const ACCEPTED = new Map([["codec-parser", "LGPL-3.0-or-later"]]);
-
-/** findCopyleft 找出来的里面，去掉登记过的例外 */
-export const unaccepted = (found) => found.filter(({ name, license }) => ACCEPTED.get(name) !== license);
 
 /** 一个 SPDX 许可证表达式是不是只能按 GPL 一类（GPL、LGPL、AGPL）来用。"MIT OR GPL-3.0" 可以选 MIT，不算 */
 function copyleftOnly(license) {
@@ -98,7 +91,7 @@ export function stageApp(packageDir, stagingDir, entries) {
   pruneUnused(stagingDir);
   // 卸掉之后会剩下几个空目录（node_modules/@electron 之类）
   execFileSync("find", [join(stagingDir, "node_modules"), "-type", "d", "-empty", "-delete"]);
-  const copyleft = unaccepted(findCopyleft(join(stagingDir, "node_modules")));
+  const copyleft = findCopyleft(join(stagingDir, "node_modules"));
   if (copyleft.length > 0) {
     const listed = copyleft.map(({ name, license }) => `${name}（${license}）`).join("、");
     throw new Error(`程序里有许可证和 MIT 不兼容、或者没写许可证的包，先确认再发：${listed}`);

@@ -2,15 +2,13 @@ import { downsample, encodeWav, mixDown } from "./pcm.mjs";
 
 // 把录音换成别家模型收的格式。录音是 Opus：悬浮条录的装在 WebM 里，原版 Typeless 的装在 Ogg 里。
 // Gemini 两种都直接收，用不到这里；OpenAI 只收 wav 和 mp3（实测，别的格式回 400）。
+// Ogg 不转：拆 Ogg 要用 LGPL 的 codec-parser，作者定了不随程序分发；SpeakMore 自己只录 WebM。
 
 /** 说话用 16 kHz 足够。实测 90 秒的录音交给 OpenAI：48 kHz 要 18 秒，16 kHz 是 7–9 秒，算的音频 token 数一样 */
 const WAV_SAMPLE_RATE = 16_000;
 
 // 用到才加载：解码器带着 WASM，只用 Gemini 的人不必付这个启动开销
-const DECODERS = new Map([
-  ["audio/webm", () => import("@audio/decode-webm")],
-  ["audio/ogg", () => import("@audio/decode-opus")],
-]);
+const DECODERS = new Map([["audio/webm", () => import("@audio/decode-webm")]]);
 
 /**
  * 录音 → 16 kHz 单声道 16 位 WAV。

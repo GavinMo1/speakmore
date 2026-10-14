@@ -204,7 +204,7 @@ git clone https://github.com/zephyr4123/speakmore.git
 cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
-npm run check                 # 代码检查 + 全部测试（390 条，不联网、不开窗口）
+npm run check                 # 代码检查 + 全部测试（405 条，不联网、不开窗口）
 npm run release               # 打发布包：dist/release/ 下两种芯片各一个，外加 install.sh，摆成下载地址上的样子
 ```
 
@@ -261,7 +261,7 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 
 ### 验证到哪一步
 
-- 自动测试 390 条，在 Node 26.0 上全过；Node 24.21（CI 用的版本）上跑过其中 373 条单测，全过；Node 22.13 上跑过的是更早的 269 条（之后加的没在 22 上重跑）。其中 17 条是拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
+- 自动测试 405 条，在 Node 26.0 上全过；其中 388 条单测在 Node 24.21（CI 用的版本）上也全过；Node 22.13 上跑过的是更早的 269 条（之后加的没在 22 上重跑）。其中 17 条是拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
 - 用真的发布包走过一遍，装在临时目录里，`PATH` 里没有 Node：
   - 安装脚本从管道读入，装完直接启动并问 key，输入不显示。
   - 启动、状态、设置、重启、停止；合成的语音经过录音编码、Gemini、存历史，成品正确。
@@ -289,4 +289,4 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 
 [MIT](LICENSE)。`.claude/skills/reverse-engineer-anything/` 来自 REA，按它自己的 MIT 许可。
 
-发布包里的依赖都是 MIT、Apache、ISC、BSD 这类，只有一个例外：[codec-parser](https://github.com/eshaz/codec-parser)（LGPL-3.0-or-later），拆 Ogg 录音时用，原样作为一个独立的包放在 `node_modules` 里。打包时会扫一遍依赖的许可证，有 GPL 一类的就拒绝打包（`scripts/build/stage-app.mjs`）。
+发布包里的依赖都是 MIT、Apache、ISC、BSD 这类。打包时会扫一遍依赖的许可证，有 GPL 一类的就拒绝打包（`scripts/build/stage-app.mjs`）；音频解码库顺带装上的那几个 GPL、LGPL 解码器程序用不到，打包时删掉。

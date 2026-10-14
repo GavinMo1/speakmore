@@ -3,9 +3,10 @@
 // 和原版当时给出的成品比排版（分没分段、用没用列表、长短、文字出入），并数出明显的异常。
 // 改提示词前后各跑一次，用 --label 区分，两次的数字就能直接对比。
 //
-// 用法：用哪一家的哪个模型由 SPEAKMORE_MODEL 定（默认 Gemini），那一家的 key 经 with-key.sh 喂进来：
+// 用法：用哪个模型由 SPEAKMORE_MODEL 定（默认 Gemini），key 经 with-key.sh 喂进来：
 //   scripts/dev/with-key.sh gemini node scripts/dev/eval-prompt.mjs --label <名字> [--out <目录>] [--concurrency 4]
-//   SPEAKMORE_MODEL=openai/gpt-audio-1.5 scripts/dev/with-key.sh openai node scripts/dev/eval-prompt.mjs --label <名字>
+// 只评估 Gemini：Typeless 的录音是 Ogg，服务端不把 Ogg 转给 OpenAI（见 src/server/audio/transcode.mjs），
+// 作者也只同意这些录音发给 Gemini。OpenAI 的提示词边用边调。
 // 第一次运行会抽样，把清单写进 <目录>/samples.json，之后每次都用这同一批。
 // 加 --report-only 时不调模型，只拿这个标签上次的结果重新出一遍统计。
 //
