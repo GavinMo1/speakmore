@@ -1,5 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
 import { Converter } from "opencc-js/t2cn";
+import { toWav } from "../audio/transcode.mjs";
+import { toModelError } from "../providers/errors.mjs";
+import { findProvider } from "../providers/index.mjs";
 import { NO_SPEECH_MARK, SYSTEM_PROMPT, TASK_REMINDER } from "./prompt.mjs";
 
 // 下面三样都是模型偶尔写坏的地方，提示词里说了也压不住，所以在代码里兜底。
@@ -14,61 +16,106 @@ const LEAKED_PREFIX = /^[A-Za-z_Ѐ-ӿ]+(?:\.?(?=[一-鿿])|[ \t]*\n\s*)/;
 /** 模型听音频时自带"几分几秒"的定位，偶尔会写进正文（720 条里 10 条，像"全面开干、 00:30 全面迁移"） */
 const STRAY_TIMESTAMP = /(?<!\d)\d{1,2}:\d{2}(?!\d)/;
 
+/** 一次请求最多等多久。Gemini 一两秒、OpenAI 一分半的录音七八秒，留足余量 */
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 /**
- * "音频进、成品文字出"的那一步，用 Gemini 一次完成识别和整理。
- * 原版服务端内部怎么做的看不到；这里选一步到位，是因为只需要一家服务、一次请求。
+ * "音频进、成品文字出"的那一步。各家共用这一个流程：录音的格式这家不收就先换好，交给适配器拿原文，
+ * 再统一收尾；适配器只管"这一家的请求怎么拼、报错怎么认"。
+ *
+ * @param {object} options
+ * @param {{ id: string, name: string }} options.provider 厂商清单里的那一项（providers/index.mjs）
+ * @param {{ ping(o: { signal: AbortSignal }): Promise<void>, generate(request: object): Promise<string | null | undefined> }} options.client
+ *   这一家的适配器（providers/*.mjs 的 createClient）
+ * @param {string[]} options.audioTypes 这一家直接收的录音格式
+ * @param {(error: unknown, detail: string) => object | null} [options.classify] 这一家的报错怎么认
+ * @param {string} [options.apiKey] 只用来从报错里抹掉它
+ * @param {(audio: Buffer, mimeType: string) => Promise<{ audio: Buffer, mimeType: string }>} [options.transcode]
+ * @returns {{ warmUp(): Promise<void>, refine(audio: Buffer, o: { mimeType: string, signal?: AbortSignal }): Promise<string> }}
+ *   出错时抛的都是 ModelError
  */
-export function createGeminiRefiner({ apiKey, model, thinkingLevel, timeoutMs, log }) {
-  const client = new GoogleGenAI({ apiKey });
+export function createRefiner({
+  provider,
+  client,
+  audioTypes,
+  classify,
+  apiKey,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  log,
+  transcode = toWav,
+}) {
+  const described = (error) => toModelError(error, { provider, apiKey, classify });
+  const withTimeout = (signal) => {
+    const timeout = AbortSignal.timeout(timeoutMs);
+    return signal ? AbortSignal.any([signal, timeout]) : timeout;
+  };
 
   return {
     /**
      * 启动时发一个最小的请求。实测进程里第一次整理要 3.4–4.1 秒，之后稳定在 1.7–1.9 秒
-     * （闲置 3 分钟后也是）；先发这一个，慢的那一次就不会落在用户的第一句话上。
+     * （Gemini，闲置 3 分钟后也是）；先发这一个，慢的那一次就不会落在用户的第一句话上。
      * key 无效或模型名写错也会在这里暴露，不用等到第一次听写。
      */
     async warmUp() {
-      await client.models.generateContent({
-        model,
-        contents: "1",
-        config: { maxOutputTokens: 1, thinkingConfig: { thinkingLevel }, abortSignal: AbortSignal.timeout(timeoutMs) },
-      });
+      try {
+        await client.ping({ signal: AbortSignal.timeout(timeoutMs) });
+      } catch (error) {
+        throw described(error);
+      }
     },
 
-    /**
-     * @param {Buffer} audio 合并后的整段录音
-     * @param {{ mimeType: string, signal?: AbortSignal }} options signal 在客户端断开时用来取消
-     * @returns {Promise<string>} 整理好的文字；没有人声时是空字符串
-     */
-    refine(audio, { mimeType, signal }) {
-      const parts = [{ inlineData: { mimeType, data: audio.toString("base64") } }, { text: TASK_REMINDER }];
-
-      const generateOnce = async () => {
-        const timeout = AbortSignal.timeout(timeoutMs);
-        const response = await client.models.generateContent({
-          model,
-          contents: [{ role: "user", parts }],
-          // 不设 temperature。设成 0 时，60 条真实录音里有 10 条成品是坏的（开头多出一个不相干的外文词、
-          // 只出了开头一小截、中间一长串下划线），去掉这个设置后同一批降到 5 条，截断和下划线没再出现。
-          config: {
-            systemInstruction: SYSTEM_PROMPT,
-            thinkingConfig: { thinkingLevel },
-            abortSignal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-          },
-        });
-
-        const blockReason = response.promptFeedback?.blockReason;
-        if (blockReason) throw new Error(`Gemini 没有处理这段录音：${blockReason}`);
-        // 被截断或被拦下的半截文字不能当成品贴出去
-        const finishReason = response.candidates?.[0]?.finishReason;
-        if (finishReason && finishReason !== "STOP") throw new Error(`Gemini 没有正常结束：${finishReason}`);
-
-        return textFromModelOutput(response.text);
-      };
-
-      return generateClean(generateOnce, log);
+    /** @returns {Promise<string>} 整理好的文字；没有人声时是空字符串 */
+    async refine(audio, { mimeType, signal }) {
+      try {
+        // 只换一次：夹着时间戳要重来时用的是同一份
+        const input = audioTypes.includes(mimeType)
+          ? { audio, mimeType }
+          : await timed(log, () => transcode(audio, mimeType));
+        const generateOnce = async () =>
+          textFromModelOutput(
+            await client.generate({
+              ...input,
+              systemPrompt: SYSTEM_PROMPT,
+              reminder: TASK_REMINDER,
+              signal: withTimeout(signal),
+            }),
+          );
+        return await generateClean(generateOnce, log);
+      } catch (error) {
+        throw described(error);
+      }
     },
   };
+}
+
+/** 换格式花了多久记一笔：它算在用户等成品的时间里 */
+async function timed(log, transcode) {
+  const startedAt = performance.now();
+  const converted = await transcode();
+  log.info("audio_transcoded", { to: converted.mimeType, ms: Math.round(performance.now() - startedAt) });
+  return converted;
+}
+
+/**
+ * 按用户选的厂商和模型装出一个 refiner：清单里找到那一家，加载它的适配器，交给上面的共用流程。
+ * @param {object} options
+ * @param {{ provider: string, model: string }} options.choice
+ * @param {string} options.apiKey
+ * @param {string} [options.thinkingLevel] 只有 Gemini 用得上
+ */
+export async function createModelRefiner({ choice, apiKey, thinkingLevel, timeoutMs, log }) {
+  const provider = findProvider(choice.provider);
+  if (!provider) throw new Error(`不认识 ${choice.provider} 这家模型厂商`);
+  const adapter = await provider.load();
+  return createRefiner({
+    provider,
+    client: adapter.createClient({ apiKey, model: choice.model, thinkingLevel }),
+    audioTypes: adapter.AUDIO_TYPES,
+    classify: adapter.classifyError,
+    apiKey,
+    timeoutMs,
+    log,
+  });
 }
 
 /**

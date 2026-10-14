@@ -16,7 +16,7 @@ import { Cancelled } from "../../src/cli/ask-secret.mjs";
 import { run } from "../../src/cli/main.mjs";
 import { NotRunningError, TimeoutError } from "../../src/control.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
-import { resolvePaths } from "../../src/storage/paths.mjs";
+import { keyFile, resolvePaths } from "../../src/storage/paths.mjs";
 import { resolveSettings } from "../../src/storage/settings.mjs";
 
 const READY = {
@@ -181,7 +181,7 @@ function harness({
 }
 
 /** 假装以前存过一把 key */
-const haveStoredKey = () => writeFileSync(paths.keyFile, "密文");
+const haveStoredKey = () => writeFileSync(keyFile(paths, "gemini"), "密文");
 
 // ---------- 启动 ----------
 
@@ -235,7 +235,7 @@ test("已经有 key（存着的，或者环境变量给的）时直接启动，�
   const stored = harness();
   assert.equal(await stored.speakmore(), 0);
   assert.equal(stored.asked.length, 0);
-  rmSync(paths.keyFile);
+  rmSync(keyFile(paths, "gemini"));
 
   const fromEnv = harness({ env: { GEMINI_API_KEY: "AIza-env" } });
   assert.equal(await fromEnv.speakmore(), 0);
@@ -476,19 +476,25 @@ test("key 后面直接跟着一把 key：不照做，也不把它再打一遍，
 
 test("key --forget：两种启动方式各存的那一份都删掉；在运行的话让它也忘掉", async () => {
   const seed = () => {
-    writeFileSync(paths.keyFile, "密文");
-    writeFileSync(paths.appKeyFile, "密文");
+    writeFileSync(keyFile(paths, "gemini"), "密文");
+    writeFileSync(keyFile(paths, "gemini", { packaged: true }), "密文");
   };
   seed();
   const running = harness({ daemon: fakeDaemon({ running: READY }) });
   assert.equal(await running.speakmore("key", "--forget"), 0);
   assert.deepEqual(running.daemon.calls, ["forget-key"]);
-  assert.deepEqual([existsSync(paths.keyFile), existsSync(paths.appKeyFile)], [false, false]);
+  assert.deepEqual(
+    [existsSync(keyFile(paths, "gemini")), existsSync(keyFile(paths, "gemini", { packaged: true }))],
+    [false, false],
+  );
 
   seed();
   const idle = harness();
   assert.equal(await idle.speakmore("key", "--forget"), 0);
-  assert.deepEqual([existsSync(paths.keyFile), existsSync(paths.appKeyFile)], [false, false]);
+  assert.deepEqual(
+    [existsSync(keyFile(paths, "gemini")), existsSync(keyFile(paths, "gemini", { packaged: true }))],
+    [false, false],
+  );
   assert.deepEqual(idle.daemon.calls, []);
   assert.match(idle.output.out, /已经删掉/);
 });
@@ -725,7 +731,7 @@ function seedInstalled() {
     join(paths.appDir, "package.json"),
     join(paths.runtimeDir, "Electron.app", "Info.plist"),
     paths.settingsFile,
-    paths.keyFile,
+    keyFile(paths, "gemini"),
     paths.historyDb,
     join(paths.recordingsDir, "a.webm"),
     paths.logFile,
@@ -784,7 +790,12 @@ test("uninstall --keep-data：只删程序，设置、key、历史和录音留�
   const { link } = seedInstalled();
   const { speakmore, output } = harness({ keychain: () => assert.fail("不该动钥匙串") });
   assert.equal(await speakmore("uninstall", "--keep-data", "--yes"), 0);
-  for (const kept of [paths.settingsFile, paths.keyFile, paths.historyDb, join(paths.recordingsDir, "a.webm")]) {
+  for (const kept of [
+    paths.settingsFile,
+    keyFile(paths, "gemini"),
+    paths.historyDb,
+    join(paths.recordingsDir, "a.webm"),
+  ]) {
     assert.equal(existsSync(kept), true, kept);
   }
   for (const gone of [paths.binDir, paths.appDir, paths.runtimeDir, paths.cacheDir, paths.logFile, link]) {

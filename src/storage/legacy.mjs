@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { NotRunningError, requestControl } from "../control.mjs";
-import { ensureHome, legacyDataDir } from "./paths.mjs";
+import { ensureHome, keyFile, legacyDataDir } from "./paths.mjs";
 
 // 0.1 版把数据放在 ~/Library/Application Support/SpeakMore。那里还有东西的话，第一次运行时搬进现在的家目录。
 // 想退回 0.1：把这几样搬回原处即可（历史里记的录音位置会指着新地方，只影响"录音留在哪"那句话）。
@@ -14,8 +14,9 @@ const moves = (paths) => [
   ["history.db", paths.historyDb],
   ["Recordings", paths.recordingsDir],
   ["settings.json", paths.settingsFile],
-  ["gemini-key.bin", paths.keyFile],
-  ["gemini-key.app.bin", paths.appKeyFile],
+  // 0.1 版只有 Gemini
+  ["gemini-key.bin", keyFile(paths, "gemini")],
+  ["gemini-key.app.bin", keyFile(paths, "gemini", { packaged: true })],
 ];
 
 /** 旧版本的后台应用还在不在：它在旧目录里听着同一种控制通道 */

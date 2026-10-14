@@ -6,7 +6,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { startControlServer } from "../../src/control.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
 import { migrateLegacyData } from "../../src/storage/legacy.mjs";
-import { resolvePaths } from "../../src/storage/paths.mjs";
+import { keyFile, resolvePaths } from "../../src/storage/paths.mjs";
 
 let dir;
 let legacyDir;
@@ -58,7 +58,7 @@ test("旧目录里的历史、录音、设置、key 搬进新的家目录；历�
   assert.deepEqual(await migrate(), ["history.db", "Recordings", "settings.json", "gemini-key.bin"]);
 
   assert.equal(readFileSync(paths.settingsFile, "utf8"), '{"hotkey":"fn"}\n');
-  assert.equal(readFileSync(paths.keyFile, "utf8"), "密文");
+  assert.equal(readFileSync(keyFile(paths, "gemini"), "utf8"), "密文");
   const history = openHistory(paths.historyDb, { readOnly: true });
   const [row] = history.list();
   history.close();

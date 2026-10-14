@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { ensureHome, legacyDataDir, resolvePaths } from "../../src/storage/paths.mjs";
+import { ensureHome, keyFile, legacyDataDir, resolvePaths } from "../../src/storage/paths.mjs";
 
 test("所有东西都在家目录下的 .speakmore 这一个目录里", () => {
   const paths = resolvePaths({}, "/Users/someone");
@@ -27,8 +27,6 @@ test("程序、你的东西、运行时产生的，各在各的位置", () => {
     runtimeDir: "runtime",
     // 你的东西
     settingsFile: "settings.json",
-    keyFile: "gemini-key.bin",
-    appKeyFile: "gemini-key.app.bin",
     historyDb: "data/history.db",
     recordingsDir: "data/Recordings",
     // 运行时产生的，删了会自己再建
@@ -37,6 +35,14 @@ test("程序、你的东西、运行时产生的，各在各的位置", () => {
     pidFile: "run/daemon.pid",
     cacheDir: "cache",
   });
+});
+
+test("每家模型一把 key，命令启动的和打成应用的各存各的；Gemini 的文件名和 0.3 以前一样，不用迁移", () => {
+  const paths = resolvePaths({}, "/Users/someone");
+  assert.equal(keyFile(paths, "gemini"), "/Users/someone/.speakmore/gemini-key.bin");
+  assert.equal(keyFile(paths, "gemini", { packaged: true }), "/Users/someone/.speakmore/gemini-key.app.bin");
+  assert.equal(keyFile(paths, "openai"), "/Users/someone/.speakmore/openai-key.bin");
+  assert.throws(() => keyFile(paths, "../x"), /id/);
 });
 
 test("SPEAKMORE_HOME 把整个目录换到别处", () => {

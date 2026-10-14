@@ -1,6 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { DEFAULT_MODEL, DEFAULT_THINKING_LEVEL, THINKING_LEVELS } from "../server/config.mjs";
+import {
+  DEFAULT_MODEL_CHOICE,
+  DEFAULT_THINKING_LEVEL,
+  findProvider,
+  formatModelChoice,
+  parseModelChoice,
+} from "../server/providers/index.mjs";
 import { DEFAULT_THEME, findTheme, THEMES } from "../themes/index.mjs";
 
 // 用户能改的几项设置，存在数据目录的 settings.json 里。
@@ -26,10 +32,12 @@ export const HOTKEY_KEYCAPS = {
 };
 
 const THEME_IDS = THEMES.map((theme) => theme.id);
+const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
 
 /**
  * 每一项：对应的环境变量、默认值、能填的值（不限时为 null）、把写法规整并校验的函数。
  * label 可有可无：值本身不好懂时（right_option、cinnabar）给出它叫什么。
+ * legacyEnv 可有可无：改名之前的环境变量，env 没设时照样认（README 里写过，用的人可能还在用）。
  */
 export const SETTINGS = {
   hotkey: {
@@ -44,19 +52,22 @@ export const SETTINGS = {
     label: (value) => HOTKEYS[value],
   },
   model: {
-    env: "GEMINI_MODEL",
-    default: DEFAULT_MODEL,
-    describe: "用哪个 Gemini 模型整理",
+    env: "SPEAKMORE_MODEL",
+    // 0.3 以前只有 Gemini，这个环境变量只写模型名
+    legacyEnv: "GEMINI_MODEL",
+    default: formatModelChoice(DEFAULT_MODEL_CHOICE),
+    describe: "用哪一家的哪个模型整理，写成 厂商/模型；只写厂商就用它的默认模型。换模型用 speakmore model",
     choices: null,
     parse(value) {
-      if (value.trim() === "") throw new Error("model 不能是空的");
-      return value.trim();
+      // 存下来的统一是 厂商/模型。0.3 以前文件里只写 Gemini 的模型名，读的时候照样认（见 parseModelChoice）
+      return formatModelChoice(parseModelChoice(value));
     },
+    label: (value) => findProvider(parseModelChoice(value).provider).name,
   },
   thinking: {
     env: "GEMINI_THINKING_LEVEL",
     default: DEFAULT_THINKING_LEVEL,
-    describe: "模型的思考档位，越高越慢",
+    describe: "Gemini 的思考档位，越高越慢。别家的模型用不上",
     choices: THINKING_LEVELS,
     parse(value) {
       const level = value.toUpperCase();
@@ -114,16 +125,28 @@ function writeFile(file, stored) {
   writeFileSync(file, `${JSON.stringify(stored, null, 2)}\n`);
 }
 
+/** 这一项现在被哪个环境变量盖着（新名字优先于改名前的）；没有就是 null */
+export function overridingEnv(name, env) {
+  const setting = settingNamed(name);
+  for (const variable of [setting.env, setting.legacyEnv]) {
+    if (variable && env[variable] !== undefined) return variable;
+  }
+  return null;
+}
+
 /**
  * 现在生效的设置，以及每一项是从哪来的。
- * @returns {Record<keyof typeof SETTINGS, { value: string, source: "env" | "file" | "default" }>}
+ * @returns {Record<keyof typeof SETTINGS, { value: string, source: "env" | "file" | "default", env?: string }>}
+ *   来自改名前的环境变量时，env 写着是哪一个
  */
 export function resolveSettings({ file, env }) {
   const stored = readFile(file);
   const resolved = {};
   for (const [name, setting] of Object.entries(SETTINGS)) {
-    if (env[setting.env] !== undefined) {
-      resolved[name] = { value: parseValue(name, env[setting.env], `环境变量 ${setting.env}`), source: "env" };
+    const variable = overridingEnv(name, env);
+    if (variable !== null) {
+      const value = parseValue(name, env[variable], `环境变量 ${variable}`);
+      resolved[name] = variable === setting.env ? { value, source: "env" } : { value, source: "env", env: variable };
     } else if (stored[name] !== undefined) {
       resolved[name] = { value: parseValue(name, stored[name], `设置文件 ${file} 里的 ${name}`), source: "file" };
     } else {

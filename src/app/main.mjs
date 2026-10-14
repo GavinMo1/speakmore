@@ -16,9 +16,10 @@ import {
 } from "electron";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { alsoLogTo, log } from "../log.mjs";
+import { findProvider, PROVIDERS, parseModelChoice } from "../server/providers/index.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
-import { ensureHome, resolvePaths } from "../storage/paths.mjs";
+import { ensureHome, keyFile, resolvePaths } from "../storage/paths.mjs";
 import { HOTKEY_KEYCAPS, HOTKEYS, resolveSettings } from "../storage/settings.mjs";
 import { toHex } from "../themes/color.mjs";
 import { themeCss } from "../themes/contract.mjs";
@@ -51,10 +52,14 @@ try {
   process.exit(2);
 }
 const HOTKEY = SETTINGS.hotkey.value;
+/** 这次运行用哪一家的哪个模型整理。换模型要重启 */
+const MODEL = parseModelChoice(SETTINGS.model.value);
+const PROVIDER = findProvider(MODEL.provider);
+/** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
+const THINKING = PROVIDER.thinkingLevels ? SETTINGS.thinking.value : null;
 const HOTKEY_LABEL = HOTKEYS[HOTKEY];
 /** 悬浮条的窗口。比条本身大一圈：上面要放一行提示，四周要留出阴影，报错时条会变宽变高 */
 const BAR_SIZE = { width: 380, height: 124 };
-const KEY_PAGE_URL = "https://aistudio.google.com/apikey";
 /** 系统设置里三项权限各自的页面 */
 const PRIVACY_PANES = {
   microphone: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
@@ -106,14 +111,25 @@ async function main() {
 
   const startedAt = new Date().toISOString();
   const history = openHistory(PATHS.historyDb);
-  const keyStore = createKeyStore({ file: app.isPackaged ? PATHS.appKeyFile : PATHS.keyFile, safeStorage });
-  const service = EXTERNAL_SERVER_URL
-    ? null
-    : await startService({ log, model: SETTINGS.model.value, thinkingLevel: SETTINGS.thinking.value });
+  // 每家一把 key，各存一个文件。正在用的那家之外的也要在：speakmore key openai、model check 要用
+  const keyStores = Object.fromEntries(
+    PROVIDERS.map(({ id }) => [
+      id,
+      createKeyStore({ file: keyFile(PATHS, id, { packaged: app.isPackaged }), safeStorage }),
+    ]),
+  );
+  const service = EXTERNAL_SERVER_URL ? null : await startService({ log, model: MODEL, thinkingLevel: THINKING });
   const serverUrl = EXTERNAL_SERVER_URL ?? service.url;
   const e2e = process.env.SPEAKMORE_E2E_OUT ? await import("./e2e.mjs") : null;
 
-  const keys = createKeyManager({ service, keyStore, env: process.env, log, onChange: () => setupChanged() });
+  const keys = createKeyManager({
+    service,
+    provider: PROVIDER,
+    keyStores,
+    env: process.env,
+    log,
+    onChange: () => setupChanged(),
+  });
   /** 按键监听的小帮手：starting（还没报上来）/ running / stopped（退出了，或者根本没起来） */
   let helperState = "starting";
   /** 小帮手报上来的两项权限；它没在 running 时是 null */
@@ -128,7 +144,7 @@ async function main() {
     version: app.getVersion(),
     hotkey: HOTKEY,
     model: SETTINGS.model.value,
-    thinking: SETTINGS.thinking.value,
+    thinking: THINKING,
     theme: SETTINGS.theme.value,
     home: PATHS.home,
     server_url: serverUrl,
@@ -140,6 +156,7 @@ async function main() {
   // ---------- 能不能用、还差什么 ----------
 
   const currentSetup = () => ({
+    providerName: PROVIDER.name,
     key: keys.current,
     helper: helperState,
     permissions: {
@@ -381,13 +398,14 @@ async function main() {
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
       openAtLogin: { supported: app.isPackaged, enabled: app.getLoginItemSettings().openAtLogin },
       home: PATHS.home,
+      provider: { id: PROVIDER.id, name: PROVIDER.name, keyPage: PROVIDER.keyPage },
     };
   });
   // 设置窗口和 speakmore key 存 key、删 key，走的是同一处
   ipcMain.handle("setup:save-key", (_event, value) => keys.save(value));
   ipcMain.handle("setup:forget-key", () => keys.forget());
   ipcMain.handle("setup:read-clipboard", () => clipboard.readText());
-  ipcMain.handle("setup:open-key-page", () => shell.openExternal(KEY_PAGE_URL));
+  ipcMain.handle("setup:open-key-page", () => shell.openExternal(PROVIDER.keyPage));
   ipcMain.handle("setup:open-privacy", async (_event, permission) => {
     if (!Object.hasOwn(PRIVACY_PANES, permission)) throw new TypeError(`不认识的权限：${permission}`);
     // 麦克风从没问过时，系统设置的列表里还没有这个应用，要先让系统弹一次授权框
@@ -532,8 +550,9 @@ async function main() {
       hotkey: HOTKEY,
       hotkeyLabel: HOTKEY_LABEL,
       // 连着单独启动的服务端时，用哪个模型由那边定
+      provider: service ? PROVIDER.id : null,
       model: service ? SETTINGS.model.value : null,
-      thinking: service ? SETTINGS.thinking.value : null,
+      thinking: service ? THINKING : null,
       theme: theme.id,
       // 装成应用的和命令启动的，权限和 key 各是一套：命令行据此决定该不该代它重启
       packaged: app.isPackaged,
@@ -559,8 +578,18 @@ async function main() {
             await helperReported();
             return describeStatus();
           },
-          "set-key": ({ key }) => keys.save(key),
-          "forget-key": () => keys.forget(),
+          // provider 不给就是正在用的那一家（0.3 的命令行不给）
+          "set-key": ({ key, provider }) => keys.save(key, { provider }),
+          "forget-key": ({ provider } = {}) => keys.forget({ provider }),
+          "check-model": ({ model }) => {
+            let choice;
+            try {
+              choice = parseModelChoice(model);
+            } catch (error) {
+              return { ok: false, cause: "other", problem: `model ${error.message}` };
+            }
+            return keys.check(choice);
+          },
           "reload-theme": reloadTheme,
           "show-settings": showSettings,
           "show-history": showHistory,

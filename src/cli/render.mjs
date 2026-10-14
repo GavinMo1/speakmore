@@ -262,7 +262,8 @@ export function themeTitle(id) {
 const SOURCES = {
   default: () => "默认",
   file: () => "存在设置文件里",
-  env: (setting) => `这次运行来自环境变量 ${setting.env}`,
+  // 来自改名前的环境变量（GEMINI_MODEL）时，entry.env 写着是哪一个
+  env: (setting, entry) => `这次运行来自环境变量 ${entry?.env ?? setting.env}`,
 };
 
 /**
@@ -279,7 +280,10 @@ export function renderConfig({ settings, paths }, { color }) {
     const { value, source } = settings[name];
     const meaning = setting.label ? `${setting.label(value)} · ` : "";
     lines.push(
-      row(name, `${c.bold(value)}${" ".repeat(valueWidth - displayWidth(value))}${meaning}${SOURCES[source](setting)}`),
+      row(
+        name,
+        `${c.bold(value)}${" ".repeat(valueWidth - displayWidth(value))}${meaning}${SOURCES[source](setting, settings[name])}`,
+      ),
       row("", c.dim(`${setting.describe}${setting.choices ? `。能填：${setting.choices.join(" / ")}` : ""}`)),
     );
   }

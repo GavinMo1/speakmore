@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { NO_SPEECH_MARK, SYSTEM_PROMPT } from "../../../src/server/refine/prompt.mjs";
-import { generateClean, textFromModelOutput } from "../../../src/server/refine/refiner.mjs";
+import { ModelError } from "../../../src/server/providers/errors.mjs";
+import { NO_SPEECH_MARK, SYSTEM_PROMPT, TASK_REMINDER } from "../../../src/server/refine/prompt.mjs";
+import {
+  createModelRefiner,
+  createRefiner,
+  generateClean,
+  textFromModelOutput,
+} from "../../../src/server/refine/refiner.mjs";
 
 test("提示词里写的无人声标记，和代码里判断的是同一个", () => {
   assert.ok(SYSTEM_PROMPT.includes(`只输出 ${NO_SPEECH_MARK}，`));
@@ -71,4 +77,134 @@ test("重来一次还有钟点，就当是他真说了，不再重试", async ()
   const { calls, generateOnce, log } = fakeGenerate(["明天 09:30 开会", "明天 09:30 开会"]);
   assert.equal(await generateClean(generateOnce, log), "明天 09:30 开会");
   assert.equal(calls.count, 2);
+});
+
+// ---------- 共用的整理流程：各家的适配器只管"发请求、拿原文"，其余在这里 ----------
+
+/** 假的适配器：记下每次 generate 收到了什么，按顺序吐出给定的原文 */
+function fakeClient(outputs, { ping = async () => {} } = {}) {
+  const calls = [];
+  return {
+    calls,
+    ping,
+    async generate(request) {
+      calls.push(request);
+      const next = outputs[calls.length - 1];
+      if (next instanceof Error) throw next;
+      return next;
+    },
+  };
+}
+
+const quietLog = { info() {}, warn() {}, error() {} };
+const OpenAI = { id: "openai", name: "OpenAI" };
+
+function refinerWith(client, options = {}) {
+  const transcoded = [];
+  const refiner = createRefiner({
+    provider: OpenAI,
+    client,
+    audioTypes: ["audio/wav"],
+    log: quietLog,
+    timeoutMs: 1_000,
+    transcode: async (audio, mimeType) => {
+      transcoded.push(mimeType);
+      return { audio: Buffer.from(`wav:${audio}`), mimeType: "audio/wav" };
+    },
+    ...options,
+  });
+  return { refiner, transcoded };
+}
+
+test("交给模型的是同一份提示词和同一句提醒，成品照样经过收尾（繁转简、去句末句号）", async () => {
+  const client = fakeClient(["我們後天開會。"]);
+  const { refiner } = refinerWith(client, { audioTypes: ["audio/webm"] });
+  assert.equal(await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm" }), "我们后天开会");
+  const [request] = client.calls;
+  assert.equal(request.systemPrompt, SYSTEM_PROMPT);
+  assert.equal(request.reminder, TASK_REMINDER);
+  assert.equal(request.mimeType, "audio/webm");
+  assert.equal(String(request.audio), "rec");
+});
+
+test("这家不收录音的格式时先换好再交过去；夹着时间戳要重来时也只换一次", async () => {
+  const client = fakeClient(["全面开干、 00:30 全面迁移", "全面开干、全面迁移"]);
+  const { refiner, transcoded } = refinerWith(client);
+  assert.equal(await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm" }), "全面开干、全面迁移");
+  assert.deepEqual(transcoded, ["audio/webm"]);
+  assert.deepEqual(
+    client.calls.map(({ audio, mimeType }) => [String(audio), mimeType]),
+    [
+      ["wav:rec", "audio/wav"],
+      ["wav:rec", "audio/wav"],
+    ],
+  );
+});
+
+test("客户端断开时取消请求：交给适配器的 signal 跟着断", async () => {
+  let seen;
+  const client = fakeClient([]);
+  client.generate = (request) => {
+    seen = request.signal;
+    return new Promise((_, reject) => request.signal.addEventListener("abort", () => reject(request.signal.reason)));
+  };
+  const { refiner } = refinerWith(client, { audioTypes: ["audio/webm"] });
+  const abort = new AbortController();
+  const pending = refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", signal: abort.signal });
+  abort.abort();
+  await assert.rejects(pending);
+  assert.equal(seen.aborted, true);
+});
+
+test("出错时报的是分好类的 ModelError：说得出是哪一家、该怎么办", async () => {
+  const offline = new TypeError("fetch failed");
+  const { refiner } = refinerWith(fakeClient([offline]), { audioTypes: ["audio/webm"] });
+  const error = await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm" }).catch((thrown) => thrown);
+  assert.ok(error instanceof ModelError);
+  assert.equal(error.kind, "unavailable");
+  assert.equal(error.message, "连不上 OpenAI，检查网络后再试");
+});
+
+test("录音换不了格式时也报 ModelError，不让原始的解码错误直接冒出去", async () => {
+  const { refiner } = refinerWith(fakeClient([]), {
+    transcode: async () => {
+      throw new Error("录音解不出声音（audio/webm）：坏了");
+    },
+  });
+  const error = await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm" }).catch((thrown) => thrown);
+  assert.ok(error instanceof ModelError);
+  assert.match(error.message, /解不出声音/);
+});
+
+test("warmUp 发适配器的最小请求；失败时同样分好类", async () => {
+  let pinged = 0;
+  const { refiner } = refinerWith(fakeClient([], { ping: async () => void pinged++ }));
+  await refiner.warmUp();
+  assert.equal(pinged, 1);
+
+  const invalid = Object.assign(new Error("401"), { status: 401 });
+  const { refiner: failing } = refinerWith(
+    fakeClient([], {
+      ping: async () => {
+        throw invalid;
+      },
+    }),
+    { classify: (error) => (error.status === 401 ? { kind: "key", problem: "这把 key 无效" } : null) },
+  );
+  const error = await failing.warmUp().catch((thrown) => thrown);
+  assert.deepEqual([error.kind, error.message], ["key", "这把 key 无效"]);
+});
+
+test("createModelRefiner：按选的厂商装上对应的适配器；不认识的厂商直接报错", async () => {
+  const refiner = await createModelRefiner({
+    choice: { provider: "openai", model: "gpt-audio-mini" },
+    apiKey: "k",
+    log: quietLog,
+  });
+  assert.equal(typeof refiner.refine, "function");
+  assert.equal(typeof refiner.warmUp, "function");
+  await assert.rejects(
+    createModelRefiner({ choice: { provider: "deepseek", model: "x" }, apiKey: "k", log: quietLog }),
+    /deepseek/,
+  );
 });

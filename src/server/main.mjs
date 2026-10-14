@@ -1,6 +1,7 @@
 import { log } from "../log.mjs";
 import { loadConfig } from "./config.mjs";
-import { createGeminiRefiner } from "./refine/refiner.mjs";
+import { formatModelChoice } from "./providers/index.mjs";
+import { createModelRefiner } from "./refine/refiner.mjs";
 import { startServer, WS_PATH } from "./server.mjs";
 
 let config;
@@ -12,7 +13,13 @@ try {
   process.exit(2);
 }
 
-const refiner = createGeminiRefiner({ ...config.gemini, log });
+const model = formatModelChoice(config.model);
+const refiner = await createModelRefiner({
+  choice: config.model,
+  apiKey: config.apiKey,
+  thinkingLevel: config.thinkingLevel,
+  log,
+});
 let server;
 try {
   server = await startServer({ host: config.host, port: config.port, refiner, log });
@@ -24,15 +31,15 @@ try {
 }
 log.info("listening", {
   url: `ws://${config.host}:${server.port}${WS_PATH}`,
-  model: config.gemini.model,
-  thinking_level: config.gemini.thinkingLevel,
+  model,
+  thinking_level: config.thinkingLevel,
 });
 
 // 不等它：预热失败不该拦着服务启动，但要让人看得见
 const warmUpStartedAt = performance.now();
 refiner.warmUp().then(
   () => log.info("warmed_up", { ms: Math.round(performance.now() - warmUpStartedAt) }),
-  (error) => log.error("warm_up_failed", { model: config.gemini.model, error: String(error?.message ?? error) }),
+  (error) => log.error("warm_up_failed", { model, error: error.message, detail: error.detail }),
 );
 
 for (const signal of ["SIGINT", "SIGTERM"]) {

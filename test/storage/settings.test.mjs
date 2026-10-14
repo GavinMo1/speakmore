@@ -6,6 +6,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import {
   HOTKEY_KEYCAPS,
   HOTKEYS,
+  overridingEnv,
   resolveSettings,
   SETTINGS,
   saveSetting,
@@ -23,7 +24,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 test("没有文件也没有环境变量时全用默认值", () => {
   assert.deepEqual(resolveSettings({ file, env: {} }), {
     hotkey: { value: "right_option", source: "default" },
-    model: { value: "gemini-3.5-flash", source: "default" },
+    model: { value: "gemini/gemini-3.5-flash", source: "default" },
     thinking: { value: "MINIMAL", source: "default" },
     theme: { value: "ink", source: "default" },
   });
@@ -35,7 +36,7 @@ test("存下来的值下次读得到，没动过的仍是默认值", () => {
   const settings = resolveSettings({ file, env: {} });
   assert.deepEqual(settings.hotkey, { value: "fn", source: "file" });
   assert.deepEqual(settings.thinking, { value: "LOW", source: "file" });
-  assert.deepEqual(settings.model, { value: "gemini-3.5-flash", source: "default" });
+  assert.deepEqual(settings.model, { value: "gemini/gemini-3.5-flash", source: "default" });
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { hotkey: "fn", thinking: "LOW" });
 });
 
@@ -44,11 +45,42 @@ test("环境变量优先于文件", () => {
   saveSetting(file, "model", "gemini-3.8-flash");
   const settings = resolveSettings({
     file,
-    env: { SPEAKMORE_HOTKEY: "right_command", GEMINI_MODEL: "gemini-3.6-flash", GEMINI_THINKING_LEVEL: "high" },
+    env: { SPEAKMORE_HOTKEY: "right_command", SPEAKMORE_MODEL: "openai", GEMINI_THINKING_LEVEL: "high" },
   });
   assert.deepEqual(settings.hotkey, { value: "right_command", source: "env" });
-  assert.deepEqual(settings.model, { value: "gemini-3.6-flash", source: "env" });
+  assert.deepEqual(settings.model, { value: "openai/gpt-audio-mini", source: "env" });
   assert.deepEqual(settings.thinking, { value: "HIGH", source: "env" });
+});
+
+test("模型：写成 厂商/模型，只写厂商就用它的默认模型；存下来的都是 厂商/模型", () => {
+  assert.equal(saveSetting(file, "model", "openai"), "openai/gpt-audio-mini");
+  assert.equal(saveSetting(file, "model", "OpenAI/gpt-audio-1.5"), "openai/gpt-audio-1.5");
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { model: "openai/gpt-audio-1.5" });
+  assert.throws(() => saveSetting(file, "model", "deepseek/deepseek-flash"), /不认识 deepseek.*gemini \/ openai/);
+  assert.equal(SETTINGS.model.label("openai/gpt-audio-1.5"), "OpenAI");
+});
+
+test("0.3 以前的写法照样认：设置文件里只写了 Gemini 的模型名，环境变量 GEMINI_MODEL", () => {
+  writeFileSync(file, JSON.stringify({ model: "gemini-3.8-flash" }));
+  assert.deepEqual(resolveSettings({ file, env: {} }).model, { value: "gemini/gemini-3.8-flash", source: "file" });
+  // 用的是旧的环境变量时，说清是哪一个，换主题之类的提示才不会指错
+  assert.deepEqual(resolveSettings({ file, env: { GEMINI_MODEL: "gemini-3.6-flash" } }).model, {
+    value: "gemini/gemini-3.6-flash",
+    source: "env",
+    env: "GEMINI_MODEL",
+  });
+  // 新旧都设了：新的优先
+  assert.equal(
+    resolveSettings({ file, env: { GEMINI_MODEL: "gemini-3.6-flash", SPEAKMORE_MODEL: "openai" } }).model.value,
+    "openai/gpt-audio-mini",
+  );
+});
+
+test("overridingEnv：这一项现在被哪个环境变量盖着；没有就是 null", () => {
+  assert.equal(overridingEnv("model", {}), null);
+  assert.equal(overridingEnv("model", { GEMINI_MODEL: "x" }), "GEMINI_MODEL");
+  assert.equal(overridingEnv("model", { GEMINI_MODEL: "x", SPEAKMORE_MODEL: "openai" }), "SPEAKMORE_MODEL");
+  assert.equal(overridingEnv("theme", { SPEAKMORE_THEME: "ink" }), "SPEAKMORE_THEME");
 });
 
 test("不认识的设置项、不认识的热键、不认识的思考档位都拒绝保存，并列出能填什么", () => {
@@ -74,7 +106,6 @@ test("主题：写 id 或写名字都行，存下来的是 id；没有的那一�
 test("带说明的设置项：热键给出键的名字，主题给出主题的名字；每个热键都有一个写在悬浮条上的短名字", () => {
   assert.equal(SETTINGS.hotkey.label("fn"), "地球仪（fn）键");
   assert.equal(SETTINGS.theme.label("cinnabar"), "朱砂");
-  assert.equal(SETTINGS.model.label, undefined);
   assert.deepEqual(Object.keys(HOTKEY_KEYCAPS), Object.keys(HOTKEYS));
 });
 
@@ -92,7 +123,7 @@ test("取消一项设置后回到默认值，其余的不动", () => {
   unsetSetting(file, "hotkey");
   const settings = resolveSettings({ file, env: {} });
   assert.deepEqual(settings.hotkey, { value: "right_option", source: "default" });
-  assert.deepEqual(settings.model, { value: "gemini-3.8-flash", source: "file" });
+  assert.deepEqual(settings.model, { value: "gemini/gemini-3.8-flash", source: "file" });
   assert.throws(() => unsetSetting(file, "volume"), /hotkey/);
 });
 

@@ -6,10 +6,10 @@ import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { ControlError, TimeoutError } from "../control.mjs";
 import { log } from "../log.mjs";
-import { apiKeyProblem } from "../server/config.mjs";
+import { apiKeyProblem, findProvider, parseModelChoice } from "../server/providers/index.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
-import { ensureHome, resolvePaths } from "../storage/paths.mjs";
+import { ensureHome, keyFile, resolvePaths } from "../storage/paths.mjs";
 import { resolveSettings, SETTINGS, saveSetting, unsetSetting } from "../storage/settings.mjs";
 import { THEMES } from "../themes/index.mjs";
 import { askSecret, Cancelled } from "./ask-secret.mjs";
@@ -163,9 +163,18 @@ async function submitKey(io, value) {
   return result.ok;
 }
 
+/** 设置里选的是哪一家 */
+const currentProvider = (io) => findProvider(parseModelChoice(currentSettings(io).model.value).provider);
+
 /** 启动之前就看得出有 key 可用：存过、环境变量给了，或者 key 归单独启动的服务端管 */
-const hasKeyAlready = (io) =>
-  existsSync(io.paths.keyFile) || Boolean(io.env.GEMINI_API_KEY?.trim()) || Boolean(io.env.SPEAKMORE_SERVER_URL);
+function hasKeyAlready(io) {
+  const provider = currentProvider(io);
+  return (
+    existsSync(keyFile(io.paths, provider.id)) ||
+    Boolean(io.env[provider.keyEnv]?.trim()) ||
+    Boolean(io.env.SPEAKMORE_SERVER_URL)
+  );
+}
 
 /**
  * 这种状态是不是填一把新的 key 就能解决。有两种不是：Gemini 拒绝了请求（多半是模型名或档位写错），
@@ -269,7 +278,8 @@ async function key(args, io) {
     // 在运行的话让它把正在用的那把也放下；没在运行时不必为了删文件把它启动起来
     if ((await io.daemon.status()) !== null) await io.daemon.request("forget-key");
     // 命令启动的和装成应用的各存各的一份，都删
-    for (const file of [io.paths.keyFile, io.paths.appKeyFile]) rmSync(file, { force: true });
+    const { id } = currentProvider(io);
+    for (const packaged of [false, true]) rmSync(keyFile(io.paths, id, { packaged }), { force: true });
     io.out("存着的 key 已经删掉。");
     return 0;
   }

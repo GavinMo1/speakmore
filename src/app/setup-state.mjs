@@ -9,23 +9,24 @@ const OPEN_SETTINGS = "点菜单栏的“听写”打开设置";
  * @param {{ microphone: string, listen: boolean | null, trusted: boolean | null }} setup.permissions
  *   microphone 是系统给的状态（granted / denied / not-determined…）；listen、trusted 为 null 表示按键监听还没报上来
  * @param {"starting" | "running" | "stopped"} [setup.helper] 按键监听的小程序。stopped：退出了或者根本没起来
+ * @param {string} [setup.providerName] 正在用哪一家的模型，缺 key 时点名
  * @returns {{ ready: boolean, missing: string[], blocker: string | null, degraded: string | null }}
  *   ready：现在按热键能不能听写；missing：确定缺的东西；blocker：按了热键却不能用时提示的那句话；
  *   degraded：能用但打了折扣时的说明
  */
-export function summarizeSetup({ key, permissions, helper }) {
+export function summarizeSetup({ key, permissions, helper, providerName = "Gemini" }) {
   const missing = [];
   let blocker = null;
 
   if (key.state === "missing" || key.state === "unreadable") {
-    missing.push("Gemini API key");
-    blocker = `还没有填 Gemini API key：${OPEN_SETTINGS}`;
+    missing.push(`${providerName} API key`);
+    blocker = `还没有填 ${providerName} API key：${OPEN_SETTINGS}`;
   } else if (key.state === "rejected" && key.cause === "other") {
-    // Gemini 拒绝了请求，多半是模型名或思考档位写错：key 本身未必有问题，不能让人以为要换 key
-    missing.push("Gemini 验证");
-    blocker = `Gemini 验证没通过：${key.problem}`;
+    // 那一家拒绝了请求，多半是模型名或思考档位写错：key 本身未必有问题，不能让人以为要换 key
+    missing.push(`${providerName} 验证`);
+    blocker = `${providerName} 验证没通过：${key.problem}`;
   } else if (key.state === "rejected") {
-    missing.push("Gemini API key");
+    missing.push(`${providerName} API key`);
     blocker = `API key 不能用：${key.problem}`;
   } else if (key.state === "checking") {
     blocker = "正在验证 API key，稍等一下";

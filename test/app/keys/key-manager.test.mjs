@@ -1,15 +1,26 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createKeyManager } from "../../../src/app/keys/key-manager.mjs";
-import { describeKeyError } from "../../../src/app/service.mjs";
+import { ModelError } from "../../../src/server/providers/errors.mjs";
+import { findProvider } from "../../../src/server/providers/index.mjs";
 
-const OFFLINE = () => new TypeError("fetch failed");
-/** Gemini 偶尔回的 503（实测到的原文） */
+// 服务报上来的错都是模型层分好类的 ModelError（见 src/server/providers/errors.mjs），下面几种的原文都是实测到的
+const OFFLINE = () =>
+  new ModelError({ kind: "unavailable", problem: "连不上 Gemini，检查网络后再试", detail: "fetch failed" });
 const BUSY = () =>
-  new Error('{"error":{"code":503,"message":"The service is currently unavailable.","status":"UNAVAILABLE"}}');
-const INVALID = () => new Error('{"error":{"code":400,"message":"API key not valid.","status":"INVALID_ARGUMENT"}}');
+  new ModelError({
+    kind: "unavailable",
+    problem: "Gemini 暂时用不了（The service is currently unavailable），过一会儿再试",
+    detail: '{"error":{"code":503,"message":"The service is currently unavailable.","status":"UNAVAILABLE"}}',
+  });
+const INVALID = () =>
+  new ModelError({ kind: "key", problem: "这把 key 无效，检查有没有复制完整", detail: "API key not valid." });
 const NO_SUCH_MODEL = () =>
-  new Error('{"error":{"code":404,"message":"models/gemini-nope is not found.","status":"NOT_FOUND"}}');
+  new ModelError({
+    kind: "other",
+    problem: "Gemini 拒绝了请求：models/gemini-nope is not found",
+    detail: '{"error":{"code":404,"message":"models/gemini-nope is not found.","status":"NOT_FOUND"}}',
+  });
 
 /**
  * 假的听写服务。verdicts：key → 拿它去验证时抛什么错（不写就是通过）。
@@ -23,9 +34,15 @@ function fakeService(verdicts = {}) {
     async useKey(apiKey, { allowUnverified = false } = {}) {
       service.calls.push({ useKey: apiKey, allowUnverified });
       const error = verdicts[apiKey]?.();
-      if (error && !(allowUnverified && describeKeyError(error).cause === "unavailable")) throw error;
+      if (error && !(allowUnverified && error.kind === "unavailable")) throw error;
       service.using = apiKey;
       return { verified: !error };
+    },
+    /** 拿一把 key 试另一家（或另一个模型），不换掉正在用的 */
+    async probe({ choice, apiKey }) {
+      service.calls.push({ probe: apiKey, choice });
+      const error = verdicts[apiKey]?.();
+      if (error) throw error;
     },
     async verify() {
       service.calls.push({ verify: service.using });
@@ -57,20 +74,35 @@ function fakeStore(initial = null) {
   return store;
 }
 
-function setup({ verdicts, stored = null, env = {}, external = false } = {}) {
+/**
+ * @param {object} [options]
+ * @param {string} [options.provider] 正在用哪一家，默认 Gemini
+ * @param {string | Error | null} [options.stored] 正在用的那一家存着的 key
+ * @param {string | Error | null} [options.storedOther] 另一家（Gemini 时是 OpenAI，反之亦然）存着的 key
+ */
+function setup({ verdicts, provider = "gemini", stored = null, storedOther = null, env = {}, external = false } = {}) {
   const service = external ? null : fakeService(verdicts);
-  const keyStore = fakeStore(stored);
+  const other = provider === "gemini" ? "openai" : "gemini";
+  const keyStores = { [provider]: fakeStore(stored), [other]: fakeStore(storedOther) };
   const logged = [];
   const record = (level) => (event, fields) => logged.push({ level, event, ...fields });
   let changes = 0;
   const keys = createKeyManager({
     service,
-    keyStore,
+    provider: findProvider(provider),
+    keyStores,
     env,
     log: { info: record("info"), warn: record("warn"), error: record("error") },
     onChange: () => changes++,
   });
-  return { keys, service, keyStore, logged, changes: () => changes };
+  return {
+    keys,
+    service,
+    keyStore: keyStores[provider],
+    otherStore: keyStores[other],
+    logged,
+    changes: () => changes,
+  };
 }
 
 // ---------- 启动时找 key ----------
@@ -102,7 +134,13 @@ test("启动时连不上 Gemini：存着的那把照样启用，如实标成还�
   assert.deepEqual(await keys.loadAtStartup(), { state: "ready", source: "stored", problem: null, verified: false });
   assert.equal(service.using, "stored-key");
   assert.deepEqual(service.calls, [{ useKey: "stored-key", allowUnverified: true }]);
-  assert.deepEqual(logged.at(-1), { level: "info", event: "key_ready", source: "stored", verified: false });
+  assert.deepEqual(logged.at(-1), {
+    level: "info",
+    event: "key_ready",
+    provider: "gemini",
+    source: "stored",
+    verified: false,
+  });
 });
 
 test("启动时 Gemini 一时不可用（503）：和没网一样先用着，不说成模型设置有问题", async () => {
@@ -332,4 +370,97 @@ test("补验证：已经验证过的、没有 key 的，都不再发请求；同
   await pending.keys.loadAtStartup();
   await Promise.all([pending.keys.reverify(), pending.keys.reverify()]);
   assert.equal(pending.service.calls.filter((call) => "verify" in call).length, 1);
+});
+
+// ---------- 不止一家 ----------
+
+test("正在用 OpenAI：从 OPENAI_API_KEY 和它自己存着的那把里找，不碰 Gemini 的", async () => {
+  const fromEnv = setup({ provider: "openai", env: { GEMINI_API_KEY: "gemini-key", OPENAI_API_KEY: "openai-key" } });
+  assert.equal((await fromEnv.keys.loadAtStartup()).source, "env");
+  assert.equal(fromEnv.service.using, "openai-key");
+
+  const stored = setup({ provider: "openai", stored: "openai-stored", storedOther: "gemini-stored" });
+  await stored.keys.loadAtStartup();
+  assert.equal(stored.service.using, "openai-stored");
+});
+
+test("给另一家存 key：拿它那家的默认模型验证过才存，正在用的那把和状态都不动", async () => {
+  const { keys, service, keyStore, otherStore } = setup({ stored: "gemini-key" });
+  await keys.loadAtStartup();
+  assert.deepEqual(await keys.save(" openai-key ", { provider: "openai" }), { ok: true });
+  assert.equal(otherStore.value, "openai-key");
+  assert.equal(keyStore.value, "gemini-key");
+  assert.equal(service.using, "gemini-key");
+  assert.deepEqual(service.calls.at(-1), {
+    probe: "openai-key",
+    choice: { provider: "openai", model: findProvider("openai").defaultModel },
+  });
+  assert.equal(keys.current.state, "ready");
+});
+
+test("给另一家存的 key 没通过：不存，说清原因", async () => {
+  const { keys, otherStore } = setup({ verdicts: { "bad-key": INVALID } });
+  const result = await keys.save("bad-key", { provider: "openai" });
+  assert.equal(result.ok, false);
+  assert.match(result.problem, /无效/);
+  assert.equal(otherStore.value, null);
+});
+
+test("删另一家的 key：只删它那一份，正在用的不受影响", async () => {
+  const { keys, service, keyStore, otherStore } = setup({ stored: "gemini-key", storedOther: "openai-key" });
+  await keys.loadAtStartup();
+  await keys.forget({ provider: "openai" });
+  assert.equal(otherStore.value, null);
+  assert.equal(keyStore.value, "gemini-key");
+  assert.equal(service.using, "gemini-key");
+  assert.equal(keys.current.state, "ready");
+});
+
+test("不认识的厂商：不验证、不存、不删", async () => {
+  const { keys, service } = setup();
+  assert.match((await keys.save("k", { provider: "deepseek" })).problem, /不认识 deepseek/);
+  await assert.rejects(keys.forget({ provider: "deepseek" }), /不认识 deepseek/);
+  assert.deepEqual(service.calls, []);
+});
+
+// ---------- 检查某个模型能不能用 ----------
+
+test("检查：用那一家的 key（环境变量优先，其次存着的）发一个最小的请求，说能不能用、花了多久", async () => {
+  const { keys, service } = setup({ storedOther: "openai-stored" });
+  const result = await keys.check({ provider: "openai", model: "gpt-audio-1.5" });
+  assert.equal(result.ok, true);
+  assert.equal(result.source, "stored");
+  assert.equal(typeof result.ms, "number");
+  assert.deepEqual(service.calls, [{ probe: "openai-stored", choice: { provider: "openai", model: "gpt-audio-1.5" } }]);
+
+  const fromEnv = setup({ storedOther: "openai-stored", env: { OPENAI_API_KEY: "openai-env" } });
+  assert.equal((await fromEnv.keys.check({ provider: "openai", model: "gpt-audio-mini" })).source, "env");
+  assert.equal(fromEnv.service.calls[0].probe, "openai-env");
+});
+
+test("检查：没有那一家的 key、key 读不出来、验证没通过，各说各的", async () => {
+  const none = await setup().keys.check({ provider: "openai", model: "gpt-audio-mini" });
+  assert.equal(none.ok, false);
+  assert.equal(none.cause, "missing");
+  assert.match(none.problem, /还没有 OpenAI 的 key.*speakmore key openai/);
+
+  const unreadable = await setup({ storedOther: new Error("解不开") }).keys.check({
+    provider: "openai",
+    model: "gpt-audio-mini",
+  });
+  assert.equal(unreadable.ok, false);
+  assert.match(unreadable.problem, /读不出来/);
+
+  const rejected = await setup({ storedOther: "openai-key", verdicts: { "openai-key": NO_SUCH_MODEL } }).keys.check({
+    provider: "openai",
+    model: "gpt-audio-9",
+  });
+  assert.deepEqual([rejected.ok, rejected.cause], [false, "other"]);
+  assert.match(rejected.problem, /gemini-nope is not found/);
+});
+
+test("检查：连的是单独启动的服务端时查不了，说清为什么", async () => {
+  const result = await setup({ external: true }).keys.check({ provider: "gemini", model: "gemini-3.5-flash" });
+  assert.equal(result.ok, false);
+  assert.match(result.problem, /SPEAKMORE_SERVER_URL/);
 });

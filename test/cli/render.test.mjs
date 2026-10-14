@@ -242,7 +242,7 @@ test("设置逐项列出现在的值、从哪来、能填什么，后面是文�
       settings: {
         ...settings,
         hotkey: { value: "fn", source: "file" },
-        model: { value: "gemini-3.8-flash", source: "env" },
+        model: { value: "gemini/gemini-3.8-flash", source: "env", env: "GEMINI_MODEL" },
       },
       paths: {
         home: "/home/.speakmore",
@@ -254,7 +254,8 @@ test("设置逐项列出现在的值、从哪来、能填什么，后面是文�
   );
   assert.match(text, /hotkey\s+fn\s+地球仪（fn）键/);
   assert.match(text, /right_option \/ right_command \/ right_control \/ fn/);
-  assert.match(text, /model\s+gemini-3\.8-flash\s+.*环境变量 GEMINI_MODEL/);
+  // 用的是改名前的环境变量：照实写它的名字
+  assert.match(text, /model\s+gemini\/gemini-3\.8-flash\s+Gemini · 这次运行来自环境变量 GEMINI_MODEL/);
   assert.match(text, /thinking\s+MINIMAL\s+.*默认/);
   assert.match(text, /theme\s+ink\s+墨 · 默认/);
   assert.match(text, /ink \/ cinnabar \/ indigo/);
