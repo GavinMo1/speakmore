@@ -15,6 +15,6 @@
 - [可以用真实录音调提示词](typeless-clone-real-recordings-ok.md) — Typeless 历史录音只发给 Gemini 调提示词，OpenAI 的边用边调；再调时用 eval-prompt.mjs 对比，别把温度设回 0
 - [SpeakMore 按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节
 - [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，代码在仓库根，已公开（MIT）；一行命令安装并启动，装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端以后用 Tauri
-- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，推标签由 CI 发，发过的版本不覆盖；证书 2027-01-12 到期要续
+- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，推标签由 CI 发，CI 传不上就本机发；发过的版本不覆盖；证书 2027-01-12 到期要续
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
