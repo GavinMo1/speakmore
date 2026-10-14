@@ -290,6 +290,13 @@ test("还没记过账时用量全是 0，等待时间是空的", () => {
   history.close();
 });
 
+test("记账只取表里有的那几项：适配器以后多带一项用量也记得进去", () => {
+  const history = openHistory(join(dir, "history.db"));
+  history.addCall({ ...call(), reasoningSummary: "多出来的一项" });
+  assert.equal(history.usage().calls, 1);
+  history.close();
+});
+
 test("账的用途只能是听写或验证 key", () => {
   const history = openHistory(join(dir, "history.db"));
   assert.throws(() => history.addCall(call({ purpose: "other" })), /CHECK|constraint/i);

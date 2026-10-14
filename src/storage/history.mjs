@@ -178,7 +178,21 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
      * @param {{ purpose: "dictation" | "check", audioId: string | null, provider: string, model: string, inputTokens: number, audioTokens: number, cachedTokens: number, outputTokens: number, thinkingTokens: number, costUsd: number | null, latencyMs: number, createdAt: string }} call
      */
     addCall(call) {
-      insertCall.run(call);
+      // 只取表里有的几项：多给一项的话 SQLite 会报"未知参数"，适配器多带一项用量不该让账记不上
+      insertCall.run({
+        audioId: call.audioId,
+        purpose: call.purpose,
+        provider: call.provider,
+        model: call.model,
+        inputTokens: call.inputTokens,
+        audioTokens: call.audioTokens,
+        cachedTokens: call.cachedTokens,
+        outputTokens: call.outputTokens,
+        thinkingTokens: call.thinkingTokens,
+        costUsd: call.costUsd,
+        latencyMs: call.latencyMs,
+        createdAt: call.createdAt,
+      });
     },
     /**
      * 用量汇总：调了几次（几次是验证 key）、几次听写、各项 token、多少美元、几次不知道价（没算进钱里），
