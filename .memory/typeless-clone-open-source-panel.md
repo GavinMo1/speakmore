@@ -1,6 +1,6 @@
 ---
 name: typeless-clone-open-source-panel
-description: 仿刻定名 SpeakMore，代码在仓库根；按开源标准打磨：一行命令安装并启动、装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端 App 以后用 Tauri
+description: 仿刻定名 SpeakMore，代码在仓库根；按开源标准打磨：一行命令安装并启动、装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端 App 以后用 Electron 做（2026-10-14 从 Tauri 改过来）
 metadata:
   type: project
 ---
@@ -19,14 +19,16 @@ Typeless 的仿刻定名 **SpeakMore**，代码就在仓库根（一个 npm 包�
 
 > onboarding 要做好，不要让用户自己 npm，把这些 onboarding 流程都做好，让用户一行命令就能安装+启动，并且有安装的预检查，让用户有一个好的体验。以及要有环境隔离的思想，无论是 key、安装的包都在 .speakmore 之下，就像 claude code 一样。
 
-**Why:** 上一轮做成了"打包成应用 + 设置窗口"，他看过后把衡量标准换成"陌生人从仓库拿到就能跑起来"，并且认为当时只打包了客户端、不够彻底。图形界面的主窗口他打算以后用 Tauri 另做，所以现在不在 Electron 上继续堆界面。
+**Why:** 上一轮做成了"打包成应用 + 设置窗口"，他看过后把衡量标准换成"陌生人从仓库拿到就能跑起来"，并且认为当时只打包了客户端、不够彻底。
+
+桌面端的框架后来改了：2026-10-14 他确认 Typeless 的界面是 Electron 写的（应用包里带着 Electron Framework），原话："那就仿照它就行了呀。咱们的 GUI 也用 Electron 去做就行了，那简单很多了……咱们之后的桌面端 App 就用 Electron 去写"。这之前我跟他讲过：后台本来就是 Electron，菜单栏、悬浮条、设置窗口都长在它身上；另起一个 Tauri 要么和 Electron 并存（冗余），要么把录音、key 加密、菜单栏从 Electron 里拆出去。用 Electron 就是在现有后台上加主窗口，不用拆。
 
 **How to apply:**
 
 - 评判每个决定时问"一个刚拿到仓库的人，要几步才能说出第一句话"。安装步骤、报错、README 都按这个人写；自己照陌生人的路径真跑一遍（打成包装到别处、在伪终端里走第一次使用），2026-10-13 这样跑出了三个单看代码发现不了的问题。
 - 一切落在 `~/.speakmore/` 一个目录里（程序 `bin/ app/ runtime/`，用户的东西 `settings.json <厂商>-key.bin data/`，运行时的 `logs/ run/ cache/`），布局定在 `src/storage/paths.mjs`。新加任何会落盘的东西都放进这里；非放在目录以外不可的（命令链接、钥匙串条目），要让 `speakmore uninstall` 删得掉，删不掉的要在卸载时照实列出来。往 `~/Library`、全局 npm、shell 配置文件里写东西都算走偏。
 - 给用户的安装方式是 `curl … install.sh | bash`：预检查 → 下载校验 → 装好 → 直接启动。不要求用户有 Node、npm、Xcode（包里自带 Electron，命令行也拿它当 Node 跑）。让用户自己敲 `npm install`/`npm link` 的步骤只留给"从源码开发"那一节。发 npm 这条路因此不再走（我的判断：它会把程序装到 `.speakmore` 以外；他没有单独说过"不发 npm"）。
-- 入口是 `speakmore` 命令。新功能先想它在命令行里是什么样；不要往 Electron 的窗口里加新界面，那部分等 Tauri。现有的悬浮条、菜单栏、设置窗口保留，打成 .app 的脚本也还在，但都不是主路径。
+- 入口现在仍是 `speakmore` 命令，新功能先想它在命令行里是什么样。桌面端 App 用 Electron，开始做时直接在现有的后台应用上加主窗口（参照原版的首页、历史、词典）；设置窗口、历史窗口是它的雏形，往里加东西不算走偏。窗口和命令行跟后台说话现在是两套接口（窗口走 Electron 的 IPC，命令行走控制通道），新功能两边都要时，核心逻辑放在一处、两套接口只做转达。
 - 范围仍受 [[typeless-clone-scope-dictation]] 约束，只做语音转写。原版主窗口的三张截图（首页的统计、历史、词典）存在 `targets/typeless/_work/ui-reference/`，不进 git；词典还没做，它对应现在和原版差得最多的地方（专有名词听错），做之前问一句。
 - 开源前他定下的几件事：`.memory/` 保留并随项目迁移，工作习惯可以公开，逆向文档保留，本机情况改成配置驱动（[[machine-facts-stay-local]]），git 历史里泄露隐私的内容要抹掉。
 - 仓库 2026-10-13 已公开，在 GitHub 上叫 `speakmore`（名字是他定的；本地目录名没改，仍是 reverse-anything），许可证 MIT。公开前旧的私有仓库由他本人删掉，改写过的历史推到了新仓库。
