@@ -26,7 +26,7 @@ curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 看到下面这样就可以用了：点进任意输入框，按一下右 Option，说话，再按一下。
 
 ```text
-SpeakMore 0.2.0 · 运行中
+SpeakMore 0.3.0 · 运行中
 
   可以用了：点进任意输入框，按一下右 Option 键开始说话，再按一下结束，文字会贴进去。
 
