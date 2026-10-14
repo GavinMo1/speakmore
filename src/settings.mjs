@@ -19,9 +19,9 @@ export const HOTKEYS = {
 
 /** 同一批热键写在悬浮条提示里的短名字：那里地方小，写不下"右 Option 键" */
 export const HOTKEY_KEYCAPS = {
-  right_option: "右 ⌥",
-  right_command: "右 ⌘",
-  right_control: "右 ⌃",
+  right_option: "右⌥",
+  right_command: "右⌘",
+  right_control: "右⌃",
   fn: "fn",
 };
 

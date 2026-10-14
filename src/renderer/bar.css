@@ -1,14 +1,12 @@
-/* 悬浮条浮在任意应用、任意壁纸上面，所以用不透明的深色底配浅色字，不跟随系统深浅色。 */
+/* 悬浮条：说话时屏幕底部的那一条。左边取消，中间是跟着声音向左流的声波，右边完成；上方一行提示。
+   它浮在任意应用、任意壁纸上面，所以用不透明的深色底，不跟随系统深浅色。
+   颜色由主题给（src/themes 里"悬浮条"那一组），字号、圆角、动效在 tokens.css。
 
-:root {
-  --surface: oklch(0.21 0.012 262);
-  --edge: oklch(0.36 0.014 262);
-  --ink: oklch(0.96 0.004 262);
-  --listening: oklch(0.8 0.15 152);
-  --working: oklch(0.8 0.11 262);
-  --problem: oklch(0.82 0.13 62);
-  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
-}
+   这个窗口本身点不到（鼠标事件全部穿过去，见 src/app/main.mjs），两个按钮的点击是原生小帮手截下来再转给页面的，
+   所以这里没有悬停和按下的样式。画成什么样由 body 上的三个属性定，都是 bar-ui.mjs 设的：
+     data-view      现在是哪种样子（starting / recording / finishing / done / notice / error）
+     data-shown     条在不在屏幕上
+     data-controls  两个按钮点不点得动（没有辅助功能权限时点不动，就不画出来） */
 
 *,
 *::before,
@@ -26,31 +24,272 @@ body {
 }
 
 body {
-  display: grid;
-  place-items: center;
-  font:
-    0.8125rem / 1.35 -apple-system,
-    BlinkMacSystemFont,
-    "PingFang SC",
-    system-ui,
-    sans-serif;
-  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  /* 窗口贴着屏幕可用区域的底边放。条离底边这么远，这段空也是留给阴影的地方 */
+  padding-bottom: 28px;
+  font: var(--text-small) / 1.35 var(--font);
+  color: var(--bar-ink);
   -webkit-font-smoothing: antialiased;
 }
 
-.pill {
+.shell {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.6rem;
-  max-width: calc(100vw - 0.75rem);
-  padding: 0.5rem 0.9rem 0.5rem 0.75rem;
-  background: var(--surface);
-  border: 1px solid var(--edge);
-  border-radius: 999px;
+  gap: 6px;
 }
 
-.label {
-  /* 报错可能是一整句话：最多两行，再长就截断 */
+/* 出现：从下面浮上来。消失：淡出去，淡完由脚本把窗口收起来 */
+body[data-shown="true"] .shell {
+  animation: rise var(--dur-slow) var(--ease-out);
+}
+
+body[data-shown="false"] .shell {
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---------- 上方的一行提示 ---------- */
+
+.hint {
+  margin: 0;
+  padding: 3px 10px;
+  color: var(--bar-muted);
+  background: var(--bar-surface);
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 0 1px var(--bar-edge);
+  font-size: var(--text-micro);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.hint:empty {
+  display: none;
+}
+
+/* 键名：用和正文一样的字体，等宽字体里 ⌥ ⌘ 这些符号又小又偏 */
+.hint kbd {
+  font: inherit;
+  font-weight: 600;
+  color: var(--bar-ink);
+}
+
+/* ---------- 条 ---------- */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 6px;
+  background: var(--bar-surface);
+  /* 一行高时正好是两头全圆；报错写成两行时是圆角矩形 */
+  border-radius: 20px;
+  box-shadow:
+    0 0 0 1px var(--bar-edge),
+    0 6px 18px oklch(0 0 0 / 0.3),
+    0 2px 5px oklch(0 0 0 / 0.2);
+}
+
+.control {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+
+.control svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cancel {
+  color: var(--bar-ink);
+  background: var(--bar-ghost);
+}
+
+.confirm {
+  color: var(--bar-on-go);
+  background: var(--bar-go);
+}
+
+body[data-controls="false"] .control {
+  display: none;
+}
+
+body[data-controls="false"] .bar {
+  padding-inline: 14px;
+}
+
+/* ---------- 中间：声波、整理中的波、完成的勾，叠在同一块地方，按样子换着显示 ---------- */
+
+.mid {
+  position: relative;
+  flex: none;
+  width: 76px;
+  height: 22px;
+}
+
+.mid > * {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+.wave,
+.think {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wave i,
+.think i {
+  flex: none;
+  height: 100%;
+  border-radius: 2px;
+}
+
+/* 声波：每根竖条是一个瞬间的音量，新的从右边进来，整排向左流 */
+.wave {
+  gap: 2px;
+}
+
+.wave i {
+  --h: 0.1;
+  width: 2px;
+  background: var(--bar-live);
+  transform: scaleY(var(--h));
+  /* 比两次音量之间的 50 ms 稍长一点，高度变化连得上、不跳 */
+  transition: transform 90ms linear;
+}
+
+/* 越往左是越早的声音，淡下去 */
+.wave i:nth-child(-n + 6) {
+  opacity: 0.45;
+}
+
+.wave i:nth-child(-n + 3) {
+  opacity: 0.2;
+}
+
+.think {
+  gap: 3px;
+}
+
+.think i {
+  --i: 0;
+  width: 3px;
+  background: var(--bar-working);
+  transform: scaleY(0.2);
+}
+
+.tick path {
+  fill: none;
+  stroke: var(--bar-go);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+}
+
+/* 打开麦克风：还没有声音，竖条都伏着，轻轻一明一暗；"完成"先暗着，这时点不动 */
+body[data-view="starting"] .wave,
+body[data-view="recording"] .wave {
+  opacity: 1;
+}
+
+body[data-view="starting"] .wave {
+  animation: breathe 1s var(--ease-out) infinite alternate;
+}
+
+body[data-view="starting"] .confirm {
+  opacity: 0.35;
+}
+
+@keyframes breathe {
+  from {
+    opacity: 0.3;
+  }
+}
+
+/* 整理中：两个按钮退场（这时已经取消不了），中间换成一道匀速滚过的波 */
+body[data-view="finishing"] .think {
+  opacity: 1;
+}
+
+body[data-view="finishing"] .think i {
+  animation: think 1.15s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -90ms);
+}
+
+@keyframes think {
+  50% {
+    transform: scaleY(0.78);
+  }
+}
+
+body[data-view="finishing"] .control,
+body[data-view="done"] .control {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+/* 完成：打一个勾，随后整条消失 */
+body[data-view="done"] .tick {
+  opacity: 1;
+}
+
+body[data-view="done"] .tick path {
+  animation: draw 380ms var(--ease-out) forwards;
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ---------- 提示和出错：整条换成一句话 ---------- */
+
+.message {
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 300px;
+  padding: 0 10px;
+}
+
+.message span {
+  /* 可能是一整句话：最多两行，再长就截断 */
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -58,43 +297,54 @@ body {
   text-wrap: balance;
 }
 
-/* 圆点：颜色表示阶段，录音时随音量变大 */
-.meter {
-  --level: 0;
+.warning {
   flex: none;
-  width: 0.625rem;
-  height: 0.625rem;
-  border-radius: 50%;
-  background: var(--working);
-  transform: scale(calc(0.7 + var(--level) * 0.9));
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--bar-problem);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-body[data-phase="recording"] .meter {
-  background: var(--listening);
+body[data-view="notice"] .bar > :not(.message),
+body[data-view="error"] .bar > :not(.message) {
+  display: none;
 }
 
-body[data-phase="error"] .meter,
-body[data-phase="idle"] .meter {
-  background: var(--problem);
+body[data-view="notice"] .message,
+body[data-view="error"] .message {
+  display: flex;
+  animation: appear var(--dur-base) var(--ease-out);
 }
 
-/* 动效只在用户没有要求"减弱动态效果"时才加，圆点本身不靠动效传达信息 */
-@media (prefers-reduced-motion: no-preference) {
-  .meter {
-    transition: transform 120ms var(--ease-out);
+body[data-view="notice"] .warning {
+  display: none;
+}
+
+/* 系统开了"减弱动态效果"：不位移、不缩放、不滚动，只留明暗的变化。声波照样跟着声音动，但不做过渡 */
+@media (prefers-reduced-motion: reduce) {
+  body[data-shown="true"] .shell {
+    animation: appear var(--dur-base) linear;
   }
 
-  body[data-phase="starting"] .meter,
-  body[data-phase="finishing"] .meter {
-    animation: breathe 1.1s var(--ease-out) infinite alternate;
+  .control,
+  .wave i {
+    transition: none;
   }
-}
 
-@keyframes breathe {
-  from {
-    opacity: 0.35;
+  body[data-view="finishing"] .think {
+    animation: breathe 1.2s linear infinite alternate;
   }
-  to {
-    opacity: 1;
+
+  body[data-view="finishing"] .think i {
+    animation: none;
+    transform: scaleY(0.45);
+  }
+
+  body[data-view="done"] .tick path {
+    animation: none;
+    stroke-dashoffset: 0;
   }
 }

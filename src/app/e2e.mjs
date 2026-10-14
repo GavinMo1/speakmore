@@ -16,6 +16,9 @@ export const fakeHelper = {
     pasted.push(text);
     return { ok: true, reason: null };
   },
+  // 不截真的 esc 和鼠标点击
+  capture() {},
+  release() {},
   stop() {},
 };
 
@@ -41,9 +44,9 @@ export async function run({ bar, history, quit }) {
     await new Promise((resolve) => bar.webContents.once("did-finish-load", resolve));
   }
   const press = async () => {
-    bar.webContents.send("hotkey", { event: "hotkey", down: true });
+    bar.webContents.send("input", { event: "hotkey", down: true });
     await sleep(120);
-    bar.webContents.send("hotkey", { event: "hotkey", down: false });
+    bar.webContents.send("input", { event: "hotkey", down: false });
   };
   await sleep(500);
   await press();

@@ -7,6 +7,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  nativeTheme,
   safeStorage,
   screen,
   shell,
@@ -18,7 +19,10 @@ import { openHistory } from "../history.mjs";
 import { migrateLegacyData } from "../legacy.mjs";
 import { alsoLogTo, log } from "../log.mjs";
 import { ensureHome, resolvePaths } from "../paths.mjs";
-import { HOTKEYS, resolveSettings } from "../settings.mjs";
+import { HOTKEY_KEYCAPS, HOTKEYS, resolveSettings } from "../settings.mjs";
+import { toHex } from "../themes/color.mjs";
+import { themeCss } from "../themes/contract.mjs";
+import { findTheme } from "../themes/index.mjs";
 import { createDelivery } from "./delivery.mjs";
 import { startHelper } from "./helper.mjs";
 import { createKeyManager } from "./key-manager.mjs";
@@ -27,7 +31,8 @@ import { startService } from "./service.mjs";
 import { summarizeSetup } from "./setup-state.mjs";
 
 // 后台应用的主进程：三个窗口（悬浮条、历史、设置）、菜单栏图标、原生小帮手、内置的听写服务，
-// 以及页面和命令行要它代办的事。平时由 speakmore 命令启动（src/cli），也可以打成应用双击启动。
+// 以及页面和命令行要它代办的事。窗口用什么颜色由主题定（src/themes），这里负责把它交给每个窗口。
+// 平时由 speakmore 命令启动（src/cli），也可以打成应用双击启动。
 // 结构对应原版的"主进程 + 悬浮条 + 键盘子进程"（targets/typeless/docs/03-process-architecture.md）。
 
 /** 调试用：设了就连这个地址上单独启动的服务端，不启动内置的那个 */
@@ -47,8 +52,8 @@ try {
 }
 const HOTKEY = SETTINGS.hotkey.value;
 const HOTKEY_LABEL = HOTKEYS[HOTKEY];
-const BAR_SIZE = { width: 380, height: 64 };
-const BAR_BOTTOM_GAP = 28;
+/** 悬浮条的窗口。比条本身大一圈：上面要放一行提示，四周要留出阴影，报错时条会变宽变高 */
+const BAR_SIZE = { width: 380, height: 124 };
 const KEY_PAGE_URL = "https://aistudio.google.com/apikey";
 /** 系统设置里三项权限各自的页面 */
 const PRIVACY_PANES = {
@@ -124,6 +129,7 @@ async function main() {
     hotkey: HOTKEY,
     model: SETTINGS.model.value,
     thinking: SETTINGS.thinking.value,
+    theme: SETTINGS.theme.value,
     home: PATHS.home,
     server_url: serverUrl,
     packaged: app.isPackaged,
@@ -166,6 +172,24 @@ async function main() {
     settingsWindow?.webContents.send("setup:changed");
   }
 
+  // ---------- 主题 ----------
+
+  let theme = findTheme(SETTINGS.theme.value);
+  // 每个窗口的预加载脚本一上来就同步来取，赶在页面画出第一帧之前
+  ipcMain.on("theme:get", (event) => {
+    event.returnValue = themeCss(theme);
+  });
+  /** 重新读一遍设置里的主题，开着的窗口当场换。别的设置要重启才生效，主题不用 */
+  function reloadTheme() {
+    theme = findTheme(resolveSettings({ file: PATHS.settingsFile, env: process.env }).theme.value);
+    const css = themeCss(theme);
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send("theme:changed", css);
+    log.info("theme_changed", { theme: theme.id });
+    return { theme: theme.id };
+  }
+  /** 窗口还没画出页面时的底色：和页面的底一样，免得深色模式下先闪一下白 */
+  const windowBackground = () => toHex(theme.window[nativeTheme.shouldUseDarkColors ? "dark" : "light"].bg);
+
   // ---------- 悬浮条 ----------
 
   function createBar() {
@@ -173,7 +197,8 @@ async function main() {
     const bar = new BrowserWindow({
       ...BAR_SIZE,
       x: Math.round(workArea.x + (workArea.width - BAR_SIZE.width) / 2),
-      y: workArea.y + workArea.height - BAR_SIZE.height - BAR_BOTTOM_GAP,
+      // 贴着屏幕可用区域的底边。条离底边多远由 bar.css 定
+      y: workArea.y + workArea.height - BAR_SIZE.height,
       show: false,
       frame: false,
       transparent: true,
@@ -185,6 +210,9 @@ async function main() {
       focusable: false,
       webPreferences,
     });
+    // 整个窗口都点不到，鼠标事件原样落到它下面的应用上。条上的两个按钮不靠这个窗口收点击：
+    // 点击一旦落在我们的窗口上，系统就会把我们切到最前面（面板类型的窗口也一样，实测过），输入框照样丢焦点。
+    // 所以点击是原生小帮手在事件到达任何窗口之前截下来的，见下面的 bar:capture
     bar.setIgnoreMouseEvents(true);
     bar.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     bar.loadFile(join(sourceDir, "renderer", "bar.html"));
@@ -192,20 +220,61 @@ async function main() {
   }
 
   const bar = createBar();
-  ipcMain.on("bar:set-visible", (_event, visible) => {
-    if (visible) bar.showInactive();
-    else bar.hide();
-  });
-  const notify = (message) => {
-    // 退出途中窗口已经销毁，这时再发消息会抛错
-    if (!bar.isDestroyed()) bar.webContents.send("notice", message);
+  /** 给悬浮条的页面发消息。退出途中窗口已经销毁，这时再发会抛错 */
+  const tellBar = (channel, payload) => {
+    if (!bar.isDestroyed()) bar.webContents.send(channel, payload);
   };
+  const notify = (message) => tellBar("notice", message);
+  ipcMain.on("bar:set-visible", (_event, visible) => {
+    if (visible) {
+      bar.showInactive();
+      return;
+    }
+    bar.hide();
+    // 条不在屏幕上时什么都不该截着。页面自己会说"不截了"，这里再说一遍是保险：
+    // 万一它漏说了，esc 会一直被吞掉，在哪个应用里都按不出来
+    helper.release();
+  });
+  // 页面崩了就更没人说"不截了"
+  bar.webContents.on("render-process-gone", (_event, details) => {
+    log.error("bar_gone", { reason: details.reason });
+    helper.release();
+  });
+  // 听写进行中，页面让小帮手把 esc 和条上两个按钮的点击截下来（null 是不截了）。
+  // 页面给的是按钮在窗口里的位置，小帮手要的是在屏幕上的位置
+  ipcMain.on("bar:capture", (_event, regions) => {
+    if (regions === null) {
+      helper.release();
+      return;
+    }
+    if (!Array.isArray(regions)) {
+      log.error("bar_capture_invalid", { type: typeof regions });
+      return;
+    }
+    const origin = bar.getBounds();
+    const onScreen = regions.map(({ id, x, y, width, height }) => ({
+      id,
+      x: origin.x + x,
+      y: origin.y + y,
+      width,
+      height,
+    }));
+    // "点了按钮没反应"时先看这条：位置对不对得上屏幕上画的那两个圆
+    log.info("bar_capture", { regions: onScreen });
+    helper.capture(onScreen);
+  });
 
   // ---------- 按键和贴字 ----------
 
   let helper = null;
   /** 每启动一个小帮手加一；旧的那个退出时发来的事件靠它认出来并丢掉 */
   let helperGeneration = 0;
+  /** 小帮手截不截得住 esc 和点击（要辅助功能权限）。截不住时悬浮条不画那两个按钮 */
+  let barControls = false;
+  function setBarControls(enabled) {
+    barControls = enabled;
+    tellBar("bar:controls", enabled);
+  }
 
   /**
    * @param {{ prompt: boolean }} options prompt：两项权限没给时让不让系统弹授权框。只在应用启动时弹一次；
@@ -215,6 +284,7 @@ async function main() {
     const generation = ++helperGeneration;
     helperPermissions = null;
     helperState = "starting";
+    setBarControls(false);
     helper = startHelper(join(app.getAppPath(), "build", "key-helper"), {
       args: ["--key", HOTKEY, ...(prompt ? [] : ["--no-prompt"])],
       onEvent: (event) => {
@@ -229,7 +299,8 @@ async function main() {
       case "ready":
         helperState = "running";
         helperPermissions = { listen: event.listen, trusted: event.trusted };
-        log.info("helper_ready", helperPermissions);
+        log.info("helper_ready", { ...helperPermissions, capture: event.capture });
+        setBarControls(event.capture === true);
         setupChanged();
         offerSettingsIfIncomplete();
         break;
@@ -238,13 +309,20 @@ async function main() {
         // 热键不灵时先看这条日志有没有：没有就是小帮手没收到按键（权限或键选错了）
         log.info("key_event", { event: event.event, down: event.down });
         const { blocker } = summarizeSetup(currentSetup());
-        if (blocker === null) bar.webContents.send("hotkey", event);
+        if (blocker === null) tellBar("input", event);
         else if (event.event === "hotkey" && event.down) notify(blocker);
         break;
       }
+      case "escape":
+      case "click":
+        // 只在听写进行中才会有：那时页面让小帮手把它们截下来了
+        log.info("bar_input", { event: event.event, id: event.id });
+        tellBar("input", event);
+        break;
       case "exit":
         helperState = "stopped";
         helperPermissions = null;
+        setBarControls(false);
         log.error("helper_exited", { code: event.code, signal: event.signal });
         setupChanged();
         notify(`按键监听停了，${HOTKEY_LABEL}不会生效：重新启动试试`);
@@ -269,7 +347,7 @@ async function main() {
   });
   const historyChanged = () => historyWindow?.webContents.send("history:changed");
 
-  ipcMain.handle("config:get", () => ({ serverUrl, hotkeyLabel: HOTKEY_LABEL }));
+  ipcMain.handle("config:get", () => ({ serverUrl, hotkeyKeycap: HOTKEY_KEYCAPS[HOTKEY], barControls }));
   ipcMain.handle("dictation:deliver", async (_event, payload) => {
     const result = await delivery.completed(payload);
     // 只记长度：成品是用户说的话，不进日志
@@ -354,7 +432,14 @@ async function main() {
 
   function showHistory() {
     historyWindow = showWindow(historyWindow, () => {
-      const window = new BrowserWindow({ width: 560, height: 680, minWidth: 380, title: "历史记录", webPreferences });
+      const window = new BrowserWindow({
+        width: 560,
+        height: 680,
+        minWidth: 380,
+        title: "历史记录",
+        backgroundColor: windowBackground(),
+        webPreferences,
+      });
       window.loadFile(join(sourceDir, "renderer", "history.html"));
       window.on("closed", () => {
         historyWindow = null;
@@ -371,6 +456,7 @@ async function main() {
         minWidth: 460,
         minHeight: 480,
         title: "听写设置",
+        backgroundColor: windowBackground(),
         webPreferences,
       });
       window.loadFile(join(sourceDir, "renderer", "settings.html"));
@@ -447,6 +533,7 @@ async function main() {
       // 连着单独启动的服务端时，用哪个模型由那边定
       model: service ? SETTINGS.model.value : null,
       thinking: service ? SETTINGS.thinking.value : null,
+      theme: theme.id,
       // 装成应用的和命令启动的，权限和 key 各是一套：命令行据此决定该不该代它重启
       packaged: app.isPackaged,
       ...setup,
@@ -473,6 +560,7 @@ async function main() {
           },
           "set-key": ({ key }) => keys.save(key),
           "forget-key": () => keys.forget(),
+          "reload-theme": reloadTheme,
           "show-settings": showSettings,
           "show-history": showHistory,
           // 先把这次的回答发出去再退出

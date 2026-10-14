@@ -1,16 +1,23 @@
-// 悬浮条：把按键事件喂给状态机，按状态机给出的动作去录音、上传、交付，并把状态画出来。
+// 悬浮条：把按键和点击喂给状态机，按状态机给出的动作去录音、上传、交付。
+// 画面不在这里：该是什么样子由 bar-view.mjs 算，画出来由 bar-ui.mjs 管。
 
+import { createBarUi } from "./bar-ui.mjs";
+import { viewOf } from "./bar-view.mjs";
 import { Action, initialState, LONG_PRESS_MS, Phase, transition } from "./machine.mjs";
 import { startRecording } from "./recorder.mjs";
 import { VoiceSocket } from "./voice-socket.mjs";
 
 /** 原版的单次录音上限：9 分钟 */
 const MAX_DURATION_MS = 540_000;
-/** 回到空闲后，提示和报错在屏幕上留多久 */
-const MESSAGE_LINGER_MS = 4_000;
 
-const { serverUrl, hotkeyLabel } = await window.speakmore.config();
+const { serverUrl, hotkeyKeycap, barControls } = await window.speakmore.config();
 const voice = new VoiceSocket(serverUrl);
+const ui = createBarUi({
+  document,
+  host: { setVisible: window.speakmore.setBarVisible, capture: window.speakmore.captureBarInput },
+  keycap: hotkeyKeycap,
+});
+ui.setControls(barControls);
 
 let state = initialState;
 /** 正在进行的那一次：{ audioId, recording, cancelled } */
@@ -19,9 +26,11 @@ let holdTimer = null;
 let maxDurationTimer = null;
 
 function dispatch(event) {
+  const previous = state;
   const result = transition(state, event);
   state = result.state;
-  render();
+  // 状态没动（比如空闲时松开热键）就不重画
+  if (state !== previous) ui.show(viewOf(state, previous.phase), state.message);
   for (const action of result.actions) ACTIONS[action]();
 }
 
@@ -44,7 +53,7 @@ function start() {
     await voice.begin(current.audioId);
     const recording = await startRecording({
       onChunk: (chunk) => voice.sendChunk(chunk),
-      onLevel: renderLevel,
+      onLevel: ui.level,
       onError: (error) => dispatch({ type: "FAILED", message: describe(error) }),
     });
     // 等麦克风的这一小段时间里用户可能已经取消了
@@ -113,47 +122,30 @@ async function stop() {
   }
 }
 
-// ---------- 画面 ----------
-
-const label = document.getElementById("label");
-const meter = document.getElementById("meter");
-const LABELS = {
-  [Phase.STARTING]: "正在打开麦克风",
-  [Phase.RECORDING]: `正在听，再按一下${hotkeyLabel}结束`,
-  [Phase.FINISHING]: "整理中",
-};
-let lingerTimer = null;
-
-function render() {
-  clearTimeout(lingerTimer);
-  document.body.dataset.phase = state.phase;
-  label.textContent = state.message ?? LABELS[state.phase] ?? "";
-  if (state.phase !== Phase.RECORDING) renderLevel(0);
-
-  const resting = state.phase === Phase.IDLE || state.phase === Phase.ERROR;
-  window.speakmore.setBarVisible(!resting || state.message !== null);
-  if (resting && state.message !== null) {
-    lingerTimer = setTimeout(() => window.speakmore.setBarVisible(false), MESSAGE_LINGER_MS);
-  }
-}
-
-function renderLevel(level) {
-  // 说话的音量集中在低段，开方之后小声也看得出变化
-  meter.style.setProperty("--level", Math.min(1, Math.sqrt(level)).toFixed(3));
-}
-
 // ---------- 来自主进程的事件 ----------
 
-window.speakmore.onHotkey((event) => {
-  if (event.event === "hotkey") dispatch({ type: event.down ? "KEY_DOWN" : "KEY_UP" });
-  else if (event.event === "other_key") dispatch({ type: "OTHER_KEY" });
+/** 小帮手报上来的事 → 状态机的事件。click 的 id 是条上被点的那个按钮 */
+const INPUT_EVENTS = {
+  hotkey: (event) => (event.down ? "KEY_DOWN" : "KEY_UP"),
+  other_key: () => "OTHER_KEY",
+  escape: () => "USER_CANCEL",
+  click: (event) => ({ cancel: "USER_CANCEL", confirm: "USER_CONFIRM" })[event.id],
+};
+
+window.speakmore.onInput((event) => {
+  const type = Object.hasOwn(INPUT_EVENTS, event.event) ? INPUT_EVENTS[event.event](event) : undefined;
+  if (type === undefined) {
+    console.warn("不认识的输入事件", event);
+    return;
+  }
+  dispatch({ type });
 });
+
+window.speakmore.onBarControls(ui.setControls);
 
 window.speakmore.onNotice((message) => {
   // 权限之类的提醒只在空闲时显示，不打断正在进行的听写
   if (state.phase !== Phase.IDLE && state.phase !== Phase.ERROR) return;
   state = { ...state, message };
-  render();
+  ui.show(viewOf(state, state.phase), message);
 });
-
-render();

@@ -4,12 +4,13 @@
 
 const CHUNK_MS = 3_000;
 const MIME_TYPE = "audio/webm;codecs=opus";
-const LEVEL_INTERVAL_MS = 100;
+/** 悬浮条的声波每来一个音量往左流一格，这个间隔就是它流的快慢 */
+const LEVEL_INTERVAL_MS = 50;
 
 /**
  * @param {object} handlers
  * @param {(chunk: Blob) => void} handlers.onChunk 每 3 秒一块，结束时还有最后一块
- * @param {(level: number) => void} handlers.onLevel 0–1 的瞬时音量，每 100 ms 一次
+ * @param {(level: number) => void} handlers.onLevel 0–1 的瞬时音量，每 50 ms 一次
  * @param {(error: Error) => void} handlers.onError 录音中途出错
  */
 export async function startRecording({ onChunk, onLevel, onError }) {
