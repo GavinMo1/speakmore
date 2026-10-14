@@ -12,7 +12,7 @@ export const ready = {
   hotkey: "right_option",
   hotkeyLabel: "右 Option 键",
   provider: "gemini",
-  model: "gemini/gemini-3.5-flash",
+  model: "gemini/gemini-3.6-flash",
   thinking: "MINIMAL",
   packaged: false,
   helper: "running",
@@ -22,7 +22,7 @@ export const ready = {
 };
 export const settings = {
   hotkey: { value: "right_option", source: "default" },
-  model: { value: "gemini/gemini-3.5-flash", source: "default" },
+  model: { value: "gemini/gemini-3.6-flash", source: "default" },
   thinking: { value: "MINIMAL", source: "default" },
   theme: { value: "ink", source: "default" },
 };

@@ -17,7 +17,7 @@ test("一切就绪时说怎么用，并列出 key、权限、热键、模型", (
   assert.match(text, /key\s+已保存，验证通过/);
   assert.match(text, /麦克风 ✓\s+输入监控 ✓\s+辅助功能 ✓/);
   assert.match(text, /热键\s+右 Option 键/);
-  assert.match(text, /模型\s+Gemini 的 gemini-3\.5-flash（MINIMAL）/);
+  assert.match(text, /模型\s+Gemini 的 gemini-3\.6-flash（MINIMAL）/);
 });
 
 test("缺东西时标题说还差几样，逐项标出，并说权限记在终端名下", () => {
@@ -212,8 +212,8 @@ test("用的是 OpenAI：模型写清是哪一家，没有思考档位就不写�
 });
 
 test("0.3 的后台应用报的模型名不带厂商：照样认成 Gemini 的，不误报设置没生效", () => {
-  const legacy = { ...ready, provider: undefined, model: "gemini-3.5-flash" };
+  const legacy = { ...ready, provider: undefined, model: "gemini-3.6-flash" };
   const text = renderStatus({ status: legacy, version: "0.1.0", settings, stats: noStats }, plain);
-  assert.match(text, /模型\s+Gemini 的 gemini-3\.5-flash（MINIMAL）/);
+  assert.match(text, /模型\s+Gemini 的 gemini-3\.6-flash（MINIMAL）/);
   assert.doesNotMatch(text, /speakmore restart/);
 });

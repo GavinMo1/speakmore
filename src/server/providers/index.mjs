@@ -11,8 +11,9 @@ export const PROVIDERS = Object.freeze([
     keyEnv: "GEMINI_API_KEY",
     keyPage: "https://aistudio.google.com/apikey",
     keySite: "Google AI Studio",
-    // 实测选的：gemini-3.5-flash + MINIMAL 约 1.7 秒出结果，能处理改口；flash-lite 更快（约 1.2 秒）但会把改口的痕迹留下
-    defaultModel: "gemini-3.5-flash",
+    // 原来实测选的是 gemini-3.5-flash + MINIMAL：约 1.7 秒出结果，能处理改口；flash-lite 更快（约 1.2 秒）但会把改口的痕迹留下。
+    // 3.5 Flash 后来停用了，发给它的请求被自动转给 3.6 Flash（官方弃用页；2026-10-14 实测回话报的就是 3.6），所以直接写 3.6
+    defaultModel: "gemini-3.6-flash",
     // 有的型号不接受 MINIMAL，所以档位也要能换
     thinkingLevels: Object.freeze(["MINIMAL", "LOW", "MEDIUM", "HIGH"]),
     load: () => import("./gemini.mjs"),

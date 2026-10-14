@@ -26,7 +26,7 @@ const READY = {
   hotkey: "right_option",
   hotkeyLabel: "右 Option 键",
   provider: "gemini",
-  model: "gemini/gemini-3.5-flash",
+  model: "gemini/gemini-3.6-flash",
   thinking: "MINIMAL",
   packaged: false,
   helper: "running",
@@ -1095,7 +1095,7 @@ test("model：列出有哪几家、各用哪个模型、key 有没有、现在�
   haveStoredKey();
   const { speakmore, output } = harness({ env: { OPENAI_API_KEY: "sk-env" } });
   assert.equal(await speakmore("model"), 0);
-  assert.match(output.out, /● gemini\s+Gemini\s+gemini-3\.5-flash\s+key 存着/);
+  assert.match(output.out, /● gemini\s+Gemini\s+gemini-3\.6-flash\s+key 存着/);
   assert.match(output.out, /openai\s+OpenAI\s+gpt-audio-mini（默认）\s+key 来自环境变量 OPENAI_API_KEY/);
 });
 
@@ -1137,12 +1137,12 @@ test("model <厂商>：没有它的 key 又没法问（不在终端里）、或�
   const quiet = harness({ interactive: false });
   assert.equal(await quiet.speakmore("model", "openai"), 1);
   assert.match(quiet.output.err, /还没有 OpenAI 的 key.*speakmore key openai/);
-  assert.equal(savedModel(), "gemini/gemini-3.5-flash");
+  assert.equal(savedModel(), "gemini/gemini-3.6-flash");
 
   const declined = harness({ daemon: fakeDaemon({ running: READY }), secrets: [""] });
   assert.equal(await declined.speakmore("model", "openai"), 1);
   assert.match(declined.output.err, /没有换/);
-  assert.equal(savedModel(), "gemini/gemini-3.5-flash");
+  assert.equal(savedModel(), "gemini/gemini-3.6-flash");
 
   const rejected = harness({
     daemon: fakeDaemon({ running: READY, saveKey: () => ({ ok: false, problem: "这把 key 无效" }) }),
@@ -1150,7 +1150,7 @@ test("model <厂商>：没有它的 key 又没法问（不在终端里）、或�
   });
   assert.equal(await rejected.speakmore("model", "openai"), 1);
   assert.match(rejected.output.err, /这把 key 没有通过：这把 key 无效/);
-  assert.equal(savedModel(), "gemini/gemini-3.5-flash");
+  assert.equal(savedModel(), "gemini/gemini-3.6-flash");
 });
 
 test("model：不认识的厂商、写错的模型名，以 2 退出并说能填什么", async () => {
@@ -1165,8 +1165,8 @@ test("model check：查现在用的那个，说能不能用、key 从哪来、�
   haveStoredKey();
   const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
   assert.equal(await speakmore("model", "check"), 0);
-  assert.deepEqual(daemon.requests.at(-1), { cmd: "check-model", params: { model: "gemini/gemini-3.5-flash" } });
-  assert.match(output.out, /能用：Gemini 的 gemini-3\.5-flash.*0\.8 秒/);
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "check-model", params: { model: "gemini/gemini-3.6-flash" } });
+  assert.match(output.out, /能用：Gemini 的 gemini-3\.6-flash.*0\.8 秒/);
 });
 
 test("model check <模型>：查别的；不能用时说原因和下一步，以 1 退出", async () => {
@@ -1276,7 +1276,7 @@ test("model：key 是启动后台时从环境变量给的（命令行这边没�
   const fromEnv = { ...READY, key: { state: "ready", source: "env", problem: null, verified: true } };
   const { speakmore, output } = harness({ daemon: fakeDaemon({ running: fromEnv }) });
   assert.equal(await speakmore("model"), 0);
-  assert.match(output.out, /● gemini\s+Gemini\s+gemini-3\.5-flash\s+key 来自环境变量 GEMINI_API_KEY/);
+  assert.match(output.out, /● gemini\s+Gemini\s+gemini-3\.6-flash\s+key 来自环境变量 GEMINI_API_KEY/);
   assert.match(output.out, /openai\s+OpenAI\s+gpt-audio-mini（默认）\s+还没有 key/);
 });
 
@@ -1317,7 +1317,7 @@ test("换模型、重启之后那家的 key 被拒：说不能用、怎么换 ke
   const { speakmore, output } = harness({ daemon: fakeDaemon({ running: READY, afterStart: rejected }) });
   assert.equal(await speakmore("model", "openai"), 1);
   assert.match(output.err, /OpenAI 的 key 不能用：这把 key 无效.*speakmore key openai/);
-  assert.match(output.err, /撤回.*speakmore model gemini\/gemini-3\.5-flash/);
+  assert.match(output.err, /撤回.*speakmore model gemini\/gemini-3\.6-flash/);
   assert.doesNotMatch(output.out, /已经生效/);
 });
 

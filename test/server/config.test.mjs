@@ -6,7 +6,7 @@ test("只给 Gemini 的密钥时，其余用默认值，只监听本机", () => 
   assert.deepEqual(loadConfig({ GEMINI_API_KEY: "k" }), {
     host: "127.0.0.1",
     port: 8790,
-    model: { provider: "gemini", model: "gemini-3.5-flash" },
+    model: { provider: "gemini", model: "gemini-3.6-flash" },
     apiKey: "k",
     thinkingLevel: "MINIMAL",
   });
@@ -57,7 +57,7 @@ test("样子不对的 key 直接拒绝，不交给 SDK：它报错时会把整�
 test("模型的环境变量是空的：当作没设，用默认的（0.3 单独启动服务端时就是这样）", () => {
   assert.deepEqual(loadConfig({ GEMINI_API_KEY: "k", GEMINI_MODEL: "" }).model, {
     provider: "gemini",
-    model: "gemini-3.5-flash",
+    model: "gemini-3.6-flash",
   });
   assert.equal(loadConfig({ GEMINI_API_KEY: "k", SPEAKMORE_MODEL: " " }).model.provider, "gemini");
 });

@@ -28,8 +28,8 @@ test("在册的厂商：Gemini 和 OpenAI，各自说清 key 从哪个环境变�
   assert.equal(findProvider("openai").thinkingLevels, null);
 });
 
-test("默认还是 Gemini：升级上来的人什么都不改，用的和原来一样", () => {
-  assert.deepEqual(DEFAULT_MODEL_CHOICE, { provider: "gemini", model: "gemini-3.5-flash" });
+test("默认用 Gemini 3.6 Flash：3.5 Flash 已停用，发给它的请求本来就被转给 3.6，升级上来的人用的和原来一样", () => {
+  assert.deepEqual(DEFAULT_MODEL_CHOICE, { provider: "gemini", model: "gemini-3.6-flash" });
 });
 
 test("findProvider：认 id，大小写不论；不认识的是 null，原型上的名字也查不到东西", () => {
@@ -43,7 +43,7 @@ test("选模型的写法：厂商/模型；只写厂商就用它的默认模型"
   assert.deepEqual(parseModelChoice("openai/gpt-audio-1.5"), { provider: "openai", model: "gpt-audio-1.5" });
   assert.deepEqual(parseModelChoice(" OpenAI/gpt-audio-1.5 "), { provider: "openai", model: "gpt-audio-1.5" });
   assert.deepEqual(parseModelChoice("openai"), { provider: "openai", model: findProvider("openai").defaultModel });
-  assert.deepEqual(parseModelChoice("gemini"), { provider: "gemini", model: "gemini-3.5-flash" });
+  assert.deepEqual(parseModelChoice("gemini"), { provider: "gemini", model: "gemini-3.6-flash" });
   assert.equal(formatModelChoice({ provider: "openai", model: "gpt-audio-1.5" }), "openai/gpt-audio-1.5");
 });
 
