@@ -187,8 +187,9 @@ body[data-controls="false"] .bar {
   width: 2px;
   background: var(--bar-live);
   transform: scaleY(var(--h));
-  /* 比两次音量之间的 50 ms 稍长一点，高度变化连得上、不跳 */
-  transition: transform 90ms linear;
+  /* 和两次音量之间的 50 ms 一样长：长了竖条总在半路被下一个音量拉走，够不到该有的高度，波就平了。
+     先快后慢，起落干脆 */
+  transition: transform 50ms var(--ease-out);
 }
 
 /* 越往左是越早的声音，淡下去 */
