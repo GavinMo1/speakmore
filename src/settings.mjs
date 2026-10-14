@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { DEFAULT_MODEL, DEFAULT_THINKING_LEVEL, THINKING_LEVELS } from "./server/config.mjs";
+import { DEFAULT_THEME, findTheme, THEMES } from "./themes/index.mjs";
 
 // 用户能改的几项设置，存在数据目录的 settings.json 里。
 // 取值的顺序：环境变量（只管这一次运行）优先于文件，文件优先于默认值。key 不在这里，它单独加密保存。
@@ -16,7 +17,20 @@ export const HOTKEYS = {
   fn: "地球仪（fn）键",
 };
 
-/** 每一项：对应的环境变量、默认值、能填的值（不限时为 null）、把写法规整并校验的函数 */
+/** 同一批热键写在悬浮条提示里的短名字：那里地方小，写不下"右 Option 键" */
+export const HOTKEY_KEYCAPS = {
+  right_option: "右 ⌥",
+  right_command: "右 ⌘",
+  right_control: "右 ⌃",
+  fn: "fn",
+};
+
+const THEME_IDS = THEMES.map((theme) => theme.id);
+
+/**
+ * 每一项：对应的环境变量、默认值、能填的值（不限时为 null）、把写法规整并校验的函数。
+ * label 可有可无：值本身不好懂时（right_option、cinnabar）给出它叫什么。
+ */
 export const SETTINGS = {
   hotkey: {
     env: "SPEAKMORE_HOTKEY",
@@ -27,6 +41,7 @@ export const SETTINGS = {
       if (!Object.hasOwn(HOTKEYS, value)) throw new Error(`要是 ${Object.keys(HOTKEYS).join(" / ")} 之一`);
       return value;
     },
+    label: (value) => HOTKEYS[value],
   },
   model: {
     env: "GEMINI_MODEL",
@@ -48,6 +63,19 @@ export const SETTINGS = {
       if (!THINKING_LEVELS.includes(level)) throw new Error(`要是 ${THINKING_LEVELS.join(" / ")} 之一`);
       return level;
     },
+  },
+  theme: {
+    env: "SPEAKMORE_THEME",
+    default: DEFAULT_THEME,
+    describe: "界面用哪套主题",
+    choices: THEME_IDS,
+    parse(value) {
+      // 写 id 或写名字都认（cinnabar、朱砂），存下来的统一是 id
+      const theme = findTheme(value.trim());
+      if (theme === null) throw new Error(`要是 ${THEME_IDS.join(" / ")} 之一`);
+      return theme.id;
+    },
+    label: (value) => findTheme(value).name,
   },
 };
 

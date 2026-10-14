@@ -17,6 +17,7 @@ import { run } from "../../src/cli/main.mjs";
 import { NotRunningError, TimeoutError } from "../../src/control.mjs";
 import { openHistory } from "../../src/history.mjs";
 import { resolvePaths } from "../../src/paths.mjs";
+import { resolveSettings } from "../../src/settings.mjs";
 
 const READY = {
   pid: 4321,
@@ -78,6 +79,7 @@ afterEach(() => {
 /**
  * 假的后台应用。running 是它现在的状态（null 表示没在运行），afterStart 是启动之后的状态，
  * saveKey 决定存 key 的结果，stopped 是停止时的说法，hung 为 true 表示它卡住了不答话。
+ * reloadTheme 是让它重新读主题时的回答，默认和真的一样：照设置文件里现在写的换。
  * calls 记下命令行对它做过什么。
  */
 function fakeDaemon({
@@ -86,6 +88,7 @@ function fakeDaemon({
   saveKey = () => ({ ok: true }),
   stopped = "quit",
   hung = false,
+  reloadTheme = () => ({ theme: resolveSettings({ file: paths.settingsFile, env: {} }).theme.value }),
 } = {}) {
   const daemon = {
     calls: [],
@@ -119,6 +122,7 @@ function fakeDaemon({
         return result;
       }
       if (cmd === "forget-key") daemon.current = NO_KEY;
+      if (cmd === "reload-theme") return reloadTheme();
       return null;
     },
   };
@@ -559,6 +563,86 @@ test("config unset：回到默认值", async () => {
   assert.match(output.out, /hotkey 回到了默认值 right_option/);
 });
 
+// ---------- 主题 ----------
+
+test("theme：列出有哪几套，标出现在用的是哪套、怎么换", async () => {
+  const { speakmore, output, daemon } = harness();
+  assert.equal(await speakmore("theme"), 0);
+  assert.match(output.out, /● ink\s+墨/);
+  assert.match(output.out, / {4}cinnabar\s+朱砂/);
+  assert.match(output.out, / {4}indigo\s+靛青/);
+  assert.match(output.out, /现在用的是墨（ink）.*默认/);
+  assert.match(output.out, /speakmore theme cinnabar/);
+  assert.deepEqual(daemon.calls, []);
+});
+
+test("theme <名字>：存进设置；在运行的话让它当场换，不重启；写 id 或写中文名都行", async () => {
+  const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
+  assert.equal(await speakmore("theme", "朱砂"), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { theme: "cinnabar" });
+  assert.deepEqual(daemon.calls, ["reload-theme"]);
+  assert.match(output.out, /主题换成了朱砂（cinnabar）/);
+  assert.match(output.out, /已经生效/);
+
+  assert.equal(await speakmore("theme"), 0);
+  assert.match(output.out, /● cinnabar\s+朱砂/);
+  assert.match(output.out, /现在用的是朱砂（cinnabar）.*存在设置文件里/);
+
+  const idle = harness();
+  assert.equal(await idle.speakmore("theme", "indigo"), 0);
+  assert.deepEqual(idle.daemon.calls, []);
+  assert.match(idle.output.out, /下次启动生效/);
+});
+
+test("theme：没有的那一套不存，说有哪几套，以 2 退出；多写了参数也是", async () => {
+  const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
+  assert.equal(await speakmore("theme", "neon"), 2);
+  assert.match(output.err, /ink \/ cinnabar \/ indigo/);
+  assert.equal(existsSync(paths.settingsFile), false);
+  assert.equal(await speakmore("theme", "ink", "cinnabar"), 2);
+  assert.deepEqual(daemon.calls, []);
+});
+
+test("theme：环境变量盖着时提醒；正在运行的那个带着环境变量启动的话，照实说它用的还是哪套", async () => {
+  const daemon = fakeDaemon({ running: READY, reloadTheme: () => ({ theme: "indigo" }) });
+  const { speakmore, output } = harness({ daemon, env: { SPEAKMORE_THEME: "indigo" } });
+  assert.equal(await speakmore("theme", "cinnabar"), 0);
+  assert.match(output.out, /环境变量 SPEAKMORE_THEME 现在设着/);
+  assert.doesNotMatch(output.out, /已经生效/);
+  assert.match(output.out, /用的还是靛青（indigo）.*SPEAKMORE_THEME/);
+});
+
+test("theme：正在运行的是不认识这条命令的旧版本：设置照存，说重启之后才换", async () => {
+  const daemon = fakeDaemon({
+    running: READY,
+    reloadTheme: () => {
+      throw new Error('不认识的命令："reload-theme"');
+    },
+  });
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore("theme", "cinnabar"), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { theme: "cinnabar" });
+  assert.doesNotMatch(output.out, /已经生效/);
+  assert.match(output.out, /旧版本.*speakmore restart/);
+});
+
+test("config set theme / config unset theme：和 theme 命令一样当场换，不重启", async () => {
+  const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
+  assert.equal(await speakmore("config", "set", "theme", "indigo"), 0);
+  assert.deepEqual(daemon.calls, ["reload-theme"]);
+  assert.match(output.out, /theme 改成了 indigo/);
+  assert.match(output.out, /已经生效/);
+  assert.equal(await speakmore("config", "unset", "theme"), 0);
+  assert.deepEqual(daemon.calls, ["reload-theme", "reload-theme"]);
+  assert.match(output.out, /theme 回到了默认值 ink/);
+});
+
+test("面板里写着正在用的主题", async () => {
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: { ...READY, theme: "cinnabar" } }) });
+  assert.equal(await speakmore("status"), 0);
+  assert.match(output.out, /主题\s+朱砂（cinnabar）/);
+});
+
 test("设置文件被改坏时，任何命令都先把这件事说清楚", async () => {
   mkdirSync(dir, { recursive: true });
   writeFileSync(paths.settingsFile, "{ 坏了");
@@ -798,6 +882,7 @@ test("help 和 --help 列出全部命令；--version 给版本号", async () => 
       "history",
       "logs",
       "settings",
+      "theme",
       "uninstall",
     ]) {
       assert.match(output.out, new RegExp(`speakmore ${command}`));

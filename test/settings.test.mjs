@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { HOTKEYS, resolveSettings, saveSetting, unsetSetting } from "../src/settings.mjs";
+import { HOTKEY_KEYCAPS, HOTKEYS, resolveSettings, SETTINGS, saveSetting, unsetSetting } from "../src/settings.mjs";
 
 let dir;
 let file;
@@ -18,6 +18,7 @@ test("没有文件也没有环境变量时全用默认值", () => {
     hotkey: { value: "right_option", source: "default" },
     model: { value: "gemini-3.5-flash", source: "default" },
     thinking: { value: "MINIMAL", source: "default" },
+    theme: { value: "ink", source: "default" },
   });
 });
 
@@ -48,6 +49,26 @@ test("不认识的设置项、不认识的热键、不认识的思考档位都�
   assert.throws(() => saveSetting(file, "hotkey", "caps_lock"), new RegExp(Object.keys(HOTKEYS).join(".*")));
   assert.throws(() => saveSetting(file, "thinking", "none"), /MINIMAL.*LOW.*MEDIUM.*HIGH/);
   assert.throws(() => saveSetting(file, "model", "  "), /model/);
+});
+
+test("主题：写 id 或写名字都行，存下来的是 id；没有的那一套拒绝，并列出有哪几套", () => {
+  assert.equal(saveSetting(file, "theme", "cinnabar"), "cinnabar");
+  assert.equal(saveSetting(file, "theme", "靛青"), "indigo");
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { theme: "indigo" });
+  assert.deepEqual(resolveSettings({ file, env: {} }).theme, { value: "indigo", source: "file" });
+  assert.deepEqual(resolveSettings({ file, env: { SPEAKMORE_THEME: "朱砂" } }).theme, {
+    value: "cinnabar",
+    source: "env",
+  });
+  assert.throws(() => saveSetting(file, "theme", "neon"), /ink \/ cinnabar \/ indigo/);
+  assert.deepEqual(SETTINGS.theme.choices, ["ink", "cinnabar", "indigo"]);
+});
+
+test("带说明的设置项：热键给出键的名字，主题给出主题的名字；每个热键都有一个写在悬浮条上的短名字", () => {
+  assert.equal(SETTINGS.hotkey.label("fn"), "地球仪（fn）键");
+  assert.equal(SETTINGS.theme.label("cinnabar"), "朱砂");
+  assert.equal(SETTINGS.model.label, undefined);
+  assert.deepEqual(Object.keys(HOTKEY_KEYCAPS), Object.keys(HOTKEYS));
 });
 
 test("环境变量或文件里的值写错时报错，不悄悄换成默认值", () => {

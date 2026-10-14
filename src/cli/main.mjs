@@ -11,9 +11,10 @@ import { log } from "../log.mjs";
 import { ensureHome, resolvePaths } from "../paths.mjs";
 import { apiKeyProblem } from "../server/config.mjs";
 import { resolveSettings, SETTINGS, saveSetting, unsetSetting } from "../settings.mjs";
+import { THEMES } from "../themes/index.mjs";
 import { askSecret, Cancelled } from "./ask-secret.mjs";
 import { createDaemon } from "./daemon.mjs";
-import { renderConfig, renderHistory, renderStatus } from "./render.mjs";
+import { renderConfig, renderHistory, renderStatus, renderThemes, themeTitle } from "./render.mjs";
 
 // speakmore 命令：把"装好依赖、编小帮手、起后台应用、填 key、看历史、改设置"收成几个子命令。
 // 真正干活的是后台应用（src/app），这里通过控制通道指挥它；历史和设置文件则直接读写。
@@ -37,9 +38,11 @@ const HELP = `SpeakMore：按一下热键说话，整理好的文字贴进当前
                                 看说过的话，按天分组，新的在前（默认最近 ${DEFAULT_HISTORY_LIMIT} 条）
   speakmore key                 换一把 key（输入不会显示出来；也可以从管道喂进来）
   speakmore key --forget        删掉存着的 key
-  speakmore config              看设置：热键、模型、思考档位，以及数据和日志在哪
+  speakmore config              看设置：热键、模型、思考档位、主题，以及数据和日志在哪
   speakmore config set <名字> <值>
   speakmore config unset <名字>  回到默认值
+  speakmore theme               看有哪几套主题、现在用的哪套
+  speakmore theme <名字>         换一套（${THEMES.map((theme) => `${theme.id} ${theme.name}`).join(" / ")}），当场生效不用重启
   speakmore settings            打开设置窗口（去系统设置授权时用）
   speakmore logs [-n 行数] [-f]  看日志，-f 一直跟着
   speakmore uninstall [--keep-data] [--yes]
@@ -93,7 +96,7 @@ function readStats(io) {
   }
 }
 
-const renderOptions = (io) => ({ color: io.color, now: io.now(), timeZone: io.timeZone });
+const renderOptions = (io) => ({ color: io.color, truecolor: io.truecolor, now: io.now(), timeZone: io.timeZone });
 
 function showStatus(io, status, settings) {
   io.out(renderStatus({ status, version: io.version, settings, stats: readStats(io) }, renderOptions(io)));
@@ -324,39 +327,87 @@ async function applySettings(io, undo) {
   return 0;
 }
 
+/**
+ * 主题改完之后让它生效。主题不用重启：让正在运行的那个重新读一遍设置，开着的窗口当场换。
+ * @param {string} wanted 设置里现在写的那一套
+ * @returns {Promise<number>} 退出码
+ */
+async function applyTheme(io, wanted) {
+  if ((await io.daemon.status()) === null) {
+    io.out("下次启动生效。");
+    return 0;
+  }
+  let applied;
+  try {
+    applied = await io.daemon.request("reload-theme");
+  } catch (error) {
+    // 正在运行的是升级之前启动的那一个，还不认识这条命令
+    if (!/^不认识的命令/.test(error?.message ?? "")) throw error;
+    io.out("正在运行的 SpeakMore 是旧版本，不会当场换：运行 speakmore restart。");
+    return 0;
+  }
+  if (applied.theme === wanted) io.out("已经生效，不用重启。");
+  else {
+    io.out(
+      `正在运行的 SpeakMore 用的还是${themeTitle(applied.theme)}：启动它的环境里设着 ${SETTINGS.theme.env}，它盖过设置文件。`,
+    );
+  }
+  return 0;
+}
+
+/** 校验并存下一项设置。@returns {string} 规整后的值 */
+function storeSetting(io, name, value) {
+  try {
+    // 可能是这个目录里的第一个文件
+    ensureHome(io.paths);
+    return saveSetting(io.paths.settingsFile, name, value);
+  } catch (error) {
+    throw new ConfigError(error.message);
+  }
+}
+
+function warnIfEnvOverrides(io, name) {
+  if (io.env[SETTINGS[name].env] !== undefined) {
+    io.out(`注意：环境变量 ${SETTINGS[name].env} 现在设着，它会盖过这个值。`);
+  }
+}
+
 async function config(args, io) {
   const [action, name, value, ...extra] = parse(args).positionals;
-  const file = io.paths.settingsFile;
 
   if (action === undefined) {
     io.out(renderConfig({ settings: currentSettings(io), paths: io.paths }, renderOptions(io)));
     return 0;
   }
   if (action === "set" && name !== undefined && value !== undefined && extra.length === 0) {
-    let saved;
-    try {
-      // 可能是这个目录里的第一个文件
-      ensureHome(io.paths);
-      saved = saveSetting(file, name, value);
-    } catch (error) {
-      throw new ConfigError(error.message);
-    }
+    const saved = storeSetting(io, name, value);
     io.out(`${name} 改成了 ${saved}。`);
-    if (io.env[SETTINGS[name].env] !== undefined) {
-      io.out(`注意：环境变量 ${SETTINGS[name].env} 现在设着，它会盖过这个值。`);
-    }
-    return applySettings(io, `speakmore config unset ${name}`);
+    warnIfEnvOverrides(io, name);
+    return name === "theme" ? applyTheme(io, saved) : applySettings(io, `speakmore config unset ${name}`);
   }
   if (action === "unset" && name !== undefined && value === undefined) {
     try {
-      unsetSetting(file, name);
+      unsetSetting(io.paths.settingsFile, name);
     } catch (error) {
       throw new ConfigError(error.message);
     }
     io.out(`${name} 回到了默认值 ${SETTINGS[name].default}。`);
-    return applySettings(io, null);
+    return name === "theme" ? applyTheme(io, SETTINGS.theme.default) : applySettings(io, null);
   }
   throw new UsageError("用法：speakmore config | speakmore config set <名字> <值> | speakmore config unset <名字>");
+}
+
+async function theme(args, io) {
+  const [wanted, ...extra] = parse(args).positionals;
+  if (extra.length > 0) throw new UsageError("用法：speakmore theme | speakmore theme <名字>");
+  if (wanted === undefined) {
+    io.out(renderThemes({ themes: THEMES, setting: currentSettings(io).theme }, renderOptions(io)));
+    return 0;
+  }
+  const saved = storeSetting(io, "theme", wanted);
+  io.out(`主题换成了${themeTitle(saved)}。`);
+  warnIfEnvOverrides(io, "theme");
+  return applyTheme(io, saved);
 }
 
 async function history(args, io) {
@@ -500,7 +551,7 @@ async function uninstall(args, io) {
   return 0;
 }
 
-const COMMANDS = { start, stop, restart, status, key, config, history, logs, settings, uninstall };
+const COMMANDS = { start, stop, restart, status, key, config, theme, history, logs, settings, uninstall };
 
 /**
  * 执行一条命令。
@@ -578,6 +629,8 @@ export function createIo({ packageDir, env = process.env }) {
     interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
     // NO_COLOR 是通行的约定：设了就不上色
     color: Boolean(process.stdout.isTTY) && !env.NO_COLOR,
+    // 终端说自己支持 24 位色时，才画得出主题本来的颜色
+    truecolor: Boolean(process.stdout.isTTY) && !env.NO_COLOR && /^(truecolor|24bit)$/.test(env.COLORTERM ?? ""),
     version: manifest.version,
     packageDir,
     paths,

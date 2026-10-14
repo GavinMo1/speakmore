@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderConfig, renderHistory, renderStatus } from "../../src/cli/render.mjs";
+import { renderConfig, renderHistory, renderStatus, renderThemes } from "../../src/cli/render.mjs";
+import { THEMES } from "../../src/themes/index.mjs";
 
 const timeZone = "Asia/Shanghai";
 // 上海时间 2026-10-13 15:00
@@ -25,6 +26,7 @@ const settings = {
   hotkey: { value: "right_option", source: "default" },
   model: { value: "gemini-3.5-flash", source: "default" },
   thinking: { value: "MINIMAL", source: "default" },
+  theme: { value: "ink", source: "default" },
 };
 const noStats = { today: null, total: null };
 
@@ -254,10 +256,50 @@ test("设置逐项列出现在的值、从哪来、能填什么，后面是文�
   assert.match(text, /right_option \/ right_command \/ right_control \/ fn/);
   assert.match(text, /model\s+gemini-3\.8-flash\s+.*环境变量 GEMINI_MODEL/);
   assert.match(text, /thinking\s+MINIMAL\s+.*默认/);
+  assert.match(text, /theme\s+ink\s+墨 · 默认/);
+  assert.match(text, /ink \/ cinnabar \/ indigo/);
   assert.match(text, /speakmore config set hotkey fn/);
   assert.match(text, /目录\s+\/home\/\.speakmore\n/);
   assert.match(text, /\/home\/\.speakmore\/logs\/main\.log/);
   assert.match(text, /speakmore uninstall/);
+});
+
+test("主题：一行一套，现在用的那套打一个点；终端支持 24 位色时画出那一套悬浮条的样子", () => {
+  const view = { themes: THEMES, setting: { value: "cinnabar", source: "file" } };
+  const text = renderThemes(view, plain);
+  assert.match(text, /^主题\n/);
+  assert.match(text, /\n {4}ink\s+墨\s+黑白/);
+  assert.match(text, /\n {2}● cinnabar\s+朱砂\s+一种暖红/);
+  assert.match(text, /现在用的是朱砂（cinnabar） · 存在设置文件里/);
+  // 举的例子是另一套，不是已经在用的这套
+  assert.match(text, /换一套：speakmore theme ink/);
+  assert.ok(!text.includes("\x1b["));
+
+  const painted = renderThemes(view, { ...plain, color: true, truecolor: true });
+  // 朱砂的声波是那种暖红：oklch(0.74 0.17 32)
+  assert.ok(painted.includes("\x1b[38;2;255;124;99m"), JSON.stringify(painted));
+  assert.equal(painted.split("\x1b[48;2;").length - 1 >= THEMES.length, true);
+  // 只开了普通颜色、没有 24 位色时不画
+  assert.ok(!renderThemes(view, { ...plain, color: true, truecolor: false }).includes("[48;2;"));
+});
+
+test("面板：后台应用报了主题就写上，叫得出名字的写名字；旧版本不报就不写", () => {
+  const withTheme = (theme) =>
+    renderStatus({ status: { ...ready, theme }, version: "0.1.0", settings, stats: noStats }, plain);
+  assert.match(withTheme("indigo"), /主题\s+靛青（indigo）/);
+  assert.match(withTheme("neon"), /主题\s+neon\n/);
+  assert.doesNotMatch(renderStatus({ status: ready, version: "0.1.0", settings, stats: noStats }, plain), /主题/);
+  // 设置里写的和正在用的不一样（手改了文件，或者启动它的环境里带着环境变量）
+  const pending = renderStatus(
+    {
+      status: { ...ready, theme: "ink" },
+      version: "0.1.0",
+      settings: { ...settings, theme: { value: "indigo", source: "file" } },
+      stats: noStats,
+    },
+    plain,
+  );
+  assert.match(pending, /设置里的 theme 和正在用的不一样/);
 });
 
 test("开了颜色时对勾和叉带颜色，关了就是纯文字", () => {
