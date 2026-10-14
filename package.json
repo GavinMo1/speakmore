@@ -34,6 +34,7 @@
     "build:native": "node scripts/build/build-native.mjs",
     "release": "node scripts/release/release.mjs",
     "publish-release": "node scripts/release/publish-release.mjs",
+    "ship": "sh scripts/release/ship.sh",
     "dist": "node scripts/build/package.mjs",
     "install-app": "sh scripts/build/install-app.sh",
     "test": "npm run test:unit && npm run test:install",

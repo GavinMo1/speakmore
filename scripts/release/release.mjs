@@ -4,7 +4,7 @@
 //       npm run release -- arm64     只打一种（arm64 或 x64）
 //
 // 产物在 dist/release/，摆成下载地址上的样子（见 release-layout.mjs），所以它本身就能当下载地址用，
-// 传上去用 npm run publish-release。包里有两个目录，解开后直接就是家目录里的样子：
+// 发新版本用 npm run ship，它会调这里打包、再传上去。包里有两个目录，解开后直接就是家目录里的样子：
 //   app/      程序：代码、运行时依赖、编好的小帮手（两种芯片合一）
 //   runtime/  运行环境：原版的 Electron.app。命令行和后台应用都用它跑，所以用的人不需要装 Node
 // 装的人不需要 npm、Node、Xcode：这些活都在这里做完了。

@@ -1,0 +1,48 @@
+#!/bin/sh
+# 发一个新版本，从这台电脑发：把关 → 检查 → 打包 → 传到下载地址 → 从下载地址核对。
+# 发布包只放在腾讯云 COS 一处。以前推标签由 GitHub 的机器打包再传，那边在国外，传到上海太慢，
+# 0.4.0 那次传了 32 分钟一个包都没传上；本机传两个包两分多钟。
+#
+# 用法：改好 package.json 的版本号并提交，打同名的标签推上去，然后发：
+#   git tag -a v0.4.1 -m "…" && git push origin main v0.4.1
+#   npm run ship
+#
+# 版本号发过就不能再改（见 release-layout.mjs），所以先把关：工作区干净、HEAD 就是那个标签、标签已经推上去。
+# 传到一半断了：别重新打包（打出来的包每次都不一样，会被当成改了已发布的版本），
+# 直接再传一次 scripts/release/with-cos-key.sh npm run publish-release，传好的会跳过。
+set -eu
+cd "$(dirname "$0")/../.."
+
+DOWNLOAD_URL="https://dl.zephyrxiang.com/speakmore"
+
+fail() {
+  echo "ship：$1" >&2
+  exit 1
+}
+
+tag="v$(node -p "require('./package.json').version")"
+[ -z "$(git status --porcelain)" ] || fail "工作区有没提交的改动，发出去的会和标签对不上"
+git tag --points-at HEAD | grep -qx "${tag}" || fail "HEAD 上没有标签 ${tag}（package.json 里是这个版本）"
+# 带注释的标签要看它指向的提交（^{}）；不带注释的没有那一行，标签指的就是提交本身
+remote="$(git ls-remote origin "refs/tags/${tag}^{}" | cut -f 1)"
+[ -n "${remote}" ] || remote="$(git ls-remote origin "refs/tags/${tag}" | cut -f 1)"
+[ "${remote}" = "$(git rev-parse HEAD)" ] || fail "标签 ${tag} 还没推到 GitHub，或者那边指的不是这个提交"
+
+npm run check
+# 程序跑在 Electron 自带的 Node 上，单测在那个版本上也跑一遍
+ELECTRON_RUN_AS_NODE=1 node_modules/.bin/electron --test --test-timeout=5000 "test/*.test.mjs" "test/!(install)/**/*.test.mjs"
+npm run release
+scripts/release/with-cos-key.sh npm run publish-release ||
+  fail "没传完。别重新打包，直接再运行：scripts/release/with-cos-key.sh npm run publish-release"
+
+# latest 在 CDN 上缓存一分钟，等它换过来
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  [ "$(curl -fsS "${DOWNLOAD_URL}/latest")" = "${tag}" ] && break
+  sleep 10
+done
+[ "$(curl -fsS "${DOWNLOAD_URL}/latest")" = "${tag}" ] || fail "传上去了，但下载地址上的 latest 两分钟后还不是 ${tag}"
+for arch in arm64 x64; do
+  sum="${tag}/speakmore-darwin-${arch}.tar.gz.sha256"
+  [ "$(curl -fsS "${DOWNLOAD_URL}/${sum}")" = "$(cat "dist/release/${sum}")" ] || fail "下载地址上 ${sum} 和本机的不一样"
+done
+echo "发好了：${tag}。下载地址上的最新版本和两个包的校验值都对得上。"

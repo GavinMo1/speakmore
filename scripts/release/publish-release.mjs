@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // 把打好的发布包（dist/release/）传到腾讯云 COS。安装脚本和官网的下载链接都从那里取。
-// 用法：scripts/release/with-cos-key.sh npm run publish-release       本机发：密钥和桶从本机配置里带上
-//       npm run publish-release -- --dry-run                 只列出要传什么，不联网
-// CI 里密钥和桶直接在环境变量里，不用包 with-cos-key.sh 那一层。
+// 发新版本用 npm run ship（scripts/release/ship.sh），它会先把关、打包，再调这里。单独用：
+//   scripts/release/with-cos-key.sh npm run publish-release       密钥和桶从本机配置里带上；传到一半断了就再跑一次
+//   npm run publish-release -- --dry-run                         只列出要传什么，不联网
 //
 // 要的环境变量：
 //   TENCENTCLOUD_SECRET_ID、TENCENTCLOUD_SECRET_KEY  能写这个桶的密钥
