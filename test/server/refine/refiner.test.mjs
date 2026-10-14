@@ -81,8 +81,19 @@ test("重来一次还有钟点，就当是他真说了，不再重试", async ()
 
 // ---------- 共用的整理流程：各家的适配器只管"发请求、拿原文"，其余在这里 ----------
 
-/** 假的适配器：记下每次 generate 收到了什么，按顺序吐出给定的原文 */
-function fakeClient(outputs, { ping = async () => {} } = {}) {
+/** 适配器带回来的用量（openai.mjs 的 usageOf 那个样子） */
+const USAGE = {
+  model: "gpt-audio-mini-2025-12-15",
+  inputTokens: 1532,
+  audioTokens: 10,
+  cachedTokens: 0,
+  outputTokens: 4,
+  thinkingTokens: 0,
+  costUsd: 0.001,
+};
+
+/** 假的适配器：记下每次 generate 收到了什么，按顺序吐出给定的原文（字符串）或整个回话（对象） */
+function fakeClient(outputs, { ping = async () => ({ usage: USAGE }) } = {}) {
   const calls = [];
   return {
     calls,
@@ -91,7 +102,7 @@ function fakeClient(outputs, { ping = async () => {} } = {}) {
       calls.push(request);
       const next = outputs[calls.length - 1];
       if (next instanceof Error) throw next;
-      return next;
+      return typeof next === "string" ? { text: next, problem: null, usage: USAGE } : next;
     },
   };
 }
@@ -178,7 +189,14 @@ test("录音换不了格式时也报 ModelError，不让原始的解码错误直
 
 test("warmUp 发适配器的最小请求；失败时同样分好类", async () => {
   let pinged = 0;
-  const { refiner } = refinerWith(fakeClient([], { ping: async () => void pinged++ }));
+  const { refiner } = refinerWith(
+    fakeClient([], {
+      ping: async () => {
+        pinged++;
+        return { usage: USAGE };
+      },
+    }),
+  );
   await refiner.warmUp();
   assert.equal(pinged, 1);
 
@@ -207,4 +225,104 @@ test("createModelRefiner：按选的厂商装上对应的适配器；不认识�
     createModelRefiner({ choice: { provider: "deepseek", model: "x" }, apiKey: "k", log: quietLog }),
     /deepseek/,
   );
+});
+
+// ---------- 记账：每一次回了话的调用都记一笔，花了多少、多久 ----------
+
+function recorder() {
+  const records = [];
+  const events = [];
+  const log = {
+    info: (event, fields) => events.push({ level: "info", event, ...fields }),
+    warn: (event, fields) => events.push({ level: "warn", event, ...fields }),
+    error: (event, fields) => events.push({ level: "error", event, ...fields }),
+  };
+  return { records, events, log, onCall: (record) => records.push(record) };
+}
+
+test("每次调用记一笔：哪次听写、哪家、按哪个型号、多少 token、多少钱、多久", async () => {
+  const { records, events, log, onCall } = recorder();
+  const { refiner } = refinerWith(fakeClient(["好的"]), { audioTypes: ["audio/webm"], log, onCall });
+  const before = Date.now();
+  await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a1" });
+
+  assert.equal(records.length, 1);
+  const [{ latencyMs, createdAt, ...record }] = records;
+  assert.deepEqual(record, { purpose: "dictation", audioId: "a1", provider: "openai", ...USAGE });
+  assert.ok(Number.isInteger(latencyMs) && latencyMs >= 0);
+  assert.ok(Date.parse(createdAt) >= before - 1);
+  // 日志里也有一条，排查时看得到；不带成品文字
+  const logged = events.find(({ event }) => event === "model_call");
+  assert.deepEqual(
+    [logged.purpose, logged.audio_id, logged.model, logged.input_tokens, logged.cost_usd],
+    ["dictation", "a1", USAGE.model, 1532, 0.001],
+  );
+  assert.ok(!JSON.stringify(events).includes("好的"));
+});
+
+test("夹着时间戳重来的那一次也记上，两笔是同一次听写的", async () => {
+  const { records, onCall } = recorder();
+  const { refiner } = refinerWith(fakeClient(["全面开干、 00:30 全面迁移", "全面开干、全面迁移"]), { onCall });
+  await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a2" });
+  assert.deepEqual(
+    records.map(({ purpose, audioId }) => [purpose, audioId]),
+    [
+      ["dictation", "a2"],
+      ["dictation", "a2"],
+    ],
+  );
+});
+
+test("验证 key 的最小请求也记一笔，不算哪次听写", async () => {
+  const { records, onCall } = recorder();
+  const { refiner } = refinerWith(fakeClient([]), { onCall });
+  await refiner.warmUp();
+  assert.deepEqual(
+    records.map(({ purpose, audioId, model }) => [purpose, audioId, model]),
+    [["check", null, USAGE.model]],
+  );
+});
+
+test("回了话但用不了（被截断）：先记账再报错，这一次是收了钱的", async () => {
+  const { records, onCall } = recorder();
+  const cut = { text: null, problem: "OpenAI 没有正常结束：length", usage: USAGE };
+  const { refiner } = refinerWith(fakeClient([cut]), { audioTypes: ["audio/webm"], onCall });
+  const error = await refiner
+    .refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a3" })
+    .catch((thrown) => thrown);
+  assert.ok(error instanceof ModelError);
+  assert.equal(error.message, "OpenAI 没有正常结束：length");
+  assert.equal(records.length, 1);
+});
+
+test("没回话的调用（连不上、被取消）不记：没有用量，也不收钱", async () => {
+  const { records, onCall } = recorder();
+  const { refiner } = refinerWith(fakeClient([new TypeError("fetch failed")]), { audioTypes: ["audio/webm"], onCall });
+  await assert.rejects(refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a4" }));
+  assert.deepEqual(records, []);
+});
+
+test("记账出错不连累这次听写：成品照常给，错误记进日志", async () => {
+  const { events, log } = recorder();
+  const onCall = () => {
+    throw new Error("database is locked");
+  };
+  const { refiner } = refinerWith(fakeClient(["好的"]), { audioTypes: ["audio/webm"], log, onCall });
+  assert.equal(await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a5" }), "好的");
+  const failed = events.find(({ event }) => event === "model_call_not_recorded");
+  assert.equal(failed.level, "error");
+  assert.equal(failed.audio_id, "a5");
+  assert.match(failed.error, /database is locked/);
+});
+
+test("适配器没带回用量（它自己的毛病）：成品照常给，记一条警告，不瞎记一笔 0", async () => {
+  const { records, events, log, onCall } = recorder();
+  const { refiner } = refinerWith(fakeClient([{ text: "好的", problem: null }]), {
+    audioTypes: ["audio/webm"],
+    log,
+    onCall,
+  });
+  assert.equal(await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a6" }), "好的");
+  assert.deepEqual(records, []);
+  assert.equal(events.find(({ event }) => event === "usage_missing")?.level, "warn");
 });

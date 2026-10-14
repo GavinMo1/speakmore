@@ -12,9 +12,17 @@ import { startServer, WS_PATH } from "../server/server.mjs";
  * @param {{ info: Function, warn: Function, error: Function }} options.log
  * @param {{ provider: string, model: string }} options.model 一开始用哪一家的哪个模型（设置里的 model）
  * @param {string} [options.thinkingLevel] 只有 Gemini 用得上
+ * @param {(record: object) => void} [options.onModelCall] 记账：每一次回了话的模型调用（听写和验证 key 都算），
+ *   见 ../server/refine/refiner.mjs
  * @param {typeof createModelRefiner} [options.createRefiner] 测试时换成假的
  */
-export async function startService({ log, model: initialModel, thinkingLevel, createRefiner = createModelRefiner }) {
+export async function startService({
+  log,
+  model: initialModel,
+  thinkingLevel,
+  onModelCall,
+  createRefiner = createModelRefiner,
+}) {
   /** 正在用的厂商和模型。换一家要带着那一家的 key 一起换（useKey 的 choice），验证过了才换 */
   let model = initialModel;
   const noKeyMessage = () =>
@@ -57,7 +65,7 @@ export async function startService({ log, model: initialModel, thinkingLevel, cr
      * @returns {Promise<{ verified: boolean }>} verified 为 false 表示先用着、还没验证
      */
     async useKey(apiKey, { allowUnverified = false, choice = model } = {}) {
-      const candidate = await createRefiner({ choice, apiKey, thinkingLevel, log });
+      const candidate = await createRefiner({ choice, apiKey, thinkingLevel, log, onCall: onModelCall });
       let verified = true;
       try {
         await candidate.warmUp();
@@ -81,7 +89,7 @@ export async function startService({ log, model: initialModel, thinkingLevel, cr
      * @param {{ choice: { provider: string, model: string }, apiKey: string }} options
      */
     async probe({ choice, apiKey }) {
-      const candidate = await createRefiner({ choice, apiKey, thinkingLevel, log });
+      const candidate = await createRefiner({ choice, apiKey, thinkingLevel, log, onCall: onModelCall });
       await candidate.warmUp();
     },
 

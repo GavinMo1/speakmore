@@ -23,15 +23,20 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * "音频进、成品文字出"的那一步。各家共用这一个流程：录音的格式这家不收就先换好，交给适配器拿原文，
  * 再统一收尾；适配器只管"这一家的请求怎么拼、报错怎么认"。
  *
+ * 每一次回了话的调用都记一笔账（onCall）：哪次听写、用的哪个型号、多少 token、多少钱、等了多久。
+ * 回了话才收钱，所以连不上、被取消的不记；回了话但用不了的（被截断、被拦下）照记。
+ *
  * @param {object} options
  * @param {{ id: string, name: string }} options.provider 厂商清单里的那一项（providers/index.mjs）
- * @param {{ ping(o: { signal: AbortSignal }): Promise<void>, generate(request: object): Promise<string | null | undefined> }} options.client
+ * @param {{ ping(o: { signal: AbortSignal }): Promise<{ usage: object }>, generate(request: object): Promise<{ text: string | null | undefined, problem: string | null, usage: object }> }} options.client
  *   这一家的适配器（providers/*.mjs 的 createClient）
  * @param {string[]} options.audioTypes 这一家直接收的录音格式
  * @param {(error: unknown, detail: string) => object | null} [options.classify] 这一家的报错怎么认
  * @param {string} [options.apiKey] 只用来从报错里抹掉它
  * @param {(audio: Buffer, mimeType: string) => Promise<{ audio: Buffer, mimeType: string }>} [options.transcode]
- * @returns {{ warmUp(): Promise<void>, refine(audio: Buffer, o: { mimeType: string, signal?: AbortSignal }): Promise<string> }}
+ * @param {(record: object) => void} [options.onCall] 记账：{ purpose: "dictation" | "check", audioId, provider,
+ *   ...适配器带回的用量, latencyMs, createdAt }。它出错不影响这次听写
+ * @returns {{ warmUp(): Promise<void>, refine(audio: Buffer, o: { mimeType: string, signal?: AbortSignal, audioId?: string }): Promise<string> }}
  *   出错时抛的都是 ModelError
  */
 export function createRefiner({
@@ -43,12 +48,45 @@ export function createRefiner({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   log,
   transcode = toWav,
+  onCall = () => {},
 }) {
   const described = (error) => toModelError(error, { provider, apiKey, classify });
   const withTimeout = (signal) => {
     const timeout = AbortSignal.timeout(timeoutMs);
     return signal ? AbortSignal.any([signal, timeout]) : timeout;
   };
+
+  /** 调一次适配器，回了话就记一笔账。没回话（抛错）的不记 */
+  async function metered(purpose, audioId, call) {
+    const startedAt = performance.now();
+    const reply = await call();
+    const latencyMs = Math.round(performance.now() - startedAt);
+    if (!reply?.usage) {
+      log.warn("usage_missing", { purpose, audio_id: audioId, provider: provider.id });
+      return reply;
+    }
+    const { usage } = reply;
+    // 只记数，不记成品：成品是用户说的话
+    log.info("model_call", {
+      purpose,
+      audio_id: audioId,
+      model: usage.model,
+      input_tokens: usage.inputTokens,
+      audio_tokens: usage.audioTokens,
+      cached_tokens: usage.cachedTokens,
+      output_tokens: usage.outputTokens,
+      thinking_tokens: usage.thinkingTokens,
+      cost_usd: usage.costUsd,
+      latency_ms: latencyMs,
+    });
+    try {
+      onCall({ purpose, audioId, provider: provider.id, ...usage, latencyMs, createdAt: new Date().toISOString() });
+    } catch (error) {
+      // 账没记上只是少一笔统计，不能因此把用户的这句话丢掉
+      log.error("model_call_not_recorded", { audio_id: audioId, error: String(error?.stack ?? error) });
+    }
+    return reply;
+  }
 
   return {
     /**
@@ -58,28 +96,34 @@ export function createRefiner({
      */
     async warmUp() {
       try {
-        await client.ping({ signal: AbortSignal.timeout(timeoutMs) });
+        await metered("check", null, () => client.ping({ signal: AbortSignal.timeout(timeoutMs) }));
       } catch (error) {
         throw described(error);
       }
     },
 
-    /** @returns {Promise<string>} 整理好的文字；没有人声时是空字符串 */
-    async refine(audio, { mimeType, signal }) {
+    /**
+     * @param {{ mimeType: string, signal?: AbortSignal, audioId?: string }} options audioId：这是哪一次听写，记账时用
+     * @returns {Promise<string>} 整理好的文字；没有人声时是空字符串
+     */
+    async refine(audio, { mimeType, signal, audioId = null }) {
       try {
         // 只换一次：夹着时间戳要重来时用的是同一份
         const input = audioTypes.includes(mimeType)
           ? { audio, mimeType }
           : await timed(log, () => transcode(audio, mimeType));
-        const generateOnce = async () =>
-          textFromModelOutput(
-            await client.generate({
+        const generateOnce = async () => {
+          const reply = await metered("dictation", audioId, () =>
+            client.generate({
               ...input,
               systemPrompt: SYSTEM_PROMPT,
               reminder: TASK_REMINDER,
               signal: withTimeout(signal),
             }),
           );
+          if (reply.problem) throw new Error(reply.problem);
+          return textFromModelOutput(reply.text);
+        };
         return await generateClean(generateOnce, log);
       } catch (error) {
         throw described(error);
@@ -102,8 +146,9 @@ async function timed(log, transcode) {
  * @param {{ provider: string, model: string }} options.choice
  * @param {string} options.apiKey
  * @param {string} [options.thinkingLevel] 只有 Gemini 用得上
+ * @param {(record: object) => void} [options.onCall] 记账，见 createRefiner
  */
-export async function createModelRefiner({ choice, apiKey, thinkingLevel, timeoutMs, log }) {
+export async function createModelRefiner({ choice, apiKey, thinkingLevel, timeoutMs, log, onCall }) {
   const provider = findProvider(choice.provider);
   if (!provider) throw new Error(`不认识 ${choice.provider} 这家模型厂商`);
   const adapter = await provider.load();
@@ -115,6 +160,7 @@ export async function createModelRefiner({ choice, apiKey, thinkingLevel, timeou
     apiKey,
     timeoutMs,
     log,
+    onCall,
   });
 }
 

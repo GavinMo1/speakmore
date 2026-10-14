@@ -1,5 +1,6 @@
 import { encodeWav } from "../audio/pcm.mjs";
 import { quote } from "./errors.mjs";
+import { costOf } from "./prices/openai.mjs";
 
 // OpenAI 的适配器：gpt-audio 系列在 Chat Completions 里收音频，一次请求完成识别和整理，和 Gemini 一样。
 // 不用官方 SDK：只用到这一个接口，SDK 装上有 21 MB，会让一行命令安装的包变大。下面的请求格式和报错
@@ -50,7 +51,7 @@ export function createClient({ apiKey, model, fetch = globalThis.fetch }) {
   return {
     /** 最小的请求：0.1 秒静音、只要 1 个 token（这时它回的 finish_reason 是 length，不算失败）。实测约 0.7 秒 */
     async ping({ signal }) {
-      await complete(
+      const payload = await complete(
         {
           max_completion_tokens: 1,
           messages: [
@@ -59,9 +60,13 @@ export function createClient({ apiKey, model, fetch = globalThis.fetch }) {
         },
         signal,
       );
+      return { usage: usageOf(payload, model) };
     },
 
-    /** @returns {Promise<string | null>} 模型的原文，收尾交给调用方 */
+    /**
+     * @returns {Promise<{ text: string | null, problem: string | null, usage: object }>} 模型的原文（收尾交给调用方）、
+     *   用不了的原因、这一次的用量。用不了的回话（被截断、被拒绝）也收了钱，所以不在这里抛错，由调用方记完账再报错
+     */
     async generate({ audio, mimeType, systemPrompt, reminder, signal }) {
       const payload = await complete(
         {
@@ -79,11 +84,36 @@ export function createClient({ apiKey, model, fetch = globalThis.fetch }) {
         signal,
       );
       const choice = payload?.choices?.[0];
-      if (choice?.message?.refusal) throw new Error(`OpenAI 没有处理这段录音：${quote(choice.message.refusal)}`);
       // 被截断或被拦下的半截文字不能当成品贴出去
-      if (choice?.finish_reason !== "stop") throw new Error(`OpenAI 没有正常结束：${choice?.finish_reason}`);
-      return choice.message.content;
+      const problem = choice?.message?.refusal
+        ? `OpenAI 没有处理这段录音：${quote(choice.message.refusal)}`
+        : choice?.finish_reason !== "stop"
+          ? `OpenAI 没有正常结束：${choice?.finish_reason}`
+          : null;
+      return { text: problem ? null : choice.message.content, problem, usage: usageOf(payload, model) };
     },
+  };
+}
+
+/**
+ * 回话里的用量 → 记账用的样子。字段对着实测的回话写的：prompt_tokens 含音频和命中缓存的，
+ * completion_tokens 含思考的和音频的；没有的项是 0。按回话报的型号算钱，没报就按请求的。
+ */
+function usageOf(payload, model) {
+  const usage = payload?.usage ?? {};
+  const input = usage.prompt_tokens ?? 0;
+  const output = usage.completion_tokens ?? 0;
+  const audio = usage.prompt_tokens_details?.audio_tokens ?? 0;
+  const audioOutput = usage.completion_tokens_details?.audio_tokens ?? 0;
+  const billed = payload?.model ?? model;
+  return {
+    model: billed,
+    inputTokens: input,
+    audioTokens: audio,
+    cachedTokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
+    outputTokens: output,
+    thinkingTokens: usage.completion_tokens_details?.reasoning_tokens ?? 0,
+    costUsd: costOf(billed, { text: input - audio, audio, textOutput: output - audioOutput, audioOutput }),
   };
 }
 

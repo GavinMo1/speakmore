@@ -12,9 +12,31 @@ function fakeFetch(status, body) {
   return { fetch, requests };
 }
 
+/** 实测的用量（gpt-audio-mini，1 秒录音加系统提示词） */
+const USAGE = {
+  prompt_tokens: 1532,
+  completion_tokens: 4,
+  total_tokens: 1536,
+  prompt_tokens_details: { cached_tokens: 0, audio_tokens: 10, text_tokens: 1522, image_tokens: 0 },
+  completion_tokens_details: { reasoning_tokens: 0, audio_tokens: 0, text_tokens: 4 },
+};
+
 const completion = (content, finish_reason = "stop", extra = {}) => ({
+  model: "gpt-audio-mini-2025-12-15",
   choices: [{ finish_reason, message: { role: "assistant", content, refusal: null, ...extra } }],
+  usage: USAGE,
 });
+
+/** 上面那份用量记账后的样子 */
+const BILLED = {
+  model: "gpt-audio-mini-2025-12-15",
+  inputTokens: 1532,
+  audioTokens: 10,
+  cachedTokens: 0,
+  outputTokens: 4,
+  thinkingTokens: 0,
+  costUsd: (1522 * 0.6 + 10 * 10 + 4 * 2.4) / 1e6,
+};
 
 const WAV = Buffer.from("RIFF fake wav");
 
@@ -26,14 +48,14 @@ test("整理：系统提示词、录音、跟在录音后面的那句话一起�
   const { fetch, requests } = fakeFetch(200, completion("整理好的文字"));
   const client = createClient({ apiKey: "sk-test", model: "gpt-audio-1.5", fetch });
   const signal = new AbortController().signal;
-  const text = await client.generate({
+  const reply = await client.generate({
     audio: WAV,
     mimeType: "audio/wav",
     systemPrompt: "系统提示词",
     reminder: "只输出成品。",
     signal,
   });
-  assert.equal(text, "整理好的文字");
+  assert.deepEqual(reply, { text: "整理好的文字", problem: null, usage: BILLED });
 
   const [{ url, init, body }] = requests;
   assert.equal(url, "https://api.openai.com/v1/chat/completions");
@@ -56,25 +78,67 @@ test("整理：系统提示词、录音、跟在录音后面的那句话一起�
   });
 });
 
-test("被截断、被拦下的半截文字不能当成品：没有正常结束或者它拒绝了，都报错", async () => {
-  for (const [reply, pattern] of [
-    [completion("说到一半", "length"), /没有正常结束：length/],
-    [completion("", "content_filter"), /没有正常结束：content_filter/],
-    [completion(null, "stop", { refusal: "I can't help with that." }), /没有处理这段录音：I can't help with that/],
+test("被截断、被拦下的半截文字不能当成品：说清为什么用不了；这一次收了钱，用量照样带回来", async () => {
+  for (const [reply, problem] of [
+    [completion("说到一半", "length"), "OpenAI 没有正常结束：length"],
+    [completion("", "content_filter"), "OpenAI 没有正常结束：content_filter"],
+    [
+      completion(null, "stop", { refusal: "I can't help with that." }),
+      "OpenAI 没有处理这段录音：I can't help with that",
+    ],
   ]) {
     const { fetch } = fakeFetch(200, reply);
     const client = createClient({ apiKey: "k", model: "m", fetch });
-    await assert.rejects(
-      client.generate({ audio: WAV, mimeType: "audio/wav", systemPrompt: "", reminder: "" }),
-      pattern,
-    );
+    assert.deepEqual(await client.generate({ audio: WAV, mimeType: "audio/wav", systemPrompt: "", reminder: "" }), {
+      text: null,
+      problem,
+      usage: BILLED,
+    });
   }
+});
+
+test("用量按回话报的型号算钱；没报型号按请求的；价目表里没有的算不出钱，token 照记", async () => {
+  const { model: _reported, ...unnamed } = completion("好");
+  const { fetch } = fakeFetch(200, unnamed);
+  const { usage } = await createClient({ apiKey: "k", model: "gpt-audio-1.5", fetch }).generate({
+    audio: WAV,
+    mimeType: "audio/wav",
+    systemPrompt: "",
+    reminder: "",
+  });
+  assert.equal(usage.model, "gpt-audio-1.5");
+  assert.ok(Math.abs(usage.costUsd - (1522 * 2.5 + 10 * 32 + 4 * 10) / 1e6) < 1e-12);
+
+  const { fetch: unknown } = fakeFetch(200, { ...completion("好"), model: "gpt-9-audio" });
+  const priced = await createClient({ apiKey: "k", model: "gpt-9-audio", fetch: unknown }).ping({});
+  assert.equal(priced.usage.costUsd, null);
+  assert.equal(priced.usage.inputTokens, 1532);
+});
+
+test("音频输出、思考的 token 各按各的价；用量缺项时按 0 算", async () => {
+  const usage = {
+    prompt_tokens: 100,
+    completion_tokens: 30,
+    prompt_tokens_details: { audio_tokens: 40 },
+    completion_tokens_details: { reasoning_tokens: 8, audio_tokens: 10 },
+  };
+  const { fetch } = fakeFetch(200, { ...completion("好"), usage });
+  const reply = await createClient({ apiKey: "k", model: "gpt-audio-mini", fetch }).generate({
+    audio: WAV,
+    mimeType: "audio/wav",
+    systemPrompt: "",
+    reminder: "",
+  });
+  assert.equal(reply.usage.cachedTokens, 0);
+  assert.equal(reply.usage.thinkingTokens, 8);
+  assert.ok(Math.abs(reply.usage.costUsd - (60 * 0.6 + 40 * 10 + 20 * 2.4 + 10 * 20) / 1e6) < 1e-12);
 });
 
 test("验证 key 发一个最小的请求：0.1 秒静音、只要 1 个 token。文字请求不行，这几个模型要求带音频（实测 400）", async () => {
   // 只要 1 个 token，它回的 finish_reason 就是 length：这不算失败
   const { fetch, requests } = fakeFetch(200, completion("", "length"));
-  await createClient({ apiKey: "k", model: "gpt-audio-mini", fetch }).ping({});
+  const { usage } = await createClient({ apiKey: "k", model: "gpt-audio-mini", fetch }).ping({});
+  assert.deepEqual(usage, BILLED);
   const [{ body }] = requests;
   assert.equal(body.model, "gpt-audio-mini");
   assert.equal(body.max_completion_tokens, 1);

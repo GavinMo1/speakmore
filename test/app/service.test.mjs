@@ -174,12 +174,14 @@ test("没有 key 时的提示点名是哪一家：选的是 OpenAI 就说 OpenAI
   assert.match((await dictateOnce(service.url)).V.detail, /还没有填 OpenAI API key/);
 });
 
-test("按设置里选的厂商和模型装配；probe 拿另一把 key 试别的模型，不换掉正在用的", async (t) => {
+test("按设置里选的厂商和模型装配；probe 拿另一把 key 试别的模型，不换掉正在用的；都带着同一个记账的", async (t) => {
   const built = [];
+  const onModelCall = () => {};
   const service = await startService({
     log: quietLog,
     model: GEMINI,
     thinkingLevel: "LOW",
+    onModelCall,
     createRefiner: async (options) => {
       built.push(options);
       return fakeRefiner(`用的是 ${options.choice.provider}`, async () => {
@@ -197,6 +199,10 @@ test("按设置里选的厂商和模型装配；probe 拿另一把 key 试别的
   const openai = { provider: "openai", model: "gpt-audio-1.5" };
   await service.probe({ choice: openai, apiKey: "openai-key" });
   assert.deepEqual(built[1].choice, openai);
+  assert.deepEqual(
+    built.map(({ onCall }) => onCall),
+    [onModelCall, onModelCall],
+  );
   await assert.rejects(service.probe({ choice: openai, apiKey: "bad" }), /无效/);
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 gemini");
 });

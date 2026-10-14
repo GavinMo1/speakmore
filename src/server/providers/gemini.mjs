@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { quote } from "./errors.mjs";
+import { costOf } from "./prices/gemini.mjs";
 
 // Gemini 的适配器：一次请求同时完成识别和整理，录音原样交过去。
 // 原版服务端内部怎么做的看不到；选一步到位，是因为只需要一家服务、一次请求。
@@ -8,22 +9,26 @@ import { quote } from "./errors.mjs";
 export const AUDIO_TYPES = ["audio/ogg", "audio/webm"];
 
 /**
- * @param {{ apiKey: string, model: string, thinkingLevel: string }} options
+ * @param {{ apiKey: string, model: string, thinkingLevel: string, now?: () => Date }} options now 在测试时换成固定的
  */
-export function createClient({ apiKey, model, thinkingLevel }) {
+export function createClient({ apiKey, model, thinkingLevel, now = () => new Date() }) {
   const client = new GoogleGenAI({ apiKey });
 
   return {
-    /** 最小的请求：只要 1 个 token。key 无效、模型名或档位写错都会在这里暴露 */
+    /**
+     * 最小的请求：只要 1 个 token。key 无效、模型名或档位写错都会在这里暴露。
+     * 只要 1 个 token 时它说"没有正常结束"（MAX_TOKENS），这不算失败
+     */
     async ping({ signal }) {
-      await client.models.generateContent({
+      const response = await client.models.generateContent({
         model,
         contents: "1",
         config: { maxOutputTokens: 1, thinkingConfig: { thinkingLevel }, abortSignal: signal },
       });
+      return { usage: replyOf(response, { model, at: now() }).usage };
     },
 
-    /** @returns {Promise<string | undefined>} 模型的原文，收尾交给调用方 */
+    /** @returns {Promise<{ text: string | null | undefined, problem: string | null, usage: object }>} 见 replyOf */
     async generate({ audio, mimeType, systemPrompt, reminder, signal }) {
       const response = await client.models.generateContent({
         model,
@@ -34,15 +39,51 @@ export function createClient({ apiKey, model, thinkingLevel }) {
         // 只出了开头一小截、中间一长串下划线），去掉这个设置后同一批降到 5 条，截断和下划线没再出现。
         config: { systemInstruction: systemPrompt, thinkingConfig: { thinkingLevel }, abortSignal: signal },
       });
-
-      const blockReason = response.promptFeedback?.blockReason;
-      if (blockReason) throw new Error(`Gemini 没有处理这段录音：${blockReason}`);
-      // 被截断或被拦下的半截文字不能当成品贴出去
-      const finishReason = response.candidates?.[0]?.finishReason;
-      if (finishReason && finishReason !== "STOP") throw new Error(`Gemini 没有正常结束：${finishReason}`);
-      return response.text;
+      return replyOf(response, { model, at: now() });
     },
   };
+}
+
+/** 用量里某一类输入（AUDIO、TEXT…）有多少 token */
+const tokensOf = (details, modality) => details?.find((detail) => detail.modality === modality)?.tokenCount ?? 0;
+
+/**
+ * Gemini 的回话 → 模型的原文、用不了的原因、这一次的用量。
+ * 用不了的回话（被拦下、被截断）也收了钱，所以不在这里抛错：用量照样带回去记账，由调用方报错。
+ * 用量的字段对着实测的回话写的：promptTokenCount 含音频和命中缓存的，candidatesTokenCount 不含思考的，
+ * 没有的项（不思考时没有 thoughtsTokenCount）就是 0。
+ * @param {{ model: string, at: Date }} request 请求的型号、什么时候调的。按回话报的型号（modelVersion）算钱：
+ *   停用的型号会被转给别的（实测请求 gemini-3.5-flash，回话的是 gemini-3.6-flash）
+ * @returns {{ text: string | null | undefined, problem: string | null, usage: object }}
+ */
+export function replyOf(response, { model, at }) {
+  const meta = response.usageMetadata ?? {};
+  const audio = tokensOf(meta.promptTokensDetails, "AUDIO");
+  const cachedAudio = tokensOf(meta.cacheTokensDetails, "AUDIO");
+  const input = meta.promptTokenCount ?? 0;
+  const cached = meta.cachedContentTokenCount ?? 0;
+  const thinking = meta.thoughtsTokenCount ?? 0;
+  const output = (meta.candidatesTokenCount ?? 0) + thinking;
+  const billed = response.modelVersion ?? model;
+  const usage = {
+    model: billed,
+    inputTokens: input,
+    audioTokens: audio,
+    cachedTokens: cached,
+    outputTokens: output,
+    thinkingTokens: thinking,
+    costUsd: costOf(billed, { text: input - audio, audio, cachedText: cached - cachedAudio, cachedAudio, output }, at),
+  };
+
+  const blockReason = response.promptFeedback?.blockReason;
+  // 被截断或被拦下的半截文字不能当成品贴出去
+  const finishReason = response.candidates?.[0]?.finishReason;
+  const problem = blockReason
+    ? `Gemini 没有处理这段录音：${blockReason}`
+    : finishReason && finishReason !== "STOP"
+      ? `Gemini 没有正常结束：${finishReason}`
+      : null;
+  return { text: problem ? null : response.text, problem, usage };
 }
 
 /** Gemini 的报错是一整段 JSON：{"error":{"code":503,"message":"…","status":"UNAVAILABLE"}}。不是这种形状时是 null */
