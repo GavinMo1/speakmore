@@ -1,0 +1,42 @@
+# 推一个版本标签（比如 v0.2.0）就自动发布：检查、打包、传到下载地址。
+# 标签要和 package.json 里的版本号一致；同一个版本号发过了就不会再覆盖（见 scripts/release-layout.mjs）。
+#
+# 要在仓库的 Settings → Secrets and variables → Actions 里配四个 secret：
+#   TENCENTCLOUD_SECRET_ID、TENCENTCLOUD_SECRET_KEY  只能写发布桶的那把密钥
+#   COS_BUCKET、COS_REGION                          发布桶
+name: 发布
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+# 一次只发一个：两个标签前后脚推上来时，后一个等前一个发完
+concurrency: release
+
+jobs:
+  release:
+    # 小帮手要用 Xcode 编成两种芯片合一的
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: 标签和 package.json 里的版本号要一致
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          [ "$version" = "$GITHUB_REF_NAME" ] || { echo "标签是 $GITHUB_REF_NAME，package.json 里是 $version" >&2; exit 1; }
+      - run: npm run check
+      - run: npm run release
+      - run: npm run publish-release
+        env:
+          TENCENTCLOUD_SECRET_ID: ${{ secrets.TENCENTCLOUD_SECRET_ID }}
+          TENCENTCLOUD_SECRET_KEY: ${{ secrets.TENCENTCLOUD_SECRET_KEY }}
+          COS_BUCKET: ${{ secrets.COS_BUCKET }}
+          COS_REGION: ${{ secrets.COS_REGION }}
