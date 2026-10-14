@@ -8,7 +8,8 @@ const PASTE_TIMEOUT_MS = 3_000;
  * @param {string} command 可执行文件
  * @param {object} options
  * @param {string[]} [options.args]
- * @param {(event: object) => void} options.onEvent 收到 ready / hotkey / other_key，以及小帮手不在了（退出或根本没起来）时的 exit，只报一次
+ * @param {(event: object) => void} options.onEvent 收到 ready / hotkey / other_key / escape / click，
+ *   以及小帮手不在了（退出或根本没起来）时的 exit，只报一次
  * @param {{ warn: Function, error: Function }} options.log
  */
 export function startHelper(command, { args = [], onEvent, log }) {
@@ -79,6 +80,18 @@ export function startHelper(command, { args = [], onEvent, log }) {
         pending.set(id, { resolve, reject, timer });
         child.stdin.write(`${JSON.stringify({ cmd: "paste", id, text })}\n`);
       });
+    },
+    /**
+     * 听写进行中：把 esc 和这几块里的鼠标点击截下来，不让别的应用收到。截到了会报 escape / click。
+     * 小帮手不在了就什么也不做：那时热键本身也不灵，上面已经报过了。
+     * @param {{ id: string, x: number, y: number, width: number, height: number }[]} regions 屏幕坐标
+     */
+    capture(regions) {
+      if (!exited) child.stdin.write(`${JSON.stringify({ cmd: "capture", regions })}\n`);
+    },
+    /** 不截了 */
+    release() {
+      if (!exited) child.stdin.write(`${JSON.stringify({ cmd: "release" })}\n`);
     },
     /** 关掉标准输入，小帮手会自己退出 */
     stop() {

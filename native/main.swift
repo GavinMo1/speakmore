@@ -2,11 +2,17 @@
 // 这两件事 Electron 自己做不了，原版也是交给 Swift 写的库和子进程（docs/07-native-helpers.md）。
 //
 // 和父进程用"一行一个 JSON"通信：
-//   标准输出  {"event":"ready","listen":true,"trusted":true}   启动完成，附两项权限的状态
+//   标准输出  {"event":"ready","listen":true,"trusted":true,"capture":true}
+//                                                               启动完成，附两项权限的状态；capture：截不截得住 esc 和点击
 //             {"event":"hotkey","down":true}                    热键按下 / 松开
 //             {"event":"other_key"}                             热键按住时又按了别的键（是组合键，不是听写）
 //             {"event":"pasted","id":1,"ok":true}               贴完了；ok 为 false 时文字留在剪贴板里
+//             {"event":"escape"}                                截着的时候按了 esc
+//             {"event":"click","id":"cancel"}                   截着的时候点了某一块
 //   标准输入  {"cmd":"paste","id":1,"text":"…"}
+//             {"cmd":"capture","regions":[{"id":"cancel","x":0,"y":0,"width":28,"height":28}]}
+//                                                               开始截：esc，和这几块（屏幕坐标）里的鼠标点击
+//             {"cmd":"release"}                                 不截了
 // 父进程退出（标准输入关闭）时自己也退出。
 //
 // 热键用 --key 指定，是单独一个修饰键：right_option（默认）、right_command、right_control、fn。
@@ -14,6 +20,7 @@
 // --no-prompt：缺权限时不让系统弹授权提示，只照实报。
 //
 // 按键内容不出这个进程：除了热键的按下松开，只报"有别的键"，不报是哪个键。
+// 例外只有 esc，而且只在父进程说"开始截"之后、"不截了"之前：那段时间它是用来取消听写的。
 
 import AppKit
 import ApplicationServices
@@ -159,6 +166,134 @@ func startKeyListener() -> Bool {
     return true
 }
 
+// MARK: - 截住 esc 和悬浮条上的点击
+//
+// 听写进行中，悬浮条上有"取消"和"完成"两个按钮，按 esc 也能取消。这两样都不能让别的应用收到：
+// 点击要是落到悬浮条的窗口上，我们的应用会被切到最前面，用户正在写的那个输入框就丢了焦点，文字贴不进去；
+// esc 要是也传给前台应用，取消听写的同时会顺手关掉它的对话框、打断它正在做的事。
+// 所以另开一个能改事件的监听，平时关着，只在听写进行中打开，只吞这两样，别的原样放行。它要辅助功能权限。
+
+struct Region {
+    let id: String
+    let rect: CGRect
+}
+
+let escapeKeyCode: Int64 = 53
+var captureTap: CFMachPort?
+var capturing = false
+var regions: [Region] = []
+/// 按下已经被吞掉、还在等松开的：esc，和鼠标（记着按在哪一块上）
+var escapeIsDown = false
+var pressedRegion: String?
+/// 一次录音最长 9 分钟。过了这么久父进程还没说"不截了"，多半是它那边出了岔子：自己松开，
+/// 不能让 esc 在所有应用里一直按不出来
+let captureLimit: TimeInterval = 600
+var captureDeadline: DispatchWorkItem?
+
+/// 这个监听现在该不该开着。手还没松开的那一下要吞完整，所以"不截了"之后可能还要再开一小会儿：
+/// 按下吞了、松开却放出去的话，前台应用会收到没头没尾的半个事件
+var captureWanted: Bool { capturing || escapeIsDown || pressedRegion != nil }
+
+func settleCapture() {
+    guard let tap = captureTap else { return }
+    CGEvent.tapEnable(tap: tap, enable: captureWanted)
+}
+
+func setCapturing(_ on: Bool, regions newRegions: [Region] = []) {
+    captureDeadline?.cancel()
+    captureDeadline = nil
+    capturing = on
+    regions = newRegions
+    settleCapture()
+    guard on else { return }
+    let deadline = DispatchWorkItem {
+        emit(["event": "error", "message": "截了 \(Int(captureLimit)) 秒还没人说不截了，自己松开"])
+        setCapturing(false)
+    }
+    captureDeadline = deadline
+    DispatchQueue.main.asyncAfter(deadline: .now() + captureLimit, execute: deadline)
+}
+
+func regionAt(_ point: CGPoint) -> String? {
+    regions.first { $0.rect.contains(point) }?.id
+}
+
+let onCaptureEvent: CGEventTapCallBack = { _, type, event, _ in
+    let pass = Unmanaged.passUnretained(event)
+    switch type {
+    case .tapDisabledByTimeout, .tapDisabledByUserInput:
+        // 它被停掉了：可能是系统嫌回调慢，也可能就是我们自己关的（自己关也会收到这个通知）。
+        // 该开着就重新打开；不该开的不能碰——在这里再关一次会再收到一次通知，没完没了地转（实测转起来过）
+        if captureWanted, let tap = captureTap { CGEvent.tapEnable(tap: tap, enable: true) }
+        return pass
+    case .keyDown:
+        guard event.getIntegerValueField(.keyboardEventKeycode) == escapeKeyCode else { return pass }
+        let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        if capturing {
+            if !isRepeat {
+                escapeIsDown = true
+                emit(["event": "escape"])
+            }
+            return nil
+        }
+        // 已经不截了，但取消用的那一下还按着没松：长按产生的重复也不放出去
+        if escapeIsDown && isRepeat { return nil }
+        // 新的一下：和我们无关了。万一上一次的松开没收到，也在这里收拾掉
+        escapeIsDown = false
+        settleCapture()
+        return pass
+    case .keyUp:
+        guard escapeIsDown, event.getIntegerValueField(.keyboardEventKeycode) == escapeKeyCode else { return pass }
+        escapeIsDown = false
+        settleCapture()
+        return nil
+    case .leftMouseDown:
+        guard capturing, let region = regionAt(event.location) else { return pass }
+        pressedRegion = region
+        return nil
+    case .leftMouseDragged:
+        return pressedRegion == nil ? pass : nil
+    case .leftMouseUp:
+        guard let pressed = pressedRegion else { return pass }
+        pressedRegion = nil
+        // 和普通按钮一样，按下和松开在同一块里才算点了它：按下之后拖出去再松手是反悔
+        if capturing && regionAt(event.location) == pressed {
+            emit(["event": "click", "id": pressed])
+        }
+        settleCapture()
+        return nil
+    default:
+        return pass
+    }
+}
+
+func startCaptureTap() -> Bool {
+    let types: [CGEventType] = [.keyDown, .keyUp, .leftMouseDown, .leftMouseUp, .leftMouseDragged]
+    let mask = types.reduce(CGEventMask(0)) { $0 | CGEventMask(1 << $1.rawValue) }
+    guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
+                                      options: .defaultTap, eventsOfInterest: mask,
+                                      callback: onCaptureEvent, userInfo: nil) else { return false }
+    captureTap = tap
+    let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+    CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+    // 平时关着：不在任何按键和点击的必经之路上
+    CGEvent.tapEnable(tap: tap, enable: false)
+    return true
+}
+
+func parseRegions(_ value: Any?) -> [Region]? {
+    guard let list = value as? [[String: Any]] else { return nil }
+    var parsed: [Region] = []
+    for item in list {
+        guard let id = item["id"] as? String,
+              let x = item["x"] as? Double, let y = item["y"] as? Double,
+              let width = item["width"] as? Double, let height = item["height"] as? Double,
+              width > 0, height > 0 else { return nil }
+        parsed.append(Region(id: id, rect: CGRect(x: x, y: y, width: width, height: height)))
+    }
+    return parsed
+}
+
 // MARK: - 自检（不发按键，只验证剪贴板存取能原样还原）
 
 func selfTest() -> Bool {
@@ -204,7 +339,9 @@ let trusted = mayPrompt
     ? AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
     : AXIsProcessTrusted()
 let listening = listenAllowed && startKeyListener()
-emit(["event": "ready", "listen": listening, "trusted": trusted])
+// 先开只听的那个，再开能改事件的这个：后开的排在前面，它吞掉的 esc 不会再被当成"热键加别的键"
+let capture = trusted && startCaptureTap()
+emit(["event": "ready", "listen": listening, "trusted": trusted, "capture": capture])
 
 Thread.detachNewThread {
     while let line = readLine() {
@@ -221,6 +358,14 @@ Thread.detachNewThread {
                 continue
             }
             DispatchQueue.main.async { paste(id: id, text: text) }
+        case "capture":
+            guard let parsed = parseRegions(object["regions"]) else {
+                emit(["event": "error", "message": "capture 需要 regions：一组 { id, x, y, width, height }"])
+                continue
+            }
+            DispatchQueue.main.async { setCapturing(true, regions: parsed) }
+        case "release":
+            DispatchQueue.main.async { setCapturing(false) }
         default:
             emit(["event": "error", "message": "不认识的命令：\(command)"])
         }
