@@ -19,6 +19,7 @@ test("在册的厂商：Gemini 和 OpenAI，各自说清 key 从哪个环境变�
   );
   for (const provider of PROVIDERS) {
     assert.match(provider.keyPage, /^https:\/\//);
+    assert.equal(typeof provider.keySite, "string");
     assert.equal(typeof provider.defaultModel, "string");
     assert.equal(typeof provider.load, "function");
   }

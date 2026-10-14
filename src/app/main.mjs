@@ -398,7 +398,8 @@ async function main() {
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
       openAtLogin: { supported: app.isPackaged, enabled: app.getLoginItemSettings().openAtLogin },
       home: PATHS.home,
-      provider: { id: PROVIDER.id, name: PROVIDER.name, keyPage: PROVIDER.keyPage },
+      // 设置窗口里 key 那一块说的是这一家
+      provider: { id: PROVIDER.id, name: PROVIDER.name, keyEnv: PROVIDER.keyEnv, site: PROVIDER.keySite },
     };
   });
   // 设置窗口和 speakmore key 存 key、删 key，走的是同一处

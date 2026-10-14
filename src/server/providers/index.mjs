@@ -10,6 +10,7 @@ export const PROVIDERS = Object.freeze([
     name: "Gemini",
     keyEnv: "GEMINI_API_KEY",
     keyPage: "https://aistudio.google.com/apikey",
+    keySite: "Google AI Studio",
     // 实测选的：gemini-3.5-flash + MINIMAL 约 1.7 秒出结果，能处理改口；flash-lite 更快（约 1.2 秒）但会把改口的痕迹留下
     defaultModel: "gemini-3.5-flash",
     // 有的型号不接受 MINIMAL，所以档位也要能换
@@ -21,6 +22,7 @@ export const PROVIDERS = Object.freeze([
     name: "OpenAI",
     keyEnv: "OPENAI_API_KEY",
     keyPage: "https://platform.openai.com/api-keys",
+    keySite: "OpenAI 开发者平台",
     defaultModel: "gpt-audio-mini",
     // gpt-audio 系列没有思考档位
     thinkingLevels: null,

@@ -10,13 +10,20 @@ const keyProblem = $("key-problem");
 /** 正在保存时不让重复提交，也不让别处的刷新把按钮重新点亮 */
 let saving = false;
 
-function keyText(key) {
-  // 启动时够不着 Gemini 的话先用着，如实说还没验证
-  const unverified = key.verified === false ? "启动时没连上 Gemini，还没验证这把能不能用。" : "";
+/** 夹在中文里的词：英文开头或结尾的那一侧和汉字之间空一格（"去 Google AI Studio 申请"、"去 OpenAI 开发者平台申请"） */
+const spacedInChinese = (text) =>
+  `${/^[A-Za-z0-9]/.test(text) ? " " : ""}${text}${/[A-Za-z0-9]$/.test(text) ? " " : ""}`;
+
+/** 0.3 的主进程不报用的是哪一家，那时只有 Gemini */
+const GEMINI = { name: "Gemini", keyEnv: "GEMINI_API_KEY", site: "Google AI Studio" };
+
+function keyText(key, provider) {
+  // 启动时够不着的话先用着，如实说还没验证
+  const unverified = key.verified === false ? `启动时没连上 ${provider.name}，还没验证这把能不能用。` : "";
   switch (key.state) {
     case "ready":
       if (key.source === "env") {
-        return [`这次运行用的是环境变量 GEMINI_API_KEY 里的 key，没有保存。${unverified}`, "ok"];
+        return [`这次运行用的是环境变量 ${provider.keyEnv} 里的 key，没有保存。${unverified}`, "ok"];
       }
       if (key.source === "external") return ["现在连的是单独启动的服务端，key 在那边配。", "ok"];
       return unverified ? [`已保存。${unverified}`, "pending"] : ["已保存，验证通过。", "ok"];
@@ -25,11 +32,14 @@ function keyText(key) {
     case "rejected":
       // 三种情况要做的事不一样：只有最后一种是在下面换一把就能解决的
       if (key.cause === "other") {
-        return [`验证没通过：${key.problem}。key 未必有问题，先看模型和思考档位的设置。`, "problem"];
+        return [
+          `验证没通过：${key.problem}。key 未必有问题，先看模型的设置（终端里运行 speakmore model）。`,
+          "problem",
+        ];
       }
       if (key.source === "env") {
         return [
-          `环境变量 GEMINI_API_KEY 里的 key 不能用：${key.problem}。改对它，或者去掉这个环境变量，再重新启动。`,
+          `环境变量 ${provider.keyEnv} 里的 key 不能用：${key.problem}。改对它，或者去掉这个环境变量，再重新启动。`,
           "problem",
         ];
       }
@@ -71,7 +81,13 @@ function render(setup) {
   $("status-degraded").textContent = summary.degraded ?? "";
   $("status-degraded").hidden = summary.degraded === null;
 
-  const [text, tone] = keyText(setup.key);
+  // key 这一块说的是正在用的那一家：标题、为什么要它、去哪申请
+  const provider = setup.provider ?? GEMINI;
+  $("key-heading").textContent = `${provider.name} API key`;
+  keyInput.setAttribute("aria-label", `${provider.name} API key`);
+  $("key-provider").textContent = provider.name;
+  $("open-key-page").textContent = `去${spacedInChinese(provider.site)}申请一把`;
+  const [text, tone] = keyText(setup.key, provider);
   $("key-state").textContent = text;
   $("key-state").dataset.tone = tone;
   // 环境变量和外部服务端的 key 不归这里管，不提供"删除"
