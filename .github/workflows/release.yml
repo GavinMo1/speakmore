@@ -20,7 +20,8 @@ jobs:
   release:
     # 小帮手要用 Xcode 编成两种芯片合一的
     runs-on: macos-15
-    timeout-minutes: 30
+    # 往下载地址传两个 130 多兆的包最慢：0.3.0 那次传了 28 分半，30 分钟的时限差点不够
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
