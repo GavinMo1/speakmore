@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { packager } from "@electron/packager";
 import { buildHelper } from "../../src/cli/native-helper.mjs";
-import { stageApp } from "./stage-app.mjs";
+import { APP_ENTRIES, stageApp } from "./stage-app.mjs";
 
 const packageDir = resolve(import.meta.dirname, "../..");
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
@@ -26,7 +26,7 @@ buildHelper(packageDir);
 const staging = mkdtempSync(join(tmpdir(), "speakmore-package-"));
 let bundleDir;
 try {
-  stageApp(packageDir, staging, ["src", "build"]);
+  stageApp(packageDir, staging, APP_ENTRIES);
   [bundleDir] = await packageApp(staging);
 } finally {
   rmSync(staging, { recursive: true, force: true });

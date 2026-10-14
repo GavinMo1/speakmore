@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { test } from "node:test";
-import { findCopyleft, pruneUnused, UNUSED_PACKAGES } from "../../../scripts/build/stage-app.mjs";
+import { APP_ENTRIES, findCopyleft, pruneUnused, UNUSED_PACKAGES } from "../../../scripts/build/stage-app.mjs";
+
+const repoDir = resolve(import.meta.dirname, "../../..");
 
 /** 在临时目录里摆一个假的 node_modules：名字 → 许可证 */
 function fakeModules(t, packages) {
@@ -62,5 +64,26 @@ test("嵌套的 node_modules 也查；没写许可证的不放过，当成要人
       .map(({ name }) => name)
       .sort(),
     ["inner", "unlicensed"],
+  );
+});
+
+test("程序按相对路径用到的仓库文件都存在，并且在打包会摆进去的目录里", () => {
+  const srcDir = join(repoDir, "src");
+  const outside = [];
+  for (const file of readdirSync(srcDir, { recursive: true })) {
+    if (!/\.(mjs|html|css)$/.test(file)) continue;
+    const text = readFileSync(join(srcDir, file), "utf8");
+    for (const [, path] of text.matchAll(/["'(]((?:\.\.\/)+[^"')\s]+)["')]/g)) {
+      const target = resolve(dirname(join(srcDir, file)), path);
+      assert.ok(existsSync(target), `${file} 用到的 ${path} 不存在`);
+      // src 里面的不用查；指向程序根目录本身的（命令行找自己装在哪）也不算
+      if (target === repoDir || target.startsWith(srcDir + sep)) continue;
+      outside.push({ file, top: relative(repoDir, target).split(sep)[0] });
+    }
+  }
+  for (const { file, top } of outside) assert.ok(APP_ENTRIES.includes(top), `${file} 用到了 ${top}/，打包时没带上它`);
+  assert.ok(
+    outside.some(({ top }) => top === "assets"),
+    "菜单栏和窗口的图标从 assets/ 读",
   );
 });

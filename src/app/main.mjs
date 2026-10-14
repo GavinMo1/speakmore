@@ -58,6 +58,8 @@ const PROVIDER = findProvider(MODEL.provider);
 /** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
 const THINKING = PROVIDER.thinkingLevels ? SETTINGS.thinking.value : null;
 const HOTKEY_LABEL = HOTKEYS[HOTKEY];
+/** 菜单栏图标：印章上的五道声波。文件名带 Template，系统按菜单栏的深浅反色；@2x 那张由系统自己挑（scripts/build/make-icon.sh） */
+const TRAY_ICON = join(import.meta.dirname, "../../assets/trayTemplate.png");
 /** 悬浮条的窗口。比条本身大一圈：上面要放一行提示，四周要留出阴影，报错时条会变宽变高 */
 const BAR_SIZE = { width: 380, height: 124 };
 /** 系统设置里三项权限各自的页面 */
@@ -492,9 +494,14 @@ async function main() {
     });
   }
 
-  // 菜单栏上只放文字，不放图标
-  const tray = new Tray(nativeImage.createEmpty());
-  tray.setTitle("听写");
+  const trayIcon = nativeImage.createFromPath(TRAY_ICON);
+  const tray = new Tray(trayIcon);
+  tray.setToolTip("SpeakMore");
+  // 图标读不出来时菜单栏上会是空的一格，找不到入口。退回写两个字，并记下来
+  if (trayIcon.isEmpty()) {
+    log.error("tray_icon_missing", { path: TRAY_ICON });
+    tray.setTitle("听写");
+  }
 
   function refreshTrayMenu() {
     const summary = summarizeSetup(currentSetup());

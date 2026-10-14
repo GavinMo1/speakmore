@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { downloadArtifact } from "@electron/get";
 import { buildHelper } from "../../src/cli/native-helper.mjs";
-import { stageApp } from "../build/stage-app.mjs";
+import { APP_ENTRIES, stageApp } from "../build/stage-app.mjs";
 import { ARCHS, archiveName, sha256, versionDir } from "./release-layout.mjs";
 
 const packageDir = resolve(import.meta.dirname, "../..");
@@ -57,7 +57,7 @@ const staging = mkdtempSync(join(tmpdir(), "speakmore-release-"));
 try {
   const appDir = join(staging, "app");
   mkdirSync(appDir);
-  stageApp(packageDir, appDir, ["bin", "src", "build", "LICENSE"]);
+  stageApp(packageDir, appDir, ["bin", ...APP_ENTRIES, "LICENSE"]);
   // 锁文件只在上一步装依赖时用得上
   rmSync(join(appDir, "package-lock.json"));
 

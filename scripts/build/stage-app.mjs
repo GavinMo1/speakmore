@@ -8,6 +8,12 @@ import { join } from "node:path";
 const NPM_FLAGS = ["--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"];
 
 /**
+ * 后台应用运行时要从仓库里读的目录：代码、编好的小帮手、图标。
+ * 打 .app 只摆这些；发布包另外带上命令行入口和许可证。漏了哪个，测试会指出（test/scripts/build）
+ */
+export const APP_ENTRIES = ["src", "build", "assets"];
+
+/**
  * 装上了、但程序从来不加载的包，不随程序分发。@audio/decode-webm 声明依赖了另外几种解码器（AAC、AC-3、DTS、
  * E-AC-3、FLAC、MP3、Opus、Vorbis），其中 AAC、AC-3、DTS 是 GPL，E-AC-3 是 LGPL，和本项目的 MIT 不兼容；
  * 而它打包好的代码只用自带的 Opus 解码。codec-parser（LGPL）是拆 Ogg 用的，程序不转 Ogg（见 src/server/audio/transcode.mjs）。
