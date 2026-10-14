@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { costOf as geminiCost } from "../../../src/server/providers/prices/gemini.mjs";
+import { costOf as openaiCost } from "../../../src/server/providers/prices/openai.mjs";
+
+const OCT = new Date("2026-10-14T08:00:00Z");
+const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-12, `${actual} ≠ ${expected}`);
+
+// 一次真实的听写请求（2026-10-14 实测）：系统提示词 1365 个文字 token，1 秒录音 25 个音频 token，回了 4 个 token
+const DICTATION = { text: 1365, audio: 25, cachedText: 0, cachedAudio: 0, output: 4 };
+
+test("Gemini 3.6 Flash：输入不分文字音频一个价，输出一个价；2027 年起翻倍", () => {
+  close(geminiCost("gemini-3.6-flash", DICTATION, OCT), (1390 * 0.75 + 4 * 3.75) / 1e6);
+  close(geminiCost("gemini-3.6-flash", DICTATION, new Date("2026-12-31T23:59:59Z")), (1390 * 0.75 + 4 * 3.75) / 1e6);
+  close(geminiCost("gemini-3.6-flash", DICTATION, new Date("2027-01-01T00:00:00Z")), (1390 * 1.5 + 4 * 7.5) / 1e6);
+});
+
+test("Gemini 分开定价的型号：音频比文字贵；命中缓存的那部分按缓存价，音频文字也分开", () => {
+  close(geminiCost("gemini-2.5-flash", DICTATION, OCT), (1365 * 0.3 + 25 * 1 + 4 * 2.5) / 1e6);
+  const cached = { text: 1365, audio: 25, cachedText: 1024, cachedAudio: 25, output: 4 };
+  close(geminiCost("gemini-2.5-flash", cached, OCT), (341 * 0.3 + 1024 * 0.03 + 25 * 0.1 + 4 * 2.5) / 1e6);
+});
+
+test("Gemini Pro：提示词超过 20 万 token 时整次按高的那档", () => {
+  const short = { text: 200_000, audio: 0, cachedText: 0, cachedAudio: 0, output: 1000 };
+  const long = { ...short, text: 200_001 };
+  close(geminiCost("gemini-2.5-pro", short, OCT), (200_000 * 1.25 + 1000 * 10) / 1e6);
+  close(geminiCost("gemini-2.5-pro", long, OCT), (200_001 * 2.5 + 1000 * 15) / 1e6);
+});
+
+test("Gemini 已停用、请求被转走的型号按转去的那个算；价目表里没有的是 null", () => {
+  assert.equal(geminiCost("gemini-3.5-flash", DICTATION, OCT), geminiCost("gemini-3.6-flash", DICTATION, OCT));
+  assert.equal(geminiCost("gemini-3.7-flash", DICTATION, OCT), geminiCost("gemini-3.8-flash", DICTATION, OCT));
+  assert.equal(geminiCost("gemini-9-ultra", DICTATION, OCT), null);
+});
+
+test("OpenAI gpt-audio：文字和音频各一个价，输入输出分开；响应里带日期的快照名按型号查价", () => {
+  // 实测：gpt-audio-mini 回的是 gpt-audio-mini-2025-12-15，1522 个文字 token、10 个音频 token，回了 4 个
+  const tokens = { text: 1522, audio: 10, textOutput: 4, audioOutput: 0 };
+  const expected = (1522 * 0.6 + 10 * 10 + 4 * 2.4) / 1e6;
+  close(openaiCost("gpt-audio-mini-2025-12-15", tokens), expected);
+  close(openaiCost("gpt-audio-mini", tokens), expected);
+  close(
+    openaiCost("gpt-audio-1.5", { text: 1000, audio: 100, textOutput: 10, audioOutput: 5 }),
+    (1000 * 2.5 + 100 * 32 + 10 * 10 + 5 * 64) / 1e6,
+  );
+  assert.equal(openaiCost("gpt-9-audio", tokens), null);
+});
