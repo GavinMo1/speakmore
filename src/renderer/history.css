@@ -1,4 +1,4 @@
-/* 历史窗口。颜色、字体、按钮在 window.css 里。 */
+/* 历史窗口。字体、按钮在 window.css 里，颜色由主题给。 */
 
 .empty {
   margin: 3rem 0;
@@ -20,7 +20,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-small);
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }

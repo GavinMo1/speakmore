@@ -1,4 +1,4 @@
-/* 设置窗口。颜色、字体、按钮在 window.css 里。 */
+/* 设置窗口。字体、按钮在 window.css 里，颜色由主题给。 */
 
 main {
   padding-bottom: 2rem;
@@ -11,7 +11,7 @@ section {
 
 h2 {
   margin: 0 0 0.35rem;
-  font-size: 0.9375rem;
+  font-size: var(--text-body);
   font-weight: 650;
 }
 
@@ -22,7 +22,7 @@ p {
 .hint,
 .state,
 footer {
-  font-size: 0.8125rem;
+  font-size: var(--text-small);
   color: var(--ink-2);
 }
 
@@ -41,7 +41,7 @@ footer {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  font-size: 1.0625rem;
+  font-size: var(--text-heading);
   font-weight: 650;
 }
 
@@ -93,7 +93,7 @@ footer {
   color: var(--ink);
   background: var(--raised);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
 }
 
 .key-form input::placeholder {
@@ -138,7 +138,7 @@ footer {
 .link {
   padding: 0;
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--text-small);
   color: var(--primary);
   background: none;
   border: none;
@@ -183,12 +183,12 @@ footer {
 }
 
 .what span {
-  font-size: 0.8125rem;
+  font-size: var(--text-small);
   color: var(--ink-2);
 }
 
 .granted {
-  font-size: 0.8125rem;
+  font-size: var(--text-small);
   color: var(--ink-2);
   white-space: nowrap;
 }
