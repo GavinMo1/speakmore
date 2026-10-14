@@ -10,13 +10,15 @@ import { startServer, WS_PATH } from "../server/server.mjs";
  *
  * @param {object} options
  * @param {{ info: Function, warn: Function, error: Function }} options.log
- * @param {{ provider: string, model: string }} options.model 用哪一家的哪个模型（设置里的 model）
+ * @param {{ provider: string, model: string }} options.model 一开始用哪一家的哪个模型（设置里的 model）
  * @param {string} [options.thinkingLevel] 只有 Gemini 用得上
  * @param {typeof createModelRefiner} [options.createRefiner] 测试时换成假的
  */
-export async function startService({ log, model, thinkingLevel, createRefiner = createModelRefiner }) {
-  const provider = findProvider(model.provider);
-  const noKeyMessage = `还没有填 ${provider.name} API key：在终端运行 speakmore key，或者点菜单栏的“听写”打开设置`;
+export async function startService({ log, model: initialModel, thinkingLevel, createRefiner = createModelRefiner }) {
+  /** 正在用的厂商和模型。换一家要带着那一家的 key 一起换（useKey 的 choice），验证过了才换 */
+  let model = initialModel;
+  const noKeyMessage = () =>
+    `还没有填 ${findProvider(model.provider).name} API key：在终端运行 speakmore key，或者点菜单栏上 SpeakMore 的图标打开设置`;
   /** 通过了验证、正在用的那一个；没有 key 时是 null */
   let refiner = null;
 
@@ -25,7 +27,7 @@ export async function startService({ log, model, thinkingLevel, createRefiner = 
     log,
     refiner: {
       async refine(audio, options) {
-        if (!refiner) throw new Error(noKeyMessage);
+        if (!refiner) throw new Error(noKeyMessage());
         return refiner.refine(audio, options);
       },
     },
@@ -38,17 +40,24 @@ export async function startService({ log, model, thinkingLevel, createRefiner = 
       return refiner !== null;
     },
 
+    /** 正在用的厂商和模型：{ provider, model } */
+    get model() {
+      return model;
+    },
+
     /**
      * 换一把 key。先拿它发一个最小的请求：key 无效、模型名写错、连不上都会在这里抛出来（都是分好类的
      * ModelError），这时原来能用的那把继续用。这个请求同时是预热，之后的第一次听写不会慢。
      *
      * @param {string} apiKey
-     * @param {{ allowUnverified?: boolean }} [options] allowUnverified：只是暂时够不着那一家的话照样启用。
-     *   启动时用：存着的那把当初是验证过才存的，不该因为开机时没网、或者对方一时回了 503 就被判成不能用
+     * @param {{ allowUnverified?: boolean, choice?: { provider: string, model: string } }} [options]
+     *   allowUnverified：只是暂时够不着那一家的话照样启用。启动时、换用存着的那把时用：它当初是验证过才存的，
+     *   不该因为开机时没网、或者对方一时回了 503 就被判成不能用。
+     *   choice：连厂商和模型一起换（设置窗口里改用别家）；不写就是正在用的那个
      * @returns {Promise<{ verified: boolean }>} verified 为 false 表示先用着、还没验证
      */
-    async useKey(apiKey, { allowUnverified = false } = {}) {
-      const candidate = await createRefiner({ choice: model, apiKey, thinkingLevel, log });
+    async useKey(apiKey, { allowUnverified = false, choice = model } = {}) {
+      const candidate = await createRefiner({ choice, apiKey, thinkingLevel, log });
       let verified = true;
       try {
         await candidate.warmUp();
@@ -57,12 +66,13 @@ export async function startService({ log, model, thinkingLevel, createRefiner = 
         verified = false;
       }
       refiner = candidate;
+      model = choice;
       return { verified };
     },
 
     /** 把正在用的那把再验一次，没通过就抛错。启动时没连上网的，之后靠它补上验证 */
     async verify() {
-      if (!refiner) throw new Error(noKeyMessage);
+      if (!refiner) throw new Error(noKeyMessage());
       await refiner.warmUp();
     },
 

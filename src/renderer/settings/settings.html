@@ -21,8 +21,12 @@
       </section>
 
       <section aria-labelledby="key-heading">
-        <h2 id="key-heading">Gemini API key</h2>
-        <p class="state" id="key-state"></p>
+        <h2 id="key-heading">用哪家的模型</h2>
+        <div class="providers" id="providers" role="radiogroup" aria-labelledby="key-heading"></div>
+        <div class="key-state-row">
+          <p class="state" id="key-state"></p>
+          <button type="button" class="button primary" id="use-provider" hidden>改用</button>
+        </div>
         <form class="key-form" id="key-form">
           <input
             type="password"
@@ -30,14 +34,15 @@
             autocomplete="off"
             spellcheck="false"
             placeholder="把 key 粘贴到这里"
-            aria-label="Gemini API key"
+            aria-label="API key"
           />
           <button type="button" class="button" id="paste-key">从剪贴板粘贴</button>
           <button type="submit" class="button primary" id="save-key">保存并验证</button>
         </form>
         <p class="problem" id="key-problem" role="alert" hidden></p>
+        <p class="hint" id="key-note" hidden></p>
         <p class="hint">
-          录音是发给 <span id="key-provider">Gemini</span> 整理成文字的，所以需要一把你自己的 key。换别家的模型在终端里运行 speakmore model。它用系统钥匙串加密后存在这台电脑上，不会显示出来，也不会发到别处。
+          选哪家，录音就发给哪家整理成文字，所以要一把你自己的 key。它用系统钥匙串加密后存在这台电脑上，不会显示出来，也不会发到别处。
         </p>
         <p class="links">
           <button type="button" class="link" id="open-key-page">去 Google AI Studio 申请一把</button>

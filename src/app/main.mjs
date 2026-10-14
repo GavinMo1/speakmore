@@ -16,11 +16,11 @@ import {
 } from "electron";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { alsoLogTo, log } from "../log.mjs";
-import { findProvider, PROVIDERS, parseModelChoice } from "../server/providers/index.mjs";
+import { findProvider, formatModelChoice, PROVIDERS, parseModelChoice } from "../server/providers/index.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
 import { ensureHome, keyFile, resolvePaths } from "../storage/paths.mjs";
-import { HOTKEY_KEYCAPS, HOTKEYS, resolveSettings } from "../storage/settings.mjs";
+import { HOTKEY_KEYCAPS, HOTKEYS, overridingEnv, resolveSettings, saveSetting } from "../storage/settings.mjs";
 import { toHex } from "../themes/color.mjs";
 import { themeCss } from "../themes/contract.mjs";
 import { findTheme } from "../themes/index.mjs";
@@ -52,11 +52,11 @@ try {
   process.exit(2);
 }
 const HOTKEY = SETTINGS.hotkey.value;
-/** 这次运行用哪一家的哪个模型整理。换模型要重启 */
+/** 启动时用哪一家的哪个模型整理。之后可以在设置窗口里改用别家（keys.use），正在用的以 keys.provider 为准 */
 const MODEL = parseModelChoice(SETTINGS.model.value);
 const PROVIDER = findProvider(MODEL.provider);
 /** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
-const THINKING = PROVIDER.thinkingLevels ? SETTINGS.thinking.value : null;
+const thinkingFor = (provider) => (provider.thinkingLevels ? SETTINGS.thinking.value : null);
 const HOTKEY_LABEL = HOTKEYS[HOTKEY];
 /** 菜单栏图标：印章上的五道声波。文件名带 Template，系统按菜单栏的深浅反色；@2x 那张由系统自己挑（scripts/build/make-icon.sh） */
 const TRAY_ICON = join(import.meta.dirname, "../../assets/trayTemplate.png");
@@ -149,7 +149,7 @@ async function main() {
     version: app.getVersion(),
     hotkey: HOTKEY,
     model: SETTINGS.model.value,
-    thinking: THINKING,
+    thinking: thinkingFor(PROVIDER),
     theme: SETTINGS.theme.value,
     home: PATHS.home,
     server_url: serverUrl,
@@ -160,8 +160,11 @@ async function main() {
 
   // ---------- 能不能用、还差什么 ----------
 
+  /** 正在用的那一家：连着单独启动的服务端时是设置里那家（用哪个由那边定，这里只是个名字） */
+  const provider = () => (service ? keys.provider : PROVIDER);
+
   const currentSetup = () => ({
-    providerName: PROVIDER.name,
+    providerName: provider().name,
     key: keys.current,
     helper: helperState,
     permissions: {
@@ -403,15 +406,56 @@ async function main() {
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
       openAtLogin: { supported: app.isPackaged, enabled: app.getLoginItemSettings().openAtLogin },
       home: PATHS.home,
-      // 设置窗口里 key 那一块说的是这一家
-      provider: { id: PROVIDER.id, name: PROVIDER.name, keyEnv: PROVIDER.keyEnv, site: PROVIDER.keySite },
+      // 正在用的那一家；设置窗口里还列出别家，可以给它们填 key、改用它们
+      provider: describeProvider(provider()),
+      providers: PROVIDERS.map(describeProvider),
+      // 连着单独启动的服务端时用哪家由那边定，这里换不了
+      switchable: Boolean(service),
     };
   });
+  /** 设置窗口要的一家的说明，带着它的 key 在哪（env / stored / null，不解密） */
+  function describeProvider(found) {
+    const sources = service ? keys.sources() : {};
+    return {
+      id: found.id,
+      name: found.name,
+      keyEnv: found.keyEnv,
+      site: found.keySite,
+      key: sources[found.id] ?? null,
+    };
+  }
   // 设置窗口和 speakmore key 存 key、删 key，走的是同一处
   ipcMain.handle("setup:save-key", (_event, value) => keys.save(value));
-  ipcMain.handle("setup:forget-key", () => keys.forget());
+  ipcMain.handle("setup:forget-key", (_event, id) => keys.forget({ provider: id ?? keys.provider.id }));
+  ipcMain.handle("setup:use-provider", (_event, id, value) => useProvider(id, value));
   ipcMain.handle("setup:read-clipboard", () => clipboard.readText());
-  ipcMain.handle("setup:open-key-page", () => shell.openExternal(PROVIDER.keyPage));
+  ipcMain.handle("setup:open-key-page", (_event, id) => shell.openExternal((findProvider(id) ?? provider()).keyPage));
+
+  /**
+   * 改用另一家（可以顺带填一把它的新 key）：验证过才换，换了就记进设置，下次启动也用它。
+   * 当场换，不重启后台：用哪家、哪把 key 都在内置服务里，换掉它们就够了
+   * @returns {Promise<{ ok: boolean, problem?: string, note?: string }>}
+   */
+  async function useProvider(id, value) {
+    const result = await keys.use({ provider: id, key: value });
+    if (!result.ok) return result;
+    const choice = service.model;
+    log.info("model_switched", { model: formatModelChoice(choice), by: "settings" });
+    try {
+      saveSetting(PATHS.settingsFile, "model", choice.provider);
+    } catch (error) {
+      log.error("settings_save_failed", { name: "model", error: String(error?.message ?? error) });
+      return {
+        ok: true,
+        note: `这次运行已经改用 ${keys.provider.name}，但没记进设置（${error.message}），下次启动还是原来那家`,
+      };
+    }
+    const variable = overridingEnv("model", process.env);
+    if (variable !== null) {
+      return { ok: true, note: `环境变量 ${variable} 设着，下次启动还会用它定的那家` };
+    }
+    return { ok: true };
+  }
   ipcMain.handle("setup:open-privacy", async (_event, permission) => {
     if (!Object.hasOwn(PRIVACY_PANES, permission)) throw new TypeError(`不认识的权限：${permission}`);
     // 麦克风从没问过时，系统设置的列表里还没有这个应用，要先让系统弹一次授权框
@@ -561,11 +605,11 @@ async function main() {
       hotkey: HOTKEY,
       hotkeyLabel: HOTKEY_LABEL,
       // 连着单独启动的服务端时，用哪个模型由那边定
-      provider: service ? PROVIDER.id : null,
+      provider: service ? keys.provider.id : null,
       // 每家的 key 在哪。装成应用的那个各存各的，命令行要靠这一项才知道
       keys: service ? keys.sources() : null,
-      model: service ? SETTINGS.model.value : null,
-      thinking: service ? THINKING : null,
+      model: service ? formatModelChoice(service.model) : null,
+      thinking: service ? thinkingFor(keys.provider) : null,
       theme: theme.id,
       // 装成应用的和命令启动的，权限和 key 各是一套：命令行据此决定该不该代它重启
       packaged: app.isPackaged,

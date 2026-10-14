@@ -31,11 +31,14 @@ function fakeService(verdicts = {}) {
     calls: [],
     /** 正在用的那把；没有时是 null */
     using: null,
-    async useKey(apiKey, { allowUnverified = false } = {}) {
-      service.calls.push({ useKey: apiKey, allowUnverified });
+    /** 正在用的厂商和模型；没换过时是 null（启动时设置里的那个） */
+    model: null,
+    async useKey(apiKey, { allowUnverified = false, choice } = {}) {
+      service.calls.push(choice ? { useKey: apiKey, allowUnverified, choice } : { useKey: apiKey, allowUnverified });
       const error = verdicts[apiKey]?.();
       if (error && !(allowUnverified && error.kind === "unavailable")) throw error;
       service.using = apiKey;
+      if (choice) service.model = choice;
       return { verified: !error };
     },
     /** 拿一把 key 试另一家（或另一个模型），不换掉正在用的 */
@@ -424,6 +427,81 @@ test("不认识的厂商：不验证、不存、不删", async () => {
   assert.match((await keys.save("k", { provider: "deepseek" })).problem, /不认识 deepseek/);
   await assert.rejects(keys.forget({ provider: "deepseek" }), /不认识 deepseek/);
   assert.deepEqual(service.calls, []);
+});
+
+// ---------- 改用另一家 ----------
+
+const OPENAI_DEFAULT = { provider: "openai", model: findProvider("openai").defaultModel };
+
+test("改用另一家：拿它存着的那把验证过就换过去；之后存、删、检查不写厂商时说的都是新的那家", async () => {
+  const { keys, service, keyStore, otherStore } = setup({ stored: "gemini-key", storedOther: "openai-key" });
+  await keys.loadAtStartup();
+  assert.deepEqual(await keys.use({ provider: "openai" }), { ok: true });
+  assert.equal(keys.provider.id, "openai");
+  assert.equal(service.using, "openai-key");
+  assert.deepEqual(service.model, OPENAI_DEFAULT);
+  assert.deepEqual(keys.current, { state: "ready", source: "stored", problem: null, verified: true });
+
+  await keys.forget();
+  assert.equal(otherStore.value, null);
+  assert.equal(keyStore.value, "gemini-key");
+  assert.equal(keys.current.state, "missing");
+});
+
+test("改用另一家时连带填一把新的：验证过才存、才换；没通过就什么都不变", async () => {
+  const good = setup({ stored: "gemini-key" });
+  await good.keys.loadAtStartup();
+  assert.deepEqual(await good.keys.use({ provider: "openai", key: " openai-new " }), { ok: true });
+  assert.equal(good.otherStore.value, "openai-new");
+  assert.equal(good.keys.provider.id, "openai");
+  assert.equal(good.service.using, "openai-new");
+
+  const bad = setup({ stored: "gemini-key", verdicts: { "openai-bad": INVALID } });
+  await bad.keys.loadAtStartup();
+  const result = await bad.keys.use({ provider: "openai", key: "openai-bad" });
+  assert.equal(result.ok, false);
+  assert.match(result.problem, /无效/);
+  assert.equal(bad.keys.provider.id, "gemini");
+  assert.equal(bad.service.using, "gemini-key");
+  assert.equal(bad.otherStore.value, null);
+  assert.equal(bad.keys.current.state, "ready");
+});
+
+test("改用一家还没有 key 的：不换，说要先填它的 key", async () => {
+  const { keys, service } = setup({ stored: "gemini-key" });
+  await keys.loadAtStartup();
+  const result = await keys.use({ provider: "openai" });
+  assert.equal(result.ok, false);
+  assert.match(result.problem, /还没有 OpenAI 的 key/);
+  assert.equal(keys.provider.id, "gemini");
+  assert.equal(service.using, "gemini-key");
+});
+
+test("改用时那一家暂时连不上：存着的那把当初验证过，照样换过去，如实标成还没验证；新填的不算", async () => {
+  const stored = setup({ stored: "gemini-key", storedOther: "openai-key", verdicts: { "openai-key": OFFLINE } });
+  await stored.keys.loadAtStartup();
+  assert.deepEqual(await stored.keys.use({ provider: "openai" }), { ok: true });
+  assert.equal(stored.keys.current.verified, false);
+
+  const typed = setup({ stored: "gemini-key", verdicts: { "openai-new": OFFLINE } });
+  await typed.keys.loadAtStartup();
+  assert.equal((await typed.keys.use({ provider: "openai", key: "openai-new" })).ok, false);
+  assert.equal(typed.keys.provider.id, "gemini");
+});
+
+test("改用时那一家的环境变量里有 key：用它，标明来自环境变量", async () => {
+  const { keys, service } = setup({ stored: "gemini-key", env: { OPENAI_API_KEY: "openai-env" } });
+  await keys.loadAtStartup();
+  assert.deepEqual(await keys.use({ provider: "openai" }), { ok: true });
+  assert.equal(service.using, "openai-env");
+  assert.equal(keys.current.source, "env");
+});
+
+test("改用：不认识的厂商、连的是单独启动的服务端，都不换并说清楚", async () => {
+  const { keys } = setup();
+  assert.match((await keys.use({ provider: "deepseek" })).problem, /不认识 deepseek/);
+  const external = setup({ external: true });
+  assert.match((await external.keys.use({ provider: "openai" })).problem, /单独启动的服务端/);
 });
 
 // ---------- 检查某个模型能不能用 ----------

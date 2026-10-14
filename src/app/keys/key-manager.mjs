@@ -17,14 +17,17 @@ const MISSING = { state: "missing", source: null, problem: null };
  * @param {object} options
  * @param {{ useKey: Function, verify: Function, forgetKey: Function, probe: Function } | null} options.service
  *   内置的听写服务；连的是单独启动的服务端时为 null，key 归那边管
- * @param {{ id: string, name: string, keyEnv: string }} options.provider 正在用的那一家（providers/index.mjs）
+ * @param {{ id: string, name: string, keyEnv: string }} options.provider 一开始用的那一家（providers/index.mjs）。
+ *   之后可以改用别家（use），不写厂商的存、删、检查说的都是正在用的那家
  * @param {Record<string, { load(): string | null, save(key: string): void, clear(): void }>} options.keyStores
  *   每家一个，按 id 找
  * @param {Record<string, string | undefined>} options.env
  * @param {{ info: Function, error: Function }} options.log
  * @param {() => void} options.onChange 状态每变一次调一次
  */
-export function createKeyManager({ service, provider, keyStores, env, log, onChange }) {
+export function createKeyManager({ service, provider: initialProvider, keyStores, env, log, onChange }) {
+  /** 正在用的那一家 */
+  let provider = initialProvider;
   let current = MISSING;
   /** 正在用的那家这次运行实际在用的那把 key（检查它时要用同一把）；没有时是 null */
   let inUse = null;
@@ -50,8 +53,8 @@ export function createKeyManager({ service, provider, keyStores, env, log, onCha
   }
 
   /** 服务报上来的错。不是模型层分好类的（多半是 bug）也照样能说，key 先抹掉 */
-  const described = (error, apiKey) => {
-    const modelError = toModelError(error, { provider, apiKey });
+  const described = (error, apiKey, who = provider) => {
+    const modelError = toModelError(error, { provider: who, apiKey });
     return { cause: modelError.kind, problem: modelError.message, detail: modelError.detail };
   };
 
@@ -70,26 +73,35 @@ export function createKeyManager({ service, provider, keyStores, env, log, onCha
 
   /**
    * 拿一把 key 去验证，通过了才开始用。不抛错。
-   * @param {{ atStartup: boolean }} options 两处不一样：启动时只是够不着的话照样启用，没通过就是不能用；
-   *   换一把时够不着也算没通过，没通过的话服务里原来那把还在用，状态也回到原来的
+   * @param {{ atStartup: boolean, allowUnverified?: boolean, target?: object }} options
+   *   atStartup：启动时只是够不着的话照样启用，没通过就是不能用；换一把时没通过的话服务里原来那把还在用，
+   *   状态也回到原来的。allowUnverified：够不着时照样启用，默认同 atStartup（换用存着的那把时也要）。
+   *   target：连厂商一起换成这一家（用它的默认模型），通过了才换
    * @returns {Promise<null | { cause: string, problem: string }>} 通过了是 null，没通过是原因
    */
-  function adopt(apiKey, source, { atStartup }) {
+  function adopt(apiKey, source, { atStartup, allowUnverified = atStartup, target = null }) {
     return enqueue(async () => {
-      // 排到自己了再记"原来的状态"：排队期间前一把可能刚验完
+      // 排到自己了再记"原来的状态"：排队期间前一把可能刚验完、或者已经换过一家
       const previous = current;
+      const switching = target !== null && target.id !== provider.id;
+      const who = switching ? target : provider;
       become({ state: "checking", source, problem: null });
       try {
-        const { verified } = await service.useKey(apiKey, { allowUnverified: atStartup });
+        const choice = switching ? { choice: { provider: target.id, model: target.defaultModel } } : {};
+        const { verified } = await service.useKey(apiKey, { allowUnverified, ...choice });
+        if (switching) {
+          log.info("provider_switched", { from: provider.id, to: target.id });
+          provider = target;
+        }
         inUse = { apiKey, source };
         log.info("key_ready", { provider: provider.id, source, verified });
         become({ state: "ready", source, problem: null, verified });
         return null;
       } catch (error) {
-        const { cause, problem, detail } = described(error, apiKey);
+        const { cause, problem, detail } = described(error, apiKey, who);
         if (atStartup) reject(source, cause, problem, detail);
         else {
-          log.error("key_rejected", { provider: provider.id, source, cause, error: detail.slice(0, 300) });
+          log.error("key_rejected", { provider: who.id, source, cause, error: detail.slice(0, 300) });
           become(previous);
         }
         return { cause, problem };
@@ -130,9 +142,22 @@ export function createKeyManager({ service, provider, keyStores, env, log, onCha
     return stored ? { apiKey: stored, source: "stored" } : null;
   }
 
+  /** 一把刚填的 key：去掉首尾空白；空的、样子不对的直接说原因（不交给服务） */
+  function typed(value) {
+    if (typeof value !== "string" || value.trim() === "") return { problem: "还没有填 key" };
+    const apiKey = value.trim();
+    const shape = apiKeyProblem(apiKey);
+    return shape ? { problem: `这把 key ${shape}` } : { apiKey };
+  }
+
   return {
     get current() {
       return current;
+    },
+
+    /** 正在用的那一家 */
+    get provider() {
+      return provider;
     },
 
     /**
@@ -175,14 +200,51 @@ export function createKeyManager({ service, provider, keyStores, env, log, onCha
       } catch (error) {
         return { ok: false, problem: error.message };
       }
-      const apiKey = value.trim();
-      const shape = apiKeyProblem(apiKey);
-      if (shape) return { ok: false, problem: `这把 key ${shape}` };
+      const { apiKey, problem } = typed(value);
+      if (problem) return { ok: false, problem };
 
       if (target.found.id !== provider.id) return saveForOther(target.found, target.store, apiKey);
       const failure = await adopt(apiKey, "stored", { atStartup: false });
       if (failure) return { ok: false, problem: failure.problem };
       return storeKey(target.store, apiKey);
+    },
+
+    /**
+     * 改用另一家：拿它的 key 验证过才换（厂商和模型一起换，模型用它的默认的）。没通过就什么都不变。
+     * 设置里的 model 由调用方去改：这里只管这次运行用的是哪家。
+     * @param {{ provider: string, key?: string }} options key：顺带填的一把新的，验证过才存；
+     *   不写就用那一家现有的（环境变量优先，其次存着的）。存着的那把当初验证过，换用时只是够不着也照样换
+     * @returns {Promise<{ ok: true } | { ok: false, problem: string }>}
+     */
+    async use({ provider: id, key: value } = {}) {
+      if (!service) {
+        return { ok: false, problem: "现在连的是单独启动的服务端（SPEAKMORE_SERVER_URL），用哪个模型由那边定" };
+      }
+      let target;
+      try {
+        target = lookup(id);
+      } catch (error) {
+        return { ok: false, problem: error.message };
+      }
+      const { found, store } = target;
+      if (value !== undefined) {
+        const { apiKey, problem } = typed(value);
+        if (problem) return { ok: false, problem };
+        const failure = await adopt(apiKey, "stored", { atStartup: false, target: found });
+        return failure ? { ok: false, problem: failure.problem } : storeKey(store, apiKey);
+      }
+      let key;
+      try {
+        key = keyFor(found, store);
+      } catch (error) {
+        log.error("key_unreadable", { provider: found.id, error: String(error?.message ?? error) });
+        return { ok: false, problem: `存着的 ${found.name} key 读不出来了，重新填一次` };
+      }
+      if (!key) return { ok: false, problem: `还没有 ${found.name} 的 key，先填一把` };
+      const shape = apiKeyProblem(key.apiKey);
+      if (shape) return { ok: false, problem: `这把 key ${shape}` };
+      const failure = await adopt(key.apiKey, key.source, { atStartup: false, allowUnverified: true, target: found });
+      return failure ? { ok: false, problem: failure.problem } : { ok: true };
     },
 
     /** @param {{ provider?: string }} [options] 删哪一家的，默认是正在用的那一家 */

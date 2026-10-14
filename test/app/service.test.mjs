@@ -200,3 +200,27 @@ test("按设置里选的厂商和模型装配；probe 拿另一把 key 试别的
   await assert.rejects(service.probe({ choice: openai, apiKey: "bad" }), /无效/);
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 gemini");
 });
+
+test("useKey 带上别的厂商和模型：验证过才整个换过去，没 key 时的提示也跟着换；没通过就还是原来的", async (t) => {
+  const service = await startService({
+    log: quietLog,
+    model: GEMINI,
+    createRefiner: async (options) =>
+      fakeRefiner(`用的是 ${options.choice.provider}`, async () => {
+        if (options.apiKey === "bad") throw INVALID();
+      }),
+  });
+  t.after(() => service.close());
+  await service.useKey("gemini-key");
+  const openai = { provider: "openai", model: "gpt-audio-mini" };
+
+  await assert.rejects(service.useKey("bad", { choice: openai }), /无效/);
+  assert.deepEqual(service.model, GEMINI);
+  assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 gemini");
+
+  await service.useKey("openai-key", { choice: openai });
+  assert.deepEqual(service.model, openai);
+  assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 openai");
+  service.forgetKey();
+  assert.match((await dictateOnce(service.url)).V.detail, /还没有填 OpenAI API key/);
+});
