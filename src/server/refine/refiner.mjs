@@ -24,7 +24,8 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * 再统一收尾；适配器只管"这一家的请求怎么拼、报错怎么认"。
  *
  * 每一次回了话的调用都记一笔账（onCall）：哪次听写、用的哪个型号、多少 token、多少钱、等了多久。
- * 回了话才收钱，所以连不上、被取消的不记；回了话但用不了的（被截断、被拦下）照记。
+ * 回了话但用不了的（被截断、被拦下）也收了钱，照记。没回话的拿不到用量、记不了：连不上的本来就不收钱；
+ * 发出去了却等不到回话（超时、断开）的对方可能照样收了钱，只记一条警告。
  *
  * @param {object} options
  * @param {{ id: string, name: string }} options.provider 厂商清单里的那一项（providers/index.mjs）
@@ -56,10 +57,26 @@ export function createRefiner({
     return signal ? AbortSignal.any([signal, timeout]) : timeout;
   };
 
-  /** 调一次适配器，回了话就记一笔账。没回话（抛错）的不记 */
+  /** 调一次适配器，回了话就记一笔账。没回话（抛错）的拿不到用量，记不了 */
   async function metered(purpose, audioId, call) {
     const startedAt = performance.now();
-    const reply = await call();
+    let reply;
+    try {
+      reply = await call();
+    } catch (error) {
+      // 请求发出去了、我们等不及先断开的（超时、用户那头断了）：对方可能已经算完、照样收钱，账上会少这一笔。
+      // 收没收没法知道，记一条警告，对账时有据可查
+      if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+        log.warn("model_call_unmetered", {
+          purpose,
+          audio_id: audioId,
+          provider: provider.id,
+          reason: error.name,
+          latency_ms: Math.round(performance.now() - startedAt),
+        });
+      }
+      throw error;
+    }
     const latencyMs = Math.round(performance.now() - startedAt);
     if (!reply?.usage) {
       log.warn("usage_missing", { purpose, audio_id: audioId, provider: provider.id });

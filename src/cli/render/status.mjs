@@ -57,12 +57,13 @@ function pendingSettings(status, settings) {
   return Object.keys(SETTINGS).filter((name) => status[name] != null && !same(name, status[name]));
 }
 
-function statsLine({ dictations, characters, seconds, costUsd }, { withPace }) {
+function statsLine({ dictations, characters, seconds, costUsd, unpricedCalls }, { withPace }) {
   const parts = [`${count(dictations)} 次`, `${count(characters)} 字`, duration(seconds)];
   // 每分钟多少字只在累计里给：一天里说得少时这个数跳得厉害，没有参考价值
   if (withPace && seconds >= 60) parts.push(`每分钟 ${count(Math.round(characters / (seconds / 60)))} 字`);
-  // 记账之前的版本没有账，不写 $0 让人以为没花钱
-  if (costUsd > 0) parts.push(formatUsd(costUsd));
+  // 有几笔不知道价时钱只加得上一部分，说"至少"；记账之前的版本没有账，不写 $0 让人以为没花钱
+  if (unpricedCalls > 0) parts.push(costUsd > 0 ? `至少 ${formatUsd(costUsd)}` : "花费不明");
+  else if (costUsd > 0) parts.push(formatUsd(costUsd));
   return parts.join(" · ");
 }
 

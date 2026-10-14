@@ -295,11 +295,35 @@ test("回了话但用不了（被截断）：先记账再报错，这一次是�
   assert.equal(records.length, 1);
 });
 
-test("没回话的调用（连不上、被取消）不记：没有用量，也不收钱", async () => {
+test("没回话的调用记不了账：拿不到用量", async () => {
   const { records, onCall } = recorder();
   const { refiner } = refinerWith(fakeClient([new TypeError("fetch failed")]), { audioTypes: ["audio/webm"], onCall });
   await assert.rejects(refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a4" }));
   assert.deepEqual(records, []);
+});
+
+test("发出去了但等不到回话就断开的（超时、连接断了）：对方可能照样收了钱，记一条警告，账上会少这一笔", async () => {
+  const { records, events, log, onCall } = recorder();
+  const timeout = Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+  const { refiner } = refinerWith(fakeClient([timeout]), { audioTypes: ["audio/webm"], log, onCall });
+  await assert.rejects(refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a7" }));
+  assert.deepEqual(records, []);
+  const unmetered = events.find(({ event }) => event === "model_call_unmetered");
+  assert.equal(unmetered?.level, "warn");
+  assert.deepEqual([unmetered.purpose, unmetered.audio_id, unmetered.reason], ["dictation", "a7", "TimeoutError"]);
+  assert.ok(Number.isInteger(unmetered.latency_ms));
+
+  // 连不上这种根本没发出去的，不用警告
+  const offline = recorder();
+  const { refiner: unreachable } = refinerWith(fakeClient([new TypeError("fetch failed")]), {
+    audioTypes: ["audio/webm"],
+    log: offline.log,
+  });
+  await assert.rejects(unreachable.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a8" }));
+  assert.equal(
+    offline.events.find(({ event }) => event === "model_call_unmetered"),
+    undefined,
+  );
 });
 
 test("记账出错不连累这次听写：成品照常给，错误记进日志", async () => {

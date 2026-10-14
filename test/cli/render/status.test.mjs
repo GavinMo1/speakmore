@@ -140,6 +140,16 @@ test("有历史时给出今天和累计的数：次数、字数、时长、每�
   assert.match(text, /累计\s+132 次 · 12,480 字 · 48 分钟 · 每分钟 260 字/);
 });
 
+test("有账时带上花了多少钱；有几笔不知道价时说至少多少，不拿一半当全部", () => {
+  const stats = {
+    today: { dictations: 3, characters: 420, seconds: 95, failed: 0, costUsd: 0.0036, unpricedCalls: 0 },
+    total: { dictations: 132, characters: 12480, seconds: 2880, failed: 2, costUsd: 0.16, unpricedCalls: 4 },
+  };
+  const text = renderStatus({ status: ready, version: "0.1.0", settings, stats }, plain);
+  assert.match(text, /今天\s+3 次 · 420 字 · 1 分 35 秒 · \$0\.0036\n/);
+  assert.match(text, /累计\s+.* · 至少 \$0\.16\n/);
+});
+
 test("一次都没说过时不列统计", () => {
   const stats = {
     today: { dictations: 0, characters: 0, seconds: 0, failed: 0 },

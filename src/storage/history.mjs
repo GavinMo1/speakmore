@@ -125,7 +125,8 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
             coalesce(sum(length(refined_text)) FILTER (WHERE status = 'completed'), 0) AS characters,
             coalesce(sum(duration) FILTER (WHERE status = 'completed'), 0) AS seconds,
             count(*) FILTER (WHERE status = 'failed') AS failed,
-            (SELECT coalesce(sum(cost_usd), 0) FROM model_calls WHERE created_at >= :since) AS costUsd
+            (SELECT coalesce(sum(cost_usd), 0) FROM model_calls WHERE created_at >= :since) AS costUsd,
+            (SELECT count(*) - count(cost_usd) FROM model_calls WHERE created_at >= :since) AS unpricedCalls
      FROM history WHERE created_at >= :since`,
   );
   // 用量汇总的各列，总数和按型号分开的两处共用
@@ -168,6 +169,7 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
     },
     /**
      * 说了多少次、多少字、多长时间（只数完成的），失败了几次，以及花了多少美元（验证 key 的也算）。
+     * 钱只加得上知道价的那几笔，不知道价的有几笔另报（unpricedCalls），给人看时要说"至少"
      * @param {{ since?: string }} [range] 只数这个时刻（ISO 8601）之后的
      */
     stats({ since = "" } = {}) {

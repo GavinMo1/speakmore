@@ -123,6 +123,15 @@ test("回话没报型号就按请求的型号算；价目表里没有的型号�
   assert.equal(usage.inputTokens, 1390);
 });
 
+test("回话报的型号查不到价（比如带了后缀的变体名）时，退回去按请求的型号算", () => {
+  const { usage } = replyOf(dictation({ modelVersion: "gemini-3.6-flash-preview-0915" }), {
+    model: "gemini-3.6-flash",
+    at: OCT,
+  });
+  assert.equal(usage.model, "gemini-3.6-flash-preview-0915");
+  assert.equal(usage.costUsd, (1390 * 0.75 + 4 * 3.75) / 1e6);
+});
+
 test("被拦下、没正常结束的回话不能当成品，但用量照样带回来：这一次是收了钱的", () => {
   const blocked = replyOf(dictation({ promptFeedback: { blockReason: "PROHIBITED_CONTENT" }, candidates: [] }), {
     model: "gemini-3.6-flash",

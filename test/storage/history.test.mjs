@@ -95,20 +95,35 @@ test("统计：只数完成的听写，可以只看某个时刻之后的", () =>
     }),
   );
 
-  assert.deepEqual(history.stats(), { dictations: 3, characters: 16, seconds: 15.5, failed: 1, costUsd: 0 });
+  assert.deepEqual(history.stats(), {
+    dictations: 3,
+    characters: 16,
+    seconds: 15.5,
+    failed: 1,
+    costUsd: 0,
+    unpricedCalls: 0,
+  });
   assert.deepEqual(history.stats({ since: "2026-10-13T00:00:00.000Z" }), {
     dictations: 2,
     characters: 11,
     seconds: 9.5,
     failed: 1,
     costUsd: 0,
+    unpricedCalls: 0,
   });
   history.close();
 });
 
 test("空的历史库统计出来全是 0", () => {
   const history = openHistory(join(dir, "history.db"));
-  assert.deepEqual(history.stats(), { dictations: 0, characters: 0, seconds: 0, failed: 0, costUsd: 0 });
+  assert.deepEqual(history.stats(), {
+    dictations: 0,
+    characters: 0,
+    seconds: 0,
+    failed: 0,
+    costUsd: 0,
+    unpricedCalls: 0,
+  });
   history.close();
 });
 
@@ -267,7 +282,12 @@ test("今天花了多少钱也在统计里，验证 key 的那几次也算", () 
   history.addCall(call({ audioId: "a", costUsd: 0.002 }));
   history.addCall(call({ purpose: "check", audioId: null, costUsd: 0.0001 }));
   history.addCall(call({ audioId: "x", createdAt: "2026-10-12T08:00:00.000Z", costUsd: 1 }));
-  close(history.stats({ since: "2026-10-13T00:00:00.000Z" }).costUsd, 0.0021);
+  const today = history.stats({ since: "2026-10-13T00:00:00.000Z" });
+  close(today.costUsd, 0.0021);
+  assert.equal(today.unpricedCalls, 0);
+  // 有一笔不知道价：钱只加得上知道价的，另报几笔不知道
+  history.addCall(call({ audioId: "a", model: "gemini-9-ultra", costUsd: null }));
+  assert.equal(history.stats({ since: "2026-10-13T00:00:00.000Z" }).unpricedCalls, 1);
   history.close();
 });
 

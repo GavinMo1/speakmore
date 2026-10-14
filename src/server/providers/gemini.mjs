@@ -53,7 +53,8 @@ const tokensOf = (details, modality) => details?.find((detail) => detail.modalit
  * 用量的字段对着实测的回话写的：promptTokenCount 含音频和命中缓存的，candidatesTokenCount 不含思考的，
  * 没有的项（不思考时没有 thoughtsTokenCount）就是 0。
  * @param {{ model: string, at: Date }} request 请求的型号、什么时候调的。按回话报的型号（modelVersion）算钱：
- *   停用的型号会被转给别的（实测请求 gemini-3.5-flash，回话的是 gemini-3.6-flash）
+ *   停用的型号会被转给别的（实测请求 gemini-3.5-flash，回话的是 gemini-3.6-flash）。回话报的型号查不到价
+ *   （比如带了后缀的变体名）时退回去按请求的型号算，总比说不知道强
  * @returns {{ text: string | null | undefined, problem: string | null, usage: object }}
  */
 export function replyOf(response, { model, at }) {
@@ -65,6 +66,7 @@ export function replyOf(response, { model, at }) {
   const thinking = meta.thoughtsTokenCount ?? 0;
   const output = (meta.candidatesTokenCount ?? 0) + thinking;
   const billed = response.modelVersion ?? model;
+  const tokens = { text: input - audio, audio, cachedText: cached - cachedAudio, cachedAudio, output };
   const usage = {
     model: billed,
     inputTokens: input,
@@ -72,7 +74,7 @@ export function replyOf(response, { model, at }) {
     cachedTokens: cached,
     outputTokens: output,
     thinkingTokens: thinking,
-    costUsd: costOf(billed, { text: input - audio, audio, cachedText: cached - cachedAudio, cachedAudio, output }, at),
+    costUsd: costOf(billed, tokens, at) ?? costOf(model, tokens, at),
   };
 
   const blockReason = response.promptFeedback?.blockReason;

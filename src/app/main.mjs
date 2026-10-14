@@ -523,6 +523,8 @@ async function main() {
         webPreferences,
       });
       window.loadFile(join(sourceDir, "renderer", "history", "history.html"));
+      // 切回来时重读一遍：窗口开着过了夜，"今天"那一行要换成新的一天
+      window.on("focus", () => window.webContents.send("history:changed"));
       window.on("closed", () => {
         historyWindow = null;
       });
