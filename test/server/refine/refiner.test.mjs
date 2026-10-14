@@ -350,3 +350,43 @@ test("适配器没带回用量（它自己的毛病）：成品照常给，记�
   assert.deepEqual(records, []);
   assert.equal(events.find(({ event }) => event === "usage_missing")?.level, "warn");
 });
+
+// ---------- 开口说话时先备好：Gemini 建提示词缓存，花的钱单记一笔 ----------
+
+test("prepare：让适配器备好提示词缓存，花的钱记一笔，用途是缓存、不算哪次听写", async () => {
+  const { records, onCall } = recorder();
+  const prepared = [];
+  const client = fakeClient([]);
+  client.prepare = async (request) => {
+    prepared.push(request);
+    return { usage: { ...USAGE, model: "gemini-3.6-flash", inputTokens: 1350, outputTokens: 0, costUsd: 0.0012 } };
+  };
+  const { refiner } = refinerWith(client, { onCall });
+  await refiner.prepare();
+  assert.deepEqual(prepared, [{ systemPrompt: SYSTEM_PROMPT }]);
+  assert.deepEqual(
+    records.map(({ purpose, audioId, inputTokens, costUsd }) => [purpose, audioId, inputTokens, costUsd]),
+    [["cache", null, 1350, 0.0012]],
+  );
+});
+
+test("prepare：这一次没花钱（已经在建、型号不支持）就不记；适配器不做这件事（OpenAI）就什么都不干", async () => {
+  const { records, onCall } = recorder();
+  const client = fakeClient([]);
+  client.prepare = async () => null;
+  await refinerWith(client, { onCall }).refiner.prepare();
+  await refinerWith(fakeClient([]), { onCall }).refiner.prepare();
+  assert.deepEqual(records, []);
+});
+
+test("prepare：建不好只记一条警告，不往外抛，也不带出 key", async () => {
+  const { events, log } = recorder();
+  const client = fakeClient([]);
+  client.prepare = async () => {
+    throw new Error("fetch failed for key sk-secret");
+  };
+  await refinerWith(client, { log, apiKey: "sk-secret" }).refiner.prepare();
+  const failed = events.find(({ event }) => event === "prompt_cache_failed");
+  assert.equal(failed.level, "warn");
+  assert.doesNotMatch(JSON.stringify(failed), /sk-secret/);
+});

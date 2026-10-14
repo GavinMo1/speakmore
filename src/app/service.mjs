@@ -38,6 +38,10 @@ export async function startService({
         if (!refiner) throw new Error(noKeyMessage());
         return refiner.refine(audio, options);
       },
+      /** 开口时先做的准备（Gemini 建提示词缓存）。还没有 key 时没什么可准备的 */
+      async prepare() {
+        await refiner?.prepare?.();
+      },
     },
   });
 

@@ -35,9 +35,9 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * @param {(error: unknown, detail: string) => object | null} [options.classify] 这一家的报错怎么认
  * @param {string} [options.apiKey] 只用来从报错里抹掉它
  * @param {(audio: Buffer, mimeType: string) => Promise<{ audio: Buffer, mimeType: string }>} [options.transcode]
- * @param {(record: object) => void} [options.onCall] 记账：{ purpose: "dictation" | "check", audioId, provider,
+ * @param {(record: object) => void} [options.onCall] 记账：{ purpose: "dictation" | "check" | "cache", audioId, provider,
  *   ...适配器带回的用量, latencyMs, createdAt }。它出错不影响这次听写
- * @returns {{ warmUp(): Promise<void>, refine(audio: Buffer, o: { mimeType: string, signal?: AbortSignal, audioId?: string }): Promise<string> }}
+ * @returns {{ warmUp(): Promise<void>, prepare(): Promise<void>, refine(audio: Buffer, o: { mimeType: string, signal?: AbortSignal, audioId?: string }): Promise<string> }}
  *   出错时抛的都是 ModelError
  */
 export function createRefiner({
@@ -78,6 +78,8 @@ export function createRefiner({
       throw error;
     }
     const latencyMs = Math.round(performance.now() - startedAt);
+    // null：这一次没花钱（比如缓存正在建），没什么可记的
+    if (reply === null) return null;
     if (!reply?.usage) {
       log.warn("usage_missing", { purpose, audio_id: audioId, provider: provider.id });
       return reply;
@@ -116,6 +118,19 @@ export function createRefiner({
         await metered("check", null, () => client.ping({ signal: AbortSignal.timeout(timeoutMs) }));
       } catch (error) {
         throw described(error);
+      }
+    },
+
+    /**
+     * 用户开口说话了：让这一家先把要用的东西备好，说完整理时就用得上。现在只有 Gemini 有事做（建提示词缓存，
+     * 见 providers/gemini-cache.mjs），花的钱记一笔"缓存"。备不好只是这一次贵一点，记一条警告，从不往外抛
+     */
+    async prepare() {
+      if (!client.prepare) return;
+      try {
+        await metered("cache", null, () => client.prepare({ systemPrompt: SYSTEM_PROMPT }));
+      } catch (error) {
+        log.warn("prompt_cache_failed", { provider: provider.id, error: described(error).detail.slice(0, 300) });
       }
     },
 
@@ -171,7 +186,7 @@ export async function createModelRefiner({ choice, apiKey, thinkingLevel, timeou
   const adapter = await provider.load();
   return createRefiner({
     provider,
-    client: adapter.createClient({ apiKey, model: choice.model, thinkingLevel }),
+    client: adapter.createClient({ apiKey, model: choice.model, thinkingLevel, log }),
     audioTypes: adapter.AUDIO_TYPES,
     classify: adapter.classifyError,
     apiKey,

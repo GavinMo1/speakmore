@@ -103,6 +103,12 @@ test("说清 token 的分项、验证 key 的也算在里面、钱是按标准�
   assert.match(text, /免费额度/);
 });
 
+test("用了提示词缓存：说清花费里有多少是缓存的（建缓存、存着），没用就不提", () => {
+  const cached = { ...report, total: { ...report.total, cacheCostUsd: 0.021 } };
+  assert.match(renderUsage(cached, plain), /花费里有 \$0\.021 是提示词缓存的（建缓存、存着）/);
+  assert.doesNotMatch(renderUsage(report, plain), /提示词缓存/);
+});
+
 test("今天还没说过话：那一行是 0，等待时间写一道横线", () => {
   const text = lines(renderUsage({ ...report, today: period() }, plain));
   assert.match(

@@ -24,11 +24,12 @@ const MIGRATIONS = [
      created_at       TEXT NOT NULL       -- ISO 8601
    );
    CREATE INDEX history_created_at ON history (created_at DESC);`,
-  // 账和历史各记各的，不设外键：账在模型回话时就记了，历史要等成品贴出去才存；验证 key 的那几笔不属于哪次听写
+  // 账和历史各记各的，不设外键：账在模型回话时就记了，历史要等成品贴出去才存；验证 key、提示词缓存
+  // （建缓存、续存储，见 src/server/providers/gemini-cache.mjs）的那几笔不属于哪次听写
   `CREATE TABLE model_calls (
      id              INTEGER PRIMARY KEY,
-     audio_id        TEXT,               -- 哪一次听写（history.id）；验证 key 时为空
-     purpose         TEXT NOT NULL CHECK (purpose IN ('dictation', 'check')),
+     audio_id        TEXT,               -- 哪一次听写（history.id）；验证 key、提示词缓存的为空
+     purpose         TEXT NOT NULL CHECK (purpose IN ('dictation', 'check', 'cache')),
      provider        TEXT NOT NULL,      -- gemini / openai
      model           TEXT NOT NULL,      -- 实际回话、按它算钱的型号
      input_tokens    INTEGER NOT NULL,   -- 输入，含音频和命中缓存的
@@ -139,6 +140,7 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
             coalesce(sum(output_tokens), 0) AS outputTokens,
             coalesce(sum(thinking_tokens), 0) AS thinkingTokens,
             coalesce(sum(cost_usd), 0) AS costUsd,
+            coalesce(sum(cost_usd) FILTER (WHERE purpose = 'cache'), 0) AS cacheCostUsd,
             count(*) - count(cost_usd) AS unpricedCalls`;
   const usageTotals = db.prepare(`SELECT ${USAGE_COLUMNS} FROM model_calls WHERE created_at >= :since`);
   const usageByModel = db.prepare(
@@ -177,7 +179,7 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
     },
     /**
      * 记一笔账：一次回了话的模型调用（src/server/refine/refiner.mjs 的 onCall 给的样子）。
-     * @param {{ purpose: "dictation" | "check", audioId: string | null, provider: string, model: string, inputTokens: number, audioTokens: number, cachedTokens: number, outputTokens: number, thinkingTokens: number, costUsd: number | null, latencyMs: number, createdAt: string }} call
+     * @param {{ purpose: "dictation" | "check" | "cache", audioId: string | null, provider: string, model: string, inputTokens: number, audioTokens: number, cachedTokens: number, outputTokens: number, thinkingTokens: number, costUsd: number | null, latencyMs: number, createdAt: string }} call
      */
     addCall(call) {
       // 只取表里有的几项：多给一项的话 SQLite 会报"未知参数"，适配器多带一项用量不该让账记不上
@@ -197,7 +199,7 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
       });
     },
     /**
-     * 用量汇总：调了几次（几次是验证 key）、几次听写、各项 token、多少美元、几次不知道价（没算进钱里），
+     * 用量汇总：调了几次（几次是验证 key）、几次听写、各项 token、多少美元（其中提示词缓存多少）、几次不知道价（没算进钱里），
      * latenciesMs 是每次听写等模型的毫秒数（从快到慢）；models 是按型号分开的同样几项，花得多的在前。
      * @param {{ since?: string }} [range] 只数这个时刻（ISO 8601）之后的
      */

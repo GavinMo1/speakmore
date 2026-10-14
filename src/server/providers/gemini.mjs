@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { quote } from "./errors.mjs";
+import { cacheMissing, createPromptCache } from "./gemini-cache.mjs";
 import { costOf } from "./prices/gemini.mjs";
 
 // Gemini 的适配器：一次请求同时完成识别和整理，录音原样交过去。
@@ -8,13 +9,33 @@ import { costOf } from "./prices/gemini.mjs";
 /** 悬浮条录的 WebM、原版的 Ogg 都直接收。实测 7 块首尾相接的链式 Ogg 也能从头识别到尾 */
 export const AUDIO_TYPES = ["audio/ogg", "audio/webm"];
 
+const QUIET = { info() {}, warn() {}, error() {} };
+
 /**
- * @param {{ apiKey: string, model: string, thinkingLevel: string, now?: () => Date }} options now 在测试时换成固定的
+ * @param {object} options
+ * @param {string} options.apiKey
+ * @param {string} options.model
+ * @param {string} options.thinkingLevel
+ * @param {{ info: Function, warn: Function, error: Function }} [options.log]
+ * @param {() => Date} [options.now] 测试时换成固定的
+ * @param {GoogleGenAI} [options.sdk] 测试时换成假的
  */
-export function createClient({ apiKey, model, thinkingLevel, now = () => new Date() }) {
-  const client = new GoogleGenAI({ apiKey });
+export function createClient({
+  apiKey,
+  model,
+  thinkingLevel,
+  log = QUIET,
+  now = () => new Date(),
+  sdk: client = new GoogleGenAI({ apiKey }),
+}) {
+  const promptCache = createPromptCache({ caches: client.caches, model, now, log });
 
   return {
+    /** 开口说话时调：把提示词缓存建好或者往后续（gemini-cache.mjs）。返回这一次花的钱，没做什么时是 null */
+    prepare({ systemPrompt }) {
+      return promptCache.prepare(systemPrompt);
+    },
+
     /**
      * 最小的请求：只要 1 个 token。key 无效、模型名或档位写错都会在这里暴露。
      * 只要 1 个 token 时它说"没有正常结束"（MAX_TOKENS），这不算失败
@@ -28,17 +49,35 @@ export function createClient({ apiKey, model, thinkingLevel, now = () => new Dat
       return { usage: replyOf(response, { model, at: now() }).usage };
     },
 
-    /** @returns {Promise<{ text: string | null | undefined, problem: string | null, usage: object }>} 见 replyOf */
+    /**
+     * 有能用的提示词缓存就带上它（这时不能再写 systemInstruction，实测 400），没有就照原样发。
+     * 缓存在那边已经没了的话，这一次照原样再发一遍
+     * @returns {Promise<{ text: string | null | undefined, problem: string | null, usage: object }>} 见 replyOf
+     */
     async generate({ audio, mimeType, systemPrompt, reminder, signal }) {
-      const response = await client.models.generateContent({
-        model,
-        contents: [
-          { role: "user", parts: [{ inlineData: { mimeType, data: audio.toString("base64") } }, { text: reminder }] },
-        ],
-        // 不设 temperature。设成 0 时，60 条真实录音里有 10 条成品是坏的（开头多出一个不相干的外文词、
-        // 只出了开头一小截、中间一长串下划线），去掉这个设置后同一批降到 5 条，截断和下划线没再出现。
-        config: { systemInstruction: systemPrompt, thinkingConfig: { thinkingLevel }, abortSignal: signal },
-      });
+      // 不设 temperature。设成 0 时，60 条真实录音里有 10 条成品是坏的（开头多出一个不相干的外文词、
+      // 只出了开头一小截、中间一长串下划线），去掉这个设置后同一批降到 5 条，截断和下划线没再出现。
+      const send = (prompt) =>
+        client.models.generateContent({
+          model,
+          contents: [
+            { role: "user", parts: [{ inlineData: { mimeType, data: audio.toString("base64") } }, { text: reminder }] },
+          ],
+          config: { ...prompt, thinkingConfig: { thinkingLevel }, abortSignal: signal },
+        });
+      const cached = promptCache.nameFor(systemPrompt);
+      let response;
+      if (cached === null) {
+        response = await send({ systemInstruction: systemPrompt });
+      } else {
+        try {
+          response = await send({ cachedContent: cached });
+        } catch (error) {
+          if (!cacheMissing(error)) throw error;
+          promptCache.forget(cached);
+          response = await send({ systemInstruction: systemPrompt });
+        }
+      }
       return replyOf(response, { model, at: now() });
     },
   };

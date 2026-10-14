@@ -230,3 +230,30 @@ test("useKey 带上别的厂商和模型：验证过才整个换过去，没 key
   service.forgetKey();
   assert.match((await dictateOnce(service.url)).V.detail, /还没有填 OpenAI API key/);
 });
+
+test("开口时的准备交给正在用的那一个；还没有 key 时什么都不做", async (t) => {
+  let prepared = 0;
+  const service = await startService({
+    log: quietLog,
+    model: GEMINI,
+    createRefiner: () => ({ ...fakeRefiner("文字"), prepare: async () => void prepared++ }),
+  });
+  t.after(() => service.close());
+  /** 开一次录音，等服务端回 audio_session_started */
+  const startRecording = async () => {
+    const socket = new WebSocket(service.url);
+    await new Promise((resolve) => {
+      socket.onopen = resolve;
+    });
+    socket.send(JSON.stringify({ type: "start_audio", audio_id: crypto.randomUUID() }));
+    await new Promise((resolve) => {
+      socket.onmessage = resolve;
+    });
+    socket.close();
+  };
+  await startRecording();
+  assert.equal(prepared, 0);
+  await service.useKey("gemini-key");
+  await startRecording();
+  assert.equal(prepared, 1);
+});

@@ -113,6 +113,7 @@ function renderUsage(report) {
       `${unpriced.map(({ model }) => model).join("、")} 不在价目表里，这 ${total.unpricedCalls} 次的钱没算进去。`,
     );
   }
+  if (total.cacheCostUsd > 0) notes.push(`花费里有 ${formatUsd(total.cacheCostUsd)} 是提示词缓存的（建缓存、存着）。`);
   notes.push("花费按各家官方标准价估算（美元），Gemini 免费额度内用的其实不收钱。");
   usageNote.textContent = notes.join("");
 }

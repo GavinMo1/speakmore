@@ -74,6 +74,7 @@ export function renderUsage(report, { color }) {
       `输出 ${formatTokens(total.outputTokens)}（其中思考 ${formatTokens(total.thinkingTokens)}）。`,
   ];
   if (total.checks > 0) notes.push(`验证 key 的 ${total.checks} 次也算在里面。`);
+  if (total.cacheCostUsd > 0) notes.push(`花费里有 ${formatUsd(total.cacheCostUsd)} 是提示词缓存的（建缓存、存着）。`);
   const unpriced = report.models.filter(({ unpricedCalls }) => unpricedCalls > 0);
   if (unpriced.length > 0) {
     notes.push(

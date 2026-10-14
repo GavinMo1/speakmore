@@ -16,7 +16,8 @@ const DEFAULT_MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 const ERROR_DETAIL_MAX_LENGTH = 300;
 
 /**
- * 启动听写服务。refiner 是"音频进、文字出"的那一步，由调用方传入，测试时换成假的。
+ * 启动听写服务。refiner 是"音频进、文字出"的那一步（refine），可以带一个开口时先做准备的 prepare，
+ * 由调用方传入，测试时换成假的。
  * @returns {Promise<{ port: number, close: () => Promise<void> }>}
  */
 export function startServer({ host = "127.0.0.1", port, refiner, log, maxAudioBytes = DEFAULT_MAX_AUDIO_BYTES }) {
@@ -82,6 +83,11 @@ function handleConnection(socket, { refiner, log, maxAudioBytes }) {
           log.info("session_abandoned", { audio_id: session.audioId, chunks: session.chunkCount });
         }
         session = new RecordingSession(message.audioId, { maxTotalBytes: maxAudioBytes });
+        // 用户开口了：让模型那边先备好要用的东西（Gemini 建提示词缓存），说完整理时就用得上。
+        // 不等它；备不好只是这一次贵一点，记一笔就算了
+        Promise.resolve()
+          .then(() => refiner.prepare?.())
+          .catch((error) => log.warn("prepare_failed", { audio_id: message.audioId, error: String(error?.message) }));
         send(ServerType.STARTED, { audio_id: message.audioId, start_time: Date.now() });
         break;
       case ClientType.CHUNK_INFO:

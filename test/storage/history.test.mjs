@@ -223,6 +223,7 @@ test("用量汇总：几次听写、几次验证 key、token 分项、多少钱�
     cachedTokens: 1024,
     outputTokens: 4 * 3 + 7,
     thinkingTokens: 3,
+    cacheCostUsd: 0,
     unpricedCalls: 1,
     // 每次听写等模型的时间（重来的几次加在一起），从快到慢
     latenciesMs: [1900, 2000, 3000],
@@ -303,6 +304,7 @@ test("还没记过账时用量全是 0，等待时间是空的", () => {
     outputTokens: 0,
     thinkingTokens: 0,
     costUsd: 0,
+    cacheCostUsd: 0,
     unpricedCalls: 0,
     latenciesMs: [],
     models: [],
@@ -317,7 +319,22 @@ test("记账只取表里有的那几项：适配器以后多带一项用量也�
   history.close();
 });
 
-test("账的用途只能是听写或验证 key", () => {
+test("提示词缓存的钱（建缓存、存着）记成单独的一类，汇总里另报；不算哪次听写", () => {
+  const history = openHistory(join(dir, "history.db"));
+  history.addCall(call({ audioId: "a" }));
+  history.addCall(call({ purpose: "cache", audioId: null, inputTokens: 1350, outputTokens: 0, costUsd: 0.0012 }));
+  history.addCall(call({ purpose: "cache", audioId: null, inputTokens: 0, outputTokens: 0, costUsd: 0.0001 }));
+  const usage = history.usage();
+  assert.equal(usage.calls, 3);
+  assert.equal(usage.dictations, 1);
+  close(usage.cacheCostUsd, 0.0013);
+  close(usage.costUsd, 0.0023);
+  // 等待时间只算听写的
+  assert.deepEqual(usage.latenciesMs, [1700]);
+  history.close();
+});
+
+test("账的用途只能是听写、验证 key 或者提示词缓存", () => {
   const history = openHistory(join(dir, "history.db"));
   assert.throws(() => history.addCall(call({ purpose: "other" })), /CHECK|constraint/i);
   history.close();

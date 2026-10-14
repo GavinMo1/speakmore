@@ -195,3 +195,29 @@ test("网页发起的连接和别的路径都拒绝", async () => {
   // Electron 渲染进程从本地文件发起连接时，Origin 是 file://
   await connect(port, { origin: "file://" });
 });
+
+test("一开始录音就让模型那边先备好（Gemini 建提示词缓存），不等它；备不好不影响这次听写", async () => {
+  let prepared = 0;
+  const port = await start({
+    async prepare() {
+      prepared++;
+      throw new Error("建缓存失败");
+    },
+    refine: async () => "整理好的文字",
+  });
+  const client = await connect(port);
+  client.sendJson({ type: "start_audio", audio_id: "p1" });
+  assert.equal((await client.next()).K, "audio_session_started");
+  assert.equal(prepared, 1);
+  await sendChunk(client, "p1", 1, ogg("x"));
+  client.sendJson({ type: "end_audio", audio_id: "p1" });
+  await client.next();
+  assert.equal((await client.next()).V.refined_text, "整理好的文字");
+});
+
+test("整理的那一步不做准备（没有 prepare）也照常听写", async () => {
+  const port = await start({ refine: async () => "文字" });
+  const client = await connect(port);
+  client.sendJson({ type: "start_audio", audio_id: "p2" });
+  assert.equal((await client.next()).K, "audio_session_started");
+});
