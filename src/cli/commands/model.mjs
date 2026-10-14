@@ -2,7 +2,7 @@ import { findProvider, formatModelChoice, PROVIDERS, parseModelChoice } from "..
 import { ConfigError, currentSettings, ensureRunning, parse, renderOptions, UsageError } from "../common.mjs";
 import { renderModels } from "../render/models.mjs";
 import { applySettings, storeSetting, warnIfEnvOverrides } from "./config.mjs";
-import { keyPrompter, keySource, submitKey } from "./key.mjs";
+import { keyPrompter, keySourceFor, submitKey } from "./key.mjs";
 
 // speakmore model：看有哪几家、换用哪一家的哪个模型、检查某个模型现在能不能用。
 // 换模型其实就是改设置里的 model，和 speakmore config set model 是一回事；这里多做两件事：
@@ -36,7 +36,7 @@ async function list(io) {
   const fromDaemon = (provider) =>
     running?.provider === provider.id && running.key.state === "ready" && running.key.source === "env" ? "env" : null;
   const keys = Object.fromEntries(
-    PROVIDERS.map((provider) => [provider.id, keySource(io, provider) ?? fromDaemon(provider)]),
+    PROVIDERS.map((provider) => [provider.id, keySourceFor(io, provider, running) ?? fromDaemon(provider)]),
   );
   io.out(renderModels({ providers: PROVIDERS, setting: currentSettings(io).model, keys }, renderOptions(io)));
   return 0;
@@ -51,7 +51,7 @@ async function switchTo(io, value) {
   const provider = findProvider(choice.provider);
   const before = currentSettings(io).model.value;
 
-  if (keySource(io, provider) === null) {
+  if (keySourceFor(io, provider, await io.daemon.status()) === null) {
     if (!io.interactive) {
       io.err(`还没有 ${provider.name} 的 key，没有换：先运行 speakmore key ${provider.id}，再换。`);
       return 1;

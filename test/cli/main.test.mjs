@@ -1113,3 +1113,55 @@ test("model：key 是启动后台时从环境变量给的（命令行这边没�
   assert.match(output.out, /● gemini\s+Gemini\s+gemini-3\.5-flash\s+key 来自环境变量 GEMINI_API_KEY/);
   assert.match(output.out, /openai\s+OpenAI\s+gpt-audio-mini（默认）\s+还没有 key/);
 });
+
+// ---------- 审查之后补的 ----------
+
+/** 0.3 的后台应用：状态里没有 provider，也不认按厂商存、删 key */
+const LEGACY_DAEMON = (() => {
+  const { provider: _provider, ...rest } = READY;
+  return { ...rest, model: "gemini-3.5-flash" };
+})();
+
+test("后台是 0.3 的：给别家存 key、删别家的 key 都先拦下，说要重启；不发请求、不删文件", async () => {
+  haveStoredKey();
+  haveOpenAIKey();
+  const forget = harness({ daemon: fakeDaemon({ running: LEGACY_DAEMON }) });
+  assert.equal(await forget.speakmore("key", "--forget", "openai"), 1);
+  assert.match(forget.output.err, /旧版本.*speakmore restart/);
+  assert.ok(!forget.daemon.calls.includes("forget-key"));
+  assert.ok(existsSync(keyFile(paths, "openai")) && existsSync(keyFile(paths, "gemini")));
+
+  const save = harness({ daemon: fakeDaemon({ running: LEGACY_DAEMON }), secrets: ["sk-new"] });
+  assert.equal(await save.speakmore("key", "openai"), 1);
+  assert.ok(!save.daemon.calls.includes("set-key"));
+
+  // Gemini 的 key 旧后台本来就会存
+  const gemini = harness({ daemon: fakeDaemon({ running: LEGACY_DAEMON }), secrets: ["AIza-new"] });
+  assert.equal(await gemini.speakmore("key", "gemini"), 0);
+});
+
+test("换模型、重启之后那家的 key 被拒：说不能用、怎么换 key、怎么撤回，以 1 退出", async () => {
+  haveOpenAIKey();
+  const rejected = {
+    ...READY,
+    provider: "openai",
+    model: "openai/gpt-audio-mini",
+    key: { state: "rejected", source: "stored", cause: "key", problem: "这把 key 无效，检查有没有复制完整" },
+  };
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: READY, afterStart: rejected }) });
+  assert.equal(await speakmore("model", "openai"), 1);
+  assert.match(output.err, /OpenAI 的 key 不能用：这把 key 无效.*speakmore key openai/);
+  assert.match(output.err, /撤回.*speakmore model gemini\/gemini-3\.5-flash/);
+  assert.doesNotMatch(output.out, /已经生效/);
+});
+
+test("装成应用的在运行：它的 key 存在它自己那一份里，看 key 有没有以它报的为准", async () => {
+  const app = { ...READY, packaged: true, keys: { gemini: "stored", openai: "stored" } };
+  const { speakmore, output, asked } = harness({ daemon: fakeDaemon({ running: app }) });
+  assert.equal(await speakmore("model"), 0);
+  assert.match(output.out, /openai\s+OpenAI\s+gpt-audio-mini（默认）\s+key 存着/);
+  // 不再问一遍 key；装成应用的不能从命令行重启，照常提示怎么让它生效
+  assert.equal(await speakmore("model", "openai"), 0);
+  assert.equal(asked.length, 0);
+  assert.match(output.out, /SpeakMore\.app/);
+});

@@ -38,6 +38,7 @@ const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
  * 每一项：对应的环境变量、默认值、能填的值（不限时为 null）、把写法规整并校验的函数。
  * label 可有可无：值本身不好懂时（right_option、cinnabar）给出它叫什么。
  * legacyEnv 可有可无：改名之前的环境变量，env 没设时照样认（README 里写过，用的人可能还在用）。
+ * store 可有可无：规整后的值写进文件时换成什么样子（默认原样）。
  */
 export const SETTINGS = {
   hotkey: {
@@ -63,6 +64,11 @@ export const SETTINGS = {
       return formatModelChoice(parseModelChoice(value));
     },
     label: (value) => findProvider(parseModelChoice(value).provider).name,
+    // Gemini 的照 0.3 的写法只存模型名：退回 0.3 时它把整个值当 Gemini 的模型名用，gemini/… 会让每次请求都失败
+    store(value) {
+      const { provider, model } = parseModelChoice(value);
+      return provider === "gemini" ? model : value;
+    },
   },
   thinking: {
     env: "GEMINI_THINKING_LEVEL",
@@ -160,7 +166,7 @@ export function resolveSettings({ file, env }) {
 export function saveSetting(file, name, value) {
   settingNamed(name);
   const parsed = parseValue(name, value, name);
-  writeFile(file, { ...readFile(file), [name]: parsed });
+  writeFile(file, { ...readFile(file), [name]: SETTINGS[name].store?.(parsed) ?? parsed });
   return parsed;
 }
 

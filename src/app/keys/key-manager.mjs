@@ -26,6 +26,8 @@ const MISSING = { state: "missing", source: null, problem: null };
  */
 export function createKeyManager({ service, provider, keyStores, env, log, onChange }) {
   let current = MISSING;
+  /** 正在用的那家这次运行实际在用的那把 key（检查它时要用同一把）；没有时是 null */
+  let inUse = null;
   /** 排在最后的那件事做完的时候。只用来排队，不带结果也不带错误 */
   let queue = Promise.resolve();
   let reverifying = false;
@@ -79,6 +81,7 @@ export function createKeyManager({ service, provider, keyStores, env, log, onCha
       become({ state: "checking", source, problem: null });
       try {
         const { verified } = await service.useKey(apiKey, { allowUnverified: atStartup });
+        inUse = { apiKey, source };
         log.info("key_ready", { provider: provider.id, source, verified });
         become({ state: "ready", source, problem: null, verified });
         return null;
@@ -190,6 +193,7 @@ export function createKeyManager({ service, provider, keyStores, env, log, onCha
         log.info("key_forgotten", { provider: found.id });
         if (!service || found.id !== provider.id) return;
         service.forgetKey();
+        inUse = null;
         become(MISSING);
       });
     },
@@ -217,7 +221,8 @@ export function createKeyManager({ service, provider, keyStores, env, log, onCha
       const { found, store } = target;
       let key;
       try {
-        key = keyFor(found, store);
+        // 正在用的那家：查这次运行实际在用的那把（中途存过新的，就不是环境变量里那把了）
+        key = found.id === provider.id && inUse ? inUse : keyFor(found, store);
       } catch (error) {
         log.error("key_unreadable", { provider: found.id, error: String(error?.message ?? error) });
         return { ok: false, cause: "unreadable", problem: `存着的 ${found.name} key 读不出来了，重新填一次` };
@@ -244,6 +249,20 @@ export function createKeyManager({ service, provider, keyStores, env, log, onCha
       return { ok: true, source: key.source, ms };
     },
 
+    /**
+     * 每家的 key 在哪：env（环境变量）/ stored（存着的）/ null（没有）。不解密，给命令行列模型用：
+     * 装成应用的那个各存各的，命令行从文件看不到它的
+     * @returns {Record<string, "env" | "stored" | null>}
+     */
+    sources() {
+      return Object.fromEntries(
+        Object.entries(keyStores).map(([id, store]) => {
+          const { keyEnv } = findProvider(id);
+          return [id, env[keyEnv]?.trim() ? "env" : store.exists() ? "stored" : null];
+        }),
+      );
+    },
+
     /** 启动时够不着那一家、还没验证的那把，再验一次。别的情况什么都不做 */
     async reverify() {
       const checked = current;
@@ -259,6 +278,7 @@ export function createKeyManager({ service, provider, keyStores, env, log, onCha
         // 还是够不着就继续先用着；期间状态被别处换过（比如存了一把新的）也不再插手
         if (cause === "unavailable" || current !== checked) return;
         service.forgetKey();
+        inUse = null;
         reject(checked.source, cause, problem, detail);
       } finally {
         reverifying = false;

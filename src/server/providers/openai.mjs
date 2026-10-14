@@ -93,12 +93,20 @@ export function createClient({ apiKey, model, fetch = globalThis.fetch }) {
  */
 export function classifyError(error) {
   if (!(error instanceof OpenAIError)) return null;
-  const said = quote(error.said);
+  // 回的不是 JSON（前面的网关回了一页 HTML）时没有原话，至少带上状态码
+  const said = quote(error.said) || `HTTP ${error.status}`;
   if (error.status === 401) return { kind: "key", problem: "这把 key 无效，检查有没有复制完整" };
+  // 按网络出口所在地区拒的（官方文档写的错误码）：key 没问题，开着代理或换个网络就好，不能叫人换 key
+  if (error.code === "unsupported_country_region_territory") {
+    return {
+      kind: "unavailable",
+      problem: `OpenAI 不对你现在网络出口所在的地区开放（${said}）：检查代理或换个网络，key 没问题`,
+    };
+  }
   if (error.code === "insufficient_quota") return { kind: "key", problem: "这把 key 的账号没有额度了，充值或者换一把" };
   if (error.status === 403) return { kind: "key", problem: `这把 key 没有权限：${said}` };
   if (error.status === 429 || error.status >= 500) {
-    return { kind: "unavailable", problem: `OpenAI 暂时用不了（${said || `HTTP ${error.status}`}），过一会儿再试` };
+    return { kind: "unavailable", problem: `OpenAI 暂时用不了（${said}），过一会儿再试` };
   }
   if (error.status === 404 || error.code === "model_not_found") {
     return { kind: "other", problem: `OpenAI 没有这个模型，或者这把 key 用不了它：${said}` };

@@ -77,3 +77,17 @@ test("key 的样子：只该有看得见的英文字符；不对时说哪里不�
   assert.match(apiKeyProblem("a b"), /空格或换行/);
   assert.match(apiKeyProblem("k".repeat(600)), /太长/);
 });
+
+test("0.3 里 Gemini 的 SDK 认的带前缀写法（models/…、tunedModels/…）照样认成 Gemini 的", () => {
+  assert.deepEqual(parseModelChoice("models/gemini-3.5-flash"), {
+    provider: "gemini",
+    model: "models/gemini-3.5-flash",
+  });
+  assert.deepEqual(parseModelChoice("tunedModels/my-model"), { provider: "gemini", model: "tunedModels/my-model" });
+  assert.deepEqual(parseModelChoice("gemini/models/gemini-3.5-flash"), {
+    provider: "gemini",
+    model: "models/gemini-3.5-flash",
+  });
+  // 别家的模型名里不该有斜杠
+  assert.throws(() => parseModelChoice("openai/models/x"), /模型名/);
+});

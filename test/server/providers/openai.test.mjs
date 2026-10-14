@@ -155,3 +155,24 @@ test("回的不是 JSON（比如中间的网关回了一页 HTML）也能说清�
 test("不是 OpenAI 回的报错不认，交给通用的分类", () => {
   assert.equal(classifyError(new TypeError("fetch failed")), null);
 });
+
+test("所在地区不支持（403 unsupported_country_region_territory）：是网络出口的问题，不叫人换 key", async () => {
+  const region = await failWith(403, {
+    message: "Country, region, or territory not supported",
+    type: "request_forbidden",
+    code: "unsupported_country_region_territory",
+  });
+  assert.equal(region.classified.kind, "unavailable");
+  assert.match(region.classified.problem, /地区/);
+  assert.match(region.classified.problem, /代理/);
+});
+
+test("回的不是 JSON 的 4xx（比如网关回 413）：说明里至少有状态码，不是一句空话", async () => {
+  for (const status of [400, 413]) {
+    const fetch = async () => new Response("<html>nope</html>", { status });
+    const error = await createClient({ apiKey: "k", model: "m", fetch })
+      .ping({})
+      .catch((thrown) => thrown);
+    assert.match(classifyError(error).problem, new RegExp(`HTTP ${status}$`));
+  }
+});

@@ -48,3 +48,19 @@ test("系统钥匙串不可用时拒绝保存，不退回到存明文", (t) => {
   assert.throws(() => store.save("AIza-not-a-real-key"), /钥匙串/);
   assert.throws(() => statSync(file), { code: "ENOENT" });
 });
+
+test("exists：只看文件在不在，不解密", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sm-key-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const store = createKeyStore({
+    file: join(dir, "openai-key.bin"),
+    safeStorage: {
+      isEncryptionAvailable: () => true,
+      encryptString: (text) => Buffer.from(text),
+      decryptString: () => assert.fail("不该解密"),
+    },
+  });
+  assert.equal(store.exists(), false);
+  store.save("k");
+  assert.equal(store.exists(), true);
+});

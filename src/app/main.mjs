@@ -118,7 +118,10 @@ async function main() {
       createKeyStore({ file: keyFile(PATHS, id, { packaged: app.isPackaged }), safeStorage }),
     ]),
   );
-  const service = EXTERNAL_SERVER_URL ? null : await startService({ log, model: MODEL, thinkingLevel: THINKING });
+  // 档位按设置原样给：正在用的那家用不上，但拿 Gemini 的 key 去检查、给 Gemini 存 key 时要用它
+  const service = EXTERNAL_SERVER_URL
+    ? null
+    : await startService({ log, model: MODEL, thinkingLevel: SETTINGS.thinking.value });
   const serverUrl = EXTERNAL_SERVER_URL ?? service.url;
   const e2e = process.env.SPEAKMORE_E2E_OUT ? await import("./e2e.mjs") : null;
 
@@ -552,6 +555,8 @@ async function main() {
       hotkeyLabel: HOTKEY_LABEL,
       // 连着单独启动的服务端时，用哪个模型由那边定
       provider: service ? PROVIDER.id : null,
+      // 每家的 key 在哪。装成应用的那个各存各的，命令行要靠这一项才知道
+      keys: service ? keys.sources() : null,
       model: service ? SETTINGS.model.value : null,
       thinking: service ? THINKING : null,
       theme: theme.id,

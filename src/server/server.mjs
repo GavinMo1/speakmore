@@ -153,6 +153,7 @@ function handleConnection(socket, { refiner, log, maxAudioBytes }) {
         error: String(error?.stack ?? error),
         // 模型层的错误（ModelError）给用户的是一句人话，模型回的原文（已抹掉 key）在 detail 里
         ...(error?.detail ? { model_said: error.detail.slice(0, 1_000) } : {}),
+        ...(error?.origin ? { origin: error.origin.slice(0, 2_000) } : {}),
       });
       send(ServerType.PROCESSING_ERROR, {
         audio_id: finished.audioId,

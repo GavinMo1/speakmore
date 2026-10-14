@@ -7,14 +7,25 @@
 const PROBLEM_MAX_LENGTH = 200;
 
 export class ModelError extends Error {
-  /** @param {{ kind: "key" | "unavailable" | "other", problem: string, detail: string }} fields */
-  constructor({ kind, problem, detail }) {
+  /**
+   * @param {{ kind: "key" | "unavailable" | "other", problem: string, detail: string, origin?: string }} fields
+   *   origin：原始报错的调用栈（已抹掉 key），只进日志。适配器或解码自己出了 bug 时靠它找出处
+   */
+  constructor({ kind, problem, detail, origin }) {
     super(problem);
     this.name = "ModelError";
     this.kind = kind;
     this.detail = detail;
+    this.origin = origin;
   }
 }
+
+/** 连接层面断掉的几种：没连上、连上了又被重置、响应读到一半断了（undici 报 "terminated"） */
+const DROPPED = /^(ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|EHOSTUNREACH|ENETUNREACH|UND_ERR_)/;
+const unreachable = (error, detail) =>
+  error?.name === "AbortError" ||
+  /fetch failed|^terminated$/.test(detail) ||
+  DROPPED.test(error?.code ?? error?.cause?.code ?? "");
 
 /**
  * 任意一个错误 → ModelError。先认够不着的情况（各家都一样），再交给那一家的适配器认它自己的报错，
@@ -27,14 +38,20 @@ export class ModelError extends Error {
  */
 export function toModelError(error, { provider, apiKey, classify }) {
   if (error instanceof ModelError) return error;
-  let detail = String(error?.message ?? error);
-  if (apiKey) detail = detail.replaceAll(apiKey, "（key）");
-  if (error?.name === "AbortError" || error?.name === "TimeoutError" || /fetch failed/.test(detail)) {
-    return new ModelError({ kind: "unavailable", problem: `连不上 ${provider.name}，检查网络后再试`, detail });
+  const scrub = (text) => (apiKey ? text.replaceAll(apiKey, "（key）") : text);
+  const detail = scrub(String(error?.message ?? error));
+  const origin = error?.stack ? scrub(String(error.stack)) : undefined;
+  const make = (fields) => new ModelError({ ...fields, detail, origin });
+  // 超时单独说：网是通的，是它太久没回话（长录音交给 OpenAI 时，上传加处理可能就这么久）
+  if (error?.name === "TimeoutError") {
+    return make({ kind: "unavailable", problem: `${provider.name} 太久没回话，过一会儿再试` });
+  }
+  if (unreachable(error, detail)) {
+    return make({ kind: "unavailable", problem: `连不上 ${provider.name}，检查网络后再试` });
   }
   const specific = classify?.(error, detail);
-  if (specific) return new ModelError({ ...specific, detail });
-  return new ModelError({ kind: "other", problem: detail.slice(0, PROBLEM_MAX_LENGTH), detail });
+  if (specific) return make(specific);
+  return make({ kind: "other", problem: detail.slice(0, PROBLEM_MAX_LENGTH) });
 }
 
 /** 把模型回的一句话收拾成能接在中文后面的样子：去掉句尾的句号和空白，截短 */

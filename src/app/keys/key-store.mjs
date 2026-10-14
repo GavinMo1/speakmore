@@ -28,5 +28,10 @@ export function createKeyStore({ file, safeStorage }) {
     clear() {
       rmSync(file, { force: true });
     },
+
+    /** 存过没有。只看文件在不在，不解密 */
+    exists() {
+      return existsSync(file);
+    },
   };
 }

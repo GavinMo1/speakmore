@@ -41,33 +41,37 @@ export function findProvider(id) {
 
 /** 模型名里只出现这些字符（gpt-audio-1.5、gemini-3.5-flash、gpt-audio-mini-2025-12-15 这样的） */
 const MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+/** Gemini 的 SDK 还认带前缀的写法，0.3 时可能有人这么写在设置里 */
+const GEMINI_PREFIXED = /^(models|tunedModels)\/[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 
 /**
  * 用户写的模型选择 → { provider, model }。写法：
  *   openai/gpt-audio-1.5   厂商/模型
  *   openai                 只写厂商，用它的默认模型
  *   gemini-3.5-flash       只写一个不是厂商名的模型名：当成 Gemini 的。0.3 以前设置里只有 Gemini 的模型名，照样认
+ *   models/gemini-3.5-flash  0.3 时 Gemini 的 SDK 也认带 models/、tunedModels/ 前缀的写法，照样认成 Gemini 的
  * 写错了就抛错，说清哪里不对。
  */
 export function parseModelChoice(value) {
   const text = String(value ?? "").trim();
   if (text === "") throw new Error("是空的");
+  if (GEMINI_PREFIXED.test(text)) return { provider: "gemini", model: text };
   const slash = text.indexOf("/");
   if (slash === -1) {
     const provider = findProvider(text);
     if (provider) return { provider: provider.id, model: provider.defaultModel };
-    return { provider: "gemini", model: checkedModelName(text) };
+    return { provider: "gemini", model: checkedModelName("gemini", text) };
   }
   const provider = findProvider(text.slice(0, slash));
   if (!provider) {
     throw new Error(`不认识 ${text.slice(0, slash)} 这家，能用的有 ${PROVIDERS.map(({ id }) => id).join(" / ")}`);
   }
-  return { provider: provider.id, model: checkedModelName(text.slice(slash + 1)) };
+  return { provider: provider.id, model: checkedModelName(provider.id, text.slice(slash + 1)) };
 }
 
-function checkedModelName(model) {
-  if (!MODEL_NAME.test(model)) throw new Error(`模型名 ${JSON.stringify(model)} 不对：只能有字母、数字和 . _ : -`);
-  return model;
+function checkedModelName(provider, model) {
+  if (MODEL_NAME.test(model) || (provider === "gemini" && GEMINI_PREFIXED.test(model))) return model;
+  throw new Error(`模型名 ${JSON.stringify(model)} 不对：只能有字母、数字和 . _ : -`);
 }
 
 export const formatModelChoice = ({ provider, model }) => `${provider}/${model}`;

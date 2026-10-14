@@ -43,6 +43,14 @@ export async function applySettings(io, undo) {
     if (undo) io.err(`想撤回这次改动：${undo}`);
     return 1;
   }
+  // 那一家的 key 不能用（存着的过期了、环境变量里的不对）
+  if (restarted.key.state === "rejected") {
+    io.err(
+      `重启了，但 ${provider.name} 的 key 不能用：${restarted.key.problem}。运行 speakmore key ${provider.id} 换一把`,
+    );
+    if (undo) io.err(`想撤回这次改动：${undo}`);
+    return 1;
+  }
   // 换成了还没有 key 的那一家（config set model 不先问 key）
   if (restarted.key.state === "missing" || restarted.key.state === "unreadable") {
     io.err(`重启了，但还没有 ${provider.name} 的 key，现在不能用：运行 speakmore key ${provider.id}`);

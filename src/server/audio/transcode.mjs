@@ -26,7 +26,7 @@ export async function toWav(audio, mimeType) {
   try {
     decoded = await decode(new Uint8Array(audio.buffer, audio.byteOffset, audio.byteLength));
   } catch (error) {
-    throw new Error(`录音解不出声音（${mimeType}）：${error?.message ?? error}`);
+    throw new Error(`录音解不出声音（${mimeType}）：${error?.message ?? error}`, { cause: error });
   }
   if (!decoded?.channelData?.length || decoded.channelData[0].length === 0) {
     throw new Error(`录音解不出声音（${mimeType}）：里面没有音频`);

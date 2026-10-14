@@ -70,6 +70,9 @@ function fakeStore(initial = null) {
     clear() {
       store.value = null;
     },
+    exists() {
+      return store.value !== null;
+    },
   };
   return store;
 }
@@ -463,4 +466,20 @@ test("检查：连的是单独启动的服务端时查不了，说清为什么",
   const result = await setup({ external: true }).keys.check({ provider: "gemini", model: "gemini-3.5-flash" });
   assert.equal(result.ok, false);
   assert.match(result.problem, /SPEAKMORE_SERVER_URL/);
+});
+
+test("检查正在用的那家时，用的是这次运行实际在用的那把（中途存过新的就是新的），不是环境变量里的", async () => {
+  const { keys, service } = setup({ env: { GEMINI_API_KEY: "env-key" } });
+  await keys.loadAtStartup();
+  await keys.save("new-key");
+  await keys.check({ provider: "gemini", model: "gemini-3.5-flash" });
+  assert.equal(service.calls.at(-1).probe, "new-key");
+  assert.equal((await keys.check({ provider: "gemini", model: "gemini-3.5-flash" })).source, "stored");
+});
+
+test("sources：每家的 key 在哪（环境变量、存着的、没有），不用解密", () => {
+  const { keys, keyStore } = setup({ storedOther: "openai-key", env: { GEMINI_API_KEY: "env-key" } });
+  keyStore.load = () => assert.fail("不该解密");
+  assert.deepEqual(keys.sources(), { gemini: "env", openai: "stored" });
+  assert.deepEqual(setup().keys.sources(), { gemini: null, openai: null });
 });

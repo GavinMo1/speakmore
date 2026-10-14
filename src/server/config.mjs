@@ -10,10 +10,13 @@ import {
 
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
 
-/** 选哪家哪个模型。SPEAKMORE_MODEL 优先；GEMINI_MODEL 是 0.3 以前的写法，只能写 Gemini 的模型名，照样认 */
+/**
+ * 选哪家哪个模型。SPEAKMORE_MODEL 优先；GEMINI_MODEL 是 0.3 以前的写法，只能写 Gemini 的模型名，照样认。
+ * 空的当作没设：0.3 单独启动服务端时就是这样
+ */
 function modelFrom(env) {
   for (const name of ["SPEAKMORE_MODEL", "GEMINI_MODEL"]) {
-    if (env[name] === undefined) continue;
+    if (!env[name]?.trim()) continue;
     try {
       return parseModelChoice(env[name]);
     } catch (error) {

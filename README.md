@@ -115,9 +115,9 @@ speakmore model gemini                   # 换回来
 | 厂商 | 默认模型 | key 去哪申请 | 说明 |
 | --- | --- | --- | --- |
 | `gemini`（默认） | `gemini-3.5-flash` | [Google AI Studio](https://aistudio.google.com/apikey) | 录音原样发过去。提示词是对着它调的，整理得最干净，一般 2 秒左右出成品 |
-| `openai` | `gpt-audio-mini` | [OpenAI 开发者平台](https://platform.openai.com/api-keys) | 它只收 WAV 和 MP3，录音先在本机转成 16 kHz 的 WAV 再发（一分钟的录音转一次约 60 毫秒）。实测 2–5 秒出成品，口头禅删得没有 Gemini 干净。`gpt-audio-1.5` 有时把成品包成 `{"…"}` 的样子，不建议用 |
+| `openai` | `gpt-audio-mini` | [OpenAI 开发者平台](https://platform.openai.com/api-keys) | 它只收 WAV 和 MP3，录音先在本机转成 16 kHz 的 WAV 再发（一分钟的录音转一次约 60 毫秒）。实测 2–5 秒出成品，口头禅删得没有 Gemini 干净。转出来的 WAV 比原录音大七八倍，长录音慢：悬浮条最多等成品 20 秒，按 90 秒的录音要 6–9 秒推算，三分钟以上的可能等不到（没实测；录音留着）。`gpt-audio-1.5` 有时把成品包成 `{"…"}` 的样子，不建议用 |
 
-每家的 key 各存一份，来回换不用重新填。换模型要重启后台，`speakmore model` 会替你重启。
+每家的 key 各存一份，来回换不用重新填。换模型要重启后台，`speakmore model` 会替你重启。要退回 0.3：先 `speakmore model gemini` 换回 Gemini，0.3 认得这样存下的设置。
 
 ### 主题
 
@@ -288,3 +288,5 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 ## 许可
 
 [MIT](LICENSE)。`.claude/skills/reverse-engineer-anything/` 来自 REA，按它自己的 MIT 许可。
+
+发布包里的依赖都是 MIT、Apache、ISC、BSD 这类，只有一个例外：[codec-parser](https://github.com/eshaz/codec-parser)（LGPL-3.0-or-later），拆 Ogg 录音时用，原样作为一个独立的包放在 `node_modules` 里。打包时会扫一遍依赖的许可证，有 GPL 一类的就拒绝打包（`scripts/build/stage-app.mjs`）。

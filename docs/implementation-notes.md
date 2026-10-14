@@ -115,7 +115,8 @@ src/server/server.mjs             听写协议那一侧不知道背后是哪一�
 - **只收 wav 和 mp3。** 传 webm、ogg 都回 400："Supported values are: 'wav' and 'mp3'"。悬浮条录的是 WebM（Electron 的录音接口录不了 Ogg，实测 `MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")` 是 false），所以服务端先解码（[@audio/decode-webm](https://www.npmjs.com/package/@audio/decode-webm)、[@audio/decode-opus](https://www.npmjs.com/package/@audio/decode-opus)）、降到 16 kHz、封成 WAV。降采样和封 WAV 是自己写的（`src/server/audio/pcm.mjs`），一分钟的录音约 60 毫秒。
 - **采样率要降。** 同一段 90 秒的录音，48 kHz 的 WAV 要 18 秒，24 kHz 和 16 kHz 是 6–9 秒；三种算出来的音频 token 一样多（907），所以降采样只省上传、不省钱。
 - **验证 key 不能发纯文字。** 这几个模型要求输入或输出里有音频，纯文字的请求回 400；所以带一段 0.1 秒静音、只要 1 个 token，约 0.7 秒。
-- **报错**：假 key 回 401 `invalid_api_key`，写错的模型名回 404 `model_not_found`，都按实测写进了分类。账号没额度（429 `insufficient_quota`）照官方文档写的，没测到。
+- **报错**：假 key 回 401 `invalid_api_key`，写错的模型名回 404 `model_not_found`，都按实测写进了分类。账号没额度（429 `insufficient_quota`）、所在地区不支持（403 `unsupported_country_region_territory`，归成"暂时用不了"、提示查代理，不叫人换 key）照官方文档的错误码写的，没测到。
+- **长录音慢。** WAV 比悬浮条录的 Opus 大七八倍，一次请求最多等 30 秒、包括上传；悬浮条那边等成品最多 20 秒（照原版）。按 90 秒的录音要 6–9 秒推算，三分钟以上的录音交给 OpenAI 可能等不到，录音会留着。没实测；要改的话可以换成 MP3（要多一个编码库）或者给 OpenAI 放宽等待。
 - **选哪个模型。** 同 6 段录音、同一份提示词：
 
   | 模型 | 结果 | 耗时 |

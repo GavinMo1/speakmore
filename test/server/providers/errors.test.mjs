@@ -4,12 +4,8 @@ import { ModelError, toModelError } from "../../../src/server/providers/errors.m
 
 const OpenAI = { name: "OpenAI" };
 
-test("够不着厂商（没网、超时、被取消）算暂时用不了，话里点名是哪一家", () => {
-  for (const error of [
-    new TypeError("fetch failed"),
-    new DOMException("This operation was aborted", "AbortError"),
-    new DOMException("The operation was aborted due to timeout", "TimeoutError"),
-  ]) {
+test("够不着厂商（没网、被取消）算暂时用不了，话里点名是哪一家", () => {
+  for (const error of [new TypeError("fetch failed"), new DOMException("This operation was aborted", "AbortError")]) {
     const described = toModelError(error, { provider: OpenAI });
     assert.ok(described instanceof ModelError);
     assert.equal(described.kind, "unavailable");
@@ -40,4 +36,37 @@ test("报错里带着 key 本身时先抹掉：给用户看的话和留给日志
 test("已经分好类的原样交回，不再包一层", () => {
   const error = new ModelError({ kind: "key", problem: "这把 key 无效", detail: "401" });
   assert.equal(toModelError(error, { provider: OpenAI }), error);
+});
+
+test("超时单独说：是它太久没回话，不是网没通", () => {
+  const timeout = new DOMException("The operation was aborted due to timeout", "TimeoutError");
+  const described = toModelError(timeout, { provider: OpenAI });
+  assert.equal(described.kind, "unavailable");
+  assert.equal(described.message, "OpenAI 太久没回话，过一会儿再试");
+});
+
+test("连接中途被重置（响应读到一半断了、对方重置连接）也算暂时够不着，不说成请求被拒", () => {
+  for (const error of [
+    new TypeError("terminated"),
+    Object.assign(new TypeError("fetch failed"), { cause: { code: "UND_ERR_SOCKET" } }),
+    Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }),
+    Object.assign(new Error("other side closed"), { cause: { code: "UND_ERR_SOCKET" } }),
+  ]) {
+    const described = toModelError(error, { provider: OpenAI });
+    assert.equal(described.kind, "unavailable", error.message);
+  }
+});
+
+test("留着原始报错的调用栈（抹掉 key）给日志：适配器自己出 bug 时找得到出处", () => {
+  const key = "sk-SECRET";
+  let original;
+  try {
+    null.content;
+  } catch (error) {
+    original = Object.assign(error, { message: `${error.message} ${key}` });
+  }
+  const described = toModelError(original, { provider: OpenAI, apiKey: key });
+  assert.match(described.origin, /TypeError/);
+  assert.match(described.origin, /errors\.test\.mjs/);
+  assert.doesNotMatch(described.origin, /SECRET/);
 });

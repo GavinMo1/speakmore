@@ -2,7 +2,7 @@ import { existsSync, rmSync } from "node:fs";
 import { apiKeyProblem, findProvider, PROVIDERS, parseModelChoice } from "../../server/providers/index.mjs";
 import { keyFile } from "../../storage/paths.mjs";
 import { Cancelled } from "../ask-secret.mjs";
-import { currentSettings, ensureRunning, parse, UsageError } from "../common.mjs";
+import { currentSettings, ensureRunning, PACKAGED_RELAUNCH, parse, UsageError } from "../common.mjs";
 
 // speakmore key：问 key、交给后台应用验证并保存、删掉。每家模型一把，不写厂商就是设置里正在用的那家。
 // 启动时（speakmore start）和换模型时（speakmore model）缺 key 也从这里问。
@@ -54,8 +54,22 @@ export function keyPrompter(io, provider) {
   };
 }
 
+/**
+ * 0.3 的后台应用不认按厂商区分的 set-key、forget-key：它会忽略 provider，把别家的 key 拿去问 Gemini、
+ * 删 key 时删掉的是 Gemini 那把。它的状态里没有 provider 这一项，凭这个认出来，先拦下。
+ * Gemini 的 key 它本来就会存、会删，不拦。
+ */
+async function refuseLegacyDaemon(io, provider) {
+  if (provider.id === "gemini") return;
+  const status = await io.daemon.status();
+  if (status === null || "provider" in status) return;
+  const restart = status.packaged ? PACKAGED_RELAUNCH : "运行 speakmore restart";
+  throw new Error(`正在运行的 SpeakMore 是旧版本，只认 Gemini 的 key：先${restart}，再来一次。`);
+}
+
 /** 把某一家的一把 key 交给后台应用验证并保存。@returns {Promise<boolean>} 通过了没有 */
 export async function submitKey(io, value, provider) {
+  await refuseLegacyDaemon(io, provider);
   io.out("正在验证…");
   const result = await io.daemon.request(
     "set-key",
@@ -78,6 +92,16 @@ export function keySource(io, provider) {
   if (io.env[provider.keyEnv]?.trim()) return "env";
   if (existsSync(keyFile(io.paths, provider.id))) return "stored";
   return null;
+}
+
+/**
+ * 某一家有没有 key，以会用到它的那个后台为准：装成应用的那个各存各的（<厂商>-key.app.bin），
+ * 在运行的话照它报的算；否则看命令行这边（重启后台时用的就是这边的环境变量和文件）。
+ * @param {object | null} status 正在运行的后台报的状态；没在运行时是 null
+ */
+export function keySourceFor(io, provider, status) {
+  if (status?.packaged && status.keys) return status.keys[provider.id] ?? null;
+  return keySource(io, provider);
 }
 
 /** 启动之前就看得出有 key 可用：存过、环境变量给了，或者 key 归单独启动的服务端管 */
@@ -106,6 +130,7 @@ export async function key(args, io) {
   const provider = named ?? currentProvider(io);
 
   if (values.forget) {
+    await refuseLegacyDaemon(io, provider);
     // 在运行的话让它把手里的那把也放下；没在运行时不必为了删文件把它启动起来
     if ((await io.daemon.status()) !== null) await io.daemon.request("forget-key", { provider: provider.id });
     // 命令启动的和装成应用的各存各的一份，都删
