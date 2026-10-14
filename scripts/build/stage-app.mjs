@@ -2,10 +2,83 @@
 // 打 .app（package.mjs）和打发布包（release.mjs）都从这里开始。
 
 import { execFileSync } from "node:child_process";
-import { cpSync } from "node:fs";
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 const NPM_FLAGS = ["--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"];
+
+/**
+ * 装上了、但程序从来不加载的包，不随程序分发。@audio/decode-webm 声明依赖了另外几种解码器（AAC、AC-3、DTS、
+ * E-AC-3、FLAC、MP3、Vorbis），其中 AAC、AC-3、DTS 是 GPL，E-AC-3 是 LGPL，和本项目的 MIT 不兼容；
+ * 而它打包好的代码只用自带的 Opus 解码。实测把这几个挪走，WebM 和 Ogg 照样转得出来（test/server/audio）。
+ */
+export const UNUSED_PACKAGES = [
+  "@audio/decode-aac",
+  "@audio/decode-ac3",
+  "@audio/decode-dts",
+  "@audio/decode-eac3",
+  "@audio/decode-flac",
+  "@audio/decode-mp3",
+  "@audio/decode-vorbis",
+];
+
+export function pruneUnused(stagingDir) {
+  for (const name of UNUSED_PACKAGES) rmSync(join(stagingDir, "node_modules", name), { recursive: true, force: true });
+}
+
+/**
+ * 查出来、但确认过可以随程序分发的包，以及按哪个许可证。许可证一变就不再放行。
+ * codec-parser：@audio/decode-opus 拆 Ogg 要用（WebM 那条路不用它）。LGPL 允许不改动地作为独立的库和别的程序一起分发，
+ * 它原样放在 node_modules 里、带着自己的许可证文件，用的人可以换掉它。2026-10-13 加进来，作者还没有确认这一条。
+ */
+const ACCEPTED = new Map([["codec-parser", "LGPL-3.0-or-later"]]);
+
+/** findCopyleft 找出来的里面，去掉登记过的例外 */
+export const unaccepted = (found) => found.filter(({ name, license }) => ACCEPTED.get(name) !== license);
+
+/** 一个 SPDX 许可证表达式是不是只能按 GPL 一类（GPL、LGPL、AGPL）来用。"MIT OR GPL-3.0" 可以选 MIT，不算 */
+function copyleftOnly(license) {
+  const alternatives = license.replace(/[()]/g, "").split(/\s+OR\s+/i);
+  return alternatives.every((alternative) => /GPL/i.test(alternative));
+}
+
+/** package.json 里的许可证。老写法是一个对象或者一组对象 */
+function licenseOf(manifest) {
+  const { license, licenses } = manifest;
+  if (typeof license === "string") return license;
+  if (license?.type) return license.type;
+  if (Array.isArray(licenses)) return licenses.map((entry) => entry.type ?? entry).join(" OR ");
+  return null;
+}
+
+/**
+ * 找出 node_modules 里（连嵌套的一起）只能按 GPL 一类许可证用、或者根本没写许可证的包。
+ * 机器查得了的就别等人来查：加依赖时不小心带进来的，打包这一步就拦下。
+ * @returns {{ name: string, license: string }[]}
+ */
+export function findCopyleft(nodeModulesDir) {
+  const found = [];
+  const visit = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      const path = join(dir, entry.name);
+      if (entry.name.startsWith("@")) {
+        visit(path);
+        continue;
+      }
+      const manifestFile = join(path, "package.json");
+      if (existsSync(manifestFile)) {
+        const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
+        const license = licenseOf(manifest);
+        if (license === null || copyleftOnly(license))
+          found.push({ name: manifest.name, license: license ?? "（没写）" });
+      }
+      if (existsSync(join(path, "node_modules"))) visit(join(path, "node_modules"));
+    }
+  };
+  visit(nodeModulesDir);
+  return found;
+}
 
 /**
  * @param {string} packageDir 源码仓库
@@ -22,6 +95,12 @@ export function stageApp(packageDir, stagingDir, entries) {
   // electron 这个依赖是给从源码仓库跑的人找运行环境用的。装好的程序另有运行环境，不用带它和它的下载工具
   // （这里也要 --omit=dev：不带的话 uninstall 会顺手把开发依赖全装回来）
   npm(["uninstall", "electron"]);
+  pruneUnused(stagingDir);
   // 卸掉之后会剩下几个空目录（node_modules/@electron 之类）
   execFileSync("find", [join(stagingDir, "node_modules"), "-type", "d", "-empty", "-delete"]);
+  const copyleft = unaccepted(findCopyleft(join(stagingDir, "node_modules")));
+  if (copyleft.length > 0) {
+    const listed = copyleft.map(({ name, license }) => `${name}（${license}）`).join("、");
+    throw new Error(`程序里有许可证和 MIT 不兼容、或者没写许可证的包，先确认再发：${listed}`);
+  }
 }
