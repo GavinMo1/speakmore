@@ -59,12 +59,23 @@ test("哪个样子下哪个按钮点得动：打开麦克风时只能取消，�
   }
 });
 
-test("声波一根竖条的高度：没声音也留一点，小声也看得出，再大也不超过满格", () => {
+test("声波一根竖条的高度：按真实说话的音量标定，说话时竖条有四成到九成高，停顿时伏下去", () => {
+  // 没声音、和 8 位波形分辨不出来的那一格以下：只留一点高度
   assert.equal(barHeight(0), 0.1);
+  assert.equal(barHeight(1 / 128), 0.1);
+  assert.equal(barHeight(-1), 0.1);
+  // 再响也不超过满格
   assert.equal(barHeight(1), 1);
   assert.equal(barHeight(4), 1);
-  assert.equal(barHeight(-1), 0.1);
-  // 说话的音量集中在低段：音量只有满格的 4% 时，竖条已经有四分之一高
-  assert.ok(barHeight(0.04) > 0.25);
-  assert.ok(barHeight(0.25) < barHeight(0.5));
+  // 下面三个音量是从真实录音里量出来的（每 50 ms 一个，共 707 个）：中位数、九成的时候不超过、最响
+  assert.ok(barHeight(0.023) > 0.35 && barHeight(0.023) < 0.5, String(barHeight(0.023)));
+  assert.ok(barHeight(0.094) > 0.75, String(barHeight(0.094)));
+  assert.equal(barHeight(0.203), 1);
+  // 越响越高
+  const heights = [0.01, 0.02, 0.05, 0.1, 0.15].map(barHeight);
+  assert.deepEqual(
+    heights,
+    [...heights].sort((a, b) => a - b),
+  );
+  assert.equal(new Set(heights).size, heights.length);
 });

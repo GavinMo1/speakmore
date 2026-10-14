@@ -41,6 +41,12 @@ test("id 和名字都不重复；默认的那一套在册；按 id 或按名字�
   assert.equal(findTheme("constructor"), null);
 });
 
+test("朱砂：正在听和整理中是同一种红。整理中不能变回白色，那样看起来像主题没生效", () => {
+  const { bar } = findTheme("cinnabar");
+  assert.equal(bar.working, bar.live);
+  assert.equal(bar.go, bar.live);
+});
+
 test("不合格的主题说得出毛病在哪：缺 token、多了不认识的、颜色写法不对、看不清", () => {
   const missing = clone(THEMES[0]);
   delete missing.bar.live;
