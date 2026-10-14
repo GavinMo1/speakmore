@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { costOf as geminiCost } from "../../../src/server/providers/prices/gemini.mjs";
+import { costOf as geminiCost, storageCostOf } from "../../../src/server/providers/prices/gemini.mjs";
 import { costOf as openaiCost } from "../../../src/server/providers/prices/openai.mjs";
 
 const OCT = new Date("2026-10-14T08:00:00Z");
@@ -32,6 +32,16 @@ test("Gemini 已停用、请求被转走的型号按转去的那个算；价目�
   assert.equal(geminiCost("gemini-3.5-flash", DICTATION, OCT), geminiCost("gemini-3.6-flash", DICTATION, OCT));
   assert.equal(geminiCost("gemini-3.7-flash", DICTATION, OCT), geminiCost("gemini-3.8-flash", DICTATION, OCT));
   assert.equal(geminiCost("gemini-9-ultra", DICTATION, OCT), null);
+});
+
+test("Gemini 显式缓存的存储费：按缓存的 token 数和存多久算，每百万 token 每小时；2027 年起 Flash 的也翻倍", () => {
+  // 1350 个 token 存半小时
+  close(storageCostOf("gemini-3.6-flash", 1350, 0.5, OCT), (1350 * 0.5 * 0.5) / 1e6);
+  close(storageCostOf("gemini-3.6-flash", 1350, 0.5, new Date("2027-01-01T00:00:00Z")), (1350 * 1 * 0.5) / 1e6);
+  close(storageCostOf("gemini-2.5-pro", 1000, 2, OCT), (1000 * 4.5 * 2) / 1e6);
+  // 不支持显式缓存的（4 Argon 只有隐式缓存）和价目表里没有的：算不出来
+  assert.equal(storageCostOf("gemini-4-argon", 1350, 1, OCT), null);
+  assert.equal(storageCostOf("gemini-9-ultra", 1350, 1, OCT), null);
 });
 
 test("OpenAI gpt-audio：文字和音频各一个价，输入输出分开；响应里带日期的快照名按型号查价", () => {
