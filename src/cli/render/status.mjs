@@ -1,5 +1,6 @@
 import { findProvider, parseModelChoice } from "../../server/providers/index.mjs";
 import { SETTINGS } from "../../storage/settings.mjs";
+import { formatUsd } from "../../usage/format.mjs";
 import { themeTitle } from "./settings.mjs";
 import { count, duration, INDENT, paint, row } from "./text.mjs";
 
@@ -56,10 +57,12 @@ function pendingSettings(status, settings) {
   return Object.keys(SETTINGS).filter((name) => status[name] != null && !same(name, status[name]));
 }
 
-function statsLine({ dictations, characters, seconds }, { withPace }) {
+function statsLine({ dictations, characters, seconds, costUsd }, { withPace }) {
   const parts = [`${count(dictations)} 次`, `${count(characters)} 字`, duration(seconds)];
   // 每分钟多少字只在累计里给：一天里说得少时这个数跳得厉害，没有参考价值
   if (withPace && seconds >= 60) parts.push(`每分钟 ${count(Math.round(characters / (seconds / 60)))} 字`);
+  // 记账之前的版本没有账，不写 $0 让人以为没花钱
+  if (costUsd > 0) parts.push(formatUsd(costUsd));
   return parts.join(" · ");
 }
 
@@ -156,7 +159,8 @@ export function renderStatus({ status, version, settings, stats }, { color }) {
   lines.push(
     "",
     c.dim(`${INDENT}speakmore history  看说过的话     speakmore config  看和改设置`),
-    c.dim(`${INDENT}speakmore stop     停掉           speakmore help    全部命令`),
+    c.dim(`${INDENT}speakmore usage    看花了多少钱   speakmore stop    停掉`),
+    c.dim(`${INDENT}speakmore help     全部命令`),
     "",
   );
   return lines.join("\n");

@@ -819,11 +819,78 @@ test("history -n 要是正整数", async () => {
   assert.match(output.err, /-n/);
 });
 
-test("有历史时面板里带上今天和累计的数", async () => {
+test("有历史时面板里带上今天和累计的数；记过账的话带上花了多少钱", async () => {
   seedHistory();
-  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: READY }) });
-  await speakmore("status");
-  assert.match(output.out, /累计\s+2 次 · 8 字 · 8 秒/);
+  const before = harness({ daemon: fakeDaemon({ running: READY }) });
+  await before.speakmore("status");
+  assert.match(before.output.out, /累计\s+2 次 · 8 字 · 8 秒\n/);
+
+  seedCall();
+  const after = harness({ daemon: fakeDaemon({ running: READY }) });
+  await after.speakmore("status");
+  assert.match(after.output.out, /累计\s+2 次 · 8 字 · 8 秒 · \$0\.0011\n/);
+  assert.match(after.output.out, /speakmore usage/);
+});
+
+// ---------- 用量 ----------
+
+/** 记一笔账：今天那句话调了一次 Gemini */
+function seedCall() {
+  const history = openHistory(paths.historyDb);
+  history.addCall({
+    purpose: "dictation",
+    audioId: "b",
+    provider: "gemini",
+    model: "gemini-3.6-flash",
+    inputTokens: 1390,
+    audioTokens: 25,
+    cachedTokens: 0,
+    outputTokens: 4,
+    thinkingTokens: 0,
+    costUsd: 0.0011,
+    latencyMs: 1700,
+    createdAt: "2026-10-13T06:32:00.000Z",
+  });
+  history.close();
+}
+
+test("usage：一次都没用过时说一句，不凭空建库", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("usage"), 0);
+  assert.match(output.out, /还没有用量记录/);
+  assert.equal(existsSync(paths.historyDb), false);
+});
+
+test("usage：列出花了多少钱、多少 token、模型多久回话；后台应用不在运行也能看", async () => {
+  seedHistory();
+  seedCall();
+  const { speakmore, output, daemon } = harness();
+  assert.equal(await speakmore("usage"), 0);
+  assert.match(output.out, /累计\s+\$0\.0011\s+1\.39K\s+1\s+一般 1\.7 秒，慢时 1\.7 秒/);
+  assert.match(output.out, /Gemini gemini-3\.6-flash/);
+  assert.deepEqual(daemon.calls, []);
+});
+
+test("usage --json：原样给出报表；还没有历史库时是 null", async () => {
+  const empty = harness();
+  await empty.speakmore("usage", "--json");
+  assert.equal(JSON.parse(empty.output.out), null);
+
+  seedHistory();
+  seedCall();
+  const { speakmore, output } = harness();
+  await speakmore("usage", "--json");
+  const report = JSON.parse(output.out);
+  assert.equal(report.total.costUsd, 0.0011);
+  assert.equal(report.total.tokens, 1394);
+  assert.deepEqual(report.total.latency, { medianMs: 1700, p90Ms: 1700 });
+  assert.equal(report.models[0].model, "gemini-3.6-flash");
+});
+
+test("usage 不收别的参数", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("usage", "today"), 2);
+  assert.match(output.err, /speakmore usage/);
 });
 
 // ---------- 卸载 ----------
@@ -995,6 +1062,7 @@ test("help 和 --help 列出全部命令；--version 给版本号", async () => 
       "key",
       "config",
       "history",
+      "usage",
       "logs",
       "settings",
       "theme",

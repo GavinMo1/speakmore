@@ -18,6 +18,7 @@ import { restart, start, status, stop } from "./commands/lifecycle.mjs";
 import { logs } from "./commands/logs.mjs";
 import { model } from "./commands/model.mjs";
 import { uninstall } from "./commands/uninstall.mjs";
+import { usage } from "./commands/usage.mjs";
 import { ConfigError, UsageError } from "./common.mjs";
 import { createDaemon } from "./daemon.mjs";
 
@@ -35,6 +36,7 @@ const HELP = `SpeakMore：按一下热键说话，整理好的文字贴进当前
 
   speakmore history [-n 条数] [--json]
                                 看说过的话，按天分组，新的在前（默认最近 ${DEFAULT_HISTORY_LIMIT} 条）
+  speakmore usage [--json]      看花了多少钱：今天、本月、累计的花费、token，模型多久回话，按型号分开
   speakmore model               看能用哪几家的模型（${PROVIDERS.map(({ id }) => id).join(" / ")}）、各家的 key 有没有、现在用的哪个
   speakmore model <厂商>[/<模型>]
                                 换一家或换个模型，比如 speakmore model openai。没有它的 key 会先问
@@ -57,7 +59,7 @@ const HELP = `SpeakMore：按一下热键说话，整理好的文字贴进当前
   speakmore --version           版本号
 `;
 
-const COMMANDS = { start, stop, restart, status, key, model, config, theme, history, logs, settings, uninstall };
+const COMMANDS = { start, stop, restart, status, key, model, config, theme, history, usage, logs, settings, uninstall };
 
 /**
  * 执行一条命令。
