@@ -139,6 +139,40 @@ src/server/server.mjs             听写协议那一侧不知道背后是哪一�
 
 v8 在前两遍之间。耗时多了 0.4 秒，原因没查实：每次请求的代码路径没有多出步骤，两次测的时候网络环境可能不一样。
 
+## 记账：花了多少钱、多少 token、等了多久
+
+原版是包月的，不需要这一项；这里每次调模型都按量收费，所以每一次回了话的调用都记一笔账。
+
+```text
+providers/gemini.mjs、openai.mjs        从回话里取用量，按回话报的型号查自家的价目表（providers/prices/）算钱
+   │ { model, inputTokens, audioTokens, cachedTokens, outputTokens, thinkingTokens, costUsd }
+   ▼
+refine/refiner.mjs                      量一下等了多久，记一笔（onCall）：听写的带上 audio_id，验证 key 的算 check
+   ▼
+src/app/main.mjs → storage/history.mjs  存进历史库的 model_calls 表
+   ▼
+src/usage/report.mjs                    今天、本月、累计、按型号分开；speakmore usage 和历史窗口共用这一份
+```
+
+规矩和为什么：
+
+- **价格只抄官方价目页的标准档付费价**（2026-10-14 抄的，出处写在 `providers/prices/` 两个文件的开头）。Gemini 在免费档里用不收钱，可接口不告诉我们这把 key 在哪一档，所以一律按付费价估算，界面上写明是估算。价目表里没有的型号 token 照记，钱写"价格不明"，不混进花费。
+- **按回话报的型号算钱，不按请求的。** 实测请求 `gemini-3.5-flash`，回话里的 `modelVersion` 是 `gemini-3.6-flash`：官方弃用页写着 3.5 Flash 已停用，请求自动转给 3.6 Flash。3.6 Flash 不分文字和音频，输入 $0.75、输出 $3.75 每百万 token，2027-01-01 起翻倍；价目表按调用那天取价。OpenAI 回话报的是带日期的快照名（`gpt-audio-mini-2025-12-15`），去掉日期查价。
+- **用量字段对着实测的回话写。** Gemini 的 `promptTokenCount` 含音频；思考的 token 单独报在 `thoughtsTokenCount`，不在 `candidatesTokenCount` 里（开 HIGH 实测：提示 26、输出 1、思考 179，合计 206），输出价按两者之和算；不思考时回话里没有这一项。OpenAI 的 `prompt_tokens_details` 分得出文字和音频；gpt-audio 系列的缓存价一栏是"-"，命中缓存也照原价算。
+- **回了话但用不了的也记。** 被截断、被拦下的回话是收了钱的，所以适配器不再自己抛这类错，带着用量交回去，由整理流程记完账再报错。连不上、被取消的没回话，不收钱，也不记。
+- **记账出错只写日志**，不能因为少记一笔把用户的这句话丢掉。
+- **等了多久量的是发出请求到收齐回话**，不含本机转格式（交给 OpenAI 前那一步，一分钟的录音约 60 毫秒）。一次听写重来过的，几次加在一起才是用户等的；报表给中位数（"一般"）和九成分位（"慢时"）。
+- **账存在历史库里**，库的版本从 1 升到 2，旧库打开时自动升上来。退回 0.4.2 之前要先降回去（命令写在 `src/storage/history.mjs` 的 MIGRATIONS 注释里），只丢账，不丢历史。
+
+一次听写多少钱（合成的 5 秒语音，两家各走一遍端到端）：
+
+| | 输入 token（其中音频） | 输出 token | 花费 | 模型用时 |
+| --- | --- | --- | --- | --- |
+| Gemini（实际是 3.6 Flash） | 1500（135） | 18 | $0.0012 | 3.4 秒 |
+| OpenAI `gpt-audio-mini` | 1576（54） | 19 | $0.0015 | 2.7 秒 |
+
+钱的大头是每次都带上的提示词：Gemini 那边光提示词就有 1365 个 token，占了这一次花费的八成多。Gemini 有隐式缓存，命中的部分只收一成的价，这几次都没命中；OpenAI 的 gpt-audio 系列没有缓存价。
+
 ## 界面：主题和悬浮条
 
 **主题是数据，不是代码。** 三套主题只在颜色的值上不一样，没有哪一套要有自己的行为，所以没有做成“每套主题一个带方法的对象”。做成的是一份约定加一张登记表：
@@ -188,7 +222,8 @@ v8 在前两遍之间。耗时多了 0.4 秒，原因没查实：每次请求的
 | `src/storage/paths.mjs`、`src/storage/settings.mjs` | 东西放哪、有哪些设置。命令和后台应用共用 | |
 | `src/themes/` | 主题：界面要哪些颜色、每套主题的值、合不合格怎么查。见上面“界面：主题和悬浮条” | 原版只有一套外观 |
 | `src/storage/legacy.mjs` | 把 0.1 版放在别处的数据搬进现在的家目录 | |
-| `src/storage/history.mjs` | 历史库。后台应用写，命令只读着看 | `history_v2` 表的子集（[08](../targets/typeless/docs/08-local-data.md)） |
+| `src/storage/history.mjs` | 历史库和账（每次调模型一笔）。后台应用写，命令只读着看 | `history_v2` 表的子集（[08](../targets/typeless/docs/08-local-data.md)）；账是原版没有的 |
+| `src/usage/` | 用量报表（今天、本月、累计、按型号）和数字的写法，命令和历史窗口共用。见上面“记账” | 原版包月，没有这一项 |
 | `native/main.swift` | 听热键（只听不改，不报是哪个键）、贴字；说话时截住 `esc` 和悬浮条上的点击 | 键盘子进程和 Swift 库（[07](../targets/typeless/docs/07-native-helpers.md)） |
 | `src/app/main.mjs` | 后台应用的主进程：窗口、菜单栏、和小帮手对接，把下面几样接起来 | 主进程（[03](../targets/typeless/docs/03-process-architecture.md)） |
 | `src/app/service.mjs` | 把 `src/server` 跑在主进程里；换 key 先验证再生效 | 原版的服务端在云上 |
