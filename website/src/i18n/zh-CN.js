@@ -57,7 +57,7 @@ export default {
     free: { value: "$0", label: "使用 Gemini 免费额度" },
   },
   look: {
-    title: "三套主题\n深浅模式随系统切换",
+    title: "三套主题\n深浅随系统切换",
     lead: "字数、节省时间、语速、连续使用天数与花费，一目了然。",
     themes: { ink: "墨", cinnabar: "朱砂", indigo: "靛青" },
     schemes: { light: "浅色", dark: "深色" },

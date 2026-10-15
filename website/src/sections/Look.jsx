@@ -25,7 +25,7 @@ export function Look() {
     <Section id="look" labelledBy="look-title">
       <Heading id="look-title" title={m.look.title} lead={m.look.lead} />
 
-      <div className="reveal mt-10 flex flex-wrap items-center justify-center gap-3">
+      <div className="reveal mt-10 flex flex-wrap items-center gap-3">
         <Segmented
           label={m.look.themeLabel}
           value={theme}
@@ -40,7 +40,7 @@ export function Look() {
         />
       </div>
 
-      <div className="reveal relative mx-auto mt-10 mb-[clamp(5rem,9vw,7rem)] max-w-5xl">
+      <div className="reveal relative mt-10 mb-[clamp(5rem,9vw,7rem)]">
         <WindowFrame
           key={`${theme}-${scheme}`}
           {...home}

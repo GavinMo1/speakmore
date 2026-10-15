@@ -69,7 +69,7 @@ export function Demo() {
       <Heading id="demo-title" title={m.demo.title} lead={m.demo.lead} />
 
       <div ref={root} className="reveal mt-[clamp(3rem,7vw,5rem)]">
-        <div className="mb-6 flex justify-center gap-1.5" role="tablist">
+        <div className="mb-6 flex gap-1.5" role="tablist">
           {examples.map((item, i) => (
             <button
               key={item.label}

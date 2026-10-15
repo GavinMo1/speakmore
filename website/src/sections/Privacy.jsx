@@ -40,7 +40,7 @@ export function Privacy() {
 
   return (
     <Section id="privacy" tone="ink" labelledBy="privacy-title">
-      <Heading id="privacy-title" title={text.title} />
+      <Heading id="privacy-title" title={text.title} align="center" />
       <ul className="reveal mt-[clamp(3.5rem,8vw,6rem)] grid gap-y-14 sm:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-line">
         {items.map((item) => (
           <li key={item.id} className="flex flex-col items-center px-6 text-center">

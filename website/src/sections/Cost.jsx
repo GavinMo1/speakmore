@@ -22,14 +22,14 @@ export function Cost() {
       <dl
         ref={roll.ref}
         data-roll={roll.stage}
-        className="reveal mx-auto mt-[clamp(3.5rem,8vw,6rem)] grid max-w-5xl gap-12 text-center lg:grid-cols-[1fr_1.45fr_1fr] lg:gap-6"
+        className="reveal mt-[clamp(3.5rem,8vw,6rem)] grid gap-12 lg:grid-cols-[1fr_1.45fr_1fr] lg:gap-6"
       >
         {facts.map((fact) => (
           // 数在上、说明在下；dl 里 dt 得写在前面，所以倒过来排
-          <div key={fact.id} className="flex flex-col-reverse items-center gap-2">
+          <div key={fact.id} className="flex flex-col-reverse items-start gap-2">
             <dt className={fact.highlight ? "font-medium text-ink" : "text-ink-2"}>{fact.label}</dt>
             <dd
-              className={`font-rounded text-[clamp(2.5rem,5vw,3.75rem)] leading-[1.25] font-semibold tracking-tight whitespace-nowrap tabular-nums ${
+              className={`font-rounded text-[clamp(2.5rem,5vw,3.75rem)] leading-[1.25] font-semibold tracking-tight whitespace-nowrap ${
                 fact.highlight ? "text-cinnabar" : "text-ink"
               }`}
             >
@@ -81,7 +81,9 @@ function Rolling({ value }) {
           /\d/.test(char) ? (
             // biome-ignore lint/suspicious/noArrayIndexKey: 字符的位置是固定的
             <span key={place} className="roll" style={{ "--d": 10 + Number(char), "--p": place }}>
-              <span>
+              {/* 撑出这一位最后那个数本来的宽度：1 窄、0 宽，不留空 */}
+              <span className="invisible">{char}</span>
+              <span className="roll-strip">
                 {STRIP.map((digit, row) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: 竖条是固定的两遍 0–9
                   <span key={row}>{digit}</span>

@@ -175,24 +175,28 @@
    一格比字高一些（--roll-cell，和那行字的行高一样）：上下留出的空让相邻的数露不出来，边缘淡出也碰不到停稳的数 */
 .roll {
   --roll-cell: 1.25em;
+  position: relative;
   display: inline-block;
   height: var(--roll-cell);
   overflow: hidden;
   mask-image: linear-gradient(transparent, #000 16%, #000 84%, transparent);
 }
 
-.roll > span {
+.roll-strip {
+  position: absolute;
+  inset: 0 0 auto;
   display: flex;
   flex-direction: column;
+  align-items: center;
   transform: translateY(calc(var(--d) * -1 * var(--roll-cell)));
   transition: transform 1.4s var(--ease-out-quint) calc(var(--p) * 50ms);
 }
 
-.roll > span > span {
+.roll-strip > span {
   height: var(--roll-cell);
 }
 
-[data-roll="ready"] .roll > span {
+[data-roll="ready"] .roll-strip {
   transform: translateY(0);
   transition: none;
 }
@@ -203,7 +207,7 @@
     animation: none;
   }
 
-  .roll > span {
+  .roll-strip {
     transition: none;
   }
 }

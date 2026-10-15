@@ -53,7 +53,7 @@ export default {
     speedLabel: "from end of speech to text",
   },
   cost: {
-    title: "About $1\na month.",
+    title: "Monthly cost.\nAbout $1.",
     lead: "The app is free. Use your own key and pay Google only for what you use.",
     once: { value: "$0.0003", label: "Per dictation" },
     month: { value: "$0.67–1.05", label: "430–870 dictations a month" },
