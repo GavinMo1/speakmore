@@ -1,0 +1,48 @@
+/**
+ * 一整段：底色、上下留白、内容的最大宽度。
+ * tone：canvas（跟着系统深浅）、surface（跟着系统、比底色深一点）、night（首屏的靛青夜色）、ink（近黑）
+ */
+const TONES = {
+  canvas: "bg-canvas",
+  surface: "bg-surface",
+  night: "tone-night",
+  ink: "tone-ink",
+};
+
+export function Section({ id, tone = "canvas", className = "", children, labelledBy }) {
+  return (
+    <section id={id} aria-labelledby={labelledBy} className={`${TONES[tone]} text-ink overflow-hidden ${className}`}>
+      <div className="mx-auto max-w-6xl px-5 py-[clamp(5.5rem,13vw,10rem)] sm:px-8">{children}</div>
+    </section>
+  );
+}
+
+/** 文案里的 \n 是标题换行的位置 */
+export function Lines({ text }) {
+  const lines = text.split("\n");
+  return lines.map((line, index) => (
+    <span key={line} className="block">
+      {line}
+      {index < lines.length - 1 ? " " : null}
+    </span>
+  ));
+}
+
+/** 每段的大标题和下面一句话。align：center 或 left */
+export function Heading({ id, title, lead, align = "center", className = "" }) {
+  const centered = align === "center";
+  return (
+    <header className={`reveal ${centered ? "mx-auto text-center" : ""} max-w-3xl ${className}`}>
+      <h2 id={id} className="display text-[clamp(2.4rem,6vw,4.5rem)]">
+        <Lines text={title} />
+      </h2>
+      {lead ? (
+        <p
+          className={`mt-5 text-[clamp(1.0625rem,1.8vw,1.375rem)] leading-relaxed font-medium text-ink-2 ${centered ? "mx-auto text-balance" : "text-pretty"} max-w-[36rem]`}
+        >
+          {lead}
+        </p>
+      ) : null}
+    </header>
+  );
+}

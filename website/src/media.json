@@ -1,0 +1,102 @@
+{
+  "home-light-ink.en": {
+    "path": "shots/home-light-ink.en.2cf0c991.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "home-dark-ink.en": {
+    "path": "shots/home-dark-ink.en.44ee26c1.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "home-light-cinnabar.en": {
+    "path": "shots/home-light-cinnabar.en.0bca2fd5.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "home-dark-cinnabar.en": {
+    "path": "shots/home-dark-cinnabar.en.e6ce4dfd.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "home-light-indigo.en": {
+    "path": "shots/home-light-indigo.en.fe744880.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "home-dark-indigo.en": {
+    "path": "shots/home-dark-indigo.en.58d9204d.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "history-light-cinnabar.en": {
+    "path": "shots/history-light-cinnabar.en.a33dee25.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "bar-ink.en": {
+    "path": "shots/bar-ink.en.25f94dde.webp",
+    "width": 230,
+    "height": 107
+  },
+  "bar-cinnabar.en": {
+    "path": "shots/bar-cinnabar.en.a268f494.webp",
+    "width": 230,
+    "height": 107
+  },
+  "bar-indigo.en": {
+    "path": "shots/bar-indigo.en.a866c5cc.webp",
+    "width": 230,
+    "height": 107
+  },
+  "home-light-ink.zh-CN": {
+    "path": "shots/home-light-ink.zh-CN.0e0d5ac0.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "home-dark-ink.zh-CN": {
+    "path": "shots/home-dark-ink.zh-CN.0337f186.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "home-light-cinnabar.zh-CN": {
+    "path": "shots/home-light-cinnabar.zh-CN.b8bca719.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "home-dark-cinnabar.zh-CN": {
+    "path": "shots/home-dark-cinnabar.zh-CN.14af4328.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "home-light-indigo.zh-CN": {
+    "path": "shots/home-light-indigo.zh-CN.3b07a467.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "home-dark-indigo.zh-CN": {
+    "path": "shots/home-dark-indigo.zh-CN.26d8a3b5.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "history-light-cinnabar.zh-CN": {
+    "path": "shots/history-light-cinnabar.zh-CN.e9e1b19c.webp",
+    "width": 1080,
+    "height": 750
+  },
+  "bar-ink.zh-CN": {
+    "path": "shots/bar-ink.zh-CN.ad961277.webp",
+    "width": 211,
+    "height": 107
+  },
+  "bar-cinnabar.zh-CN": {
+    "path": "shots/bar-cinnabar.zh-CN.ce516746.webp",
+    "width": 211,
+    "height": 107
+  },
+  "bar-indigo.zh-CN": {
+    "path": "shots/bar-indigo.zh-CN.cc6ea5fc.webp",
+    "width": 211,
+    "height": 107
+  }
+}

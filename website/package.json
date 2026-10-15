@@ -1,0 +1,24 @@
+{
+  "name": "speakmore-website",
+  "private": true,
+  "description": "SpeakMore 官网：React + Tailwind CSS v4 的单页静态站，中英双语",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "icons": "node scripts/icons.mjs"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@vitejs/plugin-react": "6.1.2",
+    "tailwindcss": "4.3.3",
+    "vite": "8.3.4"
+  }
+}

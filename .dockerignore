@@ -1,0 +1,7 @@
+# docker build 只用得到 package.json、assets/icon.svg 和 website/（见 website/Dockerfile），别的都不送进去
+*
+!package.json
+!assets/icon.svg
+!website
+website/node_modules
+website/dist

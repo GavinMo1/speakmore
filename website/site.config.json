@@ -1,0 +1,8 @@
+{
+  "siteUrl": "https://speakmore.zephyrxiang.com",
+  "downloadBase": "https://dl.zephyrxiang.com/speakmore",
+  "mediaBase": "https://media.speakmore.zephyrxiang.com",
+  "repository": "https://github.com/zephyr4123/speakmore",
+  "locales": ["en", "zh-CN"],
+  "defaultLocale": "en"
+}

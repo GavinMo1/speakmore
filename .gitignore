@@ -34,6 +34,8 @@ node_modules/
 # SpeakMore 本机编译出来的原生小程序和打出来的应用（只认仓库根下的这两个目录）
 /build/
 /dist/
+# 官网构建出来的静态页
+website/dist/
 
 # Claude Code 给子任务临时建的工作副本
 .claude/worktrees/
