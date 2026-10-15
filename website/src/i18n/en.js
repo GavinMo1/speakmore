@@ -21,7 +21,6 @@ export default {
   hero: {
     title: "Speak more.\nType less.",
     lead: "Voice dictation for Mac.\nOne key, any app, polished text.",
-    facts: ["Free", "Open source", "macOS 12+"],
     shotAlt: "SpeakMore's home window: words, time saved, pace, a daily heatmap and spend",
     barAlt: "The floating bar during dictation: cancel, a live waveform, done",
   },
@@ -30,7 +29,6 @@ export default {
     lead: "Filler words, repetitions and self-corrections are removed. Enumerations become lists.",
     said: "Spoken",
     written: "Written",
-    note: "Actual output: synthesized speech, cleaned up by Gemini 3.6 Flash.",
     examples: [
       {
         label: "Filler words",
@@ -53,10 +51,8 @@ export default {
       { key: null, text: "Speak" },
       { key: "Right ⌥", text: "Press again" },
     ],
-    cancel: "Press {esc} to cancel",
     speedValue: "≈2 s",
     speedLabel: "from end of speech to text",
-    apps: "Slack, Notion, VS Code, WeChat, Chrome, Gmail and more",
   },
   cost: {
     title: "About $1\na month.",
@@ -67,37 +63,6 @@ export default {
       { label: "430–870 dictations a month", value: "$0.67–1.05", highlight: true },
       { label: "On Gemini's free tier", value: "$0" },
     ],
-    note: "Estimated from the author's real use, Jun–Sep 2026: 430–870 dictations and 4.5–7 hours of audio a month, at Gemini 3.6 Flash list prices with prompt caching. Google doubles 3.6 Flash prices on Jan 1, 2027, which puts it at about $1.30–2.10 a month.",
-  },
-  privacy: {
-    title: "Straight to the model.\nNothing in between.",
-    lead: "No account, no intermediary server, no analytics.",
-    mac: "Your Mac",
-    key: "your key",
-    provider: "Gemini or OpenAI",
-    middle: "Intermediary server",
-    none: "None",
-    points: [
-      { icon: "key", title: "Keychain encryption", text: "Your key is encrypted by the macOS Keychain." },
-      { icon: "drive", title: "Local history", text: "Your history never leaves your Mac." },
-      { icon: "eyeOff", title: "No screen reading", text: "Only audio is sent, nothing else." },
-      { icon: "code", title: "Open source", text: "Every line of code is on GitHub." },
-    ],
-  },
-  models: {
-    title: "Gemini or OpenAI.\nYour choice.",
-    lead: "Add your own key. Switch providers in one click.",
-    default: "Default",
-    gemini: {
-      name: "Gemini",
-      model: "gemini-3.6-flash",
-      facts: ["Most thorough cleanup", "Text in about 2 s", "Free tier available", "Prompt caching"],
-    },
-    openai: {
-      name: "OpenAI",
-      model: "gpt-audio-mini",
-      facts: ["Text in 2–5 s", "Lighter cleanup"],
-    },
   },
   look: {
     title: "Three themes.\nLight and dark.",
@@ -108,24 +73,26 @@ export default {
     schemeLabel: "Appearance",
     alt: "SpeakMore's home window, {theme} theme, {scheme}",
   },
-  open: {
-    title: "Open source.\nMIT licensed.",
-    lead: "Read, modify and build it yourself.",
-    cta: "View on GitHub",
+  privacy: {
+    title: "Private and open.",
+    direct: {
+      title: "Direct to the model",
+      text: "Audio goes straight from your Mac to the model. No account; history stays local.",
+    },
+    models: { title: "Gemini or OpenAI", text: "Use your own key and switch at any time." },
+    open: { title: "Open source", text: "MIT licensed. The source code is on {github}." },
+    languages: {
+      title: "English and Chinese",
+      text: "The interface follows your system language, or set it in Settings.",
+    },
   },
   download: {
     title: "Get started.",
-    lead: "Free. Signed and notarized by Apple.",
+    lead: "Free. Requires macOS 12 or later.",
     button: "Download for {chip}",
     chips: { arm64: "Apple silicon", x64: "Intel" },
-    whichChip: "Your Mac's chip is listed in About This Mac.",
-    terminal: "Or install from Terminal",
     copy: "Copy",
     copied: "Copied",
-    needs: "Requires macOS 12 or later and a {gemini} (free tier available) or an {openai}.",
-    geminiKey: "Gemini key",
-    openaiKey: "OpenAI key",
-    version: "Version {version}",
   },
   footer: {
     license: "MIT License",

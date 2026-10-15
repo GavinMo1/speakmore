@@ -3,7 +3,6 @@ import { Keycap } from "../components/Keycap.jsx";
 import { Heading, Section } from "../components/Section.jsx";
 import { useI18n } from "../i18n/index.jsx";
 import { Icon } from "../icons/Icon.jsx";
-import { fill } from "../lib/text.js";
 
 // 字能落进去的那些应用：原色的标志
 const APPS = ["wechat", "slack", "notion", "vscode", "chrome", "gmail", "obsidian", "figma", "telegram"];
@@ -25,15 +24,6 @@ export function How() {
           </li>
         ))}
       </ol>
-      <p className="mt-6 text-center text-sm text-ink-2">
-        {fill(m.how.cancel, {
-          esc: (
-            <kbd key="esc" className="font-sans font-semibold text-ink">
-              esc
-            </kbd>
-          ),
-        })}
-      </p>
 
       <div className="reveal mt-[clamp(3.5rem,8vw,6rem)] flex flex-col items-center gap-6">
         <ul className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
@@ -46,7 +36,6 @@ export function How() {
             </li>
           ))}
         </ul>
-        <p className="text-sm text-ink-2">{m.how.apps}</p>
         <p className="mt-4 flex items-baseline gap-3">
           <span className="font-rounded text-4xl font-semibold tracking-tight text-ink">{m.how.speedValue}</span>
           <span className="text-ink-2">{m.how.speedLabel}</span>

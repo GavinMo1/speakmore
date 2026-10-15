@@ -24,9 +24,6 @@ export function Hero() {
           <Lines text={m.hero.lead} />
         </p>
         <DownloadButtons className="rise mt-10" style={{ "--d": "240ms" }} />
-        <p className="rise mt-5 text-sm text-ink-2" style={{ "--d": "300ms" }}>
-          {m.hero.facts.join(" · ")}
-        </p>
       </div>
 
       <div

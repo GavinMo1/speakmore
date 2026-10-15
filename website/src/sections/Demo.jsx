@@ -5,14 +5,14 @@ import { useI18n } from "../i18n/index.jsx";
 import { cutMarks } from "../lib/text.js";
 import { useOnScreen, useReducedMotion } from "../lib/usePageMotion.js";
 
-// 一轮演示的节奏（毫秒）：边说边出字 → 整理 → 打勾 → 删掉的划掉、成品出来 → 停一会儿换下一个
+// 一轮演示的节奏（毫秒）：边说边出字 → 整理 → 打勾 → 删掉的淡出、成品出来 → 停一会儿换下一个
 const TYPE_MS = 3200;
 const FINISH_MS = 1300;
 const DONE_MS = 600;
 const HOLD_MS = 4200;
 
 /**
- * 左边是口述（边说边出现），右边是写出来的成品。口头禅、重复、改口在口述里划掉。
+ * 左边是口述（边说边出现），右边是写出来的成品。口头禅、重复、改口在口述里一段接一段淡出、虚掉，不划线。
  * 例子都是 App 的真实输出（合成语音口述给 Gemini 3.6 Flash）
  */
 export function Demo() {
@@ -60,6 +60,7 @@ export function Demo() {
   const parts = cutMarks(example.said);
   const total = parts.reduce((sum, part) => sum + part.text.length, 0);
   let shown = Math.round(total * progress);
+  let cuts = 0;
   const written = phase === "written";
   const barState = phase === "talk" ? "recording" : phase === "finishing" ? "finishing" : "done";
 
@@ -94,17 +95,18 @@ export function Demo() {
               {parts.map((part, i) => {
                 const visible = part.text.slice(0, Math.max(0, shown));
                 shown -= part.text.length;
+                if (part.cut) cuts += 1;
                 if (!visible) return null;
                 return (
                   <span
                     // biome-ignore lint/suspicious/noArrayIndexKey: 片段的顺序是固定的
                     key={i}
                     aria-hidden="true"
-                    className={
-                      part.cut && written
-                        ? "text-ink-2/45 line-through decoration-cinnabar decoration-2 transition-colors duration-500"
-                        : "text-ink transition-colors duration-500"
-                    }
+                    // 删掉的部分从前往后依次淡下去，像被拿走了；留下的字不动
+                    style={part.cut ? { transitionDelay: written ? `${cuts * 110}ms` : "0ms" } : undefined}
+                    className={`transition-[color,filter] duration-700 ease-out-quint motion-reduce:transition-none ${
+                      part.cut && written ? "text-ink/28 blur-[1px]" : "text-ink"
+                    }`}
                   >
                     {visible}
                   </span>
@@ -134,7 +136,6 @@ export function Demo() {
             </p>
           </div>
         </div>
-        <p className="mt-5 text-center text-xs text-ink-2">{m.demo.note}</p>
       </div>
     </Section>
   );

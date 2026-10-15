@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 import en from "../src/i18n/en.js";
 import zh from "../src/i18n/zh-CN.js";
@@ -36,4 +38,26 @@ test("演示里的口述标记成对，删掉的部分不是整句", () => {
       assert.ok(parts.some((part) => !part.cut));
     }
   }
+});
+
+test("页面里读的文案都有：两份一起漏了同一段时，结构对得上也查不出来", () => {
+  const dir = new URL("../src/", import.meta.url).pathname;
+  const files = readdirSync(dir, { recursive: true }).filter((file) => file.endsWith(".jsx"));
+  const missing = [];
+  for (const file of files) {
+    const source = readFileSync(join(dir, file), "utf8");
+    for (const [, path] of source.matchAll(/\bm\.(\w+(?:\.\w+)*)/g)) {
+      let value = en;
+      for (const key of path.split(".")) {
+        // 读到字或数组就停：后面是 .join、.length 这些
+        if (typeof value !== "object" || Array.isArray(value)) break;
+        value = value[key];
+        if (value === undefined) {
+          missing.push(`${file}: m.${path}`);
+          break;
+        }
+      }
+    }
+  }
+  assert.deepEqual(missing, []);
 });

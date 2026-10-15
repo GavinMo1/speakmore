@@ -19,7 +19,6 @@ export default {
   hero: {
     title: "开口即成文",
     lead: "专为 Mac 打造的语音输入。\n一键唤起，适用于任意应用，自动整理成文。",
-    facts: ["免费", "开源", "macOS 12 及以上"],
     shotAlt: "SpeakMore 主窗口首页：字数、节省时间、语速、每日热力图与花费",
     barAlt: "口述时的悬浮条：左侧取消，中间为随语音起伏的声波，右侧完成",
   },
@@ -28,7 +27,6 @@ export default {
     lead: "自动删除语气词、重复与改口前的内容，列举的事项整理为条目。",
     said: "口述原话",
     written: "整理结果",
-    note: "以上均为真实输出：合成语音口述，由 Gemini 3.6 Flash 整理。",
     examples: [
       {
         label: "去除口癖",
@@ -50,10 +48,8 @@ export default {
       { key: null, text: "口述" },
       { key: "右 ⌥", text: "再次按下" },
     ],
-    cancel: "按 {esc} 取消",
     speedValue: "约 2 秒",
     speedLabel: "口述结束至文字出现",
-    apps: "微信、飞书、Slack、Notion、VS Code、Chrome 等",
   },
   cost: {
     title: "月均成本\n约 1 美元",
@@ -64,37 +60,6 @@ export default {
       { label: "每月 430–870 次听写", value: "$0.67–1.05", highlight: true },
       { label: "使用 Gemini 免费额度", value: "$0" },
     ],
-    note: "依据作者 2026 年 6–9 月的实际用量估算：每月听写 430–870 次、录音 4.5–7 小时，按 Gemini 3.6 Flash 官方价格并启用提示词缓存计算。Google 已宣布自 2027 年 1 月 1 日起 3.6 Flash 价格上调一倍，届时每月约 $1.30–2.10。",
-  },
-  privacy: {
-    title: "语音直达模型\n全程不经中转",
-    lead: "无需注册账号，不设中转服务器，不收集使用数据。",
-    mac: "本机",
-    key: "自有密钥",
-    provider: "Gemini 或 OpenAI",
-    middle: "中转服务器",
-    none: "不存在",
-    points: [
-      { icon: "key", title: "钥匙串加密", text: "密钥由 macOS 钥匙串加密保存。" },
-      { icon: "drive", title: "记录仅存本机", text: "听写历史不离开你的 Mac。" },
-      { icon: "eyeOff", title: "不读取屏幕", text: "仅上传录音，不采集其他内容。" },
-      { icon: "code", title: "代码完全公开", text: "全部源代码托管于 GitHub。" },
-    ],
-  },
-  models: {
-    title: "Gemini 与 OpenAI\n任选其一",
-    lead: "填入自有密钥即可使用，支持一键切换。",
-    default: "默认",
-    gemini: {
-      name: "Gemini",
-      model: "gemini-3.6-flash",
-      facts: ["整理效果最佳", "约 2 秒出字", "提供免费额度", "支持提示词缓存"],
-    },
-    openai: {
-      name: "OpenAI",
-      model: "gpt-audio-mini",
-      facts: ["2–5 秒出字", "整理力度略轻"],
-    },
   },
   look: {
     title: "三套主题\n深浅模式随系统切换",
@@ -105,24 +70,20 @@ export default {
     schemeLabel: "外观",
     alt: "SpeakMore 主窗口首页，{theme}主题，{scheme}",
   },
-  open: {
-    title: "开源\n采用 MIT 许可",
-    lead: "源代码完全公开，可自由查阅、修改与编译。",
-    cta: "前往 GitHub",
+  privacy: {
+    title: "隐私与开放",
+    direct: { title: "直连模型", text: "录音由本机直接发送至模型，无需账号，记录仅存本机。" },
+    models: { title: "Gemini 或 OpenAI", text: "使用自有密钥，可随时切换。" },
+    open: { title: "开源", text: "采用 MIT 许可，源代码公开于 {github}。" },
+    languages: { title: "中英双语", text: "界面跟随系统语言，也可在设置中切换。" },
   },
   download: {
     title: "立即开始",
-    lead: "免费下载，已通过 Apple 签名与公证。",
+    lead: "免费下载，适用于 macOS 12 及以上版本。",
     button: "下载 {chip}版",
     chips: { arm64: "Apple 芯片", x64: "Intel 芯片" },
-    whichChip: "可在“关于本机”中查看芯片类型。",
-    terminal: "也可在终端中安装",
     copy: "复制",
     copied: "已复制",
-    needs: "需要 macOS 12 及以上版本，以及一把 {gemini}（提供免费额度）或 {openai}",
-    geminiKey: "Gemini 密钥",
-    openaiKey: "OpenAI 密钥",
-    version: "当前版本 {version}",
   },
   footer: {
     license: "MIT 许可",

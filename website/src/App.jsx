@@ -4,9 +4,7 @@ import { Download } from "./sections/Download.jsx";
 import { Hero } from "./sections/Hero.jsx";
 import { How } from "./sections/How.jsx";
 import { Look } from "./sections/Look.jsx";
-import { Models } from "./sections/Models.jsx";
 import { Nav } from "./sections/Nav.jsx";
-import { OpenSource } from "./sections/OpenSource.jsx";
 import { Privacy } from "./sections/Privacy.jsx";
 
 export default function App() {
@@ -17,11 +15,9 @@ export default function App() {
         <Hero />
         <Demo />
         <How />
+        <Look />
         <Cost />
         <Privacy />
-        <Models />
-        <Look />
-        <OpenSource />
         <Download />
       </main>
     </>

@@ -3,15 +3,15 @@ import { useI18n } from "../i18n/index.jsx";
 
 /**
  * 花多少钱：一张账单式的清单，左边是哪一项，右边是钱。文案里标了 highlight 的那一行（每月）用朱砂标出来。
- * 数字的出处在文案的 note 里（README 成本一节：作者的真实用量、Gemini 的官方价）
+ * 数字的出处是 README 的成本一节（作者的真实用量、Gemini 的官方价），页面上不再写一遍
  */
 export function Cost() {
   const { m } = useI18n();
   return (
-    <Section id="cost" labelledBy="cost-title">
+    <Section id="cost" tone="surface" labelledBy="cost-title">
       <Heading id="cost-title" title={m.cost.title} lead={m.cost.lead} />
 
-      <figure className="reveal mx-auto mt-[clamp(3rem,7vw,5rem)] max-w-3xl">
+      <div className="reveal mx-auto mt-[clamp(3rem,7vw,5rem)] max-w-3xl">
         <dl className="border-t border-line">
           {m.cost.items.map((item) => (
             <div
@@ -29,8 +29,7 @@ export function Cost() {
             </div>
           ))}
         </dl>
-        <figcaption className="mt-8 text-xs leading-relaxed text-ink-2 text-pretty">{m.cost.note}</figcaption>
-      </figure>
+      </div>
     </Section>
   );
 }

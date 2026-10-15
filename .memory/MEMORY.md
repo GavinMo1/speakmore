@@ -26,4 +26,4 @@
 - [客户端多语言](speakmore-i18n-next.md) — 已随 0.6.0 发布：英文和简体中文、跟随系统、命令行和内核报的话也跟着换，提示词不动；加语言照 docs/development.md
 - [官网文案用书面语](website-copy-formal.md) — 简洁但不口语、不俏皮；第一版他嫌像小孩子写的，中英都收敛
 - [官网不提 Typeless](website-no-typeless.md) — 不比价、不链逆向笔记、不写无关联声明，有测试守着；README 和逆向资料没说要动
-- [官网观感](website-look.md) — 不铺渐变光晕、按钮里不套胶囊、Apple 芯片和 Intel 入口完全同等
+- [官网观感](website-look.md) — 不铺渐变光晕、按钮里不套胶囊、两种芯片入口同等；一句话的特色并成一排，不加小字，删除效果不用划线

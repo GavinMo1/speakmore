@@ -1,7 +1,8 @@
 // 从 Iconify 取页面用到的图标，写成 src/icons/data.js。加图标：在下面登记一行，再跑 npm run icons。
 // 取下来的 SVG 直接打进页面，不在访客打开时再去 Iconify 要：少一个外部依赖，也不往第三方报访客的来路。
 //
-// 界面图标只用 Remix Icon（ri，Apache-2.0）一套；各家应用的标志用 SVG Logos（logos，CC0）和 theSVG（thesvg-color，MIT）。
+// 界面图标只用 Remix Icon（ri，Apache-2.0）一套；各家应用的标志用 SVG Logos（logos，CC0）和 theSVG（thesvg-color，MIT），
+// Intel 的标志用 Simple Icons（simple-icons，CC0）。
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,33 +10,15 @@ import { fileURLToPath } from "node:url";
 /** 页面里的名字 → Iconify 里的 "图标集:名字" */
 const ICONS = {
   // 界面
-  download: "ri:download-2-line",
   terminal: "ri:terminal-box-line",
   copy: "ri:file-copy-line",
   check: "ri:check-line",
   lock: "ri:lock-2-line",
-  key: "ri:key-2-line",
-  noAccount: "ri:user-forbid-line",
-  eyeOff: "ri:eye-off-line",
-  laptop: "ri:macbook-line",
-  cloudOff: "ri:cloud-off-line",
   translate: "ri:translate-2",
-  palette: "ri:palette-line",
-  shield: "ri:shield-check-line",
-  code: "ri:code-s-slash-line",
-  arrowRight: "ri:arrow-right-line",
-  arrowUpRight: "ri:arrow-right-up-line",
-  mic: "ri:mic-line",
-  verified: "ri:verified-badge-line",
-  chart: "ri:bar-chart-2-line",
-  history: "ri:history-line",
-  drive: "ri:hard-drive-3-line",
-  sparkle: "ri:magic-line",
-  timer: "ri:timer-flash-line",
   // 品牌（单色，跟着字的颜色走）
   apple: "ri:apple-fill",
+  intel: "simple-icons:intel",
   github: "ri:github-fill",
-  gemini: "ri:gemini-fill",
   openai: "ri:openai-fill",
   // 品牌（原色）
   geminiColor: "thesvg-color:gemini",

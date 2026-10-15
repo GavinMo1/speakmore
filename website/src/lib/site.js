@@ -16,8 +16,6 @@ export function siteLinks(site, version) {
     install: `curl -fsSL ${base}/install.sh | bash`,
     repository: site.repository,
     license: `${site.repository}/blob/main/LICENSE`,
-    geminiKey: "https://aistudio.google.com/apikey",
-    openaiKey: "https://platform.openai.com/api-keys",
     /** COS 上一张图的地址；path 是 src/media.json 里记的对象名 */
     media: (path) => `${media}/${path}`,
   };
