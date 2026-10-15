@@ -22,4 +22,4 @@
 - [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、改完就收，不再派第二轮，除非他点名
 - [桌面端的文案和观感](desktop-copy-and-look.md) — 短词短句；结构对齐原版，配色走自己的主题，做渐变、玻璃等特色
 - [README 英文为主](readme-english-first.md) — 英文主页加中文切换，HTML 排版、简短；卖点是成本和隐私，数字要有出处
-- [下一个需求：客户端 i18n](speakmore-i18n-next.md) — 先加英文且默认英文，内核语言不动；动手前先对齐命令行、内核报错文案、默认语言三处边界
+- [客户端多语言](speakmore-i18n-next.md) — 已在 feat/i18n 做完：英文和简体中文、跟随系统、命令行和内核报的话也跟着换，提示词不动；加语言照 docs/development.md
