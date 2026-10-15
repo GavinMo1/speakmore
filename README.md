@@ -243,7 +243,7 @@ git clone https://github.com/zephyr4123/speakmore.git
 cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
-npm run check                 # 代码检查 + 全部测试（524 条，不联网、不开窗口）
+npm run check                 # 代码检查 + 全部测试（530 条，不联网、不开窗口）
 npm run release               # 打发布包：dist/release/ 下两种芯片各一个，外加 install.sh，摆成下载地址上的样子
 ```
 
@@ -295,13 +295,15 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 npm run install-app     # 打包并装进“应用程序”，然后打开
 ```
 
-用的是不带身份的本机签名，所以每次重新打包系统都会把它当成一个新应用，权限要重新给，key 要重新填。它不在 `~/.speakmore` 里，`speakmore uninstall` 不会删它。
+本机配了签名证书和公证档案时（`.machine.env` 里的 `MAC_SIGNING_IDENTITY`、`MAC_NOTARY_PROFILE`，怎么配见 `.machine.env.example`），打出来的应用用 Developer ID 签名、开 hardened runtime，交给苹果公证并钉上票据，连公证一共五六分钟。系统按应用标识（`com.zephyrxiang.speakmore`）和证书的团队认它，重新打包不再被当成新应用；拷到别的 Mac 上也能直接打开。没配就是不带身份的本机签名：每次重新打包系统都把它当成一个新应用，权限要重新给，key 要重新填。
+
+它不在 `~/.speakmore` 里，`speakmore uninstall` 不会删它。
 
 .app 在运行时，`speakmore status`、`history`、`key`、`stop` 照常能用。`speakmore restart` 和 `config set` 不会代它重启：从命令行起来的是终端启动的那一个，权限和 key 是另一套。按提示从菜单栏退出，再打开一次。
 
 ### 验证到哪一步
 
-- 自动测试 524 条，在 Node 26.0 上全过；其中 475 条单测在 Node 24.21（Electron 自带的版本，程序就跑在它上面）上也全过；Node 22.13 上跑过的是更早的 269 条（之后加的没在 22 上重跑）。其中 18 条是安装脚本的，17 条拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
+- 自动测试 530 条，在 Node 26.0 上全过；其中 475 条单测在 Node 24.21（Electron 自带的版本，程序就跑在它上面）上也全过；Node 22.13 上跑过的是更早的 269 条（之后加的没在 22 上重跑）。其中 18 条是安装脚本的，17 条拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
 - 用真的发布包走过一遍，装在临时目录里，`PATH` 里没有 Node：
   - 安装脚本从管道读入，装完直接启动并问 key，输入不显示。
   - 启动、状态、设置、重启、停止；合成的语音经过录音编码、Gemini、存历史，成品正确。
@@ -339,6 +341,7 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
   - 在伪终端里跑第一次启动：选 2（OpenAI）、粘贴 key，启动后用的是 OpenAI，设置文件里记着它，key 没有出现在屏幕上；选的时候按 Ctrl-C，key 也不问了，照默认的 Gemini 启动，面板里说还差 key。
   - 用调试协议驱动真的设置窗口：两家都有 key 时点"改用 OpenAI"，命令行看到的、设置文件里的都换成了 OpenAI，接着发一段录音给内置服务，先转成 WAV 再交给 OpenAI，4 秒回来；换回 Gemini；删掉 OpenAI 的 key 后粘贴一把错的，说 key 无效、还是 Gemini；粘贴对的，存好并换过去。重启后台后用的仍是 OpenAI。
   - 安装脚本的预检查真跑过一次（本机打的包、临时目录、只装不启动）：两家都打了勾。两家连不上时的样子只在自动测试里（假的 curl）看过。
+- 签名和公证（`npm run dist`，Apple 芯片）：打出来的应用 Developer ID 签名、hardened runtime、安全时间戳都在，主程序和小帮手只有 JIT、麦克风两项权限；苹果公证 Accepted、没有问题项，票据钉上了，`spctl` 判定 Notarized Developer ID。**没验证的**：签了名的应用装上后实际跑一遍（授权、填 key、听写）、重新打包后权限和 key 还在不在、Intel 版。
 - 主窗口和首次引导（从源码跑的，发布包里还没试过）：
   - 画面：用真页面和造的数据离屏截图看过三套主题、浅色深色下的首页、历史记录、设置四页和"还差什么"的横幅；首次引导六步（朱砂浅色全部、墨深色四步）；历史记录往下滚时，顶上那条玻璃把滚上去的字模糊了。
   - 临时目录里起真的后台（右 Control 当热键），用调试协议驱动真窗口：缺 key 时自己打开首次引导；在引导里填 key，真的验证通过；走完打开主窗口首页；设置里换热键、换主题当场生效；`speakmore settings` 停在缺东西的那一页。这一轮是在换观感、改文案之前跑的，之后只改了样式和字，没有重跑。
