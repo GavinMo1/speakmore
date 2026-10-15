@@ -130,6 +130,10 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
             (SELECT count(*) - count(cost_usd) FROM model_calls WHERE created_at >= :since) AS unpricedCalls
      FROM history WHERE created_at >= :since`,
   );
+  const completed = db.prepare(
+    `SELECT created_at AS createdAt, refined_text AS text, duration FROM history
+     WHERE status = 'completed' ORDER BY created_at`,
+  );
   // 用量汇总的各列，总数和按型号分开的两处共用
   const USAGE_COLUMNS = `count(*) AS calls,
             count(*) FILTER (WHERE purpose = 'check') AS checks,
@@ -176,6 +180,13 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
      */
     stats({ since = "" } = {}) {
       return { ...summarize.get({ since }) };
+    },
+    /**
+     * 所有完成了的听写，老的在前，只带首页统计要的几项（src/usage/insights.mjs）：字数、哪天说的要从文字和时间里数。
+     * 一条百来个字，几千条也就几百 KB，不在库里预先汇总
+     */
+    dictations() {
+      return completed.all().map((row) => ({ ...row }));
     },
     /**
      * 记一笔账：一次回了话的模型调用（src/server/refine/refiner.mjs 的 onCall 给的样子）。
