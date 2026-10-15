@@ -1,6 +1,6 @@
 ---
 name: speakmore-i18n-next
-description: 客户端多语言已做（分支 feat/i18n）：英文和简体中文，跟随系统、认不出来用英文；命令行和内核报上来的话也跟着换，提示词不动
+description: 客户端多语言已随 0.6.0 发布：英文和简体中文，跟随系统、认不出来用英文；命令行和内核报上来的话也跟着换，提示词不动
 metadata:
   node_type: memory
   type: project
@@ -16,4 +16,4 @@ metadata:
 
 **Why:** README 已改成英文为主（见 [[readme-english-first]]），界面却只有中文，英文用户用不了。
 
-**How to apply:** 2026-10-15 在分支 feat/i18n 做完（提交 6e29a77、4d8fd1a，审查后的修正 67a2d24），还没合并主干、没推。之后加语言照 docs/development.md 里"加一种界面语言"那段做；内核新写给人看的话要交出 msg（src/i18n），不要写死中文；回给命令行的话由后台按请求里的 locale 翻成字（旧命令行和 status --json 只认字）。文案照 [[desktop-copy-and-look]]，英文也要短。没验证的：菜单栏换语言后的样子、装好的应用里换语言。install.sh 他定了只用英文、不跟语言（2026-10-15），测试会拦住非注释的汉字。
+**How to apply:** 2026-10-15 做完（提交 6e29a77、4d8fd1a，审查后的修正 67a2d24），当天合并主干、随 0.6.0 发布。之后加语言照 docs/development.md 里"加一种界面语言"那段做；内核新写给人看的话要交出 msg（src/i18n），不要写死中文；回给命令行的话由后台按请求里的 locale 翻成字（旧命令行和 status --json 只认字）。文案照 [[desktop-copy-and-look]]，英文也要短。没验证的：菜单栏换语言后的样子、装好的应用里换语言。install.sh 他定了只用英文、不跟语言（2026-10-15），测试会拦住非注释的汉字。
