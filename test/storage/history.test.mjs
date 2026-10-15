@@ -114,11 +114,13 @@ test("统计：只数完成的听写，可以只看某个时刻之后的", () =>
   history.close();
 });
 
-test("首页统计要的：所有完成了的听写，只带时间、文字、时长，老的在前；失败的不算", () => {
+test("首页统计要的：所有完成了的听写，只带时间、文字、时长，老的在前；失败的、没听到声音的不算", () => {
   const history = openHistory(join(dir, "history.db"));
   history.add(entry({ id: "b", createdAt: "2026-10-13T09:00:00.000Z", refinedText: "第二句", duration: 2 }));
   history.add(entry({ id: "a", createdAt: "2026-10-12T09:00:00.000Z", refinedText: "第一句", duration: 1 }));
   history.add(entry({ id: "c", status: "failed", refinedText: "", error: "超时" }));
+  // 误按了一下、没说话：模型回了空文字，也记成完成了，但不算说过话
+  history.add(entry({ id: "d", createdAt: "2026-10-14T09:00:00.000Z", refinedText: "", duration: 3 }));
   assert.deepEqual(history.dictations(), [
     { createdAt: "2026-10-12T09:00:00.000Z", text: "第一句", duration: 1 },
     { createdAt: "2026-10-13T09:00:00.000Z", text: "第二句", duration: 2 },

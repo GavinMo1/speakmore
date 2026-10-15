@@ -132,7 +132,7 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
   );
   const completed = db.prepare(
     `SELECT created_at AS createdAt, refined_text AS text, duration FROM history
-     WHERE status = 'completed' ORDER BY created_at`,
+     WHERE status = 'completed' AND refined_text <> '' ORDER BY created_at`,
   );
   // 用量汇总的各列，总数和按型号分开的两处共用
   const USAGE_COLUMNS = `count(*) AS calls,
@@ -183,6 +183,7 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
     },
     /**
      * 所有完成了的听写，老的在前，只带首页统计要的几项（src/usage/insights.mjs）：字数、哪天说的要从文字和时间里数。
+     * 没听到声音的（模型回了空文字）不算：误按一下不该算一天活跃，也不该拉低语速。
      * 一条百来个字，几千条也就几百 KB，不在库里预先汇总
      */
     dictations() {
