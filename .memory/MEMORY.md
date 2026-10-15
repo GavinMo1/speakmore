@@ -21,3 +21,4 @@
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
 - [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、改完就收，不再派第二轮，除非他点名
 - [桌面端的文案和观感](desktop-copy-and-look.md) — 短词短句；结构对齐原版，配色走自己的主题，做渐变、玻璃等特色
+- [README 英文为主](readme-english-first.md) — 英文主页加中文切换，HTML 排版、简短；卖点是成本和隐私，数字要有出处
