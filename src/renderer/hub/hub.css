@@ -203,13 +203,6 @@
   gap: 0.875rem;
 }
 
-.panel-title {
-  margin: 0 0.25rem;
-  font-size: var(--text-heading);
-  font-weight: 600;
-  color: var(--ink-2);
-}
-
 /* 浮在光晕上的面：半透明，上沿一道亮边 */
 .card {
   padding: 1.1rem 1.25rem;
@@ -520,12 +513,6 @@
   line-height: 1.35;
 }
 
-.dictate-hint {
-  font-size: 0.75rem;
-  line-height: 1.35;
-  color: var(--ink-2);
-}
-
 .version {
   font-size: 0.75rem;
   text-align: right;
@@ -534,26 +521,6 @@
 
 /* ---------- 历史记录 ---------- */
 
-/* 标题底下一行小字：数据在哪、录音发去哪 */
-.privacy-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem 0.5rem;
-  margin: -1rem 0 0.5rem;
-  font-size: var(--text-small);
-  color: var(--ink-2);
-}
-
-.privacy-line code {
-  padding: 0.05rem 0.4rem;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  background: var(--fill-hover);
-  border-radius: 0.3rem;
-  user-select: text;
-}
-
 .load-error {
   margin-top: 1.5rem;
 }
@@ -561,15 +528,6 @@
 .empty-state {
   padding: 4rem 0 2rem;
   text-align: center;
-}
-
-.empty-title {
-  font-size: var(--text-heading);
-  font-weight: 600;
-}
-
-.empty-text {
-  margin-top: 0.35rem;
   color: var(--ink-2);
 }
 
@@ -739,20 +697,6 @@
   font-weight: 650;
 }
 
-.pane-lede {
-  max-width: 34rem;
-  margin-bottom: 1rem;
-  font-size: 0.875rem;
-  color: var(--ink-2);
-}
-
-.category {
-  margin: 1.5rem 0 0.25rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--ink-2);
-}
-
 .setting {
   display: flex;
   align-items: center;
@@ -762,20 +706,14 @@
   border-bottom: 1px solid var(--line);
 }
 
-.setting-text {
-  min-width: 0;
-}
-
 .setting-title {
   display: block;
   font-size: 0.875rem;
   font-weight: 590;
 }
 
-.setting-desc {
-  margin-top: 0.1rem;
-  font-size: 0.8125rem;
-  color: var(--ink-2);
+.recheck-row {
+  margin-top: 1rem;
 }
 
 .setting-value {

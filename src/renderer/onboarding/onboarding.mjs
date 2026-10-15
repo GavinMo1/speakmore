@@ -64,14 +64,11 @@ function render() {
     button.disabled = granted === true;
   }
 
-  const keycap = setup.hotkey.choices.find(({ id }) => id === setup.hotkey.value);
   $("big-keycap").textContent = setup.hotkey.keycap;
-  $("hotkey-desc").textContent = `当前：${keycap.label}`;
   $("hotkey-select").replaceChildren(
     ...setup.hotkey.choices.map(({ id, label }) => new Option(label, id, false, id === setup.hotkey.value)),
   );
-  $("try-desc").textContent = `点进笔记 · 按 ${setup.hotkey.keycap} 读下面这句 · 再按结束`;
-  $("try-text").placeholder = `按 ${setup.hotkey.keycap} 开始说…`;
+  $("try-text").placeholder = `点这里，按 ${setup.hotkey.keycap} 读左边那句，再按一下结束`;
 
   // 底下的两个按钮
   const first = step === STEPS[0] || (step === "permissions" && startStep(setup) === "permissions");

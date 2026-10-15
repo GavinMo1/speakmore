@@ -42,10 +42,8 @@ export function createSettings({ refresh }) {
     $("theme").replaceChildren(
       ...setup.theme.choices.map(({ id, name }) => new Option(name, id, false, id === setup.theme.value)),
     );
-    const openAtLogin = $("open-at-login");
-    openAtLogin.checked = setup.openAtLogin.enabled;
-    openAtLogin.disabled = !setup.openAtLogin.supported;
-    $("open-at-login-desc").textContent = setup.openAtLogin.supported ? "登录后自动打开" : "从终端启动时不可用";
+    $("open-at-login").checked = setup.openAtLogin.enabled;
+    $("open-at-login-row").hidden = !setup.openAtLogin.supported;
   }
 
   function showNote(id, message, tone = "") {

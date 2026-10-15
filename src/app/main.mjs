@@ -1,5 +1,5 @@
 import { rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import {
   app,
   BrowserWindow,
@@ -435,7 +435,6 @@ async function main() {
   ipcMain.handle("app:info", () => ({
     version: app.getVersion(),
     hotkeyKeycap: HOTKEY_KEYCAPS[hotkey],
-    dataDir: dirname(PATHS.historyDb),
   }));
   ipcMain.handle("app:open-homepage", () => shell.openExternal(HOMEPAGE));
   ipcMain.handle("clipboard:write", (_event, text) => {

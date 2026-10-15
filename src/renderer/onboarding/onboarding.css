@@ -84,7 +84,7 @@ body {
 }
 
 .step-title {
-  margin: 0 0 0.9rem;
+  margin: 0 0 1.5rem;
   /* 中文标题只在标点和空格处换行，不把"设置"拆成两行 */
   word-break: keep-all;
   font-size: 2.25rem;
@@ -96,13 +96,6 @@ body {
 
 .soft {
   color: var(--ink-2);
-}
-
-.step-desc {
-  max-width: 30rem;
-  margin-bottom: 1.5rem;
-  color: var(--ink-2);
-  text-wrap: pretty;
 }
 
 .visual {
@@ -197,12 +190,6 @@ body {
   font-weight: 590;
 }
 
-.grant-secondary {
-  margin-top: 0.15rem;
-  font-size: 0.8125rem;
-  color: var(--ink-2);
-}
-
 /* 给了以后按钮换成一个勾，不再能点 */
 .grants [data-granted="true"] > .button {
   color: var(--ok);
@@ -210,25 +197,17 @@ body {
 }
 
 .privacy {
-  gap: 1.1rem;
-  justify-content: flex-start;
-}
-
-.privacy-title {
-  font-size: 0.8125rem;
-  color: var(--ink-2);
+  gap: 1.25rem;
 }
 
 .privacy-name {
   font-weight: 600;
 }
 
-.privacy-text {
-  margin-top: 0.15rem;
-  font-size: 0.875rem;
-  color: var(--ink-2);
-  /* 家目录是真实路径，可能很长、中间没有空格 */
-  overflow-wrap: anywhere;
+.privacy-name::before {
+  content: "✓";
+  margin-right: 0.6rem;
+  color: var(--ok);
 }
 
 /* ---------- 测麦克风、测快捷键 ---------- */
@@ -314,37 +293,9 @@ body {
   box-shadow: var(--edge);
 }
 
-.did-title {
-  margin-bottom: 0.4rem;
-  font-size: 0.875rem;
-  color: var(--ink-2);
-}
-
-.did {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.875rem;
-}
-
-.did li::before {
-  content: "✓ ";
-  color: var(--ok);
-}
-
 .notes {
   justify-content: flex-start;
-  gap: 0.75rem;
   padding: 1.5rem;
-}
-
-.notes-title {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--ink-2);
 }
 
 .notes-text {
@@ -380,12 +331,8 @@ body {
 }
 
 .done .step-title {
-  font-size: 3rem;
-}
-
-.done .step-desc {
-  max-width: 34rem;
   margin-bottom: 2rem;
+  font-size: 3rem;
 }
 
 .button.big {

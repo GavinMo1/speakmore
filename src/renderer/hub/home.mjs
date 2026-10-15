@@ -129,17 +129,13 @@ export function createHome() {
       spendRow("本月", report.month),
       spendRow("累计", report.total),
     );
-    const { total } = report;
-    // 一条一个短语，中间点隔开
-    const notes = [];
-    if (total.latency) notes.push(`耗时取中位数，慢时 ${formatSeconds(total.latency.p90Ms)}`);
+    // 只在数字不全时说一句：有的型号没有标价，那几次没算进花费
     const unpriced = report.models.filter(({ unpricedCalls }) => unpricedCalls > 0);
-    if (unpriced.length > 0) {
-      notes.push(`${unpriced.map(({ model }) => model).join("、")} 无标价，${total.unpricedCalls} 次未计入`);
-    }
-    if (total.cacheCostUsd > 0) notes.push(`含提示词缓存 ${formatUsd(total.cacheCostUsd)}`);
-    notes.push("按官方标价估算（美元）", "Gemini 免费额度内实际不收费");
-    $("spend-note").textContent = notes.join(" · ");
+    $("spend-note").hidden = unpriced.length === 0;
+    $("spend-note").textContent =
+      unpriced.length === 0
+        ? ""
+        : `${unpriced.map(({ model }) => model).join("、")} 无标价，${report.total.unpricedCalls} 次未计入`;
   }
 
   $("heatmap-back").addEventListener("click", () => {

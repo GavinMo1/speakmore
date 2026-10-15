@@ -91,13 +91,12 @@ export function createHistory() {
 
   return {
     /**
-     * @param {{ rows: object[], app: { dataDir: string, hotkeyKeycap: string } }} data
+     * @param {{ rows: object[], app: { hotkeyKeycap: string } }} data
      */
     render({ rows, app }) {
       $("history-error").hidden = true;
-      $("history-dir").textContent = app.dataDir;
       $("history-empty").hidden = rows.length > 0;
-      $("history-empty-text").textContent = `按 ${app.hotkeyKeycap} 说第一句`;
+      $("history-empty").textContent = `还没有记录 · 按 ${app.hotkeyKeycap} 说第一句`;
 
       const now = new Date();
       const groups = [];

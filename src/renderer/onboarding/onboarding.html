@@ -24,7 +24,6 @@
       <section class="step" data-step="key" aria-labelledby="key-title">
         <div class="step-text">
           <h1 class="step-title" id="key-title"><span class="soft">先接上</span>模型</h1>
-          <p class="step-desc">一次转写加整理 · 自带 key、按量计费 · Gemini 有免费额度</p>
           <div class="key-panel" id="key-panel"></div>
         </div>
         <aside class="visual flow" aria-hidden="true">
@@ -41,50 +40,29 @@
           <h1 class="step-title" id="permissions-title"><span class="soft">开三项</span>权限</h1>
           <ul class="grants">
             <li data-permission="microphone">
-              <div>
-                <p class="grant-primary">麦克风</p>
-                <p class="grant-secondary">只在说话时打开</p>
-              </div>
+              <p class="grant-primary">麦克风</p>
               <button type="button" class="button primary">允许</button>
             </li>
             <li data-permission="listen">
-              <div>
-                <p class="grant-primary">输入监控</p>
-                <p class="grant-secondary">听热键 · 只认这一个键</p>
-              </div>
+              <p class="grant-primary">输入监控</p>
               <button type="button" class="button primary">允许</button>
             </li>
             <li data-permission="trusted">
-              <div>
-                <p class="grant-primary">辅助功能</p>
-                <p class="grant-secondary">自动贴字 · 缺了要手动 ⌘V</p>
-              </div>
+              <p class="grant-primary">辅助功能</p>
               <button type="button" class="button primary">允许</button>
             </li>
           </ul>
-          <p class="hint">开好后回来，自动刷新</p>
         </div>
         <aside class="visual privacy">
-          <p class="privacy-title">数据去向</p>
-          <div class="privacy-item">
-            <p class="privacy-name">历史只存本机</p>
-            <p class="privacy-text" id="privacy-home">~/.speakmore · 不上传</p>
-          </div>
-          <div class="privacy-item">
-            <p class="privacy-name">录音只发所选模型</p>
-            <p class="privacy-text">直连 Gemini 或 OpenAI · 无中转</p>
-          </div>
-          <div class="privacy-item">
-            <p class="privacy-name">key 加密存本机</p>
-            <p class="privacy-text">系统钥匙串 · 存后不再显示</p>
-          </div>
+          <p class="privacy-name">历史只存本机</p>
+          <p class="privacy-name">录音只发所选模型</p>
+          <p class="privacy-name">key 加密存本机</p>
         </aside>
       </section>
 
       <section class="step" data-step="microphone" aria-labelledby="microphone-title" hidden>
         <div class="step-text">
           <h1 class="step-title" id="microphone-title"><span class="soft">说句话，</span>测麦克风</h1>
-          <p class="step-desc">随便说，看右边</p>
           <p class="question">条在动吗？</p>
           <div class="answers">
             <button type="button" class="button primary" id="microphone-yes">在动，继续</button>
@@ -104,7 +82,6 @@
       <section class="step" data-step="hotkey" aria-labelledby="hotkey-title" hidden>
         <div class="step-text">
           <h1 class="step-title" id="hotkey-title"><span class="soft">按一下，</span>测快捷键</h1>
-          <p class="step-desc" id="hotkey-desc"></p>
           <p class="question">键变色了吗？</p>
           <div class="answers">
             <button type="button" class="button primary" id="hotkey-yes">变了，继续</button>
@@ -124,24 +101,15 @@
       <section class="step" data-step="try" aria-labelledby="try-title" hidden>
         <div class="step-text">
           <h1 class="step-title" id="try-title"><span class="soft">现在，</span>说一句</h1>
-          <p class="step-desc" id="try-desc"></p>
           <blockquote class="sample">嗯，我们明天上午九点开会，不对，九点半吧，记得把上周的数据带上。</blockquote>
-          <p class="did-title">整理时会</p>
-          <ul class="did">
-            <li>去掉“嗯”</li>
-            <li>听出改口：九点 → 九点半</li>
-            <li>只留最终说法</li>
-          </ul>
         </div>
         <aside class="visual notes">
-          <p class="notes-title">笔记</p>
           <textarea class="notes-text" id="try-text" aria-label="笔记"></textarea>
         </aside>
       </section>
 
       <section class="step done" data-step="done" aria-labelledby="done-title" hidden>
         <h1 class="step-title" id="done-title"><span class="soft">说话，</span>别打字</h1>
-        <p class="step-desc">想到就说 · 剩下的交给 SpeakMore</p>
         <button type="button" class="button primary big" id="finish">开始使用</button>
       </section>
     </main>
