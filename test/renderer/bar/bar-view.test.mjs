@@ -31,7 +31,7 @@ test("收尾的样子自己会消失，说话时的样子一直留着", () => {
 
 test("上方的那行提示：告诉人现在在干什么、按哪个键；键名单独标出来", () => {
   const options = { keycap: "右⌥", cancellable: true };
-  assert.deepEqual(hintFor(View.STARTING, options), ["正在打开麦克风"]);
+  assert.deepEqual(hintFor(View.STARTING, options), ["打开麦克风…"]);
   assert.deepEqual(hintFor(View.RECORDING, options), [
     "再按一下 ",
     { key: "右⌥" },

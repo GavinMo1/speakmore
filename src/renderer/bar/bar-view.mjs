@@ -50,7 +50,7 @@ export function viewOf(state, previousPhase) {
 export function hintFor(view, { keycap, cancellable }) {
   switch (view) {
     case View.STARTING:
-      return ["正在打开麦克风"];
+      return ["打开麦克风…"];
     case View.RECORDING:
       return cancellable
         ? ["再按一下 ", { key: keycap }, " 完成 · ", { key: "esc" }, " 取消"]

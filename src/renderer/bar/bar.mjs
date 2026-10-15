@@ -72,8 +72,8 @@ function start() {
 }
 
 function describeStartError(error) {
-  if (error?.name === "NotAllowedError") return "没有麦克风权限：到 系统设置 › 隐私与安全性 › 麦克风 里打开";
-  if (error?.name === "NotFoundError") return "没有找到麦克风";
+  if (error?.name === "NotAllowedError") return "缺麦克风权限：系统设置 › 隐私与安全性 › 麦克风";
+  if (error?.name === "NotFoundError") return "找不到麦克风";
   return describe(error);
 }
 
@@ -95,7 +95,7 @@ async function stop() {
     recorded = await current.recording.stop();
     if (!recorded.hadSignal) {
       voice.abandon();
-      throw new Error("麦克风没有信号：检查输入设备有没有选对、是不是被静音了");
+      throw new Error("麦克风没信号：查输入设备、是否静音");
     }
     const text = await voice.finish({ durationSeconds: recorded.durationSeconds });
     const { notice } = await window.speakmore.deliver({
