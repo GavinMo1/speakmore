@@ -4,6 +4,8 @@
 //   latest                                        一行：最新的版本号，比如 v0.2.0
 //   v0.2.0/speakmore-darwin-arm64.tar.gz          这个版本的包，两种芯片各一个
 //   v0.2.0/speakmore-darwin-arm64.tar.gz.sha256   和 shasum -a 256 的输出同一种格式
+//   v0.2.0/SpeakMore-arm64.dmg                    直接下载的安装包：签了名、过了公证的 SpeakMore.app，两种芯片各一个
+//   v0.2.0/SpeakMore-arm64.dmg.sha256             同上
 
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -11,6 +13,7 @@ import { join } from "node:path";
 
 export const ARCHS = ["arm64", "x64"];
 export const archiveName = (arch) => `speakmore-darwin-${arch}.tar.gz`;
+export const dmgName = (arch) => `SpeakMore-${arch}.dmg`;
 export const versionDir = (version) => `v${version}`;
 
 /** 下载地址上，这个产品的东西都在这个前缀下面 */
@@ -32,7 +35,10 @@ export const sha256 = (file) => createHash("sha256").update(readFileSync(file)).
 export function planUpload(releaseDir) {
   const item = (name, cacheControl, contentType) => {
     const path = join(releaseDir, name);
-    if (!existsSync(path)) throw new Error(`发布目录里少了 ${name}。先运行 npm run release（两种芯片都要打）。`);
+    if (!existsSync(path))
+      throw new Error(
+        `发布目录里少了 ${name}。先运行 npm run release（两种芯片都要打；安装包要先在 .machine.env 配好签名和公证）。`,
+      );
     const immutable = cacheControl === IMMUTABLE;
     return {
       path,
@@ -52,15 +58,20 @@ export function planUpload(releaseDir) {
   }
 
   const items = [];
-  for (const arch of ARCHS) {
-    const archive = item(`${version}/${archiveName(arch)}`, IMMUTABLE, "application/gzip");
-    const checksum = item(`${version}/${archiveName(arch)}.sha256`, IMMUTABLE, TEXT);
-    const recorded = readFileSync(checksum.path, "utf8").split(/\s+/)[0];
-    // 安装脚本拿这个校验值核对下到的包：两样对不上的话，传上去谁也装不成
-    if (recorded !== archive.sha256) {
-      throw new Error(`${archiveName(arch)} 和它的 .sha256 对不上。重新运行 npm run release。`);
+  /** 一个包和它的校验值。安装脚本、下载的人拿这个校验值核对：两样对不上的话，传上去谁也装不成 */
+  const withChecksum = (name, contentType) => {
+    const file = item(`${version}/${name}`, IMMUTABLE, contentType);
+    const checksum = item(`${version}/${name}.sha256`, IMMUTABLE, TEXT);
+    if (readFileSync(checksum.path, "utf8").split(/\s+/)[0] !== file.sha256) {
+      throw new Error(`${name} 和它的 .sha256 对不上。重新运行 npm run release。`);
     }
-    items.push(archive, checksum);
+    return [file, checksum];
+  };
+  for (const arch of ARCHS) {
+    items.push(
+      ...withChecksum(archiveName(arch), "application/gzip"),
+      ...withChecksum(dmgName(arch), "application/x-apple-diskimage"),
+    );
   }
   items.push(item("install.sh", MUTABLE, "text/x-shellscript; charset=utf-8"), latest);
   return items;

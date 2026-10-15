@@ -28,6 +28,10 @@ remote="$(git ls-remote origin "refs/tags/${tag}^{}" | cut -f 1)"
 [ -n "${remote}" ] || remote="$(git ls-remote origin "refs/tags/${tag}" | cut -f 1)"
 [ "${remote}" = "$(git rev-parse HEAD)" ] || fail "标签 ${tag} 还没推到 GitHub，或者那边指的不是这个提交"
 
+# 安装包要签名、公证：没配的话要等打到最后才发现，先查
+node --input-type=module -e 'import { signingConfig } from "./scripts/build/signing.mjs"; process.exit(signingConfig(process.cwd())?.notaryProfile ? 0 : 1)' ||
+  fail "本机没配签名和公证（.machine.env 的 MAC_SIGNING_IDENTITY、MAC_NOTARY_PROFILE，见 .machine.env.example），打不了安装包"
+
 npm run check
 # 程序跑在 Electron 自带的 Node 上，单测在那个版本上也跑一遍
 ELECTRON_RUN_AS_NODE=1 node_modules/.bin/electron --test --test-timeout=5000 "test/*.test.mjs" "test/!(install)/**/*.test.mjs"
@@ -42,7 +46,8 @@ for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
 done
 [ "$(curl -fsS "${DOWNLOAD_URL}/latest")" = "${tag}" ] || fail "传上去了，但下载地址上的 latest 两分钟后还不是 ${tag}"
 for arch in arm64 x64; do
-  sum="${tag}/speakmore-darwin-${arch}.tar.gz.sha256"
-  [ "$(curl -fsS "${DOWNLOAD_URL}/${sum}")" = "$(cat "dist/release/${sum}")" ] || fail "下载地址上 ${sum} 和本机的不一样"
+  for sum in "${tag}/speakmore-darwin-${arch}.tar.gz.sha256" "${tag}/SpeakMore-${arch}.dmg.sha256"; do
+    [ "$(curl -fsS "${DOWNLOAD_URL}/${sum}")" = "$(cat "dist/release/${sum}")" ] || fail "下载地址上 ${sum} 和本机的不一样"
+  done
 done
-echo "发好了：${tag}。下载地址上的最新版本和两个包的校验值都对得上。"
+echo "发好了：${tag}。下载地址上的最新版本、两个包和两个安装包的校验值都对得上。"

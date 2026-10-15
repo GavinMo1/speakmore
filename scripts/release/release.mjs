@@ -8,6 +8,9 @@
 //   app/      程序：代码、运行时依赖、编好的小帮手（两种芯片合一）
 //   runtime/  运行环境：原版的 Electron.app。命令行和后台应用都用它跑，所以用的人不需要装 Node
 // 装的人不需要 npm、Node、Xcode：这些活都在这里做完了。
+//
+// 另外每种芯片打一个直接下载的安装包（SpeakMore-<芯片>.dmg）：签了名、过了公证的 SpeakMore.app，
+// 要本机配好签名和公证（.machine.env 的 MAC_SIGNING_IDENTITY、MAC_NOTARY_PROFILE），没配就不打，发布时会因为缺它传不上去。
 
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -15,8 +18,11 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { downloadArtifact } from "@electron/get";
 import { buildHelper } from "../../src/cli/native-helper.mjs";
+import { makeDmg } from "../build/dmg.mjs";
+import { packageMacApp } from "../build/mac-app.mjs";
+import { signingConfig } from "../build/signing.mjs";
 import { APP_ENTRIES, stageApp } from "../build/stage-app.mjs";
-import { ARCHS, archiveName, sha256, versionDir } from "./release-layout.mjs";
+import { ARCHS, archiveName, dmgName, sha256, versionDir } from "./release-layout.mjs";
 
 const packageDir = resolve(import.meta.dirname, "../..");
 const outDir = join(packageDir, "dist", "release");
@@ -30,6 +36,8 @@ if (unknown.length > 0) {
   process.exit(2);
 }
 const archs = wanted.length > 0 ? wanted : ARCHS;
+// 先读：配错了在编译、打包之前就说
+const signing = signingConfig(packageDir);
 
 const { version } = readJson(join(packageDir, "package.json"));
 const electronDir = join(packageDir, "node_modules", "electron");
@@ -80,6 +88,26 @@ try {
   }
 } finally {
   rmSync(staging, { recursive: true, force: true });
+}
+
+// 没公证过的 dmg 下回来系统不让开，所以签名和公证都配了才打
+if (signing?.notaryProfile) {
+  const appsDir = mkdtempSync(join(tmpdir(), "speakmore-apps-"));
+  try {
+    for (const arch of archs) {
+      const appPath = await packageMacApp({ packageDir, arch, out: appsDir, signing });
+      const dmg = join(outDir, versionDir(version), dmgName(arch));
+      makeDmg({ appPath, dmgPath: dmg, signing });
+      writeFileSync(`${dmg}.sha256`, `${sha256(dmg)}  ${basename(dmg)}\n`);
+      console.log(`打好了：${dmg}（${megabytes(dmg)}）`);
+    }
+  } finally {
+    rmSync(appsDir, { recursive: true, force: true });
+  }
+} else {
+  console.warn(
+    "没配签名和公证（.machine.env 的 MAC_SIGNING_IDENTITY、MAC_NOTARY_PROFILE），不打安装包；发布时缺了它传不上去",
+  );
 }
 
 // 安装脚本和发布包放在一起：下载地址上的和仓库里的是同一份
