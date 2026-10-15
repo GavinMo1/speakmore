@@ -1,7 +1,6 @@
 import { keycapOf, localize, t } from "../shared/i18n.mjs";
 import { createKeyPanel } from "../shared/key-panel.mjs";
 import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
-import { providerIcon } from "../shared/provider-icons.mjs";
 import { describeError, permissionGranted } from "../shared/setup-text.mjs";
 import { canContinue, groupStates, STEPS, startStep } from "./steps.mjs";
 
@@ -57,8 +56,6 @@ function render() {
   for (const item of document.querySelectorAll("[data-group]")) item.dataset.state = states[item.dataset.group];
 
   keyPanel.render(setup);
-  const icon = providerIcon(setup.provider.id);
-  $("flow-model").replaceChildren(...(icon ? [icon] : []), setup.provider.name);
 
   for (const row of document.querySelectorAll("[data-permission]")) {
     const granted = permissionGranted(row.dataset.permission, setup.permissions[row.dataset.permission]);
