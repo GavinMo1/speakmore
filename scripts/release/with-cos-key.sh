@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 带着腾讯云 COS 的密钥跑一条命令（把发布包传上去时用）。密钥只进这一条命令的进程，
+# 带着腾讯云 COS 的密钥跑一条命令（把发布包、官网的图传上去时用）。密钥只进这一条命令的进程，
 # 不留在当前 shell 里，也不出现在命令行参数里。
 #
 #   scripts/release/with-cos-key.sh <命令…>        比如：scripts/release/with-cos-key.sh npm run publish-release
@@ -25,10 +25,12 @@ fail() {
 
 [ -f "$config" ] || fail "没有本机配置 $config"
 # 环境里已经给了的以环境为准，配置只补没给的
-bucket="${COS_BUCKET:-}" region="${COS_REGION:-}"
+bucket="${COS_BUCKET:-}" region="${COS_REGION:-}" media="${SITE_MEDIA_BUCKET:-}"
 # shellcheck source=/dev/null
 . "$config"
 export COS_BUCKET="${bucket:-${COS_BUCKET:-}}" COS_REGION="${region:-${COS_REGION:-}}"
+# 官网图片的桶（website/scripts/upload-media.mjs），没配也不影响发布
+export SITE_MEDIA_BUCKET="${media:-${SITE_MEDIA_BUCKET:-}}"
 [ -n "$COS_BUCKET" ] && [ -n "$COS_REGION" ] || fail "$config 里的 COS_BUCKET 或 COS_REGION 是空的"
 
 if [ -n "${TENCENTCLOUD_SECRET_ID:-}" ] && [ -n "${TENCENTCLOUD_SECRET_KEY:-}" ]; then exec "$@"; fi

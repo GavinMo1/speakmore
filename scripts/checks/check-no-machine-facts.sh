@@ -4,7 +4,7 @@
 #   scripts/checks/check-no-machine-facts.sh
 #
 # 拿去查的字样都是运行时从本机取的，脚本本身不含任何一台机器的情况：
-#   - .machine.env 里填的凭据名、加载器路径、发布桶的名字和签名证书的名字
+#   - .machine.env 里填的凭据名、加载器路径、发布桶和官网图片桶的名字、签名证书的名字
 #   - 家目录的绝对路径
 #   - .machine.env 配了 GIT_EMAIL 时：全局 git 配置里的那个邮箱（它不该出现在这个仓库里）
 # 查的范围：工作区里会进 git 的文件（已跟踪的和还没加进去的）、全部分支的提交信息和作者邮箱、
@@ -27,7 +27,7 @@ needles=()
 # 太短的字样会到处误报，不查
 add() { [ ${#1} -ge 4 ] && needles+=("$1"); return 0; }
 
-for name in SECRETS_LOADER GEMINI_CREDENTIAL OPENAI_CREDENTIAL COS_SECRETS_LOADER COS_CREDENTIAL COS_BUCKET; do
+for name in SECRETS_LOADER GEMINI_CREDENTIAL OPENAI_CREDENTIAL COS_SECRETS_LOADER COS_CREDENTIAL COS_BUCKET SITE_MEDIA_BUCKET; do
   value="$(setting "$name")"
   add "$value"
   # 路径有两种写法，都查：写成 ~ 开头的，和展开成家目录的
