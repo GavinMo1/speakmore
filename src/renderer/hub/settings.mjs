@@ -9,10 +9,10 @@ const $ = (id) => document.getElementById(id);
 
 const PANES = ["general", "model", "permissions", "about"];
 
-/** 还差的东西在哪一页补：key 在"模型"，其余是权限；两样都差时先补 key */
+/** 还差的东西在哪一页补：key 在"模型"，其余是权限（小帮手停了也是，重新检查在那页）；两样都差时先补 key */
 export function paneFor(setup) {
   if (keyMissing(setup)) return "model";
-  return permissionDenied(setup) ? "permissions" : "general";
+  return permissionDenied(setup) || setup.helper === "stopped" ? "permissions" : "general";
 }
 
 /**
@@ -67,8 +67,10 @@ export function createSettings({ refresh }) {
 
   $("theme").addEventListener("change", async (event) => {
     showNote("general-problem", null);
+    showNote("theme-note", null);
     try {
-      await window.speakmore.setTheme(event.target.value);
+      const result = await window.speakmore.setTheme(event.target.value);
+      showNote("theme-note", result.note ?? null);
     } catch (error) {
       showNote("general-problem", `主题没换成：${describeError(error)}`, "problem");
     }

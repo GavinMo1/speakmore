@@ -535,6 +535,9 @@ async function main() {
     saveSetting(PATHS.settingsFile, "theme", wanted);
     reloadTheme();
     setupChanged();
+    // 和热键一样：被环境变量盖着时，存是存下了，眼前不会变，要交代一句
+    const variable = overridingEnv("theme", process.env);
+    return variable === null ? {} : { note: `环境变量 ${variable} 优先 · 删掉它才生效` };
   });
 
   /**
