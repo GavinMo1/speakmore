@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { NotRunningError, requestControl } from "../control.mjs";
+import { LocalizedError, msg } from "../i18n/index.mjs";
 import { ensureHome, keyFile, legacyDataDir } from "./paths.mjs";
 
 // 0.1 版把数据放在 ~/Library/Application Support/SpeakMore。那里还有东西的话，第一次运行时搬进现在的家目录。
@@ -66,7 +67,7 @@ export async function migrateLegacyData({ paths, legacyDir = legacyDataDir(), lo
   if (!existsSync(legacyDir)) return [];
   // 它还开着那个库的话不能搬：搬走之后它会接着往旧位置写，两边各有一半
   if (!(await quitOldDaemon(join(legacyDir, "control.sock"), quitTimeoutMs))) {
-    throw new Error("旧版本的 SpeakMore 还在运行，数据搬不过来。先把它退出（菜单栏“听写”→“退出”），再运行一次。");
+    throw new LocalizedError(msg("storage.legacyRunning"));
   }
 
   ensureHome(paths);

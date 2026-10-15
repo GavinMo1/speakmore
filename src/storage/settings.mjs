@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
 import {
   DEFAULT_MODEL_CHOICE,
   DEFAULT_THINKING_LEVEL,
@@ -14,29 +15,25 @@ import { DEFAULT_THEME, findTheme, THEMES } from "../themes/index.mjs";
 
 /**
  * 热键是单独一个修饰键。原版 Typeless 用 fn；这里默认右 Option，这样两个可以同时开着用。
- * 名字要能直接嵌进中文句子里（"按一下右 Option 键开始说话"），所以都以汉字开头、以"键"结尾。
+ * 叫什么、在悬浮条上写成什么（hotkeys.<id>.name / keycap）在文案里，按界面语言写。
  */
-export const HOTKEYS = {
-  right_option: "右 Option 键",
-  right_command: "右 Command 键",
-  right_control: "右 Control 键",
-  fn: "地球仪（fn）键",
-};
+export const HOTKEY_IDS = Object.freeze(["right_option", "right_command", "right_control", "fn"]);
 
-/** 同一批热键写在悬浮条提示里的短名字：那里地方小，写不下"右 Option 键" */
-export const HOTKEY_KEYCAPS = {
-  right_option: "右⌥",
-  right_command: "右⌘",
-  right_control: "右⌃",
-  fn: "fn",
-};
+/** 热键叫什么：一句还没定语言的话 */
+export const hotkeyName = (id) => msg(`hotkeys.${id}.name`);
+/** 热键写在悬浮条提示里的短名字（那里地方小） */
+export const hotkeyKeycap = (id) => msg(`hotkeys.${id}.keycap`);
 
 const THEME_IDS = THEMES.map((theme) => theme.id);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
+const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
+
+const oneOf = (choices) => new LocalizedError(msg("settings.oneOf", { choices: choices.join(" / ") }));
 
 /**
  * 每一项：对应的环境变量、默认值、能填的值（不限时为 null）、把写法规整并校验的函数。
- * label 可有可无：值本身不好懂时（right_option、cinnabar）给出它叫什么。
+ * 这一项是做什么的写在文案里（settings.describe.<名字>），按界面语言写。
+ * label 可有可无：值本身不好懂时（right_option、cinnabar）给出它叫什么，是一句话（msg）或者一个名字。
  * legacyEnv 可有可无：改名之前的环境变量，env 没设时照样认（README 里写过，用的人可能还在用）。
  * store 可有可无：规整后的值写进文件时换成什么样子（默认原样）。
  */
@@ -44,20 +41,18 @@ export const SETTINGS = {
   hotkey: {
     env: "SPEAKMORE_HOTKEY",
     default: "right_option",
-    describe: "按哪个键开始和结束说话",
-    choices: Object.keys(HOTKEYS),
+    choices: HOTKEY_IDS,
     parse(value) {
-      if (!Object.hasOwn(HOTKEYS, value)) throw new Error(`要是 ${Object.keys(HOTKEYS).join(" / ")} 之一`);
+      if (!HOTKEY_IDS.includes(value)) throw oneOf(HOTKEY_IDS);
       return value;
     },
-    label: (value) => HOTKEYS[value],
+    label: hotkeyName,
   },
   model: {
     env: "SPEAKMORE_MODEL",
     // 0.3 以前只有 Gemini，这个环境变量只写模型名
     legacyEnv: "GEMINI_MODEL",
     default: formatModelChoice(DEFAULT_MODEL_CHOICE),
-    describe: "用哪一家的哪个模型整理，写成 厂商/模型；只写厂商就用它的默认模型。换模型用 speakmore model",
     choices: null,
     parse(value) {
       // 存下来的统一是 厂商/模型。0.3 以前文件里只写 Gemini 的模型名，读的时候照样认（见 parseModelChoice）
@@ -73,42 +68,63 @@ export const SETTINGS = {
   thinking: {
     env: "GEMINI_THINKING_LEVEL",
     default: DEFAULT_THINKING_LEVEL,
-    describe: "Gemini 的思考档位，越高越慢。别家的模型用不上",
     choices: THINKING_LEVELS,
     parse(value) {
       const level = value.toUpperCase();
-      if (!THINKING_LEVELS.includes(level)) throw new Error(`要是 ${THINKING_LEVELS.join(" / ")} 之一`);
+      if (!THINKING_LEVELS.includes(level)) throw oneOf(THINKING_LEVELS);
       return level;
     },
   },
   theme: {
     env: "SPEAKMORE_THEME",
     default: DEFAULT_THEME,
-    describe: "界面用哪套主题",
     choices: THEME_IDS,
     parse(value) {
-      // 写 id 或写名字都认（cinnabar、朱砂），存下来的统一是 id
+      // 写 id 或写名字都认（cinnabar、朱砂、Cinnabar），存下来的统一是 id
       const theme = findTheme(value.trim());
-      if (theme === null) throw new Error(`要是 ${THEME_IDS.join(" / ")} 之一`);
+      if (theme === null) throw oneOf(THEME_IDS);
       return theme.id;
     },
-    label: (value) => findTheme(value).name,
+    label: (value) => msg(`themes.${value}.name`),
+  },
+  language: {
+    env: "SPEAKMORE_LANGUAGE",
+    // 跟随系统，认不出系统的语言时用英文（src/i18n）
+    default: SYSTEM_LOCALE,
+    choices: LANGUAGES,
+    parse(value) {
+      const wanted = value.trim();
+      if (wanted.toLowerCase() === SYSTEM_LOCALE) return SYSTEM_LOCALE;
+      const locale = findLocale(wanted);
+      if (locale === null) throw oneOf(LANGUAGES);
+      return locale.id;
+    },
+    // 语言的名字用它自己的语言写（English、简体中文），不翻
+    label: (value) => (value === SYSTEM_LOCALE ? msg("language.system") : findLocale(value).name),
   },
 };
 
 function settingNamed(name) {
   if (!Object.hasOwn(SETTINGS, name)) {
-    throw new Error(`没有 ${JSON.stringify(name)} 这项设置。能改的有：${Object.keys(SETTINGS).join("、")}`);
+    throw new LocalizedError(
+      msg("settings.unknown", { name: JSON.stringify(name), names: Object.keys(SETTINGS).join(" / ") }),
+    );
   }
   return SETTINGS[name];
 }
 
+/** @param {string | object} where 哪里写的：设置的名字，或者一句话（msg） */
 function parseValue(name, value, where) {
   try {
-    if (typeof value !== "string") throw new Error("要是一段文字");
+    if (typeof value !== "string") throw new LocalizedError(msg("settings.notText"));
     return SETTINGS[name].parse(value);
   } catch (error) {
-    throw new Error(`${where} 写的是 ${JSON.stringify(value)}，${error.message}`);
+    throw new LocalizedError(
+      msg("settings.invalid", { where, value: JSON.stringify(value), reason: problemOf(error) }),
+      {
+        cause: error,
+      },
+    );
   }
 }
 
@@ -118,10 +134,10 @@ function readFile(file) {
   try {
     stored = JSON.parse(readFileSync(file, "utf8"));
   } catch (error) {
-    throw new Error(`设置文件 ${file} 读不出来（${error.message}）。改好它，或者删掉重新设置。`);
+    throw new LocalizedError(msg("settings.unreadable", { file, reason: error.message }), { cause: error });
   }
   if (stored === null || typeof stored !== "object" || Array.isArray(stored)) {
-    throw new Error(`设置文件 ${file} 的内容不是一组"名字: 值"。改好它，或者删掉重新设置。`);
+    throw new LocalizedError(msg("settings.notObject", { file }));
   }
   return stored;
 }
@@ -151,10 +167,13 @@ export function resolveSettings({ file, env }) {
   for (const [name, setting] of Object.entries(SETTINGS)) {
     const variable = overridingEnv(name, env);
     if (variable !== null) {
-      const value = parseValue(name, env[variable], `环境变量 ${variable}`);
+      const value = parseValue(name, env[variable], msg("settings.whereEnv", { variable }));
       resolved[name] = variable === setting.env ? { value, source: "env" } : { value, source: "env", env: variable };
     } else if (stored[name] !== undefined) {
-      resolved[name] = { value: parseValue(name, stored[name], `设置文件 ${file} 里的 ${name}`), source: "file" };
+      resolved[name] = {
+        value: parseValue(name, stored[name], msg("settings.whereFile", { file, name })),
+        source: "file",
+      };
     } else {
       resolved[name] = { value: setting.default, source: "default" };
     }

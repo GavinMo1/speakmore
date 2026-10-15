@@ -2,6 +2,7 @@
 // 单声道、32 kbps、3 秒一块，回声消除、降噪、自动增益全部关掉，把未加工的声音交给模型。
 // 和原版不同的是容器：原版自带编码库出 Ogg，这里用浏览器自带的 MediaRecorder，出的是 WebM。
 
+import { LocalizedError, msg } from "../../i18n/index.mjs";
 import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
 
 const CHUNK_MS = 3_000;
@@ -25,7 +26,10 @@ export async function startRecording({ onChunk, onLevel, onError }) {
     onChunk(event.data);
   });
   recorder.addEventListener("error", (event) => {
-    if (!cancelled) onError(new Error(`录音出错：${event.error?.message ?? "原因不明"}`));
+    if (!cancelled) {
+      const reason = event.error?.message ?? msg("common.unknownReason");
+      onError(new LocalizedError(msg("bar.recordError", { reason })));
+    }
   });
 
   // 音量：给界面一点反馈，也用来发现"麦克风完全没信号"（设备被静音、选错了输入）

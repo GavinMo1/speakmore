@@ -10,7 +10,7 @@ export async function history(args, io) {
     limit: { type: "string", short: "n" },
     json: { type: "boolean", default: false },
   });
-  noPositionals(positionals, "speakmore history [-n 条数] [--json]");
+  noPositionals(positionals, "history");
   const limit = values.limit === undefined ? DEFAULT_HISTORY_LIMIT : positiveInteger(values.limit, "-n");
 
   let rows = [];

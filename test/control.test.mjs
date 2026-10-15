@@ -5,6 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { ControlError, NotRunningError, requestControl, startControlServer, TimeoutError } from "../src/control.mjs";
+import { createTranslator } from "../src/i18n/index.mjs";
+
+const zh = createTranslator("zh-CN");
 
 let dir;
 let socketPath;
@@ -109,7 +112,7 @@ test("对方一直不回话时按时放弃", async () => {
   server = await startControlServer({ socketPath, log, handlers: { hang: () => new Promise(() => {}) } });
   await assert.rejects(
     requestControl(socketPath, "hang", {}, { timeoutMs: 100 }),
-    (error) => error instanceof TimeoutError && /没有在 0\.1 秒内回话/.test(error.message),
+    (error) => error instanceof TimeoutError && /没有在 0\.1 秒内回话/.test(zh.text(error.problem)),
   );
 });
 

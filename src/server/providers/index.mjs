@@ -2,7 +2,9 @@
 // 各自管请求怎么拼、收哪些录音格式、报错怎么认；整理流程本身（提示词、收尾、重试）在 ../refine，各家共用。
 //
 // 这里只放每家的说明，不加载它的 SDK：命令行看设置、列模型时也要用到这份清单，不该为此把各家的代码都读进来。
-// 真要发请求时再 load()。加一家 = 写一个适配器、在下面登记一行。
+// 真要发请求时再 load()。加一家 = 写一个适配器、在下面登记一行，再给每种语言的文案添上去哪申请 key（providers.<id>.getKey）。
+
+import { LocalizedError, msg } from "../../i18n/index.mjs";
 
 export const PROVIDERS = Object.freeze([
   Object.freeze({
@@ -10,7 +12,6 @@ export const PROVIDERS = Object.freeze([
     name: "Gemini",
     keyEnv: "GEMINI_API_KEY",
     keyPage: "https://aistudio.google.com/apikey",
-    keySite: "Google AI Studio",
     // 原来实测选的是 gemini-3.5-flash + MINIMAL：约 1.7 秒出结果，能处理改口；flash-lite 更快（约 1.2 秒）但会把改口的痕迹留下。
     // 3.5 Flash 后来停用了，发给它的请求被自动转给 3.6 Flash（官方弃用页；2026-10-14 实测回话报的就是 3.6），所以直接写 3.6
     defaultModel: "gemini-3.6-flash",
@@ -23,7 +24,6 @@ export const PROVIDERS = Object.freeze([
     name: "OpenAI",
     keyEnv: "OPENAI_API_KEY",
     keyPage: "https://platform.openai.com/api-keys",
-    keySite: "OpenAI 开发者平台",
     defaultModel: "gpt-audio-mini",
     // gpt-audio 系列没有思考档位
     thinkingLevels: null,
@@ -51,11 +51,11 @@ const GEMINI_PREFIXED = /^(models|tunedModels)\/[A-Za-z0-9][A-Za-z0-9._:-]*$/;
  *   openai                 只写厂商，用它的默认模型
  *   gemini-3.5-flash       只写一个不是厂商名的模型名：当成 Gemini 的。0.3 以前设置里只有 Gemini 的模型名，照样认
  *   models/gemini-3.5-flash  0.3 时 Gemini 的 SDK 也认带 models/、tunedModels/ 前缀的写法，照样认成 Gemini 的
- * 写错了就抛错，说清哪里不对。
+ * 写错了就抛 LocalizedError，说清哪里不对（一句接在"model 写的是 …，"后面的话）。
  */
 export function parseModelChoice(value) {
   const text = String(value ?? "").trim();
-  if (text === "") throw new Error("是空的");
+  if (text === "") throw new LocalizedError(msg("models.empty"));
   if (GEMINI_PREFIXED.test(text)) return { provider: "gemini", model: text };
   const slash = text.indexOf("/");
   if (slash === -1) {
@@ -65,14 +65,19 @@ export function parseModelChoice(value) {
   }
   const provider = findProvider(text.slice(0, slash));
   if (!provider) {
-    throw new Error(`不认识 ${text.slice(0, slash)} 这家，能用的有 ${PROVIDERS.map(({ id }) => id).join(" / ")}`);
+    throw new LocalizedError(
+      msg("models.unknownProvider", {
+        name: text.slice(0, slash),
+        providers: PROVIDERS.map(({ id }) => id).join(" / "),
+      }),
+    );
   }
   return { provider: provider.id, model: checkedModelName(provider.id, text.slice(slash + 1)) };
 }
 
 function checkedModelName(provider, model) {
   if (MODEL_NAME.test(model) || (provider === "gemini" && GEMINI_PREFIXED.test(model))) return model;
-  throw new Error(`模型名 ${JSON.stringify(model)} 不对：只能有字母、数字和 . _ : -`);
+  throw new LocalizedError(msg("models.badName", { model: JSON.stringify(model) }));
 }
 
 export const formatModelChoice = ({ provider, model }) => `${provider}/${model}`;
@@ -80,15 +85,15 @@ export const formatModelChoice = ({ provider, model }) => `${provider}/${model}`
 const MAX_KEY_LENGTH = 512;
 
 /**
- * key 的样子对不对（不联网）。不对时返回一句接在"这把 key"后面的说明，句子里不带 key 本身。
+ * key 的样子对不对（不联网）。不对时返回一句说明（msg），句子里不带 key 本身。
  * 要在交给 SDK 之前拦下：带换行的 key 会让 Gemini 的 SDK 报"Headers.append: "…" is an invalid header value"，
  * 引号里是整段输入（实测），这句报错再进日志和终端，key 就漏了。各家的 key 都放在请求头里，所以规则通用。
- * @returns {string | null} 没问题时是 null
+ * @returns {{ key: string, params?: object } | null} 没问题时是 null
  */
 export function apiKeyProblem(key) {
-  if (key.length > MAX_KEY_LENGTH) return `太长了（${key.length} 个字符），像是复制错了东西`;
-  if (/\s/.test(key)) return "里有空格或换行，像是多复制了别的内容";
+  if (key.length > MAX_KEY_LENGTH) return msg("key.tooLong", { length: key.length });
+  if (/\s/.test(key)) return msg("key.whitespace");
   // 只该有看得见的英文字符：别的字符放不进请求头
-  if (!/^[\x21-\x7e]+$/.test(key)) return "里有不该出现的字符，像是复制错了东西";
+  if (!/^[\x21-\x7e]+$/.test(key)) return msg("key.badCharacters");
   return null;
 }

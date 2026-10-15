@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createTranslator, msg } from "../../../src/i18n/index.mjs";
 import { ModelError } from "../../../src/server/providers/errors.mjs";
 import { NO_SPEECH_MARK, SYSTEM_PROMPT, TASK_REMINDER } from "../../../src/server/refine/prompt.mjs";
 import {
@@ -8,6 +9,8 @@ import {
   generateClean,
   textFromModelOutput,
 } from "../../../src/server/refine/refiner.mjs";
+
+const zh = createTranslator("zh-CN");
 
 test("提示词里写的无人声标记，和代码里判断的是同一个", () => {
   assert.ok(SYSTEM_PROMPT.includes(`只输出 ${NO_SPEECH_MARK}，`));
@@ -173,7 +176,7 @@ test("出错时报的是分好类的 ModelError：说得出是哪一家、该怎
   const error = await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm" }).catch((thrown) => thrown);
   assert.ok(error instanceof ModelError);
   assert.equal(error.kind, "unavailable");
-  assert.equal(error.message, "连不上 OpenAI，检查网络后再试");
+  assert.equal(zh.text(error.problem), "连不上 OpenAI，检查网络后再试");
 });
 
 test("录音换不了格式时也报 ModelError，不让原始的解码错误直接冒出去", async () => {
@@ -184,7 +187,7 @@ test("录音换不了格式时也报 ModelError，不让原始的解码错误直
   });
   const error = await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm" }).catch((thrown) => thrown);
   assert.ok(error instanceof ModelError);
-  assert.match(error.message, /解不出声音/);
+  assert.match(zh.text(error.problem), /解不出声音/);
 });
 
 test("warmUp 发适配器的最小请求；失败时同样分好类", async () => {
@@ -210,7 +213,7 @@ test("warmUp 发适配器的最小请求；失败时同样分好类", async () =
     { classify: (error) => (error.status === 401 ? { kind: "key", problem: "这把 key 无效" } : null) },
   );
   const error = await failing.warmUp().catch((thrown) => thrown);
-  assert.deepEqual([error.kind, error.message], ["key", "这把 key 无效"]);
+  assert.deepEqual([error.kind, zh.text(error.problem)], ["key", "这把 key 无效"]);
 });
 
 test("createModelRefiner：按选的厂商装上对应的适配器；不认识的厂商直接报错", async () => {
@@ -285,13 +288,13 @@ test("验证 key 的最小请求也记一笔，不算哪次听写", async () => 
 
 test("回了话但用不了（被截断）：先记账再报错，这一次是收了钱的", async () => {
   const { records, onCall } = recorder();
-  const cut = { text: null, problem: "OpenAI 没有正常结束：length", usage: USAGE };
+  const cut = { text: null, problem: msg("model.unfinished", { provider: "OpenAI", reason: "length" }), usage: USAGE };
   const { refiner } = refinerWith(fakeClient([cut]), { audioTypes: ["audio/webm"], onCall });
   const error = await refiner
     .refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a3" })
     .catch((thrown) => thrown);
   assert.ok(error instanceof ModelError);
-  assert.equal(error.message, "OpenAI 没有正常结束：length");
+  assert.equal(zh.text(error.problem), "OpenAI 没有正常结束：length");
   assert.equal(records.length, 1);
 });
 

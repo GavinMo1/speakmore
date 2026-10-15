@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createKeyManager } from "../../../src/app/keys/key-manager.mjs";
+import { createTranslator } from "../../../src/i18n/index.mjs";
 import { ModelError } from "../../../src/server/providers/errors.mjs";
 import { findProvider } from "../../../src/server/providers/index.mjs";
+
+const zh = createTranslator("zh-CN");
 
 // 服务报上来的错都是模型层分好类的 ModelError（见 src/server/providers/errors.mjs），下面几种的原文都是实测到的
 const OFFLINE = () =>
@@ -162,20 +165,20 @@ test("启动时 key 无效、或者 Gemini 拒绝了请求：不能用，并分�
     { state: rejected.state, source: rejected.source, cause: rejected.cause },
     { state: "rejected", source: "stored", cause: "key" },
   );
-  assert.match(rejected.problem, /无效/);
+  assert.match(zh.text(rejected.problem), /无效/);
   assert.equal(invalid.service.using, null);
 
   const wrongModel = setup({ stored: "good", verdicts: { good: NO_SUCH_MODEL } });
   const other = await wrongModel.keys.loadAtStartup();
   assert.equal(other.cause, "other");
-  assert.match(other.problem, /gemini-nope is not found/);
+  assert.match(zh.text(other.problem), /gemini-nope is not found/);
 });
 
 test("存着的 key 解不开：说读不出来了，请用户重新填", async () => {
   const { keys, service } = setup({ stored: new Error("钥匙串里的密钥没了") });
   const state = await keys.loadAtStartup();
   assert.deepEqual({ state: state.state, source: state.source }, { state: "unreadable", source: "stored" });
-  assert.match(state.problem, /读不出来/);
+  assert.match(zh.text(state.problem), /读不出来/);
   assert.deepEqual(service.calls, []);
 });
 
@@ -186,7 +189,7 @@ test("环境变量里的 key 带着换行：直接判成不能用，不交给服
     { state: state.state, source: state.source, cause: state.cause },
     { state: "rejected", source: "env", cause: "key" },
   );
-  assert.match(state.problem, /空格或换行/);
+  assert.match(zh.text(state.problem), /空格或换行/);
   assert.deepEqual(service.calls, []);
   assert.doesNotMatch(JSON.stringify([state, logged]), /SECRET/);
 });
@@ -194,7 +197,7 @@ test("环境变量里的 key 带着换行：直接判成不能用，不交给服
 test("连的是单独启动的服务端：key 在那边，这里不管", async () => {
   const { keys } = setup({ external: true, stored: "stored-key" });
   assert.deepEqual(await keys.loadAtStartup(), { state: "ready", source: "external", problem: null });
-  assert.match((await keys.save("new-key")).problem, /SPEAKMORE_SERVER_URL/);
+  assert.match(zh.text((await keys.save("new-key")).problem), /SPEAKMORE_SERVER_URL/);
   await keys.forget();
   assert.equal(keys.current.source, "external");
 });
@@ -212,7 +215,7 @@ test("存一把新的：验证通过才存下来并开始用", async () => {
 test("什么都没填：不验证也不存", async () => {
   const { keys, service } = setup();
   for (const empty of ["", "   ", undefined, 42]) {
-    assert.match((await keys.save(empty)).problem, /还没有填/);
+    assert.match(zh.text((await keys.save(empty)).problem), /还没有填/);
   }
   assert.deepEqual(service.calls, []);
 });
@@ -222,7 +225,7 @@ test("新填的 key 带着换行：当场拒绝，不交给服务，它的内容
   await keys.loadAtStartup();
   const result = await keys.save("line-one-SECRET\nline-two-SECRET");
   assert.equal(result.ok, false);
-  assert.match(result.problem, /这把 key 里有空格或换行/);
+  assert.match(zh.text(result.problem), /这把 key 里有空格或换行/);
   assert.equal(service.using, "old-key");
   assert.equal(keyStore.value, "old-key");
   assert.equal(keys.current.state, "ready");
@@ -234,7 +237,7 @@ test("新填的 key 没连上网验证不了：不算通过（它从没验证过
   await withOld.keys.loadAtStartup();
   const result = await withOld.keys.save("new-key");
   assert.equal(result.ok, false);
-  assert.match(result.problem, /连不上/);
+  assert.match(zh.text(result.problem), /连不上/);
   assert.deepEqual(withOld.service.calls.at(-1), { useKey: "new-key", allowUnverified: false });
   assert.equal(withOld.service.using, "old-key");
   assert.equal(withOld.keyStore.value, "old-key");
@@ -242,7 +245,7 @@ test("新填的 key 没连上网验证不了：不算通过（它从没验证过
 
   // 原来就没有 key 的，失败后仍然是"还没有"，而不是"存着的那把不能用"
   const empty = setup({ verdicts: { "new-key": INVALID } });
-  assert.match((await empty.keys.save("new-key")).problem, /无效/);
+  assert.match(zh.text((await empty.keys.save("new-key")).problem), /无效/);
   assert.deepEqual(empty.keys.current, { state: "missing", source: null, problem: null });
   assert.equal(empty.keyStore.value, null);
 });
@@ -252,7 +255,7 @@ test("验证过了但存不下来：这次能用，如实说下次要重填", as
   keyStore.failOnSave = true;
   const result = await keys.save("new-key");
   assert.equal(result.ok, false);
-  assert.match(result.problem, /没存下来.*钥匙串不可用/);
+  assert.match(zh.text(result.problem), /没存下来.*钥匙串不可用/);
   assert.equal(service.using, "new-key");
   assert.equal(keys.current.state, "ready");
 });
@@ -408,7 +411,7 @@ test("给另一家存的 key 没通过：不存，说清原因", async () => {
   const { keys, otherStore } = setup({ verdicts: { "bad-key": INVALID } });
   const result = await keys.save("bad-key", { provider: "openai" });
   assert.equal(result.ok, false);
-  assert.match(result.problem, /无效/);
+  assert.match(zh.text(result.problem), /无效/);
   assert.equal(otherStore.value, null);
 });
 
@@ -424,8 +427,10 @@ test("删另一家的 key：只删它那一份，正在用的不受影响", asyn
 
 test("不认识的厂商：不验证、不存、不删", async () => {
   const { keys, service } = setup();
-  assert.match((await keys.save("k", { provider: "deepseek" })).problem, /不认识 deepseek/);
-  await assert.rejects(keys.forget({ provider: "deepseek" }), /不认识 deepseek/);
+  assert.match(zh.text((await keys.save("k", { provider: "deepseek" })).problem), /不认识 deepseek/);
+  await assert.rejects(keys.forget({ provider: "deepseek" }), (error) =>
+    /不认识 deepseek/.test(zh.text(error.problem)),
+  );
   assert.deepEqual(service.calls, []);
 });
 
@@ -460,7 +465,7 @@ test("改用另一家时连带填一把新的：验证过才存、才换；没�
   await bad.keys.loadAtStartup();
   const result = await bad.keys.use({ provider: "openai", key: "openai-bad" });
   assert.equal(result.ok, false);
-  assert.match(result.problem, /无效/);
+  assert.match(zh.text(result.problem), /无效/);
   assert.equal(bad.keys.provider.id, "gemini");
   assert.equal(bad.service.using, "gemini-key");
   assert.equal(bad.otherStore.value, null);
@@ -472,7 +477,7 @@ test("改用一家还没有 key 的：不换，说要先填它的 key", async ()
   await keys.loadAtStartup();
   const result = await keys.use({ provider: "openai" });
   assert.equal(result.ok, false);
-  assert.match(result.problem, /还没有 OpenAI 的 key/);
+  assert.match(zh.text(result.problem), /还没有 OpenAI 的 key/);
   assert.equal(keys.provider.id, "gemini");
   assert.equal(service.using, "gemini-key");
 });
@@ -499,9 +504,9 @@ test("改用时那一家的环境变量里有 key：用它，标明来自环境�
 
 test("改用：不认识的厂商、连的是单独启动的服务端，都不换并说清楚", async () => {
   const { keys } = setup();
-  assert.match((await keys.use({ provider: "deepseek" })).problem, /不认识 deepseek/);
+  assert.match(zh.text((await keys.use({ provider: "deepseek" })).problem), /不认识 deepseek/);
   const external = setup({ external: true });
-  assert.match((await external.keys.use({ provider: "openai" })).problem, /单独启动的服务端/);
+  assert.match(zh.text((await external.keys.use({ provider: "openai" })).problem), /单独启动的服务端/);
 });
 
 // ---------- 检查某个模型能不能用 ----------
@@ -523,27 +528,27 @@ test("检查：没有那一家的 key、key 读不出来、验证没通过，各
   const none = await setup().keys.check({ provider: "openai", model: "gpt-audio-mini" });
   assert.equal(none.ok, false);
   assert.equal(none.cause, "missing");
-  assert.match(none.problem, /还没有 OpenAI 的 key.*speakmore key openai/);
+  assert.match(zh.text(none.problem), /还没有 OpenAI 的 key.*speakmore key openai/);
 
   const unreadable = await setup({ storedOther: new Error("解不开") }).keys.check({
     provider: "openai",
     model: "gpt-audio-mini",
   });
   assert.equal(unreadable.ok, false);
-  assert.match(unreadable.problem, /读不出来/);
+  assert.match(zh.text(unreadable.problem), /读不出来/);
 
   const rejected = await setup({ storedOther: "openai-key", verdicts: { "openai-key": NO_SUCH_MODEL } }).keys.check({
     provider: "openai",
     model: "gpt-audio-9",
   });
   assert.deepEqual([rejected.ok, rejected.cause], [false, "other"]);
-  assert.match(rejected.problem, /gemini-nope is not found/);
+  assert.match(zh.text(rejected.problem), /gemini-nope is not found/);
 });
 
 test("检查：连的是单独启动的服务端时查不了，说清为什么", async () => {
   const result = await setup({ external: true }).keys.check({ provider: "gemini", model: "gemini-3.5-flash" });
   assert.equal(result.ok, false);
-  assert.match(result.problem, /SPEAKMORE_SERVER_URL/);
+  assert.match(zh.text(result.problem), /SPEAKMORE_SERVER_URL/);
 });
 
 test("检查正在用的那家时，用的是这次运行实际在用的那把（中途存过新的就是新的），不是环境变量里的", async () => {

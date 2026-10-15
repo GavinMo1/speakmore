@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { LOCALES } from "../../src/i18n/index.mjs";
 import { contrast, toHex } from "../../src/themes/color.mjs";
 import { BAR_TOKENS, themeCss, themeProblems, WINDOW_TOKENS } from "../../src/themes/contract.mjs";
 import { DEFAULT_THEME, findTheme, THEMES } from "../../src/themes/index.mjs";
@@ -26,16 +27,19 @@ test("登记在册的每套主题都合格：token 一个不缺，该读得清�
   for (const theme of THEMES) assert.deepEqual(themeProblems(theme), [], theme.id);
 });
 
-test("id 和名字都不重复；默认的那一套在册；按 id 或按名字都找得到", () => {
+test("id 和每种语言里的名字都不重复；默认的那一套在册；按 id 或按哪种语言的名字都找得到", () => {
   assert.equal(new Set(THEMES.map((theme) => theme.id)).size, THEMES.length);
-  assert.equal(new Set(THEMES.map((theme) => theme.name)).size, THEMES.length);
+  for (const { id, messages } of LOCALES) {
+    assert.equal(new Set(THEMES.map((theme) => messages.themes[theme.id].name)).size, THEMES.length, id);
+  }
   assert.deepEqual(
     THEMES.map((theme) => theme.id),
     ["ink", "cinnabar", "indigo"],
   );
   assert.equal(findTheme(DEFAULT_THEME).id, DEFAULT_THEME);
-  assert.equal(findTheme("cinnabar").name, "朱砂");
+  assert.equal(findTheme("cinnabar").id, "cinnabar");
   assert.equal(findTheme("朱砂").id, "cinnabar");
+  assert.equal(findTheme("Cinnabar").id, "cinnabar");
   assert.equal(findTheme("neon"), null);
   // 对象自带的属性名不是主题
   assert.equal(findTheme("constructor"), null);
@@ -69,7 +73,6 @@ test("不合格的主题说得出毛病在哪：缺 token、多了不认识的�
   assert.match(problems, /窗口（浅色）的 ink2 叠在 bg 上看不清/);
 
   assert.match(themeProblems({ ...clone(THEMES[0]), id: "Ink 2" }).join("\n"), /id/);
-  assert.match(themeProblems({ ...clone(THEMES[0]), name: " " }).join("\n"), /名字/);
   assert.deepEqual(themeProblems(null), ["主题要是一组数据"]);
 });
 

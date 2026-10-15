@@ -4,6 +4,8 @@
 // 说话的时候可以取消（按 esc 或点悬浮条上的 ✕），点 ✓ 等于再按一下热键。
 // 原版的热键是 fn，这里是哪个键由主进程决定，状态机不关心。
 
+import { msg } from "../../i18n/index.mjs";
+
 export const LONG_PRESS_MS = 600;
 
 export const Phase = Object.freeze({
@@ -61,7 +63,7 @@ export function transition(state, event) {
 
     case "LONG_HOLD":
       if (!held) return unchanged(state);
-      return { state: idle("不支持按住说话：按一下开始，再按一下结束"), actions: [Action.CANCEL] };
+      return { state: idle(msg("bar.noHold")), actions: [Action.CANCEL] };
 
     case "USER_CANCEL":
       // 用户不要这一次了。等成品时已经取消不了：录音已经交出去了

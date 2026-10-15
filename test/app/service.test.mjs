@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { startService } from "../../src/app/service.mjs";
+import { createTranslator } from "../../src/i18n/index.mjs";
 import { ModelError } from "../../src/server/providers/errors.mjs";
+
+const zh = createTranslator("zh-CN");
+/** 报错里给人看的那句，按中文翻出来对得上 */
+const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
 const quietLog = { info() {}, warn() {}, error() {} };
 const OGG_CHUNK = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(60)]);
@@ -88,7 +93,7 @@ test("新 key 验证不过时报错，原来能用的那把继续用", async (t)
   });
   t.after(() => service.close());
   await service.useKey("good");
-  await assert.rejects(service.useKey("bad"), /无效/);
+  await assert.rejects(service.useKey("bad"), said(/无效/));
   assert.equal(service.ready, true);
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是好 key");
 });
@@ -123,7 +128,7 @@ test("启动时允许先用着：连不上 Gemini 时这把 key 照样启用，�
   });
   t.after(() => service.close());
   // 不说允许的话（用户刚填的新 key），连不上就是没通过
-  await assert.rejects(service.useKey("stored-key"), /连不上/);
+  await assert.rejects(service.useKey("stored-key"), said(/连不上/));
   assert.equal(service.ready, false);
 
   assert.deepEqual(await service.useKey("stored-key", { allowUnverified: true }), { verified: false });
@@ -141,7 +146,7 @@ test("允许先用着只管连不上的情况：key 无效照样拒绝", async (
     createRefiner: () => fakeRefiner("不该用到", invalid),
   });
   t.after(() => service.close());
-  await assert.rejects(service.useKey("bad", { allowUnverified: true }), /无效/);
+  await assert.rejects(service.useKey("bad", { allowUnverified: true }), said(/无效/));
   assert.equal(service.ready, false);
 });
 
@@ -156,9 +161,9 @@ test("通过验证时说一声验证过了；verify 把正在用的那把再验�
     createRefiner: () => fakeRefiner("文字", warmUp),
   });
   t.after(() => service.close());
-  await assert.rejects(service.verify(), /API key/);
+  await assert.rejects(service.verify(), said(/API key/));
   await service.useKey("k", { allowUnverified: true });
-  await assert.rejects(service.verify(), /连不上/);
+  await assert.rejects(service.verify(), said(/连不上/));
   online = true;
   await service.verify();
   assert.deepEqual(await service.useKey("k"), { verified: true });
@@ -171,7 +176,7 @@ test("没有 key 时的提示点名是哪一家：选的是 OpenAI 就说 OpenAI
     createRefiner: () => fakeRefiner("不该用到"),
   });
   t.after(() => service.close());
-  assert.match((await dictateOnce(service.url)).V.detail, /还没有填 OpenAI API key/);
+  assert.match(zh.text((await dictateOnce(service.url)).V.problem), /还没有填 OpenAI API key/);
 });
 
 test("按设置里选的厂商和模型装配；probe 拿另一把 key 试别的模型，不换掉正在用的；都带着同一个记账的", async (t) => {
@@ -203,7 +208,7 @@ test("按设置里选的厂商和模型装配；probe 拿另一把 key 试别的
     built.map(({ onCall }) => onCall),
     [onModelCall, onModelCall],
   );
-  await assert.rejects(service.probe({ choice: openai, apiKey: "bad" }), /无效/);
+  await assert.rejects(service.probe({ choice: openai, apiKey: "bad" }), said(/无效/));
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 gemini");
 });
 
@@ -220,7 +225,7 @@ test("useKey 带上别的厂商和模型：验证过才整个换过去，没 key
   await service.useKey("gemini-key");
   const openai = { provider: "openai", model: "gpt-audio-mini" };
 
-  await assert.rejects(service.useKey("bad", { choice: openai }), /无效/);
+  await assert.rejects(service.useKey("bad", { choice: openai }), said(/无效/));
   assert.deepEqual(service.model, GEMINI);
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 gemini");
 
@@ -228,7 +233,7 @@ test("useKey 带上别的厂商和模型：验证过才整个换过去，没 key
   assert.deepEqual(service.model, openai);
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 openai");
   service.forgetKey();
-  assert.match((await dictateOnce(service.url)).V.detail, /还没有填 OpenAI API key/);
+  assert.match(zh.text((await dictateOnce(service.url)).V.problem), /还没有填 OpenAI API key/);
 });
 
 test("开口时的准备交给正在用的那一个；还没有 key 时什么都不做", async (t) => {

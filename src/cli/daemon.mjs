@@ -3,12 +3,13 @@ import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { ALREADY_RUNNING_EXIT_CODE, NotRunningError, requestControl, TimeoutError } from "../control.mjs";
+import { LocalizedError, msg } from "../i18n/index.mjs";
 import { rotateIfLarge } from "../log.mjs";
 import { ensureHome } from "../storage/paths.mjs";
 import { ensureHelper as defaultEnsureHelper } from "./native-helper.mjs";
 
 // 后台应用（src/app，跑在 Electron 里）的起停。它脱离终端运行：关掉终端窗口它还在，
-// 要靠控制通道才知道它在不在、状态如何。
+// 要靠控制通道才知道它在不在、状态如何。途中要说的话和出错的原因都是还没定语言的（msg），由命令行按它的语言翻。
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -25,21 +26,22 @@ function resolveElectronBinary(packageDir, onProgress) {
   try {
     electronDir = dirname(require.resolve("electron/package.json"));
   } catch {
-    throw new Error(`找不到 Electron：依赖没有装全。在 ${packageDir} 里运行 npm install 再试。`);
+    throw new LocalizedError(msg("cli.daemon.noElectron", { dir: packageDir }));
   }
-  if (!existsSync(join(electronDir, "dist"))) onProgress("第一次启动，正在下载运行环境 Electron（约 100 MB）…");
+  if (!existsSync(join(electronDir, "dist"))) onProgress(msg("cli.daemon.downloading"));
   try {
     return require("electron");
   } catch (error) {
-    throw new Error(`Electron 没有下载成功（${error.message}）。检查网络后再运行一次。`);
+    throw new LocalizedError(msg("cli.daemon.downloadFailed", { reason: error.message }), { cause: error });
   }
 }
 
+/** 日志的最后几行；还没有日志时是一句话（msg） */
 function logTail(file, lines = 8) {
   try {
     return readFileSync(file, "utf8").trimEnd().split("\n").slice(-lines).join("\n");
   } catch (error) {
-    if (error.code === "ENOENT") return "（日志是空的）";
+    if (error.code === "ENOENT") return msg("cli.daemon.emptyLog");
     throw error;
   }
 }
@@ -54,12 +56,10 @@ function commandOfProcess(pid) {
   }
 }
 
-/** 启动途中在等什么。只说用户看得见、需要他动手或等一下的那两种 */
+/** 启动途中在等什么（文案里的名字）。只说用户看得见、需要他动手或等一下的那两种 */
 function startingHint(status) {
-  if (status.permissions?.microphone === "not-determined") {
-    return "系统弹出了麦克风的授权框，点“允许”（框里写的是你这个终端程序的名字）。";
-  }
-  if (status.key?.state === "checking") return "正在验证 key…";
+  if (status.permissions?.microphone === "not-determined") return "cli.daemon.micPrompt";
+  if (status.key?.state === "checking") return "cli.daemon.verifying";
   return null;
 }
 
@@ -146,11 +146,11 @@ export function createDaemon({
 
     /**
      * 启动后台应用，等它准备好（key 验证完、麦克风的授权框有了回应）。调用前要确认它没有在运行。
-     * @param {{ onProgress: (text: string) => void }} options 途中要让用户知道的事
+     * @param {{ onProgress: (message: object) => void }} options 途中要让用户知道的事（msg）
      * @returns {Promise<object>} 启动后的状态；等得太久时 starting 仍是 true
      */
     async start({ onProgress }) {
-      ensureHelper(packageDir, { onBuild: () => onProgress("第一次启动，正在编译按键监听的小程序…") });
+      ensureHelper(packageDir, { onBuild: () => onProgress(msg("cli.daemon.building")) });
       const electron = resolveElectron(onProgress);
 
       // 日志要写进家目录。先按规矩把它建出来：顺着日志的路径一路建的话，目录的权限会是默认的那种
@@ -167,7 +167,7 @@ export function createDaemon({
         env: { ...childEnv, SPEAKMORE_CLI: "1" },
       });
       child.on("exit", (code, signal) => {
-        ended = { code, reason: signal ? `被信号 ${signal} 结束` : `退出码 ${code}` };
+        ended = { code, reason: signal ? msg("cli.daemon.signal", { signal }) : msg("cli.daemon.exitCode", { code }) };
       });
       child.on("error", (error) => {
         ended = { code: null, reason: String(error.message) };
@@ -178,8 +178,12 @@ export function createDaemon({
       // 另一条 speakmore 命令抢先启动了一个，我们这个发现后自己退出：不算失败，接着等抢先的那个
       const lostRace = () => ended?.code === ALREADY_RUNNING_EXIT_CODE;
       const failed = () =>
-        new Error(
-          `SpeakMore 没能启动（${ended && !lostRace() ? ended.reason : "中途退出"}）。日志 ${paths.logFile} 的最后几行：\n${logTail(paths.logFile)}`,
+        new LocalizedError(
+          msg("cli.daemon.failed", {
+            reason: ended && !lostRace() ? ended.reason : msg("cli.daemon.exitedEarly"),
+            file: paths.logFile,
+            tail: logTail(paths.logFile),
+          }),
         );
 
       let current = null;
@@ -188,7 +192,9 @@ export function createDaemon({
         if (current !== null) break;
         if (ended && !lostRace()) throw failed();
         if (Date.now() > deadline) {
-          throw new Error(`SpeakMore 启动后 ${connectTimeoutMs / 1000} 秒没有答话。看看日志：${paths.logFile}`);
+          throw new LocalizedError(
+            msg("cli.daemon.noAnswer", { seconds: connectTimeoutMs / 1000, file: paths.logFile }),
+          );
         }
       }
 
@@ -197,7 +203,7 @@ export function createDaemon({
         const hint = startingHint(current);
         if (hint && !said.has(hint)) {
           said.add(hint);
-          onProgress(hint);
+          onProgress(msg(hint));
         }
         await sleep(pollMs);
         current = await status();
@@ -224,9 +230,7 @@ export function createDaemon({
           answering = false;
           pid ??= recordedPid();
           if (pid === null) {
-            throw new Error(
-              "SpeakMore 卡住了不答话，也认不出它的进程号。在“活动监视器”里找到名叫 Electron 或 SpeakMore 的进程，结束它。",
-            );
+            throw new LocalizedError(msg("cli.daemon.stuckNoPid"));
           }
           // 答了"在运行"之后、收到退出命令之前它自己没了，不算错
         } else if (!(error instanceof NotRunningError)) throw error;
@@ -241,7 +245,7 @@ export function createDaemon({
         }
         if (await exited(pid, quitTimeoutMs)) return "killed";
       }
-      throw new Error(`SpeakMore 停不掉（进程号 ${pid}）。在“活动监视器”里结束它。`);
+      throw new LocalizedError(msg("cli.daemon.cantStop", { pid }));
     },
   };
 }

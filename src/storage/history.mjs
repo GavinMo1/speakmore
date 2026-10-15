@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { LocalizedError, msg } from "../i18n/index.mjs";
 
 // 历史记录和记账。history 表取原版 history_v2 里听写用得到的那几列（docs/08-local-data.md），
 // 列名保持一致；model_calls 表是每次调模型的账（原版没有，它是包月的）。
@@ -48,7 +49,7 @@ const MIGRATIONS = [
 function migrate(db) {
   const { user_version: current } = db.prepare("PRAGMA user_version").get();
   if (current > MIGRATIONS.length) {
-    throw new Error(`历史库的版本是 ${current}，比这个程序认识的 ${MIGRATIONS.length} 新，不敢动它`);
+    throw new LocalizedError(msg("storage.historyTooNew", { found: current, known: MIGRATIONS.length }));
   }
   for (let version = current; version < MIGRATIONS.length; version++) {
     db.exec("BEGIN");
@@ -69,9 +70,7 @@ function openReadOnly(dbPath) {
   const { user_version: version } = db.prepare("PRAGMA user_version").get();
   if (version !== MIGRATIONS.length) {
     db.close();
-    throw new Error(
-      `历史库的版本是 ${version}，这个程序认识的是 ${MIGRATIONS.length}：先把 SpeakMore 启动一次，或者更新到新版`,
-    );
+    throw new LocalizedError(msg("storage.historyTooOld", { found: version, known: MIGRATIONS.length }));
   }
   return db;
 }

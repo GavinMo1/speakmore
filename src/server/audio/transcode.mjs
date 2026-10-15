@@ -1,3 +1,4 @@
+import { LocalizedError, msg } from "../../i18n/index.mjs";
 import { downsample, encodeWav, mixDown } from "./pcm.mjs";
 
 // 把录音换成别家模型收的格式。录音是 Opus：悬浮条录的装在 WebM 里，原版 Typeless 的装在 Ogg 里。
@@ -24,10 +25,12 @@ export async function toWav(audio, mimeType) {
   try {
     decoded = await decode(new Uint8Array(audio.buffer, audio.byteOffset, audio.byteLength));
   } catch (error) {
-    throw new Error(`录音解不出声音（${mimeType}）：${error?.message ?? error}`, { cause: error });
+    throw new LocalizedError(msg("audio.undecodable", { type: mimeType, reason: String(error?.message ?? error) }), {
+      cause: error,
+    });
   }
   if (!decoded?.channelData?.length || decoded.channelData[0].length === 0) {
-    throw new Error(`录音解不出声音（${mimeType}）：里面没有音频`);
+    throw new LocalizedError(msg("audio.empty", { type: mimeType }));
   }
   const samples = downsample(mixDown(decoded.channelData), decoded.sampleRate, WAV_SAMPLE_RATE);
   return { audio: encodeWav(samples, WAV_SAMPLE_RATE), mimeType: "audio/wav" };

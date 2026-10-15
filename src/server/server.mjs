@@ -1,4 +1,5 @@
 import { WebSocket, WebSocketServer } from "ws";
+import { msg } from "../i18n/index.mjs";
 import {
   ClientType,
   envelope,
@@ -112,7 +113,12 @@ function handleConnection(socket, { refiner, log, maxAudioBytes }) {
     const context = { audio_id: finished.audioId, chunks: finished.chunkCount, bytes: finished.totalBytes };
     if (finished.chunkCount === 0) {
       log.warn("no_audio", context);
-      send(ServerType.PROCESSING_ERROR, { audio_id: finished.audioId, code: "no_audio", detail: "没有收到音频" });
+      send(ServerType.PROCESSING_ERROR, {
+        audio_id: finished.audioId,
+        code: "no_audio",
+        detail: "no audio received",
+        problem: msg("voice.noAudio"),
+      });
       return;
     }
     send(ServerType.ENDING, {
@@ -158,14 +164,16 @@ function handleConnection(socket, { refiner, log, maxAudioBytes }) {
         ...context,
         refine_ms: Math.round(performance.now() - startedAt),
         error: String(error?.stack ?? error),
-        // 模型层的错误（ModelError）给用户的是一句人话，模型回的原文（已抹掉 key）在 detail 里
+        // 模型层的错误（ModelError）给用户的是 problem，模型回的原文（已抹掉 key）在 detail 里
         ...(error?.detail ? { model_said: error.detail.slice(0, 1_000) } : {}),
         ...(error?.origin ? { origin: error.origin.slice(0, 2_000) } : {}),
       });
+      // 原版只有 code 和 detail。problem 是我们加的：给用户看的那句话（msg 或原话），由悬浮条按界面语言翻
       send(ServerType.PROCESSING_ERROR, {
         audio_id: finished.audioId,
         code: "refine_failed",
         detail: String(error?.message ?? error).slice(0, ERROR_DETAIL_MAX_LENGTH),
+        ...(error?.problem ? { problem: error.problem } : {}),
       });
     } finally {
       refining.delete(abort);

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createTranslator } from "../../../src/i18n/index.mjs";
 import {
   apiKeyProblem,
   DEFAULT_MODEL_CHOICE,
@@ -8,6 +9,10 @@ import {
   PROVIDERS,
   parseModelChoice,
 } from "../../../src/server/providers/index.mjs";
+
+const zh = createTranslator("zh-CN");
+/** 报错里给人看的那句，按中文翻出来对得上 */
+const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
 test("在册的厂商：Gemini 和 OpenAI，各自说清 key 从哪个环境变量来、去哪申请、默认用哪个模型", () => {
   assert.deepEqual(
@@ -19,7 +24,6 @@ test("在册的厂商：Gemini 和 OpenAI，各自说清 key 从哪个环境变�
   );
   for (const provider of PROVIDERS) {
     assert.match(provider.keyPage, /^https:\/\//);
-    assert.equal(typeof provider.keySite, "string");
     assert.equal(typeof provider.defaultModel, "string");
     assert.equal(typeof provider.load, "function");
   }
@@ -52,11 +56,11 @@ test("旧写法：只写一个 Gemini 的模型名（0.3 以前的设置文件�
 });
 
 test("写错时说清哪里不对、能填什么", () => {
-  assert.throws(() => parseModelChoice("deepseek/deepseek-flash"), /不认识 deepseek.*gemini \/ openai/);
-  assert.throws(() => parseModelChoice("openai/"), /模型名/);
-  assert.throws(() => parseModelChoice(""), /空/);
-  assert.throws(() => parseModelChoice("openai/gpt audio"), /模型名/);
-  assert.throws(() => parseModelChoice("openai/a/b"), /模型名/);
+  assert.throws(() => parseModelChoice("deepseek/deepseek-flash"), said(/不认识 deepseek.*gemini \/ openai/));
+  assert.throws(() => parseModelChoice("openai/"), said(/模型名/));
+  assert.throws(() => parseModelChoice(""), said(/空/));
+  assert.throws(() => parseModelChoice("openai/gpt audio"), said(/模型名/));
+  assert.throws(() => parseModelChoice("openai/a/b"), said(/模型名/));
 });
 
 test("key 的样子：只该有看得见的英文字符；不对时说哪里不对，句子里不带 key 本身", () => {
@@ -71,11 +75,12 @@ test("key 的样子：只该有看得见的英文字符；不对时说哪里不�
     "x-SECRET\u0007",
   ]) {
     const problem = apiKeyProblem(bad);
-    assert.equal(typeof problem, "string");
-    assert.doesNotMatch(problem, /SECRET/);
+    assert.equal(typeof problem.key, "string");
+    assert.doesNotMatch(zh.text(problem), /SECRET/);
+    assert.doesNotMatch(JSON.stringify(problem), /SECRET/);
   }
-  assert.match(apiKeyProblem("a b"), /空格或换行/);
-  assert.match(apiKeyProblem("k".repeat(600)), /太长/);
+  assert.match(zh.text(apiKeyProblem("a b")), /空格或换行/);
+  assert.match(zh.text(apiKeyProblem("k".repeat(600))), /太长/);
 });
 
 test("0.3 里 Gemini 的 SDK 认的带前缀写法（models/…、tunedModels/…）照样认成 Gemini 的", () => {
@@ -89,5 +94,5 @@ test("0.3 里 Gemini 的 SDK 认的带前缀写法（models/…、tunedModels/�
     model: "models/gemini-3.5-flash",
   });
   // 别家的模型名里不该有斜杠
-  assert.throws(() => parseModelChoice("openai/models/x"), /模型名/);
+  assert.throws(() => parseModelChoice("openai/models/x"), said(/模型名/));
 });

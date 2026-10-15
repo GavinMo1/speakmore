@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'" />
@@ -14,63 +14,71 @@
          我们没有账号，第一段换成接上一家模型 -->
     <header class="steps">
       <ol class="step-groups">
-        <li data-group="key">模型</li>
-        <li data-group="setup">设置</li>
-        <li data-group="try">试一下</li>
+        <li data-group="key" data-i18n="onboarding.groups.key">Model</li>
+        <li data-group="setup" data-i18n="onboarding.groups.setup">Set up</li>
+        <li data-group="try" data-i18n="onboarding.groups.try">Try it</li>
       </ol>
     </header>
 
     <main class="stage">
       <section class="step" data-step="key" aria-labelledby="key-title">
         <div class="step-text">
-          <h1 class="step-title" id="key-title"><span class="soft">先接上</span>模型</h1>
+          <h1 class="step-title" id="key-title">
+            <span class="soft" data-i18n="onboarding.key.soft">Connect a </span><span data-i18n="onboarding.key.title">model</span>
+          </h1>
           <div class="key-panel" id="key-panel"></div>
         </div>
         <aside class="visual flow" aria-hidden="true">
-          <p class="flow-card">“嗯，我们明天九点开会，不对，九点半……”</p>
+          <p class="flow-card" data-i18n="onboarding.key.spoken">“Um, let's meet at nine tomorrow, no wait, nine thirty…”</p>
           <p class="flow-arrow">↓</p>
           <p class="flow-card model" id="flow-model">Gemini</p>
           <p class="flow-arrow">↓</p>
-          <p class="flow-card result">我们明天九点半开会。</p>
+          <p class="flow-card result" data-i18n="onboarding.key.result">Let's meet at 9:30 tomorrow.</p>
         </aside>
       </section>
 
       <section class="step" data-step="permissions" aria-labelledby="permissions-title" hidden>
         <div class="step-text">
-          <h1 class="step-title" id="permissions-title"><span class="soft">开三项</span>权限</h1>
+          <h1 class="step-title" id="permissions-title">
+            <span class="soft" data-i18n="onboarding.permissions.soft">Turn on three </span
+            ><span data-i18n="onboarding.permissions.title">permissions</span>
+          </h1>
           <ul class="grants">
             <li data-permission="microphone">
-              <p class="grant-primary">麦克风</p>
-              <button type="button" class="button primary">允许</button>
+              <p class="grant-primary" data-i18n="permissions.microphone">Microphone</p>
+              <button type="button" class="button primary"></button>
             </li>
             <li data-permission="listen">
-              <p class="grant-primary">输入监控</p>
-              <button type="button" class="button primary">允许</button>
+              <p class="grant-primary" data-i18n="permissions.listen">Input Monitoring</p>
+              <button type="button" class="button primary"></button>
             </li>
             <li data-permission="trusted">
-              <p class="grant-primary">辅助功能</p>
-              <button type="button" class="button primary">允许</button>
+              <p class="grant-primary" data-i18n="permissions.trusted">Accessibility</p>
+              <button type="button" class="button primary"></button>
             </li>
           </ul>
         </div>
         <aside class="visual privacy">
-          <p class="privacy-name">历史只存本机</p>
-          <p class="privacy-name">录音只发所选模型</p>
-          <p class="privacy-name">key 加密存本机</p>
+          <p class="privacy-name" data-i18n="onboarding.permissions.history">History stays on this Mac</p>
+          <p class="privacy-name" data-i18n="onboarding.permissions.audio">Audio goes only to your model</p>
+          <p class="privacy-name" data-i18n="onboarding.permissions.key">Key encrypted on this Mac</p>
         </aside>
       </section>
 
       <section class="step" data-step="microphone" aria-labelledby="microphone-title" hidden>
         <div class="step-text">
-          <h1 class="step-title" id="microphone-title"><span class="soft">说句话，</span>测麦克风</h1>
-          <p class="question">条在动吗？</p>
+          <h1 class="step-title" id="microphone-title">
+            <span class="soft" data-i18n="onboarding.microphone.soft">Speak to </span
+            ><span data-i18n="onboarding.microphone.title">test the mic</span>
+          </h1>
+          <p class="question" data-i18n="onboarding.microphone.question">Are the bars moving?</p>
           <div class="answers">
-            <button type="button" class="button primary" id="microphone-yes">在动，继续</button>
-            <button type="button" class="button" id="microphone-no">不动</button>
+            <button type="button" class="button primary" id="microphone-yes" data-i18n="onboarding.microphone.yes">Yes, continue</button>
+            <button type="button" class="button" id="microphone-no" data-i18n="onboarding.microphone.no">No</button>
           </div>
           <p class="hint" id="microphone-help" hidden>
-            查 系统设置 › 声音 › 输入：设备、音量 · 或麦克风权限没开
-            <button type="button" class="link" id="microphone-settings">麦克风权限</button>
+            <span data-i18n="onboarding.microphone.help">Check the input device and volume in System Settings › Sound, or turn on</span>
+            <button type="button" class="link" id="microphone-settings" data-i18n="onboarding.microphone.settings">Microphone access</button>
           </p>
           <p class="problem" id="microphone-error" role="alert" hidden></p>
         </div>
@@ -81,14 +89,17 @@
 
       <section class="step" data-step="hotkey" aria-labelledby="hotkey-title" hidden>
         <div class="step-text">
-          <h1 class="step-title" id="hotkey-title"><span class="soft">按一下，</span>测快捷键</h1>
-          <p class="question">键变色了吗？</p>
+          <h1 class="step-title" id="hotkey-title">
+            <span class="soft" data-i18n="onboarding.hotkey.soft">Press it to </span
+            ><span data-i18n="onboarding.hotkey.title">test the shortcut</span>
+          </h1>
+          <p class="question" data-i18n="onboarding.hotkey.question">Did the key light up?</p>
           <div class="answers">
-            <button type="button" class="button primary" id="hotkey-yes">变了，继续</button>
-            <button type="button" class="button" id="hotkey-no">没变，换个键</button>
+            <button type="button" class="button primary" id="hotkey-yes" data-i18n="onboarding.hotkey.yes">Yes, continue</button>
+            <button type="button" class="button" id="hotkey-no" data-i18n="onboarding.hotkey.no">No, pick another key</button>
           </div>
           <div class="hotkey-choice" id="hotkey-choice" hidden>
-            <label for="hotkey-select">换成</label>
+            <label for="hotkey-select" data-i18n="onboarding.hotkey.switchTo">Switch to</label>
             <select class="select" id="hotkey-select"></select>
           </div>
           <p class="hint" id="hotkey-note" role="status" hidden></p>
@@ -100,23 +111,27 @@
 
       <section class="step" data-step="try" aria-labelledby="try-title" hidden>
         <div class="step-text">
-          <h1 class="step-title" id="try-title"><span class="soft">现在，</span>说一句</h1>
-          <blockquote class="sample">嗯，我们明天上午九点开会，不对，九点半吧，记得把上周的数据带上。</blockquote>
+          <h1 class="step-title" id="try-title">
+            <span class="soft" data-i18n="onboarding.try.soft">Now, </span><span data-i18n="onboarding.try.title">say something</span>
+          </h1>
+          <blockquote class="sample" data-i18n="onboarding.try.sample">Um, let's meet tomorrow at nine, no wait, nine thirty, and bring last week's numbers.</blockquote>
         </div>
         <aside class="visual notes">
-          <textarea class="notes-text" id="try-text" aria-label="笔记"></textarea>
+          <textarea class="notes-text" id="try-text" data-i18n-aria-label="onboarding.try.notes"></textarea>
         </aside>
       </section>
 
       <section class="step done" data-step="done" aria-labelledby="done-title" hidden>
-        <h1 class="step-title" id="done-title"><span class="soft">说话，</span>别打字</h1>
-        <button type="button" class="button primary big" id="finish">开始使用</button>
+        <h1 class="step-title" id="done-title">
+          <span class="soft" data-i18n="onboarding.done.soft">Speak, </span><span data-i18n="onboarding.done.title">don't type</span>
+        </h1>
+        <button type="button" class="button primary big" id="finish" data-i18n="onboarding.done.start">Get started</button>
       </section>
     </main>
 
     <footer class="nav">
-      <button type="button" class="button" id="back">返回</button>
-      <button type="button" class="button primary" id="next">继续</button>
+      <button type="button" class="button" id="back" data-i18n="onboarding.back">Back</button>
+      <button type="button" class="button primary" id="next"></button>
     </footer>
 
     <script type="module" src="onboarding.mjs"></script>

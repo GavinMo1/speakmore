@@ -2,8 +2,14 @@
 // 这样两端对协议的理解有出入时，这里会先红。
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
+import { createTranslator, LocalizedError, msg } from "../../../src/i18n/index.mjs";
 import { VoiceSocket } from "../../../src/renderer/bar/voice-socket.mjs";
 import { startServer, WS_PATH } from "../../../src/server/server.mjs";
+
+const zh = createTranslator("zh-CN");
+const en = createTranslator("en");
+/** 报错里给人看的那句，按中文翻出来对得上 */
+const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
 const silentLog = { info() {}, warn() {}, error() {} };
 const webm = (payload) => new Blob([Uint8Array.from([0x1a, 0x45, 0xdf, 0xa3]), payload]);
@@ -52,21 +58,32 @@ test("服务端整理失败时，finish 抛出带原因的错误", async () => {
   });
   await socket.begin("a1");
   socket.sendChunk(webm("x"));
-  await assert.rejects(socket.finish({ durationSeconds: 1 }), /refine_failed.*上游 503/);
+  await assert.rejects(socket.finish({ durationSeconds: 1 }), said(/refine_failed.*上游 503/));
+});
+
+test("模型那边说得清的原因（problem）原样带过来，悬浮条按界面语言翻", async () => {
+  const socket = await start(async () => {
+    throw new LocalizedError(msg("model.unreachable", { provider: "Gemini" }));
+  });
+  await socket.begin("a1");
+  socket.sendChunk(webm("x"));
+  const error = await socket.finish({ durationSeconds: 1 }).catch((thrown) => thrown);
+  assert.equal(en.text(error.problem), "Can't reach Gemini. Check your network");
+  assert.equal(zh.text(error.problem), "连不上 Gemini，检查网络后再试");
 });
 
 test("服务端不认的录音格式，在 finish 时报出来", async () => {
   const socket = await start(async () => "不该走到这里");
   await socket.begin("a1");
   socket.sendChunk(new Blob(["RIFF...."]));
-  await assert.rejects(socket.finish({ durationSeconds: 1 }), /unsupported_audio/);
+  await assert.rejects(socket.finish({ durationSeconds: 1 }), said(/unsupported_audio/));
 });
 
 test("等成品超时", async () => {
   const socket = await start(() => new Promise(() => {}));
   await socket.begin("a1");
   socket.sendChunk(webm("x"));
-  await assert.rejects(socket.finish({ durationSeconds: 1, timeoutMs: 50 }), /没有等到成品/);
+  await assert.rejects(socket.finish({ durationSeconds: 1, timeoutMs: 50 }), said(/没有等到成品/));
 });
 
 test("等成品时连接断了", async () => {
@@ -77,14 +94,14 @@ test("等成品时连接断了", async () => {
   const running = server;
   server = undefined; // 这里自己关，收尾时不要再关一次
   setTimeout(() => running.close(), 20);
-  await assert.rejects(pending, /连接断了/);
+  await assert.rejects(pending, said(/连接断了/));
 });
 
 test("服务端没开时，begin 直接报连不上", async () => {
   const socket = await start(async () => "");
   await server.close();
   server = undefined;
-  await assert.rejects(socket.begin("a1"), /连不上服务端/);
+  await assert.rejects(socket.begin("a1"), said(/连不上服务端/));
 });
 
 test("放弃一次录音后，它迟到的成品不会算到下一次头上", async () => {
@@ -93,7 +110,7 @@ test("放弃一次录音后，它迟到的成品不会算到下一次头上", as
   await socket.begin("a1");
   socket.sendChunk(webm("x"));
   const first = socket.finish({ durationSeconds: 1, timeoutMs: 60 });
-  await assert.rejects(first, /没有等到成品/);
+  await assert.rejects(first, said(/没有等到成品/));
 
   await socket.begin("a2");
   socket.sendChunk(webm("xyz"));

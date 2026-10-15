@@ -1,3 +1,4 @@
+import { LocalizedError } from "../i18n/index.mjs";
 import {
   apiKeyProblem,
   DEFAULT_MODEL_CHOICE,
@@ -20,7 +21,7 @@ function modelFrom(env) {
     try {
       return parseModelChoice(env[name]);
     } catch (error) {
-      throw new Error(`${name} 写的是 ${JSON.stringify(env[name])}，${error.message}`);
+      throw new Error(`${name} 写的是 ${JSON.stringify(env[name])}，${error.message}`, { cause: error });
     }
   }
   return DEFAULT_MODEL_CHOICE;
@@ -33,7 +34,8 @@ export function loadConfig(env) {
   const apiKey = env[keyEnv]?.trim();
   if (!apiKey) throw new Error(`缺少环境变量 ${keyEnv}`);
   const keyProblem = apiKeyProblem(apiKey);
-  if (keyProblem) throw new Error(`${keyEnv} ${keyProblem}`);
+  // 单独启动服务端是调试用的，报错照日志的习惯用英文
+  if (keyProblem) throw new Error(`${keyEnv}: ${new LocalizedError(keyProblem).message}`);
 
   const port = env.PORT === undefined ? 8790 : Number(env.PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {

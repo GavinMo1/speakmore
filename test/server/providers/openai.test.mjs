@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createTranslator } from "../../../src/i18n/index.mjs";
 import { AUDIO_TYPES, classifyError, createClient } from "../../../src/server/providers/openai.mjs";
+
+const zh = createTranslator("zh-CN");
 
 /** 假的 fetch：记下请求，按给定的状态码和内容回话 */
 function fakeFetch(status, body) {
@@ -79,7 +82,7 @@ test("整理：系统提示词、录音、跟在录音后面的那句话一起�
 });
 
 test("被截断、被拦下的半截文字不能当成品：说清为什么用不了；这一次收了钱，用量照样带回来", async () => {
-  for (const [reply, problem] of [
+  for (const [completed, problem] of [
     [completion("说到一半", "length"), "OpenAI 没有正常结束：length"],
     [completion("", "content_filter"), "OpenAI 没有正常结束：content_filter"],
     [
@@ -87,13 +90,10 @@ test("被截断、被拦下的半截文字不能当成品：说清为什么用�
       "OpenAI 没有处理这段录音：I can't help with that",
     ],
   ]) {
-    const { fetch } = fakeFetch(200, reply);
+    const { fetch } = fakeFetch(200, completed);
     const client = createClient({ apiKey: "k", model: "m", fetch });
-    assert.deepEqual(await client.generate({ audio: WAV, mimeType: "audio/wav", systemPrompt: "", reminder: "" }), {
-      text: null,
-      problem,
-      usage: BILLED,
-    });
+    const reply = await client.generate({ audio: WAV, mimeType: "audio/wav", systemPrompt: "", reminder: "" });
+    assert.deepEqual({ ...reply, problem: zh.text(reply.problem) }, { text: null, problem, usage: BILLED });
   }
 });
 
@@ -157,7 +157,9 @@ async function failWith(status, error) {
   try {
     await client.ping({});
   } catch (thrown) {
-    return { thrown, classified: classifyError(thrown) };
+    const classified = classifyError(thrown);
+    // 说法按中文翻出来比
+    return { thrown, classified: classified && { ...classified, problem: zh.text(classified.problem) } };
   }
   throw new Error("应该失败");
 }
@@ -237,6 +239,6 @@ test("回的不是 JSON 的 4xx（比如网关回 413）：说明里至少有状
     const error = await createClient({ apiKey: "k", model: "m", fetch })
       .ping({})
       .catch((thrown) => thrown);
-    assert.match(classifyError(error).problem, new RegExp(`HTTP ${status}$`));
+    assert.match(zh.text(classifyError(error).problem), new RegExp(`HTTP ${status}$`));
   }
 });

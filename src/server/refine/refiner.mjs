@@ -1,4 +1,5 @@
 import { Converter } from "opencc-js/t2cn";
+import { LocalizedError, msg } from "../../i18n/index.mjs";
 import { toWav } from "../audio/transcode.mjs";
 import { toModelError } from "../providers/errors.mjs";
 import { findProvider } from "../providers/index.mjs";
@@ -29,7 +30,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  *
  * @param {object} options
  * @param {{ id: string, name: string }} options.provider 厂商清单里的那一项（providers/index.mjs）
- * @param {{ ping(o: { signal: AbortSignal }): Promise<{ usage: object }>, generate(request: object): Promise<{ text: string | null | undefined, problem: string | null, usage: object }> }} options.client
+ * @param {{ ping(o: { signal: AbortSignal }): Promise<{ usage: object }>, generate(request: object): Promise<{ text: string | null | undefined, problem: object | null, usage: object }> }} options.client
  *   这一家的适配器（providers/*.mjs 的 createClient）
  * @param {string[]} options.audioTypes 这一家直接收的录音格式
  * @param {(error: unknown, detail: string) => object | null} [options.classify] 这一家的报错怎么认
@@ -153,7 +154,8 @@ export function createRefiner({
               signal: withTimeout(signal),
             }),
           );
-          if (reply.problem) throw new Error(reply.problem);
+          // 被拦下、被截断：适配器说了原因（一句 msg），照它说的报
+          if (reply.problem) throw new LocalizedError(reply.problem);
           return textFromModelOutput(reply.text);
         };
         return await generateClean(generateOnce, log);
@@ -182,7 +184,7 @@ async function timed(log, transcode) {
  */
 export async function createModelRefiner({ choice, apiKey, thinkingLevel, timeoutMs, log, onCall }) {
   const provider = findProvider(choice.provider);
-  if (!provider) throw new Error(`不认识 ${choice.provider} 这家模型厂商`);
+  if (!provider) throw new LocalizedError(msg("key.unknownProvider", { id: choice.provider }));
   const adapter = await provider.load();
   return createRefiner({
     provider,

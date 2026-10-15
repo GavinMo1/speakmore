@@ -1,5 +1,8 @@
 // 和服务端之间的那条 WebSocket。消息名和字段照抄原版（docs/05-network-protocol.md）。
 // 只依赖标准的 WebSocket，所以浏览器和 Node 里都能跑，测试直接连真的服务端模块。
+// 出错时抛的是 LocalizedError：给人看的那句话（problem）由悬浮条按界面语言翻。
+
+import { LocalizedError, msg } from "../../i18n/index.mjs";
 
 /** 原版听写等成品的超时：VOICE_TRANSCRIPT_REFINE_TIMEOUT_MS */
 export const REFINE_TIMEOUT_MS = 20_000;
@@ -24,7 +27,7 @@ export class VoiceSocket {
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         socket.close();
-        reject(new Error("连接服务端超时"));
+        reject(new LocalizedError(msg("voice.connectTimeout")));
       }, CONNECT_TIMEOUT_MS);
       socket.addEventListener("open", () => {
         clearTimeout(timer);
@@ -32,13 +35,13 @@ export class VoiceSocket {
       });
       socket.addEventListener("error", () => {
         clearTimeout(timer);
-        reject(new Error(`连不上服务端 ${this.#url}`));
+        reject(new LocalizedError(msg("voice.unreachable", { url: this.#url })));
       });
     });
     socket.addEventListener("message", (event) => this.#onMessage(event.data));
     socket.addEventListener("close", () => {
       if (this.#socket === socket) this.#socket = null;
-      this.#fail(new Error("和服务端的连接断了"));
+      this.#fail(new LocalizedError(msg("voice.disconnected")));
     });
     this.#socket = socket;
     return socket;
@@ -103,7 +106,10 @@ export class VoiceSocket {
         mode: "voice_transcript",
       }),
     );
-    const timer = setTimeout(() => this.#fail(new Error(`等了 ${timeoutMs / 1000} 秒没有等到成品`)), timeoutMs);
+    const timer = setTimeout(
+      () => this.#fail(new LocalizedError(msg("voice.timeout", { seconds: timeoutMs / 1000 }))),
+      timeoutMs,
+    );
     try {
       return await result;
     } finally {
@@ -141,7 +147,10 @@ export class VoiceSocket {
         break;
       case "audio_processing_error":
       case "error":
-        this.#fail(new Error(`服务端报错 ${value.code}：${value.detail}`));
+        // 服务端说得清的（模型那边的原因）带着 problem；协议层面的毛病只有 code 和 detail
+        this.#fail(
+          new LocalizedError(value.problem ?? msg("voice.serverError", { code: value.code, detail: value.detail })),
+        );
         break;
       // audio_session_started、received_audio_chunk_count、audio_session_ending 只是进度，用不到
     }

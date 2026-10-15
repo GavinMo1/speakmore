@@ -4,9 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { startControlServer } from "../../src/control.mjs";
+import { createTranslator } from "../../src/i18n/index.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
 import { migrateLegacyData } from "../../src/storage/legacy.mjs";
 import { keyFile, resolvePaths } from "../../src/storage/paths.mjs";
+
+const zh = createTranslator("zh-CN");
+/** 报错里给人看的那句，按中文翻出来对得上 */
+const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
 let dir;
 let legacyDir;
@@ -103,7 +108,7 @@ test("旧版本的后台应用请不走：不搬（它还开着那个库），�
     handlers: { status: () => ({}), quit: () => {} },
   });
   try {
-    await assert.rejects(migrate({ quitTimeoutMs: 100 }), /旧版本.*还在运行/);
+    await assert.rejects(migrate({ quitTimeoutMs: 100 }), said(/旧版本.*还在运行/));
     assert.equal(existsSync(paths.historyDb), false);
     assert.equal(existsSync(join(legacyDir, "history.db")), true);
   } finally {

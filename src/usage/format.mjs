@@ -1,5 +1,5 @@
 // 用量的写法：钱、token、个数、时长、等待时间。命令行（src/cli/render/usage.mjs）和主窗口共用，两边写法一致。
-// 纯函数，不碰 Node 也不碰页面：窗口的页面直接 import 这个文件。
+// 纯函数，不碰 Node 也不碰页面：窗口的页面直接 import 这个文件。带单位的按界面语言写，翻译函数由调用方给（src/i18n）。
 
 /** 个数从小到大的缩写：千、百万、十亿 */
 const COUNT_UNITS = ["K", "M", "B"];
@@ -23,13 +23,13 @@ export const formatTokens = formatCount;
 /**
  * 一段时长写成数和单位分开的两半（页面上单位写得小一号）：一小时以内按分钟，以上按小时，十小时以内带一位小数。
  * 原版首页的"节省时间""总口述时间"只用这两个单位
- * @returns {{ value: string, unit: "分钟" | "小时" }}
+ * @returns {{ value: string, unit: "min" | "hr" }} unit 是文案里的名字：units.min、units.hr
  */
 export function formatSpan(seconds) {
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return { value: seconds > 0 && minutes === 0 ? "<1" : String(minutes), unit: "分钟" };
+  if (minutes < 60) return { value: seconds > 0 && minutes === 0 ? "<1" : String(minutes), unit: "min" };
   const hours = seconds / 3600;
-  return { value: String(hours < 10 ? Number(hours.toFixed(1)) : Math.round(hours)), unit: "小时" };
+  return { value: String(hours < 10 ? Number(hours.toFixed(1)) : Math.round(hours)), unit: "hr" };
 }
 
 /**
@@ -44,5 +44,8 @@ export function formatUsd(usd) {
   return `$${usd.toFixed(2)}`;
 }
 
-/** 等了多久：秒，一位小数 */
-export const formatSeconds = (ms) => `${(ms / 1000).toFixed(1)} 秒`;
+/**
+ * 等了多久：秒，一位小数
+ * @param {(key: string, params: object) => string} t 界面语言的翻译函数
+ */
+export const formatSeconds = (ms, t) => t("units.seconds", { value: (ms / 1000).toFixed(1) });

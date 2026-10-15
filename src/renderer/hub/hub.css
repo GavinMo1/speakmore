@@ -189,9 +189,10 @@
 
 /* ---------- 首页 ---------- */
 
+/* 右边一列至少 12rem；键帽和"按一下说话"在有的语言里更长（Right ⌥ / Press to talk），放不下就撑宽，不折行 */
 .home {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 12rem;
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, max-content);
   gap: 2rem;
   align-items: start;
 }
@@ -423,12 +424,13 @@
   color: var(--ink-2);
 }
 
-.legend .cell:first-child {
-  margin-left: 0.2rem;
+/* 两头是"少""多"两个字，和格子之间多空一点 */
+.legend > :first-child {
+  margin-right: 0.2rem;
 }
 
-.legend .cell:last-child {
-  margin-right: 0.2rem;
+.legend > :last-child {
+  margin-left: 0.2rem;
 }
 
 /* 花费（原版没有：它是包月的。放在原版"个性化"那张卡的位置） */
@@ -508,6 +510,7 @@
 }
 
 .dictate-title {
+  white-space: nowrap;
   font-size: 0.875rem;
   font-weight: 590;
   line-height: 1.35;
@@ -585,8 +588,9 @@
   color: var(--ink-2);
 }
 
+/* "失败 · "按界面语言写，由 history.mjs 放进 data-prefix */
 .row[data-kind="failed"] .row-text::before {
-  content: "失败 · ";
+  content: attr(data-prefix);
   color: var(--problem);
 }
 

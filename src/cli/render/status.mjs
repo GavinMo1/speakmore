@@ -1,8 +1,9 @@
+import { findLocale, msg, SYSTEM_LOCALE } from "../../i18n/index.mjs";
 import { findProvider, parseModelChoice } from "../../server/providers/index.mjs";
-import { SETTINGS } from "../../storage/settings.mjs";
+import { HOTKEY_IDS, SETTINGS } from "../../storage/settings.mjs";
 import { formatUsd } from "../../usage/format.mjs";
 import { themeTitle } from "./settings.mjs";
-import { count, duration, INDENT, paint, row } from "./text.mjs";
+import { duration, INDENT, paint, rows } from "./text.mjs";
 
 // 状态面板（speakmore、speakmore status）。和别的画面一样是"数据进、一段文字出"，不碰终端也不读文件。
 
@@ -16,31 +17,40 @@ function modelInUse(status, settings) {
   return parseModelChoice(status.model ?? settings.model.value);
 }
 
-function keyLine(key, provider) {
+function keyLine(key, provider, t) {
   // 启动时够不着的话先用着，如实说还没验证
-  const unverified = key.verified === false ? `；启动时没连上 ${provider.name}，还没验证这把能不能用` : "";
+  const unverified = key.verified === false;
+  const named = { variable: provider.keyEnv, provider: provider.name, problem: key.problem };
   switch (key.state) {
     case "ready":
-      if (key.source === "env") return `这次运行用的是环境变量 ${provider.keyEnv} 里的，没有保存${unverified}`;
-      if (key.source === "external") return "连的是单独启动的服务端，key 在那边配";
-      return unverified ? `已保存${unverified}` : "已保存，验证通过";
+      if (key.source === "env") return t(unverified ? "cli.status.keyEnvUnverified" : "cli.status.keyEnv", named);
+      if (key.source === "external") return t("cli.status.keyExternal");
+      return t(unverified ? "cli.status.keySavedUnverified" : "cli.status.keySaved", named);
     case "checking":
-      return "正在验证…";
+      return t("cli.status.keyChecking");
     case "rejected":
       // 三种情况要做的事不一样，不能都说成"换一把"
       if (key.cause === "other") {
-        const what = provider.thinkingLevels ? "模型和档位" : "模型";
-        return `验证没通过：${key.problem}。key 未必有问题，先看${what}：speakmore config`;
+        const what = msg(provider.thinkingLevels ? "cli.status.modelAndLevel" : "cli.status.modelOnly");
+        return t("cli.status.keyCheckFailed", { ...named, what });
       }
-      if (key.source === "env") {
-        return `环境变量 ${provider.keyEnv} 里的 key 不能用：${key.problem}。改对它，或者去掉这个环境变量，再重新启动`;
-      }
-      return `不能用：${key.problem}。运行 speakmore key 换一把`;
+      if (key.source === "env") return t("cli.status.keyEnvRejected", named);
+      return t("cli.status.keyRejected", named);
     case "unreadable":
-      return `${key.problem}：运行 speakmore key`;
+      return t("cli.status.keyUnreadable", named);
     default:
-      return "还没有填：运行 speakmore key";
+      return t("cli.status.keyMissing");
   }
+}
+
+/** 热键叫什么。比这个命令新的版本里才有的热键叫不出名字，用后台报的说法（0.5 以前它报 hotkeyLabel） */
+const hotkeyTitle = (status, t) =>
+  HOTKEY_IDS.includes(status.hotkey) ? t(`hotkeys.${status.hotkey}.name`) : (status.hotkeyLabel ?? status.hotkey);
+
+/** 界面语言：跟随系统时带上实际用的那种（"System · English"） */
+function languageTitle({ language, locale }, t) {
+  const name = (id) => findLocale(id)?.name ?? id;
+  return language === SYSTEM_LOCALE ? `${t("language.system")} · ${name(locale)}` : name(language);
 }
 
 /** 设置里现在写的，和后台应用启动时带着的不一样的那几项 */
@@ -57,13 +67,18 @@ function pendingSettings(status, settings) {
   return Object.keys(SETTINGS).filter((name) => status[name] != null && !same(name, status[name]));
 }
 
-function statsLine({ dictations, characters, seconds, costUsd, unpricedCalls }, { withPace }) {
-  const parts = [`${count(dictations)} 次`, `${count(characters)} 字`, duration(seconds)];
+function statsLine({ dictations, characters, seconds, costUsd, unpricedCalls }, { withPace, t }) {
+  const parts = [
+    t("cli.status.dictations", { count: dictations }),
+    t("cli.status.characters", { count: characters }),
+    duration(seconds, t),
+  ];
   // 每分钟多少字只在累计里给：一天里说得少时这个数跳得厉害，没有参考价值
-  if (withPace && seconds >= 60) parts.push(`每分钟 ${count(Math.round(characters / (seconds / 60)))} 字`);
+  if (withPace && seconds >= 60) parts.push(t("cli.status.pace", { count: Math.round(characters / (seconds / 60)) }));
   // 有几笔不知道价时钱只加得上一部分，说"至少"；记账之前的版本没有账，不写 $0 让人以为没花钱
-  if (unpricedCalls > 0) parts.push(costUsd > 0 ? `至少 ${formatUsd(costUsd)}` : "花费不明");
-  else if (costUsd > 0) parts.push(formatUsd(costUsd));
+  if (unpricedCalls > 0) {
+    parts.push(costUsd > 0 ? t("cli.status.atLeast", { cost: formatUsd(costUsd) }) : t("cli.status.costUnknown"));
+  } else if (costUsd > 0) parts.push(formatUsd(costUsd));
   return parts.join(" · ");
 }
 
@@ -74,40 +89,40 @@ function statsLine({ dictations, characters, seconds, costUsd, unpricedCalls }, 
  * @param {Record<string, { value: string }>} view.settings 现在的设置。面板上写的是后台应用正在用的，
  *   这一份只用来看两边一不一样
  * @param {{ today: object | null, total: object | null }} view.stats 没有历史库时两项都是 null
- * @param {{ color: boolean }} options
+ * @param {{ color: boolean, t: Function }} options t：界面语言的翻译函数。后台报上来的话（msg）也按它翻
  */
-export function renderStatus({ status, version, settings, stats }, { color }) {
+export function renderStatus({ status, version, settings, stats }, { color, t }) {
   const c = paint(color);
   if (status === null) {
-    return [`${c.bold(`SpeakMore ${version}`)} · 没有运行`, "", `${INDENT}运行 ${c.bold("speakmore")} 启动。`, ""].join(
-      "\n",
-    );
+    return [
+      `${c.bold(`SpeakMore ${version}`)} · ${t("cli.status.notRunning")}`,
+      "",
+      `${INDENT}${t("cli.status.runToStart", { command: c.bold("speakmore") })}`,
+      "",
+    ].join("\n");
   }
 
   const { summary, permissions } = status;
   const state = status.starting
-    ? "正在启动"
+    ? t("cli.status.starting")
     : summary.ready
-      ? c.green("运行中")
+      ? c.green(t("cli.status.running"))
       : summary.missing.length > 0
-        ? c.yellow(`运行中，还差 ${summary.missing.length} 样`)
-        : "运行中，正在准备";
+        ? c.yellow(t("cli.status.missingCount", { count: summary.missing.length }))
+        : t("cli.status.preparing");
   const lines = [`${c.bold(`SpeakMore ${status.version}`)} · ${state}`, ""];
 
   if (summary.ready) {
-    lines.push(
-      `${INDENT}可以用了：点进任意输入框，按一下${status.hotkeyLabel}开始说话，再按一下结束，文字会贴进去。`,
-      "",
-    );
+    lines.push(`${INDENT}${t("cli.status.ready", { hotkey: hotkeyTitle(status, t) })}`, "");
   } else if (!status.starting && summary.missing.length > 0) {
-    lines.push(`${INDENT}还差：${summary.missing.join("、")}。`, "");
+    lines.push(`${INDENT}${t("cli.status.missing", { items: t.list(summary.missing) })}`, "");
   }
 
   const mark = (granted) => (granted === null ? c.dim("…") : granted ? c.green("✓") : c.red("✗"));
   const cells = [
-    `麦克风 ${mark(permissions.microphone === "granted")}`,
-    `输入监控 ${mark(permissions.listen)}`,
-    `辅助功能 ${mark(permissions.trusted)}`,
+    `${t("permissions.microphone")} ${mark(permissions.microphone === "granted")}`,
+    `${t("permissions.listen")} ${mark(permissions.listen)}`,
+    `${t("permissions.trusted")} ${mark(permissions.trusted)}`,
   ];
   // 写后台应用正在用的，不是现在设置里的：设置改了还没重启、或者启动它的那条命令上带着环境变量时，两者不一样
   const inUse = modelInUse(status, settings);
@@ -116,52 +131,53 @@ export function renderStatus({ status, version, settings, stats }, { color }) {
   const thinking = provider.thinkingLevels ? (status.thinking ?? settings.thinking.value) : null;
   const model =
     inUse === null
-      ? "由单独启动的服务端决定"
-      : `${provider.name} 的 ${inUse.model}${thinking ? `（${thinking}）` : ""}`;
-  lines.push(
-    row("key", keyLine(status.key, provider)),
-    row("权限", cells.join("   ")),
-    row("热键", status.hotkeyLabel),
-    row("模型", model),
-  );
-  // 旧版本的后台应用不报这一项
-  if (status.theme != null) lines.push(row("主题", themeTitle(status.theme)));
+      ? t("cli.status.modelExternal")
+      : t(thinking ? "cli.status.modelWithThinking" : "cli.status.modelInUse", {
+          provider: provider.name,
+          model: inUse.model,
+          thinking,
+        });
+  const entries = [
+    [t("cli.status.key"), keyLine(status.key, provider, t)],
+    [t("cli.status.permissions"), cells.join("   ")],
+    [t("cli.status.hotkey"), hotkeyTitle(status, t)],
+    [t("cli.status.model"), model],
+  ];
+  // 旧版本的后台应用不报这两项
+  if (status.theme != null) entries.push([t("cli.status.theme"), themeTitle(t, status.theme)]);
+  if (status.language != null) entries.push([t("cli.status.language"), languageTitle(status, t)]);
   if (stats.total && stats.total.dictations > 0) {
-    lines.push(
-      row("今天", statsLine(stats.today, { withPace: false })),
-      row("累计", statsLine(stats.total, { withPace: true })),
+    entries.push(
+      [t("cli.status.today"), statsLine(stats.today, { withPace: false, t })],
+      [t("cli.status.total"), statsLine(stats.total, { withPace: true, t })],
     );
   }
+  lines.push(...rows(entries));
 
-  const relaunch = status.packaged ? "在菜单栏点“听写”→“退出”，再打开一次 SpeakMore.app" : "运行 speakmore restart";
+  const relaunch = msg(status.packaged ? "cli.packagedRelaunch" : "cli.runRestart");
   const notes = [];
   const pending = pendingSettings(status, settings);
-  if (pending.length > 0) notes.push(`设置里的 ${pending.join("、")} 和正在用的不一样，还没生效：${relaunch}。`);
-  if (status.helper === "stopped") {
-    notes.push(`按键监听的小程序停了，热键不会生效：${relaunch}。还是这样的话看 speakmore logs。`);
-  }
+  // 设置的名字是英文的标识，用斜线隔开，不按语言并列
+  if (pending.length > 0) notes.push(t("cli.status.pending", { names: pending.join(" / "), relaunch }));
+  if (status.helper === "stopped") notes.push(t("cli.status.helperStopped", { relaunch }));
   if (notes.length > 0) lines.push("", ...notes.map((note) => `${INDENT}${note}`));
 
   const permissionMissing =
     permissions.microphone !== "granted" || permissions.listen === false || permissions.trusted === false;
   if (permissionMissing) {
     lines.push("");
-    if (summary.degraded) lines.push(`${INDENT}${summary.degraded}。`);
+    if (summary.degraded) lines.push(`${INDENT}${t("common.sentence", { text: summary.degraded })}`);
     lines.push(
-      `${INDENT}运行 ${c.bold("speakmore settings")} 打开设置的权限页：每项权限旁边有去系统设置的按钮，开关打开后点"重新检查"。`,
-      c.dim(
-        status.packaged
-          ? `${INDENT}权限记在应用自己名下，在系统设置的列表里找“SpeakMore”。`
-          : `${INDENT}权限记在启动 SpeakMore 的那个终端程序名下（比如“终端”或 iTerm），在系统设置的列表里找它。`,
-      ),
+      `${INDENT}${t("cli.status.openSettings", { command: c.bold("speakmore settings") })}`,
+      c.dim(`${INDENT}${t(status.packaged ? "cli.status.ownerApp" : "cli.status.ownerTerminal")}`),
     );
   }
 
   lines.push(
     "",
-    c.dim(`${INDENT}speakmore history  看说过的话     speakmore config  看和改设置`),
-    c.dim(`${INDENT}speakmore usage    看花了多少钱   speakmore stop    停掉`),
-    c.dim(`${INDENT}speakmore help     全部命令`),
+    ...t("cli.status.footer")
+      .split("\n")
+      .map((line) => c.dim(`${INDENT}${line}`)),
     "",
   );
   return lines.join("\n");

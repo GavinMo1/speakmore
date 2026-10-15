@@ -1,3 +1,4 @@
+import { keycapOf, localize, t } from "../shared/i18n.mjs";
 import { createKeyPanel } from "../shared/key-panel.mjs";
 import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
@@ -10,6 +11,9 @@ import { canContinue, groupStates, STEPS, startStep } from "./steps.mjs";
 const $ = (id) => document.getElementById(id);
 /** 测麦克风时画几根条，中间的高、两边的矮 */
 const METER_BARS = [0.45, 0.7, 0.9, 1, 0.9, 0.7, 0.45];
+
+// 页面上写死的字先按界面语言填上
+localize();
 
 let setup = null;
 let step = null;
@@ -60,15 +64,16 @@ function render() {
     const granted = permissionGranted(row.dataset.permission, setup.permissions[row.dataset.permission]);
     row.dataset.granted = String(granted === true);
     const button = row.querySelector("button");
-    button.textContent = granted ? "✓ 已开" : "允许";
+    button.textContent = t(granted ? "onboarding.permissions.on" : "onboarding.permissions.allow");
     button.disabled = granted === true;
   }
 
-  $("big-keycap").textContent = setup.hotkey.keycap;
+  const keycap = keycapOf(setup.hotkey.value);
+  $("big-keycap").textContent = keycap;
   $("hotkey-select").replaceChildren(
-    ...setup.hotkey.choices.map(({ id, label }) => new Option(label, id, false, id === setup.hotkey.value)),
+    ...setup.hotkey.choices.map((id) => new Option(t(`hotkeys.${id}.name`), id, false, id === setup.hotkey.value)),
   );
-  $("try-text").placeholder = `点这里，按 ${setup.hotkey.keycap} 读左边那句，再按一下结束`;
+  $("try-text").placeholder = t("onboarding.try.placeholder", { keycap });
 
   // 底下的两个按钮
   const first = step === STEPS[0] || (step === "permissions" && startStep(setup) === "permissions");
@@ -76,7 +81,7 @@ function render() {
   const next = $("next");
   next.hidden = step === "microphone" || step === "hotkey" || step === "done";
   next.disabled = !canContinue(step, setup);
-  next.textContent = step === "try" && $("try-text").value.trim() === "" ? "跳过" : "继续";
+  next.textContent = t(step === "try" && $("try-text").value.trim() === "" ? "onboarding.skip" : "onboarding.next");
 }
 
 // ---------- 测麦克风 ----------
@@ -96,7 +101,7 @@ async function startMeter() {
     opened = await openMicrophone();
   } catch (error) {
     if (run !== meterRun) return;
-    $("microphone-error").textContent = `麦克风打不开：${describeError(error)}`;
+    $("microphone-error").textContent = t("onboarding.microphone.error", { reason: describeError(error) });
     $("microphone-error").hidden = false;
     return;
   }
@@ -150,9 +155,9 @@ $("hotkey-select").addEventListener("change", async (event) => {
   $("hotkey-note").hidden = true;
   try {
     const result = await window.speakmore.setHotkey(event.target.value);
-    $("hotkey-note").textContent = result.note ?? "已换，按一下试试";
+    $("hotkey-note").textContent = result.note ? t.text(result.note) : t("onboarding.hotkey.switched");
   } catch (error) {
-    $("hotkey-note").textContent = `没换成：${describeError(error)}`;
+    $("hotkey-note").textContent = t("onboarding.hotkey.failed", { reason: describeError(error) });
   }
   $("hotkey-note").hidden = false;
   await refresh();

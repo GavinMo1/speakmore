@@ -4,11 +4,21 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { ControlError, TimeoutError } from "../control.mjs";
+import {
+  createTranslator,
+  LocalizedError,
+  localesFromEnv,
+  msg,
+  problemOf,
+  resolveLocale,
+  SYSTEM_LOCALE,
+} from "../i18n/index.mjs";
 import { log } from "../log.mjs";
 import { PROVIDERS } from "../server/providers/index.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
 import { resolvePaths } from "../storage/paths.mjs";
+import { resolveSettings } from "../storage/settings.mjs";
 import { THEMES } from "../themes/index.mjs";
 import { askSecret, Cancelled } from "./ask-secret.mjs";
 import { config, settings, theme } from "./commands/config.mjs";
@@ -25,39 +35,15 @@ import { createDaemon } from "./daemon.mjs";
 // speakmore 命令：把"装好依赖、编小帮手、起后台应用、填 key、看历史、改设置"收成几个子命令。
 // 真正干活的是后台应用（src/app），这里通过控制通道指挥它；历史和设置文件则直接读写。
 // 每个子命令在 commands/ 里一个文件，这里只管分发、收拾错误，以及真实运行时的 io。
+// 说什么语言：设置里的 language，跟随系统时照命令行的惯例看 LC_ALL、LC_MESSAGES、LANG（src/i18n）。
 
-const HELP = `SpeakMore：按一下热键说话，整理好的文字贴进当前输入框。
-
-  speakmore                     启动（已经在运行就只显示状态）。第一次会问你要一把 API key（默认用 Gemini）
-  speakmore start               同上
-  speakmore stop                停掉
-  speakmore restart             重启
-  speakmore status [--json]     看状态：在不在运行、key、三项系统权限、今天和累计说了多少
-
-  speakmore history [-n 条数] [--json]
-                                看说过的话，按天分组，新的在前（默认最近 ${DEFAULT_HISTORY_LIMIT} 条）
-  speakmore usage [--json]      看花了多少钱：今天、本月、累计的花费、token，模型多久回话，按型号分开
-  speakmore model               看能用哪几家的模型（${PROVIDERS.map(({ id }) => id).join(" / ")}）、各家的 key 有没有、现在用的哪个
-  speakmore model <厂商>[/<模型>]
-                                换一家或换个模型，比如 speakmore model openai。没有它的 key 会先问
-  speakmore model check [<厂商>[/<模型>]]
-                                检查能不能用：拿那一家的 key 发一个最小的请求。不写就查现在用的
-  speakmore key [<厂商>]         换一把 key，不写厂商就是现在用的那家（输入不会显示出来；也可以从管道喂进来）
-  speakmore key --forget [<厂商>]
-                                删掉存着的 key
-  speakmore config              看设置：热键、模型、思考档位、主题，以及数据和日志在哪
-  speakmore config set <名字> <值>
-  speakmore config unset <名字>  回到默认值
-  speakmore theme               看有哪几套主题、现在用的哪套
-  speakmore theme <名字>         换一套（${THEMES.map((theme) => `${theme.id} ${theme.name}`).join(" / ")}），当场生效不用重启
-  speakmore settings            打开设置（去系统设置授权时用）
-  speakmore logs [-n 行数] [-f]  看日志，-f 一直跟着
-  speakmore uninstall [--keep-data] [--yes]
-                                卸载：停掉后台，把 SpeakMore 的目录整个删掉。--keep-data 留下设置、key、历史和录音
-
-  speakmore help                这段说明
-  speakmore --version           版本号
-`;
+/** speakmore help 的那段说明，按这一次的语言写 */
+const help = (t) =>
+  t("cli.help", {
+    limit: DEFAULT_HISTORY_LIMIT,
+    providers: PROVIDERS.map(({ id }) => id).join(" / "),
+    themes: THEMES.map(({ id }) => `${id} ${t(`themes.${id}.name`)}`).join(" / "),
+  });
 
 const COMMANDS = { start, stop, restart, status, key, model, config, theme, history, usage, logs, settings, uninstall };
 
@@ -70,7 +56,7 @@ const COMMANDS = { start, stop, restart, status, key, model, config, theme, hist
 export async function run(argv, io) {
   try {
     if (argv.some((arg) => arg === "--help" || arg === "-h") || argv[0] === "help") {
-      io.out(HELP);
+      io.out(help(io.t));
       return 0;
     }
     if (argv[0] === "--version" || argv[0] === "-v") {
@@ -78,28 +64,27 @@ export async function run(argv, io) {
       return 0;
     }
     const [name = "start", ...rest] = argv;
-    if (!Object.hasOwn(COMMANDS, name)) throw new UsageError(`没有 ${name} 这个命令。`);
+    if (!Object.hasOwn(COMMANDS, name)) throw new UsageError(msg("cli.unknownCommand", { name }));
     return await COMMANDS[name](rest, io);
   } catch (error) {
+    const said = () => io.err(io.t.text(problemOf(error)));
     if (error instanceof UsageError) {
-      io.err(error.message);
-      io.err("运行 speakmore help 看全部命令。");
+      said();
+      io.err(io.t("cli.seeHelp"));
       return 2;
     }
     if (error instanceof ConfigError) {
-      io.err(error.message);
+      said();
       return 2;
     }
     if (error instanceof ControlError) {
-      io.err(error.message);
-      if (error instanceof TimeoutError) {
-        io.err("它可能卡住了。运行 speakmore stop 可以把它强行停掉，再运行 speakmore 重新启动。");
-      }
+      said();
+      if (error instanceof TimeoutError) io.err(io.t("cli.stuck"));
       return 1;
     }
     // 自己抛出来的、带着一句人话的错误照直说；其余的是程序本身的毛病，连调用栈一起留给排查的人
-    if (error?.constructor !== Error) throw error;
-    io.err(error.message);
+    if (!(error instanceof LocalizedError) && error?.constructor !== Error) throw error;
+    said();
     return 1;
   }
 }
@@ -142,9 +127,24 @@ async function confirm(question) {
   }
 }
 
+/**
+ * 这一次命令行说什么语言：设置里写了就用它，跟随系统时看终端的语言。
+ * 设置文件坏了的话先按终端的语言说：要读设置的命令接着会把坏在哪照实报出来
+ */
+function cliLocale(paths, env) {
+  let setting = SYSTEM_LOCALE;
+  try {
+    setting = resolveSettings({ file: paths.settingsFile, env }).language.value;
+  } catch {
+    setting = SYSTEM_LOCALE;
+  }
+  return resolveLocale(setting, localesFromEnv(env));
+}
+
 /** 真实运行时的 io：标准输入输出、真的后台应用、真的历史库 */
 export function createIo({ packageDir, env = process.env }) {
   const paths = resolvePaths(env);
+  const t = createTranslator(cliLocale(paths, env));
   const write = (stream) => (text) => stream.write(text.endsWith("\n") ? text : `${text}\n`);
   const manifest = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8"));
   return {
@@ -157,6 +157,7 @@ export function createIo({ packageDir, env = process.env }) {
     // 终端说自己支持 24 位色时，才画得出主题本来的颜色
     truecolor: Boolean(process.stdout.isTTY) && !env.NO_COLOR && /^(truecolor|24bit)$/.test(env.COLORTERM ?? ""),
     version: manifest.version,
+    t,
     packageDir,
     paths,
     daemon: createDaemon({ paths, packageDir, env }),
@@ -185,17 +186,18 @@ export async function main(argv) {
   try {
     io = createIo({ packageDir: resolve(import.meta.dirname, "../..") });
   } catch (error) {
-    // 数据目录的路径不合用：还没有 io 可用，直接说
-    console.error(error.message);
+    // 数据目录的路径不合用：还没有 io 可用，按终端的语言直接说
+    const t = createTranslator(resolveLocale(SYSTEM_LOCALE, localesFromEnv(process.env)));
+    console.error(t.text(problemOf(error)));
     return 2;
   }
   // 0.1 版的数据在别处，有的话先搬过来。只是问版本和帮助时不动
   if (!argv.some((arg) => ["--help", "-h", "help", "--version", "-v"].includes(arg))) {
     try {
       const moved = await migrateLegacyData({ paths: io.paths, log: { info() {}, warn: log.warn } });
-      if (moved.length > 0) io.out(`旧版本的数据已经搬到 ${io.paths.home}（${moved.join("、")}）。`);
+      if (moved.length > 0) io.out(io.t("cli.migrated", { home: io.paths.home, items: moved.join(", ") }));
     } catch (error) {
-      io.err(error.message);
+      io.err(io.t.text(problemOf(error)));
       return 1;
     }
   }

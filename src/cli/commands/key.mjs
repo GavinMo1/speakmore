@@ -1,4 +1,5 @@
 import { existsSync, rmSync } from "node:fs";
+import { LocalizedError, msg } from "../../i18n/index.mjs";
 import { apiKeyProblem, findProvider, PROVIDERS, parseModelChoice } from "../../server/providers/index.mjs";
 import { keyFile } from "../../storage/paths.mjs";
 import { Cancelled } from "../ask-secret.mjs";
@@ -12,21 +13,19 @@ const MAX_KEY_ATTEMPTS = 3;
 /** 存 key 时后台应用要拿它去问一次那一家，那边的超时是 30 秒 */
 const SAVE_KEY_TIMEOUT_MS = 45_000;
 
-const KEY_PROMPT = "粘贴 key 后按回车（输入不会显示出来）：";
-
 /**
  * 问 key 之前的那几句说明。它不单独打印，而是和提示一起交给 askSecret：
  * 那一步会先关掉终端的回显再显示文字。否则手快的人看到"要 key 了"就粘贴，
  * 而回显还没关，key 会被终端原样显示出来（在伪终端里实测到过）。
  */
-const keyPreamble = (provider, skippable) =>
+const keyPreamble = (t, provider, skippable) =>
   [
     "",
-    `需要一把 ${provider.name} API key：录音是发给 ${provider.name} 整理成文字的。`,
-    `没有的话在这里申请一把：${provider.keyPage}`,
-    "它会用系统钥匙串加密后存在这台电脑上，不会发到别处。",
-    ...(skippable ? ["现在不想填就直接按回车。"] : []),
-    KEY_PROMPT,
+    t("cli.key.need", { provider: provider.name }),
+    t("cli.key.getOne", { url: provider.keyPage }),
+    t("cli.key.storage"),
+    ...(skippable ? [t("cli.key.skip")] : []),
+    t("cli.key.prompt"),
   ].join("\n");
 
 /**
@@ -40,7 +39,7 @@ export function keyPrompter(io, provider) {
     while (asked < MAX_KEY_ATTEMPTS) {
       let value;
       try {
-        value = await io.askSecret(asked++ === 0 ? keyPreamble(provider, true) : KEY_PROMPT);
+        value = await io.askSecret(asked++ === 0 ? keyPreamble(io.t, provider, true) : io.t("cli.key.prompt"));
       } catch (error) {
         if (error instanceof Cancelled) return null;
         throw error;
@@ -48,7 +47,7 @@ export function keyPrompter(io, provider) {
       if (value === "") return null;
       const problem = apiKeyProblem(value);
       if (problem === null) return value;
-      io.err(`这把 key ${problem}。`);
+      io.err(io.t("common.sentence", { text: problem }));
     }
     return null;
   };
@@ -63,21 +62,21 @@ async function refuseLegacyDaemon(io, provider) {
   if (provider.id === "gemini") return;
   const status = await io.daemon.status();
   if (status === null || "provider" in status) return;
-  const restart = status.packaged ? PACKAGED_RELAUNCH : "运行 speakmore restart";
-  throw new Error(`正在运行的 SpeakMore 是旧版本，只认 Gemini 的 key：先${restart}，再来一次。`);
+  const restart = status.packaged ? PACKAGED_RELAUNCH : msg("cli.runRestart");
+  throw new LocalizedError(msg("cli.key.legacyDaemon", { restart }));
 }
 
 /** 把某一家的一把 key 交给后台应用验证并保存。@returns {Promise<boolean>} 通过了没有 */
 export async function submitKey(io, value, provider) {
   await refuseLegacyDaemon(io, provider);
-  io.out("正在验证…");
+  io.out(io.t("cli.key.verifying"));
   const result = await io.daemon.request(
     "set-key",
     { key: value, provider: provider.id },
     { timeoutMs: SAVE_KEY_TIMEOUT_MS },
   );
-  if (result.ok) io.out("key 已保存，验证通过。");
-  else io.err(`这把 key 没有通过：${result.problem}`);
+  if (result.ok) io.out(io.t("cli.key.saved"));
+  else io.err(io.t("cli.key.rejected", { problem: result.problem }));
   return result.ok;
 }
 
@@ -122,10 +121,7 @@ export async function key(args, io) {
   // 后面可以写一个厂商名。别的东西多半就是一把 key：不照做，也不把它再打一遍
   const named = positionals.length === 1 ? findProvider(positionals[0]) : null;
   if (positionals.length > 0 && named === null) {
-    throw new UsageError(
-      `key 不要写在命令后面：那样它会留在 shell 的历史记录里。运行 speakmore key 再粘贴，或者从管道喂：pbpaste | speakmore key。` +
-        `要给某一家填，后面写它的名字：${PROVIDERS.map(({ id }) => id).join(" / ")}`,
-    );
+    throw new UsageError(msg("cli.key.notInline", { providers: PROVIDERS.map(({ id }) => id).join(" / ") }));
   }
   const provider = named ?? currentProvider(io);
 
@@ -135,29 +131,29 @@ export async function key(args, io) {
     if ((await io.daemon.status()) !== null) await io.daemon.request("forget-key", { provider: provider.id });
     // 命令启动的和装成应用的各存各的一份，都删
     for (const packaged of [false, true]) rmSync(keyFile(io.paths, provider.id, { packaged }), { force: true });
-    io.out(`存着的 ${provider.name} 的 key 已经删掉。`);
+    io.out(io.t("cli.key.forgotten", { provider: provider.name }));
     return 0;
   }
 
   let value;
   try {
-    value = await io.askSecret(keyPreamble(provider, false));
+    value = await io.askSecret(keyPreamble(io.t, provider, false));
   } catch (error) {
     if (!(error instanceof Cancelled)) throw error;
-    io.err("已取消，key 没有改动。");
+    io.err(io.t("cli.key.cancelled"));
     return 1;
   }
   if (value === "") {
-    io.err("没有读到 key，原来的没有改动。");
+    io.err(io.t("cli.key.nothingRead"));
     return 1;
   }
   const problem = apiKeyProblem(value);
   if (problem !== null) {
-    io.err(`这把 key ${problem}。原来的没有改动。`);
+    io.err(io.t("cli.key.badShapeUnchanged", { problem }));
     return 1;
   }
   await ensureRunning(io);
   if (!(await submitKey(io, value, provider))) return 1;
-  if (provider.id !== currentProvider(io).id) io.out(`要换成用它：speakmore model ${provider.id}`);
+  if (provider.id !== currentProvider(io).id) io.out(io.t("cli.key.switchHint", { id: provider.id }));
   return 0;
 }

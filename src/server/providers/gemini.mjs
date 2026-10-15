@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { msg } from "../../i18n/index.mjs";
 import { quote } from "./errors.mjs";
 import { cacheMissing, createPromptCache } from "./gemini-cache.mjs";
 import { costOf } from "./prices/gemini.mjs";
@@ -52,7 +53,7 @@ export function createClient({
     /**
      * 有能用的提示词缓存就带上它（这时不能再写 systemInstruction，实测 400），没有就照原样发。
      * 缓存在那边已经没了的话，这一次照原样再发一遍
-     * @returns {Promise<{ text: string | null | undefined, problem: string | null, usage: object }>} 见 replyOf
+     * @returns {Promise<{ text: string | null | undefined, problem: object | null, usage: object }>} 见 replyOf
      */
     async generate({ audio, mimeType, systemPrompt, reminder, signal }) {
       // 不设 temperature。设成 0 时，60 条真实录音里有 10 条成品是坏的（开头多出一个不相干的外文词、
@@ -94,7 +95,7 @@ const tokensOf = (details, modality) => details?.find((detail) => detail.modalit
  * @param {{ model: string, at: Date }} request 请求的型号、什么时候调的。按回话报的型号（modelVersion）算钱：
  *   停用的型号会被转给别的（实测请求 gemini-3.5-flash，回话的是 gemini-3.6-flash）。回话报的型号查不到价
  *   （比如带了后缀的变体名）时退回去按请求的型号算，总比说不知道强
- * @returns {{ text: string | null | undefined, problem: string | null, usage: object }}
+ * @returns {{ text: string | null | undefined, problem: object | null, usage: object }} problem 是一句 msg
  */
 export function replyOf(response, { model, at }) {
   const meta = response.usageMetadata ?? {};
@@ -120,9 +121,9 @@ export function replyOf(response, { model, at }) {
   // 被截断或被拦下的半截文字不能当成品贴出去
   const finishReason = response.candidates?.[0]?.finishReason;
   const problem = blockReason
-    ? `Gemini 没有处理这段录音：${blockReason}`
+    ? msg("model.blocked", { provider: "Gemini", reason: blockReason })
     : finishReason && finishReason !== "STOP"
-      ? `Gemini 没有正常结束：${finishReason}`
+      ? msg("model.unfinished", { provider: "Gemini", reason: finishReason })
       : null;
   return { text: problem ? null : response.text, problem, usage };
 }
@@ -144,12 +145,13 @@ function geminiError(detail) {
  */
 export function classifyError(_error, detail) {
   if (/API key not valid|API_KEY_INVALID/.test(detail)) {
-    return { kind: "key", problem: "这把 key 无效，检查有没有复制完整" };
+    return { kind: "key", problem: msg("model.keyInvalid") };
   }
   const gemini = geminiError(detail);
   if (gemini === null) return null;
+  const said = quote(gemini.message);
   if (gemini.code >= 500 || gemini.code === 429) {
-    return { kind: "unavailable", problem: `Gemini 暂时用不了（${quote(gemini.message)}），过一会儿再试` };
+    return { kind: "unavailable", problem: msg("model.unavailable", { provider: "Gemini", said }) };
   }
-  return { kind: "other", problem: `Gemini 拒绝了请求：${quote(gemini.message)}` };
+  return { kind: "other", problem: msg("model.rejected", { provider: "Gemini", said }) };
 }

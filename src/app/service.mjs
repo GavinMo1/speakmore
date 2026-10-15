@@ -1,5 +1,6 @@
 // 内置的听写服务：就是 ../server 那个服务端，跑在主进程里，这样用的人不用另开一个终端。
 // 页面和它之间仍然走 WebSocket，服务端照旧可以单独启动（调试、回放录音、评估提示词）。
+import { LocalizedError, msg } from "../i18n/index.mjs";
 import { findProvider } from "../server/providers/index.mjs";
 import { createModelRefiner } from "../server/refine/refiner.mjs";
 import { startServer, WS_PATH } from "../server/server.mjs";
@@ -25,8 +26,7 @@ export async function startService({
 }) {
   /** 正在用的厂商和模型。换一家要带着那一家的 key 一起换（useKey 的 choice），验证过了才换 */
   let model = initialModel;
-  const noKeyMessage = () =>
-    `还没有填 ${findProvider(model.provider).name} API key：在终端运行 speakmore key，或者点菜单栏上 SpeakMore 的图标打开设置`;
+  const noKey = () => new LocalizedError(msg("key.noKeyService", { provider: findProvider(model.provider).name }));
   /** 通过了验证、正在用的那一个；没有 key 时是 null */
   let refiner = null;
 
@@ -35,7 +35,7 @@ export async function startService({
     log,
     refiner: {
       async refine(audio, options) {
-        if (!refiner) throw new Error(noKeyMessage());
+        if (!refiner) throw noKey();
         return refiner.refine(audio, options);
       },
       /** 开口时先做的准备（Gemini 建提示词缓存）。还没有 key 时没什么可准备的 */
@@ -84,7 +84,7 @@ export async function startService({
 
     /** 把正在用的那把再验一次，没通过就抛错。启动时没连上网的，之后靠它补上验证 */
     async verify() {
-      if (!refiner) throw new Error(noKeyMessage());
+      if (!refiner) throw noKey();
       await refiner.warmUp();
     },
 

@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { LocalizedError, msg } from "../../i18n/index.mjs";
 
 /**
  * Gemini API key 的存放处：用系统钥匙串加密后存成一个文件，明文只在内存里。
@@ -19,7 +20,7 @@ export function createKeyStore({ file, safeStorage }) {
 
     save(key) {
       // 钥匙串不可用时 Electron 在有的平台上会退回到固定密钥，那等于存明文，所以直接拒绝
-      if (!safeStorage.isEncryptionAvailable()) throw new Error("系统钥匙串不可用，没法安全地保存 key");
+      if (!safeStorage.isEncryptionAvailable()) throw new LocalizedError(msg("key.keychainUnavailable"));
       // 先删再写：mode 只在新建文件时生效，覆盖旧文件会沿用旧权限
       rmSync(file, { force: true });
       writeFileSync(file, safeStorage.encryptString(key), { mode: 0o600 });

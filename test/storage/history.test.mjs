@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, test } from "node:test";
+import { createTranslator } from "../../src/i18n/index.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
+
+const zh = createTranslator("zh-CN");
+/** 报错里给人看的那句，按中文翻出来对得上 */
+const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
 let dir;
 beforeEach(() => {
@@ -76,7 +81,7 @@ test("库的版本比程序新时拒绝打开，不去动它", () => {
   const db = new DatabaseSync(path);
   db.exec("PRAGMA user_version = 99");
   db.close();
-  assert.throws(() => openHistory(path), /版本是 99/);
+  assert.throws(() => openHistory(path), said(/版本是 99/));
 });
 
 test("统计：只数完成的听写，可以只看某个时刻之后的", () => {
@@ -162,7 +167,7 @@ test("只读打开时发现库的版本和程序对不上，就不读", () => {
   const db = new DatabaseSync(dbPath);
   db.exec("PRAGMA user_version = 99");
   db.close();
-  assert.throws(() => openHistory(dbPath, { readOnly: true }), /版本/);
+  assert.throws(() => openHistory(dbPath, { readOnly: true }), said(/版本/));
 });
 
 // ---------- 记账：每次调模型一笔（src/server/refine/refiner.mjs 的 onCall 给的那个样子） ----------

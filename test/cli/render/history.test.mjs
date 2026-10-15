@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderHistory } from "../../../src/cli/render/history.mjs";
-import { plain } from "./fixtures.mjs";
+import { english, plain } from "./fixtures.mjs";
 
 const row = (overrides) => ({
   id: "a",
@@ -24,19 +24,32 @@ test("历史按天分组，新的在前，今天和昨天有名字，每条是�
   assert.deepEqual(
     text.split("\n").filter((line) => line.trim() !== ""),
     [
-      "今天 · 10 月 13 日",
+      "今天 · 10月13日",
       "  14:32  今天下午说的",
-      "昨天 · 10 月 12 日",
+      "昨天 · 10月12日",
       "  09:05  昨天早上说的",
-      "10 月 8 日 周四",
+      "10月8日周四",
       "  20:00  上周说的",
     ],
   );
+  // 英文：日期和星期照英文的写法
+  assert.deepEqual(
+    renderHistory({ rows, total: 3 }, english)
+      .split("\n")
+      .filter((line) => /^\S/.test(line)),
+    ["Today · October 13", "Yesterday · October 12", "Thu, October 8"],
+  );
+});
+
+test("不是今年的带上年份", () => {
+  const rows = [row({ createdAt: "2025-10-08T12:00:00.000Z" })];
+  assert.match(renderHistory({ rows, total: 1 }, plain), /^2025年10月8日周三$/m);
+  assert.match(renderHistory({ rows, total: 1 }, english), /^Wed, October 8, 2025$/m);
 });
 
 test("按本地日期分组：UTC 还在前一天、本地已经过了零点的，算本地那一天", () => {
   const rows = [row({ createdAt: "2026-10-12T16:30:00.000Z" })];
-  assert.match(renderHistory({ rows, total: 1 }, plain), /今天 · 10 月 13 日\n {2}00:30/);
+  assert.match(renderHistory({ rows, total: 1 }, plain), /今天 · 10月13日\n {2}00:30/);
 });
 
 test("多段的文字后面几行缩进对齐，段落之间的空行留着", () => {

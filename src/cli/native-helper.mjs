@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { LocalizedError, msg } from "../i18n/index.mjs";
 
 // 原生小帮手（native/main.swift：听热键、贴字）的可执行文件从哪来。
 // 装好的程序里带着编好的，两种芯片都能跑，也不带源码；从源码仓库跑的话，第一次启动和改过源码之后在本机现编。
@@ -48,12 +49,10 @@ function compile(run, args) {
     run("swiftc", args, { stdio: ["ignore", "ignore", "pipe"] });
   } catch (error) {
     if (error.code === "ENOENT") {
-      throw new Error("编译按键监听的小程序需要 Xcode 命令行工具。先运行：xcode-select --install");
+      throw new LocalizedError(msg("cli.daemon.needXcode"), { cause: error });
     }
     const detail = String(error.stderr ?? "").trim() || error.message;
-    throw new Error(
-      `按键监听的小程序没有编译成功（没装 Xcode 命令行工具的话先运行 xcode-select --install）：\n${detail}`,
-    );
+    throw new LocalizedError(msg("cli.daemon.buildFailed", { detail }), { cause: error });
   }
 }
 

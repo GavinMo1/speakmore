@@ -2,10 +2,10 @@ import { TimeoutError } from "../../control.mjs";
 import {
   currentSettings,
   noPositionals,
-  PACKAGED_NOTE,
   PACKAGED_RELAUNCH,
   parse,
   permissionMissing,
+  progressOf,
   readStats,
   showStatus,
 } from "../common.mjs";
@@ -15,7 +15,7 @@ import { chooseProvider } from "./model.mjs";
 // 起停和看状态：speakmore（start）、stop、restart、status。
 
 export async function start(args, io) {
-  noPositionals(parse(args).positionals, "speakmore start");
+  noPositionals(parse(args).positionals, "start");
   // 先读一遍：设置文件坏了的话，在问任何问题之前就说清楚
   currentSettings(io);
   let provider = currentProvider(io);
@@ -37,8 +37,8 @@ export async function start(args, io) {
   let firstKey;
   if (started === null) {
     if (firstRun && !declined && keySource(io, provider) === null) firstKey = await nextKey();
-    io.out("正在启动 SpeakMore…");
-    started = await io.daemon.start({ onProgress: io.out });
+    io.out(io.t("cli.starting"));
+    started = await io.daemon.start({ onProgress: progressOf(io) });
   }
   if (firstKey === undefined && !declined && io.interactive && needsNewKey(started.key)) firstKey = await nextKey();
   // 不填或取消都不纠缠，面板里会说还差它
@@ -55,25 +55,25 @@ export async function start(args, io) {
   io.out("");
   // 刚才可能选了别家，设置变了
   showStatus(io, status, currentSettings(io));
-  if (openSettings)
-    io.out(`已经打开${firstRun ? "首次引导" : "设置"}，照着把缺的权限补上。补完运行 speakmore status 再看一眼。`);
+  if (openSettings) io.out(io.t(firstRun ? "cli.lifecycle.openedOnboarding" : "cli.lifecycle.openedSettings"));
   return 0;
 }
 
+/** 停的结果各说什么（文案里的名字） */
 const STOPPED = {
-  "not-running": "SpeakMore 本来就没有在运行。",
-  quit: "SpeakMore 已经停掉。",
-  killed: "SpeakMore 卡住了没有回应，已经强行结束。",
+  "not-running": "cli.lifecycle.notRunning",
+  quit: "cli.lifecycle.stopped",
+  killed: "cli.lifecycle.killed",
 };
 
 export async function stop(args, io) {
-  noPositionals(parse(args).positionals, "speakmore stop");
-  io.out(STOPPED[await io.daemon.stop()]);
+  noPositionals(parse(args).positionals, "stop");
+  io.out(io.t(STOPPED[await io.daemon.stop()]));
   return 0;
 }
 
 export async function restart(args, io) {
-  noPositionals(parse(args).positionals, "speakmore restart");
+  noPositionals(parse(args).positionals, "restart");
   currentSettings(io);
   let current = null;
   try {
@@ -83,8 +83,8 @@ export async function restart(args, io) {
     if (!(error instanceof TimeoutError)) throw error;
   }
   if (current?.packaged) {
-    io.err(`${PACKAGED_NOTE}从命令行重启会把它换成终端启动的那一个，权限和 key 都是另一套。`);
-    io.err(`要重启它：${PACKAGED_RELAUNCH}。`);
+    io.err(io.t("cli.lifecycle.packagedRestart"));
+    io.err(io.t("cli.lifecycle.howToRestart", { relaunch: PACKAGED_RELAUNCH }));
     return 1;
   }
   await io.daemon.stop();
@@ -93,7 +93,7 @@ export async function restart(args, io) {
 
 export async function status(args, io) {
   const { values, positionals } = parse(args, { json: { type: "boolean", default: false } });
-  noPositionals(positionals, "speakmore status [--json]");
+  noPositionals(positionals, "status");
   const settings = currentSettings(io);
   const current = await io.daemon.status({ recheck: true });
   if (values.json) {

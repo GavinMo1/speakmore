@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // speakmore 命令的入口。这里只做几件必须抢在加载其余代码之前的事，命令本身在 src/cli/main.mjs。
 import { nodeVersionProblem } from "../src/cli/node-version.mjs";
+import { createTranslator, localesFromEnv, resolveLocale, SYSTEM_LOCALE } from "../src/i18n/index.mjs";
 
+// 这两句说在读设置之前，按终端的语言说
+const t = createTranslator(resolveLocale(SYSTEM_LOCALE, localesFromEnv(process.env)));
 if (process.platform !== "darwin") {
-  console.error("SpeakMore 目前只支持 macOS：听热键和贴字靠的是 macOS 的系统接口。");
+  console.error(t("cli.macOnly"));
   process.exit(1);
 }
 const versionProblem = nodeVersionProblem(process.versions.node);
 if (versionProblem) {
-  console.error(versionProblem);
+  console.error(t.text(versionProblem));
   process.exit(1);
 }
 

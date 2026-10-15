@@ -15,6 +15,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { Cancelled } from "../../src/cli/ask-secret.mjs";
 import { run } from "../../src/cli/main.mjs";
 import { NotRunningError, TimeoutError } from "../../src/control.mjs";
+import { createTranslator } from "../../src/i18n/index.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
 import { keyFile, resolvePaths } from "../../src/storage/paths.mjs";
 import { resolveSettings } from "../../src/storage/settings.mjs";
@@ -80,7 +81,7 @@ afterEach(() => {
 /**
  * 假的后台应用。running 是它现在的状态（null 表示没在运行），afterStart 是启动之后的状态，
  * saveKey 决定存 key 的结果，stopped 是停止时的说法，hung 为 true 表示它卡住了不答话。
- * reloadTheme 是让它重新读主题时的回答，默认和真的一样：照设置文件里现在写的换。
+ * reloadTheme、reloadLanguage 是让它重新读主题、语言时的回答，默认和真的一样：照设置文件里现在写的换。
  * calls 记下命令行对它做过什么。
  */
 function fakeDaemon({
@@ -91,6 +92,7 @@ function fakeDaemon({
   stopped = "quit",
   hung = false,
   reloadTheme = () => ({ theme: resolveSettings({ file: paths.settingsFile, env: {} }).theme.value }),
+  reloadLanguage = () => ({ language: resolveSettings({ file: paths.settingsFile, env: {} }).language.value }),
 } = {}) {
   const daemon = {
     calls: [],
@@ -130,6 +132,7 @@ function fakeDaemon({
       }
       if (cmd === "forget-key") daemon.current = NO_KEY;
       if (cmd === "reload-theme") return reloadTheme();
+      if (cmd === "reload-language") return reloadLanguage();
       return null;
     },
   };
@@ -145,6 +148,7 @@ function harness({
   answers = [],
   confirms = [],
   keychain = () => true,
+  locale = "zh-CN",
 } = {}) {
   const output = { out: "", err: "" };
   const asked = [];
@@ -163,6 +167,8 @@ function harness({
     interactive,
     color: false,
     version: "0.1.0",
+    // 原来的断言都是中文的：这些测试按中文跑，英文的另有几条
+    t: createTranslator(locale),
     paths,
     daemon,
     now: () => new Date("2026-10-13T07:00:00.000Z"),
@@ -762,6 +768,98 @@ test("config set theme / config unset theme：和 theme 命令一样当场换，
   assert.match(output.out, /theme 回到了默认值 ink/);
 });
 
+// ---------- 界面语言 ----------
+
+test("英文：帮助、面板、用错了时的说法都是英文的", async () => {
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: READY }), locale: "en" });
+  assert.equal(await speakmore("help"), 0);
+  assert.match(output.out, /^SpeakMore: press a hotkey, speak/);
+  assert.match(output.out, /speakmore theme <name> +Switch theme \(ink Ink \/ cinnabar Cinnabar \/ indigo Indigo\)/);
+  assert.match(output.out, /latest 20 by default/);
+
+  assert.equal(await speakmore("status"), 0);
+  assert.match(output.out, /SpeakMore 0\.1\.0 · running/);
+  assert.match(output.out, /press Right Option to start talking/);
+  assert.match(output.out, /Permissions +Microphone ✓ {3}Input Monitoring ✓ {3}Accessibility ✓/);
+  assert.match(output.out, /Model +Gemini gemini-3\.6-flash \(MINIMAL\)/);
+
+  assert.equal(await speakmore("frobnicate"), 2);
+  assert.match(output.err, /There's no command called frobnicate\.\nRun speakmore help to see all commands\./);
+  assert.doesNotMatch(output.out + output.err, /[\u4e00-\u9fff]/);
+});
+
+test("英文：后台报上来的原因（msg）按命令行的语言翻；0.5 以前的后台报的中文原话照原样", async () => {
+  const problem = { key: "model.rejected", params: { provider: "Gemini", said: "models/gemini-nope is not found" } };
+  const fresh = {
+    ...READY,
+    key: { state: "rejected", source: "stored", cause: "other", problem },
+    summary: {
+      ready: false,
+      missing: [{ key: "setup.missing.check", params: { provider: "Gemini" } }],
+      blocker: null,
+      degraded: null,
+    },
+  };
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: fresh }), locale: "en" });
+  assert.equal(await speakmore("status"), 1);
+  assert.match(output.out, /Missing: Gemini check\./);
+  assert.match(output.out, /Check failed: Gemini rejected the request: models\/gemini-nope is not found\./);
+
+  const old = harness({ daemon: fakeDaemon({ running: WRONG_MODEL }), locale: "en" });
+  assert.equal(await old.speakmore("status"), 1);
+  assert.match(old.output.out, /Missing: Gemini 验证\./);
+});
+
+test("config set language：存进设置；在运行的话让它当场换，不重启；没在运行就下次启动生效", async () => {
+  const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
+  assert.equal(await speakmore("config", "set", "language", "zh_cn"), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { language: "zh-CN" });
+  assert.deepEqual(daemon.calls, ["reload-language"]);
+  assert.match(output.out, /language 改成了 zh-CN。\n已经生效，不用重启/);
+  assert.equal(await speakmore("config", "unset", "language"), 0);
+  assert.deepEqual(daemon.calls, ["reload-language", "reload-language"]);
+  assert.match(output.out, /language 回到了默认值 system/);
+
+  const idle = harness();
+  assert.equal(await idle.speakmore("config", "set", "language", "en"), 0);
+  assert.deepEqual(idle.daemon.calls, []);
+  assert.match(idle.output.out, /下次启动生效/);
+
+  assert.equal(await idle.speakmore("config", "set", "language", "fr"), 2);
+  assert.match(idle.output.err, /system \/ en \/ zh-CN/);
+});
+
+test("config set language：环境变量盖着时照实说它用的还是哪种；旧版本的后台说要重启", async () => {
+  const pinned = fakeDaemon({ running: READY, reloadLanguage: () => ({ language: "en" }) });
+  const { speakmore, output } = harness({ daemon: pinned, env: { SPEAKMORE_LANGUAGE: "en" } });
+  assert.equal(await speakmore("config", "set", "language", "zh-CN"), 0);
+  assert.match(output.out, /环境变量 SPEAKMORE_LANGUAGE 现在设着/);
+  assert.match(output.out, /用的还是English：.*SPEAKMORE_LANGUAGE/);
+
+  const legacy = fakeDaemon({
+    running: READY,
+    reloadLanguage: () => {
+      throw new Error('不认识的命令："reload-language"');
+    },
+  });
+  const old = harness({ daemon: legacy });
+  assert.equal(await old.speakmore("config", "set", "language", "en"), 0);
+  assert.match(old.output.out, /旧版本.*speakmore restart/);
+});
+
+test("面板里写着界面语言：跟随系统时带上实际用的那种", async () => {
+  const running = { ...READY, language: "system", locale: "en" };
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running }) });
+  assert.equal(await speakmore("status"), 0);
+  assert.match(output.out, /语言 +跟随系统 · English/);
+  const english = harness({
+    daemon: fakeDaemon({ running: { ...READY, language: "zh-CN", locale: "zh-CN" } }),
+    locale: "en",
+  });
+  assert.equal(await english.speakmore("status"), 0);
+  assert.match(english.output.out, /Language +简体中文/);
+});
+
 test("面板里写着正在用的主题", async () => {
   const { speakmore, output } = harness({ daemon: fakeDaemon({ running: { ...READY, theme: "cinnabar" } }) });
   assert.equal(await speakmore("status"), 0);
@@ -806,10 +904,7 @@ test("history：按天分组列出来；-n 限制条数；后台应用在不在�
   seedHistory();
   const all = harness();
   assert.equal(await all.speakmore("history"), 0);
-  assert.match(
-    all.output.out,
-    /今天 · 10 月 13 日\n {2}14:32 {2}今天说的\n\n昨天 · 10 月 12 日\n {2}09:05 {2}昨天说的/,
-  );
+  assert.match(all.output.out, /今天 · 10月13日\n {2}14:32 {2}今天说的\n\n昨天 · 10月12日\n {2}09:05 {2}昨天说的/);
   assert.deepEqual(all.daemon.calls, []);
 
   const one = harness();
@@ -1345,4 +1440,78 @@ test("装成应用的在运行：它的 key 存在它自己那一份里，看 ke
   assert.equal(await speakmore("model", "openai"), 0);
   assert.equal(asked.length, 0);
   assert.match(output.out, /SpeakMore\.app/);
+});
+
+test("英文时每个命令的输出里都没有漏翻的中文（用户自己说的话除外）", async () => {
+  const history = openHistory(paths.historyDb);
+  history.add({
+    id: "a",
+    status: "completed",
+    refinedText: "Let's meet at 9:30.",
+    error: null,
+    duration: 4,
+    audioLocalPath: null,
+    createdAt: "2026-10-13T06:32:00.000Z",
+  });
+  history.add({
+    id: "b",
+    status: "failed",
+    refinedText: "",
+    error: null,
+    duration: 75,
+    audioLocalPath: null,
+    createdAt: "2026-10-12T06:32:00.000Z",
+  });
+  history.addCall({
+    purpose: "dictation",
+    audioId: "a",
+    provider: "gemini",
+    model: "gemini-3.6-flash",
+    inputTokens: 1390,
+    audioTokens: 25,
+    cachedTokens: 0,
+    outputTokens: 4,
+    thinkingTokens: 0,
+    costUsd: 0.0011,
+    latencyMs: 1700,
+    createdAt: "2026-10-13T06:32:00.000Z",
+  });
+  history.addCall({
+    purpose: "check",
+    audioId: null,
+    provider: "openai",
+    model: "gpt-unknown",
+    inputTokens: 10,
+    audioTokens: 0,
+    cachedTokens: 0,
+    outputTokens: 1,
+    thinkingTokens: 0,
+    costUsd: null,
+    latencyMs: 900,
+    createdAt: "2026-10-13T06:33:00.000Z",
+  });
+  history.close();
+  const missing = { ...NO_PERMISSIONS, summary: { ...NO_PERMISSIONS.summary, missing: [], blocker: null } };
+  const commands = [
+    [["status"], READY],
+    [["status"], missing],
+    [["status"], null],
+    [["config"], READY],
+    [["theme"], READY],
+    [["model"], READY],
+    [["usage"], null],
+    [["history"], null],
+    [["logs"], null],
+    [["stop"], READY],
+    [["settings"], null],
+    [["key", "--forget", "openai"], READY],
+    [["uninstall"], null],
+    [["model", "nope"], READY],
+    [["history", "extra"], null],
+  ];
+  for (const [argv, running] of commands) {
+    const { speakmore, output } = harness({ daemon: fakeDaemon({ running }), locale: "en", interactive: false });
+    await speakmore(...argv);
+    assert.doesNotMatch(output.out + output.err, /[一-鿿]/, argv.join(" "));
+  }
 });

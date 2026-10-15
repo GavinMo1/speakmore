@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { createTranslator } from "../../../src/i18n/index.mjs";
 import { toWav } from "../../../src/server/audio/transcode.mjs";
+
+const zh = createTranslator("zh-CN");
+/** 报错里给人看的那句，按中文翻出来对得上 */
+const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
 // 测试用的录音是 ffmpeg 生成的纯音调（Opus，单声道），不是谁的说话声
 const fixture = (name) => readFileSync(join(import.meta.dirname, "../../fixtures/audio", name));
@@ -32,5 +37,8 @@ test("不转的格式直接报错，说清是哪一种：原版 Typeless 的 Ogg
 });
 
 test("内容坏了解不出声音时报错，不交出一段空的 WAV", async () => {
-  await assert.rejects(toWav(Buffer.from("\x1aE\xdf\xa3 but not really audio", "latin1"), "audio/webm"), /解不出/);
+  await assert.rejects(
+    toWav(Buffer.from("\x1aE\xdf\xa3 but not really audio", "latin1"), "audio/webm"),
+    said(/解不出/),
+  );
 });

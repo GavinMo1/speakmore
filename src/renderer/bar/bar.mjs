@@ -1,6 +1,8 @@
 // 悬浮条：把按键和点击喂给状态机，按状态机给出的动作去录音、上传、交付。
 // 画面不在这里：该是什么样子由 bar-view.mjs 算，画出来由 bar-ui.mjs 管。
 
+import { LocalizedError, msg, problemOf } from "../../i18n/index.mjs";
+import { keycapOf, setLocale, t } from "../shared/i18n.mjs";
 import { createBarUi } from "./bar-ui.mjs";
 import { viewOf } from "./bar-view.mjs";
 import { Action, initialState, LONG_PRESS_MS, Phase, transition } from "./machine.mjs";
@@ -10,15 +12,27 @@ import { VoiceSocket } from "./voice-socket.mjs";
 /** 原版的单次录音上限：9 分钟 */
 const MAX_DURATION_MS = 540_000;
 
-const { serverUrl, hotkeyKeycap, barControls } = await window.speakmore.config();
+const { serverUrl, hotkey: initialHotkey, barControls } = await window.speakmore.config();
+/** 现在的热键（id）。提示里写它的短名字，按界面语言写 */
+let hotkey = initialHotkey;
 const voice = new VoiceSocket(serverUrl);
 const ui = createBarUi({
   document,
   host: { setVisible: window.speakmore.setBarVisible, capture: window.speakmore.captureBarInput },
-  keycap: hotkeyKeycap,
+  keycap: keycapOf(hotkey),
+  t,
 });
 ui.setControls(barControls);
-window.speakmore.onHotkeyChanged((keycap) => ui.setKeycap(keycap));
+window.speakmore.onHotkeyChanged((next) => {
+  hotkey = next;
+  ui.setKeycap(keycapOf(hotkey));
+});
+// 设置里换了语言：悬浮条不重新加载（可能正在听写），换掉翻译，下一句就是新的语言
+window.speakmore.onLocaleChanged((locale) => {
+  setLocale(locale);
+  ui.setTranslator(t);
+  ui.setKeycap(keycapOf(hotkey));
+});
 
 let state = initialState;
 /** 正在进行的那一次：{ audioId, recording, cancelled } */
@@ -31,7 +45,7 @@ function dispatch(event) {
   const result = transition(state, event);
   state = result.state;
   // 状态没动（比如空闲时松开热键）就不重画
-  if (state !== previous) ui.show(viewOf(state, previous.phase), state.message);
+  if (state !== previous) ui.show(viewOf(state, previous.phase), t.text(state.message));
   for (const action of result.actions) ACTIONS[action]();
 }
 
@@ -45,7 +59,8 @@ const ACTIONS = {
   [Action.CLEAR_HOLD_TIMER]: () => clearTimeout(holdTimer),
 };
 
-const describe = (error) => (error instanceof Error ? error.message : String(error));
+/** 一个错误给人看的那句话：一句 msg（到画出来时才按界面语言翻），或者现成的字 */
+const describe = problemOf;
 
 function start() {
   const current = { audioId: crypto.randomUUID(), recording: null, cancelled: false };
@@ -72,8 +87,8 @@ function start() {
 }
 
 function describeStartError(error) {
-  if (error?.name === "NotAllowedError") return "缺麦克风权限：系统设置 › 隐私与安全性 › 麦克风";
-  if (error?.name === "NotFoundError") return "找不到麦克风";
+  if (error?.name === "NotAllowedError") return msg("bar.noMicPermission");
+  if (error?.name === "NotFoundError") return msg("bar.noMicrophone");
   return describe(error);
 }
 
@@ -95,7 +110,7 @@ async function stop() {
     recorded = await current.recording.stop();
     if (!recorded.hadSignal) {
       voice.abandon();
-      throw new Error("麦克风没信号：查输入设备、是否静音");
+      throw new LocalizedError(msg("bar.noSignal"));
     }
     const text = await voice.finish({ durationSeconds: recorded.durationSeconds });
     const { notice } = await window.speakmore.deliver({
@@ -108,12 +123,12 @@ async function stop() {
   } catch (error) {
     console.error("这次听写失败", error);
     const message = describe(error);
-    // 录音还在的话交给主进程存下来，失败了话也不会白说
+    // 录音还在的话交给主进程存下来，失败了话也不会白说。历史里记的是这一刻界面上的那句话
     if (recorded) {
       await window.speakmore
         .reportFailure({
           audioId: current.audioId,
-          error: message,
+          error: t.text(message),
           durationSeconds: recorded.durationSeconds,
           audio: await recorded.blob.arrayBuffer(),
         })
@@ -148,5 +163,5 @@ window.speakmore.onNotice((message) => {
   // 权限之类的提醒只在空闲时显示，不打断正在进行的听写
   if (state.phase !== Phase.IDLE && state.phase !== Phase.ERROR) return;
   state = { ...state, message };
-  ui.show(viewOf(state, state.phase), message);
+  ui.show(viewOf(state, state.phase), t.text(message));
 });

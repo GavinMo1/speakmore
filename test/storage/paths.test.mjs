@@ -3,7 +3,12 @@ import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { createTranslator } from "../../src/i18n/index.mjs";
 import { ensureHome, keyFile, legacyDataDir, resolvePaths } from "../../src/storage/paths.mjs";
+
+const zh = createTranslator("zh-CN");
+/** 报错里给人看的那句，按中文翻出来对得上 */
+const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
 test("所有东西都在家目录下的 .speakmore 这一个目录里", () => {
   const paths = resolvePaths({}, "/Users/someone");
@@ -56,12 +61,12 @@ test("SPEAKMORE_HOME 是空字符串时当作没设，不把文件写到当前�
 
 test("控制通道的路径太长时报错并说明怎么办，不等到监听时才失败", () => {
   const long = `/tmp/${"x".repeat(100)}`;
-  assert.throws(() => resolvePaths({ SPEAKMORE_HOME: long }, "/Users/someone"), /SPEAKMORE_HOME/);
+  assert.throws(() => resolvePaths({ SPEAKMORE_HOME: long }, "/Users/someone"), said(/SPEAKMORE_HOME/));
 });
 
 test("SPEAKMORE_HOME 要是绝对路径：相对路径会随着在哪个目录运行命令而变，找不到同一个后台应用", () => {
   for (const relative of ["data", "./data", "../data"]) {
-    assert.throws(() => resolvePaths({ SPEAKMORE_HOME: relative }, "/Users/someone"), /绝对路径/);
+    assert.throws(() => resolvePaths({ SPEAKMORE_HOME: relative }, "/Users/someone"), said(/绝对路径/));
   }
 });
 

@@ -12,7 +12,13 @@ ipcRenderer.on("theme:changed", (_event, css) => {
   webFrame.removeInsertedCSS(previous);
 });
 
+// 界面语言：同样同步取，页面一加载就按它写字（src/renderer/shared/i18n.mjs）。设置里换了语言，
+// 主窗口和首次引导整页重新加载；悬浮条不重新加载（可能正在听写），收到新的语言换掉翻译
+const locale = ipcRenderer.sendSync("locale:get");
+
 contextBridge.exposeInMainWorld("speakmore", {
+  locale,
+  onLocaleChanged: (callback) => ipcRenderer.on("locale:changed", (_event, next) => callback(next)),
   config: () => ipcRenderer.invoke("config:get"),
 
   // 悬浮条
@@ -24,7 +30,7 @@ contextBridge.exposeInMainWorld("speakmore", {
   deliver: (payload) => ipcRenderer.invoke("dictation:deliver", payload),
   reportFailure: (payload) => ipcRenderer.invoke("dictation:failed", payload),
 
-  onHotkeyChanged: (callback) => ipcRenderer.on("bar:hotkey", (_event, keycap) => callback(keycap)),
+  onHotkeyChanged: (callback) => ipcRenderer.on("bar:hotkey", (_event, hotkey) => callback(hotkey)),
 
   // 主窗口：首页、历史记录
   appInfo: () => ipcRenderer.invoke("app:info"),
@@ -54,4 +60,5 @@ contextBridge.exposeInMainWorld("speakmore", {
   onOnboardingHotkey: (callback) => ipcRenderer.on("onboarding:hotkey", (_event, key) => callback(key)),
   finishOnboarding: () => ipcRenderer.invoke("onboarding:finish"),
   setTheme: (theme) => ipcRenderer.invoke("setup:set-theme", theme),
+  setLanguage: (language) => ipcRenderer.invoke("setup:set-language", language),
 });

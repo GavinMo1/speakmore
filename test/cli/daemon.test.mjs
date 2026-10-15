@@ -6,7 +6,12 @@ import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { createDaemon } from "../../src/cli/daemon.mjs";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer, TimeoutError } from "../../src/control.mjs";
+import { createTranslator } from "../../src/i18n/index.mjs";
 import { ensureHome, resolvePaths } from "../../src/storage/paths.mjs";
+
+const zh = createTranslator("zh-CN");
+/** 报错里给人看的那句，按中文翻出来对得上 */
+const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
 const quietLog = { info() {}, warn() {}, error() {} };
 const RUNNING = { pid: 4321, starting: false, permissions: { microphone: "granted" }, key: { state: "ready" } };
@@ -95,7 +100,7 @@ test("启动：用 Electron 跑这个包，脱离终端，输出接到日志文�
     writeFileSync(options.stdio[1], '{"event":"started"}\n');
     setTimeout(() => startFakeApp(() => RUNNING), 30);
   });
-  const status = await daemonWith({ spawn }).start({ onProgress: (text) => progress.push(text) });
+  const status = await daemonWith({ spawn }).start({ onProgress: (message) => progress.push(zh.text(message)) });
 
   assert.equal(status.pid, 4321);
   assert.equal(spawned.length, 1);
@@ -129,7 +134,7 @@ test("启动前先确保小帮手编好了；编了的话说一声", async () =>
     onBuild();
     return true;
   };
-  await daemonWith({ spawn, ensureHelper }).start({ onProgress: (text) => progress.push(text) });
+  await daemonWith({ spawn, ensureHelper }).start({ onProgress: (message) => progress.push(zh.text(message)) });
   assert.deepEqual(order, ["helper:/pkg", "spawn"]);
   assert.ok(progress.some((text) => /小程序/.test(text)));
 });
@@ -142,7 +147,7 @@ test("应用还在等麦克风授权时说明在等什么，等它准备好再�
       status = RUNNING;
     }, 60);
   });
-  const result = await daemonWith({ spawn }).start({ onProgress: (text) => progress.push(text) });
+  const result = await daemonWith({ spawn }).start({ onProgress: (message) => progress.push(zh.text(message)) });
   assert.equal(result.starting, false);
   assert.equal(progress.filter((text) => /麦克风/.test(text)).length, 1);
 });
@@ -160,13 +165,13 @@ test("应用刚启动就退出时报错，并带上日志最后几行", async ()
   });
   await assert.rejects(
     daemonWith({ spawn }).start({ onProgress() {} }),
-    (error) => /没能启动/.test(error.message) && /设置文件写错了：hotkey/.test(error.message),
+    (error) => /没能启动/.test(zh.text(error.problem)) && /设置文件写错了：hotkey/.test(zh.text(error.problem)),
   );
 });
 
 test("应用一直不答话时按时放弃，并说去哪看日志", async () => {
   const spawn = fakeSpawn(() => {});
-  await assert.rejects(daemonWith({ spawn, connectTimeoutMs: 60 }).start({ onProgress() {} }), /logs\/main\.log/);
+  await assert.rejects(daemonWith({ spawn, connectTimeoutMs: 60 }).start({ onProgress() {} }), said(/logs\/main\.log/));
 });
 
 test("同时启动了两个：后到的发现已经有一个就退出，这不算失败，接着等先到的那个答话", async () => {
@@ -233,16 +238,16 @@ test("卡住不答话，进程号又对不上（没记下来，或者那个号�
   await startHungApp();
   const stuck = (overrides) => daemonWith({ statusTimeoutMs: 60, ...overrides }).stop();
 
-  await assert.rejects(stuck(), /活动监视器/);
+  await assert.rejects(stuck(), said(/活动监视器/));
   writeFileSync(paths.pidFile, "4321\n");
-  await assert.rejects(stuck({ commandOf: () => "/usr/bin/vim notes.txt" }), /活动监视器/);
+  await assert.rejects(stuck({ commandOf: () => "/usr/bin/vim notes.txt" }), said(/活动监视器/));
   // 别的 Electron 应用的辅助进程，路径里也带着 Electron 字样
   const otherApp =
     "/Applications/Other.app/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler";
-  await assert.rejects(stuck({ commandOf: () => otherApp }), /活动监视器/);
-  await assert.rejects(stuck({ commandOf: () => null }), /活动监视器/);
+  await assert.rejects(stuck({ commandOf: () => otherApp }), said(/活动监视器/));
+  await assert.rejects(stuck({ commandOf: () => null }), said(/活动监视器/));
   writeFileSync(paths.pidFile, "不是数字");
-  await assert.rejects(stuck(), /活动监视器/);
+  await assert.rejects(stuck(), said(/活动监视器/));
   assert.deepEqual(processes.signals, []);
 });
 

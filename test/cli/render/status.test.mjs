@@ -81,7 +81,7 @@ test("模型和热键写的是后台应用正在用的；设置改过还没生�
   const status = { ...ready, model: "gemini/gemini-3.8-flash", thinking: "LOW" };
   const stale = renderStatus({ status, version: "0.1.0", settings, stats: noStats }, plain);
   assert.match(stale, /模型\s+Gemini 的 gemini-3\.8-flash（LOW）/);
-  assert.match(stale, /model、thinking.*speakmore restart/);
+  assert.match(stale, /model \/ thinking.*speakmore restart/);
 
   const same = renderStatus({ status: ready, version: "0.1.0", settings, stats: noStats }, plain);
   assert.doesNotMatch(same, /speakmore restart/);

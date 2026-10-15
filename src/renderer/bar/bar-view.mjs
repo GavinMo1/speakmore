@@ -21,7 +21,7 @@ export const LINGER_MS = Object.freeze({
 });
 
 /**
- * @param {{ phase: string, message: string | null }} state 状态机现在的状态
+ * @param {{ phase: string, message: object | string | null }} state 状态机现在的状态（message 是一句 msg 或现成的字）
  * @param {string} previousPhase 变成现在这样之前的阶段
  */
 export function viewOf(state, previousPhase) {
@@ -45,18 +45,20 @@ export function viewOf(state, previousPhase) {
  * 条上方的那行提示。
  * @param {string} view
  * @param {{ keycap: string, cancellable: boolean }} options keycap：热键的短名字；cancellable：esc 截不截得住
+ * @param {Function} t 界面语言的翻译函数（src/i18n）。键在句子里的位置由各语言自己定
  * @returns {Array<string | { key: string }>} 一段一段的：文字，或者一个要标成键名的键
  */
-export function hintFor(view, { keycap, cancellable }) {
+export function hintFor(view, { keycap, cancellable }, t) {
   switch (view) {
     case View.STARTING:
-      return ["打开麦克风…"];
+      return [t("bar.opening")];
     case View.RECORDING:
-      return cancellable
-        ? ["再按一下 ", { key: keycap }, " 完成 · ", { key: "esc" }, " 取消"]
-        : ["再按一下 ", { key: keycap }, " 完成"];
+      return t.parts(cancellable ? "bar.recording" : "bar.recordingNoEsc", {
+        key: { key: keycap },
+        esc: { key: "esc" },
+      });
     case View.FINISHING:
-      return ["整理中"];
+      return [t("bar.finishing")];
     default:
       return [];
   }

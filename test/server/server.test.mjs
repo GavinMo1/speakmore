@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { afterEach, test } from "node:test";
 import WebSocket from "ws";
+import { LocalizedError, msg } from "../../src/i18n/index.mjs";
 import { startServer, WS_PATH } from "../../src/server/server.mjs";
 
 const ogg = (payload) => Buffer.concat([Buffer.from("OggS"), Buffer.from(payload)]);
@@ -134,6 +135,8 @@ test("整理失败时回 audio_processing_error，连接不断", async () => {
   assert.equal(failed.V.audio_id, "a1");
   assert.equal(failed.V.code, "refine_failed");
   assert.match(failed.V.detail, /上游 503/);
+  // 说不清的错误不带 problem，悬浮条就用 detail
+  assert.equal(failed.V.problem, undefined);
 
   client.sendJson({ type: "start_audio", audio_id: "a2" });
   await client.next();
@@ -158,7 +161,27 @@ test("一块音频都没有就结束：不去调模型，回 no_audio", async ()
   const failed = await client.next();
   assert.equal(failed.K, "audio_processing_error");
   assert.equal(failed.V.code, "no_audio");
+  assert.deepEqual(failed.V.problem, msg("voice.noAudio"));
   assert.equal(calls, 0);
+});
+
+test("整理失败时带上给人看的那句话（problem），由悬浮条按界面语言翻；原话照旧在 detail 里", async () => {
+  const problem = msg("model.unreachable", { provider: "Gemini" });
+  const port = await start({
+    async refine() {
+      throw new LocalizedError(problem);
+    },
+  });
+  const client = await connect(port);
+  client.sendJson({ type: "start_audio", audio_id: "a1" });
+  await client.next();
+  await sendChunk(client, "a1", 1, ogg("x"));
+  client.sendJson({ type: "end_audio", audio_id: "a1" });
+  await client.next();
+  const failed = await client.next();
+  assert.equal(failed.V.code, "refine_failed");
+  assert.deepEqual(failed.V.problem, problem);
+  assert.equal(failed.V.detail, "Can't reach Gemini. Check your network");
 });
 
 test("顺序不对的消息回 error，并说明原因", async () => {

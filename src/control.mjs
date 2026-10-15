@@ -1,21 +1,23 @@
 import { chmodSync, rmSync } from "node:fs";
 import { connect, createServer } from "node:net";
+import { LocalizedError, msg } from "./i18n/index.mjs";
 
 // 命令行和后台应用之间的控制通道：数据目录里的一个 Unix 套接字，只有这台机器上的同一个用户连得上。
 // 一次连接一问一答，各是一行 JSON：
-//   {"cmd": "status", "params": {…}}  →  {"ok": true, "result": …}  或  {"ok": false, "error": "…"}
+//   {"cmd": "status", "params": {…}}  →  {"ok": true, "result": …}  或  {"ok": false, "error": "…", "problem": …}
+// 出错时 error 是一句话（英文，0.5 以前是中文），problem 是给人看的那句（msg），由命令行按它的语言翻
 
 /** 一条请求最长多少字节。正常的请求只有几十个字节，带 key 的那条也不到两百 */
 const MAX_REQUEST_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 5_000;
 
-/** 控制通道这一层说得清原因的失败。调用方照着 message 告诉用户就行，不需要调用栈 */
-export class ControlError extends Error {}
+/** 控制通道这一层说得清原因的失败。调用方照着 problem 告诉用户就行，不需要调用栈 */
+export class ControlError extends LocalizedError {}
 
 /** 后台应用没有在运行 */
 export class NotRunningError extends ControlError {
   constructor() {
-    super("SpeakMore 没有在运行");
+    super(msg("control.notRunning"));
     this.name = "NotRunningError";
   }
 }
@@ -23,7 +25,7 @@ export class NotRunningError extends ControlError {
 /** 有人在听，但限时内没有回话：多半是卡住了 */
 export class TimeoutError extends ControlError {
   constructor(cmd, timeoutMs) {
-    super(`SpeakMore 没有在 ${timeoutMs / 1000} 秒内回话（命令 ${cmd}）`);
+    super(msg("control.timeout", { seconds: timeoutMs / 1000, command: cmd }));
     this.name = "TimeoutError";
   }
 }
@@ -69,11 +71,12 @@ export function requestControl(socketPath, cmd, params = {}, { timeoutMs = DEFAU
       try {
         reply = JSON.parse(received);
       } catch {
-        reject(new Error(`SpeakMore 的回答看不懂（命令 ${cmd}）`));
+        reject(new ControlError(msg("control.unreadable", { command: cmd })));
         return;
       }
       if (reply.ok) resolve(reply.result);
-      else reject(new Error(reply.error));
+      // 后台说得清的（带着 problem）按命令行的语言翻；别的照它的原话
+      else reject(reply.problem ? new LocalizedError(reply.problem) : new Error(reply.error));
     });
   });
 }
@@ -144,7 +147,11 @@ export async function startControlServer({ socketPath, handlers, log }) {
       } catch (error) {
         // 只记命令名：参数里可能有 key
         log.warn("control_failed", { cmd: request.cmd, error: String(error?.message ?? error).slice(0, 300) });
-        answer({ ok: false, error: String(error?.message ?? error) });
+        answer({
+          ok: false,
+          error: String(error?.message ?? error),
+          ...(error?.problem ? { problem: error.problem } : {}),
+        });
       }
     });
   });

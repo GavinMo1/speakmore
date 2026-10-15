@@ -23,37 +23,38 @@ function columns(rows, align) {
   );
 }
 
-const waiting = (latency) =>
-  latency ? `一般 ${formatSeconds(latency.medianMs)}，慢时 ${formatSeconds(latency.p90Ms)}` : "—";
+const waiting = (latency, t) =>
+  latency
+    ? t("cli.usage.waiting", { median: formatSeconds(latency.medianMs, t), slow: formatSeconds(latency.p90Ms, t) })
+    : "—";
 
 /** 一个型号的钱：全都不在价目表里时说不明 */
-const costOf = ({ costUsd, calls, unpricedCalls }) => (unpricedCalls === calls ? "价格不明" : formatUsd(costUsd));
+const costOf = ({ costUsd, calls, unpricedCalls }, t) =>
+  unpricedCalls === calls ? t("cli.usage.unpriced") : formatUsd(costUsd);
 
 /**
  * @param {{ today: object, month: object, total: object, models: object[] } | null} report src/usage/report.mjs 给的；
  *   还没有历史库时是 null
- * @param {{ color: boolean }} options
+ * @param {{ color: boolean, t: Function }} options
  */
-export function renderUsage(report, { color }) {
+export function renderUsage(report, { color, t }) {
   const c = paint(color);
-  if (report === null || report.total.calls === 0) {
-    return `还没有用量记录。说一句话之后再来看：每次调模型花了多少钱、多少 token、多久回话，都会记下来。\n`;
-  }
+  if (report === null || report.total.calls === 0) return `${t("cli.usage.empty")}\n`;
   const { total } = report;
 
   const periods = columns(
     [
-      ["", "花费", "token", "听写", "模型回话"],
+      ["", t("cli.usage.cost"), t("cli.usage.tokens"), t("cli.usage.dictations"), t("cli.usage.latency")],
       ...[
-        ["今天", report.today],
-        ["本月", report.month],
-        ["累计", total],
+        [t("periods.today"), report.today],
+        [t("periods.month"), report.month],
+        [t("periods.total"), total],
       ].map(([label, it]) => [
         label,
         formatUsd(it.costUsd),
         formatTokens(it.tokens),
         String(it.dictations),
-        waiting(it.latency),
+        waiting(it.latency, t),
       ]),
     ],
     ["left", "right", "right", "right", "left"],
@@ -61,35 +62,40 @@ export function renderUsage(report, { color }) {
   const models = columns(
     report.models.map((it) => [
       `${findProvider(it.provider)?.name ?? it.provider} ${it.model}`,
-      costOf(it),
+      costOf(it, t),
       formatTokens(it.tokens),
-      `${it.dictations} 次`,
-      it.latency ? `一般 ${formatSeconds(it.latency.medianMs)}` : "",
+      t("cli.usage.times", { count: it.dictations }),
+      it.latency ? t("cli.usage.usually", { median: formatSeconds(it.latency.medianMs, t) }) : "",
     ]),
     ["left", "right", "right", "right", "left"],
   );
 
   const notes = [
-    `累计的 token：输入 ${formatTokens(total.inputTokens)}（其中音频 ${formatTokens(total.audioTokens)}、命中缓存 ${formatTokens(total.cachedTokens)}），` +
-      `输出 ${formatTokens(total.outputTokens)}（其中思考 ${formatTokens(total.thinkingTokens)}）。`,
+    t("cli.usage.tokensNote", {
+      input: formatTokens(total.inputTokens),
+      audio: formatTokens(total.audioTokens),
+      cached: formatTokens(total.cachedTokens),
+      output: formatTokens(total.outputTokens),
+      thinking: formatTokens(total.thinkingTokens),
+    }),
   ];
-  if (total.checks > 0) notes.push(`验证 key 的 ${total.checks} 次也算在里面。`);
-  if (total.cacheCostUsd > 0) notes.push(`花费里有 ${formatUsd(total.cacheCostUsd)} 是提示词缓存的（建缓存、存着）。`);
+  if (total.checks > 0) notes.push(t("cli.usage.checksNote", { count: total.checks }));
+  if (total.cacheCostUsd > 0) notes.push(t("cli.usage.cacheNote", { cost: formatUsd(total.cacheCostUsd) }));
   const unpriced = report.models.filter(({ unpricedCalls }) => unpricedCalls > 0);
   if (unpriced.length > 0) {
     notes.push(
-      `${unpriced.map(({ model }) => model).join("、")} 不在价目表里，这 ${total.unpricedCalls} 次的钱没算进去。`,
+      t("cli.usage.unpricedNote", { models: t.list(unpriced.map(({ model }) => model)), count: total.unpricedCalls }),
     );
   }
-  notes.push("钱是按各家官方标准价估算的美元；Gemini 在免费额度内用的其实不收钱。");
+  notes.push(t("cli.usage.estimateNote"));
 
   return [
-    c.bold("用量"),
+    c.bold(t("cli.usage.title")),
     "",
     `${INDENT}${c.dim(periods[0])}`,
     ...periods.slice(1).map((line) => `${INDENT}${line}`),
     "",
-    `${INDENT}${c.bold("按型号（累计）")}`,
+    `${INDENT}${c.bold(t("cli.usage.byModel"))}`,
     ...models.map((line) => `${INDENT}${line}`),
     "",
     ...notes.map((note) => c.dim(`${INDENT}${note}`)),

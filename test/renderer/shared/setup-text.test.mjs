@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createTranslator } from "../../../src/i18n/index.mjs";
 import { describeError, permissionGranted, permissionText } from "../../../src/renderer/shared/setup-text.mjs";
+
+const zh = createTranslator("zh-CN");
+const en = createTranslator("en");
 
 test("主进程的报错去掉 Electron 加的前缀，只留那句话", () => {
   const wrapped = new Error("Error invoking remote method 'setup:set-theme': Error: theme 要是 ink / cinnabar 之一");
@@ -18,8 +22,10 @@ test("权限给没给：麦克风看系统给的状态，另两项是小帮手�
 });
 
 test('麦克风从没问过时按钮写"授权"：要先让系统弹框，系统设置的列表里才有这个应用', () => {
-  assert.deepEqual(permissionText("microphone", "not-determined"), ["未授权", "problem", "授权"]);
-  assert.deepEqual(permissionText("microphone", "denied"), ["未授权", "problem", "系统设置"]);
-  assert.deepEqual(permissionText("listen", null), ["检查中…", "pending", "系统设置"]);
-  assert.deepEqual(permissionText("trusted", true), ["已授权", "ok", "系统设置"]);
+  assert.deepEqual(permissionText("microphone", "not-determined", zh), ["未授权", "problem", "授权"]);
+  assert.deepEqual(permissionText("microphone", "denied", zh), ["未授权", "problem", "系统设置"]);
+  assert.deepEqual(permissionText("listen", null, zh), ["检查中…", "pending", "系统设置"]);
+  assert.deepEqual(permissionText("trusted", true, zh), ["已授权", "ok", "系统设置"]);
+  assert.deepEqual(permissionText("microphone", "not-determined", en), ["Not granted", "problem", "Allow"]);
+  assert.deepEqual(permissionText("trusted", true, en), ["Granted", "ok", "System Settings"]);
 });

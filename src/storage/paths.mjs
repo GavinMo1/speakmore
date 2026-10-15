@@ -1,6 +1,7 @@
 import { chmodSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
+import { LocalizedError, msg } from "../i18n/index.mjs";
 
 // SpeakMore 的家：程序、运行环境、设置、key、历史、录音、日志，全在这一个目录里。
 // 装的时候往里放，删的时候删掉它就干净了。命令行和后台应用是两个进程，靠这一份约定找到同一批文件。
@@ -22,13 +23,11 @@ export function resolvePaths(env = process.env, userHome = homedir()) {
   const home = env.SPEAKMORE_HOME || join(userHome, ".speakmore");
   // 相对路径会随着"在哪个目录运行命令"而变：换个目录就找不到正在运行的那个，还会再起一个
   if (!isAbsolute(home)) {
-    throw new Error(`环境变量 SPEAKMORE_HOME 要写绝对路径，现在是 ${JSON.stringify(home)}`);
+    throw new LocalizedError(msg("paths.homeNotAbsolute", { home: JSON.stringify(home) }));
   }
   const controlSocket = join(home, "run", "control.sock");
   if (Buffer.byteLength(controlSocket) > MAX_SOCKET_PATH_BYTES) {
-    throw new Error(
-      `SpeakMore 的目录路径太长，控制通道建不起来：${home}\n用环境变量 SPEAKMORE_HOME 换一个短一些的目录。`,
-    );
+    throw new LocalizedError(msg("paths.homeTooLong", { home }));
   }
   return {
     home,

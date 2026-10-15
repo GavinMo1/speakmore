@@ -1,7 +1,9 @@
+import { LOCALES, SYSTEM_LOCALE } from "../../i18n/index.mjs";
+import { t } from "../shared/i18n.mjs";
 import { createKeyPanel } from "../shared/key-panel.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
 
-// 设置对话框：原版的"设置中心"，左边一列菜单。我们的四页：通用（热键、主题、开机启动）、
+// 设置对话框：原版的"设置中心"，左边一列菜单。我们的四页：通用（热键、主题、语言、开机启动）、
 // 模型（用哪家、填 key，对应原版"账户"的位置）、权限、关于。
 // 状态都在主进程，这里只负责画出来和转达用户的操作。
 
@@ -33,21 +35,38 @@ export function createSettings({ refresh }) {
     }
   }
 
-  // ---------- 通用：热键、主题、开机启动 ----------
+  // ---------- 通用：热键、主题、语言、开机启动 ----------
+
+  /** 一组选项：[值, 写什么]，选中现在的那个 */
+  const options = (choices, current) =>
+    choices.map(([value, label]) => new Option(label, value, false, value === current));
 
   function renderGeneral(setup) {
     $("hotkey").replaceChildren(
-      ...setup.hotkey.choices.map(({ id, label }) => new Option(label, id, false, id === setup.hotkey.value)),
+      ...options(
+        setup.hotkey.choices.map((id) => [id, t(`hotkeys.${id}.name`)]),
+        setup.hotkey.value,
+      ),
     );
     $("theme").replaceChildren(
-      ...setup.theme.choices.map(({ id, name }) => new Option(name, id, false, id === setup.theme.value)),
+      ...options(
+        setup.theme.choices.map((id) => [id, t(`themes.${id}.name`)]),
+        setup.theme.value,
+      ),
+    );
+    // 跟随系统，再列出每种语言（名字用它自己的语言写）
+    $("language").replaceChildren(
+      ...options(
+        [[SYSTEM_LOCALE, t("language.system")], ...LOCALES.map(({ id, name }) => [id, name])],
+        setup.language.value,
+      ),
     );
     $("open-at-login").checked = setup.openAtLogin.enabled;
     $("open-at-login-row").hidden = !setup.openAtLogin.supported;
   }
 
   function showNote(id, message, tone = "") {
-    $(id).textContent = message ?? "";
+    $(id).textContent = t.text(message);
     $(id).dataset.tone = tone;
     $(id).hidden = !message;
   }
@@ -58,7 +77,7 @@ export function createSettings({ refresh }) {
       const result = await window.speakmore.setHotkey(event.target.value);
       showNote("hotkey-note", result.note ?? null);
     } catch (error) {
-      showNote("hotkey-note", `没改成：${describeError(error)}`, "problem");
+      showNote("hotkey-note", t("preferences.hotkeyFailed", { reason: describeError(error) }), "problem");
     }
     await refresh();
   });
@@ -70,7 +89,20 @@ export function createSettings({ refresh }) {
       const result = await window.speakmore.setTheme(event.target.value);
       showNote("theme-note", result.note ?? null);
     } catch (error) {
-      showNote("general-problem", `主题没换成：${describeError(error)}`, "problem");
+      showNote("general-problem", t("preferences.themeFailed", { reason: describeError(error) }), "problem");
+    }
+    await refresh();
+  });
+
+  // 换了语言：主进程把这个窗口按新的语言重新加载，回到这一页；被环境变量盖着时语言不变，留在这里说一句
+  $("language").addEventListener("change", async (event) => {
+    showNote("general-problem", null);
+    showNote("language-note", null);
+    try {
+      const result = await window.speakmore.setLanguage(event.target.value);
+      showNote("language-note", result.note ?? null);
+    } catch (error) {
+      showNote("general-problem", t("preferences.languageFailed", { reason: describeError(error) }), "problem");
     }
     await refresh();
   });
@@ -80,7 +112,7 @@ export function createSettings({ refresh }) {
     try {
       await window.speakmore.setOpenAtLogin(event.target.checked);
     } catch (error) {
-      showNote("general-problem", `开机启动没设上：${describeError(error)}`, "problem");
+      showNote("general-problem", t("preferences.loginFailed", { reason: describeError(error) }), "problem");
     }
     await refresh();
   });
@@ -90,7 +122,7 @@ export function createSettings({ refresh }) {
   function renderPermissions(setup) {
     for (const row of dialog.querySelectorAll("[data-permission]")) {
       const name = row.dataset.permission;
-      const [label, tone, action] = permissionText(name, setup.permissions[name]);
+      const [label, tone, action] = permissionText(name, setup.permissions[name], t);
       const granted = row.querySelector(".granted");
       granted.textContent = label;
       granted.dataset.tone = tone;

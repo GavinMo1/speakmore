@@ -4,6 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createKeyStore } from "../../../src/app/keys/key-store.mjs";
+import { createTranslator } from "../../../src/i18n/index.mjs";
+
+const zh = createTranslator("zh-CN");
+/** 报错里给人看的那句，按中文翻出来对得上 */
+const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
 // 假的钥匙串：把字节逐个异或一下，够区分"存的是密文还是明文"
 const fakeSafeStorage = (available = true) => ({
@@ -45,7 +50,7 @@ test("清掉之后读出来是 null，重复清不报错", (t) => {
 test("系统钥匙串不可用时拒绝保存，不退回到存明文", (t) => {
   const { file, store, cleanup } = tempStore(fakeSafeStorage(false));
   t.after(cleanup);
-  assert.throws(() => store.save("AIza-not-a-real-key"), /钥匙串/);
+  assert.throws(() => store.save("AIza-not-a-real-key"), said(/钥匙串/));
   assert.throws(() => statSync(file), { code: "ENOENT" });
 });
 

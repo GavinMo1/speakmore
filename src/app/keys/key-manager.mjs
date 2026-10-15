@@ -1,3 +1,4 @@
+import { LocalizedError, msg, problemOf } from "../../i18n/index.mjs";
 import { toModelError } from "../../server/providers/errors.mjs";
 import { apiKeyProblem, findProvider } from "../../server/providers/index.mjs";
 
@@ -10,7 +11,7 @@ const MISSING = { state: "missing", source: null, problem: null };
  * 状态（current，只说正在用的那一家）里的几项：
  *   state     missing（没有）/ unreadable（存着但解不开）/ checking / rejected / ready
  *   source    env（环境变量，比如 GEMINI_API_KEY）/ stored（加密存着的）/ external（key 在单独启动的服务端那边）
- *   problem   给用户看的一句原因
+ *   problem   给用户看的一句原因：一句还没定语言的话（msg），模型回的原话是一段字，由显示它的那一端翻
  *   cause     只在 rejected 时有：key（这把 key 不对）/ other（那一家拒绝了请求，多半是模型名或思考档位）
  *   verified  只在 ready 时有：false 表示启动时够不着那一家（没网，或者它一时不可用），先用着，还没验证
  *
@@ -55,7 +56,7 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
   /** 服务报上来的错。不是模型层分好类的（多半是 bug）也照样能说，key 先抹掉 */
   const described = (error, apiKey, who = provider) => {
     const modelError = toModelError(error, { provider: who, apiKey });
-    return { cause: modelError.kind, problem: modelError.message, detail: modelError.detail };
+    return { cause: modelError.kind, problem: modelError.problem, detail: modelError.detail };
   };
 
   function reject(source, cause, problem, detail) {
@@ -67,7 +68,7 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
   /** 按 id 找到那一家和它的 key 存放处。不认识就抛错 */
   function lookup(id) {
     const found = findProvider(id);
-    if (!found || !keyStores[found.id]) throw new Error(`不认识 ${id} 这家模型厂商`);
+    if (!found || !keyStores[found.id]) throw new LocalizedError(msg("key.unknownProvider", { id }));
     return { found, store: keyStores[found.id] };
   }
 
@@ -77,7 +78,7 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
    *   atStartup：启动时只是够不着的话照样启用，没通过就是不能用；换一把时没通过的话服务里原来那把还在用，
    *   状态也回到原来的。allowUnverified：够不着时照样启用，默认同 atStartup（换用存着的那把时也要）。
    *   target：连厂商一起换成这一家（用它的默认模型），通过了才换
-   * @returns {Promise<null | { cause: string, problem: string }>} 通过了是 null，没通过是原因
+   * @returns {Promise<null | { cause: string, problem: object | string }>} 通过了是 null，没通过是原因
    */
   function adopt(apiKey, source, { atStartup, allowUnverified = atStartup, target = null }) {
     return enqueue(async () => {
@@ -129,7 +130,7 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
     } catch (error) {
       // 验证过了但存不下来：正在用的话这次运行照样能用，下次启动要重填，如实告诉用户
       log.error("key_save_failed", { error: String(error?.message ?? error) });
-      return { ok: false, problem: `key 能用，但没存下来（${error.message}），退出后要重新填` };
+      return { ok: false, problem: msg("key.notSaved", { reason: problemOf(error) }) };
     }
     return { ok: true };
   }
@@ -144,10 +145,10 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
 
   /** 一把刚填的 key：去掉首尾空白；空的、样子不对的直接说原因（不交给服务） */
   function typed(value) {
-    if (typeof value !== "string" || value.trim() === "") return { problem: "还没有填 key" };
+    if (typeof value !== "string" || value.trim() === "") return { problem: msg("key.empty") };
     const apiKey = value.trim();
     const shape = apiKeyProblem(apiKey);
-    return shape ? { problem: `这把 key ${shape}` } : { apiKey };
+    return shape ? { problem: shape } : { apiKey };
   }
 
   return {
@@ -173,12 +174,12 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
       } catch (error) {
         // 换了签名或钥匙串里的密钥没了都会这样，只能请用户重新填
         log.error("key_unreadable", { provider: provider.id, error: String(error?.message ?? error) });
-        return become({ state: "unreadable", source: "stored", problem: "存着的 key 读不出来了，重新填一次" });
+        return become({ state: "unreadable", source: "stored", problem: msg("key.unreadable") });
       }
       if (!found) return current;
       const { apiKey, source } = found;
       const shape = apiKeyProblem(apiKey);
-      if (shape) return reject(source, "key", `这把 key ${shape}`, "样子不对，没有拿去验证");
+      if (shape) return reject(source, "key", shape, "样子不对，没有拿去验证");
       await adopt(apiKey, source, { atStartup: true });
       return current;
     },
@@ -187,18 +188,16 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
      * 验证并保存一把新的 key。没通过时原因在返回值里，原来的状态不变。
      * @param {unknown} value
      * @param {{ provider?: string }} [options] 给哪一家存，默认是正在用的那一家
-     * @returns {Promise<{ ok: true } | { ok: false, problem: string }>}
+     * @returns {Promise<{ ok: true } | { ok: false, problem: object | string }>}
      */
     async save(value, { provider: id = provider.id } = {}) {
-      if (typeof value !== "string" || value.trim() === "") return { ok: false, problem: "还没有填 key" };
-      if (!service) {
-        return { ok: false, problem: "现在连的是单独启动的服务端（SPEAKMORE_SERVER_URL），key 在那边配" };
-      }
+      if (typeof value !== "string" || value.trim() === "") return { ok: false, problem: msg("key.empty") };
+      if (!service) return { ok: false, problem: msg("key.external") };
       let target;
       try {
         target = lookup(id);
       } catch (error) {
-        return { ok: false, problem: error.message };
+        return { ok: false, problem: problemOf(error) };
       }
       const { apiKey, problem } = typed(value);
       if (problem) return { ok: false, problem };
@@ -214,17 +213,15 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
      * 设置里的 model 由调用方去改：这里只管这次运行用的是哪家。
      * @param {{ provider: string, key?: string }} options key：顺带填的一把新的，验证过才存；
      *   不写就用那一家现有的（环境变量优先，其次存着的）。存着的那把当初验证过，换用时只是够不着也照样换
-     * @returns {Promise<{ ok: true } | { ok: false, problem: string }>}
+     * @returns {Promise<{ ok: true } | { ok: false, problem: object | string }>}
      */
     async use({ provider: id, key: value } = {}) {
-      if (!service) {
-        return { ok: false, problem: "现在连的是单独启动的服务端（SPEAKMORE_SERVER_URL），用哪个模型由那边定" };
-      }
+      if (!service) return { ok: false, problem: msg("key.externalModel") };
       let target;
       try {
         target = lookup(id);
       } catch (error) {
-        return { ok: false, problem: error.message };
+        return { ok: false, problem: problemOf(error) };
       }
       const { found, store } = target;
       if (value !== undefined) {
@@ -238,11 +235,11 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
         key = keyFor(found, store);
       } catch (error) {
         log.error("key_unreadable", { provider: found.id, error: String(error?.message ?? error) });
-        return { ok: false, problem: `存着的 ${found.name} key 读不出来了，重新填一次` };
+        return { ok: false, problem: msg("key.unreadableFor", { provider: found.name }) };
       }
-      if (!key) return { ok: false, problem: `还没有 ${found.name} 的 key，先填一把` };
+      if (!key) return { ok: false, problem: msg("key.noKeyFor", { provider: found.name }) };
       const shape = apiKeyProblem(key.apiKey);
-      if (shape) return { ok: false, problem: `这把 key ${shape}` };
+      if (shape) return { ok: false, problem: shape };
       const failure = await adopt(key.apiKey, key.source, { atStartup: false, allowUnverified: true, target: found });
       return failure ? { ok: false, problem: failure.problem } : { ok: true };
     },
@@ -263,22 +260,16 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
     /**
      * 某一家的某个模型现在能不能用：拿那一家的 key 发一个最小的请求。不抛错，不改变正在用的。
      * @param {{ provider: string, model: string }} choice
-     * @returns {Promise<{ ok: true, source: string, ms: number } | { ok: false, cause: string, problem: string }>}
+     * @returns {Promise<{ ok: true, source: string, ms: number } | { ok: false, cause: string, problem: object | string }>}
      *   cause：missing（没有这家的 key）/ unreadable / key / unavailable / other
      */
     async check(choice) {
-      if (!service) {
-        return {
-          ok: false,
-          cause: "other",
-          problem: "现在连的是单独启动的服务端（SPEAKMORE_SERVER_URL），用哪个模型由那边定",
-        };
-      }
+      if (!service) return { ok: false, cause: "other", problem: msg("key.externalModel") };
       let target;
       try {
         target = lookup(choice.provider);
       } catch (error) {
-        return { ok: false, cause: "other", problem: error.message };
+        return { ok: false, cause: "other", problem: problemOf(error) };
       }
       const { found, store } = target;
       let key;
@@ -287,17 +278,13 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
         key = found.id === provider.id && inUse ? inUse : keyFor(found, store);
       } catch (error) {
         log.error("key_unreadable", { provider: found.id, error: String(error?.message ?? error) });
-        return { ok: false, cause: "unreadable", problem: `存着的 ${found.name} key 读不出来了，重新填一次` };
+        return { ok: false, cause: "unreadable", problem: msg("key.unreadableFor", { provider: found.name }) };
       }
       if (!key) {
-        return {
-          ok: false,
-          cause: "missing",
-          problem: `还没有 ${found.name} 的 key：运行 speakmore key ${found.id}`,
-        };
+        return { ok: false, cause: "missing", problem: msg("key.noKeyForCli", { provider: found.name, id: found.id }) };
       }
       const shape = apiKeyProblem(key.apiKey);
-      if (shape) return { ok: false, cause: "key", problem: `这把 key ${shape}` };
+      if (shape) return { ok: false, cause: "key", problem: shape };
       const startedAt = performance.now();
       try {
         await service.probe({ choice, apiKey: key.apiKey });

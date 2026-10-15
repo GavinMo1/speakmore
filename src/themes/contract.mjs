@@ -111,12 +111,6 @@ export function themeProblems(theme) {
   if (typeof theme.id !== "string" || !/^[a-z][a-z0-9-]*$/.test(theme.id)) {
     problems.push("id 要是小写字母开头，只含小写字母、数字和连字符");
   }
-  for (const [field, label] of [
-    ["name", "名字"],
-    ["describe", "一句话的介绍"],
-  ]) {
-    if (typeof theme[field] !== "string" || theme[field].trim() === "") problems.push(`少了${label}（${field}）`);
-  }
   problems.push(...groupProblems("悬浮条", theme.bar, BAR_TOKENS, BAR_LEGIBILITY));
   for (const [scheme, label] of Object.entries(WINDOW_SCHEMES)) {
     problems.push(

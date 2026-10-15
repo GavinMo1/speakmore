@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { summarizeSetup } from "../../src/app/setup-state.mjs";
+import { createTranslator } from "../../src/i18n/index.mjs";
+
+const zh = createTranslator("zh-CN");
+const en = createTranslator("en");
+/** 结论里的话按中文翻出来再比：说法和以前一样，只是改由显示的那一端翻 */
+function summarize(setup, t = zh) {
+  const { ready, missing, blocker, degraded } = summarizeSetup(setup);
+  return {
+    ready,
+    missing: missing.map(t.text),
+    blocker: blocker === null ? null : t.text(blocker),
+    degraded: degraded === null ? null : t.text(degraded),
+  };
+}
 
 const allGood = {
   key: { state: "ready", source: "stored", problem: null },
@@ -10,12 +24,12 @@ const withKey = (key) => ({ ...allGood, key: { source: null, problem: null, ...k
 const withPermissions = (permissions) => ({ ...allGood, permissions: { ...allGood.permissions, ...permissions } });
 
 test("都齐了：可以用，没有要补的", () => {
-  assert.deepEqual(summarizeSetup(allGood), { ready: true, missing: [], blocker: null, degraded: null });
+  assert.deepEqual(summarize(allGood), { ready: true, missing: [], blocker: null, degraded: null });
 });
 
 test("没有 key、key 解不开：不能用，提示去设置里填", () => {
   for (const state of ["missing", "unreadable"]) {
-    const summary = summarizeSetup(withKey({ state }));
+    const summary = summarize(withKey({ state }));
     assert.equal(summary.ready, false);
     assert.deepEqual(summary.missing, ["Gemini API key"]);
     assert.match(summary.blocker, /设置/);
@@ -23,13 +37,13 @@ test("没有 key、key 解不开：不能用，提示去设置里填", () => {
 });
 
 test("key 验证没通过：把原因带给用户", () => {
-  const summary = summarizeSetup(withKey({ state: "rejected", problem: "这把 key 无效" }));
+  const summary = summarize(withKey({ state: "rejected", problem: "这把 key 无效" }));
   assert.equal(summary.ready, false);
   assert.match(summary.blocker, /这把 key 无效/);
 });
 
 test("Gemini 拒绝了请求（模型名或档位写错）：不说成是 key 的问题", () => {
-  const summary = summarizeSetup(
+  const summary = summarize(
     withKey({ state: "rejected", cause: "other", problem: "Gemini 拒绝了请求：models/x is not found" }),
   );
   assert.equal(summary.ready, false);
@@ -38,54 +52,71 @@ test("Gemini 拒绝了请求（模型名或档位写错）：不说成是 key �
 });
 
 test("启动时没连上网、先用着的 key：算可以用", () => {
-  assert.equal(summarizeSetup(withKey({ state: "ready", source: "stored", verified: false })).ready, true);
+  assert.equal(summarize(withKey({ state: "ready", source: "stored", verified: false })).ready, true);
 });
 
 test("key 还在验证：不能用，但不算缺东西", () => {
-  const summary = summarizeSetup(withKey({ state: "checking" }));
+  const summary = summarize(withKey({ state: "checking" }));
   assert.equal(summary.ready, false);
   assert.deepEqual(summary.missing, []);
   assert.match(summary.blocker, /稍等/);
 });
 
 test("麦克风或输入监控没授权：列进要补的", () => {
-  assert.deepEqual(summarizeSetup(withPermissions({ microphone: "denied" })).missing, ["麦克风权限"]);
-  assert.deepEqual(summarizeSetup(withPermissions({ listen: false })).missing, ["输入监控权限"]);
+  assert.deepEqual(summarize(withPermissions({ microphone: "denied" })).missing, ["麦克风权限"]);
+  assert.deepEqual(summarize(withPermissions({ listen: false })).missing, ["输入监控权限"]);
   assert.deepEqual(
-    summarizeSetup(withKey({ state: "missing" })).missing.concat(
-      summarizeSetup(withPermissions({ microphone: "denied", listen: false })).missing,
+    summarize(withKey({ state: "missing" })).missing.concat(
+      summarize(withPermissions({ microphone: "denied", listen: false })).missing,
     ),
     ["Gemini API key", "麦克风权限", "输入监控权限"],
   );
 });
 
 test("按键监听还没启动好：暂时不能用，但不算缺权限", () => {
-  const summary = summarizeSetup(withPermissions({ listen: null, trusted: null }));
+  const summary = summarize(withPermissions({ listen: null, trusted: null }));
   assert.equal(summary.ready, false);
   assert.deepEqual(summary.missing, []);
 });
 
 test("只缺辅助功能：照样能用，只是要自己按粘贴", () => {
-  const summary = summarizeSetup(withPermissions({ trusted: false }));
+  const summary = summarize(withPermissions({ trusted: false }));
   assert.equal(summary.ready, true);
   assert.deepEqual(summary.missing, []);
   assert.match(summary.degraded, /剪贴板/);
 });
 
 test("按键监听的小程序停了：不再说成“正在准备”，明说缺它", () => {
-  const summary = summarizeSetup({ ...withPermissions({ listen: null, trusted: null }), helper: "stopped" });
+  const summary = summarize({ ...withPermissions({ listen: null, trusted: null }), helper: "stopped" });
   assert.equal(summary.ready, false);
   assert.deepEqual(summary.missing, ["按键监听"]);
 });
 
 test("用的是别家模型时，缺的 key、没通过的验证都点名是哪一家", () => {
-  const missing = summarizeSetup({ ...withKey({ state: "missing" }), providerName: "OpenAI" });
+  const missing = summarize({ ...withKey({ state: "missing" }), providerName: "OpenAI" });
   assert.deepEqual(missing.missing, ["OpenAI API key"]);
   assert.match(missing.blocker, /^缺 OpenAI API key/);
-  const rejected = summarizeSetup({
+  const rejected = summarize({
     ...withKey({ state: "rejected", cause: "other", problem: "OpenAI 没有这个模型" }),
     providerName: "OpenAI",
   });
   assert.deepEqual(rejected.missing, ["OpenAI 验证"]);
   assert.match(rejected.blocker, /^OpenAI 验证没通过/);
+});
+
+test("同一个结论换成英文说：缺的东西、按热键时的那句、打了折扣的说明", () => {
+  const setup = {
+    ...withKey({ state: "missing" }),
+    permissions: { microphone: "denied", listen: false, trusted: false },
+    providerName: "OpenAI",
+  };
+  assert.deepEqual(summarize(setup, en), {
+    ready: false,
+    missing: ["OpenAI API key", "microphone access", "Input Monitoring access"],
+    blocker: "No OpenAI API key: menu bar icon › Settings",
+    degraded: "No Accessibility access: text goes to the clipboard, press ⌘V",
+  });
+  // 原因是模型回的原话时照原样带上
+  const rejected = summarize(withKey({ state: "rejected", cause: "other", problem: "models/x is not found" }), en);
+  assert.equal(rejected.blocker, "Gemini check failed: models/x is not found");
 });

@@ -3,8 +3,6 @@
 
 export default {
   id: "indigo",
-  name: "靛青",
-  describe: "颜色代表阶段：绿是在听，蓝紫是在整理，琥珀是出了问题",
   bar: {
     surface: "oklch(0.21 0.012 262)",
     edge: "oklch(0.36 0.014 262)",

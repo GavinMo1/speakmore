@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { createDelivery } from "../../src/app/delivery.mjs";
+import { createTranslator } from "../../src/i18n/index.mjs";
+
+const zh = createTranslator("zh-CN");
 
 const AUDIO_ID = "0b6f1c1e-5a44-4f0e-9d0b-2f9f3a1c7e55";
 const audio = () => Uint8Array.from([0x1a, 0x45, 0xdf, 0xa3, 7]).buffer;
@@ -62,7 +65,8 @@ test("成品：存录音、记历史、贴出去", async () => {
 
 test("没有听到声音：记历史但不去贴", async () => {
   const { delivery, rows, pasted } = setup();
-  assert.deepEqual(await delivery.completed(payload({ text: "" })), { notice: "没有听到声音" });
+  const { notice: silent } = await delivery.completed(payload({ text: "" }));
+  assert.equal(zh.text(silent), "没有听到声音");
   assert.equal(rows.length, 1);
   assert.deepEqual(pasted, []);
 });
@@ -70,7 +74,7 @@ test("没有听到声音：记历史但不去贴", async () => {
 test("没有辅助功能权限：提示用户自己粘贴", async () => {
   const { delivery, clipboard } = setup(async () => ({ ok: false, reason: "not_trusted" }));
   const { notice } = await delivery.completed(payload());
-  assert.match(notice, /没有辅助功能权限.*⌘V/);
+  assert.match(zh.text(notice), /没有辅助功能权限.*⌘V/);
   // 这种情况小帮手自己已经写过剪贴板，这里不重复写
   assert.deepEqual(clipboard, []);
 });
@@ -80,7 +84,7 @@ test("粘贴出错：文字放进剪贴板，历史照样记上", async () => {
     throw new Error("原生小帮手退出了");
   });
   const { notice } = await delivery.completed(payload());
-  assert.match(notice, /没能自动粘贴.*⌘V/);
+  assert.match(zh.text(notice), /没能自动粘贴.*⌘V/);
   assert.deepEqual(clipboard, ["我们后天开会。"]);
   assert.equal(rows.length, 1);
 });

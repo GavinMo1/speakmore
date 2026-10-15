@@ -3,15 +3,20 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
+import { createTranslator } from "../../src/i18n/index.mjs";
 import {
-  HOTKEY_KEYCAPS,
-  HOTKEYS,
+  HOTKEY_IDS,
   overridingEnv,
   resolveSettings,
   SETTINGS,
   saveSetting,
   unsetSetting,
 } from "../../src/storage/settings.mjs";
+
+const zh = createTranslator("zh-CN");
+const en = createTranslator("en");
+/** 报错里给人看的那句，按中文翻出来对得上 */
+const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
 let dir;
 let file;
@@ -27,6 +32,7 @@ test("没有文件也没有环境变量时全用默认值", () => {
     model: { value: "gemini/gemini-3.6-flash", source: "default" },
     thinking: { value: "MINIMAL", source: "default" },
     theme: { value: "ink", source: "default" },
+    language: { value: "system", source: "default" },
   });
 });
 
@@ -56,8 +62,8 @@ test("模型：写成 厂商/模型，只写厂商就用它的默认模型；存
   assert.equal(saveSetting(file, "model", "openai"), "openai/gpt-audio-mini");
   assert.equal(saveSetting(file, "model", "OpenAI/gpt-audio-1.5"), "openai/gpt-audio-1.5");
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { model: "openai/gpt-audio-1.5" });
-  assert.throws(() => saveSetting(file, "model", "deepseek/deepseek-flash"), /不认识 deepseek.*gemini \/ openai/);
-  assert.equal(SETTINGS.model.label("openai/gpt-audio-1.5"), "OpenAI");
+  assert.throws(() => saveSetting(file, "model", "deepseek/deepseek-flash"), said(/不认识 deepseek.*gemini \/ openai/));
+  assert.equal(zh.text(SETTINGS.model.label("openai/gpt-audio-1.5")), "OpenAI");
 });
 
 test("0.3 以前的写法照样认：设置文件里只写了 Gemini 的模型名，环境变量 GEMINI_MODEL", () => {
@@ -84,10 +90,10 @@ test("overridingEnv：这一项现在被哪个环境变量盖着；没有就是 
 });
 
 test("不认识的设置项、不认识的热键、不认识的思考档位都拒绝保存，并列出能填什么", () => {
-  assert.throws(() => saveSetting(file, "volume", "11"), /hotkey.*model.*thinking/);
-  assert.throws(() => saveSetting(file, "hotkey", "caps_lock"), new RegExp(Object.keys(HOTKEYS).join(".*")));
-  assert.throws(() => saveSetting(file, "thinking", "none"), /MINIMAL.*LOW.*MEDIUM.*HIGH/);
-  assert.throws(() => saveSetting(file, "model", "  "), /model/);
+  assert.throws(() => saveSetting(file, "volume", "11"), said(/hotkey.*model.*thinking/));
+  assert.throws(() => saveSetting(file, "hotkey", "caps_lock"), said(new RegExp(HOTKEY_IDS.join(".*"))));
+  assert.throws(() => saveSetting(file, "thinking", "none"), said(/MINIMAL.*LOW.*MEDIUM.*HIGH/));
+  assert.throws(() => saveSetting(file, "model", "  "), said(/model/));
 });
 
 test("主题：写 id 或写名字都行，存下来的是 id；没有的那一套拒绝，并列出有哪几套", () => {
@@ -99,22 +105,54 @@ test("主题：写 id 或写名字都行，存下来的是 id；没有的那一�
     value: "cinnabar",
     source: "env",
   });
-  assert.throws(() => saveSetting(file, "theme", "neon"), /ink \/ cinnabar \/ indigo/);
+  assert.throws(() => saveSetting(file, "theme", "neon"), said(/ink \/ cinnabar \/ indigo/));
   assert.deepEqual(SETTINGS.theme.choices, ["ink", "cinnabar", "indigo"]);
 });
 
-test("带说明的设置项：热键给出键的名字，主题给出主题的名字；每个热键都有一个写在悬浮条上的短名字", () => {
-  assert.equal(SETTINGS.hotkey.label("fn"), "地球仪（fn）键");
-  assert.equal(SETTINGS.theme.label("cinnabar"), "朱砂");
-  assert.deepEqual(Object.keys(HOTKEY_KEYCAPS), Object.keys(HOTKEYS));
+test("带说明的设置项：热键给出键的名字，主题给出主题的名字，按界面语言写；语言的名字用它自己的语言写", () => {
+  assert.equal(zh.text(SETTINGS.hotkey.label("fn")), "地球仪（fn）键");
+  assert.equal(en.text(SETTINGS.hotkey.label("fn")), "Globe (fn)");
+  assert.equal(zh.text(SETTINGS.theme.label("cinnabar")), "朱砂");
+  assert.equal(en.text(SETTINGS.theme.label("cinnabar")), "Cinnabar");
+  assert.equal(en.text(SETTINGS.language.label("zh-CN")), "简体中文");
+  assert.equal(zh.text(SETTINGS.language.label("system")), "跟随系统");
+  assert.deepEqual(HOTKEY_IDS, ["right_option", "right_command", "right_control", "fn"]);
+});
+
+test("界面语言：默认跟随系统；写哪种都认（大小写、_ 不论），存下来是规整的 id；写了没有的说能填什么", () => {
+  assert.deepEqual(resolveSettings({ file, env: {} }).language, { value: "system", source: "default" });
+  assert.equal(saveSetting(file, "language", "zh_cn"), "zh-CN");
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { language: "zh-CN" });
+  assert.equal(saveSetting(file, "language", "EN"), "en");
+  assert.equal(saveSetting(file, "language", "System"), "system");
+  assert.deepEqual(resolveSettings({ file, env: { SPEAKMORE_LANGUAGE: "zh-CN" } }).language, {
+    value: "zh-CN",
+    source: "env",
+  });
+  assert.throws(() => saveSetting(file, "language", "ja"), said(/system \/ en \/ zh-CN/));
+  assert.deepEqual(SETTINGS.language.choices, ["system", "en", "zh-CN"]);
+});
+
+test("写错时的说法也跟着语言换", () => {
+  assert.throws(
+    () => saveSetting(file, "hotkey", "caps_lock"),
+    (error) =>
+      en.text(error.problem) ===
+      'hotkey is "caps_lock": must be one of right_option / right_command / right_control / fn',
+  );
+  assert.throws(
+    () => resolveSettings({ file, env: { SPEAKMORE_THEME: "neon" } }),
+    (error) =>
+      en.text(error.problem) === 'The SPEAKMORE_THEME env var is "neon": must be one of ink / cinnabar / indigo',
+  );
 });
 
 test("环境变量或文件里的值写错时报错，不悄悄换成默认值", () => {
-  assert.throws(() => resolveSettings({ file, env: { SPEAKMORE_HOTKEY: "caps_lock" } }), /SPEAKMORE_HOTKEY/);
+  assert.throws(() => resolveSettings({ file, env: { SPEAKMORE_HOTKEY: "caps_lock" } }), said(/SPEAKMORE_HOTKEY/));
   writeFileSync(file, JSON.stringify({ hotkey: "caps_lock" }));
-  assert.throws(() => resolveSettings({ file, env: {} }), /settings\.json/);
+  assert.throws(() => resolveSettings({ file, env: {} }), said(/settings\.json/));
   writeFileSync(file, "{ 不是 JSON");
-  assert.throws(() => resolveSettings({ file, env: {} }), /settings\.json/);
+  assert.throws(() => resolveSettings({ file, env: {} }), said(/settings\.json/));
 });
 
 test("取消一项设置后回到默认值，其余的不动", () => {
@@ -124,7 +162,7 @@ test("取消一项设置后回到默认值，其余的不动", () => {
   const settings = resolveSettings({ file, env: {} });
   assert.deepEqual(settings.hotkey, { value: "right_option", source: "default" });
   assert.deepEqual(settings.model, { value: "gemini/gemini-3.8-flash", source: "file" });
-  assert.throws(() => unsetSetting(file, "volume"), /hotkey/);
+  assert.throws(() => unsetSetting(file, "volume"), said(/hotkey/));
 });
 
 test("数据目录还不存在时也能保存", () => {

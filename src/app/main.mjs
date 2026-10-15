@@ -15,12 +15,13 @@ import {
   Tray,
 } from "electron";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
+import { createTranslator, msg, resolveLocale } from "../i18n/index.mjs";
 import { alsoLogTo, log } from "../log.mjs";
 import { findProvider, formatModelChoice, PROVIDERS, parseModelChoice } from "../server/providers/index.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
 import { ensureHome, keyFile, resolvePaths } from "../storage/paths.mjs";
-import { HOTKEY_KEYCAPS, HOTKEYS, overridingEnv, resolveSettings, saveSetting } from "../storage/settings.mjs";
+import { HOTKEY_IDS, hotkeyName, overridingEnv, resolveSettings, saveSetting } from "../storage/settings.mjs";
 import { toHex } from "../themes/color.mjs";
 import { themeCss } from "../themes/contract.mjs";
 import { findTheme, THEMES } from "../themes/index.mjs";
@@ -60,7 +61,6 @@ const MODEL = parseModelChoice(SETTINGS.model.value);
 const PROVIDER = findProvider(MODEL.provider);
 /** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
 const thinkingFor = (provider) => (provider.thinkingLevels ? SETTINGS.thinking.value : null);
-const hotkeyLabel = () => HOTKEYS[hotkey];
 /** 菜单栏图标：印章上的五道声波。文件名带 Template，系统按菜单栏的深浅反色；@2x 那张由系统自己挑（scripts/build/make-icon.sh） */
 const TRAY_ICON = join(import.meta.dirname, "../../assets/trayTemplate.png");
 /** 关于里"在 GitHub 上看"打开的地方 */
@@ -175,12 +175,27 @@ async function main() {
   let onboardingWindow = null;
   /** 首次引导正在测快捷键：热键送到引导窗口，不去开悬浮条 */
   let hotkeyToOnboarding = false;
+
+  // ---------- 界面语言 ----------
+
+  /** 设置里的语言（system 是跟随系统）和这次实际用的那种。设置里改了当场换，不用重启 */
+  let languageSetting = SETTINGS.language.value;
+  let locale = resolveLocale(languageSetting, app.getPreferredSystemLanguages());
+  /** 菜单栏用它；窗口里的页面各自按 locale 翻（预加载脚本一上来就同步来取） */
+  let t = createTranslator(locale);
+  ipcMain.on("locale:get", (event) => {
+    event.returnValue = locale;
+  });
+
   log.info("started", {
     version: app.getVersion(),
     hotkey,
     model: SETTINGS.model.value,
     thinking: thinkingFor(PROVIDER),
     theme: SETTINGS.theme.value,
+    language: languageSetting,
+    locale,
+    system_languages: app.getPreferredSystemLanguages(),
     home: PATHS.home,
     server_url: serverUrl,
     packaged: app.isPackaged,
@@ -390,7 +405,7 @@ async function main() {
         setBarControls(false);
         log.error("helper_exited", { code: event.code, signal: event.signal });
         setupChanged();
-        notify(`按键监听停了，${hotkeyLabel()}失效：重启 SpeakMore 试试`);
+        notify(msg("bar.helperStopped", { hotkey: hotkeyName(hotkey) }));
         break;
       default:
         log.warn("helper_unknown_event", { event: event.event });
@@ -414,7 +429,7 @@ async function main() {
     hubWindow?.webContents.send("history:changed");
   }
 
-  ipcMain.handle("config:get", () => ({ serverUrl, hotkeyKeycap: HOTKEY_KEYCAPS[hotkey], barControls }));
+  ipcMain.handle("config:get", () => ({ serverUrl, hotkey, barControls }));
   ipcMain.handle("dictation:deliver", async (_event, payload) => {
     const result = await delivery.completed(payload);
     // 只记长度：成品是用户说的话，不进日志
@@ -432,10 +447,7 @@ async function main() {
   ipcMain.handle("history:list", () => history.list());
   ipcMain.handle("usage:report", () => usageReport(history, { now: new Date() }));
   ipcMain.handle("insights:get", () => insights(history.dictations(), { now: new Date() }));
-  ipcMain.handle("app:info", () => ({
-    version: app.getVersion(),
-    hotkeyKeycap: HOTKEY_KEYCAPS[hotkey],
-  }));
+  ipcMain.handle("app:info", () => ({ version: app.getVersion(), hotkey }));
   ipcMain.handle("app:open-homepage", () => shell.openExternal(HOMEPAGE));
   ipcMain.handle("clipboard:write", (_event, text) => {
     if (typeof text !== "string") throw new TypeError("要复制的不是文字");
@@ -449,12 +461,10 @@ async function main() {
     return {
       ...setup,
       summary: summarizeSetup(setup),
-      hotkey: {
-        value: hotkey,
-        keycap: HOTKEY_KEYCAPS[hotkey],
-        choices: Object.entries(HOTKEYS).map(([id, label]) => ({ id, label })),
-      },
-      theme: { value: theme.id, choices: THEMES.map(({ id, name }) => ({ id, name })) },
+      // 叫什么由页面按界面语言写，这里只给 id
+      hotkey: { value: hotkey, choices: HOTKEY_IDS },
+      theme: { value: theme.id, choices: THEMES.map(({ id }) => id) },
+      language: { value: languageSetting, locale },
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
       openAtLogin: { supported: app.isPackaged, enabled: app.getLoginItemSettings().openAtLogin },
       home: PATHS.home,
@@ -473,7 +483,6 @@ async function main() {
       id: found.id,
       name: found.name,
       keyEnv: found.keyEnv,
-      site: found.keySite,
       key: sources[found.id] ?? null,
     };
   }
@@ -487,7 +496,7 @@ async function main() {
   /**
    * 改用另一家（可以顺带填一把它的新 key）：验证过才换，换了就记进设置，下次启动也用它。
    * 当场换，不重启后台：用哪家、哪把 key 都在内置服务里，换掉它们就够了
-   * @returns {Promise<{ ok: boolean, problem?: string, note?: string }>}
+   * @returns {Promise<{ ok: boolean, problem?: object | string, note?: object }>} problem、note 由页面按界面语言翻
    */
   async function useProvider(id, value) {
     const result = await keys.use({ provider: id, key: value });
@@ -498,15 +507,10 @@ async function main() {
       saveSetting(PATHS.settingsFile, "model", choice.provider);
     } catch (error) {
       log.error("settings_save_failed", { name: "model", error: String(error?.message ?? error) });
-      return {
-        ok: true,
-        note: `已改用 ${keys.provider.name}，但没存进设置（${error.message}）· 下次启动换回原来那家`,
-      };
+      return { ok: true, note: msg("notes.saveFailed", { provider: keys.provider.name, reason: error.message }) };
     }
     const variable = overridingEnv("model", process.env);
-    if (variable !== null) {
-      return { ok: true, note: `环境变量 ${variable} 优先 · 下次启动仍按它` };
-    }
+    if (variable !== null) return { ok: true, note: msg("notes.envNextLaunch", { variable }) };
     return { ok: true };
   }
   ipcMain.handle("setup:open-privacy", async (_event, permission) => {
@@ -548,15 +552,45 @@ async function main() {
     setupChanged();
     // 和热键一样：被环境变量盖着时，存是存下了，眼前不会变，要交代一句
     const variable = overridingEnv("theme", process.env);
-    return variable === null ? {} : { note: `环境变量 ${variable} 优先 · 删掉它才生效` };
+    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
+  });
+  ipcMain.handle("setup:set-language", (_event, wanted) => {
+    saveSetting(PATHS.settingsFile, "language", wanted);
+    // 是在设置的"通用"那一页换的：主窗口换好语言后回到这一页
+    reloadLanguage({ hubTarget: { pane: "general" } });
+    const variable = overridingEnv("language", process.env);
+    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
   });
 
   /**
+   * 重新读一遍设置里的语言，变了就当场换：菜单栏重画，主窗口和首次引导重新加载（页面上的字都按新的语言写），
+   * 悬浮条换掉翻译，下一句提示就是新的语言。不用重启
+   * @param {{ hubTarget?: object }} [options] 主窗口重新加载后去哪一页；不给就留在原地
+   */
+  function reloadLanguage({ hubTarget } = {}) {
+    languageSetting = resolveSettings({ file: PATHS.settingsFile, env: process.env }).language.value;
+    const next = resolveLocale(languageSetting, app.getPreferredSystemLanguages());
+    if (next !== locale) {
+      locale = next;
+      t = createTranslator(locale);
+      refreshTrayMenu();
+      tellBar("locale:changed", locale);
+      if (hubWindow !== null) {
+        if (hubTarget) hubWindow.loadFile(join(sourceDir, "renderer", "hub", "hub.html"), { query: hubTarget });
+        else hubWindow.webContents.reload();
+      }
+      onboardingWindow?.webContents.reload();
+      log.info("language_changed", { language: languageSetting, locale });
+    }
+    return { language: languageSetting, locale };
+  }
+
+  /**
    * 当场换热键：记进设置，重启小帮手让它听新的键，悬浮条的提示、菜单栏跟着换。不用重启整个应用
-   * @returns {{ note?: string }} 有话要交代时（被环境变量盖着）带一句
+   * @returns {{ note?: object }} 有话要交代时（被环境变量盖着）带一句（msg）
    */
   function setHotkey(wanted) {
-    if (!Object.hasOwn(HOTKEYS, wanted)) throw new TypeError(`不认识的热键：${wanted}`);
+    if (!HOTKEY_IDS.includes(wanted)) throw new TypeError(`不认识的热键：${wanted}`);
     saveSetting(PATHS.settingsFile, "hotkey", wanted);
     if (wanted !== hotkey) {
       hotkey = wanted;
@@ -566,12 +600,12 @@ async function main() {
         helper.stop();
         launchHelper({ prompt: false });
       }
-      tellBar("bar:hotkey", HOTKEY_KEYCAPS[hotkey]);
+      tellBar("bar:hotkey", hotkey);
       historyChanged();
       setupChanged();
     }
     const variable = overridingEnv("hotkey", process.env);
-    return variable === null ? {} : { note: `环境变量 ${variable} 优先 · 下次启动仍按它` };
+    return variable === null ? {} : { note: msg("notes.envNextLaunch", { variable }) };
   }
 
   // ---------- 菜单栏、主窗口和首次引导 ----------
@@ -666,29 +700,29 @@ async function main() {
   // 图标读不出来时菜单栏上会是空的一格，找不到入口。退回写两个字，并记下来
   if (trayIcon.isEmpty()) {
     log.error("tray_icon_missing", { path: TRAY_ICON });
-    tray.setTitle("听写");
   }
 
   function refreshTrayMenu() {
+    if (trayIcon.isEmpty()) tray.setTitle(t("tray.fallbackTitle"));
     const summary = summarizeSetup(currentSetup());
     const headline = summary.ready
-      ? `就绪 · 按 ${HOTKEY_KEYCAPS[hotkey]} 说话`
+      ? t("tray.ready", { keycap: t(`hotkeys.${hotkey}.keycap`) })
       : summary.missing.length > 0
-        ? `还差：${summary.missing.join("、")}`
-        : "准备中…";
+        ? t("tray.missing", { items: t.list(summary.missing) })
+        : t("tray.preparing");
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: headline, enabled: false },
-        ...(summary.degraded ? [{ label: summary.degraded, enabled: false }] : []),
+        ...(summary.degraded ? [{ label: t.text(summary.degraded), enabled: false }] : []),
         { type: "separator" },
         // 下面几项照原版菜单栏的菜单（tray_menu__*）
-        { label: "打开 SpeakMore", click: () => showHub({ route: "home" }) },
-        { label: "历史记录", click: () => showHub({ route: "history" }) },
+        { label: t("tray.open"), click: () => showHub({ route: "home" }) },
+        { label: t("tray.history"), click: () => showHub({ route: "history" }) },
         { type: "separator" },
-        { label: "设置…", accelerator: "CmdOrCtrl+,", click: () => showHub({ pane: "general" }) },
+        { label: t("tray.settings"), accelerator: "CmdOrCtrl+,", click: () => showHub({ pane: "general" }) },
         { type: "separator" },
-        { label: `版本 ${app.getVersion()}`, enabled: false },
-        { label: "退出 SpeakMore", accelerator: "CmdOrCtrl+Q", click: () => app.quit() },
+        { label: t("tray.version", { version: app.getVersion() }), enabled: false },
+        { label: t("tray.quit"), accelerator: "CmdOrCtrl+Q", click: () => app.quit() },
       ]),
     );
   }
@@ -729,7 +763,6 @@ async function main() {
       // 启动时要等 key 验证完、麦克风的授权框有了回应，才算准备好
       starting: !startupChecked,
       hotkey,
-      hotkeyLabel: hotkeyLabel(),
       // 连着单独启动的服务端时，用哪个模型由那边定
       provider: service ? keys.provider.id : null,
       // 每家的 key 在哪。装成应用的那个各存各的，命令行要靠这一项才知道
@@ -737,6 +770,9 @@ async function main() {
       model: service ? formatModelChoice(service.model) : null,
       thinking: service ? thinkingFor(keys.provider) : null,
       theme: theme.id,
+      // 设置里的语言（system 是跟随系统）和实际用的那种
+      language: languageSetting,
+      locale,
       // 装成应用的和命令启动的，权限和 key 各是一套：命令行据此决定该不该代它重启
       packaged: app.isPackaged,
       ...setup,
@@ -774,6 +810,7 @@ async function main() {
             return keys.check(choice);
           },
           "reload-theme": reloadTheme,
+          "reload-language": () => reloadLanguage(),
           // 命令行的名字沿用窗口还分开时的叫法：show-settings 打开设置里还差东西的那一页，
           // 第一次启动时命令行会带上 onboarding，打开首次引导
           "show-settings": ({ onboarding = false }) => (onboarding ? showOnboarding() : showHub({ pane: "auto" })),

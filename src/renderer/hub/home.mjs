@@ -1,5 +1,6 @@
 import { formatCount, formatSeconds, formatSpan, formatTokens, formatUsd } from "../../usage/format.mjs";
 import { activityGrid } from "../../usage/insights.mjs";
+import { keycapOf, t } from "../shared/i18n.mjs";
 
 // 首页：原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费；右边一列是口述卡和版本。
 // 数是主进程从全部历史里算好的（src/usage/insights.mjs），这里只管画。
@@ -8,9 +9,20 @@ const $ = (id) => document.getElementById(id);
 
 /** 热力图上每个格子多宽（加上间隔），和 hub.css 里的 --cell、--gap 一致：0.875rem + 0.375rem */
 const CELL_PITCH = 20;
-const LEVEL_NAMES = ["没有活动", "轻度使用", "中度使用", "高使用频率", "强力使用"];
-const MONTHS = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
-const dayLabel = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "short" });
+/** 热力图格子的五档，文案里的名字（home.levels.*）；月份同样（months.*） */
+const LEVELS = ["none", "light", "moderate", "high", "power"];
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const dayLabel = new Intl.DateTimeFormat(t.locale, { month: "long", day: "numeric", weekday: "short" });
+
+// 热力图左边那一列星期几（从星期日起）：按界面语言写最短的那种（S、M… / 日、一…）
+const weekday = new Intl.DateTimeFormat(t.locale, { weekday: "narrow" });
+document
+  .getElementById("heatmap-weekdays")
+  .replaceChildren(
+    ...Array.from({ length: 7 }, (_, index) =>
+      Object.assign(document.createElement("span"), { textContent: weekday.format(new Date(2026, 0, 4 + index)) }),
+    ),
+  );
 
 /** 一个数加一个小一号的单位；还没有数时是两道横线，和原版一样 */
 function setValue(element, value, unit) {
@@ -28,7 +40,7 @@ function setValue(element, value, unit) {
 
 function setSpan(element, seconds) {
   const { value, unit } = formatSpan(seconds);
-  setValue(element, value, unit);
+  setValue(element, value, t(`units.${unit}`));
 }
 
 /**
@@ -43,17 +55,18 @@ export function createHome() {
 
   function renderStats(insights) {
     const empty = insights.activeDays === 0;
-    setValue($("stat-words"), empty ? null : formatCount(insights.words), "字");
+    setValue($("stat-words"), empty ? null : formatCount(insights.words), t("units.words", { count: insights.words }));
     if (empty) {
       for (const id of ["stat-saved", "stat-time", "stat-speed"]) setValue($(id), null);
     } else {
       setSpan($("stat-saved"), insights.savedSeconds);
       setSpan($("stat-time"), insights.seconds);
-      setValue($("stat-speed"), String(insights.wordsPerMinute), "字/分");
+      setValue($("stat-speed"), String(insights.wordsPerMinute), t("units.wpm"));
     }
-    setValue($("stat-active"), String(insights.activeDays), "天");
-    setValue($("stat-current"), String(insights.currentStreak), "天");
-    setValue($("stat-longest"), String(insights.longestStreak), "天");
+    const days = (count) => t("units.days", { count });
+    setValue($("stat-active"), String(insights.activeDays), days(insights.activeDays));
+    setValue($("stat-current"), String(insights.currentStreak), days(insights.currentStreak));
+    setValue($("stat-longest"), String(insights.longestStreak), days(insights.longestStreak));
   }
 
   function renderHeatmap() {
@@ -73,11 +86,14 @@ export function createHome() {
         node.dataset.state = cell.state;
         if (cell.state !== "future") {
           const [year, month, date] = cell.day.split("-").map(Number);
-          const label = dayLabel.format(new Date(year, month - 1, date));
+          const day = dayLabel.format(new Date(year, month - 1, date));
+          const level = t(`home.levels.${LEVELS[cell.level]}`);
           node.title =
             cell.state === "before"
-              ? `${label} · 还没开始用`
-              : `${label} · ${cell.count > 0 ? `${cell.count} 次 · ` : ""}${LEVEL_NAMES[cell.level]}`;
+              ? t("home.notStarted", { day })
+              : cell.count > 0
+                ? t("home.dayCount", { day, count: cell.count, level })
+                : t("home.dayLevel", { day, level });
         }
         return node;
       }),
@@ -87,7 +103,7 @@ export function createHome() {
     $("heatmap-months").replaceChildren(
       ...grid.months.map(({ column, month }) => {
         const label = document.createElement("span");
-        label.textContent = MONTHS[month];
+        label.textContent = t(`months.${MONTHS[month]}`);
         label.style.left = `${column * pitch}px`;
         return label;
       }),
@@ -108,7 +124,7 @@ export function createHome() {
       [formatUsd(period.costUsd), "cost"],
       [formatTokens(period.tokens)],
       [String(period.dictations)],
-      [period.latency ? formatSeconds(period.latency.medianMs) : "—"],
+      [period.latency ? formatSeconds(period.latency.medianMs, t) : "—"],
     ].map(([text, className]) => {
       const td = document.createElement("td");
       td.textContent = text;
@@ -125,9 +141,9 @@ export function createHome() {
     if (card.hidden) return;
     $("spend-month").textContent = formatUsd(report.month.costUsd);
     $("spend-rows").replaceChildren(
-      spendRow("今天", report.today),
-      spendRow("本月", report.month),
-      spendRow("累计", report.total),
+      spendRow(t("periods.today"), report.today),
+      spendRow(t("periods.month"), report.month),
+      spendRow(t("periods.total"), report.total),
     );
     // 只在数字不全时说一句：有的型号没有标价，那几次没算进花费
     const unpriced = report.models.filter(({ unpricedCalls }) => unpricedCalls > 0);
@@ -135,7 +151,7 @@ export function createHome() {
     $("spend-note").textContent =
       unpriced.length === 0
         ? ""
-        : `${unpriced.map(({ model }) => model).join("、")} 无标价，${report.total.unpricedCalls} 次未计入`;
+        : t("home.unpriced", { models: t.list(unpriced.map(({ model }) => model)), count: report.total.unpricedCalls });
   }
 
   $("heatmap-back").addEventListener("click", () => {
@@ -151,14 +167,14 @@ export function createHome() {
 
   return {
     /**
-     * @param {{ insights: object, usage: object, app: { version: string, hotkeyKeycap: string } }} data
+     * @param {{ insights: object, usage: object, app: { version: string, hotkey: string } }} data
      */
     render({ insights, usage, app }) {
       latest = insights;
       renderStats(insights);
       renderHeatmap();
       renderSpend(usage);
-      $("home-keycap").textContent = app.hotkeyKeycap;
+      $("home-keycap").textContent = keycapOf(app.hotkey);
       $("home-version").textContent = `v${app.version}`;
     },
   };

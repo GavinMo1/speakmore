@@ -2,19 +2,23 @@
 //   key          这把 key 不对（无效、没额度、没权限）：换一把能解决
 //   unavailable  暂时够不着（没网、超时、它那边出状况或限流）：和 key、设置都没关系，过一会儿再试
 //   other        它拒绝了这个请求（多半是模型名、档位写错），或者录音有问题
-// message 是给用户看的一句话（句尾不带标点，后面常要接别的话）；detail 是抹掉 key 之后的原文，留给日志。
+// problem 是给用户看的一句话：一句还没定语言的话（msg，由显示它的那一端翻），认不得的报错就是截短了的原文；
+// 句尾不带标点，后面常要接别的话。detail 是抹掉 key 之后的原文，留给日志，也是 message。
+
+import { msg } from "../../i18n/index.mjs";
 
 const PROBLEM_MAX_LENGTH = 200;
 
 export class ModelError extends Error {
   /**
-   * @param {{ kind: "key" | "unavailable" | "other", problem: string, detail: string, origin?: string }} fields
+   * @param {{ kind: "key" | "unavailable" | "other", problem: object | string, detail: string, origin?: string }} fields
    *   origin：原始报错的调用栈（已抹掉 key），只进日志。适配器或解码自己出了 bug 时靠它找出处
    */
   constructor({ kind, problem, detail, origin }) {
-    super(problem);
+    super(detail);
     this.name = "ModelError";
     this.kind = kind;
+    this.problem = problem;
     this.detail = detail;
     this.origin = origin;
   }
@@ -34,7 +38,7 @@ const unreachable = (error, detail) =>
  * @param {object} context
  * @param {{ name: string }} context.provider
  * @param {string} [context.apiKey] 当时用的那把：报错里带着它的话先抹掉
- * @param {(error: unknown, detail: string) => { kind: string, problem: string } | null} [context.classify]
+ * @param {(error: unknown, detail: string) => { kind: string, problem: object | string } | null} [context.classify]
  */
 export function toModelError(error, { provider, apiKey, classify }) {
   if (error instanceof ModelError) return error;
@@ -44,17 +48,19 @@ export function toModelError(error, { provider, apiKey, classify }) {
   const make = (fields) => new ModelError({ ...fields, detail, origin });
   // 超时单独说：网是通的，是它太久没回话（长录音交给 OpenAI 时，上传加处理可能就这么久）
   if (error?.name === "TimeoutError") {
-    return make({ kind: "unavailable", problem: `${provider.name} 太久没回话，过一会儿再试` });
+    return make({ kind: "unavailable", problem: msg("model.timeout", { provider: provider.name }) });
   }
   if (unreachable(error, detail)) {
-    return make({ kind: "unavailable", problem: `连不上 ${provider.name}，检查网络后再试` });
+    return make({ kind: "unavailable", problem: msg("model.unreachable", { provider: provider.name }) });
   }
   const specific = classify?.(error, detail);
   if (specific) return make(specific);
+  // 我们自己说得清的（录音解不出声音这类），照它说的
+  if (error?.problem) return make({ kind: "other", problem: error.problem });
   return make({ kind: "other", problem: detail.slice(0, PROBLEM_MAX_LENGTH) });
 }
 
-/** 把模型回的一句话收拾成能接在中文后面的样子：去掉句尾的句号和空白，截短 */
+/** 把模型回的一句话收拾成能接在别的话后面的样子：去掉句尾的句号和空白，截短 */
 export const quote = (said) =>
   String(said ?? "")
     .replace(/[.。\s]+$/, "")

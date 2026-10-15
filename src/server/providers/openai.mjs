@@ -1,3 +1,4 @@
+import { msg } from "../../i18n/index.mjs";
 import { encodeWav } from "../audio/pcm.mjs";
 import { quote } from "./errors.mjs";
 import { costOf } from "./prices/openai.mjs";
@@ -64,7 +65,7 @@ export function createClient({ apiKey, model, fetch = globalThis.fetch }) {
     },
 
     /**
-     * @returns {Promise<{ text: string | null, problem: string | null, usage: object }>} 模型的原文（收尾交给调用方）、
+     * @returns {Promise<{ text: string | null, problem: object | null, usage: object }>} 模型的原文（收尾交给调用方）、
      *   用不了的原因、这一次的用量。用不了的回话（被截断、被拒绝）也收了钱，所以不在这里抛错，由调用方记完账再报错
      */
     async generate({ audio, mimeType, systemPrompt, reminder, signal }) {
@@ -86,9 +87,9 @@ export function createClient({ apiKey, model, fetch = globalThis.fetch }) {
       const choice = payload?.choices?.[0];
       // 被截断或被拦下的半截文字不能当成品贴出去
       const problem = choice?.message?.refusal
-        ? `OpenAI 没有处理这段录音：${quote(choice.message.refusal)}`
+        ? msg("model.blocked", { provider: "OpenAI", reason: quote(choice.message.refusal) })
         : choice?.finish_reason !== "stop"
-          ? `OpenAI 没有正常结束：${choice?.finish_reason}`
+          ? msg("model.unfinished", { provider: "OpenAI", reason: String(choice?.finish_reason) })
           : null;
       return { text: problem ? null : choice.message.content, problem, usage: usageOf(payload, model) };
     },
@@ -125,21 +126,18 @@ export function classifyError(error) {
   if (!(error instanceof OpenAIError)) return null;
   // 回的不是 JSON（前面的网关回了一页 HTML）时没有原话，至少带上状态码
   const said = quote(error.said) || `HTTP ${error.status}`;
-  if (error.status === 401) return { kind: "key", problem: "这把 key 无效，检查有没有复制完整" };
+  if (error.status === 401) return { kind: "key", problem: msg("model.keyInvalid") };
   // 按网络出口所在地区拒的（官方文档写的错误码）：key 没问题，开着代理或换个网络就好，不能叫人换 key
   if (error.code === "unsupported_country_region_territory") {
-    return {
-      kind: "unavailable",
-      problem: `OpenAI 不对你现在网络出口所在的地区开放（${said}）：检查代理或换个网络，key 没问题`,
-    };
+    return { kind: "unavailable", problem: msg("model.regionBlocked", { provider: "OpenAI", said }) };
   }
-  if (error.code === "insufficient_quota") return { kind: "key", problem: "这把 key 的账号没有额度了，充值或者换一把" };
-  if (error.status === 403) return { kind: "key", problem: `这把 key 没有权限：${said}` };
+  if (error.code === "insufficient_quota") return { kind: "key", problem: msg("model.noQuota") };
+  if (error.status === 403) return { kind: "key", problem: msg("model.forbidden", { said }) };
   if (error.status === 429 || error.status >= 500) {
-    return { kind: "unavailable", problem: `OpenAI 暂时用不了（${said}），过一会儿再试` };
+    return { kind: "unavailable", problem: msg("model.unavailable", { provider: "OpenAI", said }) };
   }
   if (error.status === 404 || error.code === "model_not_found") {
-    return { kind: "other", problem: `OpenAI 没有这个模型，或者这把 key 用不了它：${said}` };
+    return { kind: "other", problem: msg("model.notFound", { provider: "OpenAI", said }) };
   }
-  return { kind: "other", problem: `OpenAI 拒绝了请求：${said}` };
+  return { kind: "other", problem: msg("model.rejected", { provider: "OpenAI", said }) };
 }

@@ -4,8 +4,6 @@
 
 export default {
   id: "cinnabar",
-  name: "朱砂",
-  describe: "一种暖红，用在声波和最主要的按钮上",
   bar: {
     surface: "oklch(0.17 0.008 32)",
     edge: "oklch(0.34 0.012 32)",

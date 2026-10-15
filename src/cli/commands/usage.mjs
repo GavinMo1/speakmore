@@ -6,7 +6,7 @@ import { renderUsage } from "../render/usage.mjs";
 
 export async function usage(args, io) {
   const { values, positionals } = parse(args, { json: { type: "boolean", default: false } });
-  noPositionals(positionals, "speakmore usage [--json]");
+  noPositionals(positionals, "usage");
 
   let report = null;
   const db = io.openHistory(io.paths.historyDb, { readOnly: true });

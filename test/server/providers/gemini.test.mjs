@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createTranslator } from "../../../src/i18n/index.mjs";
 import { AUDIO_TYPES, classifyError, createClient, replyOf } from "../../../src/server/providers/gemini.mjs";
+
+const zh = createTranslator("zh-CN");
 
 /** 和 SDK 抛的一样：message 是 Gemini 回的整段 JSON，status 是 HTTP 状态码 */
 function apiError(code, message, status) {
@@ -9,7 +12,11 @@ function apiError(code, message, status) {
     status: code,
   });
 }
-const classify = (error) => classifyError(error, String(error.message));
+/** 分类的结果，说法按中文翻出来 */
+const classify = (error) => {
+  const classified = classifyError(error, String(error.message));
+  return classified && { ...classified, problem: zh.text(classified.problem) };
+};
 
 test("Gemini 直接收悬浮条录的 WebM 和原版的 Ogg，不用转格式", () => {
   assert.deepEqual(AUDIO_TYPES, ["audio/ogg", "audio/webm"]);
@@ -137,7 +144,7 @@ test("被拦下、没正常结束的回话不能当成品，但用量照样带�
     model: "gemini-3.6-flash",
     at: OCT,
   });
-  assert.equal(blocked.problem, "Gemini 没有处理这段录音：PROHIBITED_CONTENT");
+  assert.equal(zh.text(blocked.problem), "Gemini 没有处理这段录音：PROHIBITED_CONTENT");
   assert.equal(blocked.text, null);
   assert.equal(blocked.usage.inputTokens, 1390);
 
@@ -145,7 +152,7 @@ test("被拦下、没正常结束的回话不能当成品，但用量照样带�
     model: "gemini-3.6-flash",
     at: OCT,
   });
-  assert.equal(cut.problem, "Gemini 没有正常结束：MAX_TOKENS");
+  assert.equal(zh.text(cut.problem), "Gemini 没有正常结束：MAX_TOKENS");
   assert.equal(cut.text, null);
 });
 

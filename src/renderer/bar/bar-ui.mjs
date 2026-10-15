@@ -22,10 +22,13 @@ const REDUCED_MOTION_MS = 200;
  * @param {(regions: object[] | null) => void} options.host.capture 开始截 esc 和这几块里的点击
  *   （{ id, x, y, width, height }，窗口里的位置）；null 是不截了
  * @param {string} options.keycap 热键的短名字，写在提示里
+ * @param {Function} options.t 界面语言的翻译函数（src/i18n），提示按它写
  */
-export function createBarUi({ document, host, keycap: initialKeycap }) {
+export function createBarUi({ document, host, keycap: initialKeycap, t: initialT }) {
   /** 在设置里改了热键时跟着换 */
   let keycap = initialKeycap;
+  /** 在设置里换了语言时跟着换 */
+  let t = initialT;
   const { body } = document;
   const hint = document.getElementById("hint");
   const message = document.getElementById("message");
@@ -85,7 +88,7 @@ export function createBarUi({ document, host, keycap: initialKeycap }) {
   }
 
   function drawHint() {
-    const parts = hintFor(view, { keycap, cancellable: controls });
+    const parts = hintFor(view, { keycap, cancellable: controls }, t);
     hint.replaceChildren(
       ...parts.map((part) =>
         typeof part === "string" ? part : Object.assign(document.createElement("kbd"), { textContent: part.key }),
@@ -172,6 +175,12 @@ export function createBarUi({ document, host, keycap: initialKeycap }) {
     /** 热键换了：提示里写新的那个 */
     setKeycap(next) {
       keycap = next;
+      if (view !== View.HIDDEN) drawHint();
+    },
+
+    /** 语言换了：提示按新的语言写。正在显示的那句话由调用方重新给 */
+    setTranslator(next) {
+      t = next;
       if (view !== View.HIDDEN) drawHint();
     },
   };

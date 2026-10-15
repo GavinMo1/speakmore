@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createTranslator } from "../../../src/i18n/index.mjs";
 import { Action, initialState, Phase, transition } from "../../../src/renderer/bar/machine.mjs";
+
+const zh = createTranslator("zh-CN");
 
 /** 依次喂事件，返回最后的状态和每一步的动作 */
 function run(...events) {
@@ -35,7 +38,7 @@ test("松开比麦克风就绪早，也照常进入录音", () => {
 test("按住超过时限：取消，并告诉用户不支持按住说话", () => {
   const { state, steps } = run("KEY_DOWN", "MIC_READY", "LONG_HOLD");
   assert.equal(state.phase, Phase.IDLE);
-  assert.match(state.message, /不支持按住说话/);
+  assert.match(zh.text(state.message), /不支持按住说话/);
   assert.deepEqual(steps.at(-1), [Action.CANCEL]);
   // 取消之后才松手，不能再触发任何事
   assert.deepEqual(transition(state, { type: "KEY_UP" }), { state, actions: [] });

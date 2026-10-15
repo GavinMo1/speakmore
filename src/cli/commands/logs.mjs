@@ -10,10 +10,10 @@ export async function logs(args, io) {
     lines: { type: "string", short: "n", default: String(DEFAULT_LOG_LINES) },
     follow: { type: "boolean", short: "f", default: false },
   });
-  noPositionals(positionals, "speakmore logs [-n 行数] [-f]");
+  noPositionals(positionals, "logs");
   const lines = positiveInteger(values.lines, "-n");
   if (!existsSync(io.paths.logFile)) {
-    io.out(`还没有日志：SpeakMore 启动过之后会写到 ${io.paths.logFile}`);
+    io.out(io.t("cli.logs.none", { file: io.paths.logFile }));
     return 0;
   }
   return io.tail(["-n", String(lines), ...(values.follow ? ["-f"] : []), io.paths.logFile]);

@@ -3,8 +3,6 @@
 
 export default {
   id: "ink",
-  name: "墨",
-  describe: "黑白。状态靠形状和动作来说，只有出错才出现颜色",
   bar: {
     surface: "oklch(0.16 0 0)",
     edge: "oklch(0.34 0 0)",

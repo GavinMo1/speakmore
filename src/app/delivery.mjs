@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { msg } from "../i18n/index.mjs";
 
 // 一次听写结束后主进程要做的事：存录音、记历史、把文字贴出去。
 // 和原版一样，录音存在 Recordings/<audio_id> 下，失败的也存（docs/08-local-data.md）。
@@ -44,22 +45,22 @@ export function createDelivery({ recordingsDir, history, paste, writeClipboard, 
   return {
     /**
      * 成品回来了：先落盘，再贴。贴不进去时把文字放进剪贴板，用户不会丢字。
-     * @returns {Promise<{ notice: string | null }>} notice 是要在悬浮条上告诉用户的话
+     * @returns {Promise<{ notice: object | null }>} notice 是要在悬浮条上告诉用户的话（msg，悬浮条按界面语言翻）
      */
     async completed(payload) {
       if (typeof payload.text !== "string") throw new TypeError("text 不是字符串");
       record(payload, { status: "completed", refinedText: payload.text, error: null });
-      if (payload.text === "") return { notice: "没有听到声音" };
+      if (payload.text === "") return { notice: msg("delivery.silent") };
       try {
         const result = await paste(payload.text);
         if (result.ok) return { notice: null };
         // 小帮手在没有权限时已经把文字留在剪贴板里了
         log.warn("paste_not_permitted", { audio_id: payload.audioId, reason: result.reason });
-        return { notice: "没有辅助功能权限：文字已复制，按 ⌘V 粘贴" };
+        return { notice: msg("delivery.noAccessibility") };
       } catch (error) {
         log.error("paste_failed", { audio_id: payload.audioId, error: String(error?.message ?? error) });
         writeClipboard(payload.text);
-        return { notice: "没能自动粘贴：文字已复制，按 ⌘V 粘贴" };
+        return { notice: msg("delivery.pasteFailed") };
       }
     },
 

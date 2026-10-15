@@ -2,9 +2,7 @@ import { INDENT, paint } from "./text.mjs";
 
 // 历史（speakmore history）：按天分组，新的在前。
 
-const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-
-/** 按给定时区拆出年月日、星期和"时:分" */
+/** 按给定时区拆出年月日和"时:分"（日期怎么写、星期几由 dayHeading 按界面语言写） */
 function localParts(date, timeZone) {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
@@ -23,51 +21,56 @@ function localParts(date, timeZone) {
   return {
     dayKey: `${parts.year}-${parts.month}-${parts.day}`,
     year: Number(parts.year),
-    month: Number(parts.month),
-    day: Number(parts.day),
-    weekday: WEEKDAYS[["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday)],
     time: `${parts.hour}:${parts.minute}`,
   };
 }
 
-function dayHeading(parts, now, timeZone) {
-  const date = `${parts.month} 月 ${parts.day} 日`;
+function dayHeading(date, parts, { now, timeZone, t }) {
+  const format = (options) => new Intl.DateTimeFormat(t.locale, { timeZone, ...options }).format(date);
+  const day = format({ month: "long", day: "numeric" });
   const today = localParts(now, timeZone);
-  if (parts.dayKey === today.dayKey) return `今天 · ${date}`;
-  if (parts.dayKey === localParts(new Date(now.getTime() - 86_400_000), timeZone).dayKey) return `昨天 · ${date}`;
+  if (parts.dayKey === today.dayKey) return t("cli.history.today", { date: day });
+  if (parts.dayKey === localParts(new Date(now.getTime() - 86_400_000), timeZone).dayKey) {
+    return t("cli.history.yesterday", { date: day });
+  }
   // 不是今年的要带上年份，否则分不清是哪一年的 10 月 8 日
-  return `${parts.year === today.year ? "" : `${parts.year} 年 `}${date} ${parts.weekday}`;
+  const year = parts.year === today.year ? {} : { year: "numeric" };
+  return format({ ...year, month: "long", day: "numeric", weekday: "short" });
 }
 
 /**
  * @param {object} view
  * @param {Array<object>} view.rows 新的在前（历史库 list() 给的顺序）
  * @param {number} view.total 库里一共多少条
- * @param {{ color: boolean, now: Date, timeZone?: string }} options timeZone 不给就用系统的
+ * @param {{ color: boolean, now: Date, timeZone?: string, t: Function }} options timeZone 不给就用系统的；t 是界面语言的翻译函数
  */
-export function renderHistory({ rows, total }, { color, now, timeZone }) {
+export function renderHistory({ rows, total }, { color, now, timeZone, t }) {
   const c = paint(color);
-  if (rows.length === 0) {
-    return `还没有听写记录。运行 ${c.bold("speakmore")} 启动之后，按一下热键说句话试试。\n`;
-  }
+  if (rows.length === 0) return `${t("cli.history.empty", { command: c.bold("speakmore") })}\n`;
 
   // "  14:32  " 之后才是文字，续行缩进到同一列
   const continuation = " ".repeat(INDENT.length + 5 + 2);
   const lines = [];
   let currentDay = null;
   for (const entry of rows) {
-    const parts = localParts(new Date(entry.createdAt), timeZone);
+    const date = new Date(entry.createdAt);
+    const parts = localParts(date, timeZone);
     if (parts.dayKey !== currentDay) {
       if (currentDay !== null) lines.push("");
-      lines.push(c.bold(dayHeading(parts, now, timeZone)));
+      lines.push(c.bold(dayHeading(date, parts, { now, timeZone, t })));
       currentDay = parts.dayKey;
     }
     const body =
       entry.status === "completed"
         ? entry.refinedText.split("\n")
         : [
-            c.red(`✗ 没有成功：${entry.error ?? "原因不明"}`),
-            c.dim(`录音 ${entry.duration.toFixed(1)} 秒，留在 ${entry.audioLocalPath ?? "（没存下来）"}`),
+            c.red(t("cli.history.failed", { reason: entry.error ?? t("common.unknownReason") })),
+            c.dim(
+              t("cli.history.recording", {
+                seconds: entry.duration.toFixed(1),
+                path: entry.audioLocalPath ?? t("cli.history.notSaved"),
+              }),
+            ),
           ];
     body.forEach((line, index) => {
       if (index === 0) lines.push(`${INDENT}${c.dim(parts.time)}  ${line}`);
@@ -77,7 +80,7 @@ export function renderHistory({ rows, total }, { color, now, timeZone }) {
   }
 
   if (rows.length < total) {
-    lines.push("", c.dim(`显示最近 ${rows.length} 条，共 ${total} 条。speakmore history -n ${total} 看全部。`));
+    lines.push("", c.dim(t("cli.history.more", { shown: rows.length, total })));
   }
   lines.push("");
   return lines.join("\n");

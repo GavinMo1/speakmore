@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'" />
@@ -60,25 +60,25 @@
     <div class="app">
       <aside class="sidebar">
         <p class="brand"><img src="../../../assets/icon.svg" alt="" width="22" height="22" />SpeakMore</p>
-        <nav aria-label="页面">
+        <nav data-i18n-aria-label="hub.pages">
           <ul class="nav">
             <li>
               <button type="button" class="nav-item" data-route="home">
-                <svg class="icon" aria-hidden="true"><use href="#i-home" /></svg>首页
+                <svg class="icon" aria-hidden="true"><use href="#i-home" /></svg><span data-i18n="hub.home">Home</span>
               </button>
             </li>
             <li>
               <button type="button" class="nav-item" data-route="history">
-                <svg class="icon" aria-hidden="true"><use href="#i-history" /></svg>历史
+                <svg class="icon" aria-hidden="true"><use href="#i-history" /></svg><span data-i18n="hub.history">History</span>
               </button>
             </li>
           </ul>
         </nav>
         <div class="sidebar-foot">
-          <button type="button" class="icon-button" id="open-settings" aria-label="设置" title="设置">
+          <button type="button" class="icon-button" id="open-settings" data-i18n-aria-label="hub.settings" data-i18n-title="hub.settings">
             <svg class="icon" aria-hidden="true"><use href="#i-settings" /></svg>
           </button>
-          <button type="button" class="icon-button" id="open-about" aria-label="关于" title="关于">
+          <button type="button" class="icon-button" id="open-about" data-i18n-aria-label="hub.about" data-i18n-title="hub.about">
             <svg class="icon" aria-hidden="true"><use href="#i-info" /></svg>
           </button>
         </div>
@@ -88,30 +88,30 @@
         <div class="banner" id="banner" role="status" hidden>
           <svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>
           <p class="banner-text" id="banner-text"></p>
-          <button type="button" class="button" id="banner-action">去设置</button>
+          <button type="button" class="button" id="banner-action" data-i18n="hub.fix">Settings</button>
         </div>
 
         <!-- 首页：原版"洞察"那一列，加上我们的花费；右边一列是口述卡和版本 -->
         <section class="page" data-route="home" aria-labelledby="home-title">
-          <h1 class="page-title" id="home-title">说话，别打字</h1>
+          <h1 class="page-title" id="home-title" data-i18n="home.title">Speak, don't type</h1>
           <div class="home">
             <div class="insights">
               <div class="card stats">
                 <div class="stat">
                   <p class="stat-value" id="stat-words"></p>
-                  <p class="stat-label">字数</p>
+                  <p class="stat-label" data-i18n="home.words">Words</p>
                 </div>
                 <div class="stat">
                   <p class="stat-value" id="stat-saved"></p>
-                  <p class="stat-label">省时</p>
+                  <p class="stat-label" data-i18n="home.saved">Time saved</p>
                 </div>
                 <div class="stat">
                   <p class="stat-value" id="stat-speed"></p>
-                  <p class="stat-label">语速</p>
+                  <p class="stat-label" data-i18n="home.speed">Speed</p>
                 </div>
                 <div class="stat">
                   <p class="stat-value" id="stat-time"></p>
-                  <p class="stat-label">口述时长</p>
+                  <p class="stat-label" data-i18n="home.time">Dictation time</p>
                 </div>
               </div>
 
@@ -119,49 +119,49 @@
                 <div class="streaks">
                   <div>
                     <p class="stat-value" id="stat-active"></p>
-                    <p class="stat-label">活跃</p>
+                    <p class="stat-label" data-i18n="home.active">Active</p>
                   </div>
                   <div>
                     <p class="stat-value" id="stat-current"></p>
-                    <p class="stat-label">连续</p>
+                    <p class="stat-label" data-i18n="home.streak">Streak</p>
                   </div>
                   <div>
                     <p class="stat-value" id="stat-longest"></p>
-                    <p class="stat-label">最长连续</p>
+                    <p class="stat-label" data-i18n="home.longest">Longest</p>
                   </div>
                 </div>
                 <div class="heatmap" id="heatmap">
-                  <div class="weekdays" aria-hidden="true">
-                    <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
-                  </div>
-                  <div class="cells" id="heatmap-cells" role="img" aria-label="每天的口述次数"></div>
-                  <button type="button" class="page-arrow" id="heatmap-back" aria-label="往前">
+                  <!-- 星期几的简写由 home.mjs 按界面语言填 -->
+                  <div class="weekdays" id="heatmap-weekdays" aria-hidden="true"></div>
+                  <div class="cells" id="heatmap-cells" role="img" data-i18n-aria-label="home.activity"></div>
+                  <button type="button" class="page-arrow" id="heatmap-back" data-i18n-aria-label="home.earlier">
                     <svg class="icon" aria-hidden="true"><use href="#i-chevron" /></svg>
                   </button>
                   <div class="months" id="heatmap-months" aria-hidden="true"></div>
-                  <button type="button" class="page-arrow next" id="heatmap-next" aria-label="往后">
+                  <button type="button" class="page-arrow next" id="heatmap-next" data-i18n-aria-label="home.later">
                     <svg class="icon" aria-hidden="true"><use href="#i-chevron" /></svg>
                   </button>
                 </div>
                 <p class="legend" aria-hidden="true">
-                  少<span class="cell" data-level="1"></span><span class="cell" data-level="2"></span
-                  ><span class="cell" data-level="3"></span><span class="cell" data-level="4"></span>多
+                  <span data-i18n="home.less">Less</span><span class="cell" data-level="1"></span
+                  ><span class="cell" data-level="2"></span><span class="cell" data-level="3"></span
+                  ><span class="cell" data-level="4"></span><span data-i18n="home.more">More</span>
                 </p>
               </div>
 
               <div class="card spend" id="spend" hidden>
                 <div class="spend-head">
                   <p class="stat-value" id="spend-month"></p>
-                  <p class="stat-label">本月花费</p>
+                  <p class="stat-label" data-i18n="home.spend">Spent this month</p>
                 </div>
                 <table class="spend-table">
                   <thead>
                     <tr>
                       <td></td>
-                      <th scope="col">花费</th>
-                      <th scope="col">token</th>
-                      <th scope="col">次数</th>
-                      <th scope="col">耗时</th>
+                      <th scope="col" data-i18n="home.cost">Cost</th>
+                      <th scope="col" data-i18n="home.tokens">Tokens</th>
+                      <th scope="col" data-i18n="home.count">Count</th>
+                      <th scope="col" data-i18n="home.latency">Latency</th>
                     </tr>
                   </thead>
                   <tbody id="spend-rows"></tbody>
@@ -174,7 +174,7 @@
               <!-- 口述卡：一张小卡，主题渐变只在键帽上 -->
               <div class="dictate">
                 <kbd class="dictate-key" id="home-keycap"></kbd>
-                <p class="dictate-title">按一下说话</p>
+                <p class="dictate-title" data-i18n="home.dictate">Press to talk</p>
               </div>
               <p class="version" id="home-version"></p>
             </aside>
@@ -183,7 +183,7 @@
 
         <!-- 历史记录：按天分组，一行一条 -->
         <section class="page" data-route="history" aria-labelledby="history-title" hidden>
-          <h1 class="page-title" id="history-title">历史</h1>
+          <h1 class="page-title" id="history-title" data-i18n="history.title">History</h1>
           <p class="problem load-error" id="history-error" role="alert" hidden></p>
           <p class="empty-state" id="history-empty" hidden></p>
           <div id="history-days"></div>
@@ -193,7 +193,7 @@
 
     <template id="history-day">
       <section class="day">
-        <h2 class="day-title">今天</h2>
+        <h2 class="day-title">Today</h2>
         <ol class="rows"></ol>
       </section>
     </template>
@@ -202,7 +202,7 @@
         <time class="row-time"></time>
         <p class="row-text"></p>
         <div class="row-actions">
-          <button type="button" class="icon-button copy" aria-label="复制" title="复制">
+          <button type="button" class="icon-button copy" data-i18n-aria-label="history.copy" data-i18n-title="history.copy">
             <svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg>
           </button>
           <button type="button" class="icon-button details">
@@ -214,85 +214,90 @@
 
     <!-- 设置：原版的"设置中心"是盖在主窗口上的对话框，左边一列菜单 -->
     <dialog class="settings" id="settings" aria-labelledby="settings-heading">
-      <h2 class="visually-hidden" id="settings-heading">设置</h2>
-      <nav class="settings-menu" aria-label="设置分类">
+      <h2 class="visually-hidden" id="settings-heading" data-i18n="preferences.title">Settings</h2>
+      <nav class="settings-menu" data-i18n-aria-label="preferences.sections">
         <button type="button" class="menu-item" data-pane="general">
-          <svg class="icon" aria-hidden="true"><use href="#i-sliders" /></svg>通用
+          <svg class="icon" aria-hidden="true"><use href="#i-sliders" /></svg><span data-i18n="preferences.general">General</span>
         </button>
         <button type="button" class="menu-item" data-pane="model">
-          <svg class="icon" aria-hidden="true"><use href="#i-key" /></svg>模型<span class="menu-dot" data-for="model" hidden></span>
+          <svg class="icon" aria-hidden="true"><use href="#i-key" /></svg><span data-i18n="preferences.model">Model</span><span class="menu-dot" data-for="model" hidden></span>
         </button>
         <button type="button" class="menu-item" data-pane="permissions">
-          <svg class="icon" aria-hidden="true"><use href="#i-shield" /></svg>权限<span class="menu-dot" data-for="permissions" hidden></span>
+          <svg class="icon" aria-hidden="true"><use href="#i-shield" /></svg><span data-i18n="preferences.permissions">Permissions</span><span class="menu-dot" data-for="permissions" hidden></span>
         </button>
         <button type="button" class="menu-item" data-pane="about">
-          <svg class="icon" aria-hidden="true"><use href="#i-info" /></svg>关于
+          <svg class="icon" aria-hidden="true"><use href="#i-info" /></svg><span data-i18n="preferences.about">About</span>
         </button>
       </nav>
       <div class="settings-body">
-        <button type="button" class="icon-button settings-close" id="settings-close" aria-label="关闭">
+        <button type="button" class="icon-button settings-close" id="settings-close" data-i18n-aria-label="common.close">
           <svg class="icon" aria-hidden="true"><use href="#i-close" /></svg>
         </button>
 
         <section class="pane" data-pane="general">
-          <h3 class="pane-title">通用</h3>
+          <h3 class="pane-title" data-i18n="preferences.general">General</h3>
           <div class="setting">
-            <label class="setting-title" for="hotkey">快捷键</label>
+            <label class="setting-title" for="hotkey" data-i18n="preferences.hotkey">Shortcut</label>
             <select class="select" id="hotkey"></select>
           </div>
           <p class="setting-note" id="hotkey-note" role="status" hidden></p>
           <div class="setting">
-            <label class="setting-title" for="theme">主题</label>
+            <label class="setting-title" for="theme" data-i18n="preferences.theme">Theme</label>
             <select class="select" id="theme"></select>
           </div>
           <p class="setting-note" id="theme-note" role="status" hidden></p>
+          <div class="setting">
+            <label class="setting-title" for="language" data-i18n="preferences.language">Language</label>
+            <select class="select" id="language"></select>
+          </div>
+          <p class="setting-note" id="language-note" role="status" hidden></p>
           <!-- 从终端启动时登记不了开机启动，整行不显示 -->
           <div class="setting" id="open-at-login-row">
-            <label class="setting-title" for="open-at-login">开机启动</label>
+            <label class="setting-title" for="open-at-login" data-i18n="preferences.openAtLogin">Launch at login</label>
             <input type="checkbox" class="switch" id="open-at-login" />
           </div>
           <p class="setting-note" id="general-problem" role="alert" hidden></p>
         </section>
 
         <section class="pane" data-pane="model" hidden>
-          <h3 class="pane-title">模型</h3>
+          <h3 class="pane-title" data-i18n="preferences.model">Model</h3>
           <div class="key-panel" id="key-panel"></div>
         </section>
 
         <section class="pane" data-pane="permissions" hidden>
-          <h3 class="pane-title">权限</h3>
+          <h3 class="pane-title" data-i18n="preferences.permissions">Permissions</h3>
           <ul class="permissions">
             <li data-permission="microphone">
-              <p class="setting-title">麦克风</p>
+              <p class="setting-title" data-i18n="permissions.microphone">Microphone</p>
               <span class="granted"></span>
-              <button type="button" class="button">系统设置</button>
+              <button type="button" class="button"></button>
             </li>
             <li data-permission="listen">
-              <p class="setting-title">输入监控</p>
+              <p class="setting-title" data-i18n="permissions.listen">Input Monitoring</p>
               <span class="granted"></span>
-              <button type="button" class="button">系统设置</button>
+              <button type="button" class="button"></button>
             </li>
             <li data-permission="trusted">
-              <p class="setting-title">辅助功能</p>
+              <p class="setting-title" data-i18n="permissions.trusted">Accessibility</p>
               <span class="granted"></span>
-              <button type="button" class="button">系统设置</button>
+              <button type="button" class="button"></button>
             </li>
           </ul>
-          <p class="recheck-row"><button type="button" class="button" id="recheck">重新检查</button></p>
+          <p class="recheck-row"><button type="button" class="button" id="recheck" data-i18n="preferences.recheck">Check again</button></p>
         </section>
 
         <section class="pane" data-pane="about" hidden>
-          <h3 class="pane-title">关于</h3>
+          <h3 class="pane-title" data-i18n="preferences.about">About</h3>
           <div class="setting">
-            <p class="setting-title">版本</p>
+            <p class="setting-title" data-i18n="preferences.version">Version</p>
             <p class="setting-value" id="about-version"></p>
           </div>
           <div class="setting">
-            <p class="setting-title">数据目录</p>
+            <p class="setting-title" data-i18n="preferences.dataFolder">Data folder</p>
             <code class="setting-value" id="about-home"></code>
           </div>
           <div class="setting">
-            <p class="setting-title">源代码</p>
+            <p class="setting-title" data-i18n="preferences.source">Source code</p>
             <button type="button" class="button" id="open-homepage">GitHub</button>
           </div>
         </section>

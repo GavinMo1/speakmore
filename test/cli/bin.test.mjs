@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
@@ -34,4 +34,30 @@ test("输出接到 head 这类只读开头就关掉的程序上：安静地结�
   );
   assert.equal(result.stderr, "");
   assert.equal(result.status, 0);
+});
+
+test("说什么语言：设置里写了就用它；跟随系统时看终端的 LC_ALL、LC_MESSAGES、LANG；认不出来是英文", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sm-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const { LC_ALL: _all, LC_MESSAGES: _messages, LANG: _lang, ...base } = process.env;
+  const helpIn = (env) =>
+    spawnSync(process.execPath, [BIN, "help"], {
+      encoding: "utf8",
+      env: { ...base, SPEAKMORE_HOME: dir, ...env },
+    }).stdout.split("\n")[0];
+
+  assert.equal(helpIn({ LANG: "zh_CN.UTF-8" }), "SpeakMore：按一下热键说话，整理好的文字贴进当前输入框。");
+  assert.match(helpIn({ LANG: "en_US.UTF-8" }), /^SpeakMore: press a hotkey/);
+  assert.match(helpIn({ LANG: "zh_CN.UTF-8", LC_ALL: "en_GB.UTF-8" }), /^SpeakMore: press a hotkey/);
+  // 繁体、日文、C：我们没有，用英文
+  for (const LANG of ["zh_TW.UTF-8", "ja_JP.UTF-8", "C"]) assert.match(helpIn({ LANG }), /^SpeakMore: press/, LANG);
+  assert.match(helpIn({}), /^SpeakMore: press/);
+
+  // 设置里定了的话盖过终端的语言；环境变量 SPEAKMORE_LANGUAGE 又盖过设置
+  writeFileSync(resolvePaths({ SPEAKMORE_HOME: dir }).settingsFile, JSON.stringify({ language: "zh-CN" }));
+  assert.match(helpIn({ LANG: "en_US.UTF-8" }), /^SpeakMore：/);
+  assert.match(helpIn({ LANG: "zh_CN.UTF-8", SPEAKMORE_LANGUAGE: "en" }), /^SpeakMore: press/);
+  // 设置文件坏了：先按终端的语言说，坏在哪由读设置的命令报
+  writeFileSync(resolvePaths({ SPEAKMORE_HOME: dir }).settingsFile, "{ 坏了");
+  assert.match(helpIn({ LANG: "zh_CN.UTF-8" }), /^SpeakMore：/);
 });

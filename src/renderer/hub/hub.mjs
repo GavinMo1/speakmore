@@ -1,3 +1,4 @@
+import { localize, t } from "../shared/i18n.mjs";
 import { createHistory } from "./history.mjs";
 import { createHome } from "./home.mjs";
 import { createSettings } from "./settings.mjs";
@@ -7,6 +8,9 @@ import { createSettings } from "./settings.mjs";
 
 const $ = (id) => document.getElementById(id);
 const ROUTES = ["home", "history"];
+
+// 页面上写死的字先按界面语言填上，下面各块再画自己的
+localize();
 
 const home = createHome();
 const history = createHistory();
@@ -32,10 +36,10 @@ function renderBanner(current) {
   const banner = $("banner");
   if (summary.missing.length > 0) {
     banner.dataset.tone = "problem";
-    $("banner-text").textContent = `还差：${summary.missing.join("、")}`;
+    $("banner-text").textContent = t("hub.missing", { items: t.list(summary.missing) });
   } else if (summary.degraded !== null) {
     banner.dataset.tone = "soft";
-    $("banner-text").textContent = summary.degraded;
+    $("banner-text").textContent = t.text(summary.degraded);
   } else {
     banner.hidden = true;
     return;
