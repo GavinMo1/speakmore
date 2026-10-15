@@ -48,5 +48,10 @@ contextBridge.exposeInMainWorld("speakmore", {
   recheckPermissions: () => ipcRenderer.invoke("setup:recheck"),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke("setup:set-open-at-login", enabled),
   setHotkey: (hotkey) => ipcRenderer.invoke("setup:set-hotkey", hotkey),
+
+  // 首次引导
+  captureHotkey: (capturing) => ipcRenderer.send("onboarding:capture-hotkey", capturing),
+  onOnboardingHotkey: (callback) => ipcRenderer.on("onboarding:hotkey", (_event, key) => callback(key)),
+  finishOnboarding: () => ipcRenderer.invoke("onboarding:finish"),
   setTheme: (theme) => ipcRenderer.invoke("setup:set-theme", theme),
 });

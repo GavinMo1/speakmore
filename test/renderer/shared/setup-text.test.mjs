@@ -17,7 +17,7 @@ test("权限给没给：麦克风看系统给的状态，另两项是小帮手�
   assert.equal(permissionGranted("trusted", null), null);
 });
 
-test("麦克风从没问过时按钮写\"授权\"：要先让系统弹框，系统设置的列表里才有这个应用", () => {
+test('麦克风从没问过时按钮写"授权"：要先让系统弹框，系统设置的列表里才有这个应用', () => {
   assert.deepEqual(permissionText("microphone", "not-determined"), ["还没授权", "problem", "授权"]);
   assert.deepEqual(permissionText("listen", null), ["检查中…", "pending", "打开系统设置"]);
 });

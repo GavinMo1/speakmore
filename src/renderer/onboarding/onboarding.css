@@ -1,0 +1,377 @@
+/* 首次引导。和主窗口一样大、一样藏起标题栏；左边一列字和操作，右边一块示意。
+   标题前半句淡一点，照原版（"<0>现在，</0>开始语音输入"那种写法）。 */
+
+body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100vh;
+}
+
+/* 标题栏藏起来了：最上面这一条用来拖窗口 */
+.steps {
+  display: flex;
+  justify-content: center;
+  padding: 1.1rem 2rem 0;
+  -webkit-app-region: drag;
+}
+
+.step-groups {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step-groups li {
+  min-width: 6.5rem;
+  padding: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 510;
+  text-align: center;
+  color: var(--ink-2);
+  border-top: 3px solid var(--fill-selected);
+  transition:
+    color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+
+.step-groups li[data-state="done"],
+.step-groups li[data-state="current"] {
+  border-top-color: var(--primary);
+}
+
+.step-groups li[data-state="current"] {
+  color: var(--ink);
+}
+
+.stage {
+  overflow-y: auto;
+  padding: 2rem 3.5rem;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 3rem;
+  align-items: center;
+  max-width: 62rem;
+  min-height: 100%;
+  margin: 0 auto;
+  animation: step-in var(--dur-slow) var(--ease-out);
+}
+
+@keyframes step-in {
+  from {
+    opacity: 0;
+    translate: 0 0.5rem;
+  }
+}
+
+.step-title {
+  margin: 0 0 0.9rem;
+  /* 中文标题只在标点和空格处换行，不把"设置"拆成两行 */
+  word-break: keep-all;
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.soft {
+  color: var(--ink-2);
+}
+
+.step-desc {
+  max-width: 30rem;
+  margin-bottom: 1.5rem;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.visual {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 22rem;
+  padding: 2rem;
+  background: var(--fill-thin);
+  border-radius: 1.25rem;
+}
+
+/* ---------- 底下的返回、继续 ---------- */
+
+.nav {
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem 2rem 1.5rem;
+}
+
+.nav > .button {
+  min-width: 6rem;
+  padding: 0.45rem 1.1rem;
+}
+
+/* 第一步没有"返回"：继续还是待在右边 */
+#next {
+  margin-left: auto;
+}
+
+/* ---------- 第一步：录音 → 模型 → 文字 ---------- */
+
+.flow {
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.flow-card {
+  max-width: 18rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  background: var(--bg);
+  border-radius: 0.75rem;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.flow-card.model {
+  padding: 0.4rem 1rem;
+  font-weight: 600;
+  color: var(--on-primary);
+  background: var(--primary);
+  box-shadow: none;
+}
+
+.flow-card.result {
+  font-weight: 600;
+}
+
+.flow-arrow {
+  color: var(--ink-2);
+}
+
+/* ---------- 权限 ---------- */
+
+.grants {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grants li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.875rem;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.grant-primary {
+  font-size: 0.9375rem;
+  font-weight: 590;
+}
+
+.grant-secondary {
+  margin-top: 0.15rem;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+/* 给了以后按钮换成一个勾，不再能点 */
+.grants [data-granted="true"] > .button {
+  color: var(--ok);
+  background: transparent;
+}
+
+.privacy {
+  gap: 1.1rem;
+  justify-content: flex-start;
+}
+
+.privacy-title {
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+.privacy-name {
+  font-weight: 600;
+}
+
+.privacy-text {
+  margin-top: 0.15rem;
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+
+/* ---------- 测麦克风、测快捷键 ---------- */
+
+.question {
+  margin: 0.5rem 0 0.75rem;
+  font-weight: 590;
+}
+
+.answers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.meter-panel,
+.keycap-panel {
+  align-items: center;
+}
+
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 8rem;
+}
+
+.meter span {
+  width: 0.75rem;
+  height: 0.75rem;
+  background: var(--primary);
+  border-radius: var(--radius-full);
+  transition: height 80ms linear;
+}
+
+.big-keycap {
+  display: inline-grid;
+  place-items: center;
+  min-width: 7rem;
+  height: 5.5rem;
+  padding: 0 1.5rem;
+  font: inherit;
+  font-size: 2rem;
+  font-weight: 650;
+  background: var(--bg);
+  border-radius: 1rem;
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 4px 0 var(--line);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    translate var(--dur-fast) var(--ease-out);
+}
+
+.big-keycap[data-pressed] {
+  color: var(--on-primary);
+  background: var(--primary);
+  translate: 0 3px;
+}
+
+.hotkey-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+}
+
+/* ---------- 体验一下 ---------- */
+
+.sample {
+  margin: 0 0 1.25rem;
+  padding: 0.9rem 1.1rem;
+  font-size: 1rem;
+  background: var(--fill-thin);
+  border-radius: 0.75rem;
+}
+
+.did-title {
+  margin-bottom: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+
+.did {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+}
+
+.did li::before {
+  content: "✓ ";
+  color: var(--ok);
+}
+
+.notes {
+  justify-content: flex-start;
+  gap: 0.75rem;
+  padding: 1.5rem;
+}
+
+.notes-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.notes-text {
+  flex: 1;
+  min-height: 14rem;
+  padding: 1rem;
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: none;
+  border-radius: 0.75rem;
+  box-shadow: 0 0 0 1px var(--line);
+  resize: none;
+}
+
+.notes-text::placeholder {
+  color: var(--ink-2);
+}
+
+.notes-text:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ---------- 完成 ---------- */
+
+.step.done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.done .step-title {
+  font-size: 3rem;
+}
+
+.done .step-desc {
+  max-width: 34rem;
+  margin-bottom: 2rem;
+}
+
+.button.big {
+  padding: 0.6rem 1.75rem;
+  font-size: 0.9375rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step {
+    animation: none;
+  }
+
+  .step-groups li,
+  .meter span,
+  .big-keycap {
+    transition: none;
+  }
+}

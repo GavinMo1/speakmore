@@ -160,6 +160,9 @@ async function main() {
   /** 启动时对麦克风和 key 的检查做完了没有 */
   let startupChecked = false;
   let hubWindow = null;
+  let onboardingWindow = null;
+  /** 首次引导正在测快捷键：热键送到引导窗口，不去开悬浮条 */
+  let hotkeyToOnboarding = false;
   log.info("started", {
     version: app.getVersion(),
     hotkey,
@@ -191,7 +194,7 @@ async function main() {
 
   let offeredSettings = LAUNCHED_BY_CLI;
   /**
-   * 还缺东西就把主窗口打开、亮出设置里缺东西的那一页，第一次启动的人不用猜下一步该干什么。只主动弹一次。
+   * 还缺东西就打开首次引导，第一次启动的人不用猜下一步该干什么。只主动弹一次。
    * 由命令启动时不弹：那个人正看着终端，突然冒出一个窗口还会把他正要粘贴 key 的焦点抢走。
    * 几样检查是先后到的（key 要验证、小帮手要启动），都有了结论才判断，免得刚启动就误报。
    */
@@ -203,13 +206,14 @@ async function main() {
     if (summary.missing.length === 0 && summary.degraded === null) return;
     offeredSettings = true;
     log.info("settings_offered", { missing: summary.missing, degraded: summary.degraded !== null });
-    showHub({ pane: "auto" });
+    showOnboarding();
   }
 
   /** 上面任何一样变了都调一次：菜单栏和主窗口跟着更新 */
   function setupChanged() {
     refreshTrayMenu();
     hubWindow?.webContents.send("setup:changed");
+    onboardingWindow?.webContents.send("setup:changed");
   }
 
   // ---------- 主题 ----------
@@ -346,6 +350,11 @@ async function main() {
         break;
       case "hotkey":
       case "other_key": {
+        // 首次引导正在测快捷键：热键只送到引导窗口
+        if (event.event === "hotkey" && hotkeyToOnboarding && onboardingWindow) {
+          onboardingWindow.webContents.send("onboarding:hotkey", { down: event.down });
+          break;
+        }
         // 热键不灵时先看这条日志有没有：没有就是小帮手没收到按键（权限或键选错了）
         log.info("key_event", { event: event.event, down: event.down });
         const { blocker } = summarizeSetup(currentSetup());
@@ -427,7 +436,11 @@ async function main() {
     return {
       ...setup,
       summary: summarizeSetup(setup),
-      hotkey: { value: hotkey, choices: Object.entries(HOTKEYS).map(([id, label]) => ({ id, label })) },
+      hotkey: {
+        value: hotkey,
+        keycap: HOTKEY_KEYCAPS[hotkey],
+        choices: Object.entries(HOTKEYS).map(([id, label]) => ({ id, label })),
+      },
       theme: { value: theme.id, choices: THEMES.map(({ id, name }) => ({ id, name })) },
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
       openAtLogin: { supported: app.isPackaged, enabled: app.getLoginItemSettings().openAtLogin },
@@ -545,7 +558,7 @@ async function main() {
     return variable === null ? {} : { note: `环境变量 ${variable} 设着，下次启动还会用它定的那个键` };
   }
 
-  // ---------- 菜单栏和主窗口 ----------
+  // ---------- 菜单栏、主窗口和首次引导 ----------
 
   /**
    * 打开主窗口（已经开着就亮出来），可以顺带指定去哪一页。
@@ -586,6 +599,46 @@ async function main() {
     return window;
   }
 
+  /** 首次引导（原版的 onboarding 窗口）：和主窗口一样大，红绿灯的位置照原版 */
+  function showOnboarding() {
+    if (onboardingWindow === null) {
+      onboardingWindow = new BrowserWindow({
+        ...HUB_SIZE,
+        title: "SpeakMore",
+        backgroundColor: windowBackground(),
+        titleBarStyle: "hidden",
+        trafficLightPosition: { x: 20, y: 16 },
+        webPreferences,
+      });
+      onboardingWindow.loadFile(join(sourceDir, "renderer", "onboarding", "onboarding.html"));
+      onboardingWindow.on("focus", () => {
+        // 用户多半是去系统设置里打开了开关再切回来：两项权限要重启小帮手才看得到。
+        // 都给了就不重启，免得测快捷键、说话时小帮手平白断一下
+        const { listen, trusted } = helperPermissions ?? {};
+        if (listen !== true || trusted !== true) recheckPermissions();
+        else setupChanged();
+      });
+      onboardingWindow.on("closed", () => {
+        onboardingWindow = null;
+        hotkeyToOnboarding = false;
+      });
+    }
+    onboardingWindow.show();
+    app.focus({ steal: true });
+  }
+
+  ipcMain.on("onboarding:capture-hotkey", (_event, capturing) => {
+    hotkeyToOnboarding = capturing === true;
+  });
+  ipcMain.handle("onboarding:finish", () => {
+    log.info("onboarding_finished");
+    onboardingWindow?.close();
+    showHub({ route: "home" });
+  });
+
+  /** 菜单栏、双击图标要打开 SpeakMore 时：引导还没走完就回到引导，走完了是主窗口 */
+  const showMain = () => (onboardingWindow ? showOnboarding() : showHub());
+
   const trayIcon = nativeImage.createFromPath(TRAY_ICON);
   const tray = new Tray(trayIcon);
   tray.setToolTip("SpeakMore");
@@ -625,7 +678,7 @@ async function main() {
   // 已经开着时又启动了一次。双击图标来的：把主窗口亮出来，让人知道它在哪。
   // speakmore 命令来的（两条命令同时启动，后到的那个）：那个人正看着终端，不弹窗口
   app.on("second-instance", (_event, _argv, _cwd, additionalData) => {
-    if (!additionalData?.byCli) showHub();
+    if (!additionalData?.byCli) showMain();
   });
   app.on("before-quit", () => {
     rmSync(PATHS.pidFile, { force: true });
@@ -726,5 +779,5 @@ async function main() {
   offerSettingsIfIncomplete();
   // 已经开着时又去双击应用图标，系统不会再起一个，而是"重新打开"这一个：同样把主窗口亮出来。
   // 等启动检查做完才挂上，免得把启动本身也当成一次重新打开
-  app.on("activate", () => showHub());
+  app.on("activate", showMain);
 }
