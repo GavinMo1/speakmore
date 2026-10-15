@@ -17,7 +17,7 @@
 - [SpeakMore 还在内测](speakmore-only-user-in-beta.md) — 只有他一个人在用；兼容旧版本、迁移按一个人的量来权衡，不做重
 - [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，代码在仓库根，已公开（MIT）；一行命令安装并启动，装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端以后用 Electron（同 Typeless，不用 Tauri）
 - [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship），GitHub 不再发；0.6.0 起命令行装的用 speakmore update 升级，0.6.2 起连 App 一起换；发过的版本不覆盖；证书 2027-01-12 到期要续
-- [SpeakMore 官网的域名](speakmore-website.md) — speakmore.zephyrxiang.com 已解析、证书已签，nginx 站点在服务器上，443 临时跳 GitHub，官网还没搭
+- [SpeakMore 官网](speakmore-website.md) — 代码在 website/，图片在单独的桶加 media 子域名（证书 2027-01-13 到期要续）；上线必须用 Docker、宿主机不装东西，443 现在还临时跳 GitHub
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
 - [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、改完就收，不再派第二轮，除非他点名
