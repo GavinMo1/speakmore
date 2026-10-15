@@ -54,7 +54,8 @@ test("样式里不写死颜色：只有阴影用的半透明黑例外", () => {
 });
 
 test("每个页面都引入共用的 token，而且排在别的样式前面", () => {
-  assert.ok(pages.length >= 3);
+  // 悬浮条和主窗口两个页面，少了说明目录没扫全
+  assert.ok(pages.length >= 2);
   for (const { name, html } of pages) {
     const links = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((match) => match[1]);
     assert.equal(links[0], "../shared/tokens.css", name);

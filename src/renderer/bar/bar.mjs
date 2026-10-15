@@ -18,6 +18,7 @@ const ui = createBarUi({
   keycap: hotkeyKeycap,
 });
 ui.setControls(barControls);
+window.speakmore.onHotkeyChanged((keycap) => ui.setKeycap(keycap));
 
 let state = initialState;
 /** 正在进行的那一次：{ audioId, recording, cancelled } */

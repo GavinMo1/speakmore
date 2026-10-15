@@ -1,8 +1,14 @@
-/* 历史和设置这两个普通窗口共用的底子：字体、标题、按钮。跟随系统的深浅色。
-   颜色由主题给（src/themes 里"窗口"那一组，浅深各一份），字号、圆角、动效在 tokens.css。 */
+/* 普通窗口（现在是主窗口）的底子：字体、按钮、输入框。跟随系统的深浅色。
+   颜色由主题给（src/themes 里"窗口"那一组，浅深各一份），字号、圆角、动效在 tokens.css。
+   原版用的几种灰都是"正文颜色叠一层半透明"（targets/typeless 的 fill.none.hover 是 7%、selected 15%、
+   container.thin 5%，border.thin 7%），这里照着用 color-mix 从主题的正文色调出来，换主题、换深浅色都跟着变。 */
 
 :root {
   color-scheme: light dark;
+  --fill-thin: color-mix(in oklch, var(--ink) 4%, var(--bg));
+  --fill-hover: color-mix(in oklch, var(--ink) 6%, transparent);
+  --fill-selected: color-mix(in oklch, var(--ink) 10%, transparent);
+  --line: color-mix(in oklch, var(--ink) 8%, transparent);
 }
 
 *,
@@ -11,68 +17,47 @@
   box-sizing: border-box;
 }
 
+/* 设了 display 的元素，hidden 属性会被盖掉：统一让 hidden 说了算 */
+[hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: 只有这样才压得住后面各处的 display，hidden 本来就该最优先 */
+  display: none !important;
+}
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: var(--text-body) / 1.7 var(--font);
+  font: var(--text-body) / 1.6 var(--font);
   -webkit-font-smoothing: antialiased;
 }
 
-header,
-main {
-  max-width: 44rem;
-  margin: 0 auto;
-  padding: 0 1.25rem;
-}
-
-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.4rem 0.75rem;
-  padding-top: 1.5rem;
-  padding-bottom: 0.75rem;
-}
-
-/* 标题上面一行：图标和产品名，单独占一行，不和标题、摘要挤在一起 */
-.brand {
-  flex-basis: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
+p {
   margin: 0;
-  font-size: var(--text-small);
-  font-weight: 600;
-  color: var(--ink-2);
-}
-
-.brand img {
-  display: block;
-}
-
-h1 {
-  margin: 0;
-  font-size: var(--text-title);
-  font-weight: 650;
-}
-
-.summary {
-  margin: 0;
-  font-size: var(--text-small);
-  color: var(--ink-2);
 }
 
 .problem {
   color: var(--problem);
 }
 
+.icon {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .button {
-  padding: 0.15rem 0.65rem;
+  padding: 0.3rem 0.8rem;
   font: inherit;
-  color: var(--primary);
-  background: transparent;
-  border: 1px solid var(--border);
+  font-size: var(--text-small);
+  font-weight: 510;
+  color: var(--ink);
+  background: var(--fill-hover);
+  border: none;
   border-radius: var(--radius-control);
   cursor: pointer;
   white-space: nowrap;
@@ -80,12 +65,7 @@ h1 {
 }
 
 .button:hover {
-  background: var(--raised);
-}
-
-.button:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
+  background: var(--fill-selected);
 }
 
 .button:disabled {
@@ -94,11 +74,137 @@ h1 {
 }
 
 .button:disabled:hover {
+  background: var(--fill-hover);
+}
+
+.button.primary {
+  color: var(--on-primary);
+  background: var(--primary);
+}
+
+.button.primary:hover {
+  filter: brightness(1.12);
+}
+
+.button.primary:disabled {
+  color: var(--ink-2);
+  background: var(--fill-hover);
+  filter: none;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--ink-2);
   background: transparent;
+  border: none;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.icon-button:hover {
+  color: var(--ink);
+  background: var(--fill-hover);
+}
+
+.link {
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-small);
+  color: var(--ink);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 0.25em;
+}
+
+.link:hover {
+  text-decoration-color: currentColor;
+}
+
+:is(.button, .icon-button, .link, .input, .select, .switch):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.input,
+.select {
+  min-width: 0;
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+  font-size: var(--text-small);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.input::placeholder {
+  color: var(--ink-2);
+}
+
+/* 开关：原版的布尔设置都是这种 */
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 2.25rem;
+  height: 1.25rem;
+  margin: 0;
+  background: var(--fill-selected);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+
+.switch::before {
+  content: "";
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1rem;
+  height: 1rem;
+  background: var(--bg);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.25);
+  transition: translate var(--dur-base) var(--ease-out);
+}
+
+.switch:checked {
+  background: var(--primary);
+}
+
+.switch:checked::before {
+  translate: 1rem 0;
+}
+
+.switch:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .button {
+  .button,
+  .icon-button,
+  .switch,
+  .switch::before {
     transition: none;
   }
 }

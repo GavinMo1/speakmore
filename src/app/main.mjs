@@ -1,5 +1,5 @@
 import { rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   app,
   BrowserWindow,
@@ -23,7 +23,8 @@ import { ensureHome, keyFile, resolvePaths } from "../storage/paths.mjs";
 import { HOTKEY_KEYCAPS, HOTKEYS, overridingEnv, resolveSettings, saveSetting } from "../storage/settings.mjs";
 import { toHex } from "../themes/color.mjs";
 import { themeCss } from "../themes/contract.mjs";
-import { findTheme } from "../themes/index.mjs";
+import { findTheme, THEMES } from "../themes/index.mjs";
+import { insights } from "../usage/insights.mjs";
 import { usageReport } from "../usage/report.mjs";
 import { createDelivery } from "./delivery.mjs";
 import { startHelper } from "./helper.mjs";
@@ -32,10 +33,10 @@ import { createKeyStore } from "./keys/key-store.mjs";
 import { startService } from "./service.mjs";
 import { summarizeSetup } from "./setup-state.mjs";
 
-// 后台应用的主进程：三个窗口（悬浮条、历史、设置）、菜单栏图标、原生小帮手、内置的听写服务，
+// 后台应用的主进程：两个窗口（悬浮条、主窗口）、菜单栏图标、原生小帮手、内置的听写服务，
 // 以及页面和命令行要它代办的事。窗口用什么颜色由主题定（src/themes），这里负责把它交给每个窗口。
 // 平时由 speakmore 命令启动（src/cli），也可以打成应用双击启动。
-// 结构对应原版的"主进程 + 悬浮条 + 键盘子进程"（targets/typeless/docs/03-process-architecture.md）。
+// 结构对应原版的"主进程 + 悬浮条 + 主窗口（hub）+ 键盘子进程"（targets/typeless/docs/03-process-architecture.md）。
 
 /** 调试用：设了就连这个地址上单独启动的服务端，不启动内置的那个 */
 const EXTERNAL_SERVER_URL = process.env.SPEAKMORE_SERVER_URL ?? null;
@@ -52,15 +53,20 @@ try {
   console.error(error.message);
   process.exit(2);
 }
-const HOTKEY = SETTINGS.hotkey.value;
+/** 现在用哪个键。设置里可以当场换（setup:set-hotkey），换的时候重启小帮手 */
+let hotkey = SETTINGS.hotkey.value;
 /** 启动时用哪一家的哪个模型整理。之后可以在设置窗口里改用别家（keys.use），正在用的以 keys.provider 为准 */
 const MODEL = parseModelChoice(SETTINGS.model.value);
 const PROVIDER = findProvider(MODEL.provider);
 /** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
 const thinkingFor = (provider) => (provider.thinkingLevels ? SETTINGS.thinking.value : null);
-const HOTKEY_LABEL = HOTKEYS[HOTKEY];
+const hotkeyLabel = () => HOTKEYS[hotkey];
 /** 菜单栏图标：印章上的五道声波。文件名带 Template，系统按菜单栏的深浅反色；@2x 那张由系统自己挑（scripts/build/make-icon.sh） */
 const TRAY_ICON = join(import.meta.dirname, "../../assets/trayTemplate.png");
+/** 关于里"在 GitHub 上看"打开的地方 */
+const HOMEPAGE = "https://github.com/zephyr4123/speakmore";
+/** 主窗口的大小，照原版（targets/typeless 的 hub 窗口：1080×750，最小 988×685） */
+const HUB_SIZE = { width: 1080, height: 750, minWidth: 988, minHeight: 685 };
 /** 悬浮条的窗口。比条本身大一圈：上面要放一行提示，四周要留出阴影，报错时条会变宽变高 */
 const BAR_SIZE = { width: 380, height: 124 };
 /** 系统设置里三项权限各自的页面 */
@@ -153,11 +159,10 @@ async function main() {
   let control = null;
   /** 启动时对麦克风和 key 的检查做完了没有 */
   let startupChecked = false;
-  let historyWindow = null;
-  let settingsWindow = null;
+  let hubWindow = null;
   log.info("started", {
     version: app.getVersion(),
-    hotkey: HOTKEY,
+    hotkey,
     model: SETTINGS.model.value,
     thinking: thinkingFor(PROVIDER),
     theme: SETTINGS.theme.value,
@@ -186,7 +191,7 @@ async function main() {
 
   let offeredSettings = LAUNCHED_BY_CLI;
   /**
-   * 还缺东西就把设置窗口打开，第一次启动的人不用猜下一步该干什么。只主动弹一次。
+   * 还缺东西就把主窗口打开、亮出设置里缺东西的那一页，第一次启动的人不用猜下一步该干什么。只主动弹一次。
    * 由命令启动时不弹：那个人正看着终端，突然冒出一个窗口还会把他正要粘贴 key 的焦点抢走。
    * 几样检查是先后到的（key 要验证、小帮手要启动），都有了结论才判断，免得刚启动就误报。
    */
@@ -198,13 +203,13 @@ async function main() {
     if (summary.missing.length === 0 && summary.degraded === null) return;
     offeredSettings = true;
     log.info("settings_offered", { missing: summary.missing, degraded: summary.degraded !== null });
-    showSettings();
+    showHub({ pane: "auto" });
   }
 
-  /** 上面任何一样变了都调一次：菜单栏和设置窗口跟着更新 */
+  /** 上面任何一样变了都调一次：菜单栏和主窗口跟着更新 */
   function setupChanged() {
     refreshTrayMenu();
-    settingsWindow?.webContents.send("setup:changed");
+    hubWindow?.webContents.send("setup:changed");
   }
 
   // ---------- 主题 ----------
@@ -321,7 +326,7 @@ async function main() {
     helperState = "starting";
     setBarControls(false);
     helper = startHelper(join(app.getAppPath(), "build", "key-helper"), {
-      args: ["--key", HOTKEY, ...(prompt ? [] : ["--no-prompt"])],
+      args: ["--key", hotkey, ...(prompt ? [] : ["--no-prompt"])],
       onEvent: (event) => {
         if (generation === helperGeneration) onHelperEvent(event);
       },
@@ -361,7 +366,7 @@ async function main() {
         setBarControls(false);
         log.error("helper_exited", { code: event.code, signal: event.signal });
         setupChanged();
-        notify(`按键监听停了，${HOTKEY_LABEL}不会生效：重新启动试试`);
+        notify(`按键监听停了，${hotkeyLabel()}不会生效：重新启动试试`);
         break;
       default:
         log.warn("helper_unknown_event", { event: event.event });
@@ -382,10 +387,10 @@ async function main() {
     log,
   });
   function historyChanged() {
-    historyWindow?.webContents.send("history:changed");
+    hubWindow?.webContents.send("history:changed");
   }
 
-  ipcMain.handle("config:get", () => ({ serverUrl, hotkeyKeycap: HOTKEY_KEYCAPS[HOTKEY], barControls }));
+  ipcMain.handle("config:get", () => ({ serverUrl, hotkeyKeycap: HOTKEY_KEYCAPS[hotkey], barControls }));
   ipcMain.handle("dictation:deliver", async (_event, payload) => {
     const result = await delivery.completed(payload);
     // 只记长度：成品是用户说的话，不进日志
@@ -402,23 +407,32 @@ async function main() {
   });
   ipcMain.handle("history:list", () => history.list());
   ipcMain.handle("usage:report", () => usageReport(history, { now: new Date() }));
-  ipcMain.handle("history:show", () => showHistory());
+  ipcMain.handle("insights:get", () => insights(history.dictations(), { now: new Date() }));
+  ipcMain.handle("app:info", () => ({
+    version: app.getVersion(),
+    hotkeyLabel: hotkeyLabel(),
+    hotkeyKeycap: HOTKEY_KEYCAPS[hotkey],
+    dataDir: dirname(PATHS.historyDb),
+  }));
+  ipcMain.handle("app:open-homepage", () => shell.openExternal(HOMEPAGE));
   ipcMain.handle("clipboard:write", (_event, text) => {
     if (typeof text !== "string") throw new TypeError("要复制的不是文字");
     clipboard.writeText(text);
   });
 
-  // ---------- 设置窗口要主进程代办的事 ----------
+  // ---------- 主窗口的设置要主进程代办的事 ----------
 
   ipcMain.handle("setup:get", () => {
     const setup = currentSetup();
     return {
       ...setup,
       summary: summarizeSetup(setup),
-      hotkeyLabel: HOTKEY_LABEL,
+      hotkey: { value: hotkey, choices: Object.entries(HOTKEYS).map(([id, label]) => ({ id, label })) },
+      theme: { value: theme.id, choices: THEMES.map(({ id, name }) => ({ id, name })) },
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
       openAtLogin: { supported: app.isPackaged, enabled: app.getLoginItemSettings().openAtLogin },
       home: PATHS.home,
+      version: app.getVersion(),
       // 正在用的那一家；设置窗口里还列出别家，可以给它们填 key、改用它们
       provider: describeProvider(provider()),
       providers: PROVIDERS.map(describeProvider),
@@ -426,7 +440,7 @@ async function main() {
       switchable: Boolean(service),
     };
   });
-  /** 设置窗口要的一家的说明，带着它的 key 在哪（env / stored / null，不解密） */
+  /** 设置里要的一家的说明，带着它的 key 在哪（env / stored / null，不解密） */
   function describeProvider(found) {
     const sources = service ? keys.sources() : {};
     return {
@@ -437,7 +451,7 @@ async function main() {
       key: sources[found.id] ?? null,
     };
   }
-  // 设置窗口和 speakmore key 存 key、删 key，走的是同一处
+  // 设置里和 speakmore key 存 key、删 key，走的是同一处
   ipcMain.handle("setup:save-key", (_event, value) => keys.save(value));
   ipcMain.handle("setup:forget-key", (_event, id) => keys.forget({ provider: id ?? keys.provider.id }));
   ipcMain.handle("setup:use-provider", (_event, id, value) => useProvider(id, value));
@@ -501,56 +515,75 @@ async function main() {
     log.info("open_at_login", { enabled: Boolean(enabled) });
     setupChanged();
   });
+  ipcMain.handle("setup:set-hotkey", (_event, wanted) => setHotkey(wanted));
+  ipcMain.handle("setup:set-theme", (_event, wanted) => {
+    saveSetting(PATHS.settingsFile, "theme", wanted);
+    reloadTheme();
+    setupChanged();
+  });
 
-  // ---------- 菜单栏和两个普通窗口 ----------
+  /**
+   * 当场换热键：记进设置，重启小帮手让它听新的键，悬浮条的提示、菜单栏跟着换。不用重启整个应用
+   * @returns {{ note?: string }} 有话要交代时（被环境变量盖着）带一句
+   */
+  function setHotkey(wanted) {
+    if (!Object.hasOwn(HOTKEYS, wanted)) throw new TypeError(`不认识的热键：${wanted}`);
+    saveSetting(PATHS.settingsFile, "hotkey", wanted);
+    if (wanted !== hotkey) {
+      hotkey = wanted;
+      log.info("hotkey_changed", { hotkey });
+      // 和重新检查权限一样：先停旧的再起新的，旧的那个退出时的事件靠代数作废
+      if (!e2e) {
+        helper.stop();
+        launchHelper({ prompt: false });
+      }
+      tellBar("bar:hotkey", HOTKEY_KEYCAPS[hotkey]);
+      historyChanged();
+      setupChanged();
+    }
+    const variable = overridingEnv("hotkey", process.env);
+    return variable === null ? {} : { note: `环境变量 ${variable} 设着，下次启动还会用它定的那个键` };
+  }
 
-  function showWindow(existing, create) {
-    const window = existing ?? create();
-    window.show();
+  // ---------- 菜单栏和主窗口 ----------
+
+  /**
+   * 打开主窗口（已经开着就亮出来），可以顺带指定去哪一页。
+   * @param {{ route?: "home" | "history", pane?: string }} [target] pane：设置里的哪一页，"auto" 是还差东西的那一页
+   */
+  function showHub(target = {}) {
+    if (hubWindow === null) {
+      hubWindow = createHub(target);
+    } else if (target.route || target.pane) {
+      hubWindow.webContents.send("hub:navigate", target);
+    }
+    hubWindow.show();
     // 这是个没有程序坞图标的应用，不主动要一下焦点的话窗口会开在别的应用后面
     app.focus({ steal: true });
+  }
+
+  function createHub(target) {
+    const window = new BrowserWindow({
+      ...HUB_SIZE,
+      title: "SpeakMore",
+      backgroundColor: windowBackground(),
+      // 和原版一样把标题栏藏起来，红绿灯放进侧栏的左上角
+      titleBarStyle: "hidden",
+      trafficLightPosition: { x: 26, y: 24 },
+      webPreferences,
+    });
+    // 第一次打开时去哪一页写在地址里：页面加载完之前发消息是收不到的
+    const query = Object.fromEntries(Object.entries(target).filter(([, value]) => value));
+    window.loadFile(join(sourceDir, "renderer", "hub", "hub.html"), { query });
+    window.on("focus", () => {
+      // 切回来时重读一遍：窗口开着过了夜，"今天"要换成新的一天；用户去系统设置里改完权限再切回来，状态跟着刷新
+      window.webContents.send("history:changed");
+      window.webContents.send("setup:changed");
+    });
+    window.on("closed", () => {
+      hubWindow = null;
+    });
     return window;
-  }
-
-  function showHistory() {
-    historyWindow = showWindow(historyWindow, () => {
-      const window = new BrowserWindow({
-        width: 560,
-        height: 680,
-        minWidth: 380,
-        title: "历史记录",
-        backgroundColor: windowBackground(),
-        webPreferences,
-      });
-      window.loadFile(join(sourceDir, "renderer", "history", "history.html"));
-      // 切回来时重读一遍：窗口开着过了夜，"今天"那一行要换成新的一天
-      window.on("focus", () => window.webContents.send("history:changed"));
-      window.on("closed", () => {
-        historyWindow = null;
-      });
-      return window;
-    });
-  }
-
-  function showSettings() {
-    settingsWindow = showWindow(settingsWindow, () => {
-      const window = new BrowserWindow({
-        width: 560,
-        height: 720,
-        minWidth: 460,
-        minHeight: 480,
-        title: "听写设置",
-        backgroundColor: windowBackground(),
-        webPreferences,
-      });
-      window.loadFile(join(sourceDir, "renderer", "settings", "settings.html"));
-      // 用户去系统设置里改完权限再切回来时，状态跟着刷新
-      window.on("focus", () => window.webContents.send("setup:changed"));
-      window.on("closed", () => {
-        settingsWindow = null;
-      });
-      return window;
-    });
   }
 
   const trayIcon = nativeImage.createFromPath(TRAY_ICON);
@@ -565,7 +598,7 @@ async function main() {
   function refreshTrayMenu() {
     const summary = summarizeSetup(currentSetup());
     const headline = summary.ready
-      ? `可以用了：按一下${HOTKEY_LABEL}开始说话`
+      ? `可以用了：按一下${hotkeyLabel()}开始说话`
       : summary.missing.length > 0
         ? `还差：${summary.missing.join("、")}`
         : "正在准备…";
@@ -574,10 +607,14 @@ async function main() {
         { label: headline, enabled: false },
         ...(summary.degraded ? [{ label: summary.degraded, enabled: false }] : []),
         { type: "separator" },
-        { label: "设置…", click: showSettings },
-        { label: "历史记录…", click: showHistory },
+        // 下面几项照原版菜单栏的菜单（tray_menu__*）
+        { label: "打开 SpeakMore 主页", click: () => showHub({ route: "home" }) },
+        { label: "显示历史记录", click: () => showHub({ route: "history" }) },
         { type: "separator" },
-        { label: "退出", click: () => app.quit() },
+        { label: "设置…", accelerator: "CmdOrCtrl+,", click: () => showHub({ pane: "general" }) },
+        { type: "separator" },
+        { label: `版本 ${app.getVersion()}`, enabled: false },
+        { label: "退出 SpeakMore", accelerator: "CmdOrCtrl+Q", click: () => app.quit() },
       ]),
     );
   }
@@ -585,10 +622,10 @@ async function main() {
 
   // 没有窗口时也继续待在菜单栏里
   app.on("window-all-closed", () => {});
-  // 已经开着时又启动了一次。双击图标来的：把设置窗口亮出来，让人知道它在哪。
+  // 已经开着时又启动了一次。双击图标来的：把主窗口亮出来，让人知道它在哪。
   // speakmore 命令来的（两条命令同时启动，后到的那个）：那个人正看着终端，不弹窗口
   app.on("second-instance", (_event, _argv, _cwd, additionalData) => {
-    if (!additionalData?.byCli) showSettings();
+    if (!additionalData?.byCli) showHub();
   });
   app.on("before-quit", () => {
     rmSync(PATHS.pidFile, { force: true });
@@ -617,8 +654,8 @@ async function main() {
       startedAt,
       // 启动时要等 key 验证完、麦克风的授权框有了回应，才算准备好
       starting: !startupChecked,
-      hotkey: HOTKEY,
-      hotkeyLabel: HOTKEY_LABEL,
+      hotkey,
+      hotkeyLabel: hotkeyLabel(),
       // 连着单独启动的服务端时，用哪个模型由那边定
       provider: service ? keys.provider.id : null,
       // 每家的 key 在哪。装成应用的那个各存各的，命令行要靠这一项才知道
@@ -663,8 +700,9 @@ async function main() {
             return keys.check(choice);
           },
           "reload-theme": reloadTheme,
-          "show-settings": showSettings,
-          "show-history": showHistory,
+          // 命令行的名字沿用窗口还分开时的叫法：show-settings 打开设置里还差东西的那一页
+          "show-settings": () => showHub({ pane: "auto" }),
+          "show-history": () => showHub({ route: "history" }),
           // 先把这次的回答发出去再退出
           quit: () => void setImmediate(() => app.quit()),
         },
@@ -686,7 +724,7 @@ async function main() {
   startupChecked = true;
   setupChanged();
   offerSettingsIfIncomplete();
-  // 已经开着时又去双击应用图标，系统不会再起一个，而是"重新打开"这一个：同样把设置窗口亮出来。
+  // 已经开着时又去双击应用图标，系统不会再起一个，而是"重新打开"这一个：同样把主窗口亮出来。
   // 等启动检查做完才挂上，免得把启动本身也当成一次重新打开
-  app.on("activate", showSettings);
+  app.on("activate", () => showHub());
 }

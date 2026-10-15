@@ -24,13 +24,19 @@ contextBridge.exposeInMainWorld("speakmore", {
   deliver: (payload) => ipcRenderer.invoke("dictation:deliver", payload),
   reportFailure: (payload) => ipcRenderer.invoke("dictation:failed", payload),
 
-  // 历史窗口
+  onHotkeyChanged: (callback) => ipcRenderer.on("bar:hotkey", (_event, keycap) => callback(keycap)),
+
+  // 主窗口：首页、历史记录
+  appInfo: () => ipcRenderer.invoke("app:info"),
   listHistory: () => ipcRenderer.invoke("history:list"),
   usageReport: () => ipcRenderer.invoke("usage:report"),
+  insights: () => ipcRenderer.invoke("insights:get"),
   copyText: (text) => ipcRenderer.invoke("clipboard:write", text),
   onHistoryChanged: (callback) => ipcRenderer.on("history:changed", () => callback()),
+  onNavigate: (callback) => ipcRenderer.on("hub:navigate", (_event, target) => callback(target)),
+  openHomepage: () => ipcRenderer.invoke("app:open-homepage"),
 
-  // 设置窗口
+  // 主窗口：设置
   getSetup: () => ipcRenderer.invoke("setup:get"),
   onSetupChanged: (callback) => ipcRenderer.on("setup:changed", () => callback()),
   saveKey: (key) => ipcRenderer.invoke("setup:save-key", key),
@@ -41,5 +47,6 @@ contextBridge.exposeInMainWorld("speakmore", {
   openPrivacySettings: (permission) => ipcRenderer.invoke("setup:open-privacy", permission),
   recheckPermissions: () => ipcRenderer.invoke("setup:recheck"),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke("setup:set-open-at-login", enabled),
-  showHistory: () => ipcRenderer.invoke("history:show"),
+  setHotkey: (hotkey) => ipcRenderer.invoke("setup:set-hotkey", hotkey),
+  setTheme: (theme) => ipcRenderer.invoke("setup:set-theme", theme),
 });

@@ -23,7 +23,9 @@ const REDUCED_MOTION_MS = 200;
  *   （{ id, x, y, width, height }，窗口里的位置）；null 是不截了
  * @param {string} options.keycap 热键的短名字，写在提示里
  */
-export function createBarUi({ document, host, keycap }) {
+export function createBarUi({ document, host, keycap: initialKeycap }) {
+  /** 在设置里改了热键时跟着换 */
+  let keycap = initialKeycap;
   const { body } = document;
   const hint = document.getElementById("hint");
   const message = document.getElementById("message");
@@ -165,6 +167,12 @@ export function createBarUi({ document, host, keycap }) {
       body.dataset.controls = String(enabled);
       if (view !== View.HIDDEN) drawHint();
       syncCapture();
+    },
+
+    /** 热键换了：提示里写新的那个 */
+    setKeycap(next) {
+      keycap = next;
+      if (view !== View.HIDDEN) drawHint();
     },
   };
 }
