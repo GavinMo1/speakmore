@@ -148,7 +148,7 @@ export function renderStatus({ status, version, settings, stats }, { color }) {
     lines.push("");
     if (summary.degraded) lines.push(`${INDENT}${summary.degraded}。`);
     lines.push(
-      `${INDENT}运行 ${c.bold("speakmore settings")} 打开设置窗口：每项权限旁边有去系统设置的按钮，开关打开后点"重新检查"。`,
+      `${INDENT}运行 ${c.bold("speakmore settings")} 打开设置的权限页：每项权限旁边有去系统设置的按钮，开关打开后点"重新检查"。`,
       c.dim(
         status.packaged
           ? `${INDENT}权限记在应用自己名下，在系统设置的列表里找“SpeakMore”。`

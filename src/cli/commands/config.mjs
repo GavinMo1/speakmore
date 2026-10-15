@@ -14,7 +14,7 @@ import {
 } from "../common.mjs";
 import { renderConfig, renderThemes, themeTitle } from "../render/settings.mjs";
 
-// 设置：speakmore config、theme，以及打开设置窗口的 speakmore settings。
+// 设置：speakmore config、theme，以及打开设置的 speakmore settings。
 
 /**
  * 设置改完之后让它生效：在运行就重启，并看重启之后的结果。
@@ -153,6 +153,6 @@ export async function settings(args, io) {
     return 1;
   }
   await io.daemon.request("show-settings");
-  io.out("设置窗口已经打开。");
+  io.out("设置已经打开。");
   return 0;
 }

@@ -53,7 +53,7 @@ export async function start(args, io) {
   io.out("");
   // 刚才可能选了别家，设置变了
   showStatus(io, status, currentSettings(io));
-  if (openSettings) io.out("已经打开设置窗口，照着把缺的权限补上。补完运行 speakmore status 再看一眼。");
+  if (openSettings) io.out("已经打开设置，照着把缺的权限补上。补完运行 speakmore status 再看一眼。");
   return 0;
 }
 

@@ -3,7 +3,9 @@
 // 状态都在主进程，这里只负责画出来和转达用户的操作。key 只从这里往主进程走一趟，不会从主进程回到页面上。
 
 const $ = (id) => document.getElementById(id);
-const describe = (error) => (error instanceof Error ? error.message : String(error));
+/** 主进程抛的错经过 IPC 会带上一截"Error invoking remote method 'xx': Error: "，给人看时去掉 */
+const describe = (error) =>
+  (error instanceof Error ? error.message : String(error)).replace(/^Error invoking remote method '[^']*': (?:\w*Error: )?/, "");
 
 const PANES = ["general", "model", "permissions", "about"];
 

@@ -50,7 +50,7 @@ const HELP = `SpeakMore：按一下热键说话，整理好的文字贴进当前
   speakmore config unset <名字>  回到默认值
   speakmore theme               看有哪几套主题、现在用的哪套
   speakmore theme <名字>         换一套（${THEMES.map((theme) => `${theme.id} ${theme.name}`).join(" / ")}），当场生效不用重启
-  speakmore settings            打开设置窗口（去系统设置授权时用）
+  speakmore settings            打开设置（去系统设置授权时用）
   speakmore logs [-n 行数] [-f]  看日志，-f 一直跟着
   speakmore uninstall [--keep-data] [--yes]
                                 卸载：停掉后台，把 SpeakMore 的目录整个删掉。--keep-data 留下设置、key、历史和录音

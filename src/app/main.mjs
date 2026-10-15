@@ -40,7 +40,7 @@ import { summarizeSetup } from "./setup-state.mjs";
 
 /** 调试用：设了就连这个地址上单独启动的服务端，不启动内置的那个 */
 const EXTERNAL_SERVER_URL = process.env.SPEAKMORE_SERVER_URL ?? null;
-/** 是 speakmore 命令启动的：日志由它接到文件里，缺什么也由它在终端里说，这边不自己弹设置窗口 */
+/** 是 speakmore 命令启动的：日志由它接到文件里，缺什么也由它在终端里说，这边不自己弹主窗口 */
 const LAUNCHED_BY_CLI = process.env.SPEAKMORE_CLI === "1";
 
 let PATHS;
@@ -55,7 +55,7 @@ try {
 }
 /** 现在用哪个键。设置里可以当场换（setup:set-hotkey），换的时候重启小帮手 */
 let hotkey = SETTINGS.hotkey.value;
-/** 启动时用哪一家的哪个模型整理。之后可以在设置窗口里改用别家（keys.use），正在用的以 keys.provider 为准 */
+/** 启动时用哪一家的哪个模型整理。之后可以在设置里改用别家（keys.use），正在用的以 keys.provider 为准 */
 const MODEL = parseModelChoice(SETTINGS.model.value);
 const PROVIDER = findProvider(MODEL.provider);
 /** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
@@ -433,7 +433,7 @@ async function main() {
       openAtLogin: { supported: app.isPackaged, enabled: app.getLoginItemSettings().openAtLogin },
       home: PATHS.home,
       version: app.getVersion(),
-      // 正在用的那一家；设置窗口里还列出别家，可以给它们填 key、改用它们
+      // 正在用的那一家；设置里还列出别家，可以给它们填 key、改用它们
       provider: describeProvider(provider()),
       providers: PROVIDERS.map(describeProvider),
       // 连着单独启动的服务端时用哪家由那边定，这里换不了

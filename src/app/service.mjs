@@ -65,7 +65,7 @@ export async function startService({
      * @param {{ allowUnverified?: boolean, choice?: { provider: string, model: string } }} [options]
      *   allowUnverified：只是暂时够不着那一家的话照样启用。启动时、换用存着的那把时用：它当初是验证过才存的，
      *   不该因为开机时没网、或者对方一时回了 503 就被判成不能用。
-     *   choice：连厂商和模型一起换（设置窗口里改用别家）；不写就是正在用的那个
+     *   choice：连厂商和模型一起换（设置里改用别家）；不写就是正在用的那个
      * @returns {Promise<{ verified: boolean }>} verified 为 false 表示先用着、还没验证
      */
     async useKey(apiKey, { allowUnverified = false, choice = model } = {}) {

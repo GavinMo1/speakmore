@@ -419,13 +419,13 @@ test("不是在终端里运行（脚本、管道）时不问 key，也不弹窗�
   assert.ok(!daemon.calls.includes("show-settings"));
 });
 
-test("缺系统权限时把设置窗口打开，并在面板里说明", async () => {
+test("缺系统权限时把设置打开，并在面板里说明", async () => {
   const daemon = fakeDaemon({ afterStart: NO_PERMISSIONS });
   const { speakmore, output } = harness({ daemon });
   assert.equal(await speakmore(), 0);
   assert.ok(daemon.calls.includes("show-settings"));
   assert.match(output.out, /还差 2 样/);
-  assert.match(output.out, /已经打开设置窗口/);
+  assert.match(output.out, /已经打开设置/);
 });
 
 test("启动不起来时把原因说出来，以非零退出", async () => {
@@ -1041,7 +1041,7 @@ test("logs：把日志文件的最后几行打出来，-f 一直跟着；还没�
   ]);
 });
 
-test("settings：在运行时打开设置窗口；没在运行时说先启动", async () => {
+test("settings：在运行时打开设置；没在运行时说先启动", async () => {
   const running = harness({ daemon: fakeDaemon({ running: READY }) });
   assert.equal(await running.speakmore("settings"), 0);
   assert.deepEqual(running.daemon.calls, ["show-settings"]);
