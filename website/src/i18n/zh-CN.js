@@ -96,15 +96,6 @@ export default {
       facts: ["2–5 秒出字", "整理力度略轻"],
     },
   },
-  language: {
-    title: "支持中英混合口述",
-    lead: "针对中文口述调校，夹杂的英文术语原样保留；纯英文口述同样适用。",
-    said: "明天的 standup 改到十点吧，然后记得 review 一下那个 PR。",
-    written: "明天的 standup 改到 10 点吧，然后记得 review 一下那个 PR",
-    ui: "界面语言",
-    uiLanguages: ["English", "简体中文"],
-    uiNote: "跟随系统设置。",
-  },
   look: {
     title: "三套主题\n深浅模式随系统切换",
     lead: "字数、节省时间、语速、连续使用天数与花费，一目了然。",

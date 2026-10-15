@@ -99,15 +99,6 @@ export default {
       facts: ["Text in 2–5 s", "Lighter cleanup"],
     },
   },
-  language: {
-    title: "Mandarin, English,\nor both at once.",
-    lead: "Tuned for Mandarin, with English terms kept intact. English-only dictation works as well.",
-    said: "明天的 standup 改到十点吧，然后记得 review 一下那个 PR。",
-    written: "明天的 standup 改到 10 点吧，然后记得 review 一下那个 PR",
-    ui: "Interface",
-    uiLanguages: ["English", "简体中文"],
-    uiNote: "Follows your system setting.",
-  },
   look: {
     title: "Three themes.\nLight and dark.",
     lead: "Words, time saved, pace, streaks and spend, at a glance.",

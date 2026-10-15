@@ -3,7 +3,6 @@ import { Demo } from "./sections/Demo.jsx";
 import { Download } from "./sections/Download.jsx";
 import { Hero } from "./sections/Hero.jsx";
 import { How } from "./sections/How.jsx";
-import { Language } from "./sections/Language.jsx";
 import { Look } from "./sections/Look.jsx";
 import { Models } from "./sections/Models.jsx";
 import { Nav } from "./sections/Nav.jsx";
@@ -21,7 +20,6 @@ export default function App() {
         <Cost />
         <Privacy />
         <Models />
-        <Language />
         <Look />
         <OpenSource />
         <Download />
