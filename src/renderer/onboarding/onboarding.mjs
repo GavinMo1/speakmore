@@ -53,6 +53,7 @@ function render() {
 
   keyPanel.render(setup);
   $("flow-model").textContent = setup.provider.name;
+  $("privacy-home").textContent = `${setup.home} · 不上传`;
 
   for (const row of document.querySelectorAll("[data-permission]")) {
     const granted = permissionGranted(row.dataset.permission, setup.permissions[row.dataset.permission]);
@@ -84,23 +85,29 @@ function render() {
 
 let meter = null;
 let stream = null;
+/** 第几次打开麦克风。每次进出这一步都加一，等麦克风回来时对不上号的就是过时了的 */
+let meterRun = 0;
 
 async function startMeter() {
+  const run = ++meterRun;
   $("microphone-error").hidden = true;
   const bars = METER_BARS.map(() => document.createElement("span"));
   $("meter").replaceChildren(...bars);
+  let opened;
   try {
-    stream = await openMicrophone();
+    opened = await openMicrophone();
   } catch (error) {
+    if (run !== meterRun) return;
     $("microphone-error").textContent = `麦克风打不开：${describeError(error)}`;
     $("microphone-error").hidden = false;
     return;
   }
-  // 等麦克风的这一小会儿里人可能已经走开了
-  if (step !== "microphone") {
-    stopMeter();
+  // 等麦克风的这一小会儿里人可能已经走开了，甚至又回来了：那一趟有自己的一路，这一路关掉
+  if (run !== meterRun) {
+    for (const track of opened.getTracks()) track.stop();
     return;
   }
+  stream = opened;
   meter = meterLevels(stream, (level) => {
     // 说话的音量一般只到满格的一两成，放大一点才看得出在动
     const loud = Math.min(1, level * 4);
@@ -111,6 +118,7 @@ async function startMeter() {
 }
 
 function stopMeter() {
+  meterRun += 1;
   meter?.stop();
   meter = null;
   for (const track of stream?.getTracks() ?? []) track.stop();

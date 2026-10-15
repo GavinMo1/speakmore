@@ -224,6 +224,8 @@ body {
   margin-top: 0.15rem;
   font-size: 0.875rem;
   color: var(--ink-2);
+  /* 家目录是真实路径，可能很长、中间没有空格 */
+  overflow-wrap: anywhere;
 }
 
 /* ---------- 测麦克风、测快捷键 ---------- */
