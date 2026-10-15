@@ -17,6 +17,22 @@
 
 需要 macOS 12 以上，和一把 Gemini 或 OpenAI 的 API key（[Gemini 的在这申请](https://aistudio.google.com/apikey)，[OpenAI 的在这申请](https://platform.openai.com/api-keys)，两家的区别见[换模型](#换模型)）。别的都不用装：不需要 Node、npm，也不需要 sudo。
 
+两种装法，选一种就行：
+
+### 下载安装包
+
+| Apple 芯片（M1 及以后） | Intel 芯片 |
+| --- | --- |
+| [SpeakMore-arm64.dmg](https://dl.zephyrxiang.com/speakmore/v0.5.0/SpeakMore-arm64.dmg) | [SpeakMore-x64.dmg](https://dl.zephyrxiang.com/speakmore/v0.5.0/SpeakMore-x64.dmg) |
+
+不确定是哪种：点屏幕左上角的苹果菜单 › 关于本机，“芯片”一栏写着 Apple M 开头的就是 Apple 芯片。
+
+打开下回来的 dmg，把 SpeakMore 拖进“应用程序”，再从“应用程序”里打开它。安装包用开发者证书签了名、过了苹果公证，打开时系统不会拦。第一次打开会走一遍首次引导：填 key、开三项权限、测麦克风和热键，最后真说一句。它只待在菜单栏，不占程序坞。
+
+想核对下回来的包：每个包旁边有同名的 `.sha256`（在链接后面加上 `.sha256`），和 `shasum -a 256 SpeakMore-arm64.dmg` 的结果对一下。
+
+### 命令行安装
+
 ```bash
 curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 ```
@@ -30,7 +46,7 @@ curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 看到下面这样就可以用了：点进任意输入框，按一下右 Option，说话，再按一下。
 
 ```text
-SpeakMore 0.4.3 · 运行中
+SpeakMore 0.5.0 · 运行中
 
   可以用了：点进任意输入框，按一下右 Option 键开始说话，再按一下结束，文字会贴进去。
 
@@ -47,7 +63,7 @@ SpeakMore 0.4.3 · 运行中
 
 它在后台运行，关掉终端窗口也还在，菜单栏上有它的图标（五道竖线，和上面那方印上刻的一样），点开能打开主窗口、历史记录、设置，或者退出。电脑重启后要再运行一次 `speakmore`。
 
-主窗口的结构照 Typeless：首页是口述的统计（字数、省下的时间、语速、口述时长、活跃和连续天数、每天说了多少的热力图）和花费；历史记录按天分组，鼠标移上去能复制、看这一条的录音时长和花费；设置里换热键、主题，填 key、换模型，看三项权限（开机启动的开关要装成应用才能用，见下面“还没做的”）。观感是自己的：颜色跟着主题走，见[主题](#主题)。
+主窗口的结构照 Typeless：首页是口述的统计（字数、省下的时间、语速、口述时长、活跃和连续天数、每天说了多少的热力图）和花费；历史记录按天分组，鼠标移上去能复制、看这一条的录音时长和花费；设置里换热键、主题、开机启动（只有安装包装的能开），填 key、换模型，看三项权限。观感是自己的：颜色跟着主题走，见[主题](#主题)。
 
 找不到菜单栏上的图标：带刘海的 MacBook 上，右边的图标一多，排在最左边的会被刘海挡住，系统直接把它藏起来。按住 ⌘ 把几个不常用的图标拖出菜单栏就能露出来；不找它也行，`speakmore settings` 打开设置，`speakmore history` 看历史。
 
@@ -56,6 +72,12 @@ SpeakMore 0.4.3 · 运行中
 要装回 0.4.2 或更早的版本：新版本在历史库里加了一张账表，旧版本见到会不敢动、启动不了。装回去之前先运行一次 `sqlite3 ~/.speakmore/data/history.db "DROP TABLE model_calls; PRAGMA user_version = 1;"`，只丢掉账，说过的话都在。
 
 **卸载**：`speakmore uninstall`。它停掉后台，把 `~/.speakmore`、那个命令链接、钥匙串里的那一条一起删掉。只想删程序、留下自己的东西，加 `--keep-data`。
+
+### 两种装法有什么不一样
+
+安装包装的是一个独立的应用：三项权限记在 SpeakMore 名下，设置里能开开机启动，升级时下载新的 dmg 再拖进去一次。命令行装的从终端启动：权限记在终端名下，多一个 `speakmore` 命令（看状态、换 key、换模型、看历史，见[命令](#命令)）。
+
+两种的设置和历史是同一份，都在 `~/.speakmore`；key 各存一把。同一时间只开一个。删安装包装的：从菜单栏退出，把“应用程序”里的 SpeakMore 拖进废纸篓；数据也不要了的话，再删掉 `~/.speakmore`。
 
 ## 命令
 
@@ -86,7 +108,7 @@ SpeakMore 0.4.3 · 运行中
 | 输入监控 | 听热键。只认你选的那一个键，别的按键不记录 | 热键没反应，`speakmore status` 里标出来 |
 | 辅助功能 | 模拟 ⌘V 把文字贴进去；说话时把 `esc` 和悬浮条上的点击截下来，不让它们落到你正在用的应用上 | 照样能用，文字放进剪贴板，自己按 ⌘V；悬浮条上没有 ✕ 和 ✓，`esc` 也取消不了 |
 
-用 `speakmore` 命令启动时，这三项权限**记在你运行命令的那个终端程序名下**（“终端”、iTerm、Ghostty 等），在系统设置的列表里要找的是它，不是 SpeakMore。换一个终端程序启动，就要给那个终端再授权一次。
+从安装包装的应用打开时，这三项权限记在 SpeakMore 名下。用 `speakmore` 命令启动时，**记在你运行命令的那个终端程序名下**（“终端”、iTerm、Ghostty 等），在系统设置的列表里要找的是它，不是 SpeakMore。换一个终端程序启动，就要给那个终端再授权一次。
 
 在系统设置里打开开关之后，运行 `speakmore status`，它会重新检查一遍。
 
@@ -194,7 +216,7 @@ speakmore theme cinnabar      # 换一套，写中文名也行：speakmore theme
 | 里面的东西 | 说明 |
 | --- | --- |
 | `settings.json` | 上面那几项设置 |
-| `gemini-key.bin`、`openai-key.bin` | 加密后的 key，每家一个。解密用的密钥在系统钥匙串的“SpeakMore Safe Storage”里，文件被拷走也解不开 |
+| `gemini-key.bin`、`openai-key.bin` | 加密后的 key，每家一个（安装包装的应用用的是 `gemini-key.app.bin` 这样带 `.app` 的那一份）。解密用的密钥在系统钥匙串的“SpeakMore Safe Storage”里，文件被拷走也解不开 |
 | `data/history.db`、`data/Recordings/` | 说过的话和录音，以及每次调模型的账（token、花费、等了多久）。失败的听写也存录音，话不会白说 |
 | `logs/main.log` | 日志，一行一条 JSON。只记长度、耗时和用量，不记说的话，也不记 key |
 | `run/`、`cache/` | 运行时产生的：命令和后台之间的通道、进程号、运行环境自己的缓存。删了会自己再建 |
@@ -206,7 +228,7 @@ speakmore theme cinnabar      # 换一套，写中文名也行：speakmore theme
 - 钥匙串里的“SpeakMore Safe Storage”，加密 key 用的。
 - 你给终端的三项系统权限。
 
-`speakmore uninstall` 会删掉前两样和整个目录。系统权限记在终端名下，要你自己去系统设置里关。
+`speakmore uninstall` 会删掉前两样和整个目录。系统权限记在终端名下，要你自己去系统设置里关。用安装包装的，还有“应用程序”里的 SpeakMore.app，`speakmore uninstall` 不删它。
 
 想装到别处，安装时设环境变量 `SPEAKMORE_HOME`，装好的命令会记住这个位置。0.1 版把数据放在 `~/Library/Application Support/SpeakMore`，装上这一版后第一次运行会自动搬过来。
 
@@ -228,7 +250,7 @@ speakmore theme cinnabar      # 换一套，写中文名也行：speakmore theme
 
 还没做的：
 
-- 登录时自动启动。现在重启电脑后要再运行一次 `speakmore`。
+- 命令行装的不能登录时自动启动，重启电脑后要再运行一次 `speakmore`。安装包装的可以在设置里打开。
 - 失败的听写重试。录音留着，但还不能一键重新整理。
 - 悬浮条固定在主屏幕的底部，不会跟着鼠标换到另一块屏幕上。
 - 等成品的那一两秒取消不了：录音已经交出去了。
@@ -244,10 +266,10 @@ cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
 npm run check                 # 代码检查 + 全部测试（530 条，不联网、不开窗口）
-npm run release               # 打发布包：dist/release/ 下两种芯片各一个，外加 install.sh，摆成下载地址上的样子
+npm run release               # 打发布包：dist/release/ 下两种芯片各一个压缩包和一个安装包（dmg），外加 install.sh，摆成下载地址上的样子
 ```
 
-**发布新版本**：改 `package.json` 里的版本号并提交，打一个同名的标签推上去（比如 `git tag -a v0.4.1 -m "…" && git push origin main v0.4.1`），然后在本机运行 `npm run ship`。它先核对工作区干净、当前提交就是那个标签、标签已经推上去，再跑全部检查、打包，传到下载地址 `dl.zephyrxiang.com/speakmore/`（腾讯云 COS + CDN），最后从下载地址核对版本号和校验值。桶和密钥从哪来写在 `.machine.env` 里。发布包只放在 COS 这一处；发布过的版本号不会被覆盖，要改就升版本号。传到一半断了，不要重新打包，再运行一次 `scripts/release/with-cos-key.sh npm run publish-release`，传好的会跳过。
+**发布新版本**：改 `package.json` 里的版本号和 README 里安装包的下载链接（测试会核对这两处对得上）并提交，打一个同名的标签推上去（比如 `git tag -a v0.4.1 -m "…" && git push origin main v0.4.1`），然后在本机运行 `npm run ship`。它先核对工作区干净、当前提交就是那个标签、标签已经推上去，再跑全部检查、打包（安装包要签名、公证，本机没配就不往下走，每个包等苹果公证几分钟），传到下载地址 `dl.zephyrxiang.com/speakmore/`（腾讯云 COS + CDN），最后从下载地址核对版本号和校验值。桶和密钥从哪来写在 `.machine.env` 里。发布包只放在 COS 这一处；发布过的版本号不会被覆盖，要改就升版本号。传到一半断了，不要重新打包，再运行一次 `scripts/release/with-cos-key.sh npm run publish-release`，传好的会跳过。
 
 从源码跑的和装好的用的是同一个 `~/.speakmore`，想分开就设 `SPEAKMORE_HOME`。
 
@@ -289,7 +311,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 
 ### 打成 .app
 
-装好的 SpeakMore 是从终端启动的，三项权限记在终端名下。想让它们记在“SpeakMore”自己名下、并且能勾选登录时自动启动，可以从源码打成应用：
+安装包里的应用就是这样打出来的。改了代码想自己装一个：
 
 ```bash
 npm run install-app     # 打包并装进“应用程序”，然后打开
