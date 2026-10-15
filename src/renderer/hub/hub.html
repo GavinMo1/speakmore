@@ -6,6 +6,7 @@
     <title>SpeakMore</title>
     <link rel="stylesheet" href="../shared/tokens.css" />
     <link rel="stylesheet" href="../shared/window.css" />
+    <link rel="stylesheet" href="../shared/setup.css" />
     <link rel="stylesheet" href="hub.css" />
   </head>
   <body>
@@ -284,30 +285,7 @@
           <p class="pane-lede">
             选哪家，录音就发给哪家整理成文字，所以要一把你自己的 key。它用系统钥匙串加密后存在这台电脑上，不会显示出来，也不会发到别处。
           </p>
-          <div class="providers" id="providers" role="radiogroup" aria-label="用哪家的模型"></div>
-          <div class="key-state-row">
-            <p class="state" id="key-state"></p>
-            <button type="button" class="button primary" id="use-provider" hidden>改用</button>
-          </div>
-          <form class="key-form" id="key-form">
-            <input
-              type="password"
-              class="input"
-              id="key-input"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="把 key 粘贴到这里"
-              aria-label="API key"
-            />
-            <button type="button" class="button" id="paste-key">从剪贴板粘贴</button>
-            <button type="submit" class="button primary" id="save-key">保存并验证</button>
-          </form>
-          <p class="problem" id="key-problem" role="alert" hidden></p>
-          <p class="hint" id="key-note" hidden></p>
-          <p class="links">
-            <button type="button" class="link" id="open-key-page">去 Google AI Studio 申请一把</button>
-            <button type="button" class="link" id="forget-key" hidden>删除已保存的 key</button>
-          </p>
+          <div class="key-panel" id="key-panel"></div>
         </section>
 
         <section class="pane" data-pane="permissions" hidden>
