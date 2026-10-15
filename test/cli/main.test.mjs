@@ -419,12 +419,27 @@ test("不是在终端里运行（脚本、管道）时不问 key，也不弹窗�
   assert.ok(!daemon.calls.includes("show-settings"));
 });
 
-test("缺系统权限时把设置打开，并在面板里说明", async () => {
+test("第一次用、缺系统权限：打开首次引导，并在面板里说明", async () => {
   const daemon = fakeDaemon({ afterStart: NO_PERMISSIONS });
   const { speakmore, output } = harness({ daemon });
   assert.equal(await speakmore(), 0);
-  assert.ok(daemon.calls.includes("show-settings"));
+  // 请求名沿用 show-settings：老版本的后台不认识 onboarding 这个参数，照样打开设置
+  assert.deepEqual(
+    daemon.requests.find(({ cmd }) => cmd === "show-settings"),
+    { cmd: "show-settings", params: { onboarding: true } },
+  );
   assert.match(output.out, /还差 2 样/);
+  assert.match(output.out, /已经打开首次引导/);
+});
+
+test("用过的人缺了系统权限：只打开设置", async () => {
+  haveStoredKey();
+  const daemon = fakeDaemon({ afterStart: NO_PERMISSIONS });
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore(), 0);
+  const request = daemon.requests.find(({ cmd }) => cmd === "show-settings");
+  assert.ok(request);
+  assert.notEqual(request.params?.onboarding, true);
   assert.match(output.out, /已经打开设置/);
 });
 

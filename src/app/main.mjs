@@ -752,8 +752,9 @@ async function main() {
             return keys.check(choice);
           },
           "reload-theme": reloadTheme,
-          // 命令行的名字沿用窗口还分开时的叫法：show-settings 打开设置里还差东西的那一页
-          "show-settings": () => showHub({ pane: "auto" }),
+          // 命令行的名字沿用窗口还分开时的叫法：show-settings 打开设置里还差东西的那一页，
+          // 第一次启动时命令行会带上 onboarding，打开首次引导
+          "show-settings": ({ onboarding = false }) => (onboarding ? showOnboarding() : showHub({ pane: "auto" })),
           "show-history": () => showHub({ route: "history" }),
           // 先把这次的回答发出去再退出
           quit: () => void setImmediate(() => app.quit()),
