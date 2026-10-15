@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
 import { ARCHS, dmgName } from "../../../scripts/release/release-layout.mjs";
@@ -25,3 +25,12 @@ test("两份 README 顶上能互相切换", () => {
   assert.ok(english.includes('href="README.zh-CN.md"'), "README.md 顶上没有切到中文的链接");
   assert.ok(chinese.includes('href="README.md"'), "README.zh-CN.md 顶上没有切回英文的链接");
 });
+
+for (const name of READMES) {
+  test(`${name} 里引用的截图都在仓库里`, () => {
+    const readme = readFileSync(join(repoDir, name), "utf8");
+    const images = [...readme.matchAll(/(?:src|srcset)="(docs\/images\/[^"]+)"/g)].map((match) => match[1]);
+    assert.ok(images.length >= 3, `${name} 只找到 ${images.length} 张图`);
+    for (const image of images) assert.ok(existsSync(join(repoDir, image)), `${name} 引用的 ${image} 不存在`);
+  });
+}

@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/bar.png" width="368" alt="The floating bar while you talk: a waveform that follows your voice, cancel on the left, done on the right" />
+  <img src="docs/images/bar.png" width="402" alt="The floating bar while you talk: a waveform that follows your voice, cancel on the left, done on the right" />
 </p>
 
 <picture>
@@ -51,6 +51,7 @@
 - 🔀 **Pick your model** — Gemini (default) or OpenAI, one click to switch.
 - 📊 **See what it costs** — every call is metered; the home window shows words, time saved and streaks.
 - 🎨 **Three themes** — Ink, Cinnabar, Indigo. Follows light and dark mode.
+- 🌐 **English and 简体中文** — menus, windows and the `speakmore` command follow your Mac's language. Switch any time in Settings; it applies right away.
 
 ## 📦 Install
 
@@ -105,7 +106,7 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 ## ⚠️ Known gaps
 
 - **Names and jargon get misheard.** Typeless sends on-screen text along as a hint; SpeakMore only sends audio, and has no personal dictionary yet.
-- **Tuned for Mandarin**, with English terms mixed in. English-only dictation hasn't been tuned or tested. The interface is Chinese-only for now.
+- **Tuned for Mandarin**, with English terms mixed in. English-only dictation hasn't been tuned or tested yet (the interface is in English; the prompt isn't).
 - **OpenAI cleans up less thoroughly than Gemini.** The prompt was tuned against Gemini.
 - **If you stop mid-sentence, the model may finish the sentence for you.**
 - Dictation only: no translation or "ask anything". The bar shows on the main display only. No Windows or Linux.
@@ -144,8 +145,9 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 | `model` | `gemini/gemini-3.6-flash` | `provider/model`; a provider alone uses its default model |
 | `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`. Higher is slower. Gemini only |
 | `theme` | `ink` | `ink` / `cinnabar` / `indigo` |
+| `language` | `system` | `system` / `en` / `zh-CN`. `system` follows macOS; the `speakmore` command follows your terminal's `LANG`. Languages we don't have fall back to English |
 
-Settings live in `~/.speakmore/settings.json`. For a one-off, put `SPEAKMORE_HOTKEY`, `SPEAKMORE_MODEL`, `GEMINI_THINKING_LEVEL` or `SPEAKMORE_THEME` on the command that starts it; `GEMINI_API_KEY` and `OPENAI_API_KEY` override stored keys.
+Settings live in `~/.speakmore/settings.json`. Theme and language apply immediately; the rest restart the background app. For a one-off, put `SPEAKMORE_HOTKEY`, `SPEAKMORE_MODEL`, `GEMINI_THINKING_LEVEL`, `SPEAKMORE_THEME` or `SPEAKMORE_LANGUAGE` on the command that starts it; `GEMINI_API_KEY` and `OPENAI_API_KEY` override stored keys.
 
 | Provider | Default model | Notes |
 | --- | --- | --- |
@@ -200,14 +202,12 @@ Outside that folder: the `~/.local/bin/speakmore` link, the Keychain entry, the 
 <details>
 <summary><b>🩺 Troubleshooting</b></summary>
 
-The interface is in Chinese, so the messages are quoted as they appear.
-
 | You see | Do this |
 | --- | --- |
-| The key line says `还没验证` (not verified yet) | It couldn't reach Gemini at startup and is using the stored key. Once online, run `speakmore status` |
-| `还差：Gemini 验证` (or OpenAI) | Usually a wrong model name or thinking level, not the key. `speakmore model check` shows the reply; `speakmore config unset model` resets |
-| `还差：按键监听` | The hotkey helper stopped. `speakmore restart`; if that fails, `speakmore logs` |
-| A command says `没有在 5 秒内回话` (no reply in 5 s) | The background app is stuck. `speakmore stop` force-quits it; then run `speakmore` |
+| The key line says "not verified yet" | It couldn't reach Gemini at startup and is using the stored key. Once online, run `speakmore status` |
+| "Missing: Gemini check" (or OpenAI) | Usually a wrong model name or thinking level, not the key. `speakmore model check` shows the reply; `speakmore config unset model` resets |
+| "Missing: key listener" | The hotkey helper stopped. `speakmore restart`; if that fails, `speakmore logs` |
+| A command says "didn't reply within 5 seconds" | The background app is stuck. `speakmore stop` force-quits it; then run `speakmore` |
 | No menu bar icon | On notched MacBooks, extra icons hide behind the notch. ⌘-drag some icons out of the menu bar, or use `speakmore settings` and `speakmore history` |
 
 </details>

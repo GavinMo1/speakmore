@@ -21,12 +21,12 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/bar.png" width="368" alt="说话时屏幕下方的悬浮条：中间的声波跟着声音跳，左边取消，右边完成" />
+  <img src="docs/images/bar.zh-CN.png" width="368" alt="说话时屏幕下方的悬浮条：中间的声波跟着声音跳，左边取消，右边完成" />
 </p>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/home-dark.png" />
-  <img src="docs/images/home-light.png" alt="主窗口首页：字数、省下的时间、语速、口述时长、每天说了多少的热力图和花费" />
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/home-dark.zh-CN.png" />
+  <img src="docs/images/home-light.zh-CN.png" alt="主窗口首页：字数、省下的时间、语速、口述时长、每天说了多少的热力图和花费" />
 </picture>
 
 ## 💸 Typeless 一年 $144，这里一个月几块钱
@@ -51,6 +51,7 @@
 - 🔀 **模型自己选**：Gemini（默认）或 OpenAI，设置里点一下就换。
 - 📊 **花多少钱一清二楚**：每次调用都记账；首页看字数、省下的时间、连续天数。
 - 🎨 **三套主题**：墨、朱砂、靛青，跟随系统深浅色。
+- 🌐 **简体中文和英文**：菜单栏、窗口、`speakmore` 命令都跟着系统的语言走，设置里随时能换，当场生效。
 
 ## 📦 安装
 
@@ -105,7 +106,7 @@ flowchart LR
 ## ⚠️ 现在的不足
 
 - **专有名词和人名会听错**：Typeless 会把屏幕上的文字一起传上去当参考，这里只有录音，也还没有个人词典。
-- **提示词是按中文调的**（夹着英文词也行）。纯英文听写没有调过，也没测过。界面目前只有中文。
+- **提示词是按中文调的**（夹着英文词也行）。纯英文听写没有调过，也没测过（界面有英文，提示词没有）。
 - **换成 OpenAI 时整理得比 Gemini 粗**：提示词是对着 Gemini 调的。
 - **话说到一半就按停，模型可能自己把后半句补上。**
 - 只有听写，没有翻译和“问任何事”。悬浮条只在主屏幕上。Windows 和 Linux 还没有。
@@ -144,8 +145,9 @@ flowchart LR
 | `model` | `gemini/gemini-3.6-flash` | `厂商/模型`，只写厂商就用它的默认模型 |
 | `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`，越高越慢，只有 Gemini 用得上 |
 | `theme` | `ink` | `ink` 墨 / `cinnabar` 朱砂 / `indigo` 靛青 |
+| `language` | `system` | `system` 跟随系统 / `en` / `zh-CN`。跟随系统时，应用看 macOS 的语言，`speakmore` 命令看终端的 `LANG`；我们没有的语言用英文 |
 
-设置存在 `~/.speakmore/settings.json`。临时换一次可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_THEME`，写在启动它的那条命令上；`GEMINI_API_KEY`、`OPENAI_API_KEY` 设着时优先于存着的 key。
+设置存在 `~/.speakmore/settings.json`。主题和语言改了当场生效，别的会重启后台。临时换一次可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_THEME`、`SPEAKMORE_LANGUAGE`，写在启动它的那条命令上；`GEMINI_API_KEY`、`OPENAI_API_KEY` 设着时优先于存着的 key。
 
 | 厂商 | 默认模型 | 说明 |
 | --- | --- | --- |
