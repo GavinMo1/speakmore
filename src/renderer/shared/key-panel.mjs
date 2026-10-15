@@ -1,3 +1,4 @@
+import { providerIcon } from "./provider-icons.mjs";
 import { describeError } from "./setup-text.mjs";
 
 // 选用哪家的模型、填 key：主窗口设置里的"模型"一页和首次引导的第一步用的是这同一块。
@@ -85,7 +86,7 @@ export function createKeyPanel(container, { refresh }) {
     node.hidden = !message;
   };
 
-  /** 每家一个按钮。正在用的那家下面写"正在用"，别家写有没有 key */
+  /** 每家一个按钮：图标和名字，正在用的那家后面打个勾。有没有 key 在下面那行说 */
   function renderProviders(providers, currentId) {
     find(".providers").replaceChildren(
       ...providers.map((provider) => {
@@ -97,12 +98,16 @@ export function createKeyPanel(container, { refresh }) {
         const name = document.createElement("span");
         name.className = "provider-name";
         name.textContent = provider.name;
-        const note = document.createElement("span");
-        note.className = "provider-note";
-        const inUse = provider.id === currentId;
-        note.textContent = inUse ? "使用中" : provider.key ? "有 key" : "无 key";
-        note.dataset.tone = inUse ? "ok" : "";
-        button.append(name, note);
+        const icon = providerIcon(provider.id);
+        button.append(...(icon ? [icon, name] : [name]));
+        if (provider.id === currentId) {
+          const mark = document.createElement("span");
+          mark.className = "provider-in-use";
+          mark.title = "使用中";
+          mark.textContent = "✓";
+          mark.setAttribute("aria-label", "使用中");
+          button.append(mark);
+        }
         button.addEventListener("click", () => {
           if (selected === provider.id) return;
           selected = provider.id;

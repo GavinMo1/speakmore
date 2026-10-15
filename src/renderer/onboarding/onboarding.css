@@ -151,6 +151,9 @@ body {
 }
 
 .flow-card.model {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   padding: 0.4rem 1rem;
   font-weight: 600;
   color: var(--on-primary);

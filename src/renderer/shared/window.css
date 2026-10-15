@@ -92,6 +92,14 @@ p {
   stroke-linejoin: round;
 }
 
+/* 各家模型的图标（shared/provider-icons.mjs）：实心的，跟着文字的颜色 */
+.provider-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: none;
+  fill: currentColor;
+}
+
 .button {
   padding: 0.3rem 0.8rem;
   font: inherit;
