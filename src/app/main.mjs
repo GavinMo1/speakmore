@@ -350,8 +350,11 @@ async function main() {
         break;
       case "hotkey":
       case "other_key": {
-        // 首次引导正在测快捷键：热键只送到引导窗口
-        if (event.event === "hotkey" && hotkeyToOnboarding && onboardingWindow) {
+        // 首次引导正在测快捷键、人也正看着它：热键只送到引导窗口。
+        // 切到别的应用了就照常听写，不然热键在哪都按不出来，还没有任何提示；
+        // 悬浮条在屏幕上（切出去开了一段听写又切回来）时也给条，不然这一段停不下来
+        if (event.event === "hotkey" && hotkeyToOnboarding && onboardingWindow?.isFocused() && !bar.isVisible()) {
+          log.info("key_event", { event: event.event, down: event.down, to: "onboarding" });
           onboardingWindow.webContents.send("onboarding:hotkey", { down: event.down });
           break;
         }
@@ -619,6 +622,11 @@ async function main() {
       });
       onboardingWindow.on("closed", () => {
         onboardingWindow = null;
+        hotkeyToOnboarding = false;
+      });
+      // 页面崩了就没人说"测完了"
+      onboardingWindow.webContents.on("render-process-gone", (_event, details) => {
+        log.error("onboarding_gone", { reason: details.reason });
         hotkeyToOnboarding = false;
       });
     }
