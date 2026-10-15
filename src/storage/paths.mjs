@@ -49,6 +49,8 @@ export function resolvePaths(env = process.env, userHome = homedir()) {
     controlSocket,
     /** 正在运行的后台应用的进程号。只在它卡住不答话、要强行结束时才用得上 */
     pidFile: join(home, "run", "daemon.pid"),
+    /** 上一次问下载地址最新版本的时间和结果。status 靠它一天只问一次 */
+    updateCheckFile: join(home, "run", "update-check.json"),
     /** 运行环境（Chromium）自己的缓存和状态，和我们的数据分开放。停掉之后可以随时删 */
     cacheDir: join(home, "cache"),
   };

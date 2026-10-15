@@ -28,9 +28,11 @@ import { restart, start, status, stop } from "./commands/lifecycle.mjs";
 import { logs } from "./commands/logs.mjs";
 import { model } from "./commands/model.mjs";
 import { uninstall } from "./commands/uninstall.mjs";
+import { update } from "./commands/update.mjs";
 import { usage } from "./commands/usage.mjs";
 import { ConfigError, UsageError } from "./common.mjs";
 import { createDaemon } from "./daemon.mjs";
+import { createUpdater } from "./updater.mjs";
 
 // speakmore 命令：把"装好依赖、编小帮手、起后台应用、填 key、看历史、改设置"收成几个子命令。
 // 真正干活的是后台应用（src/app），这里通过控制通道指挥它；历史和设置文件则直接读写。
@@ -45,7 +47,22 @@ const help = (t) =>
     themes: THEMES.map(({ id }) => `${id} ${t(`themes.${id}.name`)}`).join(" / "),
   });
 
-const COMMANDS = { start, stop, restart, status, key, model, config, theme, history, usage, logs, settings, uninstall };
+const COMMANDS = {
+  start,
+  stop,
+  restart,
+  status,
+  update,
+  key,
+  model,
+  config,
+  theme,
+  history,
+  usage,
+  logs,
+  settings,
+  uninstall,
+};
 
 /**
  * 执行一条命令。
@@ -161,6 +178,7 @@ export function createIo({ packageDir, env = process.env }) {
     packageDir,
     paths,
     daemon: createDaemon({ paths, packageDir, env, locale: t.locale }),
+    updater: createUpdater({ env, home: paths.home }),
     now: () => new Date(),
     timeZone: undefined,
     openHistory,

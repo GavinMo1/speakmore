@@ -38,6 +38,7 @@ test("程序、你的东西、运行时产生的，各在各的位置", () => {
     logFile: "logs/main.log",
     controlSocket: "run/control.sock",
     pidFile: "run/daemon.pid",
+    updateCheckFile: "run/update-check.json",
     cacheDir: "cache",
   });
 });

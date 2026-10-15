@@ -398,6 +398,7 @@ export default {
   speakmore stop                Stop
   speakmore restart             Restart
   speakmore status [--json]     Status: running or not, key, the three macOS permissions, how much you said today and in total
+  speakmore update              Update to the latest version (Terminal install). Settings, keys, history, and recordings are kept
 
   speakmore history [-n count] [--json]
                                 What you said, grouped by day, newest first (latest {limit} by default)
@@ -451,6 +452,15 @@ export default {
       model:
         "Usage: speakmore model | speakmore model <provider>[/<model>] | speakmore model check [<provider>[/<model>]]",
     },
+    update: {
+      fromSource: "This copy runs from source ({dir}): update it with git pull.",
+      unreachable: "Couldn't reach {url}: {reason}",
+      badVersion: "The download server returned a bad version number: {value}",
+      upToDate: "Already up to date ({version}).",
+      updating: "Updating SpeakMore {current} → {latest}",
+      available: "SpeakMore {latest} is out (you have {current}): run speakmore update.",
+    },
+
     lifecycle: {
       openedOnboarding:
         "Opened the setup guide. Grant the missing permissions there, then run speakmore status to check.",

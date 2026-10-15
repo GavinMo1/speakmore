@@ -389,6 +389,7 @@ export default {
   speakmore stop                停掉
   speakmore restart             重启
   speakmore status [--json]     看状态：在不在运行、key、三项系统权限、今天和累计说了多少
+  speakmore update              更新到最新版本（命令行装的）。设置、key、历史和录音不动
 
   speakmore history [-n 条数] [--json]
                                 看说过的话，按天分组，新的在前（默认最近 {limit} 条）
@@ -440,6 +441,15 @@ export default {
       theme: "用法：speakmore theme | speakmore theme <名字>",
       model: "用法：speakmore model | speakmore model <厂商>[/<模型>] | speakmore model check [<厂商>[/<模型>]]",
     },
+    update: {
+      fromSource: "这一份是从源码跑的（{dir}）：用 git pull 更新。",
+      unreachable: "连不上 {url}：{reason}",
+      badVersion: "下载地址给的版本号不对：{value}",
+      upToDate: "已经是最新的（{version}）。",
+      updating: "更新 SpeakMore：{current} → {latest}",
+      available: "有新版本 {latest}（现在是 {current}）：运行 speakmore update。",
+    },
+
     lifecycle: {
       openedOnboarding: "已经打开首次引导，照着把缺的权限补上。补完运行 speakmore status 再看一眼。",
       openedSettings: "已经打开设置，照着把缺的权限补上。补完运行 speakmore status 再看一眼。",

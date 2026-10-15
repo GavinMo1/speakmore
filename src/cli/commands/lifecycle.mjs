@@ -9,8 +9,10 @@ import {
   readStats,
   showStatus,
 } from "../common.mjs";
+import { INDENT } from "../render/text.mjs";
 import { currentProvider, hasKeyAlready, keyPrompter, keySource, needsNewKey, submitKey } from "./key.mjs";
 import { chooseProvider } from "./model.mjs";
+import { newerVersion } from "./update.mjs";
 
 // 起停和看状态：speakmore（start）、stop、restart、status。
 
@@ -96,10 +98,12 @@ export async function status(args, io) {
   noPositionals(positionals, "status");
   const settings = currentSettings(io);
   const current = await io.daemon.status({ recheck: true });
+  const newVersion = await newerVersion(io);
   if (values.json) {
-    io.out(JSON.stringify({ running: current !== null, status: current, settings, stats: readStats(io) }));
+    io.out(JSON.stringify({ running: current !== null, status: current, settings, stats: readStats(io), newVersion }));
   } else {
     showStatus(io, current, settings);
+    if (newVersion) io.out(`\n${INDENT}${io.t("cli.update.available", { latest: newVersion, current: io.version })}`);
   }
   return current?.summary.ready ? 0 : 1;
 }

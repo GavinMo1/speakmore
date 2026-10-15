@@ -15,7 +15,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { Cancelled } from "../../src/cli/ask-secret.mjs";
 import { run } from "../../src/cli/main.mjs";
 import { NotRunningError, TimeoutError } from "../../src/control.mjs";
-import { createTranslator } from "../../src/i18n/index.mjs";
+import { createTranslator, LocalizedError, msg } from "../../src/i18n/index.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
 import { keyFile, resolvePaths } from "../../src/storage/paths.mjs";
 import { resolveSettings } from "../../src/storage/settings.mjs";
@@ -149,6 +149,9 @@ function harness({
   confirms = [],
   keychain = () => true,
   locale = "zh-CN",
+  latest = "v0.1.0",
+  installerExit = 0,
+  packageDir = paths.appDir,
 } = {}) {
   const output = { out: "", err: "" };
   const asked = [];
@@ -156,6 +159,8 @@ function harness({
   const questions = [];
   const tails = [];
   const confirmed = [];
+  /** 问下载地址最新版本的次数（带的限时），和让安装脚本装过的版本 */
+  const updates = { checks: [], installs: [] };
   const io = {
     out: (text) => {
       output.out += `${text}\n`;
@@ -198,9 +203,31 @@ function harness({
     },
     removeKeychainKey: keychain,
     sharedPreferencesFile: join(dir, "com.github.Electron.plist"),
-    packageDir: paths.appDir,
+    packageDir,
+    updater: {
+      async latest(timeoutSeconds) {
+        updates.checks.push(timeoutSeconds);
+        const answer = typeof latest === "function" ? latest() : latest;
+        if (answer instanceof Error) throw answer;
+        return answer;
+      },
+      async install(version) {
+        updates.installs.push(version);
+        return installerExit;
+      },
+    },
   };
-  return { io, output, asked, questions, tails, confirmed, daemon, speakmore: (...argv) => run(argv, io) };
+  return {
+    io,
+    output,
+    asked,
+    questions,
+    tails,
+    confirmed,
+    daemon,
+    updates,
+    speakmore: (...argv) => run(argv, io),
+  };
 }
 
 /** 假装以前存过一把 key */
@@ -545,6 +572,122 @@ test("status --json：给程序读的，一行 JSON，带运行状态、设置�
   assert.deepEqual(parsed.stats, { today: null, total: null });
 });
 
+// ---------- 更新 ----------
+
+/** 像是用安装脚本装的：程序在家目录的 app 里 */
+const installed = () => mkdirSync(paths.appDir, { recursive: true });
+
+test("update：下载地址上有更新的版本，就让安装脚本装上它（装哪个版本说定了，不会装到半路又出来的更新的）", async () => {
+  installed();
+  const { speakmore, output, updates } = harness({ latest: "v0.2.0" });
+  assert.equal(await speakmore("update"), 0);
+  assert.deepEqual(updates.installs, ["v0.2.0"]);
+  assert.match(output.out, /更新 SpeakMore：0\.1\.0 → 0\.2\.0/);
+
+  // 安装脚本没装成：它已经把原因说了，这边只把退出码交出去
+  const failing = harness({ latest: "v0.2.0", installerExit: 1 });
+  assert.equal(await failing.speakmore("update"), 1);
+});
+
+test("update：已经是最新的（或者比下载地址上的还新）就什么都不做", async () => {
+  installed();
+  for (const latest of ["v0.1.0", "0.1.0", "v0.0.9", "v0.1.0-rc.1"]) {
+    const { speakmore, output, updates } = harness({ latest });
+    assert.equal(await speakmore("update"), 0, latest);
+    assert.deepEqual(updates.installs, [], latest);
+    assert.match(output.out, /已经是最新的（0\.1\.0）/, latest);
+  }
+});
+
+test("update：家目录经过符号链接（比如 /tmp 其实是 /private/tmp）也认得出是装好的那一份", async () => {
+  installed();
+  outside = mkdtempSync(join(tmpdir(), "sm-link-"));
+  const link = join(outside, "home");
+  symlinkSync(dir, link);
+  const { speakmore, updates } = harness({ latest: "v0.2.0", packageDir: join(link, "app") });
+  assert.equal(await speakmore("update"), 0);
+  assert.deepEqual(updates.installs, ["v0.2.0"]);
+});
+
+test("update：从源码跑的这一份不归安装脚本管，说用 git pull，不去问下载地址", async () => {
+  outside = mkdtempSync(join(tmpdir(), "sm-src-"));
+  const { speakmore, output, updates } = harness({ latest: "v0.2.0", packageDir: outside });
+  assert.equal(await speakmore("update"), 1);
+  assert.deepEqual(updates, { checks: [], installs: [] });
+  assert.match(output.err, /git pull/);
+  assert.ok(output.err.includes(outside));
+});
+
+test("update：问不到最新版本、问到的不像版本号，都照实说，不装", async () => {
+  installed();
+  const offline = harness({
+    latest: new LocalizedError(
+      msg("cli.update.unreachable", { url: "https://x/latest", reason: "curl: (6) 解析不了" }),
+    ),
+  });
+  assert.equal(await offline.speakmore("update"), 1);
+  assert.match(offline.output.err, /https:\/\/x\/latest/);
+  assert.match(offline.output.err, /curl: \(6\)/);
+  assert.deepEqual(offline.updates.installs, []);
+
+  const garbled = harness({ latest: "<html>出错了</html>" });
+  assert.equal(await garbled.speakmore("update"), 1);
+  assert.match(garbled.output.err, /<html>/);
+  assert.deepEqual(garbled.updates.installs, []);
+
+  assert.equal(await harness().speakmore("update", "now"), 2);
+});
+
+test("status：有新版本时提醒一句；一天只问一次下载地址", async () => {
+  installed();
+  const { io, speakmore, output, updates } = harness({ daemon: fakeDaemon({ running: READY }), latest: "v0.2.0" });
+  await speakmore("status");
+  assert.match(output.out, /有新版本 0\.2\.0（现在是 0\.1\.0）：运行 speakmore update/);
+  await speakmore("status");
+  assert.equal(updates.checks.length, 1, "问过的一天之内不再问");
+  // 过了一天再问
+  io.now = () => new Date("2026-10-14T07:00:01.000Z");
+  await speakmore("status");
+  assert.equal(updates.checks.length, 2);
+  // status 不能为这个等太久
+  assert.ok(updates.checks.every((seconds) => seconds <= 3));
+});
+
+/** 忘掉上一次问下载地址的结果：同一个测试里换一种情形时用 */
+const forgetUpdateCheck = () => rmSync(paths.updateCheckFile, { force: true });
+
+test("status：没有新版本、问不到、从源码跑的，都不提，也不影响退出码", async () => {
+  installed();
+  const same = harness({ daemon: fakeDaemon({ running: READY }) });
+  assert.equal(await same.speakmore("status"), 0);
+  assert.doesNotMatch(same.output.out, /新版本/);
+
+  forgetUpdateCheck();
+  const offline = harness({ daemon: fakeDaemon({ running: READY }), latest: new Error("没网") });
+  assert.equal(await offline.speakmore("status"), 0);
+  assert.doesNotMatch(offline.output.out + offline.output.err, /新版本|没网/);
+  // 没问到也记下：一天之内不再每看一次状态都等它
+  await offline.speakmore("status");
+  assert.equal(offline.updates.checks.length, 1);
+
+  forgetUpdateCheck();
+  outside = mkdtempSync(join(tmpdir(), "sm-src-"));
+  const source = harness({ daemon: fakeDaemon({ running: READY }), latest: "v0.2.0", packageDir: outside });
+  await source.speakmore("status");
+  assert.deepEqual(source.updates.checks, []);
+});
+
+test("status --json：带上有没有新版本（newVersion，没有是 null）", async () => {
+  installed();
+  const newer = harness({ daemon: fakeDaemon({ running: READY }), latest: "v0.2.0" });
+  await newer.speakmore("status", "--json");
+  assert.equal(JSON.parse(newer.output.out).newVersion, "0.2.0");
+  forgetUpdateCheck();
+  const same = harness({ daemon: fakeDaemon({ running: READY }) });
+  await same.speakmore("status", "--json");
+  assert.equal(JSON.parse(same.output.out).newVersion, null);
+});
+
 // ---------- key ----------
 
 test("key：没在运行就先启动，问一把，存好", async () => {
@@ -785,6 +928,16 @@ test("英文：帮助、面板、用错了时的说法都是英文的", async ()
 
   assert.equal(await speakmore("frobnicate"), 2);
   assert.match(output.err, /There's no command called frobnicate\.\nRun speakmore help to see all commands\./);
+  assert.doesNotMatch(output.out + output.err, /[\u4e00-\u9fff]/);
+});
+
+test("英文：有新版本的提醒、update 说的话", async () => {
+  installed();
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: READY }), locale: "en", latest: "v0.2.0" });
+  assert.equal(await speakmore("status"), 0);
+  assert.match(output.out, /SpeakMore 0\.2\.0 is out \(you have 0\.1\.0\): run speakmore update\./);
+  assert.equal(await speakmore("update"), 0);
+  assert.match(output.out, /Updating SpeakMore 0\.1\.0 → 0\.2\.0/);
   assert.doesNotMatch(output.out + output.err, /[\u4e00-\u9fff]/);
 });
 

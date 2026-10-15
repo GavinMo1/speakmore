@@ -121,6 +121,7 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 | `speakmore` | Start. If it's already running, show status; asks for a key if there isn't one |
 | `speakmore stop` / `restart` | Stop / restart, even if it's stuck |
 | `speakmore status [--json]` | Running or not, key, the three permissions, today's and total usage |
+| `speakmore update` | Update to the latest version. `status` tells you when there's a new one |
 | `speakmore history [-n count] [--json]` | What you said. Failed ones show why, and keep the recording |
 | `speakmore usage [--json]` | Spend, tokens, count and typical model latency for today, this month and all time, per model |
 | `speakmore model` | Available models, which providers have a key, which one is in use |
@@ -215,7 +216,7 @@ Outside that folder: the `~/.local/bin/speakmore` link, the Keychain entry, the 
 <details>
 <summary><b>🔄 Upgrade and uninstall</b></summary>
 
-- **Upgrade**: app — download the new dmg and drag it in again. Terminal — run the install line again. Settings, keys, history and recordings are kept.
+- **Upgrade**: app — download the new dmg and drag it in again. Terminal — `speakmore update` (or run the install line again). Settings, keys, history and recordings are kept.
 - **Uninstall**: app — quit from the menu bar and drag SpeakMore from Applications to the Trash. Terminal — `speakmore uninstall` stops it and removes `~/.speakmore`, the command link and the Keychain entry; add `--keep-data` to keep your data.
 - **Going back to 0.4.2 or earlier**: newer versions add a cost table that older ones refuse to open. First run `sqlite3 ~/.speakmore/data/history.db "DROP TABLE model_calls; PRAGMA user_version = 1;"` — you lose the cost log, not your history.
 
