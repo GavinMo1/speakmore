@@ -1,383 +1,239 @@
 <p align="center">
-  <img src="assets/icon.svg" width="128" height="128" alt="SpeakMore 的图标：靛青底的一方印，刻着五道声波" />
+  <img src="assets/icon.svg" width="112" height="112" alt="SpeakMore icon: an indigo seal carved with five sound bars" />
 </p>
 
 <h1 align="center">SpeakMore</h1>
 
 <p align="center">
-  按一下热键说话，再按一下，整理好的文字就贴进你正在用的输入框。<br>
-  macOS 上的开源语音输入，用你自己的 Gemini 或 OpenAI 的 API key。
+  <b>Tap a key, talk, tap again — clean text lands wherever you're typing.</b><br>
+  Open-source voice dictation for macOS. Bring your own Gemini or OpenAI key.
 </p>
 
-口头禅、改口、重复会被整理掉，长一点的话会分段、分点。只做语音转写这一件事：不采集屏幕和输入框里的内容，没有账号，没有云同步。
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-12%2B-111?logo=apple&logoColor=white" alt="macOS 12+" />
+  <img src="https://img.shields.io/badge/Apple%20silicon%20%2B%20Intel-signed%20·%20notarized-2f6feb" alt="Apple silicon and Intel, signed and notarized" />
+  <img src="https://img.shields.io/badge/models-Gemini%20·%20OpenAI-8e44ad" alt="Gemini and OpenAI" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3fb950" alt="MIT license" /></a>
+</p>
 
-名字和 Typeless 反着来：它是照着对 Typeless 的[逆向分析](targets/typeless/README.md)做的独立实现，和 Typeless 官方没有关系。
+<p align="center">
+  <b>English</b> · <a href="README.zh-CN.md">简体中文</a>
+</p>
 
-## 装和用
+<p align="center">
+  <img src="docs/images/bar.png" width="368" alt="The floating bar while you talk: a waveform that follows your voice, cancel on the left, done on the right" />
+</p>
 
-需要 macOS 12 以上，和一把 Gemini 或 OpenAI 的 API key（[Gemini 的在这申请](https://aistudio.google.com/apikey)，[OpenAI 的在这申请](https://platform.openai.com/api-keys)，两家的区别见[换模型](#换模型)）。别的都不用装：不需要 Node、npm，也不需要 sudo。
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/home-dark.png" />
+  <img src="docs/images/home-light.png" alt="Home window: words, time saved, speaking pace, total dictation time, a daily heatmap and spend" />
+</picture>
 
-两种装法，选一种就行：
+## 💸 $144 a year → about $1 a month
 
-### 下载安装包
+|  | Typeless Pro | SpeakMore |
+| --- | --- | --- |
+| **App** | $12/mo billed yearly ($144/yr), or $30/mo | Free, open source |
+| **Model** | Included in the subscription | Your own key, pay Google per use: **about $1/month**¹ |
+| **Accuracy** | — | On par with Typeless in the author's daily use² |
+| **Where your audio goes** | Typeless's servers, along with the current app, window title and on-screen text | Straight to Gemini or OpenAI. No server in between, nothing read from your screen |
+| **Account** | Required | None |
 
-| Apple 芯片（M1 及以后） | Intel 芯片 |
+<sub>¹ Estimated from the author's real Typeless usage, June–September 2026 (430–870 dictations and 4.5–7 hours of audio per month), at Gemini 3.6 Flash list prices with prompt caching: $0.67–1.05 a month. Free with a free-tier Gemini key. Google has announced that 3.6 Flash prices double on January 1, 2027, which puts it at about $1.30–2.10. Typeless prices from <a href="https://www.typeless.com/pricing">typeless.com/pricing</a>, checked 2026-10-14.<br>
+² The prompt was tuned on 60 real recordings, each compared with what Typeless produced. Names and jargon are weaker — see "Known gaps" below.</sub>
+
+## ✨ Features
+
+- 🎙️ **One key, any app** — tap Right Option, talk, tap again. The text is pasted at your cursor, anywhere you can paste.
+- 🧹 **Cleans up as it writes** — drops filler words, false starts and repeats; breaks long speech into paragraphs and lists. Reads like you typed it.
+- ⚡ **Fast** — audio streams while you talk; text is usually back about 2 seconds after you stop.
+- 🔒 **Your data stays yours** — no account, no middleman server, no analytics. Your key is encrypted with the macOS Keychain; your history never leaves your Mac.
+- 🔀 **Pick your model** — Gemini (default) or OpenAI, one click to switch.
+- 📊 **See what it costs** — every call is metered; the home window shows words, time saved and streaks.
+- 🎨 **Three themes** — Ink, Cinnabar, Indigo. Follows light and dark mode.
+
+## 📦 Install
+
+You need macOS 12 or later and a [Gemini key](https://aistudio.google.com/apikey) (has a free tier) or an [OpenAI key](https://platform.openai.com/api-keys).
+
+### Option 1: Download the app (recommended)
+
+| Apple silicon (M1 and later) | Intel |
 | --- | --- |
-| [SpeakMore-arm64.dmg](https://dl.zephyrxiang.com/speakmore/v0.5.0/SpeakMore-arm64.dmg) | [SpeakMore-x64.dmg](https://dl.zephyrxiang.com/speakmore/v0.5.0/SpeakMore-x64.dmg) |
+| ⬇️ [SpeakMore-arm64.dmg](https://dl.zephyrxiang.com/speakmore/v0.5.0/SpeakMore-arm64.dmg) | ⬇️ [SpeakMore-x64.dmg](https://dl.zephyrxiang.com/speakmore/v0.5.0/SpeakMore-x64.dmg) |
 
-不确定是哪种：点屏幕左上角的苹果菜单 › 关于本机，“芯片”一栏写着 Apple M 开头的就是 Apple 芯片。
+Open the dmg, drag SpeakMore into Applications, and open it. It's signed with a Developer ID and notarized by Apple, so macOS lets it open normally. The first launch walks you through it: add your key → grant three permissions → test the mic and hotkey → say one sentence for real.
 
-打开下回来的 dmg，把 SpeakMore 拖进“应用程序”，再从“应用程序”里打开它。安装包用开发者证书签了名、过了苹果公证，打开时系统不会拦。第一次打开会走一遍首次引导：填 key、开三项权限、测麦克风和热键，最后真说一句。它只待在菜单栏，不占程序坞。
+To check a download, add `.sha256` to its link for the checksum.
 
-想核对下回来的包：每个包旁边有同名的 `.sha256`（在链接后面加上 `.sha256`），和 `shasum -a 256 SpeakMore-arm64.dmg` 的结果对一下。
-
-### 命令行安装
+### Option 2: One line in Terminal
 
 ```bash
 curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 ```
 
-这一行做三件事：
+It checks your system and network, installs into `~/.speakmore` (no Node, no sudo), asks for your key, and starts. You also get a `speakmore` command for status, history, spend, and switching keys or models.
 
-1. **预检查**：系统版本、芯片、磁盘空间、下载地址连不连得上，以及 Gemini、OpenAI 各自连不连得上（连不上只提醒，不拦着）。哪一项不行会说清楚原因和怎么办，不行就什么都不装。
-2. **安装**：下载、核对校验值，把程序和它自带的运行环境放进 `~/.speakmore`，在 `~/.local/bin` 建一个 `speakmore` 命令。
-3. **启动**：在终端里先问你用哪一家的模型（Gemini 或 OpenAI，直接回车是 Gemini），再要那一家的 key（粘贴后回车，输入不会显示出来），系统弹出麦克风授权框时点“允许”，然后显示状态。第一次用、还缺系统权限的话会顺手打开首次引导：一项项开权限、测麦克风和热键，再真说一句试试；以后再缺权限，打开的是设置。
+**Which one?** The app is a standalone app: permissions belong to SpeakMore and it can open at login. The Terminal install runs from your terminal, and permissions belong to that terminal. Choose it if you like commands. Both share the same settings and history; run one at a time.
 
-看到下面这样就可以用了：点进任意输入框，按一下右 Option，说话，再按一下。
+## 🎙️ Use it
 
-```text
-SpeakMore 0.5.0 · 运行中
+1. Click into any text field and tap **Right Option**.
+2. Talk. The bar at the bottom of the screen moves with your voice.
+3. Tap again (or click ✓) and the text is pasted. Press `esc` to throw it away.
 
-  可以用了：点进任意输入框，按一下右 Option 键开始说话，再按一下结束，文字会贴进去。
+SpeakMore lives in the menu bar, not the Dock. From the menu bar icon you can open the main window: stats, history and settings.
 
-  key       已保存，验证通过
-  权限      麦克风 ✓   输入监控 ✓   辅助功能 ✓
-  热键      右 Option 键
-  模型      Gemini 的 gemini-3.6-flash（MINIMAL）
-  主题      墨（ink）
-  今天      12 次 · 1,024 字 · 3 分 20 秒 · $0.014
-  累计      132 次 · 12,480 字 · 48 分钟 · 每分钟 260 字 · $0.16
+## 🛠️ How it works
+
+```mermaid
+flowchart LR
+  A["⌨️ Hotkey"] --> B["🎙️ Recorder<br/>streams chunks as you talk"]
+  B --> C["🖥️ Local dictation server"]
+  C --> D["🤖 Gemini / OpenAI<br/>one call: transcribe + clean up"]
+  D --> E["📋 Paste at cursor"]
 ```
 
-说话的时候屏幕下方有一条悬浮条：中间的声波跟着你的声音从正中间往两边跳，上方一行字写着现在按哪个键。说完再按一下热键，或者点右边的 ✓；不想要这一次了按 `esc`，或者点左边的 ✕。文字贴出去之后它打个勾就消失。
+- **Reverse-engineered, then rebuilt.** The author took apart the Typeless macOS client (app bundle, recovered code, local data, network traffic from their own account) and wrote it up in [18 notes](targets/typeless/docs/00-overview.md) (Chinese). SpeakMore was then written from scratch to follow its protocol and interaction, keeping only dictation. It contains no Typeless code or keys.
+- **One call, finished text.** The audio and the prompt go to the model together; recognition and cleanup happen in one step.
+- **Tuned on real recordings.** 60 real recordings, each checked against Typeless's output. The odd slip, like traditional characters or a stray foreign word at the start, is fixed up in code.
+- **Prompt caching.** With Gemini, the prompt is cached the moment you start talking, which cuts a dictation from $0.0012 to $0.0003.
+- **Electron plus a small Swift helper.** The helper listens for the hotkey, pastes, and catches `esc`. The app and the CLI share one core.
 
-它在后台运行，关掉终端窗口也还在，菜单栏上有它的图标（五道竖线，和上面那方印上刻的一样），点开能打开主窗口、历史记录、设置，或者退出。电脑重启后要再运行一次 `speakmore`。
+More detail in the [implementation notes](docs/implementation-notes.md) (Chinese).
 
-主窗口的结构照 Typeless：首页是口述的统计（字数、省下的时间、语速、口述时长、活跃和连续天数、每天说了多少的热力图）和花费；历史记录按天分组，鼠标移上去能复制、看这一条的录音时长和花费；设置里换热键、主题、开机启动（只有安装包装的能开），填 key、换模型，看三项权限。观感是自己的：颜色跟着主题走，见[主题](#主题)。
+## ⚠️ Known gaps
 
-找不到菜单栏上的图标：带刘海的 MacBook 上，右边的图标一多，排在最左边的会被刘海挡住，系统直接把它藏起来。按住 ⌘ 把几个不常用的图标拖出菜单栏就能露出来；不找它也行，`speakmore settings` 打开设置，`speakmore history` 看历史。
+- **Names and jargon get misheard.** Typeless sends on-screen text along as a hint; SpeakMore only sends audio, and has no personal dictionary yet.
+- **Tuned for Mandarin**, with English terms mixed in. English-only dictation hasn't been tuned or tested. The interface is Chinese-only for now.
+- **OpenAI cleans up less thoroughly than Gemini.** The prompt was tuned against Gemini.
+- **If you stop mid-sentence, the model may finish the sentence for you.**
+- Dictation only: no translation or "ask anything". The bar shows on the main display only. No Windows or Linux.
 
-**升级**：把安装那一行再运行一次。程序换成新的，设置、key、历史和录音不动。
+## 📚 More
 
-要装回 0.4.2 或更早的版本：新版本在历史库里加了一张账表，旧版本见到会不敢动、启动不了。装回去之前先运行一次 `sqlite3 ~/.speakmore/data/history.db "DROP TABLE model_calls; PRAGMA user_version = 1;"`，只丢掉账，说过的话都在。
+<details>
+<summary><b>⌨️ Commands</b> (Terminal install only)</summary>
 
-**卸载**：`speakmore uninstall`。它停掉后台，把 `~/.speakmore`、那个命令链接、钥匙串里的那一条一起删掉。只想删程序、留下自己的东西，加 `--keep-data`。
-
-### 两种装法有什么不一样
-
-安装包装的是一个独立的应用：三项权限记在 SpeakMore 名下，设置里能开开机启动，升级时下载新的 dmg 再拖进去一次。命令行装的从终端启动：权限记在终端名下，多一个 `speakmore` 命令（看状态、换 key、换模型、看历史，见[命令](#命令)）。
-
-两种的设置和历史是同一份，都在 `~/.speakmore`；key 各存一把。同一时间只开一个。删安装包装的：从菜单栏退出，把“应用程序”里的 SpeakMore 拖进废纸篓；数据也不要了的话，再删掉 `~/.speakmore`。
-
-## 命令
-
-| 命令 | 做什么 |
+| Command | What it does |
 | --- | --- |
-| `speakmore` | 启动。已经在运行就只显示状态；没有 key 时问你要 |
-| `speakmore stop` / `restart` | 停掉 / 重启。它卡住不答话时也停得掉 |
-| `speakmore status [--json]` | 在不在运行、key、三项权限、今天和累计说了多少。能用时退出码是 0 |
-| `speakmore history [-n 条数] [--json]` | 看说过的话，按天分组，新的在前。失败的那条会写原因，录音还留着 |
-| `speakmore usage [--json]` | 看花了多少钱：今天、本月、累计的花费、token、几次听写、模型一般多久回话，再按型号分开。见[花了多少钱](#花了多少钱) |
-| `speakmore model` | 看能用哪几家的模型、各家的 key 有没有、现在用的哪个。见[换模型](#换模型) |
-| `speakmore model <厂商>[/<模型>]` | 换一家或换个模型，正在运行的话自动重启。还没有那一家的 key 会先问 |
-| `speakmore model check [<厂商>[/<模型>]]` | 检查能不能用：拿那一家的 key 发一个最小的请求，说能不能用、来回多久。不写就查现在用的 |
-| `speakmore key [<厂商>]` | 换一把 key，不写厂商就是现在用的那家。也可以从管道喂：`pbpaste \| speakmore key`。别把 key 写在命令后面，那样会进 shell 的历史记录 |
-| `speakmore key --forget [<厂商>]` | 删掉存着的 key |
-| `speakmore config` | 看设置，以及东西都放在哪 |
-| `speakmore config set <名字> <值>` | 改一项设置，正在运行的话自动重启，并告诉你新的值能不能用。`unset` 回到默认 |
-| `speakmore theme [名字]` | 不带名字：看有哪几套主题、现在用的哪套。带名字：换一套，当场生效，不用重启 |
-| `speakmore settings` | 打开设置，还差东西时停在那一页 |
-| `speakmore logs [-n 行数] [-f]` | 看日志 |
-| `speakmore uninstall [--keep-data]` | 卸载。先说清楚要删什么，问一句再动手 |
+| `speakmore` | Start. If it's already running, show status; asks for a key if there isn't one |
+| `speakmore stop` / `restart` | Stop / restart, even if it's stuck |
+| `speakmore status [--json]` | Running or not, key, the three permissions, today's and total usage |
+| `speakmore history [-n count] [--json]` | What you said. Failed ones show why, and keep the recording |
+| `speakmore usage [--json]` | Spend, tokens, count and typical model latency for today, this month and all time, per model |
+| `speakmore model` | Available models, which providers have a key, which one is in use |
+| `speakmore model <provider>[/<model>]` | Switch provider or model; restarts if running. Asks for a key if needed |
+| `speakmore model check [<provider>[/<model>]]` | Send a tiny request to see if it works and how fast |
+| `speakmore key [<provider>]` | Replace a key. Can be piped: `pbpaste \| speakmore key`. Don't type the key on the command line — it ends up in shell history |
+| `speakmore key --forget [<provider>]` | Delete a stored key |
+| `speakmore config` / `config set <name> <value>` / `config unset <name>` | Show settings / change one / reset it |
+| `speakmore theme [name]` | List themes / switch, takes effect immediately |
+| `speakmore settings` | Open settings |
+| `speakmore logs [-n lines] [-f]` | Show logs |
+| `speakmore uninstall [--keep-data]` | Uninstall. Says what it will delete and asks first |
 
-## 三项系统权限
+</details>
 
-| 权限 | 用来做什么 | 没有时的表现 |
+<details>
+<summary><b>⚙️ Settings and models</b></summary>
+
+| Name | Default | Values |
 | --- | --- | --- |
-| 麦克风 | 录音 | 按热键时屏幕下方提示没有麦克风权限 |
-| 输入监控 | 听热键。只认你选的那一个键，别的按键不记录 | 热键没反应，`speakmore status` 里标出来 |
-| 辅助功能 | 模拟 ⌘V 把文字贴进去；说话时把 `esc` 和悬浮条上的点击截下来，不让它们落到你正在用的应用上 | 照样能用，文字放进剪贴板，自己按 ⌘V；悬浮条上没有 ✕ 和 ✓，`esc` 也取消不了 |
+| `hotkey` | `right_option` | `right_option` / `right_command` / `right_control` / `fn`, each a single tap. Typeless uses `fn`, so the default avoids it and both can run side by side |
+| `model` | `gemini/gemini-3.6-flash` | `provider/model`; a provider alone uses its default model |
+| `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`. Higher is slower. Gemini only |
+| `theme` | `ink` | `ink` / `cinnabar` / `indigo` |
 
-从安装包装的应用打开时，这三项权限记在 SpeakMore 名下。用 `speakmore` 命令启动时，**记在你运行命令的那个终端程序名下**（“终端”、iTerm、Ghostty 等），在系统设置的列表里要找的是它，不是 SpeakMore。换一个终端程序启动，就要给那个终端再授权一次。
+Settings live in `~/.speakmore/settings.json`. For a one-off, put `SPEAKMORE_HOTKEY`, `SPEAKMORE_MODEL`, `GEMINI_THINKING_LEVEL` or `SPEAKMORE_THEME` on the command that starts it; `GEMINI_API_KEY` and `OPENAI_API_KEY` override stored keys.
 
-在系统设置里打开开关之后，运行 `speakmore status`，它会重新检查一遍。
-
-## 设置
-
-```bash
-speakmore config set hotkey fn        # 换热键
-speakmore config unset hotkey         # 回到默认
-```
-
-| 名字 | 默认值 | 能填什么 |
+| Provider | Default model | Notes |
 | --- | --- | --- |
-| `hotkey` | `right_option` | `right_option` / `right_command` / `right_control` / `fn`，都是单独按一下。Typeless 用的是 `fn`，默认避开它，两个可以同时开着 |
-| `model` | `gemini/gemini-3.6-flash` | `厂商/模型`，只写厂商就用它的默认模型。用 `speakmore model` 换更方便，见下面 |
-| `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`，越高越慢。只有 Gemini 用得上，有的 Gemini 模型不接受 `MINIMAL` |
-| `theme` | `ink` | 界面的主题，见下面 |
+| `gemini` (default) | `gemini-3.6-flash` | Audio is sent as is. The prompt was tuned against it: cleanest output, text in about 2 seconds |
+| `openai` | `gpt-audio-mini` | Takes WAV and MP3 only, so audio is converted to WAV locally first. Text in 2–5 seconds, with more filler left in than Gemini. Recordings over 3 minutes may time out (the recording is kept) |
 
-设置存在 `~/.speakmore/settings.json` 里。只想临时换一次，可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_THEME`，它们优先于文件。0.3 的 `GEMINI_MODEL`（只能写 Gemini 的模型名）还认，两个都设着时 `SPEAKMORE_MODEL` 优先。key 也一样：`GEMINI_API_KEY`、`OPENAI_API_KEY` 设着的话，用到那一家时用它，不读存着的那把。
+Each provider keeps its own key, so switching back and forth doesn't ask again. Settings switches provider only; for a specific model use e.g. `speakmore model openai/gpt-audio-1.5`.
 
-环境变量要写在**启动它的那条命令**上才算数。SpeakMore 已经在运行时，先 `speakmore stop`，再带着环境变量运行 `speakmore`。状态面板上的热键和模型，写的是正在运行的那个实际在用的。
+</details>
 
-带着 `GEMINI_API_KEY` 运行时再执行 `speakmore key`，新的那把会存下来并立刻换上；但只要环境变量还在，下次启动用的仍是环境变量里的那把。
+<details>
+<summary><b>💰 What it costs</b></summary>
 
-### 换模型
+Every model call is logged: tokens (including audio and thinking), model, cost and latency. The home window shows today, this month and all time; `speakmore usage` has the full breakdown.
 
-默认用 Gemini，第一次启动时可以直接选 OpenAI。之后要换，在设置的"模型"一页点那一家：已经有它的 key 就点"改用"，没有就在下面粘贴一把，验证过当场换过去，不用重启。命令行也行：
+- Costs are **estimates** in US dollars, from each provider's standard list price. Gemini's free tier actually costs nothing, but the API doesn't say which tier a key is on, so everything is priced as paid.
+- For a few seconds of speech, most of the cost is the prompt sent every time (about 1,350 tokens). Gemini's prompt cache bills that part at a tenth of the price. The cache itself costs a little (about $0.001 to create, about $0.0007 an hour to keep) and expires after 30 quiet minutes. OpenAI's `gpt-audio` models have no cache.
+- If a request goes out but no reply comes back (timeout, disconnect), there's no usage to record, though the provider may still have charged for it.
+
+</details>
+
+<details>
+<summary><b>🔐 The three macOS permissions</b></summary>
+
+| Permission | Used for | Without it |
+| --- | --- | --- |
+| Microphone | Recording | Pressing the hotkey says there's no mic access |
+| Input Monitoring | Hearing the hotkey. Only that one key; nothing else is recorded | The hotkey does nothing |
+| Accessibility | Pasting with a simulated ⌘V; catching `esc` and clicks on the bar while you talk | Text goes to the clipboard and you press ⌘V; `esc` can't cancel |
+
+For the app, permissions belong to SpeakMore. When started with the `speakmore` command, they belong to **the terminal you ran it from** (Terminal, iTerm, Ghostty…) — look for that in System Settings. Run `speakmore status` afterwards to recheck.
+
+</details>
+
+<details>
+<summary><b>🗂️ Where things live</b></summary>
+
+**The only thing sent out is your audio**, straight to the provider you picked, with your own key. Everything kept locally is in `~/.speakmore/`, readable only by you:
+
+| What | Notes |
+| --- | --- |
+| `settings.json` | Settings |
+| `gemini-key.bin`, `openai-key.bin` | Encrypted keys (the app uses the `.app` copies). The decryption key is "SpeakMore Safe Storage" in your Keychain, so a copied file is useless |
+| `data/history.db`, `data/Recordings/` | What you said, the recordings and the cost log. Failed dictations keep their recording |
+| `logs/main.log` | Logs. Lengths, timings and usage only — never what you said, never the key |
+| `bin/`, `app/`, `runtime/` | The Terminal install itself; replaced on upgrade |
+
+Outside that folder: the `~/.local/bin/speakmore` link, the Keychain entry, the permissions you granted, and SpeakMore in Applications if you installed the app. To install elsewhere, set `SPEAKMORE_HOME` when installing.
+
+</details>
+
+<details>
+<summary><b>🩺 Troubleshooting</b></summary>
+
+The interface is in Chinese, so the messages are quoted as they appear.
+
+| You see | Do this |
+| --- | --- |
+| The key line says `还没验证` (not verified yet) | It couldn't reach Gemini at startup and is using the stored key. Once online, run `speakmore status` |
+| `还差：Gemini 验证` (or OpenAI) | Usually a wrong model name or thinking level, not the key. `speakmore model check` shows the reply; `speakmore config unset model` resets |
+| `还差：按键监听` | The hotkey helper stopped. `speakmore restart`; if that fails, `speakmore logs` |
+| A command says `没有在 5 秒内回话` (no reply in 5 s) | The background app is stuck. `speakmore stop` force-quits it; then run `speakmore` |
+| No menu bar icon | On notched MacBooks, extra icons hide behind the notch. ⌘-drag some icons out of the menu bar, or use `speakmore settings` and `speakmore history` |
+
+</details>
+
+<details>
+<summary><b>🔄 Upgrade and uninstall</b></summary>
+
+- **Upgrade**: app — download the new dmg and drag it in again. Terminal — run the install line again. Settings, keys, history and recordings are kept.
+- **Uninstall**: app — quit from the menu bar and drag SpeakMore from Applications to the Trash. Terminal — `speakmore uninstall` stops it and removes `~/.speakmore`, the command link and the Keychain entry; add `--keep-data` to keep your data.
+- **Going back to 0.4.2 or earlier**: newer versions add a cost table that older ones refuse to open. First run `sqlite3 ~/.speakmore/data/history.db "DROP TABLE model_calls; PRAGMA user_version = 1;"` — you lose the cost log, not your history.
+
+</details>
+
+## 🧑‍💻 Development
 
 ```bash
-speakmore model                          # 有哪几家、各用哪个模型、key 有没有、现在用的哪个
-speakmore model openai                   # 换成 OpenAI（默认 gpt-audio-mini）。还没有它的 key 会先问
-speakmore model openai/gpt-audio-1.5     # 指定模型
-speakmore model check                    # 现在用的这个能不能用；也可以查别的：speakmore model check openai
-speakmore key openai                     # 只给 OpenAI 存一把 key，不换过去
-speakmore model gemini                   # 换回来
-```
-
-| 厂商 | 默认模型 | key 去哪申请 | 说明 |
-| --- | --- | --- | --- |
-| `gemini`（默认） | `gemini-3.6-flash` | [Google AI Studio](https://aistudio.google.com/apikey) | 录音原样发过去。提示词是对着它调的，整理得最干净，一般 2 秒左右出成品。提示词会缓存起来，见[花了多少钱](#花了多少钱)。以前的默认值 `gemini-3.5-flash` 已被 Google 停用，写着它的设置照样能用（请求会被转给 3.6） |
-| `openai` | `gpt-audio-mini` | [OpenAI 开发者平台](https://platform.openai.com/api-keys) | 它只收 WAV 和 MP3，录音先在本机转成 16 kHz 的 WAV 再发（一分钟的录音转一次约 60 毫秒）。实测 2–5 秒出成品，口头禅删得没有 Gemini 干净。转出来的 WAV 比原录音大七八倍，长录音慢：悬浮条最多等成品 20 秒，按 90 秒的录音要 6–9 秒推算，三分钟以上的可能等不到（没实测；录音留着）。`gpt-audio-1.5` 有时把成品包成 `{"…"}` 的样子，不建议用 |
-
-每家的 key 各存一份，来回换不用重新填。用命令换模型要重启后台，`speakmore model` 会替你重启；设置里换的只换厂商、用它的默认模型，要指定模型还是用命令。要退回 0.3：先 `speakmore model gemini` 换回 Gemini，0.3 认得这样存下的设置。
-
-
-### 花了多少钱
-
-每次调模型都记一笔账：用了多少 token（其中多少是音频、多少是思考）、按哪个型号、花了多少钱、等了多久。主窗口首页的花费卡是今天、本月、累计，历史记录里每一条的详情（鼠标停在 ⓘ 上）写着这一条的模型用时和花费；命令行看得更细：
-
-```text
-$ speakmore usage
-用量
-
-           花费   token   听写   模型回话
-  今天   $0.014   18.2K     12   一般 1.9 秒，慢时 3.1 秒
-  本月    $0.16    202K    132   一般 2.0 秒，慢时 3.4 秒
-  累计    $0.16    202K    132   一般 2.0 秒，慢时 3.4 秒
-
-  按型号（累计）
-  Gemini gemini-3.6-flash             $0.13    170K   112 次   一般 1.9 秒
-  OpenAI gpt-audio-mini-2025-12-15   $0.030   31.9K    20 次   一般 2.7 秒
-
-  累计的 token：输入 200K（其中音频 13.8K、命中缓存 0），输出 2.4K（其中思考 0）。
-```
-
-- 钱是照两家官方价目页的标准价**估算**的美元。Gemini 在免费额度内用的其实不收钱，接口不告诉我们 key 在哪一档，所以一律按付费价算。
-- 一次几秒钟的听写，大头是每次都带上的提示词（约 1350 个 token）。用 Gemini 时开口说话就把提示词缓存起来，整理时提示词那部分只收一成的价：实测一句从 $0.0012 降到 $0.0003。缓存自己也要钱（建一次约 $0.001，存着每小时约 $0.0007），30 分钟没人说话就自己过期。照作者在原版上四个多月的说话节奏算，提示词的钱省六成。OpenAI 的 `gpt-audio` 系列没有缓存。
-- 按实际回话的型号算钱，价格按调用那天算：Gemini 3.6 Flash 2027 年 1 月 1 日起翻倍。
-- token 按千、百万、十亿缩写成 K、M、B。验证 key 的那几次请求也算在里面。
-- 价目表里没有的型号 token 照记，钱写“价格不明”，不算进花费；状态面板上有这样的就写“至少”多少。
-- 发出去了却等不到回话的（30 秒超时、后台关掉时断开）拿不到用量、记不上，对方可能照样收了钱。
-- 有记账之前的听写没有账，不算在里面。
-
-### 主题
-
-悬浮条、主窗口、首次引导的颜色是一套主题。现在有三套：
-
-| 名字 | 样子 |
-| --- | --- |
-| `ink` 墨（默认） | 黑白。状态靠形状和动作来说，只有出错才出现颜色。窗口里是墨到石墨的渐变 |
-| `cinnabar` 朱砂 | 一种暖红，用在声波和最主要的按钮上。窗口里是朱砂到橘黄的渐变 |
-| `indigo` 靛青 | 颜色代表阶段：绿是在听，蓝紫是在整理，琥珀是出了问题。0.2 版就是这一套。窗口里是靛青到青绿的渐变 |
-
-```bash
-speakmore theme               # 列出来；终端支持 24 位色的话，每套会用它自己的颜色画一小段悬浮条
-speakmore theme cinnabar      # 换一套，写中文名也行：speakmore theme 朱砂
-```
-
-在设置里换或者用命令换都不用重启，开着的窗口当场变。悬浮条浮在别的应用上面，所以三套都是深色底；窗口跟随系统的浅色深色。窗口背后有两团主题色的光，侧栏和设置是透出光的玻璃，主按钮和键帽是主题的渐变；系统里开了"降低透明度"时玻璃换成实底。
-
-## 出了状况
-
-| 看到的 | 怎么办 |
-| --- | --- |
-| 面板上 key 那一行写着“还没验证” | 启动时没连上 Gemini，存着的 key 先用着。连上网后再运行一次 `speakmore status` |
-| “还差：Gemini 验证”（或 OpenAI 验证） | 那一家拒绝了请求，多半是模型名或思考档位不对，key 未必有问题。`speakmore model check` 看它怎么说，`speakmore config unset model` 回到默认 |
-| “还差：按键监听” | 听热键的小程序停了。`speakmore restart`，还不行就看 `speakmore logs` |
-| 命令说它“没有在 5 秒内回话” | 后台卡住了。`speakmore stop` 会强行结束它，再运行 `speakmore` |
-
-## 都放在哪
-
-**发出去的只有录音**，直接发给你选的那一家（Google 的 Gemini 或 OpenAI）的接口，用的是你自己的 key。没有别的服务器，没有统计上报，也不读屏幕和输入框里的内容。
-
-留在本机的全在 `~/.speakmore/` 这一个目录里，只有你自己进得去：
-
-| 里面的东西 | 说明 |
-| --- | --- |
-| `settings.json` | 上面那几项设置 |
-| `gemini-key.bin`、`openai-key.bin` | 加密后的 key，每家一个（安装包装的应用用的是 `gemini-key.app.bin` 这样带 `.app` 的那一份）。解密用的密钥在系统钥匙串的“SpeakMore Safe Storage”里，文件被拷走也解不开 |
-| `data/history.db`、`data/Recordings/` | 说过的话和录音，以及每次调模型的账（token、花费、等了多久）。失败的听写也存录音，话不会白说 |
-| `logs/main.log` | 日志，一行一条 JSON。只记长度、耗时和用量，不记说的话，也不记 key |
-| `run/`、`cache/` | 运行时产生的：命令和后台之间的通道、进程号、运行环境自己的缓存。删了会自己再建 |
-| `bin/`、`app/`、`runtime/` | 程序本身：`speakmore` 命令、代码和依赖、自带的运行环境（Electron）。升级时整个换掉 |
-
-目录以外只有三样东西：
-
-- `~/.local/bin/speakmore`，一个指向 `~/.speakmore/bin/speakmore` 的链接。
-- 钥匙串里的“SpeakMore Safe Storage”，加密 key 用的。
-- 你给终端的三项系统权限。
-
-`speakmore uninstall` 会删掉前两样和整个目录。系统权限记在终端名下，要你自己去系统设置里关。用安装包装的，还有“应用程序”里的 SpeakMore.app，`speakmore uninstall` 不删它。
-
-想装到别处，安装时设环境变量 `SPEAKMORE_HOME`，装好的命令会记住这个位置。0.1 版把数据放在 `~/Library/Application Support/SpeakMore`，装上这一版后第一次运行会自动搬过来。
-
-## 它是怎么来的
-
-先对 Typeless 的 macOS 客户端做了一遍逆向：拆安装包、读还原出来的代码、看本机数据、抓自己账号的流量，弄清楚它为什么快、发了什么出去、文字是怎么贴进输入框的。结论写成了 [targets/typeless/docs/](targets/typeless/docs/00-overview.md) 下的文档，出处记在[证据台账](targets/typeless/docs/90-evidence-ledger.md)里。
-
-然后照着文档里的协议和交互重新写了一个，只保留语音转写：服务端换成自己的（一次模型调用完成识别和整理，默认 Gemini，也可以换 OpenAI），不采集屏幕和输入框内容，不需要账号。仓库里不含 Typeless 的代码和密钥。
-
-## 现在的不足
-
-和 Typeless 比：
-
-- **专有名词和人名会听错。** Typeless 会把当前应用和屏幕上的文字一起上传当上下文，这里只有录音，也还没有个人词典。
-- **列表用得比它少**，口吃偶尔删不干净（约每 60 条 1 条）。
-- **换成 OpenAI 时整理得比 Gemini 粗。** 提示词是对着 Gemini 调的，还没拿真实录音对 OpenAI 调过。
-- **话说到一半就按停，模型可能自己把后半句补上。** 实测过一次：录音在“大家记得”处被截断，成品里多出了没说过的“准时参加”；同一段话录完整时成品是对的。还没有针对它调提示词。
-- 只有听写，没有翻译和“问任何事”。
-
-还没做的：
-
-- 命令行装的不能登录时自动启动，重启电脑后要再运行一次 `speakmore`。安装包装的可以在设置里打开。
-- 失败的听写重试。录音留着，但还不能一键重新整理。
-- 悬浮条固定在主屏幕的底部，不会跟着鼠标换到另一块屏幕上。
-- 等成品的那一两秒取消不了：录音已经交出去了。
-- Windows 和 Linux。
-
-## 开发
-
-从源码跑需要 Node 22.13 以上（用 23 的话要 23.4 以上）和 Xcode 命令行工具（`xcode-select --install`）：
-
-```bash
-git clone https://github.com/zephyr4123/speakmore.git
-cd speakmore
+git clone https://github.com/zephyr4123/speakmore.git && cd speakmore
 npm install
-npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
-npm run check                 # 代码检查 + 全部测试（532 条，不联网、不开窗口）
-npm run release               # 打发布包：dist/release/ 下两种芯片各一个压缩包和一个安装包（dmg），外加 install.sh，摆成下载地址上的样子
+npm start          # same as the speakmore command
+npm run check      # lint and all tests
 ```
 
-**发布新版本**：改 `package.json` 里的版本号和 README 里安装包的下载链接（测试会核对这两处对得上）并提交，打一个同名的标签推上去（比如 `git tag -a v0.4.1 -m "…" && git push origin main v0.4.1`），然后在本机运行 `npm run ship`。它先核对工作区干净、当前提交就是那个标签、标签已经推上去，再跑全部检查、打包（安装包要签名、公证，本机没配就不往下走，每个包等苹果公证几分钟），传到下载地址 `dl.zephyrxiang.com/speakmore/`（腾讯云 COS + CDN），最后从下载地址核对版本号和校验值。桶和密钥从哪来写在 `.machine.env` 里。发布包只放在 COS 这一处；发布过的版本号不会被覆盖，要改就升版本号。传到一半断了，不要重新打包，再运行一次 `scripts/release/with-cos-key.sh npm run publish-release`，传好的会跳过。
+Project layout, packaging, releases, and what each version was actually tested on: see the [development notes](docs/development.md) (Chinese).
 
-从源码跑的和装好的用的是同一个 `~/.speakmore`，想分开就设 `SPEAKMORE_HOME`。
+## License
 
-要真调模型的命令需要环境里有那一家的 key（`GEMINI_API_KEY`、`OPENAI_API_KEY`）。`scripts/dev/with-key.sh <厂商>` 可以按你自己机器上的配置把它只喂给一条命令，见 `.machine.env.example`。用哪家哪个模型由 `SPEAKMORE_MODEL` 定，默认 Gemini：
+[MIT](LICENSE). Files under `.claude/skills/` come from [REA](https://github.com/morluto/rea) under its own MIT license.
 
-```bash
-scripts/dev/with-key.sh gemini node scripts/dev/e2e.mjs 一段录音.wav   # 端到端：真的 Electron、录音编码、模型；麦克风和贴字是假的
-SPEAKMORE_MODEL=openai scripts/dev/with-key.sh openai node scripts/dev/e2e.mjs 一段录音.wav   # 同上，换成 OpenAI
-scripts/dev/with-key.sh gemini node scripts/dev/eval-prompt.mjs --label v1   # 拿自己 Typeless 的历史录音评估提示词
-scripts/dev/with-key.sh gemini node src/server/main.mjs           # 单独启动听写服务，配合 SPEAKMORE_SERVER_URL 调试
-node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现成的录音发给单独启动的服务
-```
-
-加一家模型：在 `src/server/providers/` 下写一个适配器（请求怎么拼、收哪些录音格式、报错怎么认），在同目录的 `index.mjs` 里登记一行。整理流程（提示词、收尾、重试、转格式）各家共用，在 `src/server/refine/`。
-
-不发布也可以试安装脚本：`SPEAKMORE_INSTALL_BASE=$PWD/dist/release SPEAKMORE_HOME=/tmp/sm bash install.sh`，装进一个临时目录。
-
-| 目录 | 内容 |
-| --- | --- |
-| `install.sh` | 安装脚本：预检查、下载、校验、装进 `~/.speakmore`、启动 |
-| `bin/`、`src/cli/` | `speakmore` 命令 |
-| `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、主窗口、首次引导；`keys/` 是 key 的保存和启用 |
-| `src/renderer/`、`src/preload/` | 各个窗口的页面，一个窗口一个目录：`bar/`（悬浮条：状态机、录音、听写协议的客户端、画面）、`hub/`（主窗口：首页、历史记录、设置对话框）、`onboarding/`（首次引导），共用的样式和填 key 那一块在 `shared/` |
-| `src/themes/` | 主题：界面要哪些颜色（一组 token）、每套主题给的值、合不合格怎么查。加一套主题是加一个文件、登记一行 |
-| `src/server/` | 听写服务：`protocol/` 收分块音频，`refine/` 交给模型整理（各家共用的流程，每次调用记一笔账），`providers/` 每家模型一个适配器（`prices/` 是各家的价目表），`audio/` 把录音转成别家收的格式。平时跑在后台应用的进程里 |
-| `src/usage/` | 用量报表（今天、本月、累计、按型号）、首页的统计（字数、语速、连续天数、热力图）和数字的写法，命令和主窗口共用 |
-| `native/` | 听热键、贴字、说话时截住 `esc` 和悬浮条上点击的小程序（Swift） |
-| `assets/` | 图标：`icon.svg` 是那方印，`tray.svg` 是菜单栏上的五道；`.icns` 和 `trayTemplate*.png` 由 `scripts/build/make-icon.sh` 从它们生成 |
-| `src/storage/` | `~/.speakmore` 里的东西：放在哪、设置、历史库、旧数据的迁移。命令和后台应用共用 |
-| `src/control.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道、日志 |
-| `test/` | 自动测试，目录和 `src/` 对应 |
-| `scripts/` | 开发用的脚本，按用途分四组：`build/` 编译小程序、打 .app；`release/` 发新版本（`ship.sh`：把关、打包、上传、核对）；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
-| `docs/` | [实现笔记](docs/implementation-notes.md) |
-| `targets/typeless/` | 对 Typeless 的[逆向分析](targets/typeless/README.md)，18 篇文档。SpeakMore 是照着它做的 |
-| `AGENTS.md`、`.memory/` | 和 AI 编程助手协作时用的工作约定和项目记忆 |
-| `.claude/`、`.mcp.json` | 逆向用的工具 [REA](https://github.com/morluto/rea) 的项目级配置。`.claude/skills/` 下是 REA 自带的说明文件，版权归它的作者，MIT 许可 |
-
-和原版的对应关系、模型怎么选的、提示词怎么调的，在[实现笔记](docs/implementation-notes.md)里。
-
-### 打成 .app
-
-安装包里的应用就是这样打出来的。改了代码想自己装一个：
-
-```bash
-npm run install-app     # 打包并装进“应用程序”，然后打开
-```
-
-本机配了签名证书和公证档案时（`.machine.env` 里的 `MAC_SIGNING_IDENTITY`、`MAC_NOTARY_PROFILE`，怎么配见 `.machine.env.example`），打出来的应用用 Developer ID 签名、开 hardened runtime，交给苹果公证并钉上票据，连公证一共五六分钟。系统按应用标识（`com.zephyrxiang.speakmore`）和证书的团队认它，重新打包不再被当成新应用；拷到别的 Mac 上也能直接打开。没配就是不带身份的本机签名：每次重新打包系统都把它当成一个新应用，权限要重新给，key 要重新填。
-
-它不在 `~/.speakmore` 里，`speakmore uninstall` 不会删它。
-
-.app 在运行时，`speakmore status`、`history`、`key`、`stop` 照常能用。`speakmore restart` 和 `config set` 不会代它重启：从命令行起来的是终端启动的那一个，权限和 key 是另一套。按提示从菜单栏退出，再打开一次。
-
-### 验证到哪一步
-
-- 自动测试 532 条，在 Node 26.0 上全过；其中 475 条单测在 Node 24.21（Electron 自带的版本，程序就跑在它上面）上也全过；Node 22.13 上跑过的是更早的 269 条（之后加的没在 22 上重跑）。其中 18 条是安装脚本的，17 条拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
-- 用真的发布包走过一遍，装在临时目录里，`PATH` 里没有 Node：
-  - 安装脚本从管道读入，装完直接启动并问 key，输入不显示。
-  - 启动、状态、设置、重启、停止；合成的语音经过录音编码、Gemini、存历史，成品正确。
-  - 再装一次（升级），历史还在。
-  - `speakmore uninstall` 之后目录、命令链接、后台进程、钥匙串里的那一条都没了。
-- Intel 的那一份只在 Apple 芯片的机器上借 Rosetta 跑过（命令、后台、小程序都起得来），**没有在真的 Intel 机器上试过**。
-- 上一版在真机上走过的那些路（多行 key 被拒、后台卡住时强行结束、同时启动、模型名写错）这一版重跑了自动测试，没有逐条重走。
-- 照上面那一行从真的下载地址装过一遍（0.2.0，装进临时目录，`PATH` 里没有 Node）：下载、校验、安装、`--version`、卸载都正常。
-- 0.3.0 发布后同样从真的下载地址装进临时目录核对过（这次 `PATH` 里有 Node，只装不启动）：`--version` 是 0.3.0，`speakmore theme` 列得出三套主题，卸载删干净了。第一次下载中途断了（`curl` 报 HTTP/2 的流没有正常关闭），安装脚本报"下载中断了"、原来的东西没动，再运行一次就装好了。
-- 0.4.0 是从本机发的：当时推标签由 GitHub 的机器发布，检查和打包都过了，往 COS 传了 32 分钟，第一个包还没传完，COS 回 "User network is too slow"，什么都没传上去。同一个提交在本机打包、传两个包用了 2 分 15 秒。之后发布改成只从本机发（`npm run ship`），GitHub 上的发布流程删掉了。发布后从真的下载地址装进临时目录核对过（只装不启动）：`--version` 是 0.4.0，图标在包里，音频解码只剩 `decode-webm`、没有 `codec-parser`，卸载删干净了。
-- 主题和新的悬浮条（下面这些是从源码跑的；发布包里的只核对了上一条那几项，没有启动过）：
-  - 画面：用真的页面和样式离屏截图看过，三套主题下悬浮条的七种样子（浅色、深色背景各一张）、两个窗口（跟随系统的浅色深色各一张）；报给小帮手的按钮位置和页面上画出来的位置差在 1 个像素以内。
-  - 截住 `esc` 和点击：给真的小帮手发合成的按键和鼠标事件，下游另挂一个监听看有没有漏。`esc` 和落在划定区域里的点击都被吞掉并报上来，长按 `esc` 时松开的那一下也吞掉，不截的时候监听是关着的。15 项全过。
-  - 真的后台应用连着真的小帮手和麦克风走过一遍：换主题当场生效；合成一次热键开始说话，合成 `esc` 取消。说话时和取消后最前面的应用都没变，`esc` 没有漏给它，取消的那次没有进历史。
-  - 合成的语音经过新的悬浮条、录音编码、Gemini、存历史，成品正确。
-  - 按着真键盘、对着真麦克风、用真鼠标试过一轮：说了三段都贴进了输入框，点 ✓ 完成、点 ✕ 取消各一次都截到了，日志里没有警告和错误。声波的高度是照这三段录音的音量标定的（原来的算法下竖条大多只有两三成高）。
-  - 声波后来改成和原版一样原地跳：原来是一排向左流的音量，嫌没有动感；现在每个字从正中间激起一道波传到两边，中间高、两边低，每帧都在抖。拿一段真实录音的 5 秒在真的页面里放过：没有报错，说话时中间那根平均 0.64、最边上 0.22，几乎每帧都在变，只有 2% 的帧顶到满格。**还没有对着真麦克风看过**。
-  - 真键盘按 `esc` 取消也试过：截到了，这一次没有进历史，取消之后监听是关着的。
-- 换模型（从源码跑的，发布包里还没试过）：
-  - 合成的语音经过悬浮条、录音编码、模型、存历史，Gemini 和 OpenAI 各走通一遍；OpenAI 那一遍录音在本机从 WebM 转成 WAV 用了 56 毫秒。
-  - 在临时目录里用真的后台和真的 key 走过一遍命令：列模型、查 Gemini、查没有 key 的 OpenAI、从管道给 OpenAI 存 key、查两个 OpenAI 模型（一个能用、一个不存在）、换到 OpenAI 并重启、看状态、没有 Gemini 的 key 时换回去被拦下、删 key。
-  - 设置窗口里 key 那一块的说法，用真页面离屏截图核对过两家。
-  - 换成策略之后，Gemini 拿同一批 60 条真实录音回归过，和之前两次的数字在同一个波动范围里（见[实现笔记](docs/implementation-notes.md#不止一家模型)）。
-- 图标（从源码跑的）：
-  - 菜单栏图标在真的 Electron 里读得出来，16 和 32 两种尺寸都在，系统认作随菜单栏深浅反色的那种。在临时目录里起了一个真的后台，菜单栏上它那一项没有文字、宽 34 点（写着"听写"的旧样子是 48 点）；没有截屏亲眼看，因为终端没有录屏权限。
-  - 设置和历史窗口顶部的图标和产品名，用真页面离屏截图看过浅色深色。
-  - 按发布包的清单实际摆过一遍，`assets/` 在里面。
-- 记账（从源码跑的，发布包里还没试过）：
-  - 两家的价格照官方价目页抄，用量字段对着真的回话写：拿真的 key 各发过一次听写请求、看过回话里的用量；Gemini 开 HIGH 思考再发一次，确认思考的 token 单独报、不在输出里。
-  - 合成的语音经过悬浮条、录音编码、模型、存历史、记账，Gemini 和 OpenAI 各走通一遍：账对上了那条历史，花费和照价目表手算的一致（见[实现笔记](docs/implementation-notes.md#记账花了多少钱多少-token等了多久)）。
-  - 历史窗口的用量表和每条的花费，用真页面和造的数据离屏截图看过浅色、深色和最窄的宽度。
-  - 旧的历史库（版本 1）升上来、原来的记录都在，只在自动测试里试过；真用着的那个库还没升过。
-  - 提示词缓存（Gemini）：合成的语音端到端走过一遍，开口时建好缓存，整理时命中 1350 个 token，这一句从 $0.0012 降到 $0.00028，成品一样；拿真的 key 连着走两轮"开口、整理"，第二次开口只续期、两次整理都命中。缓存半路没了、型号建不了、建的时候没网这几种只在自动测试里（假的 SDK）试过。
-- 第一次用时选哪家、设置窗口里换一家（从源码跑的，临时目录、右 Control 当热键）：
-  - 在伪终端里跑第一次启动：选 2（OpenAI）、粘贴 key，启动后用的是 OpenAI，设置文件里记着它，key 没有出现在屏幕上；选的时候按 Ctrl-C，key 也不问了，照默认的 Gemini 启动，面板里说还差 key。
-  - 用调试协议驱动真的设置窗口：两家都有 key 时点"改用 OpenAI"，命令行看到的、设置文件里的都换成了 OpenAI，接着发一段录音给内置服务，先转成 WAV 再交给 OpenAI，4 秒回来；换回 Gemini；删掉 OpenAI 的 key 后粘贴一把错的，说 key 无效、还是 Gemini；粘贴对的，存好并换过去。重启后台后用的仍是 OpenAI。
-  - 安装脚本的预检查真跑过一次（本机打的包、临时目录、只装不启动）：两家都打了勾。两家连不上时的样子只在自动测试里（假的 curl）看过。
-- 签名、公证和安装包（Apple 芯片）：
-  - `npm run dist` 打出来的应用 Developer ID 签名、hardened runtime、安全时间戳都在，主程序和小帮手只有 JIT、麦克风两项权限；苹果公证 Accepted、没有问题项，票据钉上了，`spctl` 判定 Notarized Developer ID。
-  - 装进"应用程序"真用过一轮（新的观感和文案改之前打的那一版）：日志里看得到第一次打开缺 key 和输入监控、自己打开首次引导；给了权限、填了 key 并验证通过；测快捷键那一步收到了真按键；说一句那一步录了 3 块、整理出 24 个字贴了出去；走完引导，换了两次主题。
-  - `npm run release -- arm64` 打出的安装包 155 MB，本身也签了名、过了公证、钉了票据，`.sha256` 对得上。给它打上浏览器下载的来源标记，`spctl` 照样放行；挂载后里面是应用和"应用程序"的替身。
-  - 把安装包里的应用装进"应用程序"、换掉上面那一版：打开后三项权限都在，存着的 key 读得出来、验证通过，不用重给。
-  - **没验证的**：从真的下载地址下回来、在访达里拖进去（这次是用命令拷的；带着来源标记、没经访达挪动的应用，系统会把它挪到一个临时位置运行，去掉标记后正常）、装好的应用里开机启动开不开得了、Intel 版。
-- 主窗口和首次引导（从源码跑的，发布包里还没试过）：
-  - 画面：用真页面和造的数据离屏截图看过三套主题、浅色深色下的首页、历史记录、设置四页和"还差什么"的横幅；首次引导六步（朱砂浅色全部、墨深色四步）；历史记录往下滚时，顶上那条玻璃把滚上去的字模糊了。
-  - 临时目录里起真的后台（右 Control 当热键），用调试协议驱动真窗口：缺 key 时自己打开首次引导；在引导里填 key，真的验证通过；走完打开主窗口首页；设置里换热键、换主题当场生效；`speakmore settings` 停在缺东西的那一页。这一轮是在换观感、改文案之前跑的，之后只改了样式和字，没有重跑。
-  - 端到端的听写（合成的 7.4 秒语音，真的 Gemini）：录音分 3 块上传，2.7 秒整理完，缓存命中 1350 个 token，花费 $0.00032，成品“我们后天下午 3 点开会，记得把上周的数据带上”，贴字、存历史、记账都走通了。
-  - **没验证的**：测麦克风那一步的电平条跟不跟真声音动（当时内置麦克风几乎收不到声音）、测快捷键时按下去键帽变不变色（合成不了那个按键；装好的应用里真按过，日志只记了按键送到了引导窗口）、"说一句"那一步的字是不是落进了笔记框（日志只记了贴出去）；审查后改的几处主进程行为没在真窗口里重跑：命令行第一次启动打开首次引导、测快捷键那一步切到别的应用时热键照常听写、设置对话框左栏不再被侧栏的拖动区盖住（要真鼠标点）、拖文件进窗口不会跳走。
-- 只有自动测试、没在真机上试的：启动时断网、从 0.1 版搬数据、重新检查权限时不再反复弹系统授权框。
-
-## 许可
-
-[MIT](LICENSE)。`.claude/skills/reverse-engineer-anything/` 来自 REA，按它自己的 MIT 许可。
-
-发布包里的依赖都是 MIT、Apache、ISC、BSD 这类。打包时会扫一遍依赖的许可证，有 GPL 一类的就拒绝打包（`scripts/build/stage-app.mjs`）；音频解码库顺带装上的那几个 GPL、LGPL 解码器程序用不到，打包时删掉。
+The name is a nod to Typeless. SpeakMore is an independent implementation based on reverse-engineering notes, not affiliated with Typeless.
