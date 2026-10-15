@@ -61,7 +61,7 @@
 
 | Apple 芯片（M1 及以后） | Intel 芯片 |
 | --- | --- |
-| ⬇️ [SpeakMore-arm64.dmg](https://dl.zephyrxiang.com/speakmore/v0.5.0/SpeakMore-arm64.dmg) | ⬇️ [SpeakMore-x64.dmg](https://dl.zephyrxiang.com/speakmore/v0.5.0/SpeakMore-x64.dmg) |
+| ⬇️ [SpeakMore-arm64.dmg](https://dl.zephyrxiang.com/speakmore/v0.6.0/SpeakMore-arm64.dmg) | ⬇️ [SpeakMore-x64.dmg](https://dl.zephyrxiang.com/speakmore/v0.6.0/SpeakMore-x64.dmg) |
 
 打开 dmg，把 SpeakMore 拖进“应用程序”，再打开它。安装包有开发者签名、过了苹果公证，系统不会拦。第一次打开会带你走一遍：填 key → 开三项权限 → 测麦克风和热键 → 真说一句。
 
