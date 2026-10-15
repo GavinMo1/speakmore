@@ -19,9 +19,6 @@ export default {
   hero: {
     title: "开口即成文",
     lead: "专为 Mac 打造的语音输入。\n一键唤起，适用于任意应用，自动整理成文。",
-    download: "下载",
-    chip: "Apple 芯片",
-    intel: "Intel 机型",
     facts: ["免费", "开源", "macOS 12 及以上"],
     shotAlt: "SpeakMore 主窗口首页：字数、节省时间、语速、每日热力图与花费",
     barAlt: "口述时的悬浮条：左侧取消，中间为随语音起伏的声波，右侧完成",
@@ -125,10 +122,9 @@ export default {
   download: {
     title: "立即开始",
     lead: "免费下载，已通过 Apple 签名与公证。",
-    appleSilicon: "Apple 芯片",
-    appleSiliconNote: "M1 及后续机型",
-    intel: "Intel",
-    intelNote: "Intel 处理器机型",
+    button: "下载 {chip}版",
+    chips: { arm64: "Apple 芯片", x64: "Intel 芯片" },
+    whichChip: "可在“关于本机”中查看芯片类型。",
     terminal: "也可在终端中安装",
     copy: "复制",
     copied: "已复制",

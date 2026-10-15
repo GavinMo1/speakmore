@@ -13,8 +13,8 @@ export function Privacy() {
         <Node icon="laptop" label={m.privacy.mac} />
         <div className="relative flex flex-col items-center self-start pt-7 sm:pt-8">
           {/* 一条直线从 Mac 连到模型；中间那一站是划掉的，因为根本没有 */}
-          <div className="relative h-px w-full bg-linear-to-r from-teal/60 via-teal to-teal/60">
-            <span className="absolute -top-[3.5px] right-0 size-2 rotate-45 border-t border-r border-teal" />
+          <div className="relative h-px w-full bg-ink-2/60">
+            <span className="absolute -top-[3.5px] right-0 size-2 rotate-45 border-t border-r border-ink-2" />
           </div>
           <div className="absolute top-7 left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-2xl border border-dashed border-line bg-[oklch(0.13_0.008_255)] px-4 py-2.5 text-center sm:top-8">
             <span className="flex items-center gap-1.5 text-xs whitespace-nowrap text-ink-2 line-through decoration-cinnabar-glow decoration-2">
@@ -23,7 +23,7 @@ export function Privacy() {
             </span>
             <span className="text-xs font-semibold text-cinnabar-glow">{m.privacy.none}</span>
           </div>
-          <span className="mt-12 inline-flex items-center gap-1.5 text-xs font-medium text-teal">
+          <span className="mt-12 inline-flex items-center gap-1.5 text-xs font-medium text-ink-2">
             <Icon name="key" className="size-3.5" />
             {m.privacy.key}
           </span>
@@ -44,7 +44,7 @@ export function Privacy() {
       <ul className="reveal mx-auto mt-[clamp(3.5rem,8vw,6rem)] grid max-w-4xl gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
         {m.privacy.points.map((point) => (
           <li key={point.title}>
-            <Icon name={point.icon} className="size-6 text-teal" />
+            <Icon name={point.icon} className="size-6 text-ink" />
             <p className="mt-3 font-semibold text-ink">{point.title}</p>
             <p className="mt-1 text-sm text-ink-2">{point.text}</p>
           </li>

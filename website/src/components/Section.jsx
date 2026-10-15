@@ -1,11 +1,10 @@
 /**
  * 一整段：底色、上下留白、内容的最大宽度。
- * tone：canvas（跟着系统深浅）、surface（跟着系统、比底色深一点）、night（首屏的靛青夜色）、ink（近黑）
+ * tone：canvas（跟着系统深浅）、surface（跟着系统、比底色深一点）、ink（近黑，固定深色）
  */
 const TONES = {
   canvas: "bg-canvas",
   surface: "bg-surface",
-  night: "tone-night",
   ink: "tone-ink",
 };
 

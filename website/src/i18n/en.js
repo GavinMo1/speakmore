@@ -21,9 +21,6 @@ export default {
   hero: {
     title: "Speak more.\nType less.",
     lead: "Voice dictation for Mac.\nOne key, any app, polished text.",
-    download: "Download",
-    chip: "Apple silicon",
-    intel: "Intel Mac",
     facts: ["Free", "Open source", "macOS 12+"],
     shotAlt: "SpeakMore's home window: words, time saved, pace, a daily heatmap and spend",
     barAlt: "The floating bar during dictation: cancel, a live waveform, done",
@@ -128,10 +125,9 @@ export default {
   download: {
     title: "Get started.",
     lead: "Free. Signed and notarized by Apple.",
-    appleSilicon: "Apple silicon",
-    appleSiliconNote: "M1 and later",
-    intel: "Intel",
-    intelNote: "Macs with Intel processors",
+    button: "Download for {chip}",
+    chips: { arm64: "Apple silicon", x64: "Intel" },
+    whichChip: "Your Mac's chip is listed in About This Mac.",
     terminal: "Or install from Terminal",
     copy: "Copy",
     copied: "Copied",

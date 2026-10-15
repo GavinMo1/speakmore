@@ -5,12 +5,12 @@ import { useI18n } from "../i18n/index.jsx";
 import { Icon } from "../icons/Icon.jsx";
 
 /**
- * 吸顶导航。停在首屏上时是透明的、白字（首屏是深色）；往下滚了就换成半透明的毛玻璃，字跟着页面的颜色。
+ * 吸顶导航。停在页面顶上时是透明的；往下滚了换成半透明的毛玻璃，经过深色的段落时玻璃也是深色。
  * 窄屏只留标志、语言和下载
  */
 export function Nav() {
   const { m, switchLocale } = useI18n();
-  // 三种样子：停在首屏顶上是透明的；滚到深色的段落上是深色毛玻璃；别处是跟着系统的毛玻璃
+  // 三种样子：停在页面顶上是透明的；滚到深色的段落（隐私）上是深色毛玻璃；别处是跟着系统的毛玻璃
   const [look, setLook] = useState("clear");
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export function Nav() {
       if (window.scrollY <= 24) return setLook("clear");
       // 导航正下方是哪一段
       const below = document.elementFromPoint(window.innerWidth / 2, 64)?.closest("section");
-      setLook(below?.matches(".tone-night, .tone-ink") ? "dark" : "glass");
+      setLook(below?.matches(".tone-ink") ? "dark" : "glass");
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -45,8 +45,8 @@ export function Nav() {
     <header
       className={`fixed inset-x-0 top-0 z-30 text-ink transition-[background-color,box-shadow] duration-300 ${
         {
-          clear: "tone-night bg-none! bg-transparent!",
-          dark: "tone-night bg-none! bg-[oklch(0.14_0.02_258/0.72)]! shadow-[0_1px_0_var(--color-line)] backdrop-blur-xl backdrop-saturate-150",
+          clear: "bg-transparent",
+          dark: "tone-ink bg-[oklch(0.13_0.008_255/0.72)]! shadow-[0_1px_0_var(--color-line)] backdrop-blur-xl backdrop-saturate-150",
           glass: "bg-canvas/72 shadow-[0_1px_0_var(--color-line)] backdrop-blur-xl backdrop-saturate-150",
         }[look]
       }`}
@@ -87,7 +87,7 @@ export function Nav() {
           </a>
           <a
             href="#download"
-            className="ml-1.5 inline-flex h-8 items-center rounded-full bg-cinnabar px-3.5 text-[0.8125rem] font-semibold text-white transition-[filter,transform] duration-150 hover:brightness-110 active:scale-[0.97]"
+            className="ml-1.5 inline-flex h-8 items-center rounded-full bg-ink px-3.5 text-[0.8125rem] font-semibold text-canvas transition-[opacity,transform] duration-150 hover:opacity-85 active:scale-[0.97]"
           >
             {m.nav.download}
           </a>

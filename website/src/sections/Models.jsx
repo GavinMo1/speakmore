@@ -20,9 +20,7 @@ function Provider({ icon, provider, badge, featured = false }) {
   return (
     <article
       className={`flex flex-col rounded-[1.75rem] p-8 sm:p-10 ${
-        featured
-          ? "bg-raised shadow-[0_0_0_1px_var(--color-line),0_30px_70px_-34px_oklch(0.45_0.12_255/0.55)]"
-          : "bg-surface"
+        featured ? "bg-raised shadow-[0_0_0_1px_var(--color-line),0_24px_60px_-30px_oklch(0_0_0/0.3)]" : "bg-surface"
       }`}
     >
       <div className="flex items-start justify-between gap-4">

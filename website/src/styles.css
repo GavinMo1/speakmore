@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* 颜色从 App 的图标那方印来：靛青的印底、朱砂和赭石两道、浅色的刻痕（assets/icon.svg）。
-   页面的底色跟着系统深浅变；首屏、隐私、下载三段固定是深色（.tone-night、.tone-ink 在下面重新给一遍颜色）。
+   大块的底色都是纯色、不铺渐变光晕：跟着系统深浅变，隐私一段固定是近黑（.tone-ink 在下面重新给一遍颜色）。
    用 OKLCH，浅色的底往靛青偏一点点，不往暖色偏。 */
 @theme {
   --font-sans:
@@ -25,8 +25,6 @@
   --color-cinnabar: oklch(0.55 0.17 33);
   --color-cinnabar-glow: oklch(0.74 0.17 32);
   --color-ochre: oklch(0.74 0.12 75);
-  --color-teal: oklch(0.78 0.11 190);
-  --color-night: oklch(0.16 0.03 258);
 
   /* 先快后慢，不回弹 */
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
@@ -45,9 +43,9 @@
   }
 }
 
-/* 固定深色的几段：里面的组件照样用 text-ink 这些，颜色在这里换掉 */
-.tone-night,
+/* 固定深色的那一段：里面的组件照样用 text-ink 这些，颜色在这里换掉 */
 .tone-ink {
+  --color-canvas: oklch(0.13 0.008 255);
   --color-surface: oklch(1 0 0 / 0.06);
   --color-raised: oklch(1 0 0 / 0.08);
   --color-ink: oklch(0.97 0.004 255);
@@ -55,13 +53,6 @@
   --color-line: oklch(1 0 0 / 0.14);
   --color-link: oklch(0.82 0.09 230);
   color-scheme: dark;
-}
-
-.tone-night {
-  background:
-    radial-gradient(60% 50% at 18% 78%, oklch(0.55 0.13 200 / 0.28), transparent 70%),
-    radial-gradient(55% 45% at 85% 18%, oklch(0.5 0.14 262 / 0.42), transparent 70%),
-    radial-gradient(40% 35% at 70% 92%, oklch(0.6 0.16 32 / 0.16), transparent 70%), var(--color-night);
 }
 
 .tone-ink {
