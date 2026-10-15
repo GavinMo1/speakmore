@@ -58,19 +58,18 @@ function render() {
     const granted = permissionGranted(row.dataset.permission, setup.permissions[row.dataset.permission]);
     row.dataset.granted = String(granted === true);
     const button = row.querySelector("button");
-    button.textContent = granted ? "✓ 已允许" : "允许";
+    button.textContent = granted ? "✓ 已开" : "允许";
     button.disabled = granted === true;
   }
 
   const keycap = setup.hotkey.choices.find(({ id }) => id === setup.hotkey.value);
   $("big-keycap").textContent = setup.hotkey.keycap;
-  $("hotkey-desc").textContent = `现在用的是${keycap.label}。按一下试试，按下去时右边的键会变色。`;
+  $("hotkey-desc").textContent = `当前：${keycap.label}`;
   $("hotkey-select").replaceChildren(
     ...setup.hotkey.choices.map(({ id, label }) => new Option(label, id, false, id === setup.hotkey.value)),
   );
-  $("try-desc").textContent =
-    `点进右边的笔记，按一下${keycap.label}开始说话，把下面这句读出来（说你自己的也行），再按一下结束。`;
-  $("try-text").placeholder = `按一下 ${setup.hotkey.keycap} 开始说话…`;
+  $("try-desc").textContent = `点进笔记 · 按 ${setup.hotkey.keycap} 读下面这句 · 再按结束`;
+  $("try-text").placeholder = `按 ${setup.hotkey.keycap} 开始说…`;
 
   // 底下的两个按钮
   const first = step === STEPS[0] || (step === "permissions" && startStep(setup) === "permissions");
@@ -93,7 +92,7 @@ async function startMeter() {
   try {
     stream = await openMicrophone();
   } catch (error) {
-    $("microphone-error").textContent = `打不开麦克风：${describeError(error)}`;
+    $("microphone-error").textContent = `麦克风打不开：${describeError(error)}`;
     $("microphone-error").hidden = false;
     return;
   }
@@ -145,9 +144,9 @@ $("hotkey-select").addEventListener("change", async (event) => {
   $("hotkey-note").hidden = true;
   try {
     const result = await window.speakmore.setHotkey(event.target.value);
-    $("hotkey-note").textContent = result.note ?? "换好了，再按一下新的键试试。";
+    $("hotkey-note").textContent = result.note ?? "已换，按一下试试";
   } catch (error) {
-    $("hotkey-note").textContent = `没有换成：${describeError(error)}`;
+    $("hotkey-note").textContent = `没换成：${describeError(error)}`;
   }
   $("hotkey-note").hidden = false;
   await refresh();

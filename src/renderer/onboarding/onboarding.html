@@ -16,17 +16,15 @@
       <ol class="step-groups">
         <li data-group="key">模型</li>
         <li data-group="setup">设置</li>
-        <li data-group="try">体验一下</li>
+        <li data-group="try">试一下</li>
       </ol>
     </header>
 
     <main class="stage">
       <section class="step" data-step="key" aria-labelledby="key-title">
         <div class="step-text">
-          <h1 class="step-title" id="key-title"><span class="soft">先接上</span>一家模型</h1>
-          <p class="step-desc">
-            SpeakMore 把你说的话交给你选的那家模型，一次完成听写和整理。要一把你自己的 key，按用量付费，Gemini 有免费额度。
-          </p>
+          <h1 class="step-title" id="key-title"><span class="soft">先接上</span>模型</h1>
+          <p class="step-desc">一次转写加整理 · 自带 key、按量计费 · Gemini 有免费额度</p>
           <div class="key-panel" id="key-panel"></div>
         </div>
         <aside class="visual flow" aria-hidden="true">
@@ -40,61 +38,61 @@
 
       <section class="step" data-step="permissions" aria-labelledby="permissions-title" hidden>
         <div class="step-text">
-          <h1 class="step-title" id="permissions-title">在你的电脑上设置 SpeakMore</h1>
+          <h1 class="step-title" id="permissions-title"><span class="soft">开三项</span>权限</h1>
           <ul class="grants">
             <li data-permission="microphone">
               <div>
-                <p class="grant-primary">允许 SpeakMore 使用麦克风</p>
-                <p class="grant-secondary">只在你按下热键说话时才打开。</p>
+                <p class="grant-primary">麦克风</p>
+                <p class="grant-secondary">只在说话时打开</p>
               </div>
               <button type="button" class="button primary">允许</button>
             </li>
             <li data-permission="listen">
               <div>
-                <p class="grant-primary">允许 SpeakMore 听到你按热键</p>
-                <p class="grant-secondary">系统里叫"输入监控"。只认你设的那一个键，别的按键不记录。</p>
+                <p class="grant-primary">输入监控</p>
+                <p class="grant-secondary">听热键 · 只认这一个键</p>
               </div>
               <button type="button" class="button primary">允许</button>
             </li>
             <li data-permission="trusted">
               <div>
-                <p class="grant-primary">允许 SpeakMore 把文字贴进任何输入框</p>
-                <p class="grant-secondary">系统里叫"辅助功能"。没有它时文字放进剪贴板，要自己按 ⌘V。</p>
+                <p class="grant-primary">辅助功能</p>
+                <p class="grant-secondary">自动贴字 · 缺了要手动 ⌘V</p>
               </div>
               <button type="button" class="button primary">允许</button>
             </li>
           </ul>
-          <p class="hint">在系统设置里打开开关后，回到这个窗口，这里会自己更新。</p>
+          <p class="hint">开好后回来，自动刷新</p>
         </div>
         <aside class="visual privacy">
-          <p class="privacy-title">你的数据怎么走</p>
+          <p class="privacy-title">数据去向</p>
           <div class="privacy-item">
-            <p class="privacy-name">历史留在这台电脑上</p>
-            <p class="privacy-text">说过的话和录音都存在 ~/.speakmore，不上传到别处。</p>
+            <p class="privacy-name">历史只存本机</p>
+            <p class="privacy-text">~/.speakmore · 不上传</p>
           </div>
           <div class="privacy-item">
-            <p class="privacy-name">录音只发给你选的那家</p>
-            <p class="privacy-text">整理时录音直接发给 Gemini 或 OpenAI，中间不经过别的服务器。</p>
+            <p class="privacy-name">录音只发所选模型</p>
+            <p class="privacy-text">直连 Gemini 或 OpenAI · 无中转</p>
           </div>
           <div class="privacy-item">
-            <p class="privacy-name">key 加密保存</p>
-            <p class="privacy-text">用系统钥匙串加密存在本机，界面上不会再显示出来。</p>
+            <p class="privacy-name">key 加密存本机</p>
+            <p class="privacy-text">系统钥匙串 · 存后不再显示</p>
           </div>
         </aside>
       </section>
 
       <section class="step" data-step="microphone" aria-labelledby="microphone-title" hidden>
         <div class="step-text">
-          <h1 class="step-title" id="microphone-title"><span class="soft">说句话，</span>测一下麦克风</h1>
-          <p class="step-desc">随便说点什么，右边的条会跟着你的声音动。</p>
-          <p class="question">说话时你看到条在动吗？</p>
+          <h1 class="step-title" id="microphone-title"><span class="soft">说句话，</span>测麦克风</h1>
+          <p class="step-desc">随便说，看右边</p>
+          <p class="question">条在动吗？</p>
           <div class="answers">
-            <button type="button" class="button primary" id="microphone-yes">是的，继续</button>
-            <button type="button" class="button" id="microphone-no">没有动</button>
+            <button type="button" class="button primary" id="microphone-yes">在动，继续</button>
+            <button type="button" class="button" id="microphone-no">不动</button>
           </div>
           <p class="hint" id="microphone-help" hidden>
-            去系统设置的"声音 › 输入"里看看选的是哪个麦克风、音量是不是拉到了底；也可能是麦克风权限被关了。
-            <button type="button" class="link" id="microphone-settings">打开麦克风权限</button>
+            查 系统设置 › 声音 › 输入：设备、音量 · 或麦克风权限没开
+            <button type="button" class="link" id="microphone-settings">麦克风权限</button>
           </p>
           <p class="problem" id="microphone-error" role="alert" hidden></p>
         </div>
@@ -105,15 +103,15 @@
 
       <section class="step" data-step="hotkey" aria-labelledby="hotkey-title" hidden>
         <div class="step-text">
-          <h1 class="step-title" id="hotkey-title"><span class="soft">按一下，</span>测试你的快捷键</h1>
+          <h1 class="step-title" id="hotkey-title"><span class="soft">按一下，</span>测快捷键</h1>
           <p class="step-desc" id="hotkey-desc"></p>
-          <p class="question">按下时，你看到右边的键变色了吗？</p>
+          <p class="question">键变色了吗？</p>
           <div class="answers">
-            <button type="button" class="button primary" id="hotkey-yes">是的，继续</button>
-            <button type="button" class="button" id="hotkey-no">不，换一个键</button>
+            <button type="button" class="button primary" id="hotkey-yes">变了，继续</button>
+            <button type="button" class="button" id="hotkey-no">没变，换个键</button>
           </div>
           <div class="hotkey-choice" id="hotkey-choice" hidden>
-            <label for="hotkey-select">用哪个键</label>
+            <label for="hotkey-select">换成</label>
             <select class="select" id="hotkey-select"></select>
           </div>
           <p class="hint" id="hotkey-note" role="status" hidden></p>
@@ -125,14 +123,14 @@
 
       <section class="step" data-step="try" aria-labelledby="try-title" hidden>
         <div class="step-text">
-          <h1 class="step-title" id="try-title"><span class="soft">现在，</span>体验一下</h1>
+          <h1 class="step-title" id="try-title"><span class="soft">现在，</span>说一句</h1>
           <p class="step-desc" id="try-desc"></p>
           <blockquote class="sample">嗯，我们明天上午九点开会，不对，九点半吧，记得把上周的数据带上。</blockquote>
-          <p class="did-title">整理的时候它会：</p>
+          <p class="did-title">整理时会</p>
           <ul class="did">
-            <li>去掉“嗯”这样的填充词</li>
-            <li>听出你改了主意：九点 → 九点半</li>
-            <li>只留下你最后的说法</li>
+            <li>去掉“嗯”</li>
+            <li>听出改口：九点 → 九点半</li>
+            <li>只留最终说法</li>
           </ul>
         </div>
         <aside class="visual notes">
@@ -143,10 +141,8 @@
 
       <section class="step done" data-step="done" aria-labelledby="done-title" hidden>
         <h1 class="step-title" id="done-title"><span class="soft">说话，</span>别打字</h1>
-        <p class="step-desc">
-          只要自然地说，SpeakMore 会把你的想法整理成通顺的消息、邮件或文档，读起来就像你仔细打出来的一样。你只管想说什么，不用操心怎么写。
-        </p>
-        <button type="button" class="button primary big" id="finish">开始用吧</button>
+        <p class="step-desc">想到就说 · 剩下的交给 SpeakMore</p>
+        <button type="button" class="button primary big" id="finish">开始使用</button>
       </section>
     </main>
 

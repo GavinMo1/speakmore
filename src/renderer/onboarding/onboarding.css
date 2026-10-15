@@ -1,5 +1,6 @@
 /* 首次引导。和主窗口一样大、一样藏起标题栏；左边一列字和操作，右边一块示意。
-   标题前半句淡一点，照原版（"<0>现在，</0>开始语音输入"那种写法）。 */
+   标题前半句淡一点，照原版（"<0>现在，</0>开始语音输入"那种写法）。
+   观感和主窗口一家：背后的光晕、半透明的面、主题渐变（shared/window.css）。 */
 
 body {
   display: grid;
@@ -23,22 +24,36 @@ body {
   list-style: none;
 }
 
+/* 三段进度：灰的底条上盖一条主题渐变，走到哪段亮到哪段 */
 .step-groups li {
+  position: relative;
   min-width: 6.5rem;
-  padding: 0.5rem 0 0;
+  padding: 0.6rem 0 0;
   font-size: 0.8125rem;
   font-weight: 510;
   text-align: center;
   color: var(--ink-2);
-  border-top: 3px solid var(--fill-selected);
-  transition:
-    color var(--dur-base) var(--ease-out),
-    border-color var(--dur-base) var(--ease-out);
+  transition: color var(--dur-base) var(--ease-out);
 }
 
-.step-groups li[data-state="done"],
-.step-groups li[data-state="current"] {
-  border-top-color: var(--primary);
+.step-groups li::before,
+.step-groups li::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--fill-selected);
+}
+
+.step-groups li::after {
+  background: var(--gradient);
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+.step-groups li:is([data-state="done"], [data-state="current"])::after {
+  opacity: 1;
 }
 
 .step-groups li[data-state="current"] {
@@ -94,10 +109,11 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 22rem;
+  min-height: 19rem;
   padding: 2rem;
-  background: var(--fill-thin);
+  background: var(--surface);
   border-radius: 1.25rem;
+  box-shadow: var(--edge), var(--lift);
 }
 
 /* ---------- 底下的返回、继续 ---------- */
@@ -129,7 +145,7 @@ body {
   max-width: 18rem;
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  background: var(--bg);
+  background: var(--surface-solid);
   border-radius: 0.75rem;
   box-shadow: 0 0 0 1px var(--line);
 }
@@ -138,8 +154,9 @@ body {
   padding: 0.4rem 1rem;
   font-weight: 600;
   color: var(--on-primary);
-  background: var(--primary);
-  box-shadow: none;
+  background: var(--gradient);
+  border-radius: var(--radius-full);
+  box-shadow: 0 4px 14px -6px var(--primary);
 }
 
 .flow-card.result {
@@ -166,9 +183,10 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.9rem 1rem;
+  padding: 0.8rem 1rem;
+  background: var(--surface);
   border-radius: 0.875rem;
-  box-shadow: 0 0 0 1px var(--line);
+  box-shadow: var(--edge);
 }
 
 .grant-primary {
@@ -236,7 +254,7 @@ body {
 .meter span {
   width: 0.75rem;
   height: 0.75rem;
-  background: var(--primary);
+  background: var(--gradient);
   border-radius: var(--radius-full);
   transition: height 80ms linear;
 }
@@ -249,22 +267,27 @@ body {
   padding: 0 1.5rem;
   font: inherit;
   font-size: 2rem;
+  font-family: var(--font-rounded);
   font-weight: 650;
-  background: var(--bg);
+  background: var(--surface-solid);
   border-radius: 1rem;
   box-shadow:
     0 0 0 1px var(--line),
     0 4px 0 var(--line);
   transition:
-    background-color var(--dur-fast) var(--ease-out),
     color var(--dur-fast) var(--ease-out),
-    translate var(--dur-fast) var(--ease-out);
+    translate var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 
+/* 按下去：换成主题渐变，往下沉一点，底下透出同色的光 */
 .big-keycap[data-pressed] {
   color: var(--on-primary);
-  background: var(--primary);
+  background: var(--gradient);
   translate: 0 3px;
+  box-shadow:
+    0 0 0 1px transparent,
+    0 10px 30px -8px var(--primary);
 }
 
 .hotkey-choice {
@@ -281,8 +304,9 @@ body {
   margin: 0 0 1.25rem;
   padding: 0.9rem 1.1rem;
   font-size: 1rem;
-  background: var(--fill-thin);
+  background: var(--surface);
   border-radius: 0.75rem;
+  box-shadow: var(--edge);
 }
 
 .did-title {
@@ -324,7 +348,7 @@ body {
   padding: 1rem;
   font: inherit;
   color: var(--ink);
-  background: var(--bg);
+  background: var(--surface-solid);
   border: none;
   border-radius: 0.75rem;
   box-shadow: 0 0 0 1px var(--line);
@@ -370,6 +394,7 @@ body {
   }
 
   .step-groups li,
+  .step-groups li::after,
   .meter span,
   .big-keycap {
     transition: none;
