@@ -389,7 +389,7 @@ export default {
   speakmore stop                停掉
   speakmore restart             重启
   speakmore status [--json]     看状态：在不在运行、key、三项系统权限、今天和累计说了多少
-  speakmore update              更新到最新版本（命令行装的）。设置、key、历史和录音不动
+  speakmore update              更新到最新版本：命令行装的这一份，装着 SpeakMore.app 的话连它一起。设置、key、历史和录音不动
 
   speakmore history [-n 条数] [--json]
                                 看说过的话，按天分组，新的在前（默认最近 {limit} 条）
@@ -447,6 +447,15 @@ export default {
       badVersion: "下载地址给的版本号不对：{value}",
       upToDate: "已经是最新的（{version}）。",
       updating: "更新 SpeakMore：{current} → {latest}",
+      updatingApp: "更新 SpeakMore.app：{current} → {latest}",
+      appDone: "SpeakMore.app 已经换成 {version}。",
+      reopened: "已经重新打开 SpeakMore.app。",
+      appChecksum: "下载的 {file} 和发布的对不上，可能是路上坏了：再运行一次 speakmore update。",
+      appMount: "打不开下载的 {file}：{reason}",
+      appWrongPackage: "下载的 {file} 里不是 {version} 版的 SpeakMore.app，没有装。",
+      appUnsigned: "下载的 SpeakMore.app 签名不对，没有装：{reason}",
+      appOtherDeveloper: "下载的 SpeakMore.app 和装着的不是同一个开发者签的（{found}，装着的是 {installed}），没有装。",
+      appReplace: "换不掉 {path}：{reason}。可以下载 {url}，自己拖进“应用程序”。",
       available: "有新版本 {latest}（现在是 {current}）：运行 speakmore update。",
     },
 

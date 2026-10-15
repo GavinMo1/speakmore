@@ -178,7 +178,7 @@ export function createIo({ packageDir, env = process.env }) {
     packageDir,
     paths,
     daemon: createDaemon({ paths, packageDir, env, locale: t.locale }),
-    updater: createUpdater({ env, home: paths.home }),
+    updater: createUpdater({ env, home: paths.home, progress: Boolean(process.stderr.isTTY) }),
     now: () => new Date(),
     timeZone: undefined,
     openHistory,

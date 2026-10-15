@@ -1,12 +1,14 @@
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { TimeoutError } from "../../control.mjs";
 import { LocalizedError, msg } from "../../i18n/index.mjs";
 import { noPositionals, parse } from "../common.mjs";
 
 // speakmore update：下载地址上有更新的版本，就用那边的安装脚本把它装上。和把安装那一行再跑一次是同一回事
 // （停掉、换掉程序、再启动，设置、key、历史和录音不动），只是不用记那一串地址。
+// 这台电脑上还装着 SpeakMore.app 的话连它一起换成新的：两个用的是同一份设置和数据，版本要跟上。
 // status 顺带提醒有没有新版本（newerVersion）：一天最多问一次下载地址。
-// 只管用安装脚本装的那一份：从源码跑的用 git pull，装成应用的下载新的安装包。
+// 得从用安装脚本装的那一份跑：从源码跑的用 git pull；只装了 App、没有这个命令的，下载新的安装包。
 
 /** 和安装脚本认的写法一样：v0.6.0、0.6.0-rc.1 */
 const VERSION = /^v?(\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.-]+)?)$/;
@@ -96,6 +98,16 @@ export async function newerVersion(io) {
   return latest !== null && compareVersions(latest, io.version) > 0 ? latest : null;
 }
 
+/** 现在跑着的是哪一个：后台报的状态，没在跑是 null。卡住不答话时也当不知道：安装脚本停它时会强行结束 */
+async function runningNow(io) {
+  try {
+    return await io.daemon.status();
+  } catch (error) {
+    if (error instanceof TimeoutError) return null;
+    throw error;
+  }
+}
+
 export async function update(args, io) {
   noPositionals(parse(args).positionals, "update");
   const { t } = io;
@@ -105,12 +117,48 @@ export async function update(args, io) {
   }
   const latest = await latestVersion(io, UPDATE_CHECK_SECONDS);
   rememberCheck(io, latest);
-  if (compareVersions(latest, io.version) <= 0) {
+  const running = await runningNow(io);
+  const appRunning = running?.packaged === true;
+  const app = await io.updater.findApp(appRunning ? running.pid : null);
+  const cliBehind = compareVersions(latest, io.version) > 0;
+  const appBehind = app !== null && compareVersions(latest, app.version) > 0;
+  if (!cliBehind && !appBehind) {
     io.out(t("cli.update.upToDate", { version: io.version }));
     return 0;
   }
-  io.out(t("cli.update.updating", { current: io.version, latest }));
-  // 装哪个版本说定了：问完到装上之间下载地址又出了更新的，也还是装刚才说的这个。
-  // 安装脚本会把这一份的程序整个换掉：从这里往后不能再加载别的代码，等它跑完只交出退出码
-  return (await io.updater.install(`v${latest}`)) === 0 ? 0 : 1;
+  // 装哪个版本说定了：问完到装上之间下载地址又出了更新的，也还是装刚才说的这个
+  const version = `v${latest}`;
+
+  // App 先换：它没换成的话命令行这一份也不动，两边不会一新一旧
+  if (appBehind) {
+    io.out(t("cli.update.updatingApp", { current: app.version, latest }));
+    // 换掉正在跑的程序之前先让它退出
+    if (appRunning) await io.daemon.stop();
+    try {
+      await io.updater.installApp(version, app.path);
+    } catch (error) {
+      if (appRunning) await io.updater.openApp(app.path);
+      throw error;
+    }
+    io.out(t("cli.update.appDone", { version: latest }));
+  }
+
+  if (cliBehind) {
+    io.out(t("cli.update.updating", { current: io.version, latest }));
+    // 装着 App 时只把原来在跑的那个重新打开：安装脚本只在命令行这一份原来在跑时启动它。
+    // 没装 App 的和以前一样，装完就启动
+    const start = app === null || (running !== null && !appRunning);
+    // 安装脚本会把这一份的程序整个换掉：从这里往后不能再加载别的代码
+    const code = await io.updater.install(version, { start });
+    if (code !== 0) {
+      if (appRunning) await io.updater.openApp(app.path);
+      return 1;
+    }
+  }
+
+  if (appRunning) {
+    await io.updater.openApp(app.path);
+    io.out(t("cli.update.reopened"));
+  }
+  return 0;
 }

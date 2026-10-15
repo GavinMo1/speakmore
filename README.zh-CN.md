@@ -121,7 +121,7 @@ flowchart LR
 | `speakmore` | 启动。已经在运行就只显示状态；没有 key 时问你要 |
 | `speakmore stop` / `restart` | 停掉 / 重启，卡住了也停得掉 |
 | `speakmore status [--json]` | 在不在运行、key、三项权限、今天和累计说了多少 |
-| `speakmore update` | 更新到最新版本。有新版本时 `status` 会提醒 |
+| `speakmore update` | 更新到最新版本，装着 SpeakMore.app 的话连它一起。有新版本时 `status` 会提醒 |
 | `speakmore history [-n 条数] [--json]` | 看说过的话。失败的那条会写原因，录音还留着 |
 | `speakmore usage [--json]` | 今天、本月、累计的花费、token、次数、模型一般多久回话，按型号分开 |
 | `speakmore model` | 能用哪几家的模型、各家的 key 有没有、现在用的哪个 |
@@ -216,7 +216,7 @@ flowchart LR
 <details>
 <summary><b>🔄 升级和卸载</b></summary>
 
-- **升级**：安装包装的，下载新的 dmg 再拖进去一次；命令行装的，运行 `speakmore update`（或者把安装那一行再运行一次）。设置、key、历史和录音都不动。
+- **升级**：命令行装的，运行 `speakmore update`，装着 SpeakMore.app 的话连它一起换，原来在跑的那个会重新打开；只装了 App 的，下载新的 dmg 再拖进去一次。设置、key、历史和录音都不动。
 - **卸载**：安装包装的，从菜单栏退出，把“应用程序”里的 SpeakMore 拖进废纸篓。命令行装的，运行 `speakmore uninstall`：停掉后台，删掉 `~/.speakmore`、命令链接和钥匙串里的那一条；只删程序、留下数据加 `--keep-data`。
 - **装回 0.4.2 或更早**：新版本在历史库里加了一张账表，旧版本见到会启动不了。先运行 `sqlite3 ~/.speakmore/data/history.db "DROP TABLE model_calls; PRAGMA user_version = 1;"`，只丢账，说过的话都在。
 
