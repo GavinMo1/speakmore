@@ -59,18 +59,15 @@ export default {
     apps: "微信、飞书、Slack、Notion、VS Code、Chrome 等",
   },
   cost: {
-    title: "告别 144 美元年费\n月均成本约 1 美元",
+    title: "月均成本\n约 1 美元",
     lead: "应用本身免费。使用自有密钥，按实际用量向 Google 付费。",
-    yearly: "年度费用",
-    typeless: "Typeless Pro",
-    typelessValue: "$144",
-    speakmore: "SpeakMore + Gemini",
-    speakmoreValue: "≈ $12",
-    perDictation: "单次听写",
-    perDictationValue: "$0.0003",
-    freeTier: "使用 Gemini 免费额度",
-    freeTierValue: "$0",
-    note: "依据作者 2026 年 6–9 月的实际用量估算：每月听写 430–870 次、录音 4.5–7 小时，按 Gemini 3.6 Flash 官方价格并启用提示词缓存计算，每月 $0.67–1.05。Google 已宣布自 2027 年 1 月 1 日起 3.6 Flash 价格上调一倍（约 $1.30–2.10）。Typeless Pro 年付价格为每月 $12（typeless.com/pricing，2026-10-14 查询）。",
+    items: [
+      { label: "应用", value: "免费" },
+      { label: "单次听写", value: "$0.0003" },
+      { label: "每月 430–870 次听写", value: "$0.67–1.05", highlight: true },
+      { label: "使用 Gemini 免费额度", value: "$0" },
+    ],
+    note: "依据作者 2026 年 6–9 月的实际用量估算：每月听写 430–870 次、录音 4.5–7 小时，按 Gemini 3.6 Flash 官方价格并启用提示词缓存计算。Google 已宣布自 2027 年 1 月 1 日起 3.6 Flash 价格上调一倍，届时每月约 $1.30–2.10。",
   },
   privacy: {
     title: "语音直达模型\n全程不经中转",
@@ -123,7 +120,6 @@ export default {
   open: {
     title: "开源\n采用 MIT 许可",
     lead: "源代码完全公开，可自由查阅、修改与编译。",
-    origin: "基于 18 篇逆向分析笔记从零实现，笔记同样公开。",
     cta: "前往 GitHub",
   },
   download: {
@@ -144,6 +140,5 @@ export default {
   footer: {
     license: "MIT 许可",
     source: "源代码",
-    notAffiliated: "本项目与 Typeless 无关联。",
   },
 };

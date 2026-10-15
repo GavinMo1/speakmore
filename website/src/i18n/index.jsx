@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { otherLocale, pickLocale } from "../lib/locale.js";
+import { I18nContext } from "./context.js";
 import en from "./en.js";
 import zh from "./zh-CN.js";
 
@@ -30,8 +31,6 @@ function initialLocale() {
     languages: navigator.languages?.length ? navigator.languages : [navigator.language],
   });
 }
-
-const I18nContext = createContext(null);
 
 export function I18nProvider({ children }) {
   const [locale, setLocale] = useState(initialLocale);

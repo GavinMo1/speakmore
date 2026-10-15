@@ -149,22 +149,6 @@
   }
 }
 
-/* 成本那张图的两根条：从左边长出来 */
-@keyframes grow {
-  from {
-    transform: scaleX(0);
-  }
-}
-
-@supports (animation-timeline: view()) {
-  .grow {
-    transform-origin: left center;
-    animation: grow linear both;
-    animation-timeline: view();
-    animation-range: entry 20% cover 45%;
-  }
-}
-
 /* 悬浮条的声波：从中间往两边传开（和 App 里一样中间先起） */
 @keyframes talk {
   0%,
@@ -197,8 +181,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .rise,
-  .reveal,
-  .grow {
+  .reveal {
     animation: none;
   }
 }

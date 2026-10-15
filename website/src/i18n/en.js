@@ -62,18 +62,15 @@ export default {
     apps: "Slack, Notion, VS Code, WeChat, Chrome, Gmail and more",
   },
   cost: {
-    title: "Not $144 a year.\nAbout $1 a month.",
+    title: "About $1\na month.",
     lead: "The app is free. Use your own key and pay Google only for what you use.",
-    yearly: "Annual cost",
-    typeless: "Typeless Pro",
-    typelessValue: "$144",
-    speakmore: "SpeakMore + Gemini",
-    speakmoreValue: "≈ $12",
-    perDictation: "per dictation",
-    perDictationValue: "$0.0003",
-    freeTier: "with Gemini's free tier",
-    freeTierValue: "$0",
-    note: "Estimated from the author's real use, Jun–Sep 2026: 430–870 dictations, 4.5–7 hours of audio a month, at Gemini 3.6 Flash list prices with prompt caching — $0.67–1.05 a month. Google doubles 3.6 Flash prices on Jan 1, 2027 (≈ $1.30–2.10). Typeless Pro is $12/month billed yearly (typeless.com/pricing, checked Oct 14, 2026).",
+    items: [
+      { label: "The app", value: "Free" },
+      { label: "Per dictation", value: "$0.0003" },
+      { label: "430–870 dictations a month", value: "$0.67–1.05", highlight: true },
+      { label: "On Gemini's free tier", value: "$0" },
+    ],
+    note: "Estimated from the author's real use, Jun–Sep 2026: 430–870 dictations and 4.5–7 hours of audio a month, at Gemini 3.6 Flash list prices with prompt caching. Google doubles 3.6 Flash prices on Jan 1, 2027, which puts it at about $1.30–2.10 a month.",
   },
   privacy: {
     title: "Straight to the model.\nNothing in between.",
@@ -126,7 +123,6 @@ export default {
   open: {
     title: "Open source.\nMIT licensed.",
     lead: "Read, modify and build it yourself.",
-    origin: "Built from scratch on 18 reverse-engineering notes, also public.",
     cta: "View on GitHub",
   },
   download: {
@@ -147,6 +143,5 @@ export default {
   footer: {
     license: "MIT License",
     source: "Source",
-    notAffiliated: "Not affiliated with Typeless.",
   },
 };

@@ -15,7 +15,6 @@ export function siteLinks(site, version) {
     },
     install: `curl -fsSL ${base}/install.sh | bash`,
     repository: site.repository,
-    notes: `${site.repository}/blob/main/targets/typeless/docs/00-overview.md`,
     license: `${site.repository}/blob/main/LICENSE`,
     geminiKey: "https://aistudio.google.com/apikey",
     openaiKey: "https://platform.openai.com/api-keys",
