@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test \"test/**/*.test.mjs\"",
-    "icons": "node scripts/icons.mjs"
+    "icons": "node scripts/icons.mjs",
+    "deploy": "sh scripts/deploy.sh"
   },
   "dependencies": {
     "react": "19.3.1",
