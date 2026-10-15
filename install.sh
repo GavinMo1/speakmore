@@ -218,9 +218,10 @@ swap_in() {
 
 install_files() {
   # 正在运行的要先停：它开着旧程序的文件。用新的这份去停，新旧版本的后台应用它都认。
-  # 0.1 版把数据放在别处，有的话这一步会顺带搬过来
+  # 0.1 版把数据放在别处，有的话这一步会顺带搬过来。
+  # 下面靠它说的话判断停没停、搬没搬，命令行又按终端的语言说话：让它说中文，和这个脚本一致
   local output
-  output="$(run_new stop 2>&1)" || fail "正在运行的 SpeakMore 停不掉" "$output" "先把它退出，再安装。"
+  output="$(SPEAKMORE_LANGUAGE=zh-CN run_new stop 2>&1)" || fail "正在运行的 SpeakMore 停不掉" "$output" "先把它退出，再安装。"
   case "$output" in *"已经搬到"*) ok "$(printf '%s\n' "$output" | grep "已经搬到" | head -1)" ;; esac
   case "$output" in *"已经停掉"* | *"强行结束"*) ok "停掉了正在运行的那一个" ;; esac
 

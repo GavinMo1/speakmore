@@ -40,7 +40,9 @@ const FAKE_ELECTRON = `#!/bin/sh
 printf '%s|%s|%s|%s\\n' "$ELECTRON_RUN_AS_NODE" "$SPEAKMORE_HOME" "$#" "$*" >> "$FAKE_CALL_LOG"
 case "$2" in
   --version) [ -z "$FAKE_BROKEN" ] || exit 1; echo "$FAKE_VERSION" ;;
-  stop) [ -z "$FAKE_STOP_FAILS" ] || { echo "SpeakMore 停不掉（进程号 1）" >&2; exit 1; }; echo "\${FAKE_STOP_SAYS:-SpeakMore 本来就没有在运行。}" ;;
+  # 真的命令行按终端的语言说话：只有指定了中文才说中文（安装脚本靠它说的话判断停没停、搬没搬）
+  stop) [ -z "$FAKE_STOP_FAILS" ] || { echo "SpeakMore 停不掉（进程号 1）" >&2; exit 1; }
+    [ "$SPEAKMORE_LANGUAGE" = zh-CN ] || { echo "SpeakMore wasn't running."; exit 0; }; echo "\${FAKE_STOP_SAYS:-SpeakMore 本来就没有在运行。}" ;;
 esac
 `;
 

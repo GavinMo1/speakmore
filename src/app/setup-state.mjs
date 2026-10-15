@@ -52,3 +52,16 @@ export function summarizeSetup({ key, permissions, helper, providerName = "Gemin
     degraded: permissions.trusted === false ? msg("setup.degraded") : null,
   };
 }
+
+/**
+ * 交给命令行的样子：结论里的每句话按 t 的语言翻成字。0.5 及以前的命令行、status --json 的读者
+ * 都把这几项当字来读（那时后台报的就是中文的字），交 msg 过去它们会显示成 [object Object]
+ */
+export function summaryAsText({ ready, missing, blocker, degraded }, t) {
+  return {
+    ready,
+    missing: missing.map(t.text),
+    blocker: blocker === null ? null : t.text(blocker),
+    degraded: degraded === null ? null : t.text(degraded),
+  };
+}

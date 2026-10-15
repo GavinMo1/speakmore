@@ -160,7 +160,7 @@ export function createIo({ packageDir, env = process.env }) {
     t,
     packageDir,
     paths,
-    daemon: createDaemon({ paths, packageDir, env }),
+    daemon: createDaemon({ paths, packageDir, env, locale: t.locale }),
     now: () => new Date(),
     timeZone: undefined,
     openHistory,

@@ -94,6 +94,27 @@ test("没有在运行时状态是 null", async () => {
   assert.equal(await daemonWith().status(), null);
 });
 
+test("每条命令都带上命令行用的语言：后台按它把话翻好回来（0.5 以前的后台不认这一项，照旧回中文）", async () => {
+  const seen = [];
+  await startFakeApp(() => RUNNING, {
+    status: (params) => {
+      seen.push(["status", params]);
+      return RUNNING;
+    },
+    "set-key": (params) => {
+      seen.push(["set-key", params]);
+      return { ok: true };
+    },
+  });
+  const daemon = daemonWith({ locale: "zh-CN" });
+  await daemon.status({ recheck: true });
+  await daemon.request("set-key", { key: "k", provider: "gemini" });
+  assert.deepEqual(seen, [
+    ["status", { recheck: true, locale: "zh-CN" }],
+    ["set-key", { key: "k", provider: "gemini", locale: "zh-CN" }],
+  ]);
+});
+
 test("启动：用 Electron 跑这个包，脱离终端，输出接到日志文件，等它答话了才算启动好", async () => {
   const spawn = fakeSpawn((_child, options) => {
     // 应用自己的输出应当落进日志文件

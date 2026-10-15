@@ -15,7 +15,7 @@ export function setLocale(locale) {
   document.documentElement.lang = t.locale;
 }
 
-/** 把 root 里标了 data-i18n 的地方按现在的语言填上 */
+/** 把 root 里标了 data-i18n 的地方按现在的语言填上。<template> 里的也填：照它克隆出来的（历史的每一行）就带着字了 */
 export function localize(root = document) {
   document.documentElement.lang = t.locale;
   for (const node of root.querySelectorAll("[data-i18n]")) node.textContent = t(node.dataset.i18n);
@@ -24,6 +24,7 @@ export function localize(root = document) {
       if (name.startsWith("data-i18n-")) node.setAttribute(name.slice("data-i18n-".length), t(value));
     }
   }
+  for (const template of root.querySelectorAll("template")) localize(template.content);
 }
 
 /** 一个热键在提示、键帽上写成什么 */

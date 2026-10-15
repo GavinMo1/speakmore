@@ -15,7 +15,7 @@ import {
   Tray,
 } from "electron";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
-import { createTranslator, msg, resolveLocale } from "../i18n/index.mjs";
+import { createTranslator, LocalizedError, msg, problemOf, resolveLocale } from "../i18n/index.mjs";
 import { alsoLogTo, log } from "../log.mjs";
 import { findProvider, formatModelChoice, PROVIDERS, parseModelChoice } from "../server/providers/index.mjs";
 import { openHistory } from "../storage/history.mjs";
@@ -32,7 +32,7 @@ import { startHelper } from "./helper.mjs";
 import { createKeyManager } from "./keys/key-manager.mjs";
 import { createKeyStore } from "./keys/key-store.mjs";
 import { startService } from "./service.mjs";
-import { summarizeSetup } from "./setup-state.mjs";
+import { summarizeSetup, summaryAsText } from "./setup-state.mjs";
 
 // 后台应用的主进程：两个窗口（悬浮条、主窗口）、菜单栏图标、原生小帮手、内置的听写服务，
 // 以及页面和命令行要它代办的事。窗口用什么颜色由主题定（src/themes），这里负责把它交给每个窗口。
@@ -429,8 +429,23 @@ async function main() {
     hubWindow?.webContents.send("history:changed");
   }
 
-  ipcMain.handle("config:get", () => ({ serverUrl, hotkey, barControls }));
-  ipcMain.handle("dictation:deliver", async (_event, payload) => {
+  /**
+   * 页面调用主进程。出错时 Electron 只把 message 带给页面，problem 丢了，而 LocalizedError 的 message 是英文：
+   * 这种错在这边按界面语言翻好再抛（比如设置文件坏了时改热键，中文界面要说中文）
+   */
+  function handle(channel, listener) {
+    ipcMain.handle(channel, async (...args) => {
+      try {
+        return await listener(...args);
+      } catch (error) {
+        if (error instanceof LocalizedError) throw new Error(t.text(error.problem), { cause: error });
+        throw error;
+      }
+    });
+  }
+
+  handle("config:get", () => ({ serverUrl, hotkey, barControls }));
+  handle("dictation:deliver", async (_event, payload) => {
     const result = await delivery.completed(payload);
     // 只记长度：成品是用户说的话，不进日志
     log.info("delivered", { audio_id: payload.audioId, text_length: payload.text.length, notice: result.notice });
@@ -438,25 +453,25 @@ async function main() {
     e2e?.onFinished({ delivered: payload.text, notice: result.notice });
     return result;
   });
-  ipcMain.handle("dictation:failed", (_event, payload) => {
+  handle("dictation:failed", (_event, payload) => {
     delivery.failed(payload);
     log.warn("dictation_failed", { audio_id: payload.audioId, error: payload.error });
     historyChanged();
     e2e?.onFinished({ failed: payload.error });
   });
-  ipcMain.handle("history:list", () => history.list());
-  ipcMain.handle("usage:report", () => usageReport(history, { now: new Date() }));
-  ipcMain.handle("insights:get", () => insights(history.dictations(), { now: new Date() }));
-  ipcMain.handle("app:info", () => ({ version: app.getVersion(), hotkey }));
-  ipcMain.handle("app:open-homepage", () => shell.openExternal(HOMEPAGE));
-  ipcMain.handle("clipboard:write", (_event, text) => {
+  handle("history:list", () => history.list());
+  handle("usage:report", () => usageReport(history, { now: new Date() }));
+  handle("insights:get", () => insights(history.dictations(), { now: new Date() }));
+  handle("app:info", () => ({ version: app.getVersion(), hotkey }));
+  handle("app:open-homepage", () => shell.openExternal(HOMEPAGE));
+  handle("clipboard:write", (_event, text) => {
     if (typeof text !== "string") throw new TypeError("要复制的不是文字");
     clipboard.writeText(text);
   });
 
   // ---------- 主窗口的设置要主进程代办的事 ----------
 
-  ipcMain.handle("setup:get", () => {
+  handle("setup:get", () => {
     const setup = currentSetup();
     return {
       ...setup,
@@ -487,11 +502,11 @@ async function main() {
     };
   }
   // 设置里和 speakmore key 存 key、删 key，走的是同一处
-  ipcMain.handle("setup:save-key", (_event, value) => keys.save(value));
-  ipcMain.handle("setup:forget-key", (_event, id) => keys.forget({ provider: id ?? keys.provider.id }));
-  ipcMain.handle("setup:use-provider", (_event, id, value) => useProvider(id, value));
-  ipcMain.handle("setup:read-clipboard", () => clipboard.readText());
-  ipcMain.handle("setup:open-key-page", (_event, id) => shell.openExternal((findProvider(id) ?? provider()).keyPage));
+  handle("setup:save-key", (_event, value) => keys.save(value));
+  handle("setup:forget-key", (_event, id) => keys.forget({ provider: id ?? keys.provider.id }));
+  handle("setup:use-provider", (_event, id, value) => useProvider(id, value));
+  handle("setup:read-clipboard", () => clipboard.readText());
+  handle("setup:open-key-page", (_event, id) => shell.openExternal((findProvider(id) ?? provider()).keyPage));
 
   /**
    * 改用另一家（可以顺带填一把它的新 key）：验证过才换，换了就记进设置，下次启动也用它。
@@ -507,13 +522,13 @@ async function main() {
       saveSetting(PATHS.settingsFile, "model", choice.provider);
     } catch (error) {
       log.error("settings_save_failed", { name: "model", error: String(error?.message ?? error) });
-      return { ok: true, note: msg("notes.saveFailed", { provider: keys.provider.name, reason: error.message }) };
+      return { ok: true, note: msg("notes.saveFailed", { provider: keys.provider.name, reason: problemOf(error) }) };
     }
     const variable = overridingEnv("model", process.env);
     if (variable !== null) return { ok: true, note: msg("notes.envNextLaunch", { variable }) };
     return { ok: true };
   }
-  ipcMain.handle("setup:open-privacy", async (_event, permission) => {
+  handle("setup:open-privacy", async (_event, permission) => {
     if (!Object.hasOwn(PRIVACY_PANES, permission)) throw new TypeError(`不认识的权限：${permission}`);
     // 麦克风从没问过时，系统设置的列表里还没有这个应用，要先让系统弹一次授权框
     if (permission === "microphone" && systemPreferences.getMediaAccessStatus("microphone") === "not-determined") {
@@ -535,18 +550,18 @@ async function main() {
   function reverifyKeyInBackground() {
     keys.reverify().catch((error) => log.error("key_reverify_failed", { error: String(error?.stack ?? error) }));
   }
-  ipcMain.handle("setup:recheck", () => {
+  handle("setup:recheck", () => {
     recheckPermissions();
     reverifyKeyInBackground();
   });
-  ipcMain.handle("setup:set-open-at-login", (_event, enabled) => {
+  handle("setup:set-open-at-login", (_event, enabled) => {
     if (!app.isPackaged) throw new Error("从终端启动时不能设置开机启动");
     app.setLoginItemSettings({ openAtLogin: Boolean(enabled) });
     log.info("open_at_login", { enabled: Boolean(enabled) });
     setupChanged();
   });
-  ipcMain.handle("setup:set-hotkey", (_event, wanted) => setHotkey(wanted));
-  ipcMain.handle("setup:set-theme", (_event, wanted) => {
+  handle("setup:set-hotkey", (_event, wanted) => setHotkey(wanted));
+  handle("setup:set-theme", (_event, wanted) => {
     saveSetting(PATHS.settingsFile, "theme", wanted);
     reloadTheme();
     setupChanged();
@@ -554,7 +569,7 @@ async function main() {
     const variable = overridingEnv("theme", process.env);
     return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
   });
-  ipcMain.handle("setup:set-language", (_event, wanted) => {
+  handle("setup:set-language", (_event, wanted) => {
     saveSetting(PATHS.settingsFile, "language", wanted);
     // 是在设置的"通用"那一页换的：主窗口换好语言后回到这一页
     reloadLanguage({ hubTarget: { pane: "general" } });
@@ -579,7 +594,11 @@ async function main() {
         if (hubTarget) hubWindow.loadFile(join(sourceDir, "renderer", "hub", "hub.html"), { query: hubTarget });
         else hubWindow.webContents.reload();
       }
-      onboardingWindow?.webContents.reload();
+      if (onboardingWindow) {
+        // 重新加载后从头开始：正停在测快捷键那一步的话，热键别再交给它，到那一步时它会再要
+        hotkeyToOnboarding = false;
+        onboardingWindow.webContents.reload();
+      }
       log.info("language_changed", { language: languageSetting, locale });
     }
     return { language: languageSetting, locale };
@@ -685,7 +704,7 @@ async function main() {
   ipcMain.on("onboarding:capture-hotkey", (_event, capturing) => {
     hotkeyToOnboarding = capturing === true;
   });
-  ipcMain.handle("onboarding:finish", () => {
+  handle("onboarding:finish", () => {
     log.info("onboarding_finished");
     onboardingWindow?.close();
     showHub({ route: "home" });
@@ -754,7 +773,14 @@ async function main() {
     for (let waited = 0; helperState === "starting" && waited < 3_000; waited += 50) await sleep(50);
   }
 
-  function describeStatus() {
+  /** 命令行说了它用哪种语言就按它的翻，没说（0.5 及以前的命令行）就按界面的 */
+  const translatorFor = (wanted) => (wanted ? createTranslator(wanted) : t);
+  /** 回给命令行的结果里那句 problem 翻成字：命令行（含旧版本的）和 --json 的读者都只认字 */
+  const withProblemText = (result, say) =>
+    result?.problem ? { ...result, problem: say.text(result.problem) } : result;
+
+  /** 交给命令行的状态。要给人看的话都按 say 的语言翻成字，原因见 summaryAsText */
+  function describeStatus(say) {
     const setup = currentSetup();
     return {
       pid: process.pid,
@@ -763,6 +789,8 @@ async function main() {
       // 启动时要等 key 验证完、麦克风的授权框有了回应，才算准备好
       starting: !startupChecked,
       hotkey,
+      // 0.5 及以前的命令行靠它说热键叫什么
+      hotkeyLabel: say(`hotkeys.${hotkey}.name`),
       // 连着单独启动的服务端时，用哪个模型由那边定
       provider: service ? keys.provider.id : null,
       // 每家的 key 在哪。装成应用的那个各存各的，命令行要靠这一项才知道
@@ -776,7 +804,8 @@ async function main() {
       // 装成应用的和命令启动的，权限和 key 各是一套：命令行据此决定该不该代它重启
       packaged: app.isPackaged,
       ...setup,
-      summary: summarizeSetup(setup),
+      key: withProblemText(setup.key, say),
+      summary: summaryAsText(summarizeSetup(setup), say),
     };
   }
 
@@ -788,26 +817,28 @@ async function main() {
         log,
         handlers: {
           /** recheck：把会自己变的几样重新看一遍再回答（用户刚去系统设置里改过、网刚连上时用） */
-          async status({ recheck = false }) {
+          async status({ recheck = false, locale: wanted }) {
             if (recheck) {
               const denied = Object.values(helperPermissions ?? {}).includes(false);
               if (denied || helperState === "stopped") recheckPermissions();
               reverifyKeyInBackground();
             }
             await helperReported();
-            return describeStatus();
+            return describeStatus(translatorFor(wanted));
           },
           // provider 不给就是正在用的那一家（0.3 的命令行不给）
-          "set-key": ({ key, provider }) => keys.save(key, { provider }),
+          "set-key": async ({ key, provider, locale: wanted }) =>
+            withProblemText(await keys.save(key, { provider }), translatorFor(wanted)),
           "forget-key": ({ provider } = {}) => keys.forget({ provider }),
-          "check-model": ({ model }) => {
+          "check-model": async ({ model, locale: wanted }) => {
+            const say = translatorFor(wanted);
             let choice;
             try {
               choice = parseModelChoice(model);
             } catch (error) {
-              return { ok: false, cause: "other", problem: `model ${error.message}` };
+              return { ok: false, cause: "other", problem: say.text(problemOf(error)) };
             }
-            return keys.check(choice);
+            return withProblemText(await keys.check(choice), say);
           },
           "reload-theme": reloadTheme,
           "reload-language": () => reloadLanguage(),
@@ -825,7 +856,8 @@ async function main() {
   const keyLoaded = keys.loadAtStartup();
   if (e2e) {
     const loaded = await keyLoaded;
-    if (loaded.state !== "ready") throw new Error(`端到端测试需要能用的 key：${loaded.problem ?? loaded.state}`);
+    if (loaded.state !== "ready")
+      throw new Error(`端到端测试需要能用的 key：${t.text(loaded.problem) || loaded.state}`);
     await e2e.run({ bar, history, quit: (code) => app.exit(code) });
     return;
   }

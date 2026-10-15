@@ -96,7 +96,6 @@ export default {
     empty: "是空的",
     unknownProvider: "不认识 {name} 这家，能用的有 {providers}",
     badName: "模型名 {model} 不对：只能有字母、数字和 . _ : -",
-    invalidChoice: "model {reason}",
   },
 
   setup: {

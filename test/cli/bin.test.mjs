@@ -61,3 +61,33 @@ test("说什么语言：设置里写了就用它；跟随系统时看终端的 L
   writeFileSync(resolvePaths({ SPEAKMORE_HOME: dir }).settingsFile, "{ 坏了");
   assert.match(helpIn({ LANG: "zh_CN.UTF-8" }), /^SpeakMore：/);
 });
+
+test("Node 太旧：按终端的语言说要哪个版本；旧到连文案那一层都加载不了时用英文说，不甩调用栈", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sm-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  /** 装成某个版本的 Node；ancient 时再拿掉 16.9 以前没有的写法 */
+  const runAs = (version, { ancient = false, LANG = "zh_CN.UTF-8" } = {}) => {
+    const preload = join(dir, `${version}.mjs`);
+    writeFileSync(
+      preload,
+      `Object.defineProperty(process.versions, "node", { value: ${JSON.stringify(version)} });\n` +
+        (ancient ? "delete String.prototype.replaceAll;\ndelete Object.hasOwn;\n" : ""),
+    );
+    const { LC_ALL: _all, LC_MESSAGES: _messages, ...base } = process.env;
+    return spawnSync(process.execPath, ["--import", preload, BIN, "help"], {
+      encoding: "utf8",
+      env: { ...base, SPEAKMORE_HOME: dir, LANG },
+    });
+  };
+
+  const zhTerminal = runAs("20.18.1");
+  assert.equal(zhTerminal.status, 1);
+  assert.equal(zhTerminal.stderr, "SpeakMore 需要 Node 22.13 或更新的版本（23 系列要 23.4 以上），现在是 20.18.1。\n");
+
+  const ancient = runAs("14.21.3", { ancient: true });
+  assert.equal(ancient.status, 1);
+  assert.equal(
+    ancient.stderr,
+    "SpeakMore needs Node 22.13 or newer (23.4 or newer on the 23 line); this is 14.21.3.\n",
+  );
+});

@@ -43,7 +43,7 @@ function keyLine(key, provider, t) {
   }
 }
 
-/** 热键叫什么。比这个命令新的版本里才有的热键叫不出名字，用后台报的说法（0.5 以前它报 hotkeyLabel） */
+/** 热键叫什么。比这个命令新的版本里才有的热键叫不出名字，用后台报的说法 hotkeyLabel */
 const hotkeyTitle = (status, t) =>
   HOTKEY_IDS.includes(status.hotkey) ? t(`hotkeys.${status.hotkey}.name`) : (status.hotkeyLabel ?? status.hotkey);
 

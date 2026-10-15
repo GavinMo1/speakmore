@@ -68,11 +68,14 @@ function startingHint(status) {
  * @param {ReturnType<import("../storage/paths.mjs").resolvePaths>} options.paths
  * @param {string} options.packageDir 这个包装在哪：Electron 以它为应用目录启动
  * @param {Record<string, string | undefined>} options.env 传给后台应用的环境
+ * @param {string} [options.locale] 命令行用的语言。每条命令都带上它，后台按它把要给人看的话翻好再回
+ *   （0.5 及以前的命令行不带，后台就按自己的语言翻：它们和 status --json 的读者都只认字）
  */
 export function createDaemon({
   paths,
   packageDir,
   env,
+  locale,
   spawn = nodeSpawn,
   resolveElectron = (onProgress) => resolveElectronBinary(packageDir, onProgress),
   ensureHelper = defaultEnsureHelper,
@@ -85,7 +88,8 @@ export function createDaemon({
   readyTimeoutMs = 90_000,
   quitTimeoutMs = 5_000,
 }) {
-  const request = (cmd, params, options) => requestControl(paths.controlSocket, cmd, params, options);
+  const request = (cmd, params, options) =>
+    requestControl(paths.controlSocket, cmd, locale ? { ...params, locale } : params, options);
 
   /**
    * @returns {Promise<object | null>} 没有在运行时是 null

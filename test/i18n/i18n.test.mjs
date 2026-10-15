@@ -110,9 +110,13 @@ test("count 是个数：按语言写成 1,234 并据此挑单复数；别的参�
   assert.equal(en("cli.history.more", { shown: 20, total: 1234 }).includes("-n 1234"), true);
 });
 
-test("并列和数字按语言写", () => {
+test("并列和数字按语言写；中文一律用顿号隔开（和原来的中文界面一样，英文字母不挨着“和”“或”）", () => {
   assert.equal(en.list(["A", "B", "C"]), "A, B, and C");
-  assert.equal(zh.list(["A", "B", "C"]), "A、B和C");
+  assert.equal(zh.list(["Gemini API key", "按键监听"]), "Gemini API key、按键监听");
+  assert.equal(zh.list(["A", "B", "C"]), "A、B、C");
+  assert.equal(zh.either(["1（Gemini）", "2（OpenAI）"]), "1（Gemini）、2（OpenAI）");
+  assert.equal(zh.list(["A"]), "A");
+  assert.equal(zh.list([]), "");
   assert.equal(en.list([msg("setup.missing.microphone")]), "microphone access");
   assert.equal(en.either(["1 (Gemini)", "2 (OpenAI)"]), "1 (Gemini) or 2 (OpenAI)");
   assert.equal(en.number(12345), "12,345");

@@ -1,20 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { summarizeSetup } from "../../src/app/setup-state.mjs";
+import { summarizeSetup, summaryAsText } from "../../src/app/setup-state.mjs";
 import { createTranslator } from "../../src/i18n/index.mjs";
 
 const zh = createTranslator("zh-CN");
 const en = createTranslator("en");
 /** 结论里的话按中文翻出来再比：说法和以前一样，只是改由显示的那一端翻 */
-function summarize(setup, t = zh) {
-  const { ready, missing, blocker, degraded } = summarizeSetup(setup);
-  return {
-    ready,
-    missing: missing.map(t.text),
-    blocker: blocker === null ? null : t.text(blocker),
-    degraded: degraded === null ? null : t.text(degraded),
-  };
-}
+const summarize = (setup, t = zh) => summaryAsText(summarizeSetup(setup), t);
 
 const allGood = {
   key: { state: "ready", source: "stored", problem: null },
@@ -119,4 +111,21 @@ test("同一个结论换成英文说：缺的东西、按热键时的那句、�
   // 原因是模型回的原话时照原样带上
   const rejected = summarize(withKey({ state: "rejected", cause: "other", problem: "models/x is not found" }), en);
   assert.equal(rejected.blocker, "Gemini check failed: models/x is not found");
+});
+
+test("交给命令行的结论：每句都按它的语言翻成字（0.5 的命令行和 status --json 的读者只认字）", () => {
+  const summary = summarizeSetup(withPermissions({ microphone: "denied", listen: false, trusted: false }));
+  assert.deepEqual(summaryAsText(summary, en), {
+    ready: false,
+    missing: ["microphone access", "Input Monitoring access"],
+    blocker: en.text(summary.blocker),
+    degraded: en.text(summary.degraded),
+  });
+  assert.equal(typeof summaryAsText(summary, zh).blocker, "string");
+  assert.deepEqual(summaryAsText(summarizeSetup(allGood), zh), {
+    ready: true,
+    missing: [],
+    blocker: null,
+    degraded: null,
+  });
 });

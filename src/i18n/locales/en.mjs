@@ -99,7 +99,6 @@ export default {
     empty: "is empty",
     unknownProvider: "unknown provider {name}; available: {providers}",
     badName: "model name {model} is invalid: only letters, digits, and . _ : - are allowed",
-    invalidChoice: "model {reason}",
   },
 
   setup: {

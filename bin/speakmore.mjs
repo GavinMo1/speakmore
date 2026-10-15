@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 // speakmore 命令的入口。这里只做几件必须抢在加载其余代码之前的事，命令本身在 src/cli/main.mjs。
 import { nodeVersionProblem } from "../src/cli/node-version.mjs";
-import { createTranslator, localesFromEnv, resolveLocale, SYSTEM_LOCALE } from "../src/i18n/index.mjs";
 
-// 这两句说在读设置之前，按终端的语言说
-const t = createTranslator(resolveLocale(SYSTEM_LOCALE, localesFromEnv(process.env)));
-if (process.platform !== "darwin") {
-  console.error(t("cli.macOnly"));
-  process.exit(1);
-}
+// 先查 Node 的版本：其余的代码（连同文案那一层）都可能用到旧版本没有的写法
 const versionProblem = nodeVersionProblem(process.versions.node);
 if (versionProblem) {
-  console.error(t.text(versionProblem));
+  console.error(await inTerminalLanguage(versionProblem));
+  process.exit(1);
+}
+
+// 这句说在读设置之前，按终端的语言说
+const { createTranslator, localesFromEnv, matchLocale } = await import("../src/i18n/index.mjs");
+if (process.platform !== "darwin") {
+  console.error(createTranslator(matchLocale(localesFromEnv(process.env)))("cli.macOnly"));
   process.exit(1);
 }
 
@@ -33,3 +34,16 @@ for (const stream of [process.stdout, process.stderr]) {
 
 const { main } = await import("../src/cli/main.mjs");
 process.exitCode = await main(process.argv.slice(2));
+
+/**
+ * Node 版本不够时的那句话，按终端的语言说。文案那一层用到较新的 Node 才有的写法（replaceAll、Object.hasOwn），
+ * 太旧的 Node 上它加载不了或者翻不出来：那就用英文说，原因还是这一句，不是那一层的调用栈
+ */
+async function inTerminalLanguage(problem) {
+  try {
+    const { createTranslator, localesFromEnv, matchLocale } = await import("../src/i18n/index.mjs");
+    return createTranslator(matchLocale(localesFromEnv(process.env))).text(problem);
+  } catch {
+    return problem.english;
+  }
+}

@@ -5,7 +5,8 @@ import { LocalizedError, msg } from "./i18n/index.mjs";
 // 命令行和后台应用之间的控制通道：数据目录里的一个 Unix 套接字，只有这台机器上的同一个用户连得上。
 // 一次连接一问一答，各是一行 JSON：
 //   {"cmd": "status", "params": {…}}  →  {"ok": true, "result": …}  或  {"ok": false, "error": "…", "problem": …}
-// 出错时 error 是一句话（英文，0.5 以前是中文），problem 是给人看的那句（msg），由命令行按它的语言翻
+// 出错时 error 是一句话（英文，0.5 以前是中文），problem 是给人看的那句（msg），由命令行按它的语言翻。
+// 命令行在 params 里带上自己用的语言（locale），回答里给人看的话后台按它翻成字（0.5 以前的命令行不带，按后台的语言）
 
 /** 一条请求最长多少字节。正常的请求只有几十个字节，带 key 的那条也不到两百 */
 const MAX_REQUEST_BYTES = 64 * 1024;

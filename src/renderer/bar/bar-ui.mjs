@@ -178,10 +178,15 @@ export function createBarUi({ document, host, keycap: initialKeycap, t: initialT
       if (view !== View.HIDDEN) drawHint();
     },
 
-    /** 语言换了：提示按新的语言写。正在显示的那句话由调用方重新给 */
-    setTranslator(next) {
+    /**
+     * 语言换了：提示按新的语言写，正在显示的那句话换成 text（调用方按新的语言翻好的）。
+     * 不走 show：样子没变，不该把动画和"过几秒收起来"重新开始
+     */
+    setTranslator(next, text = null) {
       t = next;
-      if (view !== View.HIDDEN) drawHint();
+      if (view === View.HIDDEN) return;
+      message.textContent = text ?? "";
+      drawHint();
     },
   };
 }

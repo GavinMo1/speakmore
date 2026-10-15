@@ -9,10 +9,14 @@ import zhCN from "./locales/zh-CN.mjs";
 //
 // 加一种语言：照着 locales/en.mjs 写一个文件，在 LOCALES 里加一行。少了哪句、参数对不上，测试会指出来。
 
-/** 按这个顺序列给用户选。name 用它自己的语言写，不翻：认不出眼前语言的人也找得到自己的 */
+/**
+ * 按这个顺序列给用户选。name 用它自己的语言写，不翻：认不出眼前语言的人也找得到自己的。
+ * separator：并列几样时不用 Intl 的写法（A、B和C），一律用它隔开。中文原来的界面就是全用顿号，
+ * 而且"和""或"会紧挨着英文字母（Gemini API key和按键监听）
+ */
 export const LOCALES = Object.freeze([
   Object.freeze({ id: "en", name: "English", messages: en }),
-  Object.freeze({ id: "zh-CN", name: "简体中文", messages: zhCN }),
+  Object.freeze({ id: "zh-CN", name: "简体中文", messages: zhCN, separator: "、" }),
 ]);
 
 /** 认不出系统语言、某句没翻时用它 */
@@ -96,7 +100,7 @@ const lookup = (messages, key) => key.split(".").reduce((node, part) => node?.[p
  * 找不到的名字原样返回（显得出来，不会悄悄空着），测试保证用到的名字都在。
  * 另外几样：
  *   t.text(话)   msg 翻成这种语言；本来就是一段字（模型回的原话、旧版本后台报的中文）照原样；null 是空字符串
- *   t.list(几句) 按这种语言并列（A, B, and C / A、B和C）；t.either(几句) 是"或"（A or B / A或B）
+ *   t.list(几句) 按这种语言并列（A, B, and C / A、B、C）；t.either(几句) 是"或"（A or B / A、B）
  *   t.parts(名字, 参数) 同 t，但不拼成一段：参数的位置留着参数本身，调用方要把它画成别的样子时用（键帽）
  *   t.number(数) 按这种语言写数字（1,234）
  *   t.locale     这种语言的 id
@@ -147,8 +151,12 @@ export function createTranslator(id) {
 
   t.text = text;
   t.parts = parts;
-  t.list = (items) => lists.format(items.map(text));
-  t.either = (items) => alternatives.format(items.map(text));
+  const join = (format) => (items) => {
+    const texts = items.map(text);
+    return locale.separator ? texts.join(locale.separator) : format.format(texts);
+  };
+  t.list = join(lists);
+  t.either = join(alternatives);
   t.number = (value) => numbers.format(value);
   t.locale = locale.id;
   return t;
