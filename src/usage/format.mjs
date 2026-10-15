@@ -1,20 +1,35 @@
-// 用量的写法：钱、token、等待时间。命令行（src/cli/render/usage.mjs）和历史窗口共用，两边写法一致。
+// 用量的写法：钱、token、个数、时长、等待时间。命令行（src/cli/render/usage.mjs）和主窗口共用，两边写法一致。
 // 纯函数，不碰 Node 也不碰页面：窗口的页面直接 import 这个文件。
 
-/** token 数从小到大的缩写：千、百万、十亿 */
-const TOKEN_UNITS = ["K", "M", "B"];
+/** 个数从小到大的缩写：千、百万、十亿 */
+const COUNT_UNITS = ["K", "M", "B"];
 
-/** token 数：按千、百万、十亿缩写成 K、M、B，留三位有效数字（1.39K、21.3K、6.02M） */
-export function formatTokens(count) {
+/** 个数：按千、百万、十亿缩写成 K、M、B，留三位有效数字（1.39K、21.3K、6.02M）。首页的口述字数也这么写（原版是 194K 字） */
+export function formatCount(count) {
   let value = count;
   let unit = "";
-  for (const next of TOKEN_UNITS) {
+  for (const next of COUNT_UNITS) {
     // 按缩写之后的样子判断，999,600 才会写成 1M 而不是 1000K
     if (Number(value.toPrecision(3)) < 1000) break;
     value /= 1000;
     unit = next;
   }
   return `${Number(value.toPrecision(3))}${unit}`;
+}
+
+/** token 数，写法同 formatCount */
+export const formatTokens = formatCount;
+
+/**
+ * 一段时长写成数和单位分开的两半（页面上单位写得小一号）：一小时以内按分钟，以上按小时，十小时以内带一位小数。
+ * 原版首页的"节省时间""总口述时间"只用这两个单位
+ * @returns {{ value: string, unit: "分钟" | "小时" }}
+ */
+export function formatSpan(seconds) {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return { value: seconds > 0 && minutes === 0 ? "<1" : String(minutes), unit: "分钟" };
+  const hours = seconds / 3600;
+  return { value: String(hours < 10 ? Number(hours.toFixed(1)) : Math.round(hours)), unit: "小时" };
 }
 
 /**
