@@ -1,0 +1,22 @@
+---
+name: desktop-copy-and-look
+description: 桌面端文案要短词短句、别写完整主谓宾；界面结构对齐原版，但配色走自己的主题，做渐变、玻璃这类有特色的高审美
+metadata:
+  node_type: memory
+  type: feedback
+  originSessionId: 6b5e9ce5-00ff-48cc-99ba-a927306fc7c3
+  modified: 2026-10-15T02:55:47.403Z
+---
+
+桌面端（Electron 主窗口、首次引导）的两条要求，2026-10-15 他看过第一版之后说的：
+
+1. 文案太啰嗦。原话："整个桌面端 app 的文案都需要改，现在太啰嗦了，咱们要简短干练，尽可能不要使用完整的主谓宾句子，短词短句"。
+2. 界面别完全照抄 Typeless。原话："ui 也不要照抄 typeless 完全，比如 app 的 ui token 做成可以切换的吗，根据咱们 cli theme 的主题色去做好看的 app 颜色，做一些高审美的渐变、玻璃啥的，做点特色，不一样的东西"。
+
+**Why:** 第一版照原版做得很像（灰底、黑白、长句说明），他要的是"功能和结构对齐原版、观感是自己的"。
+
+**How to apply:**
+- 界面上的字：标题、按钮、说明都用短词短句（"已保存"、"还差 key"、"按 右⌥ 说话"），能删的解释删掉，细节放悬停提示。命令行的说法不在这次要求里。
+- 配色从 src/themes 的主题出发（墨、朱砂、靛青……），主窗口跟着换主题当场变；可以加主题 token，但要过 src/themes/contract.mjs 的对比度检查。
+- 渐变、毛玻璃（backdrop-filter、Electron 的 vibrancy）可以用，要有节制、做出辨识度，不要退回原版的纯灰白。
+- 功能范围仍然是原版有的才做（[[typeless-clone-scope-dictation]]）。
