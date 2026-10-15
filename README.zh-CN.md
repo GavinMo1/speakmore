@@ -6,7 +6,8 @@
 
 <p align="center">
   <b>按一下，说话，再按一下：整理好的文字就贴进你正在打字的地方。</b><br>
-  macOS 上的开源语音输入，用你自己的 Gemini 或 OpenAI key。
+  macOS 上的开源语音输入，用你自己的 Gemini 或 OpenAI key。<br>
+  <a href="https://speakmore.zephyrxiang.com/?lang=zh-CN">speakmore.zephyrxiang.com</a>
 </p>
 
 <p align="center">

@@ -46,10 +46,25 @@ cd website
 
 和同一台服务器上别的站一样用 Docker 隔开：容器里的 nginx 托管 `dist/`，端口只绑 `127.0.0.1:9800`，宿主机的 nginx 终止 HTTPS 再反代过来。宿主机上不装 Node，构建在容器里做。
 
+部署（改完先提交，部署的是当前提交）：
+
 ```bash
-# 构建要用的只有这几样：package.json、assets/icon.svg、website/（见 .dockerignore）
-docker compose -f website/compose.yaml up -d --build
-curl http://127.0.0.1:9800/health
+cd website
+npm run deploy
 ```
 
-服务器在大陆时，构建前 `export NPM_REGISTRY=https://registry.npmmirror.com`。页面的内容安全策略构建时按 `site.config.json` 写进 `index.html`：只许加载自己的脚本、样式，图片只从自己和图片域名来。
+`scripts/deploy.sh` 从当前提交里取出构建要用的那几样（`package.json`、`assets/icon.svg`、`website/`，和 `.dockerignore` 一致），经 SSH 传到服务器的部署目录，在那里 `docker compose -f website/compose.yaml up -d --build`，等 `/health` 答应，删掉自己的上一版镜像，把线上的提交记在部署目录的 `DEPLOYED_COMMIT`。服务器不连 GitHub。服务器、部署目录、npm 源在 `.machine.env` 的 `SITE_SSH_HOST`、`SITE_REMOTE_DIR`、`SITE_NPM_REGISTRY`（见 `.machine.env.example`）；服务器在大陆时 npm 源填国内的，官方源从那里取一个包十几秒。
+
+发了新版本要再部署一次：下载链接的版本号是构建时取的。
+
+宿主机 nginx 的站点文件是 `host-nginx.conf`，放在服务器的 `/etc/nginx/sites-available/speakmore-site`。改它时先备份，`sudo nginx -t` 通过才 `sudo systemctl reload nginx`。回滚：容器出了问题就把上一个提交 `npm run deploy` 一次；站点文件出了问题就换回备份再 reload。
+
+只在本机试容器（OrbStack 或 Docker Desktop）：
+
+```bash
+docker compose -f website/compose.yaml up -d --build   # 在仓库根
+curl http://127.0.0.1:9800/health
+docker compose -f website/compose.yaml down --rmi local
+```
+
+页面的内容安全策略构建时按 `site.config.json` 写进 `index.html`：只许加载自己的脚本、样式，图片只从自己和图片域名来。

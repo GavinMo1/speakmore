@@ -6,7 +6,8 @@
 
 <p align="center">
   <b>Tap a key, talk, tap again — clean text lands wherever you're typing.</b><br>
-  Open-source voice dictation for macOS. Bring your own Gemini or OpenAI key.
+  Open-source voice dictation for macOS. Bring your own Gemini or OpenAI key.<br>
+  <a href="https://speakmore.zephyrxiang.com">speakmore.zephyrxiang.com</a>
 </p>
 
 <p align="center">
