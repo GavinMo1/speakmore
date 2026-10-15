@@ -37,8 +37,8 @@ function detailsOf(row) {
     const cost = row.usage.costUsd === null ? "价格不明" : formatUsd(row.usage.costUsd);
     lines.push(`模型 ${formatSeconds(row.usage.latencyMs)} · ${cost}`);
     lines.push(
-      `输入 ${formatTokens(row.usage.inputTokens)} token，输出 ${formatTokens(row.usage.outputTokens)} token` +
-        (row.usage.calls > 1 ? `；调了 ${row.usage.calls} 次模型` : ""),
+      `输入 ${formatTokens(row.usage.inputTokens)} · 输出 ${formatTokens(row.usage.outputTokens)} token` +
+        (row.usage.calls > 1 ? ` · 调用 ${row.usage.calls} 次` : ""),
     );
   }
   return lines.join("\n");
@@ -63,7 +63,7 @@ export function createHistory() {
     } else if (row.refinedText === "") {
       // 原版的说法：hub__history__item__empty__text
       node.dataset.kind = "silent";
-      text.textContent = "音频无声。";
+      text.textContent = "音频无声";
       copy.hidden = true;
     } else {
       text.textContent = row.refinedText;
@@ -78,7 +78,7 @@ export function createHistory() {
         }
         setTimeout(() => {
           delete copy.dataset.done;
-          copy.title = "复制转录";
+          copy.title = "复制";
         }, 1500);
       });
     }
@@ -91,13 +91,13 @@ export function createHistory() {
 
   return {
     /**
-     * @param {{ rows: object[], app: { dataDir: string, hotkeyLabel: string } }} data
+     * @param {{ rows: object[], app: { dataDir: string, hotkeyKeycap: string } }} data
      */
     render({ rows, app }) {
       $("history-error").hidden = true;
       $("history-dir").textContent = app.dataDir;
       $("history-empty").hidden = rows.length > 0;
-      $("history-empty-text").textContent = `按一下${app.hotkeyLabel}开始说话，再按一下结束，说过的话会出现在这里。`;
+      $("history-empty-text").textContent = `按 ${app.hotkeyKeycap} 说第一句`;
 
       const now = new Date();
       const groups = [];
@@ -118,7 +118,7 @@ export function createHistory() {
     },
 
     showError(message) {
-      $("history-error").textContent = `历史记录读不出来：${message}`;
+      $("history-error").textContent = `读不出历史：${message}`;
       $("history-error").hidden = false;
     },
   };

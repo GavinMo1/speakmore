@@ -73,7 +73,7 @@
             </li>
             <li>
               <button type="button" class="nav-item" data-route="history">
-                <svg class="icon" aria-hidden="true"><use href="#i-history" /></svg>历史记录
+                <svg class="icon" aria-hidden="true"><use href="#i-history" /></svg>历史
               </button>
             </li>
           </ul>
@@ -95,28 +95,28 @@
           <button type="button" class="button" id="banner-action">去设置</button>
         </div>
 
-        <!-- 首页：原版的"洞察"那一列，加上我们的花费；右边一列是快捷键和版本 -->
+        <!-- 首页：原版"洞察"那一列，加上我们的花费；右边一列是口述卡和版本 -->
         <section class="page" data-route="home" aria-labelledby="home-title">
-          <h1 class="page-title" id="home-title">说话，不要打字</h1>
+          <h1 class="page-title" id="home-title">说话，别打字</h1>
           <div class="home">
             <div class="insights">
               <h2 class="panel-title">洞察</h2>
-              <div class="stats">
-                <div class="card stat">
+              <div class="card stats">
+                <div class="stat">
                   <p class="stat-value" id="stat-words"></p>
-                  <p class="stat-label">口述字数</p>
+                  <p class="stat-label">字数</p>
                 </div>
-                <div class="card stat">
+                <div class="stat">
                   <p class="stat-value" id="stat-saved"></p>
-                  <p class="stat-label">节省时间</p>
+                  <p class="stat-label">省时</p>
                 </div>
-                <div class="card stat">
+                <div class="stat">
                   <p class="stat-value" id="stat-speed"></p>
-                  <p class="stat-label">平均口述速度</p>
+                  <p class="stat-label">语速</p>
                 </div>
-                <div class="card stat">
+                <div class="stat">
                   <p class="stat-value" id="stat-time"></p>
-                  <p class="stat-label">总口述时间</p>
+                  <p class="stat-label">口述时长</p>
                 </div>
               </div>
 
@@ -124,33 +124,33 @@
                 <div class="streaks">
                   <div>
                     <p class="stat-value" id="stat-active"></p>
-                    <p class="stat-label">活跃天数</p>
+                    <p class="stat-label">活跃</p>
                   </div>
                   <div>
                     <p class="stat-value" id="stat-current"></p>
-                    <p class="stat-label">当前连续天数</p>
+                    <p class="stat-label">连续</p>
                   </div>
                   <div>
                     <p class="stat-value" id="stat-longest"></p>
-                    <p class="stat-label">最长连续天数</p>
+                    <p class="stat-label">最长连续</p>
                   </div>
                 </div>
                 <div class="heatmap" id="heatmap">
                   <div class="weekdays" aria-hidden="true">
                     <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
                   </div>
-                  <div class="cells" id="heatmap-cells" role="img" aria-label="每天的听写次数"></div>
-                  <button type="button" class="page-arrow" id="heatmap-back" aria-label="往前看">
+                  <div class="cells" id="heatmap-cells" role="img" aria-label="每天的口述次数"></div>
+                  <button type="button" class="page-arrow" id="heatmap-back" aria-label="往前">
                     <svg class="icon" aria-hidden="true"><use href="#i-chevron" /></svg>
                   </button>
                   <div class="months" id="heatmap-months" aria-hidden="true"></div>
-                  <button type="button" class="page-arrow next" id="heatmap-next" aria-label="往后看">
+                  <button type="button" class="page-arrow next" id="heatmap-next" aria-label="往后">
                     <svg class="icon" aria-hidden="true"><use href="#i-chevron" /></svg>
                   </button>
                 </div>
                 <p class="legend" aria-hidden="true">
-                  更少<span class="cell" data-level="1"></span><span class="cell" data-level="2"></span
-                  ><span class="cell" data-level="3"></span><span class="cell" data-level="4"></span>更多
+                  少<span class="cell" data-level="1"></span><span class="cell" data-level="2"></span
+                  ><span class="cell" data-level="3"></span><span class="cell" data-level="4"></span>多
                 </p>
               </div>
 
@@ -165,8 +165,8 @@
                       <td></td>
                       <th scope="col">花费</th>
                       <th scope="col">token</th>
-                      <th scope="col">听写</th>
-                      <th scope="col">模型回话</th>
+                      <th scope="col">次数</th>
+                      <th scope="col">耗时</th>
                     </tr>
                   </thead>
                   <tbody id="spend-rows"></tbody>
@@ -176,10 +176,28 @@
             </div>
 
             <aside class="home-side">
-              <div class="side-card">
-                <p class="side-label">口述</p>
-                <p><kbd class="keycap" id="home-keycap"></kbd></p>
-                <p class="side-text">按一下开始说话，再按一下结束。</p>
+              <!-- 口述卡：主题渐变铺满，底下一排静止的声波，和悬浮条是一家 -->
+              <div class="dictate">
+                <p class="dictate-label">口述</p>
+                <kbd class="dictate-key" id="home-keycap"></kbd>
+                <p class="dictate-hint">按一下开始<br />再按一下结束</p>
+                <svg class="dictate-wave" viewBox="0 0 118 24" aria-hidden="true">
+                  <rect x="0" y="10" width="4" height="4" rx="2" />
+                  <rect x="8" y="8" width="4" height="8" rx="2" />
+                  <rect x="16" y="5" width="4" height="14" rx="2" />
+                  <rect x="24" y="2" width="4" height="20" rx="2" />
+                  <rect x="32" y="6" width="4" height="12" rx="2" />
+                  <rect x="40" y="9" width="4" height="6" rx="2" />
+                  <rect x="48" y="7" width="4" height="10" rx="2" />
+                  <rect x="56" y="3" width="4" height="18" rx="2" />
+                  <rect x="64" y="0" width="4" height="24" rx="2" />
+                  <rect x="72" y="4" width="4" height="16" rx="2" />
+                  <rect x="80" y="8" width="4" height="8" rx="2" />
+                  <rect x="88" y="6" width="4" height="12" rx="2" />
+                  <rect x="96" y="2" width="4" height="20" rx="2" />
+                  <rect x="104" y="7" width="4" height="10" rx="2" />
+                  <rect x="112" y="10" width="4" height="4" rx="2" />
+                </svg>
               </div>
               <p class="version" id="home-version"></p>
             </aside>
@@ -188,19 +206,15 @@
 
         <!-- 历史记录：按天分组，一行一条 -->
         <section class="page" data-route="history" aria-labelledby="history-title" hidden>
-          <h1 class="page-title" id="history-title">历史记录</h1>
-          <div class="info-card">
+          <h1 class="page-title" id="history-title">历史</h1>
+          <p class="privacy-line">
             <svg class="icon" aria-hidden="true"><use href="#i-lock" /></svg>
-            <div>
-              <p class="info-title">你的数据留在这台电脑上</p>
-              <p class="info-text">
-                说过的话和录音都存在 <code id="history-dir"></code>。整理时录音会发给你选的那家模型，除此之外不发去别处。
-              </p>
-            </div>
-          </div>
+            <span>只存本机</span><span aria-hidden="true">·</span><code id="history-dir"></code
+            ><span aria-hidden="true">·</span><span>录音只发给所选模型</span>
+          </p>
           <p class="problem load-error" id="history-error" role="alert" hidden></p>
           <div class="empty-state" id="history-empty" hidden>
-            <p class="empty-title">还没有口述</p>
+            <p class="empty-title">还没有记录</p>
             <p class="empty-text" id="history-empty-text"></p>
           </div>
           <div id="history-days"></div>
@@ -219,7 +233,7 @@
         <time class="row-time"></time>
         <p class="row-text"></p>
         <div class="row-actions">
-          <button type="button" class="icon-button copy" aria-label="复制转录" title="复制转录">
+          <button type="button" class="icon-button copy" aria-label="复制" title="复制">
             <svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg>
           </button>
           <button type="button" class="icon-button details">
@@ -234,7 +248,7 @@
       <h2 class="visually-hidden" id="settings-heading">设置</h2>
       <nav class="settings-menu" aria-label="设置分类">
         <button type="button" class="menu-item" data-pane="general">
-          <svg class="icon" aria-hidden="true"><use href="#i-sliders" /></svg>设置
+          <svg class="icon" aria-hidden="true"><use href="#i-sliders" /></svg>通用
         </button>
         <button type="button" class="menu-item" data-pane="model">
           <svg class="icon" aria-hidden="true"><use href="#i-key" /></svg>模型<span class="menu-dot" data-for="model" hidden></span>
@@ -252,12 +266,12 @@
         </button>
 
         <section class="pane" data-pane="general">
-          <h3 class="pane-title">设置</h3>
+          <h3 class="pane-title">通用</h3>
           <h4 class="category">快捷键</h4>
           <div class="setting">
             <div class="setting-text">
               <label class="setting-title" for="hotkey">语音输入</label>
-              <p class="setting-desc">按一下开始说话，再按一下结束。</p>
+              <p class="setting-desc">按一下开始，再按一下结束</p>
             </div>
             <select class="select" id="hotkey"></select>
           </div>
@@ -266,14 +280,14 @@
           <div class="setting">
             <div class="setting-text">
               <label class="setting-title" for="theme">主题</label>
-              <p class="setting-desc">窗口和悬浮条的配色，跟着系统的浅色、深色走。</p>
+              <p class="setting-desc">窗口和悬浮条 · 随系统深浅色</p>
             </div>
             <select class="select" id="theme"></select>
           </div>
           <div class="setting">
             <div class="setting-text">
-              <label class="setting-title" for="open-at-login">登录时启动应用</label>
-              <p class="setting-desc" id="open-at-login-desc">登录这台电脑时自动打开 SpeakMore。</p>
+              <label class="setting-title" for="open-at-login">开机启动</label>
+              <p class="setting-desc" id="open-at-login-desc"></p>
             </div>
             <input type="checkbox" class="switch" id="open-at-login" />
           </div>
@@ -282,9 +296,7 @@
 
         <section class="pane" data-pane="model" hidden>
           <h3 class="pane-title">模型</h3>
-          <p class="pane-lede">
-            选哪家，录音就发给哪家整理成文字，所以要一把你自己的 key。它用系统钥匙串加密后存在这台电脑上，不会显示出来，也不会发到别处。
-          </p>
+          <p class="pane-lede">录音直发所选模型 · key 加密存本机钥匙串</p>
           <div class="key-panel" id="key-panel"></div>
         </section>
 
@@ -294,32 +306,30 @@
             <li data-permission="microphone">
               <div class="setting-text">
                 <p class="setting-title">麦克风</p>
-                <p class="setting-desc">录下你说的话</p>
+                <p class="setting-desc">录音</p>
               </div>
               <span class="granted"></span>
-              <button type="button" class="button">打开系统设置</button>
+              <button type="button" class="button">系统设置</button>
             </li>
             <li data-permission="listen">
               <div class="setting-text">
                 <p class="setting-title">输入监控</p>
-                <p class="setting-desc">听到你按热键。只认这一个键，别的按键不记录</p>
+                <p class="setting-desc">听热键 · 只认这一个键</p>
               </div>
               <span class="granted"></span>
-              <button type="button" class="button">打开系统设置</button>
+              <button type="button" class="button">系统设置</button>
             </li>
             <li data-permission="trusted">
               <div class="setting-text">
                 <p class="setting-title">辅助功能</p>
-                <p class="setting-desc">
-                  把文字贴进输入框；说话时按 esc 取消、点悬浮条上的按钮也靠它。没有它时文字放进剪贴板，要自己按 ⌘V
-                </p>
+                <p class="setting-desc">自动贴字、Esc 取消、点悬浮条 · 缺了要手动 ⌘V</p>
               </div>
               <span class="granted"></span>
-              <button type="button" class="button">打开系统设置</button>
+              <button type="button" class="button">系统设置</button>
             </li>
           </ul>
           <p class="hint">
-            在系统设置里把开关打开之后，回到这里点
+            开好后
             <button type="button" class="button" id="recheck">重新检查</button>
           </p>
         </section>
@@ -333,16 +343,16 @@
           <div class="setting">
             <div class="setting-text">
               <p class="setting-title">数据目录</p>
-              <p class="setting-desc">设置、key、历史和录音都在这一个目录里，卸载时一起删掉</p>
+              <p class="setting-desc">设置、key、历史、录音 · 卸载即清空</p>
             </div>
             <code class="setting-value" id="about-home"></code>
           </div>
           <div class="setting">
             <div class="setting-text">
               <p class="setting-title">源代码</p>
-              <p class="setting-desc">开源，MIT 许可证</p>
+              <p class="setting-desc">MIT 开源</p>
             </div>
-            <button type="button" class="button" id="open-homepage">在 GitHub 上看</button>
+            <button type="button" class="button" id="open-homepage">GitHub</button>
           </div>
         </section>
       </div>

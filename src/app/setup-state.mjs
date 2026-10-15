@@ -1,6 +1,6 @@
 // 把"能不能用、还差什么"归成一个结论。菜单栏、主窗口、按热键时的提示都用这一个，免得三处各说各的。
 
-const OPEN_SETTINGS = "点菜单栏上的 SpeakMore 图标打开设置";
+const OPEN_SETTINGS = "菜单栏图标 › 设置";
 
 /**
  * @param {object} setup
@@ -20,7 +20,7 @@ export function summarizeSetup({ key, permissions, helper, providerName = "Gemin
 
   if (key.state === "missing" || key.state === "unreadable") {
     missing.push(`${providerName} API key`);
-    blocker = `还没有填 ${providerName} API key：${OPEN_SETTINGS}`;
+    blocker = `缺 ${providerName} API key：${OPEN_SETTINGS}`;
   } else if (key.state === "rejected" && key.cause === "other") {
     // 那一家拒绝了请求，多半是模型名或思考档位写错：key 本身未必有问题，不能让人以为要换 key
     missing.push(`${providerName} 验证`);
@@ -29,12 +29,12 @@ export function summarizeSetup({ key, permissions, helper, providerName = "Gemin
     missing.push(`${providerName} API key`);
     blocker = `API key 不能用：${key.problem}`;
   } else if (key.state === "checking") {
-    blocker = "正在验证 API key，稍等一下";
+    blocker = "API key 验证中，稍等";
   }
 
   if (permissions.microphone !== "granted") {
     missing.push("麦克风权限");
-    blocker ??= `没有麦克风权限：${OPEN_SETTINGS}`;
+    blocker ??= `缺麦克风权限：${OPEN_SETTINGS}`;
   }
   // 没有输入监控权限时热键根本传不过来，所以它不会成为"按了热键之后"的那句提示
   if (permissions.listen === false) missing.push("输入监控权限");
@@ -45,6 +45,6 @@ export function summarizeSetup({ key, permissions, helper, providerName = "Gemin
     ready: blocker === null && permissions.listen === true,
     missing,
     blocker,
-    degraded: permissions.trusted === false ? "没有辅助功能权限：文字会放进剪贴板，要自己按 ⌘V" : null,
+    degraded: permissions.trusted === false ? "缺辅助功能权限：文字进剪贴板，需手动 ⌘V" : null,
   };
 }

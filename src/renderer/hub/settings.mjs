@@ -1,7 +1,7 @@
 import { createKeyPanel } from "../shared/key-panel.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
 
-// 设置对话框：原版的"设置中心"，左边一列菜单。我们的四页：设置（热键、主题、开机启动）、
+// 设置对话框：原版的"设置中心"，左边一列菜单。我们的四页：通用（热键、主题、开机启动）、
 // 模型（用哪家、填 key，对应原版"账户"的位置）、权限、关于。
 // 状态都在主进程，这里只负责画出来和转达用户的操作。
 
@@ -33,7 +33,7 @@ export function createSettings({ refresh }) {
     }
   }
 
-  // ---------- 设置：热键、主题、开机启动 ----------
+  // ---------- 通用：热键、主题、开机启动 ----------
 
   function renderGeneral(setup) {
     $("hotkey").replaceChildren(
@@ -45,9 +45,7 @@ export function createSettings({ refresh }) {
     const openAtLogin = $("open-at-login");
     openAtLogin.checked = setup.openAtLogin.enabled;
     openAtLogin.disabled = !setup.openAtLogin.supported;
-    $("open-at-login-desc").textContent = setup.openAtLogin.supported
-      ? "登录这台电脑时自动打开 SpeakMore。"
-      : "现在是从终端启动的，装成应用之后才能设置。";
+    $("open-at-login-desc").textContent = setup.openAtLogin.supported ? "登录后自动打开" : "从终端启动时不可用";
   }
 
   function showNote(id, message, tone = "") {
@@ -62,7 +60,7 @@ export function createSettings({ refresh }) {
       const result = await window.speakmore.setHotkey(event.target.value);
       showNote("hotkey-note", result.note ?? null);
     } catch (error) {
-      showNote("hotkey-note", `没有改成：${describeError(error)}`, "problem");
+      showNote("hotkey-note", `没改成：${describeError(error)}`, "problem");
     }
     await refresh();
   });
@@ -72,7 +70,7 @@ export function createSettings({ refresh }) {
     try {
       await window.speakmore.setTheme(event.target.value);
     } catch (error) {
-      showNote("general-problem", `主题没有换成：${describeError(error)}`, "problem");
+      showNote("general-problem", `主题没换成：${describeError(error)}`, "problem");
     }
     await refresh();
   });
@@ -82,7 +80,7 @@ export function createSettings({ refresh }) {
     try {
       await window.speakmore.setOpenAtLogin(event.target.checked);
     } catch (error) {
-      showNote("general-problem", `开机启动没有设置上：${describeError(error)}`, "problem");
+      showNote("general-problem", `开机启动没设上：${describeError(error)}`, "problem");
     }
     await refresh();
   });

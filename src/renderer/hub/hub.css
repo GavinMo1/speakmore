@@ -1,6 +1,6 @@
-/* 主窗口：左边一列侧栏，右边是首页或历史记录；设置是盖在上面的对话框。
-   版式照原版的主窗口（targets/typeless/_work/ui-reference 的截图、渲染层里的 MUI 主题）：
-   侧栏是缩进一圈的浅灰圆角块，红绿灯在它左上角；数字 24px、单位 12px；卡片圆角 16–20px。 */
+/* 主窗口：左边一块玻璃侧栏，右边是首页或历史记录；设置是盖在上面的玻璃对话框。
+   版式照原版的主窗口（targets/typeless/_work/ui-reference 的截图）：红绿灯在侧栏左上角，数字 24px 起、
+   单位小一号，卡片圆角 16–20px。颜色、光晕、玻璃是自己的，底子在 shared/window.css。 */
 
 /* 标题栏藏起来了，窗口靠这两处拖动：侧栏的空白处、内容区最上面一条（.content::before） */
 .sidebar {
@@ -24,13 +24,16 @@
 
 /* ---------- 侧栏 ---------- */
 
+/* 浮在光晕上的一块玻璃：背后左上角那团光透过来，颜色被提亮一点 */
 .sidebar {
   display: flex;
   flex-direction: column;
   margin: 0.5rem;
   padding: 3.5rem 0.75rem 0.75rem;
-  background: var(--fill-thin);
+  background: var(--glass);
+  backdrop-filter: var(--glass-filter);
   border-radius: 1rem;
+  box-shadow: var(--edge);
 }
 
 .brand {
@@ -73,12 +76,15 @@
   border: none;
   border-radius: 0.625rem;
   cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease-out);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .nav-item .icon,
 .menu-item .icon {
-  color: var(--ink-2);
+  color: var(--item-icon, var(--ink-2));
+  transition: color var(--dur-fast) var(--ease-out);
 }
 
 .nav-item:hover,
@@ -86,9 +92,14 @@
   background: var(--fill-hover);
 }
 
+/* 选中的一项是一块实的小面，图标换成主题色 */
 .nav-item[aria-current="page"],
 .menu-item[aria-current="true"] {
-  background: var(--fill-selected);
+  --item-icon: var(--primary);
+  background: var(--surface-solid);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 1px 3px oklch(0 0 0 / 0.08);
 }
 
 .nav-item:focus-visible,
@@ -113,13 +124,23 @@
   padding: 3rem 3.5rem 3rem 3rem;
 }
 
-/* 内容区最上面一条留给拖窗口：标题栏藏起来以后，没有它就只能拖侧栏 */
+/* 内容区最上面一条留给拖窗口。往下滚了以后它变成一条玻璃，滚上去的字在它底下变模糊 */
 .content::before {
   content: "";
   position: fixed;
   inset: 0 0 auto 13.5rem;
-  height: 2.5rem;
+  z-index: 1;
+  height: 2.75rem;
+  background: var(--glass);
+  backdrop-filter: var(--glass-filter);
+  box-shadow: 0 1px 0 var(--line);
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out);
   -webkit-app-region: drag;
+}
+
+.content[data-scrolled]::before {
+  opacity: 1;
 }
 
 .page {
@@ -132,7 +153,7 @@
   font-size: 2.5rem;
   font-weight: 700;
   line-height: 1.2;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   text-wrap: balance;
 }
 
@@ -143,9 +164,10 @@
   gap: 0.75rem;
   max-width: 66rem;
   margin: 0 auto 1.5rem;
-  padding: 0.7rem 0.9rem 0.7rem 1rem;
-  background: color-mix(in oklch, var(--problem) 10%, var(--bg));
-  border-radius: 0.75rem;
+  padding: 0.6rem 0.7rem 0.6rem 1rem;
+  background: color-mix(in oklab, var(--problem) 12%, var(--surface));
+  border-radius: 0.875rem;
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--problem) 24%, transparent);
 }
 
 .banner > .icon {
@@ -155,74 +177,102 @@
 .banner-text {
   flex: 1;
   font-size: 0.875rem;
+  font-weight: 510;
 }
 
 /* 能用、只是打了折扣：不用那么扎眼 */
 .banner[data-tone="soft"] {
   --banner-icon: var(--ink-2);
-  background: var(--fill-thin);
+  background: var(--surface);
+  box-shadow: var(--edge);
 }
 
 /* ---------- 首页 ---------- */
 
 .home {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 12.5rem;
-  gap: 2.5rem;
+  grid-template-columns: minmax(0, 1fr) 13rem;
+  gap: 2rem;
   align-items: start;
 }
 
-/* 原版"洞察"那一块：点阵底上放一张张白卡片 */
 .insights {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem;
-  background-color: var(--fill-thin);
-  background-image: radial-gradient(color-mix(in oklch, var(--ink) 9%, transparent) 1px, transparent 1.5px);
-  background-size: 0.625rem 0.625rem;
-  border-radius: 1.25rem;
+  gap: 0.875rem;
 }
 
 .panel-title {
-  margin: 0.25rem 0.25rem 0.25rem;
-  font-size: 1.375rem;
+  margin: 0 0.25rem;
+  font-size: var(--text-heading);
   font-weight: 600;
   color: var(--ink-2);
 }
 
+/* 浮在光晕上的面：半透明，上沿一道亮边 */
 .card {
   padding: 1.1rem 1.25rem;
-  background: var(--bg);
+  background: var(--surface);
   border-radius: 1rem;
-  box-shadow:
-    0 0 0 1px var(--line),
-    0 1px 3px oklch(0 0 0 / 0.04);
+  box-shadow: var(--edge), var(--lift);
 }
 
+/* 四个数在同一块面上，细线隔开；宽的时候排成一行 */
 .stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
+  padding: 0;
+}
+
+.stat {
+  padding: 1rem 1.25rem 0.95rem;
+}
+
+.stat:nth-child(even) {
+  border-left: 1px solid var(--line);
+}
+
+.stat:nth-child(n + 3) {
+  border-top: 1px solid var(--line);
+}
+
+@container (min-width: 34rem) {
+  .stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .stat + .stat {
+    border-left: 1px solid var(--line);
+  }
+
+  .stat:nth-child(n + 3) {
+    border-top: none;
+  }
 }
 
 .stat-value {
-  font-size: 1.5rem;
-  font-weight: 590;
-  line-height: 1.75rem;
+  font-family: var(--font-rounded);
+  font-size: 1.625rem;
+  font-weight: 600;
+  line-height: 2rem;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .stat-value .unit {
-  margin-left: 0.25rem;
+  margin-left: 0.2rem;
+  font-family: var(--font);
   font-size: 0.75rem;
   font-weight: 510;
+  letter-spacing: 0;
+  color: var(--ink-2);
 }
 
 .stat-label {
-  margin-top: 0.35rem;
-  font-size: 0.875rem;
+  margin-top: 0.2rem;
+  font-size: var(--text-small);
   color: var(--ink-2);
 }
 
@@ -238,7 +288,13 @@
   margin-bottom: 1.25rem;
 }
 
-/* 热力图：一列一周，周日在最上面。格子多少列由宽度定（hub/home.mjs） */
+.streaks .stat-value {
+  font-size: 1.375rem;
+  line-height: 1.75rem;
+}
+
+/* 热力图：一列一周，周日在最上面。格子多少列由宽度定（hub/home.mjs）。
+   深浅只用 primary 一种颜色，越多越浓。在 oklab 里混：底色是纯白、纯黑时，oklch 会把色相拉偏 */
 .heatmap {
   --cell: 0.875rem;
   --gap: 0.375rem;
@@ -273,20 +329,20 @@
   display: block;
   width: var(--cell);
   height: var(--cell);
-  border-radius: 0.2rem;
-  background: var(--fill-thin);
+  border-radius: 0.25rem;
+  background: var(--fill-hover);
 }
 
 .cell[data-level="1"] {
-  background: color-mix(in oklch, var(--primary) 22%, var(--bg));
+  background: color-mix(in oklab, var(--primary) 22%, var(--bg));
 }
 
 .cell[data-level="2"] {
-  background: color-mix(in oklch, var(--primary) 45%, var(--bg));
+  background: color-mix(in oklab, var(--primary) 46%, var(--bg));
 }
 
 .cell[data-level="3"] {
-  background: color-mix(in oklch, var(--primary) 70%, var(--bg));
+  background: color-mix(in oklab, var(--primary) 72%, var(--bg));
 }
 
 .cell[data-level="4"] {
@@ -297,8 +353,8 @@
 .cell[data-state="before"] {
   background: repeating-linear-gradient(
     -45deg,
-    var(--fill-thin) 0 2px,
-    color-mix(in oklch, var(--ink) 9%, transparent) 2px 3px
+    var(--fill-hover) 0 2px,
+    color-mix(in oklch, var(--ink) 11%, transparent) 2px 3px
   );
 }
 
@@ -353,17 +409,23 @@
   background: var(--fill-hover);
 }
 
+.page-arrow:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
 .page-arrow:disabled {
   opacity: 0.35;
   cursor: default;
 }
 
 .legend {
-  --cell: 0.875rem;
+  --cell: 0.75rem;
   display: flex;
   align-items: center;
-  gap: 0.3rem;
-  margin-top: 0.75rem;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  margin-top: 0.6rem;
   font-size: 0.75rem;
   color: var(--ink-2);
 }
@@ -422,46 +484,67 @@
 .home-side {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  height: 100%;
+  gap: 0.75rem;
 }
 
-.side-card {
+/* 口述卡：整块是主题的渐变，带一圈同色的光；底下一排静止的声波，和悬浮条是一家 */
+.dictate {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 1rem 1.1rem;
-  background: var(--fill-thin);
-  border-radius: 1rem;
-}
-
-.side-label {
-  font-size: 0.8125rem;
-  color: var(--ink-2);
-}
-
-.side-text {
-  font-size: 0.8125rem;
-  color: var(--ink-2);
-}
-
-.keycap {
-  display: inline-block;
-  min-width: 2rem;
-  padding: 0.1rem 0.55rem;
-  font: inherit;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  text-align: center;
-  background: var(--bg);
-  border-radius: 0.4rem;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1.1rem 1.2rem 1.15rem;
+  color: var(--on-primary);
+  background: var(--gradient);
+  border-radius: 1.25rem;
   box-shadow:
-    0 0 0 1px var(--line),
-    0 1px 0 var(--line);
+    inset 0 1px 0 var(--sheen),
+    0 14px 34px -16px var(--primary);
+  overflow: hidden;
+}
+
+/* 左上角一层柔光，像光打在磨砂面上 */
+.dictate::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 70% at 0% 0%, var(--sheen), transparent 60%);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.dictate-label {
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.dictate-key {
+  min-width: 4.5rem;
+  padding: 0.5rem 0.9rem;
+  font: 600 1.75rem / 1.1 var(--font-rounded);
+  text-align: center;
+  color: var(--on-primary);
+  background: color-mix(in oklch, var(--on-primary) 14%, transparent);
+  border-radius: 0.75rem;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--on-primary) 30%, transparent),
+    0 3px 0 color-mix(in oklch, var(--on-primary) 18%, transparent);
+}
+
+.dictate-hint {
+  font-size: var(--text-small);
+  font-weight: 510;
+  line-height: 1.45;
+}
+
+.dictate-wave {
+  width: 100%;
+  height: 1.5rem;
+  fill: color-mix(in oklch, var(--on-primary) 50%, transparent);
 }
 
 .version {
-  margin-top: auto;
   font-size: 0.75rem;
   text-align: right;
   color: var(--ink-2);
@@ -469,31 +552,23 @@
 
 /* ---------- 历史记录 ---------- */
 
-.info-card {
+/* 标题底下一行小字：数据在哪、录音发去哪 */
+.privacy-line {
   display: flex;
-  gap: 0.6rem;
-  padding: 1rem 1.25rem;
-  background: var(--fill-thin);
-  border-radius: 0.875rem;
-}
-
-.info-card > .icon {
-  margin-top: 0.25rem;
-}
-
-.info-title {
-  font-weight: 600;
-}
-
-.info-text {
-  margin-top: 0.15rem;
-  font-size: 0.875rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin: -1rem 0 0.5rem;
+  font-size: var(--text-small);
   color: var(--ink-2);
 }
 
-.info-text code {
+.privacy-line code {
+  padding: 0.05rem 0.4rem;
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
+  background: var(--fill-hover);
+  border-radius: 0.3rem;
   user-select: text;
 }
 
@@ -517,9 +592,9 @@
 }
 
 .day-title {
-  margin: 1.75rem 0 0.6rem;
+  margin: 1.75rem 0.25rem 0.6rem;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink-2);
 }
 
@@ -527,8 +602,9 @@
   margin: 0;
   padding: 0;
   list-style: none;
+  background: var(--surface);
   border-radius: 1rem;
-  box-shadow: 0 0 0 1px var(--line);
+  box-shadow: var(--edge), var(--lift);
   overflow: hidden;
 }
 
@@ -570,7 +646,7 @@
 }
 
 .row[data-kind="failed"] .row-text::before {
-  content: "转录失败：";
+  content: "失败 · ";
   color: var(--problem);
 }
 
@@ -597,17 +673,19 @@
 
 /* ---------- 设置对话框 ---------- */
 
+/* 一块实一些的玻璃：后面的首页先整体模糊一层，对话框自己再透一点 */
 .settings {
   width: min(52rem, 100vw - 4rem);
   height: min(38rem, 100vh - 4rem);
   padding: 0;
   color: var(--ink);
-  background: var(--bg);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-filter);
   border: none;
-  border-radius: 1rem;
+  border-radius: 1.125rem;
   box-shadow:
-    0 0 0 1px var(--line),
-    0 24px 64px oklch(0 0 0 / 0.22);
+    var(--edge),
+    0 30px 80px -24px oklch(0 0 0 / 0.4);
   overflow: hidden;
 }
 
@@ -618,14 +696,15 @@
 }
 
 .settings::backdrop {
-  background: oklch(0 0 0 / 0.3);
+  background: oklch(0 0 0 / 0.18);
+  backdrop-filter: blur(6px);
   animation: fade-in var(--dur-slow) var(--ease-out);
 }
 
 @keyframes dialog-in {
   from {
     opacity: 0;
-    scale: 0.98;
+    scale: 0.97;
   }
 }
 
@@ -640,7 +719,8 @@
   flex-direction: column;
   gap: 0.125rem;
   padding: 1.25rem 0.75rem;
-  background: var(--fill-thin);
+  background: color-mix(in oklch, var(--ink) 3%, transparent);
+  box-shadow: 1px 0 0 var(--line);
 }
 
 .menu-dot {
@@ -679,7 +759,7 @@
 .category {
   margin: 1.5rem 0 0.25rem;
   font-size: 0.8125rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink-2);
 }
 
@@ -734,6 +814,9 @@ code.setting-value {
 @media (prefers-reduced-motion: reduce) {
   .nav-item,
   .menu-item,
+  .nav-item .icon,
+  .menu-item .icon,
+  .content::before,
   .row,
   .row-actions {
     transition: none;

@@ -9,62 +9,54 @@ const spacedInChinese = (text) =>
 
 /** 不是正在用的那家：只说它有没有 key、在哪（主进程只报来源，不解密） */
 function otherKeyText(provider) {
-  if (provider.key === "env") return [`环境变量 ${provider.keyEnv} 里有一把，改用时用它。`, "pending"];
-  if (provider.key === "stored") return ["已经存着一把。", "pending"];
-  return [`还没有填。填一把 ${provider.name} 的 key 就能改用它。`, ""];
+  if (provider.key === "env") return [`环境变量 ${provider.keyEnv} 里有一把`, "pending"];
+  if (provider.key === "stored") return ["已存一把", "pending"];
+  return [`未填 · 填一把即可改用 ${provider.name}`, ""];
 }
 
 function keyText(key, provider) {
   // 启动时够不着的话先用着，如实说还没验证
-  const unverified = key.verified === false ? `启动时没连上 ${provider.name}，还没验证这把能不能用。` : "";
+  const unverified = key.verified === false ? ` · 未验证（启动时没连上 ${provider.name}）` : "";
   switch (key.state) {
     case "ready":
-      if (key.source === "env") {
-        return [`这次运行用的是环境变量 ${provider.keyEnv} 里的 key，没有保存。${unverified}`, "ok"];
-      }
-      if (key.source === "external") return ["现在连的是单独启动的服务端，key 在那边配。", "ok"];
-      return unverified ? [`已保存。${unverified}`, "pending"] : ["已保存，验证通过。", "ok"];
+      if (key.source === "env") return [`用环境变量 ${provider.keyEnv} · 未保存${unverified}`, "ok"];
+      if (key.source === "external") return ["由单独启动的服务端配置", "ok"];
+      return unverified ? [`已保存${unverified}`, "pending"] : ["已保存 · 验证通过", "ok"];
     case "checking":
-      return ["正在验证…", "pending"];
+      return ["验证中…", "pending"];
     case "rejected":
       // 三种情况要做的事不一样：只有最后一种是在下面换一把就能解决的
       if (key.cause === "other") {
-        return [
-          `验证没通过：${key.problem}。key 未必有问题，先看模型的设置（终端里运行 speakmore model）。`,
-          "problem",
-        ];
+        return [`验证没通过：${key.problem} · key 未必有错，先查 speakmore model`, "problem"];
       }
       if (key.source === "env") {
-        return [
-          `环境变量 ${provider.keyEnv} 里的 key 不能用：${key.problem}。改对它，或者去掉这个环境变量，再重新启动。`,
-          "problem",
-        ];
+        return [`环境变量 ${provider.keyEnv} 的 key 不能用：${key.problem} · 改对或去掉后重启`, "problem"];
       }
-      return [`现在这把不能用：${key.problem}`, "problem"];
+      return [`这把不能用：${key.problem}`, "problem"];
     case "unreadable":
       return [key.problem, "problem"];
     default:
-      return ["还没有填。", "problem"];
+      return ["未填", "problem"];
   }
 }
 
 const MARKUP = `
-  <div class="providers" role="radiogroup" aria-label="用哪家的模型"></div>
+  <div class="providers" role="radiogroup" aria-label="模型"></div>
   <div class="key-state-row">
     <p class="state"></p>
     <button type="button" class="button primary use-provider" hidden>改用</button>
   </div>
   <form class="key-form">
     <input type="password" class="input key-input" autocomplete="off" spellcheck="false"
-      placeholder="把 key 粘贴到这里" aria-label="API key" />
-    <button type="button" class="button paste-key">从剪贴板粘贴</button>
+      placeholder="粘贴 key" aria-label="API key" />
+    <button type="button" class="button paste-key">粘贴</button>
     <button type="submit" class="button primary save-key">保存并验证</button>
   </form>
   <p class="problem key-problem" role="alert" hidden></p>
   <p class="hint key-note" hidden></p>
   <p class="links">
     <button type="button" class="link open-key-page">去 Google AI Studio 申请一把</button>
-    <button type="button" class="link forget-key" hidden>删除已保存的 key</button>
+    <button type="button" class="link forget-key" hidden>删除 key</button>
   </p>`;
 
 /**
@@ -108,7 +100,7 @@ export function createKeyPanel(container, { refresh }) {
         const note = document.createElement("span");
         note.className = "provider-note";
         const inUse = provider.id === currentId;
-        note.textContent = inUse ? "正在用" : provider.key ? "有 key" : "没有 key";
+        note.textContent = inUse ? "使用中" : provider.key ? "有 key" : "无 key";
         note.dataset.tone = inUse ? "ok" : "";
         button.append(name, note);
         button.addEventListener("click", () => {
@@ -136,7 +128,7 @@ export function createKeyPanel(container, { refresh }) {
     find(".providers").hidden = !setup.switchable;
     if (setup.switchable) renderProviders(providers, current.id);
     keyInput.setAttribute("aria-label", `${provider.name} API key`);
-    find(".open-key-page").textContent = `去${spacedInChinese(provider.site)}申请一把`;
+    find(".open-key-page").textContent = `去${spacedInChinese(provider.site)}申请`;
     const [text, tone] = isCurrent ? keyText(setup.key, provider) : otherKeyText(provider);
     find(".state").textContent = text;
     find(".state").dataset.tone = tone;
@@ -176,7 +168,7 @@ export function createKeyPanel(container, { refresh }) {
         show(keyNote, result.note ?? null);
       } else show(keyProblem, result.problem);
     } catch (error) {
-      show(keyProblem, `没有成功：${describeError(error)}`);
+      show(keyProblem, `没成功：${describeError(error)}`);
     } finally {
       saving = false;
       button.textContent = label;
@@ -199,7 +191,7 @@ export function createKeyPanel(container, { refresh }) {
   find(".paste-key").addEventListener("click", async () => {
     const text = (await window.speakmore.readClipboard()).trim();
     if (text === "") {
-      show(keyProblem, "剪贴板里没有文字");
+      show(keyProblem, "剪贴板是空的");
       return;
     }
     show(keyProblem, null);
@@ -210,8 +202,8 @@ export function createKeyPanel(container, { refresh }) {
   find(".forget-key").addEventListener("click", async () => {
     const provider = latest.providers.find(({ id }) => id === selected) ?? latest.provider;
     const inUse = provider.id === latest.provider.id;
-    const consequence = inUse ? "删除后要重新填才能继续用。" : "";
-    if (!window.confirm(`删除已保存的 ${provider.name} key？${consequence}`)) return;
+    const consequence = inUse ? "删了要重填才能用" : "";
+    if (!window.confirm(`删除 ${provider.name} key？${consequence}`)) return;
     await window.speakmore.forgetKey(selected);
     await refresh();
   });

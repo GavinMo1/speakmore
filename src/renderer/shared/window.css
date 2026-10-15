@@ -1,14 +1,56 @@
-/* 普通窗口（现在是主窗口）的底子：字体、按钮、输入框。跟随系统的深浅色。
+/* 普通窗口（主窗口、首次引导）的底子：光晕、玻璃、字体、按钮、输入框。跟随系统的深浅色。
    颜色由主题给（src/themes 里"窗口"那一组，浅深各一份），字号、圆角、动效在 tokens.css。
-   原版用的几种灰都是"正文颜色叠一层半透明"（targets/typeless 的 fill.none.hover 是 7%、selected 15%、
-   container.thin 5%，border.thin 7%），这里照着用 color-mix 从主题的正文色调出来，换主题、换深浅色都跟着变。 */
+   结构照原版，观感是自己的：窗口背后有主题色的两团光（aura、aura2），侧栏、对话框是透出光的玻璃，
+   主按钮和口述卡是从 primary 走到 glow 的渐变。灰阶照原版的做法，从正文色叠一层半透明调出来
+   （targets/typeless 的 fill.none.hover 7%、selected 15%、container.thin 5%、border.thin 7%）。 */
 
 :root {
   color-scheme: light dark;
-  --fill-thin: color-mix(in oklch, var(--ink) 4%, var(--bg));
+  --fill-thin: color-mix(in oklab, var(--ink) 4%, var(--bg));
   --fill-hover: color-mix(in oklch, var(--ink) 6%, transparent);
   --fill-selected: color-mix(in oklch, var(--ink) 10%, transparent);
   --line: color-mix(in oklch, var(--ink) 8%, transparent);
+
+  /* 主题的渐变：主按钮、口述卡、进度、电平 */
+  --gradient: linear-gradient(135deg, var(--primary), var(--glow));
+  /* 窗口背后的两团光，一直不动：玻璃透出来的就是它 */
+  --aura-layer:
+    radial-gradient(56rem 38rem at -8% -12%, var(--aura), transparent 72%),
+    radial-gradient(48rem 34rem at 108% 112%, var(--aura-2), transparent 72%);
+  /* 浮在光上的面：卡片、列表。半透明，透出一点光的颜色 */
+  --surface: color-mix(in oklch, var(--bg) 74%, transparent);
+  /* 选中的那一项：比面再实一点 */
+  --surface-solid: var(--bg);
+  /* 玻璃：更透，背后的东西模糊、颜色提一点 */
+  --glass: color-mix(in oklch, var(--bg) 46%, transparent);
+  --glass-filter: blur(28px) saturate(1.7);
+  /* 对话框那种要读一整页字的玻璃：实一些 */
+  --glass-strong: color-mix(in oklch, var(--bg) 82%, transparent);
+  /* 面的上沿一道亮边：浅色下是底色（白），深色下是淡淡的正文色 */
+  --sheen: color-mix(in oklch, var(--bg) 90%, transparent);
+  --edge: 0 0 0 1px var(--line), inset 0 1px 0 var(--sheen);
+  --lift: 0 1px 2px oklch(0 0 0 / 0.04), 0 10px 30px -12px oklch(0 0 0 / 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: color-mix(in oklch, var(--raised) 46%, transparent);
+    --surface-solid: var(--raised);
+    --glass: color-mix(in oklch, var(--bg) 52%, transparent);
+    --glass-strong: color-mix(in oklch, var(--bg) 78%, transparent);
+    --sheen: color-mix(in oklch, var(--ink) 9%, transparent);
+    --lift: 0 1px 2px oklch(0 0 0 / 0.3), 0 12px 32px -12px oklch(0 0 0 / 0.5);
+  }
+}
+
+/* 系统里打开了"降低透明度"：玻璃换成实底 */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --surface: var(--surface-solid);
+    --glass: var(--fill-thin);
+    --glass-strong: var(--bg);
+    --glass-filter: none;
+  }
 }
 
 *,
@@ -25,8 +67,8 @@
 
 body {
   margin: 0;
-  background: var(--bg);
   color: var(--ink);
+  background: var(--aura-layer), var(--bg);
   font: var(--text-body) / 1.6 var(--font);
   -webkit-font-smoothing: antialiased;
 }
@@ -61,11 +103,18 @@ p {
   border-radius: var(--radius-control);
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color var(--dur-base) var(--ease-out);
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    filter var(--dur-base) var(--ease-out),
+    scale var(--dur-fast) var(--ease-out);
 }
 
 .button:hover {
-  background: var(--fill-selected);
+  background-color: var(--fill-selected);
+}
+
+.button:active:not(:disabled) {
+  scale: 0.97;
 }
 
 .button:disabled {
@@ -74,21 +123,23 @@ p {
 }
 
 .button:disabled:hover {
-  background: var(--fill-hover);
+  background-color: var(--fill-hover);
 }
 
 .button.primary {
   color: var(--on-primary);
-  background: var(--primary);
+  background: var(--gradient);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.12);
 }
 
 .button.primary:hover {
-  filter: brightness(1.12);
+  filter: brightness(1.08) saturate(1.1);
 }
 
 .button.primary:disabled {
   color: var(--ink-2);
   background: var(--fill-hover);
+  box-shadow: none;
   filter: none;
 }
 
@@ -142,7 +193,7 @@ p {
   font: inherit;
   font-size: var(--text-small);
   color: var(--ink);
-  background: var(--bg);
+  background: var(--surface-solid);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
 }
@@ -179,7 +230,7 @@ p {
 }
 
 .switch:checked {
-  background: var(--primary);
+  background: var(--gradient);
 }
 
 .switch:checked::before {
@@ -206,5 +257,9 @@ p {
   .switch,
   .switch::before {
     transition: none;
+  }
+
+  .button:active:not(:disabled) {
+    scale: none;
   }
 }

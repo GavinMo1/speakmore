@@ -23,6 +23,7 @@ function navigate(route) {
     else item.removeAttribute("aria-current");
   }
   document.querySelector(".content").scrollTop = 0;
+  document.querySelector(".content").removeAttribute("data-scrolled");
 }
 
 /** 顶上那一条：还差什么才能用，或者能用但打了折扣。准备中、都齐了时不出现 */
@@ -31,7 +32,7 @@ function renderBanner(current) {
   const banner = $("banner");
   if (summary.missing.length > 0) {
     banner.dataset.tone = "problem";
-    $("banner-text").textContent = `还差 ${summary.missing.length} 样才能用：${summary.missing.join("、")}`;
+    $("banner-text").textContent = `还差：${summary.missing.join("、")}`;
   } else if (summary.degraded !== null) {
     banner.dataset.tone = "soft";
     $("banner-text").textContent = summary.degraded;
@@ -73,6 +74,11 @@ for (const item of document.querySelectorAll(".nav-item")) {
 $("open-settings").addEventListener("click", () => settings.open("general"));
 $("open-about").addEventListener("click", () => settings.open("about"));
 $("banner-action").addEventListener("click", () => settings.open("auto"));
+// 往下滚了，最上面那条拖窗口的地方变成玻璃
+const content = document.querySelector(".content");
+content.addEventListener("scroll", () => content.toggleAttribute("data-scrolled", content.scrollTop > 4), {
+  passive: true,
+});
 
 // ---------- 主进程来的 ----------
 

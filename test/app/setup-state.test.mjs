@@ -81,7 +81,7 @@ test("按键监听的小程序停了：不再说成“正在准备”，明说�
 test("用的是别家模型时，缺的 key、没通过的验证都点名是哪一家", () => {
   const missing = summarizeSetup({ ...withKey({ state: "missing" }), providerName: "OpenAI" });
   assert.deepEqual(missing.missing, ["OpenAI API key"]);
-  assert.match(missing.blocker, /^还没有填 OpenAI API key/);
+  assert.match(missing.blocker, /^缺 OpenAI API key/);
   const rejected = summarizeSetup({
     ...withKey({ state: "rejected", cause: "other", problem: "OpenAI 没有这个模型" }),
     providerName: "OpenAI",

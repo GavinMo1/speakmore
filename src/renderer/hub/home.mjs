@@ -1,7 +1,7 @@
 import { formatCount, formatSeconds, formatSpan, formatTokens, formatUsd } from "../../usage/format.mjs";
 import { activityGrid } from "../../usage/insights.mjs";
 
-// 首页：原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费；右边一列是热键和版本。
+// 首页：原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费；右边一列是口述卡和版本。
 // 数是主进程从全部历史里算好的（src/usage/insights.mjs），这里只管画。
 
 const $ = (id) => document.getElementById(id);
@@ -49,7 +49,7 @@ export function createHome() {
     } else {
       setSpan($("stat-saved"), insights.savedSeconds);
       setSpan($("stat-time"), insights.seconds);
-      setValue($("stat-speed"), String(insights.wordsPerMinute), "每分钟字数");
+      setValue($("stat-speed"), String(insights.wordsPerMinute), "字/分");
     }
     setValue($("stat-active"), String(insights.activeDays), "天");
     setValue($("stat-current"), String(insights.currentStreak), "天");
@@ -76,7 +76,7 @@ export function createHome() {
           const label = dayLabel.format(new Date(year, month - 1, date));
           node.title =
             cell.state === "before"
-              ? `${label} · 暂无数据`
+              ? `${label} · 还没开始用`
               : `${label} · ${cell.count > 0 ? `${cell.count} 次 · ` : ""}${LEVEL_NAMES[cell.level]}`;
         }
         return node;
@@ -108,7 +108,7 @@ export function createHome() {
       [formatUsd(period.costUsd), "cost"],
       [formatTokens(period.tokens)],
       [String(period.dictations)],
-      [period.latency ? `一般 ${formatSeconds(period.latency.medianMs)}` : "—"],
+      [period.latency ? formatSeconds(period.latency.medianMs) : "—"],
     ].map(([text, className]) => {
       const td = document.createElement("td");
       td.textContent = text;
@@ -130,21 +130,16 @@ export function createHome() {
       spendRow("累计", report.total),
     );
     const { total } = report;
+    // 一条一个短语，中间点隔开
     const notes = [];
-    if (total.latency) {
-      notes.push(
-        `模型一般 ${formatSeconds(total.latency.medianMs)}回话，慢的时候 ${formatSeconds(total.latency.p90Ms)}。`,
-      );
-    }
+    if (total.latency) notes.push(`耗时取中位数，慢时 ${formatSeconds(total.latency.p90Ms)}`);
     const unpriced = report.models.filter(({ unpricedCalls }) => unpricedCalls > 0);
     if (unpriced.length > 0) {
-      notes.push(
-        `${unpriced.map(({ model }) => model).join("、")} 不在价目表里，这 ${total.unpricedCalls} 次的钱没算进去。`,
-      );
+      notes.push(`${unpriced.map(({ model }) => model).join("、")} 无标价，${total.unpricedCalls} 次未计入`);
     }
-    if (total.cacheCostUsd > 0) notes.push(`花费里有 ${formatUsd(total.cacheCostUsd)} 是提示词缓存的。`);
-    notes.push("按各家官方标准价估算（美元），Gemini 免费额度内用的其实不收钱。");
-    $("spend-note").textContent = notes.join("");
+    if (total.cacheCostUsd > 0) notes.push(`含提示词缓存 ${formatUsd(total.cacheCostUsd)}`);
+    notes.push("按官方标价估算（美元）", "Gemini 免费额度内实际不收费");
+    $("spend-note").textContent = notes.join(" · ");
   }
 
   $("heatmap-back").addEventListener("click", () => {
@@ -168,7 +163,7 @@ export function createHome() {
       renderHeatmap();
       renderSpend(usage);
       $("home-keycap").textContent = app.hotkeyKeycap;
-      $("home-version").textContent = `版本 v${app.version}`;
+      $("home-version").textContent = `v${app.version}`;
     },
   };
 }

@@ -27,11 +27,11 @@ export function permissionGranted(name, value) {
  */
 export function permissionText(name, value) {
   if (name === "microphone") {
-    if (value === "granted") return ["已授权", "ok", "打开系统设置"];
+    if (value === "granted") return ["已授权", "ok", "系统设置"];
     // 从没问过时系统设置的列表里还没有这个应用，要先让系统弹一次授权框
-    if (value === "not-determined") return ["还没授权", "problem", "授权"];
-    return ["没有授权", "problem", "打开系统设置"];
+    if (value === "not-determined") return ["未授权", "problem", "授权"];
+    return ["未授权", "problem", "系统设置"];
   }
-  if (value === null) return ["检查中…", "pending", "打开系统设置"];
-  return value ? ["已授权", "ok", "打开系统设置"] : ["没有授权", "problem", "打开系统设置"];
+  if (value === null) return ["检查中…", "pending", "系统设置"];
+  return value ? ["已授权", "ok", "系统设置"] : ["未授权", "problem", "系统设置"];
 }

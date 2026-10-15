@@ -375,7 +375,7 @@ async function main() {
         setBarControls(false);
         log.error("helper_exited", { code: event.code, signal: event.signal });
         setupChanged();
-        notify(`按键监听停了，${hotkeyLabel()}不会生效：重新启动试试`);
+        notify(`按键监听停了，${hotkeyLabel()}失效：重启 SpeakMore 试试`);
         break;
       default:
         log.warn("helper_unknown_event", { event: event.event });
@@ -419,7 +419,6 @@ async function main() {
   ipcMain.handle("insights:get", () => insights(history.dictations(), { now: new Date() }));
   ipcMain.handle("app:info", () => ({
     version: app.getVersion(),
-    hotkeyLabel: hotkeyLabel(),
     hotkeyKeycap: HOTKEY_KEYCAPS[hotkey],
     dataDir: dirname(PATHS.historyDb),
   }));
@@ -487,12 +486,12 @@ async function main() {
       log.error("settings_save_failed", { name: "model", error: String(error?.message ?? error) });
       return {
         ok: true,
-        note: `这次运行已经改用 ${keys.provider.name}，但没记进设置（${error.message}），下次启动还是原来那家`,
+        note: `已改用 ${keys.provider.name}，但没存进设置（${error.message}）· 下次启动换回原来那家`,
       };
     }
     const variable = overridingEnv("model", process.env);
     if (variable !== null) {
-      return { ok: true, note: `环境变量 ${variable} 设着，下次启动还会用它定的那家` };
+      return { ok: true, note: `环境变量 ${variable} 优先 · 下次启动仍按它` };
     }
     return { ok: true };
   }
@@ -555,7 +554,7 @@ async function main() {
       setupChanged();
     }
     const variable = overridingEnv("hotkey", process.env);
-    return variable === null ? {} : { note: `环境变量 ${variable} 设着，下次启动还会用它定的那个键` };
+    return variable === null ? {} : { note: `环境变量 ${variable} 优先 · 下次启动仍按它` };
   }
 
   // ---------- 菜单栏、主窗口和首次引导 ----------
@@ -651,18 +650,18 @@ async function main() {
   function refreshTrayMenu() {
     const summary = summarizeSetup(currentSetup());
     const headline = summary.ready
-      ? `可以用了：按一下${hotkeyLabel()}开始说话`
+      ? `就绪 · 按 ${HOTKEY_KEYCAPS[hotkey]} 说话`
       : summary.missing.length > 0
         ? `还差：${summary.missing.join("、")}`
-        : "正在准备…";
+        : "准备中…";
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: headline, enabled: false },
         ...(summary.degraded ? [{ label: summary.degraded, enabled: false }] : []),
         { type: "separator" },
         // 下面几项照原版菜单栏的菜单（tray_menu__*）
-        { label: "打开 SpeakMore 主页", click: () => showHub({ route: "home" }) },
-        { label: "显示历史记录", click: () => showHub({ route: "history" }) },
+        { label: "打开 SpeakMore", click: () => showHub({ route: "home" }) },
+        { label: "历史记录", click: () => showHub({ route: "history" }) },
         { type: "separator" },
         { label: "设置…", accelerator: "CmdOrCtrl+,", click: () => showHub({ pane: "general" }) },
         { type: "separator" },
