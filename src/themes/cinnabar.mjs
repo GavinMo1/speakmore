@@ -1,5 +1,6 @@
 // 朱砂：只有一种暖红，用在"它正在为你干活"的地方——正在听的声波、整理中的波、最主要的那个按钮、完成时的勾。
 // 像录音机上亮着的那盏灯。出错用黄色，和红分开：红在这里的意思是"在工作"，不是"坏了"。
+// 窗口里的渐变从朱砂走到橘黄，背后两团光一红一橘，像灯透过磨砂罩。
 
 export default {
   id: "cinnabar",
@@ -28,6 +29,9 @@ export default {
       onPrimary: "oklch(1 0 0)",
       ok: "oklch(0.5 0.12 155)",
       problem: "oklch(0.5 0.12 85)",
+      glow: "oklch(0.55 0.15 52)",
+      aura: "oklch(0.89 0.065 32)",
+      aura2: "oklch(0.91 0.075 62)",
     },
     dark: {
       bg: "oklch(0.18 0.008 32)",
@@ -39,6 +43,9 @@ export default {
       onPrimary: "oklch(0.18 0.008 32)",
       ok: "oklch(0.8 0.13 155)",
       problem: "oklch(0.86 0.15 90)",
+      glow: "oklch(0.8 0.14 62)",
+      aura: "oklch(0.29 0.08 32)",
+      aura2: "oklch(0.26 0.05 62)",
     },
   },
 };

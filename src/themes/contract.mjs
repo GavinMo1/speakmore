@@ -30,6 +30,9 @@ export const WINDOW_TOKENS = {
   onPrimary: "主按钮上的字",
   ok: "成功、已授权",
   problem: "出错、还差什么",
+  glow: "渐变的另一头：和 primary 一起铺在主按钮、口述卡、进度上",
+  aura: "窗口背后左上角晕开的光：侧栏的玻璃透出它",
+  aura2: "窗口背后另一角的光，和 aura 错开一点色相",
 };
 
 /** 哪个叠在哪个上面、对比度至少多少。字要 4.5，图标和色块要 3（WCAG 2 的 AA） */
@@ -51,6 +54,13 @@ const WINDOW_LEGIBILITY = [
   ["primary", "bg", 4.5],
   ["primary", "raised", 4.5],
   ["onPrimary", "primary", 4.5],
+  // 渐变从 primary 走到 glow，字在哪一头都要读得清
+  ["onPrimary", "glow", 4.5],
+  // 光晕在字的后面：正文、次要的字叠在最浓的地方也要读得清
+  ["ink", "aura", 4.5],
+  ["ink2", "aura", 4.5],
+  ["ink", "aura2", 4.5],
+  ["ink2", "aura2", 4.5],
   ["ok", "bg", 4.5],
   ["problem", "bg", 4.5],
 ];

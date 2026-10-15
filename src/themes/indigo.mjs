@@ -1,4 +1,5 @@
 // 靛青：颜色代表阶段——绿是在听，蓝紫是在整理，琥珀是出了问题。到 0.2 版为止用的就是这一套。
+// 窗口里的渐变从靛青走到青绿（在听的那种绿偏一点蓝），背后两团光一蓝一青。
 
 export default {
   id: "indigo",
@@ -27,6 +28,9 @@ export default {
       onPrimary: "oklch(0.985 0.002 262)",
       ok: "oklch(0.5 0.12 155)",
       problem: "oklch(0.5 0.15 40)",
+      glow: "oklch(0.5 0.1 200)",
+      aura: "oklch(0.89 0.055 262)",
+      aura2: "oklch(0.91 0.065 185)",
     },
     dark: {
       bg: "oklch(0.2 0.012 262)",
@@ -38,6 +42,9 @@ export default {
       onPrimary: "oklch(0.2 0.012 262)",
       ok: "oklch(0.8 0.13 155)",
       problem: "oklch(0.8 0.12 55)",
+      glow: "oklch(0.82 0.1 195)",
+      aura: "oklch(0.3 0.07 262)",
+      aura2: "oklch(0.27 0.05 185)",
     },
   },
 };

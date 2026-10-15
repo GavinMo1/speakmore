@@ -73,6 +73,22 @@ test("不合格的主题说得出毛病在哪：缺 token、多了不认识的�
   assert.deepEqual(themeProblems(null), ["主题要是一组数据"]);
 });
 
+test("窗口的渐变和光晕也要读得清：主按钮的字叠在渐变两头，正文和次要的字叠在两团光晕上", () => {
+  for (const theme of THEMES) {
+    for (const name of ["glow", "aura", "aura2"]) {
+      assert.ok(Object.hasOwn(theme.window.light, name), `${theme.id} 浅色少了 ${name}`);
+      assert.ok(Object.hasOwn(theme.window.dark, name), `${theme.id} 深色少了 ${name}`);
+    }
+  }
+  const dim = clone(THEMES[0]);
+  dim.window.light.glow = "oklch(0.9 0 0)";
+  dim.window.light.aura2 = "oklch(0.4 0 0)";
+  const problems = themeProblems(dim).join("\n");
+  assert.match(problems, /窗口（浅色）的 onPrimary 叠在 glow 上看不清/);
+  assert.match(problems, /窗口（浅色）的 ink 叠在 aura2 上看不清/);
+  assert.match(problems, /窗口（浅色）的 ink2 叠在 aura2 上看不清/);
+});
+
 test("themeCss：悬浮条一组，窗口浅色一组，深色那组放在跟随系统的条件里；token 名按约定换成 CSS 变量名", () => {
   const theme = findTheme("ink");
   const css = themeCss(theme);
