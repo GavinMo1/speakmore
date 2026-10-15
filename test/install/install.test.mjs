@@ -40,9 +40,9 @@ const FAKE_ELECTRON = `#!/bin/sh
 printf '%s|%s|%s|%s\\n' "$ELECTRON_RUN_AS_NODE" "$SPEAKMORE_HOME" "$#" "$*" >> "$FAKE_CALL_LOG"
 case "$2" in
   --version) [ -z "$FAKE_BROKEN" ] || exit 1; echo "$FAKE_VERSION" ;;
-  # 真的命令行按终端的语言说话：只有指定了中文才说中文（安装脚本靠它说的话判断停没停、搬没搬）
-  stop) [ -z "$FAKE_STOP_FAILS" ] || { echo "SpeakMore 停不掉（进程号 1）" >&2; exit 1; }
-    [ "$SPEAKMORE_LANGUAGE" = zh-CN ] || { echo "SpeakMore wasn't running."; exit 0; }; echo "\${FAKE_STOP_SAYS:-SpeakMore 本来就没有在运行。}" ;;
+  # 真的命令行按终端的语言说话：没指定英文时就说中文（安装脚本靠它说的话判断停没停、搬没搬）
+  stop) [ -z "$FAKE_STOP_FAILS" ] || { echo "Couldn't stop SpeakMore (pid 1)" >&2; exit 1; }
+    [ "$SPEAKMORE_LANGUAGE" = en ] || { echo "SpeakMore 本来就没有在运行。"; exit 0; }; echo "\${FAKE_STOP_SAYS:-SpeakMore was not running.}" ;;
 esac
 `;
 
@@ -110,9 +110,9 @@ const calls = () => (existsSync(callLog) ? readFileSync(callLog, "utf8").trim().
 const installedVersion = (dir = home()) => JSON.parse(readFileSync(join(dir, "app", "package.json"), "utf8")).version;
 
 test("全新安装：程序和运行环境进了 ~/.speakmore，命令能用，家目录以外只多一个链接", () => {
-  const { code, out } = install();
-  assert.equal(code, 0, out);
-  assert.match(out, /预检查[\s\S]*安装[\s\S]*装好了：SpeakMore 9\.9\.9/);
+  const { code, out, all } = install();
+  assert.equal(code, 0, all);
+  assert.match(out, /Checks[\s\S]*Install[\s\S]*Installed SpeakMore 9\.9\.9/);
   assert.equal(installedVersion(), "9.9.9");
   assert.equal(statSync(home()).mode & 0o777, 0o700, "里面有录音和 key，只有自己进得去");
   // 下载和解包用的临时目录不留下
@@ -132,7 +132,7 @@ test("全新安装：程序和运行环境进了 ~/.speakmore，命令能用，�
 
 test("没有终端可用时只装不启动，并说怎么启动", () => {
   const { out } = install();
-  assert.match(out, /运行 speakmore 启动/);
+  assert.match(out, /Run speakmore to start/);
   // 安装过程中只为了问版本和停掉旧的调过程序
   assert.deepEqual(
     calls().map((line) => line.split(" ").at(-1)),
@@ -142,13 +142,13 @@ test("没有终端可用时只装不启动，并说怎么启动", () => {
 
 test("命令的链接建在 PATH 里的位置；~/.local/bin 不在 PATH 里时说清楚怎么加", () => {
   const missing = install();
-  assert.match(missing.out, /不在 PATH 里/);
+  assert.match(missing.out, /isn't on your PATH/);
   assert.match(missing.out, /export PATH=/);
 
   rmSync(home(), { recursive: true });
   const present = install({ path: `${join(userHome, ".local", "bin")}:` });
   assert.equal(present.code, 0);
-  assert.doesNotMatch(present.out, /不在 PATH 里/);
+  assert.doesNotMatch(present.out, /isn't on your PATH/);
 });
 
 test("再装一次就是升级：程序换成新的，设置、key、历史和录音不动；先停掉正在运行的", () => {
@@ -165,11 +165,11 @@ test("再装一次就是升级：程序换成新的，设置、key、历史和�
   rmSync(callLog);
   makeArchive("arm64", "10.0.0");
 
-  const { code, out } = install({ env: { FAKE_STOP_SAYS: "SpeakMore 已经停掉。" } });
+  const { code, out } = install({ env: { FAKE_STOP_SAYS: "SpeakMore stopped." } });
   assert.equal(code, 0, out);
-  assert.match(out, /已经装着 9\.9\.9/);
-  assert.match(out, /停掉了正在运行的那一个/);
-  assert.match(out, /升级好了：9\.9\.9 → 10\.0\.0/);
+  assert.match(out, /Found 9\.9\.9/);
+  assert.match(out, /Stopped the running SpeakMore/);
+  assert.match(out, /Upgraded: 9\.9\.9 → 10\.0\.0/);
   assert.equal(installedVersion(), "10.0.0");
   assert.equal(readFileSync(join(home(), "settings.json"), "utf8"), '{"hotkey":"fn"}');
   assert.equal(readFileSync(join(home(), "data", "Recordings", "a.webm"), "utf8"), "录音");
@@ -186,25 +186,25 @@ test("再装一次就是升级：程序换成新的，设置、key、历史和�
 
 test("安装时把 0.1 版搬数据的结果说出来", () => {
   const { out } = install({
-    env: { FAKE_STOP_SAYS: "旧版本的数据已经搬到 /x/.speakmore（history.db、Recordings）。" },
+    env: { FAKE_STOP_SAYS: "Moved the old version's data to /x/.speakmore (history.db, Recordings)." },
   });
-  assert.match(out, /✓ 旧版本的数据已经搬到/);
+  assert.match(out, /✓ Moved the old version's data to \/x\/\.speakmore/);
 });
 
 /** 预检查没过、或者中途出错：以非零退出，把原因说清楚，已经装着的不动，没装过的不留下东西 */
 function assertRefused(result, reason) {
   assert.equal(result.code, 1, result.all);
   assert.match(result.err, reason);
-  assert.match(result.err, /没有装成/);
+  assert.match(result.err, /Nothing was installed/);
 }
 
 test("预检查不过就不往下走：不是 macOS、系统太旧、用了 sudo、磁盘不够", () => {
   for (const [env, reason] of [
-    [{ FAKE_OS: "Linux" }, /只支持 macOS/],
-    [{ FAKE_MACOS: "11.7.10" }, /macOS 版本太旧：11\.7\.10/],
-    [{ FAKE_UID: "0" }, /不要用 sudo/],
-    [{ FAKE_FREE_KB: "20480" }, /磁盘空间不够：还剩 20 MB/],
-    [{ FAKE_ARCH: "riscv64" }, /不认识的芯片/],
+    [{ FAKE_OS: "Linux" }, /only supports macOS/],
+    [{ FAKE_MACOS: "11.7.10" }, /macOS 11\.7\.10 is too old/],
+    [{ FAKE_UID: "0" }, /Don't run this with sudo/],
+    [{ FAKE_FREE_KB: "20480" }, /Not enough disk space: 20 MB free/],
+    [{ FAKE_ARCH: "riscv64" }, /Unknown chip/],
   ]) {
     assertRefused(install({ env }), reason);
     assert.equal(existsSync(home()), false, `没装成就不留下目录：${JSON.stringify(env)}`);
@@ -214,7 +214,7 @@ test("预检查不过就不往下走：不是 macOS、系统太旧、用了 sudo
 
 test("Intel 芯片下的是 x64 的包；这个版本没有那种包时在下载之前就说清楚", () => {
   const result = install({ env: { FAKE_ARCH: "x86_64" } });
-  assertRefused(result, /下载不到发布包/);
+  assertRefused(result, /Couldn't reach the release package/);
   assert.match(result.err, /speakmore-darwin-x64\.tar\.gz/);
   assert.equal(existsSync(home()), false);
 
@@ -235,13 +235,13 @@ test("默认装下载地址上标着最新的那个版本；SPEAKMORE_VERSION �
 
 test("问不到最新版本、问到的不像版本号、指定的版本不存在：都在下载之前说清楚，不装", () => {
   writeFileSync(join(release, "latest"), "<html>出错了</html>\n");
-  assertRefused(install(), /下载地址给的最新版本号不对/);
+  assertRefused(install(), /returned a bad version number/);
 
   rmSync(join(release, "latest"));
-  assertRefused(install(), /问不到最新版本/);
+  assertRefused(install(), /Couldn't find the latest version/);
 
-  assertRefused(install({ env: { SPEAKMORE_VERSION: "v1.2.3" } }), /下载不到发布包[\s\S]*v1\.2\.3/);
-  assertRefused(install({ env: { SPEAKMORE_VERSION: "../../etc" } }), /SPEAKMORE_VERSION 不像版本号/);
+  assertRefused(install({ env: { SPEAKMORE_VERSION: "v1.2.3" } }), /Couldn't reach the release package[\s\S]*v1\.2\.3/);
+  assertRefused(install({ env: { SPEAKMORE_VERSION: "../../etc" } }), /SPEAKMORE_VERSION doesn't look like a version/);
 });
 
 test("安装脚本里查的几家，和程序里登记的模型厂商是同一份", async () => {
@@ -259,20 +259,20 @@ test("安装脚本里查的几家，和程序里登记的模型厂商是同一�
 test("能用的几家模型都查一遍连不连得上：连得上的打勾，连不上的只提醒，不拦着安装", () => {
   const both = install();
   assert.equal(both.code, 0);
-  assert.match(both.out, /✓ 连得上 Gemini/);
-  assert.match(both.out, /✓ 连得上 OpenAI/);
+  assert.match(both.out, /✓ Gemini reachable/);
+  assert.match(both.out, /✓ OpenAI reachable/);
 
   const noGemini = install({ env: { FAKE_GEMINI_EXIT: "7" } });
   assert.equal(noGemini.code, 0);
-  assert.match(noGemini.out, /! 现在连不上 Gemini/);
-  assert.match(noGemini.out, /✓ 连得上 OpenAI/);
+  assert.match(noGemini.out, /! Can't reach Gemini/);
+  assert.match(noGemini.out, /✓ OpenAI reachable/);
 
   const neither = install({ env: { FAKE_GEMINI_EXIT: "7", FAKE_OPENAI_EXIT: "7" } });
   assert.equal(neither.code, 0);
-  assert.match(neither.out, /! 现在连不上 Gemini/);
-  assert.match(neither.out, /! 现在连不上 OpenAI/);
+  assert.match(neither.out, /! Can't reach Gemini/);
+  assert.match(neither.out, /! Can't reach OpenAI/);
   // 怎么办只说一遍
-  assert.equal(neither.out.match(/需要代理的话/g)?.length, 1);
+  assert.equal(neither.out.match(/need a proxy/g)?.length, 1);
   assert.equal(installedVersion(), "9.9.9");
 });
 
@@ -280,7 +280,7 @@ test("下到的包和发布时的不一样（校验不过）：不装，已经�
   assert.equal(install().code, 0);
   makeArchive("arm64", "10.0.0");
   writeFileSync(join(release, "v10.0.0", "speakmore-darwin-arm64.tar.gz.sha256"), `${"0".repeat(64)}  x\n`);
-  assertRefused(install(), /校验没通过/);
+  assertRefused(install(), /Checksum mismatch/);
   assert.equal(installedVersion(), "9.9.9");
   assert.deepEqual(readdirSync(home()).sort(), ["app", "bin", "runtime"]);
 });
@@ -288,7 +288,7 @@ test("下到的包和发布时的不一样（校验不过）：不装，已经�
 test("下到的程序在这台机器上跑不起来：换掉旧的之前就发现，旧的不动", () => {
   assert.equal(install().code, 0);
   makeArchive("arm64", "10.0.0");
-  assertRefused(install({ env: { FAKE_BROKEN: "1" } }), /跑不起来/);
+  assertRefused(install({ env: { FAKE_BROKEN: "1" } }), /won't run on this Mac/);
   assert.equal(installedVersion(), "9.9.9");
 });
 
@@ -296,7 +296,7 @@ test("正在运行的停不掉：不换（它还开着旧程序的文件）", ()
   assert.equal(install().code, 0);
   makeArchive("arm64", "10.0.0");
   const result = install({ env: { FAKE_STOP_FAILS: "1" } });
-  assertRefused(result, /停不掉/);
+  assertRefused(result, /Couldn't stop the running SpeakMore/);
   assert.equal(installedVersion(), "9.9.9");
 });
 
@@ -306,7 +306,7 @@ test("链接的位置上已经有别人的同名文件：不动它，告诉用�
   writeFileSync(theirs, "别人的");
   const { code, out } = install();
   assert.equal(code, 0);
-  assert.match(out, /已经有一个别的 speakmore，没有动它/);
+  assert.match(out, /is another speakmore; left it alone/);
   assert.equal(readFileSync(theirs, "utf8"), "别人的");
   assert.equal(existsSync(join(home(), "bin", "links")), false);
 });
@@ -317,7 +317,7 @@ test("PATH 里排在前面的是另一个 speakmore 时提醒一句", () => {
   writeFileSync(join(other, "speakmore"), "#!/bin/sh\n");
   chmodSync(join(other, "speakmore"), 0o755);
   const { out } = install({ path: `${other}:${join(userHome, ".local", "bin")}:` });
-  assert.match(out, /排在前面的还有另一个 speakmore/);
+  assert.match(out, /Another speakmore comes first on your PATH/);
 });
 
 test("装到别处（SPEAKMORE_HOME），路径里有空格和引号也行；链接可以另指一个目录", () => {
@@ -332,6 +332,14 @@ test("装到别处（SPEAKMORE_HOME），路径里有空格和引号也行；链
 });
 
 test("不认识的参数：不装", () => {
-  assertRefused(install({ args: ["--force"] }), /不认识的参数：--force/);
+  assertRefused(install({ args: ["--force"] }), /Unknown option: --force/);
   assert.equal(existsSync(home()), false);
+});
+
+test("脚本给人看的话都是英文：除了注释，一个汉字都没有", () => {
+  const lines = readFileSync(INSTALLER, "utf8").split("\n");
+  const chinese = lines
+    .map((line, index) => [index + 1, line])
+    .filter(([, line]) => !/^\s*#/.test(line) && /\p{Script=Han}/u.test(line));
+  assert.deepEqual(chinese, []);
 });

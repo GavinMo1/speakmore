@@ -11,7 +11,7 @@ git clone https://github.com/zephyr4123/speakmore.git
 cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
-npm run check                 # 代码检查 + 全部测试（572 条，不联网、不开窗口）
+npm run check                 # 代码检查 + 全部测试（573 条，不联网、不开窗口）
 npm run release               # 打发布包：dist/release/ 下两种芯片各一个压缩包和一个安装包（dmg），外加 install.sh，摆成下载地址上的样子
 ```
 
@@ -37,7 +37,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 
 | 目录 | 内容 |
 | --- | --- |
-| `install.sh` | 安装脚本：预检查、下载、校验、装进 `~/.speakmore`、启动 |
+| `install.sh` | 安装脚本：预检查、下载、校验、装进 `~/.speakmore`、启动。输出只有英文，不跟界面语言 |
 | `bin/`、`src/cli/` | `speakmore` 命令 |
 | `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、主窗口、首次引导；`keys/` 是 key 的保存和启用 |
 | `src/renderer/`、`src/preload/` | 各个窗口的页面，一个窗口一个目录：`bar/`（悬浮条：状态机、录音、听写协议的客户端、画面）、`hub/`（主窗口：首页、历史记录、设置对话框）、`onboarding/`（首次引导），共用的样式和填 key 那一块在 `shared/` |
@@ -72,7 +72,7 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 
 ## 验证到哪一步
 
-- 自动测试 572 条，在 Node 26.0 上全过；其中 554 条单测在 Node 24.21（Electron 自带的版本，程序就跑在它上面）上也全过；Node 22.13 上跑过的是更早的 269 条（之后加的没在 22 上重跑）。其中 18 条是安装脚本的，17 条拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
+- 自动测试 573 条，在 Node 26.0 上全过；其中 554 条单测在 Node 24.21（Electron 自带的版本，程序就跑在它上面）上也全过；Node 22.13 上跑过的是更早的 269 条（之后加的没在 22 上重跑）。其中 19 条是安装脚本的，17 条拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
 - 用真的发布包走过一遍，装在临时目录里，`PATH` 里没有 Node：
   - 安装脚本从管道读入，装完直接启动并问 key，输入不显示。
   - 启动、状态、设置、重启、停止；合成的语音经过录音编码、Gemini、存历史，成品正确。

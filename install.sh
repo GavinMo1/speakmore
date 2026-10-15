@@ -48,7 +48,7 @@ fail() {
   printf '  %s✗%s %s\n' "$RED" "$RESET" "$1" >&2
   shift
   for line in "$@"; do printf '    %s\n' "$line" >&2; done
-  printf '\n  没有装成，原来的东西没有动。\n' >&2
+  printf '\n  Nothing was installed; what you had is untouched.\n' >&2
   exit 1
 }
 
@@ -67,16 +67,16 @@ cleanup() {
 
 check_system() {
   [ "$(uname -s)" = "Darwin" ] ||
-    fail "SpeakMore 目前只支持 macOS" "听热键和贴字靠的是 macOS 的系统接口。这台机器是 $(uname -s)。"
+    fail "SpeakMore only supports macOS for now" "Listening for the hotkey and pasting rely on macOS system APIs. This machine runs $(uname -s)."
 
   [ "$(id -u)" -ne 0 ] ||
-    fail "不要用 sudo 或 root 运行" "SpeakMore 装在你自己的家目录里，不需要管理员权限。去掉 sudo 再运行一次。"
+    fail "Don't run this with sudo or as root" "SpeakMore installs into your home folder and doesn't need admin rights. Run it again without sudo."
 
   local version major
   version="$(sw_vers -productVersion)"
   major="${version%%.*}"
   [ "$major" -ge "$MIN_MACOS_MAJOR" ] 2>/dev/null ||
-    fail "macOS 版本太旧：$version" "需要 macOS $MIN_MACOS_MAJOR 或更新的版本。"
+    fail "macOS $version is too old" "SpeakMore needs macOS $MIN_MACOS_MAJOR or newer."
   ok "macOS $version"
 
   case "$(uname -m)" in
@@ -85,40 +85,40 @@ check_system() {
       # Apple 芯片上从 Rosetta 转译的终端里运行时，报的是 x86_64
       if [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)" = "1" ]; then ARCH="arm64"; else ARCH="x64"; fi
       ;;
-    *) fail "不认识的芯片：$(uname -m)" "SpeakMore 有 Apple 芯片（arm64）和 Intel（x86_64）两种包。" ;;
+    *) fail "Unknown chip: $(uname -m)" "SpeakMore is built for Apple silicon (arm64) and Intel (x86_64)." ;;
   esac
-  if [ "$ARCH" = "arm64" ]; then ok "Apple 芯片"; else ok "Intel 芯片"; fi
+  if [ "$ARCH" = "arm64" ]; then ok "Apple silicon"; else ok "Intel"; fi
 
   local tool missing=""
   for tool in curl tar shasum mktemp awk sed df; do
     command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
   done
-  [ -z "$missing" ] || fail "缺少系统自带的工具：$missing" "它们本该随 macOS 一起装好。检查一下 PATH 是不是被改过。"
-  ok "需要的系统工具都在"
+  [ -z "$missing" ] || fail "Missing built-in tools:$missing" "They come with macOS. Check whether your PATH was changed."
+  ok "System tools found"
 }
 
 check_home() {
   local bytes
   bytes="$(printf '%s' "$HOME_DIR" | wc -c | tr -d ' ')"
   [ "$bytes" -le "$MAX_HOME_BYTES" ] ||
-    fail "安装目录的路径太长：$HOME_DIR" "换一个短一些的：SPEAKMORE_HOME=/一个/短路径，再运行一次。"
-  case "$HOME_DIR" in /*) ;; *) fail "SPEAKMORE_HOME 要写绝对路径，现在是 $HOME_DIR" ;; esac
+    fail "Install path is too long: $HOME_DIR" "Pick a shorter one with SPEAKMORE_HOME=/a/short/path and run again."
+  case "$HOME_DIR" in /*) ;; *) fail "SPEAKMORE_HOME must be an absolute path, not $HOME_DIR" ;; esac
 
   mkdir -p "$HOME_DIR" 2>/dev/null && [ -w "$HOME_DIR" ] ||
-    fail "$(pretty "$HOME_DIR") 建不出来或者写不进去" "检查这个位置的权限，或者用 SPEAKMORE_HOME 换一个地方。"
+    fail "Can't create or write to $(pretty "$HOME_DIR")" "Check its permissions, or pick another place with SPEAKMORE_HOME."
   # 里面会有录音和 key，只让自己进得去
   chmod 700 "$HOME_DIR"
 
   local free_mb
   free_mb="$(df -Pk "$HOME_DIR" | awk 'NR == 2 { printf "%d", $4 / 1024 }')"
   [ "$free_mb" -ge "$NEEDED_MB" ] 2>/dev/null ||
-    fail "磁盘空间不够：还剩 ${free_mb} MB" "需要大约 ${NEEDED_MB} MB。腾一些空间再运行一次。"
-  ok "装在 $(pretty "$HOME_DIR")（磁盘还剩 $((free_mb / 1024)) GB）"
+    fail "Not enough disk space: ${free_mb} MB free" "About ${NEEDED_MB} MB is needed. Free up some space and run again."
+  ok "Installing to $(pretty "$HOME_DIR") ($((free_mb / 1024)) GB free)"
 
   INSTALLED_VERSION=""
   if [ -f "$HOME_DIR/app/package.json" ]; then
     INSTALLED_VERSION="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$HOME_DIR/app/package.json" | head -1)"
-    ok "已经装着 ${INSTALLED_VERSION:-一个版本}：这次换成新的，设置、key、历史和录音不动"
+    ok "Found ${INSTALLED_VERSION:-an earlier version}: replacing it; settings, keys, history and recordings stay"
   fi
 }
 
@@ -129,12 +129,12 @@ resolve_version() {
     case "$version" in v*) ;; *) version="v$version" ;; esac
   else
     version="$(curl -fsSL --max-time 20 "$DOWNLOAD_BASE/latest" 2>/dev/null | head -n 1 | tr -d '[:space:]')" || version=""
-    [ -n "$version" ] || fail "问不到最新版本是哪个" "地址：$DOWNLOAD_BASE/latest" "检查网络，过一会儿再运行一次。"
+    [ -n "$version" ] || fail "Couldn't find the latest version" "URL: $DOWNLOAD_BASE/latest" "Check your network and try again in a bit."
   fi
   # 版本号要拼进下载地址：不像版本号的不往下走（比如问到的其实是一个报错的网页）
   if ! [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.-]+)?$ ]]; then
-    [ -n "${SPEAKMORE_VERSION:-}" ] && fail "SPEAKMORE_VERSION 不像版本号：$SPEAKMORE_VERSION" "写成 v0.2.0 这样的。"
-    fail "下载地址给的最新版本号不对" "地址：$DOWNLOAD_BASE/latest" "过一会儿再运行一次；一直这样的话请到 $REPO_URL/issues 说一声。"
+    [ -n "${SPEAKMORE_VERSION:-}" ] && fail "SPEAKMORE_VERSION doesn't look like a version: $SPEAKMORE_VERSION" "Write it like v0.2.0."
+    fail "The download server returned a bad version number" "URL: $DOWNLOAD_BASE/latest" "Try again in a bit. If it keeps happening, please open an issue at $REPO_URL/issues."
   fi
   BASE_URL="$DOWNLOAD_BASE/$version"
 }
@@ -143,23 +143,23 @@ check_network() {
   resolve_version
   # 顺带确认了这个版本、这种芯片的发布包确实存在
   curl -fsSL --max-time 20 -o /dev/null "$BASE_URL/$ARCHIVE.sha256" 2>/dev/null ||
-    fail "下载不到发布包" \
-      "地址：$BASE_URL/$ARCHIVE" \
-      "检查网络。指定了 SPEAKMORE_VERSION 的话，确认有这个版本。"
-  ok "下载地址连得上"
+    fail "Couldn't reach the release package" \
+      "URL: $BASE_URL/$ARCHIVE" \
+      "Check your network. If you set SPEAKMORE_VERSION, make sure that version exists."
+  ok "Download server reachable"
 
   # 装得上不等于用得了：整理文字要连用的那一家，装的时候还不知道用哪家，所以都查。连不上只提醒，不拦着
   local i unreachable=0
   for ((i = 0; i < ${#MODEL_HOSTS[@]}; i += 2)); do
     if curl -s --max-time 8 -o /dev/null "https://${MODEL_HOSTS[i + 1]}/" 2>/dev/null; then
-      ok "连得上 ${MODEL_HOSTS[i]}"
+      ok "${MODEL_HOSTS[i]} reachable"
     else
-      warn "现在连不上 ${MODEL_HOSTS[i]}（${MODEL_HOSTS[i + 1]}）"
+      warn "Can't reach ${MODEL_HOSTS[i]} right now (${MODEL_HOSTS[i + 1]})"
       unreachable=1
     fi
   done
   if [ "$unreachable" = 1 ]; then
-    note "不影响安装。用哪一家就要能连上哪一家；需要代理的话，启动 speakmore 的那个终端里要设好。"
+    note "Installing still works. You need to reach the provider you use; if you need a proxy, set it in the terminal that starts speakmore."
   fi
 }
 
@@ -170,25 +170,25 @@ download() {
   local progress="-sS"
   [ -t 2 ] && progress="--progress-bar"
   curl -fL "$progress" -o "$TMP_DIR/$ARCHIVE" "$BASE_URL/$ARCHIVE" ||
-    fail "下载中断了" "再运行一次。地址：$BASE_URL/$ARCHIVE"
-  curl -fsSL -o "$TMP_DIR/$ARCHIVE.sha256" "$BASE_URL/$ARCHIVE.sha256" || fail "校验文件没有下到" "再运行一次。"
-  ok "下载好了"
+    fail "Download interrupted" "Run it again. URL: $BASE_URL/$ARCHIVE"
+  curl -fsSL -o "$TMP_DIR/$ARCHIVE.sha256" "$BASE_URL/$ARCHIVE.sha256" || fail "Couldn't download the checksum" "Run it again."
+  ok "Downloaded"
 
   local expected actual
   expected="$(awk '{ print $1; exit }' "$TMP_DIR/$ARCHIVE.sha256")"
   actual="$(shasum -a 256 "$TMP_DIR/$ARCHIVE" | awk '{ print $1 }')"
   [ -n "$expected" ] && [ "$expected" = "$actual" ] ||
-    fail "下到的包和发布时的不一样（校验没通过）" "多半是下载途中坏了，再运行一次。" "应该是 $expected" "下到的是 $actual"
-  ok "校验通过"
+    fail "Checksum mismatch: the download differs from the release" "It was probably damaged on the way. Run it again." "Expected $expected" "Got      $actual"
+  ok "Checksum OK"
 
-  tar -xzf "$TMP_DIR/$ARCHIVE" -C "$TMP_DIR" || fail "包解不开" "再运行一次。"
+  tar -xzf "$TMP_DIR/$ARCHIVE" -C "$TMP_DIR" || fail "Couldn't unpack the package" "Run it again."
   NEW_ELECTRON="$TMP_DIR/runtime/Electron.app/Contents/MacOS/Electron"
-  [ -f "$TMP_DIR/app/bin/speakmore.mjs" ] && [ -x "$NEW_ELECTRON" ] || fail "包里的东西不全" "这是发布包的问题，请到 $REPO_URL/issues 说一声。"
+  [ -f "$TMP_DIR/app/bin/speakmore.mjs" ] && [ -x "$NEW_ELECTRON" ] || fail "The package is incomplete" "That's a problem with the release. Please open an issue at $REPO_URL/issues."
 
   # 换掉旧的之前先在原地跑一下：这台机器上跑不起来的话现在就知道，不至于换完才发现
   NEW_VERSION="$(run_new --version 2>/dev/null)" ||
-    fail "下到的程序在这台机器上跑不起来" "请到 $REPO_URL/issues 说一声，带上 macOS 版本和芯片型号。"
-  ok "解开了：SpeakMore $NEW_VERSION"
+    fail "The downloaded app won't run on this Mac" "Please open an issue at $REPO_URL/issues with your macOS version and chip."
+  ok "Unpacked SpeakMore $NEW_VERSION"
 }
 
 # 用刚下到的那一份程序跑一条命令
@@ -202,7 +202,7 @@ swap_in() {
   for name in app runtime; do
     rm -rf "$HOME_DIR/$name.old"
     [ ! -e "$HOME_DIR/$name" ] || mv "$HOME_DIR/$name" "$HOME_DIR/$name.old" ||
-      fail "$(pretty "$HOME_DIR/$name") 挪不动" "检查这个目录的权限。"
+      fail "Can't move $(pretty "$HOME_DIR/$name")" "Check the folder's permissions."
   done
   if mv "$TMP_DIR/app" "$HOME_DIR/app" && mv "$TMP_DIR/runtime" "$HOME_DIR/runtime"; then
     rm -rf "$HOME_DIR/app.old" "$HOME_DIR/runtime.old"
@@ -213,17 +213,17 @@ swap_in() {
     rm -rf "$HOME_DIR/$name"
     mv "$HOME_DIR/$name.old" "$HOME_DIR/$name"
   done
-  fail "新的程序放不进 $(pretty "$HOME_DIR")" "检查这个目录的权限。后台已经停了，运行 speakmore 重新启动。"
+  fail "Couldn't put the new version into $(pretty "$HOME_DIR")" "Check the folder's permissions. SpeakMore was stopped; run speakmore to start it again."
 }
 
 install_files() {
   # 正在运行的要先停：它开着旧程序的文件。用新的这份去停，新旧版本的后台应用它都认。
   # 0.1 版把数据放在别处，有的话这一步会顺带搬过来。
-  # 下面靠它说的话判断停没停、搬没搬，命令行又按终端的语言说话：让它说中文，和这个脚本一致
+  # 下面靠它说的话判断停没停、搬没搬，命令行又按终端的语言说话：让它说英文，和这个脚本一致
   local output
-  output="$(SPEAKMORE_LANGUAGE=zh-CN run_new stop 2>&1)" || fail "正在运行的 SpeakMore 停不掉" "$output" "先把它退出，再安装。"
-  case "$output" in *"已经搬到"*) ok "$(printf '%s\n' "$output" | grep "已经搬到" | head -1)" ;; esac
-  case "$output" in *"已经停掉"* | *"强行结束"*) ok "停掉了正在运行的那一个" ;; esac
+  output="$(SPEAKMORE_LANGUAGE=en run_new stop 2>&1)" || fail "Couldn't stop the running SpeakMore" "$output" "Quit it first, then install again."
+  case "$output" in *"Moved the old version's data"*) ok "$(printf '%s\n' "$output" | grep "Moved the old version's data" | head -1)" ;; esac
+  case "$output" in *"SpeakMore stopped."* | *"force-quit"*) ok "Stopped the running SpeakMore" ;; esac
 
   swap_in
 
@@ -232,15 +232,15 @@ install_files() {
   # 目录的位置写死在启动脚本里：它会被别处的链接指着，不能靠"我在哪"来猜
   cat >"$LAUNCHER" <<EOF
 #!/bin/sh
-# SpeakMore 的命令，由安装脚本生成。
-# 拿自带的 Electron 当 Node 来跑（它里面就有一个），所以不依赖系统里装没装 Node。
+# The speakmore command, generated by the SpeakMore installer.
+# Runs on the bundled Electron as Node, so Node doesn't need to be installed.
 installed_in=$(quoted "$HOME_DIR")
 SPEAKMORE_HOME="\${SPEAKMORE_HOME:-\$installed_in}"
 export SPEAKMORE_HOME
 ELECTRON_RUN_AS_NODE=1 exec $(quoted "$HOME_DIR/runtime/Electron.app/Contents/MacOS/Electron") $(quoted "$HOME_DIR/app/bin/speakmore.mjs") "\$@"
 EOF
   chmod 755 "$LAUNCHER"
-  ok "装进了 $(pretty "$HOME_DIR")"
+  ok "Installed to $(pretty "$HOME_DIR")"
 }
 
 link_command() {
@@ -258,30 +258,30 @@ link_command() {
 
   # 那个位置上已经有一个不是链接的同名文件：不是我们放的，不动它
   if [ -e "$link" ] && [ ! -L "$link" ]; then
-    warn "$(pretty "$link") 已经有一个别的 speakmore，没有动它"
-    note "要用新装的，运行：$(pretty "$LAUNCHER")"
+    warn "$(pretty "$link") is another speakmore; left it alone"
+    note "To use the new one, run: $(pretty "$LAUNCHER")"
     return
   fi
   mkdir -p "$dir"
   ln -sfn "$LAUNCHER" "$link"
   # 记下在家目录以外建了什么，卸载时照着删
   grep -qxF "$link" "$HOME_DIR/bin/links" 2>/dev/null || printf '%s\n' "$link" >>"$HOME_DIR/bin/links"
-  ok "speakmore 命令：$(pretty "$link")"
+  ok "speakmore command: $(pretty "$link")"
 
   if ! on_path "$dir"; then
     local rc=".zshrc"
     case "${SHELL:-}" in */bash) rc=".bash_profile" ;; esac
-    warn "$(pretty "$dir") 不在 PATH 里，新开的终端里会找不到 speakmore 命令"
-    note "加进去：echo 'export PATH=\"$dir:\$PATH\"' >> ~/$rc"
-    note "或者一直用完整的路径：$(pretty "$LAUNCHER")"
+    warn "$(pretty "$dir") isn't on your PATH, so new terminals won't find speakmore"
+    note "Add it: echo 'export PATH=\"$dir:\$PATH\"' >> ~/$rc"
+    note "Or use the full path: $(pretty "$LAUNCHER")"
     return
   fi
   # PATH 里排在前面的要是另一个 speakmore（比如从源码目录 npm link 的），敲命令时用到的会是它
   local found
   found="$(command -v speakmore 2>/dev/null || true)"
   if [ -n "$found" ] && [ "$found" != "$link" ]; then
-    warn "PATH 里排在前面的还有另一个 speakmore：$(pretty "$found")"
-    note "敲 speakmore 时用到的会是它。多半是以前 npm link 的，不要了就运行：npm unlink -g speakmore"
+    warn "Another speakmore comes first on your PATH: $(pretty "$found")"
+    note "Typing speakmore runs that one. It's likely an old npm link; remove it with: npm unlink -g speakmore"
   fi
 }
 
@@ -290,7 +290,7 @@ main() {
   for arg in "$@"; do
     case "$arg" in
       --no-start) start="no" ;;
-      *) fail "不认识的参数：$arg" "只认 --no-start（只装不启动）。" ;;
+      *) fail "Unknown option: $arg" "The only option is --no-start (install without starting)." ;;
     esac
   done
 
@@ -299,26 +299,26 @@ main() {
   # 本机的一个目录也可以当下载地址
   case "$DOWNLOAD_BASE" in /*) DOWNLOAD_BASE="file://$DOWNLOAD_BASE" ;; esac
 
-  printf '\n  %sSpeakMore 安装%s\n' "$BOLD" "$RESET"
+  printf '\n  %sSpeakMore installer%s\n' "$BOLD" "$RESET"
   trap cleanup EXIT
 
-  heading "预检查"
+  heading "Checks"
   check_system
   ARCHIVE="speakmore-darwin-$ARCH.tar.gz"
   check_home
   check_network
 
-  heading "安装"
+  heading "Install"
   download
   install_files
   link_command
 
   if [ -n "$INSTALLED_VERSION" ] && [ "$INSTALLED_VERSION" != "$NEW_VERSION" ]; then
-    printf '\n  %s升级好了：%s → %s%s\n' "$BOLD" "$INSTALLED_VERSION" "$NEW_VERSION" "$RESET"
+    printf '\n  %sUpgraded: %s → %s%s\n' "$BOLD" "$INSTALLED_VERSION" "$NEW_VERSION" "$RESET"
   else
-    printf '\n  %s装好了：SpeakMore %s%s\n' "$BOLD" "$NEW_VERSION" "$RESET"
+    printf '\n  %sInstalled SpeakMore %s%s\n' "$BOLD" "$NEW_VERSION" "$RESET"
   fi
-  note "不想用了：speakmore uninstall 会把 $(pretty "$HOME_DIR") 整个删掉。"
+  note "To remove it: speakmore uninstall deletes all of $(pretty "$HOME_DIR")."
 
   cleanup
   TMP_DIR=""
@@ -327,7 +327,7 @@ main() {
     printf '\n'
     exec "$LAUNCHER" </dev/tty
   fi
-  printf '\n  运行 speakmore 启动。\n\n'
+  printf '\n  Run speakmore to start.\n\n'
 }
 
 main "$@"
