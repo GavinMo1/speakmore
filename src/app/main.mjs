@@ -93,6 +93,18 @@ if (!isOnlyInstance) {
 
 const sourceDir = join(app.getAppPath(), "src");
 const webPreferences = { preload: join(sourceDir, "preload", "preload.cjs"), sandbox: true, contextIsolation: true };
+// 窗口里只放我们自己的页面。几个窗口共用一份预加载脚本：拖进窗口的文件、页面里的链接要是把窗口带走了，
+// 那个页面也能调到存 key、读历史、读剪贴板这些接口。开新窗口同理
+app.on("web-contents-created", (_event, contents) => {
+  contents.on("will-navigate", (event, url) => {
+    event.preventDefault();
+    log.warn("navigation_blocked", { url: url.slice(0, 200) });
+  });
+  contents.setWindowOpenHandler(({ url }) => {
+    log.warn("window_open_blocked", { url: url.slice(0, 200) });
+    return { action: "deny" };
+  });
+});
 
 // 不能写成顶层的 await app.whenReady()：Electron 要等主模块加载完才会就绪，
 // 而顶层 await 让模块一直加载不完，两边互相等（Electron 44.7 实测如此）。
