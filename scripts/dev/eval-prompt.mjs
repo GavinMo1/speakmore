@@ -188,9 +188,14 @@ function defectsOf(ours, reference) {
   const timestamps = (text) => text.match(/\b\d{1,2}:\d{2}\b/g)?.length ?? 0;
   if (timestamps(ours) >= 3 && timestamps(reference) === 0) defects.push("夹着时间戳");
   if (TRADITIONAL_ONLY.test(ours) && !TRADITIONAL_ONLY.test(reference)) defects.push("写成了繁体");
-  // 同一个字或词紧挨着重复三遍以上：口吃没删掉。原版里也这样的（"重做，重做，重做"）不算
-  const stutter = /([一-鿿]{1,3})\1{2,}/;
-  if (stutter.test(ours) && !stutter.test(reference.replace(/[\p{P}\s]/gu, ""))) defects.push("口吃没删");
+  // 口吃没删掉：同一个字或词紧挨着重复三遍以上，或者虚词、代词这类几乎不会叠着用的单字重复两遍（"要要做""这里的的"）。
+  // 原版里也这样的（"重做，重做，重做"）不算。"的的确确""是是非非"是正经叠词，不算
+  const bareReference = reference.replace(/[\p{P}\s]/gu, "");
+  const stutters = [
+    ...ours.matchAll(/([一-鿿]{1,3})\1{2,}/gu),
+    ...ours.matchAll(/([我你他她它这那要是的了就把被和也都还又会能有不没去给到很再才跟从])\1(?![确非])/gu),
+  ];
+  if (stutters.some(([repeated]) => !bareReference.includes(repeated))) defects.push("口吃没删");
   return defects;
 }
 
