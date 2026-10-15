@@ -14,7 +14,8 @@ COPY website/ ./
 RUN npm run build
 
 FROM nginx:1.28-alpine
-RUN rm -f /etc/nginx/conf.d/default.conf
+# 去掉镜像自带的站点配置和欢迎页、50x.html，只留构建出来的
+RUN rm -f /etc/nginx/conf.d/default.conf && rm -rf /usr/share/nginx/html/*
 COPY website/nginx.conf /etc/nginx/conf.d/site.conf
 COPY --from=build /repo/website/dist /usr/share/nginx/html
 EXPOSE 80
