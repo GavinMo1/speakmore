@@ -1,6 +1,8 @@
 /**
  * 一整段：底色、上下留白、内容的最大宽度。
  * tone：canvas（跟着系统深浅）、surface（跟着系统、比底色深一点）、ink（近黑，固定深色）
+ * 超出的部分用 overflow: clip 裁掉，不用 hidden：hidden 会让这一段自己成了滚动容器，
+ * 里面跟着滚动走的动画（.reveal、成本的数字）就去跟这个不会滚的盒子走，一直停在终点
  */
 const TONES = {
   canvas: "bg-canvas",
@@ -10,7 +12,7 @@ const TONES = {
 
 export function Section({ id, tone = "canvas", className = "", children, labelledBy }) {
   return (
-    <section id={id} aria-labelledby={labelledBy} className={`${TONES[tone]} text-ink overflow-hidden ${className}`}>
+    <section id={id} aria-labelledby={labelledBy} className={`${TONES[tone]} text-ink overflow-clip ${className}`}>
       <div className="mx-auto max-w-6xl px-5 py-[clamp(5.5rem,13vw,10rem)] sm:px-8">{children}</div>
     </section>
   );

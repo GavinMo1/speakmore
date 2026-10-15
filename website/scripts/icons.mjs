@@ -15,6 +15,7 @@ const ICONS = {
   check: "ri:check-line",
   lock: "ri:lock-2-line",
   translate: "ri:translate-2",
+  globe: "ri:global-line",
   // 品牌（单色，跟着字的颜色走）
   apple: "ri:apple-fill",
   intel: "simple-icons:intel",

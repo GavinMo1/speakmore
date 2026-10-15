@@ -6,10 +6,10 @@ import { Icon } from "../icons/Icon.jsx";
 
 /**
  * 吸顶导航。停在页面顶上时是透明的；往下滚了换成半透明的毛玻璃，经过深色的段落时玻璃也是深色。
- * 窄屏只留标志、语言和下载
+ * 窄屏只留标志、GitHub 和下载。换语言在页脚
  */
 export function Nav() {
-  const { m, switchLocale } = useI18n();
+  const { m } = useI18n();
   // 三种样子：停在页面顶上是透明的；滚到深色的段落（隐私）上是深色毛玻璃；别处是跟着系统的毛玻璃
   const [look, setLook] = useState("clear");
 
@@ -70,14 +70,6 @@ export function Nav() {
           ))}
         </ul>
         <div className="ml-auto flex items-center gap-1 md:ml-0">
-          <button
-            type="button"
-            onClick={switchLocale}
-            aria-label={m.nav.switchLabel}
-            className="grid h-9 min-w-9 cursor-pointer place-items-center rounded-full px-2.5 text-sm font-medium text-ink-2 transition-colors duration-150 hover:bg-surface hover:text-ink"
-          >
-            {m.nav.switchTo}
-          </button>
           <a
             href={links.repository}
             aria-label={m.nav.github}

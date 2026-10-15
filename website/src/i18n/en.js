@@ -14,8 +14,6 @@ export default {
     privacy: "Privacy",
     download: "Download",
     github: "SpeakMore on GitHub",
-    switchTo: "中文",
-    switchLabel: "切换到简体中文",
     home: "SpeakMore home",
   },
   hero: {
@@ -57,12 +55,9 @@ export default {
   cost: {
     title: "About $1\na month.",
     lead: "The app is free. Use your own key and pay Google only for what you use.",
-    items: [
-      { label: "The app", value: "Free" },
-      { label: "Per dictation", value: "$0.0003" },
-      { label: "430–870 dictations a month", value: "$0.67–1.05", highlight: true },
-      { label: "On Gemini's free tier", value: "$0" },
-    ],
+    once: { value: "$0.0003", label: "Per dictation" },
+    month: { value: "$0.67–1.05", label: "430–870 dictations a month" },
+    free: { value: "$0", label: "On Gemini's free tier" },
   },
   look: {
     title: "Three themes.\nLight and dark.",
@@ -97,5 +92,7 @@ export default {
   footer: {
     license: "MIT License",
     source: "Source",
+    switchTo: "简体中文",
+    switchLabel: "切换到简体中文",
   },
 };

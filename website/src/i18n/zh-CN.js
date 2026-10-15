@@ -12,8 +12,6 @@ export default {
     privacy: "隐私",
     download: "下载",
     github: "SpeakMore 的 GitHub 仓库",
-    switchTo: "EN",
-    switchLabel: "Switch to English",
     home: "SpeakMore 首页",
   },
   hero: {
@@ -54,12 +52,9 @@ export default {
   cost: {
     title: "月均成本\n约 1 美元",
     lead: "应用本身免费。使用自有密钥，按实际用量向 Google 付费。",
-    items: [
-      { label: "应用", value: "免费" },
-      { label: "单次听写", value: "$0.0003" },
-      { label: "每月 430–870 次听写", value: "$0.67–1.05", highlight: true },
-      { label: "使用 Gemini 免费额度", value: "$0" },
-    ],
+    once: { value: "$0.0003", label: "单次听写" },
+    month: { value: "$0.67–1.05", label: "每月 430–870 次听写" },
+    free: { value: "$0", label: "使用 Gemini 免费额度" },
   },
   look: {
     title: "三套主题\n深浅模式随系统切换",
@@ -88,5 +83,7 @@ export default {
   footer: {
     license: "MIT 许可",
     source: "源代码",
+    switchTo: "English",
+    switchLabel: "Switch to English",
   },
 };
