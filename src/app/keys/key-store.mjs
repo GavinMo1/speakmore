@@ -2,15 +2,17 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { LocalizedError, msg } from "../../i18n/index.mjs";
 
 /**
- * Gemini API key 的存放处：用系统钥匙串加密后存成一个文件，明文只在内存里。
+ * 一家模型的 API key 的存放处：用系统钥匙串加密后存成一个文件，明文只在内存里。
  * 加密用的密钥在钥匙串里、归这个应用所有，所以文件被拷到别的机器或别的用户下是解不开的。
  *
  * @param {object} options
  * @param {string} options.file 密文文件的路径
+ * @param {string} [options.oldFile] 0.7.0 及以前 App 自己那一份（storage/paths.mjs 的 oldAppKeyFile）：
+ *   不读也不写，只在忘掉 key 时一起删，免得下次启动又被当成要搬过来的 key（storage/app-keys.mjs）
  * @param {{ isEncryptionAvailable(): boolean, encryptString(text: string): Buffer, decryptString(data: Buffer): string }} options.safeStorage
  *   Electron 的 safeStorage；测试时换成假的
  */
-export function createKeyStore({ file, safeStorage }) {
+export function createKeyStore({ file, oldFile, safeStorage }) {
   return {
     /** @returns {string | null} 没存过时是 null。密文解不开（比如钥匙串里的密钥没了）会抛错 */
     load() {
@@ -28,6 +30,7 @@ export function createKeyStore({ file, safeStorage }) {
 
     clear() {
       rmSync(file, { force: true });
+      if (oldFile) rmSync(oldFile, { force: true });
     },
 
     /** 存过没有。只看文件在不在，不解密 */

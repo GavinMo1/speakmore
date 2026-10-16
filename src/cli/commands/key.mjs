@@ -3,7 +3,7 @@ import { LocalizedError, msg } from "../../i18n/index.mjs";
 import { keyVendorOf } from "../../server/modes.mjs";
 import { apiKeyProblem, findProvider } from "../../server/providers/index.mjs";
 import { findVendor, VENDORS } from "../../server/vendors.mjs";
-import { keyFile } from "../../storage/paths.mjs";
+import { keyFile, oldAppKeyFile } from "../../storage/paths.mjs";
 import { routeOf } from "../../storage/settings.mjs";
 import { Cancelled } from "../ask-secret.mjs";
 import { currentSettings, ensureRunning, PACKAGED_RELAUNCH, parse, UsageError } from "../common.mjs";
@@ -124,12 +124,12 @@ export function keySource(io, provider) {
 }
 
 /**
- * 某一家有没有 key，以会用到它的那个后台为准：装成应用的那个各存各的（<厂商>-key.app.bin），
- * 在运行的话照它报的算；否则看命令行这边（重启后台时用的就是这边的环境变量和文件）。
+ * 某一家有没有 key，以会用到它的那个后台为准：在运行的话照它报的算（它启动时的环境变量命令行这边看不到；
+ * 0.7.0 及以前的 App 还另存一份 <厂商>-key.app.bin）；否则看命令行这边（重启后台时用的就是这边的环境变量和文件）。
  * @param {object | null} status 正在运行的后台报的状态；没在运行时是 null
  */
 export function keySourceFor(io, provider, status) {
-  if (status?.packaged && status.keys) return status.keys[provider.id] ?? null;
+  if (status?.keys) return status.keys[provider.id] ?? null;
   return keySource(io, provider);
 }
 
@@ -160,8 +160,9 @@ export async function key(args, io) {
   if (values.forget) {
     // 在运行的话让它把手里的那把也放下；没在运行时不必为了删文件把它启动起来
     if ((await io.daemon.status()) !== null) await io.daemon.request("forget-key", { provider: provider.id });
-    // 命令启动的和装成应用的各存各的一份，都删
-    for (const packaged of [false, true]) rmSync(keyFile(io.paths, provider.id, { packaged }), { force: true });
+    // 共用的那份，和 0.7.0 及以前 App 另存的那份，都删
+    for (const file of [keyFile(io.paths, provider.id), oldAppKeyFile(io.paths, provider.id)])
+      rmSync(file, { force: true });
     io.out(io.t("cli.key.forgotten", { provider: provider.name }));
     return 0;
   }

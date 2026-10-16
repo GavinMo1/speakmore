@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
-import { ensureHome, keyFile, legacyDataDir, resolvePaths } from "../../src/storage/paths.mjs";
+import { ensureHome, keyFile, legacyDataDir, oldAppKeyFile, resolvePaths } from "../../src/storage/paths.mjs";
 
 const zh = createTranslator("zh-CN");
 /** 报错里给人看的那句，按中文翻出来对得上 */
@@ -45,15 +45,16 @@ test("程序、你的东西、运行时产生的，各在各的位置", () => {
   });
 });
 
-test("每家模型一把 key，命令启动的和打成应用的各存各的；Gemini 的文件名和 0.3 以前一样，不用迁移", () => {
+test("每家模型一把 key，App 和命令行共用一个文件；Gemini 的文件名和 0.3 以前一样；0.7.0 及以前 App 那一份另有名字", () => {
   const paths = resolvePaths({}, "/Users/someone");
   assert.equal(keyFile(paths, "gemini"), "/Users/someone/.speakmore/gemini-key.bin");
-  assert.equal(keyFile(paths, "gemini", { packaged: true }), "/Users/someone/.speakmore/gemini-key.app.bin");
+  assert.equal(oldAppKeyFile(paths, "gemini"), "/Users/someone/.speakmore/gemini-key.app.bin");
   assert.equal(keyFile(paths, "openai"), "/Users/someone/.speakmore/openai-key.bin");
   // 润色那一跳的厂商也一样，自定义服务一把
   assert.equal(keyFile(paths, "deepseek"), "/Users/someone/.speakmore/deepseek-key.bin");
   assert.equal(keyFile(paths, "custom"), "/Users/someone/.speakmore/custom-key.bin");
   assert.throws(() => keyFile(paths, "../x"), /id/);
+  assert.throws(() => oldAppKeyFile(paths, "../x"), /id/);
 });
 
 test("SPEAKMORE_HOME 把整个目录换到别处", () => {

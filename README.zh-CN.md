@@ -113,7 +113,7 @@ flowchart LR
 - **提示词是按中文调的**（夹着英文词也行）。纯英文听写没有调过，也没测过（界面有英文，提示词没有）。
 - **换成 OpenAI 时整理得比 Gemini 粗**：提示词是对着 Gemini 调的。
 - **话说到一半就按停，模型可能自己把后半句补上。**
-- **本地转写只在 Apple 芯片上测过**，Intel 的 Mac 没试过。
+- **本地转写只在 Apple 芯片上测过**：Intel 版在 Rosetta 下四个本机模型都跑通了，但没在真的 Intel 机器上试过。
 - 只有听写，没有翻译和“问任何事”。悬浮条只在主屏幕上。Windows 和 Linux 还没有。
 
 ## 📚 更多
@@ -133,7 +133,8 @@ flowchart LR
 | `speakmore model` | 原生模式：能用哪几家的模型、各家的 key 有没有、现在用的哪个 |
 | `speakmore model <厂商>[/<模型>]` | 换一家或换个模型。还没有那一家的 key 会先问 |
 | `speakmore model check [<厂商>[/<模型>]]` | 发一个最小的请求，看能不能用、来回多久 |
-| `speakmore transcriber [<模型>]` | 本地转写第一步：本机模型的大小、标签、实测速度 / 换一个，没下载过的在后台下载 |
+| `speakmore transcriber [<模型>]` | 本地转写第一步：本机模型的大小、标签、实测速度、下没下载 / 换一个（要用的没下载时先问） |
+| `speakmore transcriber download\|cancel\|delete <模型>` | 下载、停下、删除本机模型。不点就不下；正在用的删不了 |
 | `speakmore polish [<厂商>[/<模型>]] [--url <地址>]` | 本地转写第二步：文字交给谁润色 / 换一个。自定义服务写 `custom/<模型名> --url <地址>`；`polish check` 看能不能用 |
 | `speakmore key [<厂商>]` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key`。别把 key 写在命令后面，会进 shell 历史 |
 | `speakmore key --forget [<厂商>]` | 删掉存着的 key |
@@ -215,10 +216,10 @@ flowchart LR
 | 里面的东西 | 说明 |
 | --- | --- |
 | `settings.json` | 设置 |
-| `gemini-key.bin`、`openai-key.bin`、`deepseek-key.bin`… | 加密后的 key，每家一份（安装包装的应用用带 `.app` 的那一份）。解密的密钥在钥匙串的“SpeakMore Safe Storage”里，文件被拷走也解不开 |
+| `gemini-key.bin`、`openai-key.bin`、`deepseek-key.bin`… | 加密后的 key，每家一份，App 和命令行共用。解密的密钥在钥匙串的“SpeakMore Safe Storage”里，文件被拷走也解不开。0.7.0 及以前 App 另存一份带 `.app` 的，原样留着，退回旧版时还能用 |
 | `data/history.db`、`data/Recordings/` | 说过的话、录音和账。失败的听写也留着录音，话不会白说 |
 | `logs/main.log` | 日志。只记长度、耗时和用量，不记说的话，也不记 key |
-| `models/` | 本地转写用的本机模型，下载后按 SHA-256 校验过 |
+| `models/` | 本地转写用的本机模型，你点了才下，下载后按 SHA-256 校验过 |
 | `bin/`、`app/`、`runtime/` | 命令行装的程序本身，升级时整个换掉 |
 
 目录以外只有：`~/.local/bin/speakmore` 这个链接、钥匙串里的那一条、你给的系统权限，以及用安装包装的“应用程序”里的 SpeakMore。想装到别处，安装时设环境变量 `SPEAKMORE_HOME`。

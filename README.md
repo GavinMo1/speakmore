@@ -113,7 +113,7 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 - **Tuned for Mandarin**, with English terms mixed in. English-only dictation hasn't been tuned or tested yet (the interface is in English; the prompt isn't).
 - **OpenAI cleans up less thoroughly than Gemini.** The prompt was tuned against Gemini.
 - **If you stop mid-sentence, the model may finish the sentence for you.**
-- **Local mode has only been measured on Apple silicon.** Intel Macs are untested.
+- **Local mode has only been measured on Apple silicon.** The Intel build ran all four on-device models under Rosetta, but nobody has tried it on a real Intel Mac.
 - Dictation only: no translation or "ask anything". The bar shows on the main display only. No Windows or Linux.
 
 ## 📚 More
@@ -133,7 +133,8 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 | `speakmore model` | Native mode: available models, which providers have a key, which one is in use |
 | `speakmore model <provider>[/<model>]` | Switch provider or model. Asks for a key if needed |
 | `speakmore model check [<provider>[/<model>]]` | Send a tiny request to see if it works and how fast |
-| `speakmore transcriber [<model>]` | Local mode, step 1: on-device models with size, tags and measured speed / switch. Downloads in the background |
+| `speakmore transcriber [<model>]` | Local mode, step 1: on-device models with size, tags, measured speed and what is downloaded / switch (asks before downloading one you don't have) |
+| `speakmore transcriber download\|cancel\|delete <model>` | Download, stop downloading or delete an on-device model. Nothing downloads until you ask; the one in use can't be deleted |
 | `speakmore polish [<provider>[/<model>]] [--url <url>]` | Local mode, step 2: who polishes the text / switch. `custom/<model> --url <url>` for an OpenAI-compatible service. `polish check` tests it |
 | `speakmore key [<provider>]` | Replace a key. Can be piped: `pbpaste \| speakmore key`. Don't type the key on the command line — it ends up in shell history |
 | `speakmore key --forget [<provider>]` | Delete a stored key |
@@ -215,10 +216,10 @@ For the app, permissions belong to SpeakMore. When started with the `speakmore` 
 | What | Notes |
 | --- | --- |
 | `settings.json` | Settings |
-| `gemini-key.bin`, `openai-key.bin`, `deepseek-key.bin`… | Encrypted keys, one per provider (the app uses the `.app` copies). The decryption key is "SpeakMore Safe Storage" in your Keychain, so a copied file is useless |
+| `gemini-key.bin`, `openai-key.bin`, `deepseek-key.bin`… | Encrypted keys, one per provider, shared by the app and the terminal. The decryption key is "SpeakMore Safe Storage" in your Keychain, so a copied file is useless. Versions up to 0.7.0 kept a separate `.app` copy for the app; it's left in place for rolling back |
 | `data/history.db`, `data/Recordings/` | What you said, the recordings and the cost log. Failed dictations keep their recording |
 | `logs/main.log` | Logs. Lengths, timings and usage only — never what you said, never the key |
-| `models/` | On-device models for local mode, checked against their SHA-256 after download |
+| `models/` | On-device models for local mode, downloaded only when you ask and checked against their SHA-256 |
 | `bin/`, `app/`, `runtime/` | The Terminal install itself; replaced on upgrade |
 
 Outside that folder: the `~/.local/bin/speakmore` link, the Keychain entry, the permissions you granted, and SpeakMore in Applications if you installed the app. To install elsewhere, set `SPEAKMORE_HOME` when installing.

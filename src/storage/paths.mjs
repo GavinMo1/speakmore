@@ -61,15 +61,24 @@ export function resolvePaths(env = process.env, userHome = homedir()) {
 
 /**
  * 某一家模型的 key 加密后存在哪。0.3 以前只有 Gemini，文件就叫 gemini-key.bin，所以这个命名不用迁移。
- * 加密用的密钥在钥匙串里是按应用存的：命令启动的和打成应用的是两个应用，互相解不开对方的密文，所以各存各的文件。
+ * App 和命令行启动的后台共用这一个文件：加密用的密钥在钥匙串里只有一条（"SpeakMore Safe Storage"），两边都在它的
+ * 访问名单上，解得开对方存的密文（2026-10-16 实测）。0.7.0 及以前以为两边互相解不开，App 另存一份（oldAppKeyFile）。
  * @param {ReturnType<typeof resolvePaths>} paths
  * @param {string} provider 厂商的 id（providers/index.mjs）
- * @param {{ packaged?: boolean }} [options] packaged：打成 .app 的那一个用的
  */
-export function keyFile(paths, provider, { packaged = false } = {}) {
-  // id 来自我们自己的清单；还是防一手，免得拼出家目录以外的路径
+export function keyFile(paths, provider) {
+  return join(paths.home, `${checkedVendorId(provider)}-key.bin`);
+}
+
+/** 0.7.0 及以前 App 自己那一份 key。只读来搬进共用的文件（app-keys.mjs），忘掉 key 时一起删 */
+export function oldAppKeyFile(paths, provider) {
+  return join(paths.home, `${checkedVendorId(provider)}-key.app.bin`);
+}
+
+/** id 来自我们自己的清单；还是防一手，免得拼出家目录以外的路径 */
+function checkedVendorId(provider) {
   if (!/^[a-z0-9]+$/.test(provider)) throw new Error(`厂商的 id 不对：${JSON.stringify(provider)}`);
-  return join(paths.home, `${provider}-key${packaged ? ".app" : ""}.bin`);
+  return provider;
 }
 
 /**

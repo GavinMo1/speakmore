@@ -18,7 +18,7 @@ import { NotRunningError, TimeoutError } from "../../src/control.mjs";
 import { createTranslator, LocalizedError, msg } from "../../src/i18n/index.mjs";
 import { downloadSize, findModel } from "../../src/models/catalog.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
-import { keyFile, resolvePaths } from "../../src/storage/paths.mjs";
+import { keyFile, oldAppKeyFile, resolvePaths } from "../../src/storage/paths.mjs";
 import { resolveSettings } from "../../src/storage/settings.mjs";
 
 const READY = {
@@ -922,21 +922,21 @@ test("key 后面直接跟着一把 key：不照做，也不把它再打一遍，
   assert.doesNotMatch(output.out + output.err, /SECRET/);
 });
 
-test("key --forget：两种启动方式各存的那一份都删掉；在运行的话让它也忘掉", async () => {
+test("key --forget：共用的那份和 0.7.0 及以前 App 另存的那份都删掉；在运行的话让它也忘掉", async () => {
   const seed = () => {
     writeFileSync(keyFile(paths, "gemini"), "密文");
-    writeFileSync(keyFile(paths, "gemini", { packaged: true }), "密文");
+    writeFileSync(oldAppKeyFile(paths, "gemini"), "密文");
   };
   seed();
   const running = harness({ daemon: fakeDaemon({ running: READY }) });
   assert.equal(await running.speakmore("key", "--forget"), 0);
   assert.deepEqual(running.daemon.calls, ["forget-key"]);
-  assert.deepEqual([existsSync(keyFile(paths, "gemini")), existsSync(keyFile(paths, "gemini", { packaged: true }))], [false, false]);
+  assert.deepEqual([existsSync(keyFile(paths, "gemini")), existsSync(oldAppKeyFile(paths, "gemini"))], [false, false]);
 
   seed();
   const idle = harness();
   assert.equal(await idle.speakmore("key", "--forget"), 0);
-  assert.deepEqual([existsSync(keyFile(paths, "gemini")), existsSync(keyFile(paths, "gemini", { packaged: true }))], [false, false]);
+  assert.deepEqual([existsSync(keyFile(paths, "gemini")), existsSync(oldAppKeyFile(paths, "gemini"))], [false, false]);
   assert.deepEqual(idle.daemon.calls, []);
   assert.match(idle.output.out, /已经删掉/);
 });
@@ -1716,12 +1716,12 @@ test("key 后面写的不是厂商名：多半是把 key 本身写在了命令�
 test("key --forget <厂商>：只删那一家的；不写就删正在用的那家", async () => {
   haveStoredKey();
   haveOpenAIKey();
-  writeFileSync(keyFile(paths, "openai", { packaged: true }), "密文");
+  writeFileSync(oldAppKeyFile(paths, "openai"), "密文");
   const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
   assert.equal(await speakmore("key", "--forget", "openai"), 0);
   assert.deepEqual(daemon.requests.at(-1), { cmd: "forget-key", params: { provider: "openai" } });
   assert.equal(existsSync(keyFile(paths, "openai")), false);
-  assert.equal(existsSync(keyFile(paths, "openai", { packaged: true })), false);
+  assert.equal(existsSync(oldAppKeyFile(paths, "openai")), false);
   assert.equal(existsSync(keyFile(paths, "gemini")), true);
   assert.match(output.out, /OpenAI 的 key 已经删掉/);
 });

@@ -23,9 +23,10 @@ import { CHAT_VENDORS, formatChatChoice } from "../server/chat/vendors.mjs";
 import { describeRoute, keyVendorOf, MODES } from "../server/modes.mjs";
 import { formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
 import { findVendor, VENDORS } from "../server/vendors.mjs";
+import { adoptAppKeys } from "../storage/app-keys.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
-import { ensureHome, keyFile, resolvePaths } from "../storage/paths.mjs";
+import { ensureHome, keyFile, oldAppKeyFile, resolvePaths } from "../storage/paths.mjs";
 import { HOTKEY_IDS, hotkeyName, overridingEnv, resolveSettings, routeOf, saveSetting } from "../storage/settings.mjs";
 import { toHex } from "../themes/color.mjs";
 import { themeCss } from "../themes/contract.mjs";
@@ -139,6 +140,8 @@ async function main() {
   writeFileSync(PATHS.pidFile, `${process.pid}\n`);
   // 0.1 版的数据在别处。平时是 speakmore 命令在启动之前搬好的；直接双击应用启动时由这里搬
   await migrateLegacyData({ paths: PATHS, log });
+  // 0.7.0 及以前 App 另存的那份 key 搬进 App 和命令行共用的文件
+  adoptAppKeys({ paths: PATHS, log });
 
   const startedAt = new Date().toISOString();
   const history = openHistory(PATHS.historyDb);
@@ -146,7 +149,7 @@ async function main() {
   const keyStores = Object.fromEntries(
     VENDORS.map(({ id }) => [
       id,
-      createKeyStore({ file: keyFile(PATHS, id, { packaged: app.isPackaged }), safeStorage }),
+      createKeyStore({ file: keyFile(PATHS, id), oldFile: oldAppKeyFile(PATHS, id), safeStorage }),
     ]),
   );
   /** 本地模型的状态一变，菜单栏和主窗口跟着更新。菜单栏建好之前变的不用管：建的时候读的就是最新的 */

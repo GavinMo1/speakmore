@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -45,6 +45,21 @@ test("清掉之后读出来是 null，重复清不报错", (t) => {
   store.clear();
   store.clear();
   assert.equal(store.load(), null);
+});
+
+test("清掉时连 0.7.0 及以前 App 那一份也删：不然下次启动又会把它当成要搬过来的 key", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "speakmore-key-"));
+  t.after(() => rmSync(dir, { recursive: true }));
+  const file = join(dir, "gemini-key.bin");
+  const old = join(dir, "gemini-key.app.bin");
+  writeFileSync(old, "旧密文");
+  const store = createKeyStore({ file, oldFile: old, safeStorage: fakeSafeStorage() });
+  store.save("AIza-not-a-real-key");
+  // 存新的不碰旧的那份：退回 0.7.0 时它还在
+  assert.ok(existsSync(old));
+  store.clear();
+  assert.equal(existsSync(file), false);
+  assert.equal(existsSync(old), false);
 });
 
 test("系统钥匙串不可用时拒绝保存，不退回到存明文", (t) => {

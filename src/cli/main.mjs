@@ -17,6 +17,7 @@ import { log } from "../log.mjs";
 import { createLocalModels } from "../models/library.mjs";
 import { CHAT_VENDORS } from "../server/chat/vendors.mjs";
 import { PROVIDERS } from "../server/providers/index.mjs";
+import { adoptAppKeys } from "../storage/app-keys.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
 import { resolvePaths } from "../storage/paths.mjs";
@@ -230,6 +231,8 @@ export async function main(argv) {
   if (!argv.some((arg) => ["--help", "-h", "help", "--version", "-v"].includes(arg))) {
     try {
       const moved = await migrateLegacyData({ paths: io.paths, log: { info() {}, warn: log.warn } });
+      // 0.7.0 及以前 App 另存的那份 key 搬进共用的文件：没启动后台时命令行也看得到
+      adoptAppKeys({ paths: io.paths, log: { info() {}, warn: log.warn } });
       if (moved.length > 0) io.out(io.t("cli.migrated", { home: io.paths.home, items: moved.join(", ") }));
     } catch (error) {
       io.err(io.t.text(problemOf(error)));
