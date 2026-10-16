@@ -78,9 +78,15 @@ export default {
   settings: {
     describe: {
       hotkey: "Which key starts and stops dictation",
+      pipeline:
+        "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this Mac first, then has any LLM polish the text",
       model:
         "Which provider and model refines your words, as provider/model; a provider alone uses its default. Switch with speakmore model",
       thinking: "Gemini's thinking level; higher is slower. Other providers don't use it",
+      transcriber: "On the local path, which on-device model transcribes; downloaded automatically on first use",
+      polish:
+        "On the local path, which provider and model polishes the text, as provider/model; for a custom service write custom/<model>",
+      customUrl: "Address of your custom polishing service (OpenAI-compatible), e.g. https://api.example.com/v1",
       theme: "Which theme the windows use",
       language: "Interface language; system follows your Mac",
     },
@@ -100,7 +106,14 @@ export default {
     unknownProvider: "unknown provider {name}; available: {providers}",
     badName: "model name {model} is invalid: only letters, digits, and . _ : - are allowed",
   },
+  pipelines: {
+    native: "Native: the recording goes straight to the model",
+    local: "Local: transcribed on this Mac, then polished by a model",
+  },
   local: {
+    modelDownloading: "The local model is still downloading ({percent}%); it'll work once it's done",
+    modelLoading: "The local model is loading; give it a few seconds",
+    modelFailed: "The local model couldn't be set up: {reason}",
     undecodable: "Couldn't read the recording: {reason}",
     transcribeFailed: "Local transcription failed: {reason}",
   },
@@ -124,6 +137,7 @@ export default {
       microphone: "microphone access",
       listen: "Input Monitoring access",
       helper: "key listener",
+      localModel: "local model",
     },
     blocker: {
       noKey: "No {provider} API key: {where}",

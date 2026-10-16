@@ -40,7 +40,10 @@ export function createLocalRefiner({ transcriber, polisher, log, decode = toSpee
       try {
         ({ text: transcript } = await transcriber.transcribe(samples));
       } catch (error) {
-        throw failed(msg("local.transcribeFailed", { reason: String(error?.message ?? error).slice(0, 200) }), error);
+        // 自己说得清的（模型还在下载、没装上）照它说的；别的是转写进程或运行库出的错
+        const problem =
+          error?.problem ?? msg("local.transcribeFailed", { reason: String(error?.message ?? error).slice(0, 200) });
+        throw failed(problem, error);
       }
       const transcribedAt = performance.now();
       // 转写的这段时间里用户已经断开了：润色要花钱，不必再发

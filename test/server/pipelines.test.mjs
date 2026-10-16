@@ -7,8 +7,10 @@ import {
   DEFAULT_TRANSCRIBER,
   describeRoute,
   findPipeline,
+  formatFinalModel,
   keyVendorOf,
   PIPELINES,
+  parseFinalModel,
   parsePipeline,
 } from "../../src/server/pipelines.mjs";
 
@@ -37,6 +39,45 @@ test("链路的写法：认 native / local，大小写不论；写错了说能�
   assert.throws(
     () => parsePipeline("cloud"),
     (error) => /native/.test(zh.text(error.problem)) && /local/.test(zh.text(error.problem)),
+  );
+});
+
+test("出成品的模型：收音频的那几家走原生链路，只收文字的走本地转写链路", () => {
+  assert.deepEqual(parseFinalModel("openai"), {
+    pipeline: "native",
+    model: { provider: "openai", model: "gpt-audio-mini" },
+  });
+  assert.deepEqual(parseFinalModel("gemini/gemini-3.6-flash"), {
+    pipeline: "native",
+    model: { provider: "gemini", model: "gemini-3.6-flash" },
+  });
+  // 0.3 以前只写 Gemini 的模型名，照样认
+  assert.equal(parseFinalModel("gemini-3.6-flash").pipeline, "native");
+  assert.deepEqual(parseFinalModel(" DeepSeek "), {
+    pipeline: "local",
+    polish: { vendor: "deepseek", model: "deepseek-flash" },
+  });
+  assert.deepEqual(parseFinalModel("custom/Qwen/Qwen3-8B"), {
+    pipeline: "local",
+    polish: { vendor: "custom", model: "Qwen/Qwen3-8B" },
+  });
+  for (const choice of [parseFinalModel("openai/gpt-audio-1.5"), parseFinalModel("deepseek/deepseek-v4-pro")]) {
+    assert.deepEqual(parseFinalModel(formatFinalModel(choice)), choice);
+  }
+});
+
+test("出成品的模型写错了：不认识的厂商列出所有能填的，自定义的没写模型名要说", () => {
+  assert.throws(
+    () => parseFinalModel("nope/x"),
+    (error) => /gemini/.test(zh.text(error.problem)) && /deepseek/.test(zh.text(error.problem)),
+  );
+  assert.throws(
+    () => parseFinalModel("custom"),
+    (error) => /custom\/模型名/.test(zh.text(error.problem)),
+  );
+  assert.throws(
+    () => parseFinalModel(""),
+    (error) => /空/.test(zh.text(error.problem)),
   );
 });
 

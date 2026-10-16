@@ -48,10 +48,11 @@ const OFFLINE = () =>
   new ModelError({ kind: "unavailable", problem: "连不上 Gemini，检查网络后再试", detail: "fetch failed" });
 const INVALID = () =>
   new ModelError({ kind: "key", problem: "这把 key 无效，检查有没有复制完整", detail: "API key not valid" });
-const GEMINI = { provider: "gemini", model: "gemini-3.5-flash" };
+const GEMINI = { pipeline: "native", model: { provider: "gemini", model: "gemini-3.5-flash" }, thinkingLevel: "LOW" };
+const OPENAI = { pipeline: "native", model: { provider: "openai", model: "gpt-audio-mini" }, thinkingLevel: "LOW" };
 
 test("没有 key 时服务照样在听，听写会失败并说明要去填 key", async (t) => {
-  const service = await startService({ log: quietLog, model: GEMINI, createRefiner: () => fakeRefiner("不该用到") });
+  const service = await startService({ log: quietLog, route: GEMINI, createRefiner: () => fakeRefiner("不该用到") });
   t.after(() => service.close());
   assert.equal(service.ready, false);
   const reply = await dictateOnce(service.url);
@@ -63,7 +64,7 @@ test("换上能通过验证的 key 之后可以听写，地址不变", async (t)
   const seen = [];
   const service = await startService({
     log: quietLog,
-    model: GEMINI,
+    route: GEMINI,
     createRefiner: (options) => {
       seen.push(options.apiKey);
       return fakeRefiner("整理好的文字");
@@ -83,7 +84,7 @@ test("换上能通过验证的 key 之后可以听写，地址不变", async (t)
 test("新 key 验证不过时报错，原来能用的那把继续用", async (t) => {
   const service = await startService({
     log: quietLog,
-    model: GEMINI,
+    route: GEMINI,
     createRefiner: ({ apiKey }) =>
       apiKey === "good"
         ? fakeRefiner("用的是好 key")
@@ -99,7 +100,7 @@ test("新 key 验证不过时报错，原来能用的那把继续用", async (t)
 });
 
 test("forgetKey 之后回到没有 key 的状态", async (t) => {
-  const service = await startService({ log: quietLog, model: GEMINI, createRefiner: () => fakeRefiner("文字") });
+  const service = await startService({ log: quietLog, route: GEMINI, createRefiner: () => fakeRefiner("文字") });
   t.after(() => service.close());
   await service.useKey("key-1");
   service.forgetKey();
@@ -111,7 +112,7 @@ test("启动时允许先用着：Gemini 回 503 时也一样，不把好 key 判
   const busy = async () => {
     throw UNAVAILABLE();
   };
-  const service = await startService({ log: quietLog, model: GEMINI, createRefiner: () => fakeRefiner("文字", busy) });
+  const service = await startService({ log: quietLog, route: GEMINI, createRefiner: () => fakeRefiner("文字", busy) });
   t.after(() => service.close());
   assert.deepEqual(await service.useKey("stored-key", { allowUnverified: true }), { verified: false });
   assert.equal(service.ready, true);
@@ -123,7 +124,7 @@ test("启动时允许先用着：连不上 Gemini 时这把 key 照样启用，�
   };
   const service = await startService({
     log: quietLog,
-    model: GEMINI,
+    route: GEMINI,
     createRefiner: () => fakeRefiner("后来连上了", offline),
   });
   t.after(() => service.close());
@@ -142,7 +143,7 @@ test("允许先用着只管连不上的情况：key 无效照样拒绝", async (
   };
   const service = await startService({
     log: quietLog,
-    model: GEMINI,
+    route: GEMINI,
     createRefiner: () => fakeRefiner("不该用到", invalid),
   });
   t.after(() => service.close());
@@ -157,7 +158,7 @@ test("通过验证时说一声验证过了；verify 把正在用的那把再验�
   };
   const service = await startService({
     log: quietLog,
-    model: GEMINI,
+    route: GEMINI,
     createRefiner: () => fakeRefiner("文字", warmUp),
   });
   t.after(() => service.close());
@@ -172,65 +173,60 @@ test("通过验证时说一声验证过了；verify 把正在用的那把再验�
 test("没有 key 时的提示点名是哪一家：选的是 OpenAI 就说 OpenAI", async (t) => {
   const service = await startService({
     log: quietLog,
-    model: { provider: "openai", model: "gpt-audio-mini" },
+    route: OPENAI,
     createRefiner: () => fakeRefiner("不该用到"),
   });
   t.after(() => service.close());
   assert.match(zh.text((await dictateOnce(service.url)).V.problem), /还没有填 OpenAI API key/);
 });
 
-test("按设置里选的厂商和模型装配；probe 拿另一把 key 试别的模型，不换掉正在用的；都带着同一个记账的", async (t) => {
+test("按设置里的路线装配；probe 拿另一把 key 试别的路线，不换掉正在用的；都带着同一个记账的", async (t) => {
   const built = [];
   const onModelCall = () => {};
   const service = await startService({
     log: quietLog,
-    model: GEMINI,
-    thinkingLevel: "LOW",
+    route: GEMINI,
     onModelCall,
     createRefiner: async (options) => {
       built.push(options);
-      return fakeRefiner(`用的是 ${options.choice.provider}`, async () => {
+      return fakeRefiner(`用的是 ${options.route.model.provider}`, async () => {
         if (options.apiKey === "bad") throw INVALID();
       });
     },
   });
   t.after(() => service.close());
   await service.useKey("gemini-key");
-  assert.deepEqual(
-    { choice: built[0].choice, apiKey: built[0].apiKey, thinkingLevel: built[0].thinkingLevel },
-    { choice: GEMINI, apiKey: "gemini-key", thinkingLevel: "LOW" },
-  );
+  assert.deepEqual({ route: built[0].route, apiKey: built[0].apiKey }, { route: GEMINI, apiKey: "gemini-key" });
 
-  const openai = { provider: "openai", model: "gpt-audio-1.5" };
-  await service.probe({ choice: openai, apiKey: "openai-key" });
-  assert.deepEqual(built[1].choice, openai);
+  const openai = { ...OPENAI, model: { provider: "openai", model: "gpt-audio-1.5" } };
+  await service.probe({ route: openai, apiKey: "openai-key" });
+  assert.deepEqual(built[1].route, openai);
   assert.deepEqual(
     built.map(({ onCall }) => onCall),
     [onModelCall, onModelCall],
   );
-  await assert.rejects(service.probe({ choice: openai, apiKey: "bad" }), said(/无效/));
+  await assert.rejects(service.probe({ route: openai, apiKey: "bad" }), said(/无效/));
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 gemini");
 });
 
-test("useKey 带上别的厂商和模型：验证过才整个换过去，没 key 时的提示也跟着换；没通过就还是原来的", async (t) => {
+test("useKey 带上别的路线：验证过才整个换过去，没 key 时的提示也跟着换；没通过就还是原来的", async (t) => {
   const service = await startService({
     log: quietLog,
-    model: GEMINI,
+    route: GEMINI,
     createRefiner: async (options) =>
-      fakeRefiner(`用的是 ${options.choice.provider}`, async () => {
+      fakeRefiner(`用的是 ${options.route.model.provider}`, async () => {
         if (options.apiKey === "bad") throw INVALID();
       }),
   });
   t.after(() => service.close());
   await service.useKey("gemini-key");
-  const openai = { provider: "openai", model: "gpt-audio-mini" };
 
-  await assert.rejects(service.useKey("bad", { choice: openai }), said(/无效/));
-  assert.deepEqual(service.model, GEMINI);
+  await assert.rejects(service.useKey("bad", { route: OPENAI }), said(/无效/));
+  assert.deepEqual(service.route, GEMINI);
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 gemini");
 
-  await service.useKey("openai-key", { choice: openai });
-  assert.deepEqual(service.model, openai);
+  await service.useKey("openai-key", { route: OPENAI });
+  assert.deepEqual(service.route, OPENAI);
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 openai");
   service.forgetKey();
   assert.match(zh.text((await dictateOnce(service.url)).V.problem), /还没有填 OpenAI API key/);
@@ -240,7 +236,7 @@ test("开口时的准备交给正在用的那一个；还没有 key 时什么都
   let prepared = 0;
   const service = await startService({
     log: quietLog,
-    model: GEMINI,
+    route: GEMINI,
     createRefiner: () => ({ ...fakeRefiner("文字"), prepare: async () => void prepared++ }),
   });
   t.after(() => service.close());
@@ -261,4 +257,107 @@ test("开口时的准备交给正在用的那一个；还没有 key 时什么都
   await service.useKey("gemini-key");
   await startRecording();
   assert.equal(prepared, 1);
+});
+
+const LOCAL = {
+  pipeline: "local",
+  transcriber: "qwen3-asr-0.6b-q8",
+  polish: { vendor: "deepseek", model: "deepseek-flash" },
+  customUrl: null,
+};
+
+/** 假的本地模型：手动控制下载进度和装好的时机，记下卸掉了几次 */
+function fakeLocal() {
+  const control = { started: [], disposed: 0 };
+  const startLocal = (options) =>
+    new Promise((resolve, reject) => {
+      control.started.push(options.modelId);
+      control.progress = (received, total) => options.onProgress({ received, total });
+      control.finish = () =>
+        resolve({
+          backend: "fake",
+          transcribe: async (samples) => ({ text: `转写了 ${samples.length}` }),
+          dispose: () => control.disposed++,
+        });
+      control.fail = (error) => reject(error);
+      options.signal.addEventListener("abort", () => reject(new Error("下载取消了")));
+    });
+  return { control, startLocal };
+}
+
+/** 假的 refiner：照路线把转写器用起来，好看出本地模型这一跳的状态 */
+const throughTranscriber = async ({ transcriber }) => ({
+  warmUp: async () => {},
+  refine: async () => (await transcriber.transcribe(new Float32Array(3))).text,
+});
+
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+test("本地转写链路：启动时就在后台准备模型；下载中、装载中按下热键会说清在干什么；装好了就能用", async (t) => {
+  const { control, startLocal } = fakeLocal();
+  let changes = 0;
+  const service = await startService({
+    log: quietLog,
+    route: LOCAL,
+    startLocal,
+    createRefiner: throughTranscriber,
+    onLocalModel: () => changes++,
+  });
+  t.after(() => service.close());
+  assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8"]);
+  assert.equal(service.localModel.state, "loading");
+  await service.useKey("deepseek-key");
+
+  control.progress(50, 100);
+  assert.deepEqual(service.localModel, { state: "downloading", model: "qwen3-asr-0.6b-q8", received: 50, total: 100 });
+  assert.match(zh.text((await dictateOnce(service.url)).V.problem), /还在下载（50%）/);
+
+  control.finish();
+  await tick();
+  assert.equal(service.localModel.state, "ready");
+  assert.equal((await dictateOnce(service.url)).V.refined_text, "转写了 3");
+  assert.ok(changes >= 3);
+});
+
+test("本地模型没装上：状态是失败，带着原因；按下热键时说的就是这个原因", async (t) => {
+  const { control, startLocal } = fakeLocal();
+  const service = await startService({ log: quietLog, route: LOCAL, startLocal, createRefiner: throughTranscriber });
+  t.after(() => service.close());
+  await service.useKey("deepseek-key");
+  control.fail(new Error("哪个地址都没下下来"));
+  await tick();
+  assert.equal(service.localModel.state, "failed");
+  assert.match(zh.text(service.localModel.problem), /本地模型没装上：哪个地址都没下下来/);
+  assert.match(zh.text((await dictateOnce(service.url)).V.problem), /本地模型没装上/);
+});
+
+test("改走原生链路：本地模型卸掉，内存还回去；再换回来重新装", async (t) => {
+  const { control, startLocal } = fakeLocal();
+  const service = await startService({ log: quietLog, route: LOCAL, startLocal, createRefiner: throughTranscriber });
+  t.after(() => service.close());
+  control.finish();
+  await tick();
+  assert.equal(service.localModel.state, "ready");
+
+  await service.useKey("gemini-key", { route: GEMINI });
+  assert.equal(control.disposed, 1);
+  assert.deepEqual(service.localModel, { state: "off" });
+
+  await service.useKey("deepseek-key", { route: LOCAL });
+  assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8", "qwen3-asr-0.6b-q8"]);
+});
+
+test("换 key、换润色的那家不动本地模型；换本地模型才重装，没下完的那次停掉", async (t) => {
+  const { control, startLocal } = fakeLocal();
+  const service = await startService({ log: quietLog, route: LOCAL, startLocal, createRefiner: throughTranscriber });
+  t.after(() => service.close());
+  await service.useKey("key-1");
+  await service.useKey("key-2", {
+    route: { ...LOCAL, polish: { vendor: "custom", model: "m" }, customUrl: "http://x/v1" },
+  });
+  assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8"]);
+
+  await service.useKey("key-2", { route: { ...LOCAL, transcriber: "sensevoice-small-q8" } });
+  assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8", "sensevoice-small-q8"]);
+  assert.equal(service.localModel.model, "sensevoice-small-q8");
 });

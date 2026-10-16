@@ -1,6 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
+import { MODELS } from "../server/asr/catalog.mjs";
+import { formatChatChoice, normalizeBaseUrl, parseChatChoice } from "../server/chat/vendors.mjs";
+import {
+  DEFAULT_PIPELINE,
+  DEFAULT_POLISH,
+  DEFAULT_TRANSCRIBER,
+  PIPELINES,
+  parsePipeline,
+} from "../server/pipelines.mjs";
 import {
   DEFAULT_MODEL_CHOICE,
   DEFAULT_THINKING_LEVEL,
@@ -25,6 +34,8 @@ export const hotkeyName = (id) => msg(`hotkeys.${id}.name`);
 export const hotkeyKeycap = (id) => msg(`hotkeys.${id}.keycap`);
 
 const THEME_IDS = THEMES.map((theme) => theme.id);
+const PIPELINE_IDS = PIPELINES.map((pipeline) => pipeline.id);
+const TRANSCRIBER_IDS = MODELS.map((model) => model.id);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
 
@@ -47,6 +58,14 @@ export const SETTINGS = {
       return value;
     },
     label: hotkeyName,
+  },
+  pipeline: {
+    env: "SPEAKMORE_PIPELINE",
+    // 两条链路平级（server/pipelines.mjs）。原生是 0.6 以前唯一的一条，没选过的人照旧
+    default: DEFAULT_PIPELINE,
+    choices: PIPELINE_IDS,
+    parse: parsePipeline,
+    label: (value) => msg(`pipelines.${value}`),
   },
   model: {
     env: "SPEAKMORE_MODEL",
@@ -74,6 +93,30 @@ export const SETTINGS = {
       if (!THINKING_LEVELS.includes(level)) throw oneOf(THINKING_LEVELS);
       return level;
     },
+  },
+  transcriber: {
+    env: "SPEAKMORE_TRANSCRIBER",
+    default: DEFAULT_TRANSCRIBER,
+    choices: TRANSCRIBER_IDS,
+    parse(value) {
+      const id = value.trim();
+      if (!TRANSCRIBER_IDS.includes(id)) throw oneOf(TRANSCRIBER_IDS);
+      return id;
+    },
+  },
+  polish: {
+    env: "SPEAKMORE_POLISH",
+    default: formatChatChoice(parseChatChoice(DEFAULT_POLISH)),
+    choices: null,
+    // 存下来的统一是 厂商/模型
+    parse: (value) => formatChatChoice(parseChatChoice(value)),
+  },
+  customUrl: {
+    env: "SPEAKMORE_CUSTOM_URL",
+    // 空的是没填：只有润色交给自定义服务时才要
+    default: "",
+    choices: null,
+    parse: (value) => (value.trim() === "" ? "" : normalizeBaseUrl(value)),
   },
   theme: {
     env: "SPEAKMORE_THEME",
@@ -194,4 +237,20 @@ export function unsetSetting(file, name) {
   settingNamed(name);
   const { [name]: _removed, ...rest } = readFile(file);
   writeFile(file, rest);
+}
+
+/**
+ * 现在的设置走哪条路线（server/pipelines.mjs）：两条链路各要哪几项设置
+ * @param {ReturnType<typeof resolveSettings>} settings
+ */
+export function routeOf(settings) {
+  if (settings.pipeline.value === "local") {
+    return {
+      pipeline: "local",
+      transcriber: settings.transcriber.value,
+      polish: parseChatChoice(settings.polish.value),
+      customUrl: settings.customUrl.value || null,
+    };
+  }
+  return { pipeline: "native", model: parseModelChoice(settings.model.value), thinkingLevel: settings.thinking.value };
 }

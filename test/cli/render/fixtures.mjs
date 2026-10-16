@@ -29,8 +29,12 @@ export const ready = {
 };
 export const settings = {
   hotkey: { value: "right_option", source: "default" },
+  pipeline: { value: "native", source: "default" },
   model: { value: "gemini/gemini-3.6-flash", source: "default" },
   thinking: { value: "MINIMAL", source: "default" },
+  transcriber: { value: "qwen3-asr-0.6b-q8", source: "default" },
+  polish: { value: "deepseek/deepseek-flash", source: "default" },
+  customUrl: { value: "", source: "default" },
   theme: { value: "ink", source: "default" },
   language: { value: "system", source: "default" },
 };

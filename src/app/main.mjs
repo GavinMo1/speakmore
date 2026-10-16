@@ -17,11 +17,14 @@ import {
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale } from "../i18n/index.mjs";
 import { alsoLogTo, log } from "../log.mjs";
-import { findProvider, formatModelChoice, PROVIDERS, parseModelChoice } from "../server/providers/index.mjs";
+import { formatChatChoice, parseChatChoice } from "../server/chat/vendors.mjs";
+import { describeRoute, keyVendorOf, parseFinalModel } from "../server/pipelines.mjs";
+import { findProvider, formatModelChoice } from "../server/providers/index.mjs";
+import { findVendor, VENDORS } from "../server/vendors.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
 import { ensureHome, keyFile, resolvePaths } from "../storage/paths.mjs";
-import { HOTKEY_IDS, hotkeyName, overridingEnv, resolveSettings, saveSetting } from "../storage/settings.mjs";
+import { HOTKEY_IDS, hotkeyName, overridingEnv, resolveSettings, routeOf, saveSetting } from "../storage/settings.mjs";
 import { toHex } from "../themes/color.mjs";
 import { themeCss } from "../themes/contract.mjs";
 import { findTheme, THEMES } from "../themes/index.mjs";
@@ -46,9 +49,12 @@ const LAUNCHED_BY_CLI = process.env.SPEAKMORE_CLI === "1";
 
 let PATHS;
 let SETTINGS;
+/** 启动时走哪条路线（server/pipelines.mjs）。之后可以在设置里改用别家（keys.use），正在走的以 service.route 为准 */
+let ROUTE;
 try {
   PATHS = resolvePaths(process.env);
   SETTINGS = resolveSettings({ file: PATHS.settingsFile, env: process.env });
+  ROUTE = routeOf(SETTINGS);
 } catch (error) {
   // 路径或设置写错是使用上的问题，说一句人话就退出，不留一个按了热键没反应的进程
   console.error(error.message);
@@ -56,9 +62,8 @@ try {
 }
 /** 现在用哪个键。设置里可以当场换（setup:set-hotkey），换的时候重启小帮手 */
 let hotkey = SETTINGS.hotkey.value;
-/** 启动时用哪一家的哪个模型整理。之后可以在设置里改用别家（keys.use），正在用的以 keys.provider 为准 */
-const MODEL = parseModelChoice(SETTINGS.model.value);
-const PROVIDER = findProvider(MODEL.provider);
+/** 启动时用谁家的 key：原生链路是收音频的那家，本地转写链路是润色的那家。正在用的以 keys.provider 为准 */
+const PROVIDER = keyVendorOf(ROUTE);
 /** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
 const thinkingFor = (provider) => (provider.thinkingLevels ? SETTINGS.thinking.value : null);
 /** 菜单栏图标：印章上的五道声波。文件名带 Template，系统按菜单栏的深浅反色；@2x 那张由系统自己挑（scripts/build/make-icon.sh） */
@@ -134,23 +139,25 @@ async function main() {
   const history = openHistory(PATHS.historyDb);
   // 每家一把 key，各存一个文件。正在用的那家之外的也要在：speakmore key openai、model check 要用
   const keyStores = Object.fromEntries(
-    PROVIDERS.map(({ id }) => [
+    VENDORS.map(({ id }) => [
       id,
       createKeyStore({ file: keyFile(PATHS, id, { packaged: app.isPackaged }), safeStorage }),
     ]),
   );
-  // 档位按设置原样给：正在用的那家用不上，但拿 Gemini 的 key 去检查、给 Gemini 存 key 时要用它。
+  /** 本地模型的状态一变，菜单栏和主窗口跟着更新。菜单栏建好之前变的不用管：建的时候读的就是最新的 */
+  let localModelChanged = () => {};
   // 每次调模型记一笔账，开着的历史窗口跟着更新花费（记账出错由整理流程写日志，不连累听写）
   const service = EXTERNAL_SERVER_URL
     ? null
     : await startService({
         log,
-        model: MODEL,
-        thinkingLevel: SETTINGS.thinking.value,
+        route: ROUTE,
+        modelsDir: PATHS.modelsDir,
         onModelCall: (call) => {
           history.addCall(call);
           historyChanged();
         },
+        onLocalModel: () => localModelChanged(),
       });
   const serverUrl = EXTERNAL_SERVER_URL ?? service.url;
   const e2e = process.env.SPEAKMORE_E2E_OUT ? await import("./e2e.mjs") : null;
@@ -162,6 +169,7 @@ async function main() {
     env: process.env,
     log,
     onChange: () => setupChanged(),
+    routeFor,
   });
   /** 按键监听的小帮手：starting（还没报上来）/ running / stopped（退出了，或者根本没起来） */
   let helperState = "starting";
@@ -190,8 +198,8 @@ async function main() {
   log.info("started", {
     version: app.getVersion(),
     hotkey,
-    model: SETTINGS.model.value,
-    thinking: thinkingFor(PROVIDER),
+    route: describeRoute(ROUTE),
+    thinking: ROUTE.pipeline === "native" ? thinkingFor(PROVIDER) : null,
     theme: SETTINGS.theme.value,
     language: languageSetting,
     locale,
@@ -208,9 +216,42 @@ async function main() {
   /** 正在用的那一家：连着单独启动的服务端时是设置里那家（用哪个由那边定，这里只是个名字） */
   const provider = () => (service ? keys.provider : PROVIDER);
 
+  /**
+   * 把"成品交给哪一家的哪个模型"（pipelines.mjs 的 parseFinalModel）补成一条完整的路线：
+   * 本地转写链路上用哪个本地模型、自定义服务的地址，沿用正在走的；正在走原生链路就按设置里的
+   */
+  function routeWith(choice) {
+    if (choice.pipeline === "native") {
+      return { pipeline: "native", model: choice.model, thinkingLevel: SETTINGS.thinking.value };
+    }
+    // 连着单独启动的服务端时没有正在走的路线可沿用（检查模型会在 key-manager 里说清查不了）
+    const now = service?.route ?? ROUTE;
+    // 设置可能在这次运行里改过（主窗口里改了自定义地址），读现在的
+    const settings = now.pipeline === "local" ? null : resolveSettings({ file: PATHS.settingsFile, env: process.env });
+    return {
+      pipeline: "local",
+      transcriber: now.pipeline === "local" ? now.transcriber : settings.transcriber.value,
+      polish: choice.polish,
+      customUrl: now.pipeline === "local" ? now.customUrl : settings.customUrl.value || null,
+    };
+  }
+
+  /**
+   * 改用某一家、给某一家存 key 前验证时走哪条路线（key-manager.mjs 的 routeFor）。正在走的路线用的就是这家时原样；
+   * 收音频的那家用它的默认模型走原生链路；只收文字的那家走本地转写链路，设置里给它写过模型就用那个
+   * （自定义服务没有默认模型，没写过时这里抛错，说要写成 custom/模型名）
+   */
+  function routeFor(id) {
+    if (keyVendorOf(service.route).id === id) return service.route;
+    if (findProvider(id)) return routeWith(parseFinalModel(id));
+    const saved = parseChatChoice(resolveSettings({ file: PATHS.settingsFile, env: process.env }).polish.value);
+    return routeWith({ pipeline: "local", polish: saved.vendor === id ? saved : parseChatChoice(id) });
+  }
+
   const currentSetup = () => ({
     providerName: provider().name,
     key: keys.current,
+    localModel: service?.localModel ?? null,
     helper: helperState,
     permissions: {
       microphone: systemPreferences.getMediaAccessStatus("microphone"),
@@ -486,7 +527,7 @@ async function main() {
       version: app.getVersion(),
       // 正在用的那一家；设置里还列出别家，可以给它们填 key、改用它们
       provider: describeProvider(provider()),
-      providers: PROVIDERS.map(describeProvider),
+      providers: VENDORS.map(describeProvider),
       // 连着单独启动的服务端时用哪家由那边定，这里换不了
       switchable: Boolean(service),
     };
@@ -506,7 +547,12 @@ async function main() {
   handle("setup:forget-key", (_event, id) => keys.forget({ provider: id ?? keys.provider.id }));
   handle("setup:use-provider", (_event, id, value) => useProvider(id, value));
   handle("setup:read-clipboard", () => clipboard.readText());
-  handle("setup:open-key-page", (_event, id) => shell.openExternal((findProvider(id) ?? provider()).keyPage));
+  handle("setup:open-key-page", (_event, id) => {
+    // 自定义服务没有申请 key 的页面
+    const { keyPage } = findVendor(id) ?? provider();
+    if (!keyPage) throw new TypeError(`${id} 没有申请 key 的页面`);
+    return shell.openExternal(keyPage);
+  });
 
   /**
    * 改用另一家（可以顺带填一把它的新 key）：验证过才换，换了就记进设置，下次启动也用它。
@@ -516,17 +562,31 @@ async function main() {
   async function useProvider(id, value) {
     const result = await keys.use({ provider: id, key: value });
     if (!result.ok) return result;
-    const choice = service.model;
-    log.info("model_switched", { model: formatModelChoice(choice), by: "settings" });
-    try {
-      saveSetting(PATHS.settingsFile, "model", choice.provider);
-    } catch (error) {
-      log.error("settings_save_failed", { name: "model", error: String(error?.message ?? error) });
-      return { ok: true, note: msg("notes.saveFailed", { provider: keys.provider.name, reason: problemOf(error) }) };
+    return { ok: true, ...rememberRoute(service.route) };
+  }
+
+  /**
+   * 把正在走的路线记进设置，下次启动也走它。原生链路记模型，本地转写链路记润色的那家和模型。
+   * @returns {{ note?: object }} 没记上、或者下次启动会被环境变量盖掉时的那句说明
+   */
+  function rememberRoute(route) {
+    const changes =
+      route.pipeline === "native"
+        ? { pipeline: "native", model: formatModelChoice(route.model) }
+        : { pipeline: "local", polish: formatChatChoice(route.polish) };
+    log.info("model_switched", { route: describeRoute(route), by: "settings" });
+    for (const [name, value] of Object.entries(changes)) {
+      try {
+        saveSetting(PATHS.settingsFile, name, value);
+      } catch (error) {
+        log.error("settings_save_failed", { name, error: String(error?.message ?? error) });
+        return { note: msg("notes.saveFailed", { provider: keys.provider.name, reason: problemOf(error) }) };
+      }
     }
-    const variable = overridingEnv("model", process.env);
-    if (variable !== null) return { ok: true, note: msg("notes.envNextLaunch", { variable }) };
-    return { ok: true };
+    const variable = Object.keys(changes)
+      .map((name) => overridingEnv(name, process.env))
+      .find((found) => found !== null);
+    return variable ? { note: msg("notes.envNextLaunch", { variable }) } : {};
   }
   handle("setup:open-privacy", async (_event, permission) => {
     if (!Object.hasOwn(PRIVACY_PANES, permission)) throw new TypeError(`不认识的权限：${permission}`);
@@ -746,6 +806,7 @@ async function main() {
     );
   }
   refreshTrayMenu();
+  localModelChanged = setupChanged;
 
   // 没有窗口时也继续待在菜单栏里
   app.on("window-all-closed", () => {});
@@ -782,6 +843,8 @@ async function main() {
   /** 交给命令行的状态。要给人看的话都按 say 的语言翻成字，原因见 summaryAsText */
   function describeStatus(say) {
     const setup = currentSetup();
+    const route = service?.route ?? null;
+    const native = route?.pipeline === "native";
     return {
       pid: process.pid,
       version: app.getVersion(),
@@ -795,8 +858,12 @@ async function main() {
       provider: service ? keys.provider.id : null,
       // 每家的 key 在哪。装成应用的那个各存各的，命令行要靠这一项才知道
       keys: service ? keys.sources() : null,
-      model: service ? formatModelChoice(service.model) : null,
-      thinking: service ? thinkingFor(keys.provider) : null,
+      // 走哪条链路、各用什么。model、thinking 只说原生链路的：0.6 及以前的命令行把 model 当收音频的那家来读
+      pipeline: route?.pipeline ?? null,
+      model: native ? formatModelChoice(route.model) : null,
+      thinking: native ? thinkingFor(keys.provider) : null,
+      transcriber: route?.pipeline === "local" ? route.transcriber : null,
+      polish: route?.pipeline === "local" ? formatChatChoice(route.polish) : null,
       theme: theme.id,
       // 设置里的语言（system 是跟随系统）和实际用的那种
       language: languageSetting,
@@ -805,6 +872,7 @@ async function main() {
       packaged: app.isPackaged,
       ...setup,
       key: withProblemText(setup.key, say),
+      localModel: setup.localModel && withProblemText(setup.localModel, say),
       summary: summaryAsText(summarizeSetup(setup), say),
     };
   }
@@ -830,15 +898,16 @@ async function main() {
           "set-key": async ({ key, provider, locale: wanted }) =>
             withProblemText(await keys.save(key, { provider }), translatorFor(wanted)),
           "forget-key": ({ provider } = {}) => keys.forget({ provider }),
+          // model 可以是收音频的那几家，也可以是润色的那几家（走本地转写链路检查）
           "check-model": async ({ model, locale: wanted }) => {
             const say = translatorFor(wanted);
-            let choice;
+            let route;
             try {
-              choice = parseModelChoice(model);
+              route = routeWith(parseFinalModel(model));
             } catch (error) {
               return { ok: false, cause: "other", problem: say.text(problemOf(error)) };
             }
-            return withProblemText(await keys.check(choice), say);
+            return withProblemText(await keys.check(route), say);
           },
           "reload-theme": reloadTheme,
           "reload-language": () => reloadLanguage(),

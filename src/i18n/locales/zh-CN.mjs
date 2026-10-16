@@ -77,8 +77,12 @@ export default {
   settings: {
     describe: {
       hotkey: "按哪个键开始和结束说话",
+      pipeline: "识别走哪条路：native 是录音直接交给收音频的模型，local 是本机的小模型先转成文字、再交给任意大模型润色",
       model: "用哪一家的哪个模型整理，写成 厂商/模型；只写厂商就用它的默认模型。换模型用 speakmore model",
       thinking: "Gemini 的思考档位，越高越慢。别家的模型用不上",
+      transcriber: "local 那条路上用哪个本机模型转文字，第一次用时自动下载",
+      polish: "local 那条路上把文字交给哪一家的哪个模型润色，写成 厂商/模型；自定义服务写 custom/模型名",
+      customUrl: "自定义润色服务的地址（兼容 OpenAI 接口的那种），比如 https://api.example.com/v1",
       theme: "界面用哪套主题",
       language: "界面用哪种语言；system 是跟随系统",
     },
@@ -97,7 +101,14 @@ export default {
     unknownProvider: "不认识 {name} 这家，能用的有 {providers}",
     badName: "模型名 {model} 不对：只能有字母、数字和 . _ : -",
   },
+  pipelines: {
+    native: "原生：录音直接交给模型",
+    local: "本地转写，再交给模型润色",
+  },
   local: {
+    modelDownloading: "本地模型还在下载（{percent}%），下好就能用",
+    modelLoading: "本地模型正在装载，稍等几秒",
+    modelFailed: "本地模型没装上：{reason}",
     undecodable: "录音解不开：{reason}",
     transcribeFailed: "本地转写失败：{reason}",
   },
@@ -120,6 +131,7 @@ export default {
       microphone: "麦克风权限",
       listen: "输入监控权限",
       helper: "按键监听",
+      localModel: "本地模型",
     },
     blocker: {
       noKey: "缺 {provider} API key：{where}",

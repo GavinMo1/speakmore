@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { summarizeSetup, summaryAsText } from "../../src/app/setup-state.mjs";
-import { createTranslator } from "../../src/i18n/index.mjs";
+import { createTranslator, msg } from "../../src/i18n/index.mjs";
 
 const zh = createTranslator("zh-CN");
 const en = createTranslator("en");
@@ -94,6 +94,38 @@ test("用的是别家模型时，缺的 key、没通过的验证都点名是哪�
   });
   assert.deepEqual(rejected.missing, ["OpenAI 验证"]);
   assert.match(rejected.blocker, /^OpenAI 验证没通过/);
+});
+
+test("本地模型还在下载、装载：暂时不能用，说到哪了，不算缺东西", () => {
+  const downloading = summarize({
+    ...allGood,
+    localModel: { state: "downloading", model: "qwen3-asr-0.6b-q8", received: 425, total: 850 },
+  });
+  assert.equal(downloading.ready, false);
+  assert.deepEqual(downloading.missing, []);
+  assert.match(downloading.blocker, /下载.*50%/);
+  assert.match(summarize({ ...allGood, localModel: { state: "loading", model: "m" } }).blocker, /装载/);
+});
+
+test("本地模型没装上：列进要补的，把原因带给用户", () => {
+  const summary = summarize({
+    ...allGood,
+    localModel: { state: "failed", model: "m", problem: msg("local.modelFailed", { reason: "磁盘满了" }) },
+  });
+  assert.equal(summary.ready, false);
+  assert.deepEqual(summary.missing, ["本地模型"]);
+  assert.match(summary.blocker, /磁盘满了/);
+});
+
+test("本地模型就绪或没走本地转写：不影响结论；key 的问题排在它前面说", () => {
+  for (const localModel of [{ state: "ready", model: "m" }, { state: "off" }, null]) {
+    assert.equal(summarize({ ...allGood, localModel }).ready, true);
+  }
+  const both = summarize({
+    ...withKey({ state: "missing" }),
+    localModel: { state: "downloading", model: "m", received: 0, total: 1 },
+  });
+  assert.match(both.blocker, /key/);
 });
 
 test("同一个结论换成英文说：缺的东西、按热键时的那句、打了折扣的说明", () => {

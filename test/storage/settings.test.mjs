@@ -8,6 +8,7 @@ import {
   HOTKEY_IDS,
   overridingEnv,
   resolveSettings,
+  routeOf,
   SETTINGS,
   saveSetting,
   unsetSetting,
@@ -29,8 +30,12 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 test("没有文件也没有环境变量时全用默认值", () => {
   assert.deepEqual(resolveSettings({ file, env: {} }), {
     hotkey: { value: "right_option", source: "default" },
+    pipeline: { value: "native", source: "default" },
     model: { value: "gemini/gemini-3.6-flash", source: "default" },
     thinking: { value: "MINIMAL", source: "default" },
+    transcriber: { value: "qwen3-asr-0.6b-q8", source: "default" },
+    polish: { value: "deepseek/deepseek-flash", source: "default" },
+    customUrl: { value: "", source: "default" },
     theme: { value: "ink", source: "default" },
     language: { value: "system", source: "default" },
   });
@@ -178,4 +183,42 @@ test("Gemini 的模型存成 0.3 也读得懂的写法（只写模型名），�
   // 别家的 0.3 本来就不认，照常存 厂商/模型
   saveSetting(file, "model", "openai");
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { model: "openai/gpt-audio-mini" });
+});
+
+test("识别链路：默认是原生的；改成 local 后，路线里是本地模型、润色的那家和自定义地址", () => {
+  assert.deepEqual(routeOf(resolveSettings({ file, env: {} })), {
+    pipeline: "native",
+    model: { provider: "gemini", model: "gemini-3.6-flash" },
+    thinkingLevel: "MINIMAL",
+  });
+  saveSetting(file, "pipeline", "Local");
+  saveSetting(file, "polish", "custom/Qwen/Qwen3-8B");
+  saveSetting(file, "customUrl", "https://api.siliconflow.cn/v1/chat/completions");
+  const settings = resolveSettings({ file, env: {} });
+  assert.deepEqual(settings.customUrl, { value: "https://api.siliconflow.cn/v1", source: "file" });
+  assert.deepEqual(routeOf(settings), {
+    pipeline: "local",
+    transcriber: "qwen3-asr-0.6b-q8",
+    polish: { vendor: "custom", model: "Qwen/Qwen3-8B" },
+    customUrl: "https://api.siliconflow.cn/v1",
+  });
+  // 环境变量也能换，和单独启动服务端时同名
+  const env = {
+    SPEAKMORE_PIPELINE: "native",
+    SPEAKMORE_POLISH: "deepseek",
+    SPEAKMORE_TRANSCRIBER: "sensevoice-small-q8",
+  };
+  const overridden = resolveSettings({ file, env });
+  assert.equal(overridden.pipeline.value, "native");
+  assert.equal(overridden.polish.value, "deepseek/deepseek-flash");
+  assert.equal(overridden.transcriber.value, "sensevoice-small-q8");
+});
+
+test("识别链路的几项写错了拒绝保存，说能填什么；自定义地址可以清空", () => {
+  assert.throws(() => saveSetting(file, "pipeline", "cloud"), said(/native \/ local/));
+  assert.throws(() => saveSetting(file, "transcriber", "whisper-9"), said(/qwen3-asr-0\.6b-q8/));
+  assert.throws(() => saveSetting(file, "polish", "nobody/x"), said(/deepseek/));
+  assert.throws(() => saveSetting(file, "customUrl", "api.example.com"), said(/https:\/\//));
+  saveSetting(file, "customUrl", "https://x.example/v1");
+  assert.equal(saveSetting(file, "customUrl", ""), "");
 });

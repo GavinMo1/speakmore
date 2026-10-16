@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createKeyManager } from "../../../src/app/keys/key-manager.mjs";
-import { createTranslator } from "../../../src/i18n/index.mjs";
+import { createTranslator, LocalizedError, msg } from "../../../src/i18n/index.mjs";
 import { ModelError } from "../../../src/server/providers/errors.mjs";
 import { findProvider } from "../../../src/server/providers/index.mjs";
+import { findVendor } from "../../../src/server/vendors.mjs";
 
 const zh = createTranslator("zh-CN");
+
+/** 不说走哪条路线时，改用 OpenAI 走的那条：它的默认模型、原生链路 */
+const OPENAI_DEFAULT = {
+  pipeline: "native",
+  model: { provider: "openai", model: findProvider("openai").defaultModel },
+  thinkingLevel: null,
+};
 
 // 服务报上来的错都是模型层分好类的 ModelError（见 src/server/providers/errors.mjs），下面几种的原文都是实测到的
 const OFFLINE = () =>
@@ -34,19 +42,19 @@ function fakeService(verdicts = {}) {
     calls: [],
     /** 正在用的那把；没有时是 null */
     using: null,
-    /** 正在用的厂商和模型；没换过时是 null（启动时设置里的那个） */
-    model: null,
-    async useKey(apiKey, { allowUnverified = false, choice } = {}) {
-      service.calls.push(choice ? { useKey: apiKey, allowUnverified, choice } : { useKey: apiKey, allowUnverified });
+    /** 正在走的路线；没换过时是 null（启动时设置里的那条） */
+    route: null,
+    async useKey(apiKey, { allowUnverified = false, route } = {}) {
+      service.calls.push(route ? { useKey: apiKey, allowUnverified, route } : { useKey: apiKey, allowUnverified });
       const error = verdicts[apiKey]?.();
       if (error && !(allowUnverified && error.kind === "unavailable")) throw error;
       service.using = apiKey;
-      if (choice) service.model = choice;
+      if (route) service.route = route;
       return { verified: !error };
     },
-    /** 拿一把 key 试另一家（或另一个模型），不换掉正在用的 */
-    async probe({ choice, apiKey }) {
-      service.calls.push({ probe: apiKey, choice });
+    /** 拿一把 key 试另一条路线，不换掉正在用的 */
+    async probe({ route, apiKey }) {
+      service.calls.push({ probe: apiKey, route });
       const error = verdicts[apiKey]?.();
       if (error) throw error;
     },
@@ -88,18 +96,31 @@ function fakeStore(initial = null) {
  * @param {string} [options.provider] 正在用哪一家，默认 Gemini
  * @param {string | Error | null} [options.stored] 正在用的那一家存着的 key
  * @param {string | Error | null} [options.storedOther] 另一家（Gemini 时是 OpenAI，反之亦然）存着的 key
+ * @param {string | Error | null} [options.storedDeepseek] 润色那一家（DeepSeek）存着的 key
+ * @param {(id: string) => object} [options.routeFor] 不写就用 key-manager 自带的（原生链路、默认模型）
  */
-function setup({ verdicts, provider = "gemini", stored = null, storedOther = null, env = {}, external = false } = {}) {
+function setup({
+  verdicts,
+  provider = "gemini",
+  stored = null,
+  storedOther = null,
+  storedDeepseek = null,
+  env = {},
+  external = false,
+  routeFor,
+} = {}) {
   const service = external ? null : fakeService(verdicts);
   const other = provider === "gemini" ? "openai" : "gemini";
   const keyStores = { [provider]: fakeStore(stored), [other]: fakeStore(storedOther) };
+  if (provider !== "deepseek") keyStores.deepseek = fakeStore(storedDeepseek);
   const logged = [];
   const record = (level) => (event, fields) => logged.push({ level, event, ...fields });
   let changes = 0;
   const keys = createKeyManager({
     service,
-    provider: findProvider(provider),
+    provider: findVendor(provider),
     keyStores,
+    ...(routeFor ? { routeFor } : {}),
     env,
     log: { info: record("info"), warn: record("warn"), error: record("error") },
     onChange: () => changes++,
@@ -109,6 +130,7 @@ function setup({ verdicts, provider = "gemini", stored = null, storedOther = nul
     service,
     keyStore: keyStores[provider],
     otherStore: keyStores[other],
+    deepseekStore: keyStores.deepseek,
     logged,
     changes: () => changes,
   };
@@ -400,10 +422,7 @@ test("给另一家存 key：拿它那家的默认模型验证过才存，正在�
   assert.equal(otherStore.value, "openai-key");
   assert.equal(keyStore.value, "gemini-key");
   assert.equal(service.using, "gemini-key");
-  assert.deepEqual(service.calls.at(-1), {
-    probe: "openai-key",
-    choice: { provider: "openai", model: findProvider("openai").defaultModel },
-  });
+  assert.deepEqual(service.calls.at(-1), { probe: "openai-key", route: OPENAI_DEFAULT });
   assert.equal(keys.current.state, "ready");
 });
 
@@ -427,16 +446,12 @@ test("删另一家的 key：只删它那一份，正在用的不受影响", asyn
 
 test("不认识的厂商：不验证、不存、不删", async () => {
   const { keys, service } = setup();
-  assert.match(zh.text((await keys.save("k", { provider: "deepseek" })).problem), /不认识 deepseek/);
-  await assert.rejects(keys.forget({ provider: "deepseek" }), (error) =>
-    /不认识 deepseek/.test(zh.text(error.problem)),
-  );
+  assert.match(zh.text((await keys.save("k", { provider: "nope" })).problem), /不认识 nope/);
+  await assert.rejects(keys.forget({ provider: "nope" }), (error) => /不认识 nope/.test(zh.text(error.problem)));
   assert.deepEqual(service.calls, []);
 });
 
 // ---------- 改用另一家 ----------
-
-const OPENAI_DEFAULT = { provider: "openai", model: findProvider("openai").defaultModel };
 
 test("改用另一家：拿它存着的那把验证过就换过去；之后存、删、检查不写厂商时说的都是新的那家", async () => {
   const { keys, service, keyStore, otherStore } = setup({ stored: "gemini-key", storedOther: "openai-key" });
@@ -444,7 +459,7 @@ test("改用另一家：拿它存着的那把验证过就换过去；之后存�
   assert.deepEqual(await keys.use({ provider: "openai" }), { ok: true });
   assert.equal(keys.provider.id, "openai");
   assert.equal(service.using, "openai-key");
-  assert.deepEqual(service.model, OPENAI_DEFAULT);
+  assert.deepEqual(service.route, OPENAI_DEFAULT);
   assert.deepEqual(keys.current, { state: "ready", source: "stored", problem: null, verified: true });
 
   await keys.forget();
@@ -504,49 +519,55 @@ test("改用时那一家的环境变量里有 key：用它，标明来自环境�
 
 test("改用：不认识的厂商、连的是单独启动的服务端，都不换并说清楚", async () => {
   const { keys } = setup();
-  assert.match(zh.text((await keys.use({ provider: "deepseek" })).problem), /不认识 deepseek/);
+  assert.match(zh.text((await keys.use({ provider: "nope" })).problem), /不认识 nope/);
   const external = setup({ external: true });
   assert.match(zh.text((await external.keys.use({ provider: "openai" })).problem), /单独启动的服务端/);
 });
 
-// ---------- 检查某个模型能不能用 ----------
+// ---------- 检查某条路线能不能用 ----------
+
+const nativeRoute = (provider, model) => ({ pipeline: "native", model: { provider, model }, thinkingLevel: null });
+const LOCAL_DEEPSEEK = {
+  pipeline: "local",
+  transcriber: "qwen3-asr-0.6b-q8",
+  polish: { vendor: "deepseek", model: "deepseek-flash" },
+  customUrl: null,
+};
 
 test("检查：用那一家的 key（环境变量优先，其次存着的）发一个最小的请求，说能不能用、花了多久", async () => {
   const { keys, service } = setup({ storedOther: "openai-stored" });
-  const result = await keys.check({ provider: "openai", model: "gpt-audio-1.5" });
+  const result = await keys.check(nativeRoute("openai", "gpt-audio-1.5"));
   assert.equal(result.ok, true);
   assert.equal(result.source, "stored");
   assert.equal(typeof result.ms, "number");
-  assert.deepEqual(service.calls, [{ probe: "openai-stored", choice: { provider: "openai", model: "gpt-audio-1.5" } }]);
+  assert.deepEqual(service.calls, [{ probe: "openai-stored", route: nativeRoute("openai", "gpt-audio-1.5") }]);
 
   const fromEnv = setup({ storedOther: "openai-stored", env: { OPENAI_API_KEY: "openai-env" } });
-  assert.equal((await fromEnv.keys.check({ provider: "openai", model: "gpt-audio-mini" })).source, "env");
+  assert.equal((await fromEnv.keys.check(nativeRoute("openai", "gpt-audio-mini"))).source, "env");
   assert.equal(fromEnv.service.calls[0].probe, "openai-env");
 });
 
 test("检查：没有那一家的 key、key 读不出来、验证没通过，各说各的", async () => {
-  const none = await setup().keys.check({ provider: "openai", model: "gpt-audio-mini" });
+  const none = await setup().keys.check(nativeRoute("openai", "gpt-audio-mini"));
   assert.equal(none.ok, false);
   assert.equal(none.cause, "missing");
   assert.match(zh.text(none.problem), /还没有 OpenAI 的 key.*speakmore key openai/);
 
-  const unreadable = await setup({ storedOther: new Error("解不开") }).keys.check({
-    provider: "openai",
-    model: "gpt-audio-mini",
-  });
+  const unreadable = await setup({ storedOther: new Error("解不开") }).keys.check(
+    nativeRoute("openai", "gpt-audio-mini"),
+  );
   assert.equal(unreadable.ok, false);
   assert.match(zh.text(unreadable.problem), /读不出来/);
 
-  const rejected = await setup({ storedOther: "openai-key", verdicts: { "openai-key": NO_SUCH_MODEL } }).keys.check({
-    provider: "openai",
-    model: "gpt-audio-9",
-  });
+  const rejected = await setup({ storedOther: "openai-key", verdicts: { "openai-key": NO_SUCH_MODEL } }).keys.check(
+    nativeRoute("openai", "gpt-audio-9"),
+  );
   assert.deepEqual([rejected.ok, rejected.cause], [false, "other"]);
   assert.match(zh.text(rejected.problem), /gemini-nope is not found/);
 });
 
 test("检查：连的是单独启动的服务端时查不了，说清为什么", async () => {
-  const result = await setup({ external: true }).keys.check({ provider: "gemini", model: "gemini-3.5-flash" });
+  const result = await setup({ external: true }).keys.check(nativeRoute("gemini", "gemini-3.5-flash"));
   assert.equal(result.ok, false);
   assert.match(zh.text(result.problem), /SPEAKMORE_SERVER_URL/);
 });
@@ -555,14 +576,67 @@ test("检查正在用的那家时，用的是这次运行实际在用的那把�
   const { keys, service } = setup({ env: { GEMINI_API_KEY: "env-key" } });
   await keys.loadAtStartup();
   await keys.save("new-key");
-  await keys.check({ provider: "gemini", model: "gemini-3.5-flash" });
+  await keys.check(nativeRoute("gemini", "gemini-3.5-flash"));
   assert.equal(service.calls.at(-1).probe, "new-key");
-  assert.equal((await keys.check({ provider: "gemini", model: "gemini-3.5-flash" })).source, "stored");
+  assert.equal((await keys.check(nativeRoute("gemini", "gemini-3.5-flash"))).source, "stored");
 });
 
 test("sources：每家的 key 在哪（环境变量、存着的、没有），不用解密", () => {
   const { keys, keyStore } = setup({ storedOther: "openai-key", env: { GEMINI_API_KEY: "env-key" } });
   keyStore.load = () => assert.fail("不该解密");
-  assert.deepEqual(keys.sources(), { gemini: "env", openai: "stored" });
-  assert.deepEqual(setup().keys.sources(), { gemini: null, openai: null });
+  assert.deepEqual(keys.sources(), { gemini: "env", openai: "stored", deepseek: null });
+  assert.deepEqual(setup({ storedDeepseek: "ds-key" }).keys.sources(), {
+    gemini: null,
+    openai: null,
+    deepseek: "stored",
+  });
+});
+
+// ---------- 润色那一家（只收文字，走本地转写链路） ----------
+
+test("改用 DeepSeek：按 routeFor 给的路线（本地转写链路）验证过才换", async () => {
+  const routes = [];
+  const { keys, service } = setup({
+    stored: "gemini-key",
+    storedDeepseek: "ds-key",
+    routeFor: (id) => {
+      routes.push(id);
+      return LOCAL_DEEPSEEK;
+    },
+  });
+  await keys.loadAtStartup();
+  assert.deepEqual(await keys.use({ provider: "deepseek" }), { ok: true });
+  assert.deepEqual(routes, ["deepseek"]);
+  assert.equal(keys.provider.id, "deepseek");
+  assert.equal(service.using, "ds-key");
+  assert.deepEqual(service.route, LOCAL_DEEPSEEK);
+});
+
+test("给 DeepSeek 存 key：拿 routeFor 给的路线试，不换掉正在用的", async () => {
+  const { keys, service, deepseekStore } = setup({ stored: "gemini-key", routeFor: () => LOCAL_DEEPSEEK });
+  await keys.loadAtStartup();
+  assert.deepEqual(await keys.save("ds-key", { provider: "deepseek" }), { ok: true });
+  assert.equal(deepseekStore.value, "ds-key");
+  assert.equal(service.using, "gemini-key");
+  assert.deepEqual(service.calls.at(-1), { probe: "ds-key", route: LOCAL_DEEPSEEK });
+});
+
+test("routeFor 说这一家没法验证（比如自定义服务还没填地址）：不存，原因照它说的", async () => {
+  const { keys, deepseekStore, service } = setup({
+    routeFor: () => {
+      throw new LocalizedError(msg("chat.urlMissing"));
+    },
+  });
+  const result = await keys.save("ds-key", { provider: "deepseek" });
+  assert.equal(result.ok, false);
+  assert.match(zh.text(result.problem), /还没填自定义服务的地址/);
+  assert.equal(deepseekStore.value, null);
+  assert.deepEqual(service.calls, []);
+});
+
+test("检查本地转写链路：用润色那一家的 key", async () => {
+  const { keys, service } = setup({ stored: "gemini-key", storedDeepseek: "ds-key" });
+  const result = await keys.check(LOCAL_DEEPSEEK);
+  assert.equal(result.ok, true);
+  assert.deepEqual(service.calls, [{ probe: "ds-key", route: LOCAL_DEEPSEEK }]);
 });

@@ -1,9 +1,10 @@
 import { LocalizedError, msg } from "../i18n/index.mjs";
-import { findChatVendor, formatChatChoice } from "./chat/vendors.mjs";
-import { findProvider, formatModelChoice } from "./providers/index.mjs";
+import { findChatVendor, formatChatChoice, parseChatChoice } from "./chat/vendors.mjs";
+import { findProvider, formatModelChoice, parseModelChoice } from "./providers/index.mjs";
 import { createLocalRefiner } from "./refine/local.mjs";
 import { createChatPolisher } from "./refine/polisher.mjs";
 import { createModelRefiner } from "./refine/refiner.mjs";
+import { VENDORS } from "./vendors.mjs";
 
 // 识别的两条链路，用户在设置里选一条（pipeline）。两条平级，谁也不是谁的退路：
 //   native  原生：录音直接交给收音频的大模型，一次请求出成品（refine/refiner.mjs）
@@ -65,6 +66,28 @@ export function parsePipeline(value) {
   }
   return pipeline.id;
 }
+
+/**
+ * "成品交给哪一家的哪个模型"：命令行的 speakmore model、设置里改用别家都这么写。
+ * 收音频的那几家（providers/）走原生链路，只收文字的（chat/vendors.mjs）走本地转写链路，由它润色。
+ * 写法同各自的那一种：厂商、厂商/模型；只写一个 Gemini 的模型名是 0.3 以前的写法，照样认。
+ * @returns {{ pipeline: "native", model: { provider, model } } | { pipeline: "local", polish: { vendor, model } }}
+ *   写错了抛 LocalizedError
+ */
+export function parseFinalModel(value) {
+  const text = String(value ?? "").trim();
+  const name = text.split("/")[0];
+  if (!findProvider(name) && findChatVendor(name)) return { pipeline: "local", polish: parseChatChoice(text) };
+  if (text.includes("/") && !findProvider(name)) {
+    throw new LocalizedError(
+      msg("models.unknownProvider", { name, providers: VENDORS.map(({ id }) => id).join(" / ") }),
+    );
+  }
+  return { pipeline: "native", model: parseModelChoice(text) };
+}
+
+export const formatFinalModel = (choice) =>
+  choice.pipeline === "local" ? formatChatChoice(choice.polish) : formatModelChoice(choice.model);
 
 /** 这条路线要用谁家的 key：{ id, name, keyEnv, keyPage } */
 export const keyVendorOf = (route) => findPipeline(route.pipeline).keyVendor(route);

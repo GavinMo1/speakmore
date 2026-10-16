@@ -1,11 +1,14 @@
 import { LocalizedError, msg, problemOf } from "../../i18n/index.mjs";
+import { keyVendorOf } from "../../server/pipelines.mjs";
 import { toModelError } from "../../server/providers/errors.mjs";
-import { apiKeyProblem, findProvider } from "../../server/providers/index.mjs";
+import { apiKeyProblem, DEFAULT_THINKING_LEVEL, findProvider } from "../../server/providers/index.mjs";
+import { findVendor } from "../../server/vendors.mjs";
 
 const MISSING = { state: "missing", source: null, problem: null };
 
 /**
- * 每家模型各有一把 key。这次运行用的是哪一家（provider）由设置定，它的那把 key 现在是什么状态、
+ * 每家模型各有一把 key。这次运行用的是哪一家（provider）由设置里的路线定：原生链路是收音频的那家，
+ * 本地转写链路是润色的那家（server/pipelines.mjs 的 keyVendorOf）。它的那把 key 现在是什么状态、
  * 启动时去哪找、怎么换、怎么删，都走这里；别家的 key 也在这里存、删、拿去检查，但不影响正在用的。
  *
  * 状态（current，只说正在用的那一家）里的几项：
@@ -18,15 +21,25 @@ const MISSING = { state: "missing", source: null, problem: null };
  * @param {object} options
  * @param {{ useKey: Function, verify: Function, forgetKey: Function, probe: Function } | null} options.service
  *   内置的听写服务；连的是单独启动的服务端时为 null，key 归那边管
- * @param {{ id: string, name: string, keyEnv: string }} options.provider 一开始用的那一家（providers/index.mjs）。
+ * @param {{ id: string, name: string, keyEnv: string }} options.provider 一开始用的那一家（server/vendors.mjs）。
  *   之后可以改用别家（use），不写厂商的存、删、检查说的都是正在用的那家
+ * @param {(id: string) => object} [options.routeFor] 改用某一家、给某一家存 key 前验证时走哪条路线。
+ *   不写就是那家（收音频的）的默认模型走原生链路
  * @param {Record<string, { load(): string | null, save(key: string): void, clear(): void }>} options.keyStores
  *   每家一个，按 id 找
  * @param {Record<string, string | undefined>} options.env
  * @param {{ info: Function, error: Function }} options.log
  * @param {() => void} options.onChange 状态每变一次调一次
  */
-export function createKeyManager({ service, provider: initialProvider, keyStores, env, log, onChange }) {
+export function createKeyManager({
+  service,
+  provider: initialProvider,
+  keyStores,
+  env,
+  log,
+  onChange,
+  routeFor = nativeRouteFor,
+}) {
   /** 正在用的那一家 */
   let provider = initialProvider;
   let current = MISSING;
@@ -67,7 +80,7 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
 
   /** 按 id 找到那一家和它的 key 存放处。不认识就抛错 */
   function lookup(id) {
-    const found = findProvider(id);
+    const found = findVendor(id);
     if (!found || !keyStores[found.id]) throw new LocalizedError(msg("key.unknownProvider", { id }));
     return { found, store: keyStores[found.id] };
   }
@@ -77,7 +90,7 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
    * @param {{ atStartup: boolean, allowUnverified?: boolean, target?: object }} options
    *   atStartup：启动时只是够不着的话照样启用，没通过就是不能用；换一把时没通过的话服务里原来那把还在用，
    *   状态也回到原来的。allowUnverified：够不着时照样启用，默认同 atStartup（换用存着的那把时也要）。
-   *   target：连厂商一起换成这一家（用它的默认模型），通过了才换
+   *   target：连厂商一起换成这一家（走 routeFor 给的路线），通过了才换
    * @returns {Promise<null | { cause: string, problem: object | string }>} 通过了是 null，没通过是原因
    */
   function adopt(apiKey, source, { atStartup, allowUnverified = atStartup, target = null }) {
@@ -88,8 +101,8 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
       const who = switching ? target : provider;
       become({ state: "checking", source, problem: null });
       try {
-        const choice = switching ? { choice: { provider: target.id, model: target.defaultModel } } : {};
-        const { verified } = await service.useKey(apiKey, { allowUnverified, ...choice });
+        const route = switching ? { route: routeFor(target.id) } : {};
+        const { verified } = await service.useKey(apiKey, { allowUnverified, ...route });
         if (switching) {
           log.info("provider_switched", { from: provider.id, to: target.id });
           provider = target;
@@ -110,11 +123,11 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
     });
   }
 
-  /** 给不是正在用的那一家存 key：用它的默认模型验证一次，通过了再存。不碰正在用的 */
+  /** 给不是正在用的那一家存 key：走 routeFor 给的路线验证一次，通过了再存。不碰正在用的 */
   function saveForOther(found, store, apiKey) {
     return enqueue(async () => {
       try {
-        await service.probe({ choice: { provider: found.id, model: found.defaultModel }, apiKey });
+        await service.probe({ route: routeFor(found.id), apiKey });
       } catch (error) {
         const { cause, problem, detail } = described(error, apiKey);
         log.error("key_rejected", { provider: found.id, source: "stored", cause, error: detail.slice(0, 300) });
@@ -258,16 +271,16 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
     },
 
     /**
-     * 某一家的某个模型现在能不能用：拿那一家的 key 发一个最小的请求。不抛错，不改变正在用的。
-     * @param {{ provider: string, model: string }} choice
+     * 某条路线现在能不能用：拿它要的那家的 key 发一个最小的请求。不抛错，不改变正在用的。
+     * @param {object} route server/pipelines.mjs 说的路线
      * @returns {Promise<{ ok: true, source: string, ms: number } | { ok: false, cause: string, problem: object | string }>}
      *   cause：missing（没有这家的 key）/ unreadable / key / unavailable / other
      */
-    async check(choice) {
+    async check(route) {
       if (!service) return { ok: false, cause: "other", problem: msg("key.externalModel") };
       let target;
       try {
-        target = lookup(choice.provider);
+        target = lookup(keyVendorOf(route).id);
       } catch (error) {
         return { ok: false, cause: "other", problem: problemOf(error) };
       }
@@ -287,14 +300,14 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
       if (shape) return { ok: false, cause: "key", problem: shape };
       const startedAt = performance.now();
       try {
-        await service.probe({ choice, apiKey: key.apiKey });
+        await service.probe({ route, apiKey: key.apiKey });
       } catch (error) {
         const { cause, problem, detail } = described(error, key.apiKey);
-        log.warn("model_check_failed", { provider: found.id, model: choice.model, cause, error: detail.slice(0, 300) });
+        log.warn("model_check_failed", { provider: found.id, cause, error: detail.slice(0, 300) });
         return { ok: false, cause, problem };
       }
       const ms = Math.round(performance.now() - startedAt);
-      log.info("model_checked", { provider: found.id, model: choice.model, source: key.source, ms });
+      log.info("model_checked", { provider: found.id, source: key.source, ms });
       return { ok: true, source: key.source, ms };
     },
 
@@ -306,7 +319,7 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
     sources() {
       return Object.fromEntries(
         Object.entries(keyStores).map(([id, store]) => {
-          const { keyEnv } = findProvider(id);
+          const { keyEnv } = findVendor(id);
           return [id, env[keyEnv]?.trim() ? "env" : store.exists() ? "stored" : null];
         }),
       );
@@ -333,5 +346,16 @@ export function createKeyManager({ service, provider: initialProvider, keyStores
         reverifying = false;
       }
     },
+  };
+}
+
+/** 不说走哪条路线时：那家（收音频的）的默认模型走原生链路 */
+function nativeRouteFor(id) {
+  const provider = findProvider(id);
+  if (!provider) throw new LocalizedError(msg("key.unknownProvider", { id }));
+  return {
+    pipeline: "native",
+    model: { provider: provider.id, model: provider.defaultModel },
+    thinkingLevel: provider.thinkingLevels ? DEFAULT_THINKING_LEVEL : null,
   };
 }
