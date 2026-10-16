@@ -2,7 +2,10 @@
 name: speakmore-release-on-cos
 description: SpeakMore 的发布包在腾讯云 COS + CDN（dl.zephyrxiang.com/speakmore/），只从本机用 npm run ship 发，GitHub 上的发布流程已删；证书 2027-01-12 到期要续
 metadata:
+  node_type: memory
   type: project
+  originSessionId: 01cb214e-9235-4c39-87a1-f99a7f88b66e
+  modified: 2026-10-16T16:45:44.639Z
 ---
 
 SpeakMore 的发布包放在用户自己的腾讯云 COS，前面是 CDN 域名 `dl.zephyrxiang.com`，东西都在 `speakmore/` 前缀下。2026-10-13 他定的：不用 GitHub Release（太慢），新建专用的桶，下载地址用 zephyrxiang.com 的子域名，以后官网的下载链接也从这里取。
@@ -16,6 +19,8 @@ SpeakMore 的发布包放在用户自己的腾讯云 COS，前面是 CDN 域名 
 - 传到一半断了：别重新打包（每次打出来的包字节不同，会被当成改了已发布的版本而拒绝），直接再跑 `scripts/release/with-cos-key.sh npm run publish-release`，传好的会跳过。失败的上传会在桶里留没传完的分片，用本机密钥 `multipartList` / `multipartAbort` 清掉（0.4.0 那个已清）。
 - 0.6.0 起命令行装的用 `speakmore update` 升级：它读下载地址根上的 `latest`，比自己新就下载根上的 `install.sh`、钉住那个版本号去装；`speakmore status` 一天最多查一次 `latest`，有新版本时提醒一句。所以根上的 `install.sh` 和 `latest` 要一直在、一直是最新的（ship 会传）。从 0.5.0 及更早的升上来，还得再跑一次安装那一行（那些版本里没有 update）。0.6.2 起 update 连 SpeakMore.app 一起换（下载对应芯片的 dmg、验校验值和签名的开发者；App 正在跑就先退出、换完重新打开），所以根上各版本目录里的 dmg 和 .sha256 也要一直在。从 0.6.1 及更早升上来的那一次还是旧逻辑：只换命令行那一份、停掉 App 改启命令行那一份，用 App 的人那一次要手动换 App。
 - 发布过的版本号不覆盖（`scripts/release/release-layout.mjs` 会拒绝）：CDN 和用户手里缓存的都是旧内容，要改就升版本号。要在本机试链路，用预发版本号（比如 `v0.2.1-rc.1`），或者 `SPEAKMORE_INSTALL_BASE=$PWD/dist/release` 装本机打的包。
+- 不发版就想先在自己电脑上用（2026-10-16 试 0.7.1 时这么做的）：临时把版本号改成 `0.7.1-dev.N`，`MAC_NOTARY_PROFILE=` 跳过公证打包，再用 `SPEAKMORE_INSTALL_BASE` 装上，装完把 package.json 改回去。跳过公证会被自动模式拦下，要写成脚本交给用户跑（[[cloud-changes-user-runs]]）。之后正式版用 `speakmore update` 就能盖过去，key、权限、历史都还在。
+- 发版记录：0.7.1 在 2026-10-16 发布（ship 一次跑通，10 个文件），官网同一天重新部署，用户电脑从 0.7.1-dev.2 用 update 升上来，App 是公证过的。
 - 桶名、地域、凭据名、加载器都在不进 git 的 `.machine.env`（`COS_BUCKET`、`COS_REGION`、`COS_CREDENTIAL`、`COS_SECRETS_LOADER`），仓库里只认变量名（[[machine-facts-stay-local]]）。腾讯云这把凭据和 Gemini 那把不在同一个加载器下，所以有单独的 `COS_SECRETS_LOADER`；找不到时先看 `.machine.env`，不要满机器搜。
 - 以前 CI 用的子账号密钥（腾讯云子账号 `speakmore-ci`、策略 `speakmore-release-upload`，存在仓库 Actions secrets 里）已在 2026-10-14 照他的话全部删掉：四个 secrets、子账号连同密钥、策略都没了。以后要在 GitHub 上发布得重新签一把，但他定了只从本机发。
 - 云上的配置照他另一个产品域名的样子配的：桶私有、只让 CDN 读，CDN 全球加速、跟随源站的缓存头、每天 50 GB 流量封顶（超了返回 404）。运维走命令行，方法见 `zephyr-cloud-cli-ops`。
