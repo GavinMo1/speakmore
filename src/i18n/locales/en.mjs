@@ -100,6 +100,10 @@ export default {
     unknownProvider: "unknown provider {name}; available: {providers}",
     badName: "model name {model} is invalid: only letters, digits, and . _ : - are allowed",
   },
+  local: {
+    undecodable: "Couldn't read the recording: {reason}",
+    transcribeFailed: "Local transcription failed: {reason}",
+  },
   chat: {
     modelRequired: "{vendor} has no default model; write it as {vendor}/<model name>",
     badModelName: "model name {model} is invalid: only letters, digits, and . _ : / @ + - are allowed",

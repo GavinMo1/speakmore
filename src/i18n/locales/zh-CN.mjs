@@ -97,6 +97,10 @@ export default {
     unknownProvider: "不认识 {name} 这家，能用的有 {providers}",
     badName: "模型名 {model} 不对：只能有字母、数字和 . _ : -",
   },
+  local: {
+    undecodable: "录音解不开：{reason}",
+    transcribeFailed: "本地转写失败：{reason}",
+  },
   chat: {
     modelRequired: "{vendor} 没有默认模型，要写成 {vendor}/模型名",
     badModelName: "模型名 {model} 不对：只能有字母、数字和 . _ : / @ + -",

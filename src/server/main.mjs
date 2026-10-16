@@ -1,25 +1,47 @@
 import { log } from "../log.mjs";
+import { resolvePaths } from "../storage/paths.mjs";
+import { startTranscriber } from "./asr/start.mjs";
 import { loadConfig } from "./config.mjs";
-import { findProvider, formatModelChoice } from "./providers/index.mjs";
-import { createModelRefiner } from "./refine/refiner.mjs";
+import { createPipelineRefiner, describeRoute } from "./pipelines.mjs";
+import { findProvider } from "./providers/index.mjs";
 import { startServer, WS_PATH } from "./server.mjs";
 
 let config;
+/** 本地模型放在哪：只有本地转写链路用得上 */
+let modelsDir = null;
 try {
   config = loadConfig(process.env);
+  if (config.route.pipeline === "local") modelsDir = resolvePaths(process.env).modelsDir;
 } catch (error) {
   // 配置写错是使用上的问题，给一句人话就够了，不需要调用栈
   console.error(error.message);
   process.exit(2);
 }
+const { route, apiKey } = config;
 
-const model = formatModelChoice(config.model);
-const refiner = await createModelRefiner({
-  choice: config.model,
-  apiKey: config.apiKey,
-  thinkingLevel: config.thinkingLevel,
-  log,
-});
+/** 下载进度每 10% 记一行，不刷屏 */
+function progressLogger(modelId) {
+  let reported = -1;
+  return ({ received, total }) => {
+    const percent = Math.floor((received / total) * 10) * 10;
+    if (percent === reported) return;
+    reported = percent;
+    log.info("model_download_progress", { model: modelId, percent });
+  };
+}
+
+// 本地转写链路先把模型准备好：没下载过就下载，装进转写进程
+const transcriber =
+  route.pipeline === "local"
+    ? await startTranscriber({
+        modelId: route.transcriber,
+        modelsDir,
+        log,
+        onProgress: progressLogger(route.transcriber),
+      })
+    : null;
+const refiner = await createPipelineRefiner({ route, apiKey, transcriber, log });
+
 let server;
 try {
   server = await startServer({ host: config.host, port: config.port, refiner, log });
@@ -27,25 +49,30 @@ try {
   if (error.code !== "EADDRINUSE") throw error;
   // 最常见的原因是已经开着一个了，给一句人话，不甩调用栈
   console.error(`端口 ${config.port} 已经被占用：服务端可能已经在运行。要另开一个就用 PORT 换端口。`);
+  transcriber?.dispose();
   process.exit(1);
 }
 log.info("listening", {
   url: `ws://${config.host}:${server.port}${WS_PATH}`,
-  model,
+  route: describeRoute(route),
   // 思考档位只有 Gemini 用得上，别家不写，免得看日志的人以为它起了作用
-  ...(findProvider(config.model.provider).thinkingLevels ? { thinking_level: config.thinkingLevel } : {}),
+  ...(route.pipeline === "native" && findProvider(route.model.provider).thinkingLevels
+    ? { thinking_level: route.thinkingLevel }
+    : {}),
+  ...(transcriber ? { transcriber_backend: transcriber.backend } : {}),
 });
 
 // 不等它：预热失败不该拦着服务启动，但要让人看得见
 const warmUpStartedAt = performance.now();
 refiner.warmUp().then(
   () => log.info("warmed_up", { ms: Math.round(performance.now() - warmUpStartedAt) }),
-  (error) => log.error("warm_up_failed", { model, error: error.message, detail: error.detail }),
+  (error) => log.error("warm_up_failed", { route: describeRoute(route), error: error.message, detail: error.detail }),
 );
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, async () => {
     log.info("shutting_down", { signal });
+    transcriber?.dispose();
     await server.close();
     process.exit(0);
   });
