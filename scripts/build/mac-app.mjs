@@ -28,7 +28,7 @@ export async function packageMacApp({ packageDir, arch, out, signing }) {
   const staging = mkdtempSync(join(tmpdir(), "speakmore-package-"));
   let bundleDir;
   try {
-    stageApp(packageDir, staging, APP_ENTRIES);
+    stageApp(packageDir, staging, APP_ENTRIES, arch);
     [bundleDir] = await packager({
       dir: staging,
       out,

@@ -4,7 +4,7 @@
 #   scripts/checks/check-no-machine-facts.sh
 #
 # 拿去查的字样都是运行时从本机取的，脚本本身不含任何一台机器的情况：
-#   - .machine.env 里填的凭据名、加载器路径、发布桶和官网图片桶的名字、签名证书的名字
+#   - .machine.env 里填的凭据名、加载器路径、发布桶、官网图片桶和模型桶的名字、签名证书的名字
 #   - 家目录的绝对路径
 #   - .machine.env 配了 GIT_EMAIL 时：全局 git 配置里的那个邮箱（它不该出现在这个仓库里）
 # 查的范围：工作区里会进 git 的文件（已跟踪的和还没加进去的）、全部分支的提交信息和作者邮箱、
@@ -27,7 +27,7 @@ needles=()
 # 太短的字样会到处误报，不查
 add() { [ ${#1} -ge 4 ] && needles+=("$1"); return 0; }
 
-for name in SECRETS_LOADER GEMINI_CREDENTIAL OPENAI_CREDENTIAL DEEPSEEK_CREDENTIAL COS_SECRETS_LOADER COS_CREDENTIAL COS_BUCKET SITE_MEDIA_BUCKET; do
+for name in SECRETS_LOADER GEMINI_CREDENTIAL OPENAI_CREDENTIAL DEEPSEEK_CREDENTIAL COS_SECRETS_LOADER COS_CREDENTIAL COS_BUCKET SITE_MEDIA_BUCKET MODELS_BUCKET; do
   value="$(setting "$name")"
   add "$value"
   # 路径有两种写法，都查：写成 ~ 开头的，和展开成家目录的
@@ -56,11 +56,16 @@ if [ -n "$git_email" ]; then
   [ "$global" != "$git_email" ] && add "$global"
 fi
 
+# 字样要单独出现才算：两边不能紧挨着字母、数字、下划线或横线。凭据名常是个普通的词，
+# 恰好是某个依赖包名的前缀时（<名字>-sdk-…）那是包名，不是漏了本机的东西。路径、桶名、邮箱两边本来就是 / " 空格这些
+ere_escape() { printf '%s' "$1" | sed -e 's/[][\\.*^$+?(){}|]/\\&/g'; }
+
 for needle in "${needles[@]}"; do
-  if git grep -nIF --untracked -e "$needle" -- .; then failed=1; fi
-  if git log --all --format='%h %ae %ce%n%B' | grep -nF -e "$needle"; then failed=1; fi
+  pattern="(^|[^A-Za-z0-9_-])$(ere_escape "$needle")([^A-Za-z0-9_-]|\$)"
+  if git grep -nIE --untracked -e "$pattern" -- .; then failed=1; fi
+  if git log --all --format='%h %ae %ce%n%B' | grep -nE -e "$pattern"; then failed=1; fi
   # 现在的文件里没有，不等于历史上没有过：哪个提交加进或删掉过这个字样，都列出来
-  touched="$(git log --all --oneline -S"$needle")"
+  touched="$(git log --all --oneline --pickaxe-regex -S"$pattern")"
   if [ -n "$touched" ]; then
     echo "下面这些提交的文件内容里出现过本机的字样（要改写历史才去得掉）：" >&2
     echo "$touched" >&2

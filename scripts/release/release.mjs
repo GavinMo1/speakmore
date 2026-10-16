@@ -63,16 +63,18 @@ buildHelper(packageDir, { universal: true });
 
 const staging = mkdtempSync(join(tmpdir(), "speakmore-release-"));
 try {
-  const appDir = join(staging, "app");
-  mkdirSync(appDir);
-  stageApp(packageDir, appDir, ["bin", ...APP_ENTRIES, "LICENSE"]);
-  // 锁文件只在上一步装依赖时用得上
-  rmSync(join(appDir, "package-lock.json"));
-
   // 上一次打的不留：里面要是混着别的版本，传上去的就不是这一次的
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(join(outDir, versionDir(version)), { recursive: true });
   for (const arch of archs) {
+    // 每种芯片单独摆一份：本地转写的运行库带着那种芯片的原生库
+    const appDir = join(staging, "app");
+    rmSync(appDir, { recursive: true, force: true });
+    mkdirSync(appDir);
+    stageApp(packageDir, appDir, ["bin", ...APP_ENTRIES, "LICENSE"], arch);
+    // 锁文件只在上一步装依赖时用得上
+    rmSync(join(appDir, "package-lock.json"));
+
     const runtimeDir = join(staging, "runtime");
     rmSync(runtimeDir, { recursive: true, force: true });
     await addRuntime(arch, runtimeDir);

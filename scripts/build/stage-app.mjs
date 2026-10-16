@@ -83,12 +83,16 @@ export function findCopyleft(nodeModulesDir) {
  * @param {string} packageDir 源码仓库
  * @param {string} stagingDir 摆到哪。要是一个空目录
  * @param {string[]} entries 除了 package.json 和锁文件之外，还要从仓库里拷哪些
+ * @param {"arm64" | "x64"} arch 给哪种芯片的 Mac 用
  */
-export function stageApp(packageDir, stagingDir, entries) {
+export function stageApp(packageDir, stagingDir, entries, arch) {
   for (const entry of ["package.json", "package-lock.json", ...entries]) {
     cpSync(join(packageDir, entry), join(stagingDir, entry), { recursive: true });
   }
-  const npm = (args) => execFileSync("npm", [...args, ...NPM_FLAGS], { cwd: stagingDir, stdio: "inherit" });
+  // 本地转写的运行库按系统和芯片各有一个带原生库的包（optionalDependencies），npm 默认只装本机这一种：
+  // 在 Apple 芯片的 Mac 上给 Intel 打包时，要说清装哪种，不然装进去的是 arm64 的、到 Intel 的机器上加载不了
+  const target = ["--os=darwin", `--cpu=${arch}`];
+  const npm = (args) => execFileSync("npm", [...args, ...target, ...NPM_FLAGS], { cwd: stagingDir, stdio: "inherit" });
   // 不直接拿源码仓库让打包工具去剔开发依赖：实测它剔不干净，代码检查工具几十兆的可执行文件会被带进去
   npm(["ci"]);
   // electron 这个依赖是给从源码仓库跑的人找运行环境用的。装好的程序另有运行环境，不用带它和它的下载工具

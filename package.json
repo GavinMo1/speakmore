@@ -34,6 +34,7 @@
     "build:native": "node scripts/build/build-native.mjs",
     "release": "node scripts/release/release.mjs",
     "publish-release": "node scripts/release/publish-release.mjs",
+    "sync-models": "node scripts/release/sync-models.mjs",
     "ship": "sh scripts/release/ship.sh",
     "dist": "node scripts/build/package.mjs",
     "install-app": "sh scripts/build/install-app.sh",
@@ -49,6 +50,8 @@
     "@google/genai": "2.29.0",
     "electron": "44.7.0",
     "opencc-js": "1.4.2",
+    "sherpa-onnx-node": "1.13.8",
+    "transcribe-cpp": "0.4.0",
     "ws": "8.22.0"
   },
   "devDependencies": {
@@ -57,7 +60,6 @@
     "@electron/get": "5.1.0",
     "@electron/packager": "20.3.0",
     "cos-nodejs-sdk-v5": "3.0.0",
-    "sherpa-onnx-node": "1.13.8",
-    "transcribe-cpp": "0.4.0"
+    "tencentcloud-sdk-nodejs-cdn": "4.1.307"
   }
 }
