@@ -17,13 +17,26 @@ import { pipeline } from "node:stream/promises";
 // 模型仓：把清单（catalog.mjs）里的模型下载到本机、校验、列出、删除。模型广场和评测用的都是它。
 // 一个模型一个目录 <仓>/<模型 id>/，文件照清单里的相对路径放。每个文件先写成 .part，sha256 对上了才改回原名；
 // 全部下齐后写一张收据 .complete.json（钉着的那次提交和每个文件的 sha256）。有收据、且和清单对得上，才算装好了。
-// 只用 Node 自带的 fetch 和文件操作，哪个系统都一样。
+// 依次试几个下载地址（SOURCES）。只用 Node 自带的 fetch 和文件操作，哪个系统都一样。
 
 const RECEIPT = ".complete.json";
 
-/** 下载地址：Hugging Face 上钉在某一次提交的那个文件。国内连不上时换镜像，换掉这一个函数 */
+/** 下载地址：Hugging Face 上钉在某一次提交的那个文件 */
 export const huggingFace = (model, file) =>
   `https://huggingface.co/${model.source.repo}/resolve/${model.source.revision}/${file.path}`;
+
+/** 国内常用的 Hugging Face 镜像，路径的排法和 Hugging Face 一样 */
+export const hfMirror = (model, file) =>
+  `https://hf-mirror.com/${model.source.repo}/resolve/${model.source.revision}/${file.path}`;
+
+/**
+ * 依次试的下载地址：Hugging Face 连不上、卡住（国内常见）就换镜像。每个文件都按清单里的 sha256 校验，
+ * 从哪儿下的都一样，所以不用让用户自己挑
+ */
+export const SOURCES = Object.freeze([huggingFace, hfMirror]);
+
+/** 多久收不到一个字节就算卡住了，放弃这个地址换下一个 */
+const STALL_MS = 30_000;
 
 /** 收据的内容：清单里决定"装的是不是这一份"的那几样 */
 const receiptOf = (model) => ({
@@ -36,9 +49,10 @@ const receiptOf = (model) => ({
  * @param {object} options
  * @param {string} options.dir 仓放在哪
  * @param {typeof globalThis.fetch} [options.fetch] 测试时换成假的
- * @param {(model: object, file: object) => string} [options.urlOf] 文件从哪下
+ * @param {((model: object, file: object) => string)[]} [options.sources] 文件依次从哪下
+ * @param {number} [options.stallMs] 多久收不到数据算卡住，测试时换成短的
  */
-export function createModelStore({ dir, fetch = globalThis.fetch, urlOf = huggingFace }) {
+export function createModelStore({ dir, fetch = globalThis.fetch, sources = SOURCES, stallMs = STALL_MS }) {
   const dirOf = (model) => join(dir, model.id);
 
   function isInstalled(model) {
@@ -60,22 +74,47 @@ export function createModelStore({ dir, fetch = globalThis.fetch, urlOf = huggin
       return;
     }
     mkdirSync(dirname(target), { recursive: true });
-    const url = urlOf(model, file);
-    const response = await fetch(url, { signal, redirect: "follow" });
-    if (!response.ok || !response.body) throw new Error(`下载 ${url} 失败：HTTP ${response.status}`);
+    const failures = [];
+    for (const urlOf of sources) {
+      const url = urlOf(model, file);
+      try {
+        await fetchTo(url, target, file, { signal, onProgress });
+        return;
+      } catch (error) {
+        // 用户自己取消的不换地址
+        if (signal?.aborted) throw error;
+        failures.push(`${url}：${error.message}`);
+      }
+    }
+    throw new Error(`${file.path} 哪个地址都没下下来：\n${failures.join("\n")}`);
+  }
+
+  /** 从一个地址下一个文件：先写成 .part，大小和 sha256 都对上才改回原名。卡住超过 stallMs 就放弃 */
+  async function fetchTo(url, target, file, { signal, onProgress }) {
+    const stall = new AbortController();
+    let timer;
+    const kick = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => stall.abort(new Error(`${stallMs / 1000} 秒没收到数据`)), stallMs);
+    };
+    const aborted = signal ? AbortSignal.any([signal, stall.signal]) : stall.signal;
     const partial = `${target}.part`;
     const hash = createHash("sha256");
     let received = 0;
     const meter = new Transform({
       transform(chunk, _encoding, done) {
+        kick();
         hash.update(chunk);
         received += chunk.length;
         onProgress?.({ file: file.path, received, total: file.size });
         done(null, chunk);
       },
     });
+    kick();
     try {
-      await pipeline(Readable.fromWeb(response.body), meter, createWriteStream(partial), { signal });
+      const response = await fetch(url, { signal: aborted, redirect: "follow" });
+      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+      await pipeline(Readable.fromWeb(response.body), meter, createWriteStream(partial), { signal: aborted });
       if (received !== file.size) throw new Error(`${file.path} 下载到 ${received} 字节，清单里是 ${file.size} 字节`);
       const digest = hash.digest("hex");
       if (digest !== file.sha256)
@@ -83,7 +122,10 @@ export function createModelStore({ dir, fetch = globalThis.fetch, urlOf = huggin
       renameSync(partial, target);
     } catch (error) {
       rmSync(partial, { force: true });
-      throw error;
+      // 卡住时 fetch 报的是"被取消了"，换成卡住的原因
+      throw stall.signal.aborted && !signal?.aborted ? stall.signal.reason : error;
+    } finally {
+      clearTimeout(timer);
     }
   }
 

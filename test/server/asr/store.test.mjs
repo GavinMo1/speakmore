@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, test } from "node:test";
-import { createModelStore, huggingFace } from "../../../src/server/asr/store.mjs";
+import { createModelStore, hfMirror, huggingFace } from "../../../src/server/asr/store.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const BYTES = { "a.onnx": Buffer.from("weights ".repeat(1000)), "tokenizer/vocab.json": Buffer.from('{"a":1}') };
@@ -38,6 +38,56 @@ test("下载地址是 Hugging Face 上钉在那次提交的文件", () => {
     huggingFace(MODEL, MODEL.files.vocab),
     `https://huggingface.co/someone/fake-asr/resolve/${"a".repeat(40)}/tokenizer/vocab.json`,
   );
+});
+
+test("镜像的地址和 Hugging Face 的一样排，只换主机", () => {
+  assert.equal(
+    hfMirror(MODEL, MODEL.files.vocab),
+    `https://hf-mirror.com/someone/fake-asr/resolve/${"a".repeat(40)}/tokenizer/vocab.json`,
+  );
+});
+
+test("第一个地址连不上、回错误码：换下一个接着下，都不行才报错，报错里列出每个地址的原因", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "speakmore-models-"));
+  dirs.push(dir);
+  const hosts = [];
+  const fetch = async (url) => {
+    const { host, pathname } = new URL(url);
+    hosts.push(host);
+    if (host === "huggingface.co") throw new TypeError("fetch failed");
+    return new Response(BYTES[pathname.split(`/resolve/${MODEL.source.revision}/`)[1]]);
+  };
+  const store = createModelStore({ dir, fetch });
+  await store.install(MODEL);
+  assert.equal(store.isInstalled(MODEL), true);
+  assert.deepEqual(hosts, ["huggingface.co", "hf-mirror.com", "huggingface.co", "hf-mirror.com"]);
+
+  const failing = createModelStore({
+    dir: mkdtempSync(join(tmpdir(), "speakmore-models-")),
+    fetch: async (url) =>
+      new URL(url).host === "huggingface.co"
+        ? Promise.reject(new TypeError("fetch failed"))
+        : new Response("", { status: 503 }),
+  });
+  await assert.rejects(
+    failing.install(MODEL),
+    (error) => /huggingface\.co.*fetch failed/s.test(error.message) && /hf-mirror\.com.*HTTP 503/s.test(error.message),
+  );
+});
+
+test("连上了但迟迟不给数据：到时候放弃这个地址，换下一个", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "speakmore-models-"));
+  dirs.push(dir);
+  const fetch = async (url, { signal }) => {
+    const { host, pathname } = new URL(url);
+    if (host === "huggingface.co") {
+      return new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
+    }
+    return new Response(BYTES[pathname.split(`/resolve/${MODEL.source.revision}/`)[1]]);
+  };
+  const store = createModelStore({ dir, fetch, stallMs: 50 });
+  await store.install(MODEL);
+  assert.equal(store.isInstalled(MODEL), true);
 });
 
 test("装一个模型：文件照清单的路径放好，校验过，写上收据；再装一次不重新下载", async () => {

@@ -34,6 +34,8 @@ test("程序、你的东西、运行时产生的，各在各的位置", () => {
     settingsFile: "settings.json",
     historyDb: "data/history.db",
     recordingsDir: "data/Recordings",
+    // 用到时自动下载的本地模型
+    modelsDir: "models",
     // 运行时产生的，删了会自己再建
     logFile: "logs/main.log",
     controlSocket: "run/control.sock",
@@ -48,6 +50,9 @@ test("每家模型一把 key，命令启动的和打成应用的各存各的；G
   assert.equal(keyFile(paths, "gemini"), "/Users/someone/.speakmore/gemini-key.bin");
   assert.equal(keyFile(paths, "gemini", { packaged: true }), "/Users/someone/.speakmore/gemini-key.app.bin");
   assert.equal(keyFile(paths, "openai"), "/Users/someone/.speakmore/openai-key.bin");
+  // 润色那一跳的厂商也一样，自定义服务一把
+  assert.equal(keyFile(paths, "deepseek"), "/Users/someone/.speakmore/deepseek-key.bin");
+  assert.equal(keyFile(paths, "custom"), "/Users/someone/.speakmore/custom-key.bin");
   assert.throws(() => keyFile(paths, "../x"), /id/);
 });
 

@@ -9,6 +9,7 @@ import { LocalizedError, msg } from "../i18n/index.mjs";
 //   ~/.speakmore/
 //     bin/ app/ runtime/           程序本身：安装时放进去，升级时整个换掉
 //     settings.json <厂商>-key.bin data/    你的东西（每家模型一把 key：gemini-key.bin、openai-key.bin）
+//     models/                      本地转写用的模型：用到时自动下载，删了下次用时再下
 //     logs/ run/ cache/            运行时产生的，删了会自己再建
 
 /** macOS 上 Unix 套接字的路径最长 103 个字节（sockaddr_un.sun_path 是 104，含结尾的 0） */
@@ -44,6 +45,8 @@ export function resolvePaths(env = process.env, userHome = homedir()) {
     settingsFile: join(home, "settings.json"),
     historyDb: join(home, "data", "history.db"),
     recordingsDir: join(home, "data", "Recordings"),
+    /** 本地转写的模型，一个模型一个目录（server/asr/store.mjs） */
+    modelsDir: join(home, "models"),
 
     logFile: join(home, "logs", "main.log"),
     controlSocket,
