@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createTranslator } from "../../../src/i18n/index.mjs";
-import { toWav } from "../../../src/server/audio/transcode.mjs";
+import { DECODERS, toSpeech, toWav } from "../../../src/server/audio/transcode.mjs";
 
 const zh = createTranslator("zh-CN");
 /** 报错里给人看的那句，按中文翻出来对得上 */
@@ -41,4 +41,14 @@ test("内容坏了解不出声音时报错，不交出一段空的 WAV", async (
     toWav(Buffer.from("\x1aE\xdf\xa3 but not really audio", "latin1"), "audio/webm"),
     said(/解不出/),
   );
+});
+
+test("解码器可以换：传进来的认得 Ogg 就解 Ogg，多声道、48 kHz 照样合成 16 kHz 单声道", async () => {
+  const fake = async () => ({
+    default: async () => ({ sampleRate: 48_000, channelData: [new Float32Array(48_000), new Float32Array(48_000)] }),
+  });
+  const samples = await toSpeech(Buffer.from("OggS"), "audio/ogg", new Map([["audio/ogg", fake]]));
+  assert.equal(samples.length, 16_000);
+  // 程序自己用的那份只认 WebM：拆 Ogg 的库是 LGPL，不随程序分发
+  assert.deepEqual([...DECODERS.keys()], ["audio/webm"]);
 });

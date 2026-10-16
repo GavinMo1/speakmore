@@ -1,6 +1,12 @@
 // 解码之后的那几步：合成单声道、降采样、封成 WAV。都是几行能写清的小事，所以不另装库：
 // 看过的降采样库里，周下载只有几百的不放心用，封 WAV 只是写一个 44 字节的头。
 
+/**
+ * 识别用的统一格式：16 kHz、单声道。云端模型和本地转写都收它，说话用 16 kHz 足够；
+ * 进来的录音不管什么格式，先换成这个再往下交（transcode.mjs 的 toSpeech）。
+ */
+export const SPEECH_SAMPLE_RATE = 16_000;
+
 /** 低通滤波器的长度。越长越陡，也越慢：97 个系数时一分钟的录音约 60 毫秒（实测） */
 const TAPS = 97;
 /** 截止频率占目标采样率的比例：降到 16 kHz 时在 7.2 kHz，留一点余量给过渡带，说话的声音基本在 4 kHz 以下 */
@@ -77,4 +83,28 @@ export function encodeWav(samples, sampleRate) {
     wav.writeInt16LE(Math.round(value < 0 ? value * 0x8000 : value * 0x7fff), 44 + i * 2);
   }
   return wav;
+}
+
+/**
+ * encodeWav 写出的那种 WAV（单声道、16 位 PCM、44 字节的头）→ 样本。评测把录音洗成这一种存盘，再读回来交给各个模型；
+ * 别的写法（立体声、浮点、多出几个块）不去猜，直接报错，免得不同来源的录音悄悄走了不同的路。
+ * @param {Buffer} wav
+ * @returns {{ samples: Float32Array, sampleRate: number }}
+ */
+export function decodeWav(wav) {
+  if (wav.length < 44 || wav.toString("ascii", 0, 4) !== "RIFF" || wav.toString("ascii", 8, 16) !== "WAVEfmt ") {
+    throw new Error("不是 WAV 文件");
+  }
+  if (wav.readUInt16LE(20) !== 1 || wav.readUInt16LE(34) !== 16) throw new Error("只认 16 位 PCM 的 WAV");
+  if (wav.readUInt16LE(22) !== 1) throw new Error(`只认单声道的 WAV，这个有 ${wav.readUInt16LE(22)} 个声道`);
+  const dataBytes = wav.readUInt32LE(40);
+  if (wav.toString("ascii", 36, 40) !== "data" || wav.length !== 44 + dataBytes) {
+    throw new Error(`WAV 的长度对不上：头里写着 ${dataBytes} 字节的声音，文件有 ${wav.length - 44} 字节`);
+  }
+  const samples = new Float32Array(dataBytes / 2);
+  for (let i = 0; i < samples.length; i++) {
+    const value = wav.readInt16LE(44 + i * 2);
+    samples[i] = value < 0 ? value / 0x8000 : value / 0x7fff;
+  }
+  return { samples, sampleRate: wav.readUInt32LE(24) };
 }

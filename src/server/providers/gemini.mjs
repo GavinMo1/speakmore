@@ -7,8 +7,11 @@ import { costOf } from "./prices/gemini.mjs";
 // Gemini 的适配器：一次请求同时完成识别和整理，录音原样交过去。
 // 原版服务端内部怎么做的看不到；选一步到位，是因为只需要一家服务、一次请求。
 
-/** 悬浮条录的 WebM、原版的 Ogg 都直接收。实测 7 块首尾相接的链式 Ogg 也能从头识别到尾 */
-export const AUDIO_TYPES = ["audio/ogg", "audio/webm"];
+/**
+ * 悬浮条录的 WebM、原版的 Ogg 都直接收。实测 7 块首尾相接的链式 Ogg 也能从头识别到尾。
+ * WAV 也收：评测把各种来源的录音统一洗成 16 kHz 的 WAV（bench/），云端和本地模型吃的是同一份
+ */
+export const AUDIO_TYPES = ["audio/ogg", "audio/webm", "audio/wav"];
 
 const QUIET = { info() {}, warn() {}, error() {} };
 

@@ -18,8 +18,8 @@ const classify = (error) => {
   return classified && { ...classified, problem: zh.text(classified.problem) };
 };
 
-test("Gemini 直接收悬浮条录的 WebM 和原版的 Ogg，不用转格式", () => {
-  assert.deepEqual(AUDIO_TYPES, ["audio/ogg", "audio/webm"]);
+test("Gemini 直接收悬浮条录的 WebM、原版的 Ogg 和评测用的统一格式 WAV，不用转格式", () => {
+  assert.deepEqual(AUDIO_TYPES, ["audio/ogg", "audio/webm", "audio/wav"]);
 });
 
 test("key 不对：说这把 key 无效", () => {
