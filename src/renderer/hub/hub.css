@@ -459,6 +459,7 @@
   padding: 0.4rem 0 0.4rem 1.25rem;
   text-align: right;
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .spend-table :is(th, td):first-child {
@@ -487,7 +488,7 @@
 }
 
 .spend-model {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.45rem;
 }
@@ -883,16 +884,19 @@ code.setting-value {
   font-variant-numeric: tabular-nums;
 }
 
+/* 每行的按钮有一个、两个的：按钮那一列各行共用一个宽度（subgrid），右边的状态才对得齐 */
 .transcribers {
   display: grid;
-  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem 0.75rem;
 }
 
 .transcriber {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0 0.75rem;
   padding-right: 0.9rem;
   background: var(--bg);
   border-radius: 0.75rem;
@@ -933,13 +937,14 @@ code.setting-value {
 
 .transcriber-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 0.4rem;
 }
 
 /* 检查的结果：整行宽，在名字、按钮下面 */
 .transcriber-check {
   grid-column: 1 / -1;
-  margin: -0.35rem 0 0.7rem 0.9rem;
+  margin: -0.2rem 0 0.7rem 0.9rem;
   font-size: 0.8125rem;
   color: var(--ink-2);
 }
@@ -1046,7 +1051,7 @@ code.setting-value {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 0.75rem;
-  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
 .custom-fields .field {

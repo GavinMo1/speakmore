@@ -2288,6 +2288,7 @@ test("transcriber download：用户自己点的，不再问；后台没在运行
 });
 
 test("transcriber check：交给后台念一句、转一次，说念的、转出来的和用了多久；不写就查现在选的", async () => {
+  haveModel();
   const daemon = modelDaemon();
   const request = daemon.request;
   daemon.request = async (cmd, params, options) => {
@@ -2310,8 +2311,11 @@ test("transcriber check：交给后台念一句、转一次，说念的、转出
   );
   assert.match(output.out, /临时装上用了 1\.8 秒/);
 
+  // 没下载的不去问后台，直接说怎么下
+  const asked = daemon.calls.filter((cmd) => cmd === "check-transcriber").length;
   assert.equal(await speakmore("transcriber", "check", "sensevoice-small-q8"), 1);
-  assert.match(output.err, /还没下载（253 MB）/);
+  assert.match(output.err, /还没下载：先运行 speakmore transcriber download sensevoice-small-q8/);
+  assert.equal(daemon.calls.filter((cmd) => cmd === "check-transcriber").length, asked);
   assert.equal(await speakmore("transcriber", "check", "gemini"), 2);
   assert.equal(await speakmore("transcriber", "check", "qwen3-asr-0.6b-q8", "extra"), 2);
 });

@@ -382,7 +382,7 @@ export default {
       confirmDelete: "确认删除",
       check: "检查",
       checking: "检查中：念一句话交给它转…",
-      checkOk: "能用 · 转出「{text}」· 用了 {seconds}",
+      checkOk: "能用",
       downloadFirst: "先下载才能选",
       summary: "本机已下载 {count} / {all} 个，共 {size}",
       freeSpace: "磁盘剩余 {size}",
@@ -424,7 +424,7 @@ export default {
     check: {
       button: "检查",
       running: "检查中…",
-      ok: "能用 · 回话用了 {seconds}",
+      ok: "能用",
       failed: "不能用：{problem}",
     },
     state: {

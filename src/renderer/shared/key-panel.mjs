@@ -1,4 +1,3 @@
-import { formatSeconds } from "../../usage/format.mjs";
 import { localize, t } from "./i18n.mjs";
 import { providerIcon } from "./provider-icons.mjs";
 import { describeError } from "./setup-text.mjs";
@@ -97,13 +96,13 @@ function keyText(key, provider) {
 
 const MARKUP = `
   <div class="providers" role="radiogroup" data-i18n-aria-label="keyPanel.models"></div>
+  <div class="vendor-extra"></div>
   <div class="key-state-row">
     <p class="state"></p>
     <button type="button" class="button check-key" data-i18n="keyPanel.check.button" hidden></button>
     <button type="button" class="button primary use-provider" hidden></button>
   </div>
   <p class="check-result" role="status" hidden></p>
-  <div class="vendor-extra"></div>
   <form class="key-form">
     <input type="password" class="input key-input" autocomplete="off" spellcheck="false"
       data-i18n-placeholder="keyPanel.placeholder" aria-label="API key" />
@@ -125,7 +124,8 @@ const MARKUP = `
  *   refresh：存完、换完以后让整个窗口重新问一遍状态；layer：管哪一层的厂商（KEY_LAYERS）；
  *   onSelect：每次画完说一声现在看着的是哪家（设置页按它画那一家的模型、地址）
  * @returns {{ render: (setup: object) => void, check: () => void, slot: HTMLElement }}
- *   check：查一次现在看着的那家（换了模型时用）；slot：选哪家和填 key 之间的一格，用的人往里放那一家要另填的（模型、地址）
+ *   check：查一次现在看着的那家（换了模型时用）；slot：选哪家下面的一格，用的人往里放那一家要另填的（模型、地址），
+ *   放在 key 和检查的上面：检查查的就是这里选的模型
  */
 export function createKeyPanel(container, { refresh, layer, onSelect }) {
   container.innerHTML = MARKUP;
@@ -215,7 +215,7 @@ export function createKeyPanel(container, { refresh, layer, onSelect }) {
     checks.set(
       id,
       result.ok
-        ? { tone: "ok", text: t("keyPanel.check.ok", { seconds: formatSeconds(result.ms, t) }), ticket }
+        ? { tone: "ok", text: t("keyPanel.check.ok"), ticket }
         : { tone: "problem", text: t("keyPanel.check.failed", { problem: t.text(result.problem) }), ticket },
     );
     render(latest);

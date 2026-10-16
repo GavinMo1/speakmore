@@ -90,6 +90,11 @@ function listTranscribers(io, status) {
 async function checkTranscriber(io, id) {
   const model = findModel(id);
   await ensureRunning(io);
+  // 没下载的不用去问后台：直接说怎么下
+  if (!modelStatus(io, await io.daemon.status(), id).installed) {
+    io.err(io.t("cli.local.notDownloadedHint", { model: model.name, id }));
+    return 1;
+  }
   io.out(io.t("cli.local.checking", { model: model.name }));
   let result;
   try {

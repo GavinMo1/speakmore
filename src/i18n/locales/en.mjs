@@ -391,7 +391,7 @@ export default {
       confirmDelete: "Confirm delete",
       check: "Check",
       checking: "Checking: reading it a sentence…",
-      checkOk: "Works · got “{text}” · took {seconds}",
+      checkOk: "Works",
       downloadFirst: "Download it first to choose it",
       summary: "{count} of {all} downloaded on this Mac, {size} in total",
       freeSpace: "{size} free on disk",
@@ -433,7 +433,7 @@ export default {
     check: {
       button: "Check",
       running: "Checking…",
-      ok: "Works · replied in {seconds}",
+      ok: "Works",
       failed: "Doesn't work: {problem}",
     },
     state: {

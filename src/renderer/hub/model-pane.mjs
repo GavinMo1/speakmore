@@ -1,5 +1,4 @@
 import { backendText, measuredText, sizeText, tagTexts } from "../../models/describe.mjs";
-import { formatSeconds } from "../../usage/format.mjs";
 import { t } from "../shared/i18n.mjs";
 import { createKeyPanel, KEY_LAYERS } from "../shared/key-panel.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
@@ -207,7 +206,7 @@ export function createModelPane({ refresh }) {
     await refresh();
   }
 
-  /** 检查一个下载好的模型：主进程念一句交给它转（没在用的临时装上），说转出了什么、用了多久 */
+  /** 检查一个下载好的模型：主进程念一句交给它转（没在用的临时装上）。能用就只说能用，不能用说原因 */
   async function checkTranscriber(id) {
     const ticket = {};
     transcriberChecks.set(id, { tone: "pending", text: t("preferences.local.checking"), ticket });
@@ -222,14 +221,7 @@ export function createModelPane({ refresh }) {
     transcriberChecks.set(
       id,
       result.ok
-        ? {
-            tone: "ok",
-            text: t("preferences.local.checkOk", {
-              text: result.text,
-              seconds: formatSeconds(result.transcribeMs, t),
-            }),
-            ticket,
-          }
+        ? { tone: "ok", text: t("preferences.local.checkOk"), ticket }
         : { tone: "problem", text: t.text(result.problem), ticket },
     );
     render(latest);
