@@ -30,5 +30,8 @@ metadata:
 - 0.7.1（2026-10-16 已发）：本机模型由用户点了才下；每个模型（原生、润色、本机）都能"检查"，本机的是用系统朗读念一句交给它转；用量按模型分开，本机转写那一跳也记一笔（provider 是 local，不花钱）。
 - 不替用户选模型，做成模型广场、按实测打标签，见 [[speakmore-model-plaza]]。
 - 本地模型的调研（2026-10-16）：首选 Qwen3-ASR-0.6B（Apache-2.0，Q8 约 0.8 GB，FLEURS 普通话 CER 7.57%）；轻量备选 SenseVoice-Small（约 0.24 GB，CER 10.12%，许可证是 FunASR 自定义的）。运行库可选 sherpa-onnx-node（Apache-2.0）或 transcribe-cpp（MIT），两者在 npm 上都有 Mac 两种芯片和 Windows 的预编译包。榜单是朗读语音，中英夹杂的口述没有公开数字，要用真录音实测。
+- 长录音对比（2026-10-16，用户点名要测）：三条 Typeless 长录音（113、170、172 秒）加一条 SpeakMore 自己的（136 秒）。local 5 次全都完整；原生在那条 136 秒的上截断 2/11（算上 10-15 用户自己碰到的那次），回的是 STOP、只出 11 个 token，停在开头第一个 1.4 秒的停顿处。代码信任 STOP，所以没拦下来。社区也有"STOP 不代表完整"的报告。成品质量我交叉比了三家（没有标准答案）：Typeless 最好（会分点、会精简）；local 中文准、口头禅清得比原生干净，但中英夹杂的英文词容易听错（pipeline→platform、Agent as a Judge→AI judge）；原生英文词准，但会有中文同音错字（V4.1→V2.1、口子→扣子）。花费 local 约是原生的 1/18；两分多钟的长录音两边耗时差不多（5–6 秒），local 的速度优势只在短句上明显。用 ffmpeg 把 Typeless 的 Ogg 换封装成 WebM 后，解码会变得很慢（172 秒要 12 秒）；App 自己录的 136 秒只要 0.27 秒。这只影响测试，不是产品的问题。
+- 润色提示词 2026-10-16 调过（记录在 docs/implementation-notes.md）：精简成几条原则反而更差，例子不是束缚；只合了"分点写重、加一个步骤例子"那版。用户的决定：**润色不开思考**（原话"一定不打开思考，一定不做，速度优先"）；和 Typeless 的差距是模型和价钱的差距，接受（"用这么点钱……能达到这样已经很满意了"），不再往下调。
+- 待办，用户说先不做：截断检查。原生是 Gemini 返回 STOP 却只出了半句；润色那一跳 DeepSeek 也出过一次。local 可以用"成品比原文短太多"来判断，原生用"字数和有声时长对不上"来判断，查出来就重发一次。
 
 相关：[[speakmore-model-providers]]、[[typeless-clone-open-source-panel]]、[[typeless-clone-scope-dictation]]。

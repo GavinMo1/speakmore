@@ -34,3 +34,4 @@
 - [统一输入输出、策略模式](architecture-unified-io-strategy.md) — 插件化、可热插拔；录音先统一成 16 kHz 单声道，转写统一成 transcribe → { text }；不打补丁，从分层上根治
 - [本地模型的配置表和国内源](speakmore-model-mirror.md) — 全局只有 src/models/catalog.mjs 一份；国内源是隔离桶加 models.speakmore 子域名，传完必须预热；证书 2027-01-14 到期要续
 - [云上改动交给用户跑](cloud-changes-user-runs.md) — 证书、CDN、解析、发版公证由用户跑：写成自己挂后台的脚本或一行命令，放在回复最后
+- [长任务挂后台](long-runs-in-background.md) — 评测、批量调模型等几分钟的活用后台跑，不占着对话，用户要边等边讨论
