@@ -84,7 +84,7 @@ if (stages.includes("transcribe")) {
   }
 }
 
-const { cells } = collect({ clips, candidates, results, engineVersions });
+const { cells } = collect({ clips, candidates, results, engineVersions, datasetDir });
 const { groups } = pendingJudgements(
   cells.filter((cell) => cell.transcript && cell.reference?.text),
   results,

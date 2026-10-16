@@ -14,6 +14,7 @@ test("清单：id 不重复，只用小写字母、数字、点和横线（它�
 test("清单：每个文件是仓库里的相对路径，带大小和 sha256；下载地址钉在某一次提交上", () => {
   for (const model of MODELS) {
     assert.match(model.source.revision, /^[0-9a-f]{40}$/, model.id);
+    if ("maxSeconds" in model) assert.ok(model.maxSeconds > 0, `${model.id} 的 maxSeconds`);
     for (const file of Object.values(model.files)) {
       assert.match(file.path, /^[\w.-]+(\/[\w.-]+)*$/, `${model.id} ${file.path}`);
       assert.ok(!file.path.split("/").includes(".."), `${model.id} ${file.path}`);

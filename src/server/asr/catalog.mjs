@@ -4,6 +4,7 @@
 // 这里只记从哪下载、校验值和说明，模型文件本身不进仓库：用到时下载到用户的机器上（store.mjs）。
 // 下载地址钉在 Hugging Face 的某一次提交上，内容不会再变；每个文件下载完都按 sha256 校验。
 // files 按用途起名（encoder、tokens…），运行库的适配器按这些名字把文件填进它的配置（engines/*.mjs 的 FAMILIES）。
+// maxSeconds 是一次最多吃多少秒的音频，有上限的才写：更长的录音由 segment.mjs 切开逐段转写。
 //
 // 加一个模型 = 在这里加一项。它用的运行库要在 engines/index.mjs 登记过，family 要是那个运行库认得的。
 
@@ -39,6 +40,9 @@ export const MODELS = Object.freeze(
       name: "Qwen3-ASR 0.6B (int8)",
       engine: "sherpa-onnx",
       family: "qwen3-asr",
+      // 这份 ONNX 导出时把解码器的 KV 缓存定死成 512 个位置（提示词 + 音频 + 输出的字都算在内），音频一秒约折 13 个。
+      // 实测（bench/）：38 秒以上的录音只吐出 "language" 或空的，33–35 秒的悄悄丢掉后一半。按 20 秒一段切开留足余量
+      maxSeconds: 20,
       license: "Apache-2.0",
       source: {
         repo: "csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",

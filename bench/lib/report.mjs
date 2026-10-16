@@ -36,13 +36,13 @@ const table = (head, rows) =>
  * 每个候选在每条样本上的那一格：转写、参照、判分、字面相似度、耗时、实时倍数。
  * @param {Record<string, string>} engineVersions 运行库 id → 版本（算转写的指纹要用）
  */
-export function collect({ clips, candidates, results, engineVersions }) {
+export function collect({ clips, candidates, results, engineVersions, datasetDir }) {
   const references = new Map(clips.map((clip) => [clip.id, results.get("reference", referenceKey(clip))]));
   const cells = candidates.flatMap((candidate) =>
     clips.map((clip) => {
       const transcript = results.get(
         "transcribe",
-        transcribeKey(clip, candidate, engineVersions[candidate.model.engine]),
+        transcribeKey(clip, candidate, engineVersions[candidate.model.engine], datasetDir),
       );
       const reference = references.get(clip.id);
       const judged =
@@ -91,8 +91,8 @@ function summarize(cells) {
   };
 }
 
-export function buildReport({ clips, candidates, results, engineVersions, dataset }) {
-  const { references, cells } = collect({ clips, candidates, results, engineVersions });
+export function buildReport({ clips, candidates, results, engineVersions, dataset, datasetDir }) {
+  const { references, cells } = collect({ clips, candidates, results, engineVersions, datasetDir });
   const refRows = [...references.values()].filter(Boolean);
   const emptyRefs = refRows.filter((ref) => ref.text === "").length;
   const minutes = clips.reduce((sum, clip) => sum + clip.durationSec, 0) / 60;

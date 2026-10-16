@@ -1,13 +1,16 @@
 import { join } from "node:path";
+import { SPEECH_SAMPLE_RATE } from "../../audio/pcm.mjs";
+import { joinTexts, splitPoints } from "../segment.mjs";
 
 // 本地转写的运行库清单。每个运行库一个适配器（同目录下的 sherpa-onnx.mjs、transcribe-cpp.mjs），
 // 把"一个下载好的模型目录"变成同一个接口，上面的人只认这个接口，换模型、换运行库都不用改：
 //
 //   const transcriber = await loadTranscriber({ model, dir, options });  // dir：模型下载到的目录
-//   const { text } = await transcriber.transcribe(samples);   // samples：16 kHz 单声道的 Float32Array
+//   const { text } = await transcriber.transcribe(samples);   // samples：16 kHz 单声道的 Float32Array，多长都行
 //   transcriber.backend                                       // 实际跑在哪：cpu、metal…
 //   transcriber.dispose();
 //
+// 模型一次吃不下的长录音（清单里写了 maxSeconds）在这一层切开逐段转写，适配器只管一段。
 // text 是识别出的原文：去掉运行库自带的标记、首尾空白，别的不动（不转简体、不改标点），那是后面润色的事。
 // 适配器还导出 FAMILIES（认得哪几族模型、文件怎么填进配置）和 version()（运行库的版本，评测记进指纹）。
 // 运行库的包在 load() 里才加载：只用云端模型的人不必为它付启动开销。
@@ -41,5 +44,17 @@ export async function loadTranscriber({ model, dir, options = {} }) {
     if (!entry) throw new Error(`模型 ${model.id} 的清单里没有 ${role} 这个文件`);
     return join(dir, entry.path);
   };
-  return adapter.load({ model, file, options });
+  const transcriber = await adapter.load({ model, file, options });
+  if (!model.maxSeconds) return transcriber;
+  // 一次吃不下的长录音切开逐段转写，再接起来：上面的人照样只管交一整段录音
+  return {
+    ...transcriber,
+    async transcribe(samples) {
+      const parts = [];
+      for (const [start, end] of splitPoints(samples, SPEECH_SAMPLE_RATE, model.maxSeconds)) {
+        parts.push((await transcriber.transcribe(samples.subarray(start, end))).text);
+      }
+      return { text: joinTexts(parts) };
+    },
+  };
 }
