@@ -11,7 +11,7 @@ git clone https://github.com/zephyr4123/speakmore.git
 cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
-npm run check                 # 代码检查 + 全部测试（638 条，不联网、不开窗口）
+npm run check                 # 代码检查 + 全部测试（不联网、不开窗口）
 npm run release               # 打发布包：dist/release/ 下两种芯片各一个压缩包和一个安装包（dmg），外加 install.sh，摆成下载地址上的样子
 ```
 
@@ -24,12 +24,18 @@ npm run release               # 打发布包：dist/release/ 下两种芯片各�
 ```bash
 scripts/dev/with-key.sh gemini node scripts/dev/e2e.mjs 一段录音.wav   # 端到端：真的 Electron、录音编码、模型；麦克风和贴字是假的
 SPEAKMORE_MODEL=openai scripts/dev/with-key.sh openai node scripts/dev/e2e.mjs 一段录音.wav   # 同上，换成 OpenAI
+SPEAKMORE_MODE=local scripts/dev/with-key.sh deepseek node scripts/dev/e2e.mjs 一段录音.wav   # 本地转写加 DeepSeek 润色：新的数据目录，模型真从下载源下
 scripts/dev/with-key.sh gemini node scripts/dev/eval-prompt.mjs --label v1   # 拿自己 Typeless 的历史录音评估提示词
 scripts/dev/with-key.sh gemini node src/server/main.mjs           # 单独启动听写服务，配合 SPEAKMORE_SERVER_URL 调试
 node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现成的录音发给单独启动的服务
 ```
 
 加一家模型：在 `src/server/providers/` 下写一个适配器（请求怎么拼、收哪些录音格式、报错怎么认），在同目录的 `index.mjs` 里登记一行。整理流程（提示词、收尾、重试、转格式）各家共用，在 `src/server/refine/`。
+
+加一个本地转写模型：
+1. 在 `src/models/catalog.mjs` 加一项：原始地址钉在某一次提交上，每个文件写上大小和 sha256，注明许可（原文地址）和原作者的仓库。它用的运行库要在 `src/server/asr/engines/` 登记过。
+2. 在 `bench/lib/candidates.mjs` 加一个候选，跑一轮评测（[说明](../bench/README.md)），把实测数字和标签填回配置表的 `measured`、`tags`。标签按实测打，`test/models/` 会查"标了适合哪类芯片，就要有在那类芯片上的实测"。
+3. 传到国内源：`scripts/release/with-cos-key.sh npm run sync-models -- --from <本机模型仓> --download`。它逐个核对 sha256、带上 LICENSE 和 NOTICE 传进模型桶（`.machine.env` 的 `MODELS_BUCKET`），从 CDN `models.speakmore.zephyrxiang.com` 逐个查一遍，再让 CDN 预热这次新传的文件。不预热的话第一个下载的人要等回源，实测慢 3 倍左右。
 
 加一种界面语言：照着 `src/i18n/locales/en.mjs` 写一个文件，在 `src/i18n/index.mjs` 的 `LOCALES` 里登记一行（并列几样时不想用 `Intl` 的写法，比如中文全用顿号，登记时给 `separator`）。缺了哪句、参数对不上、单复数写法这种语言没有，`test/i18n/` 会指出来；设置、菜单栏、窗口、命令行都从这份清单里取，不用再改别处。只管界面：提示词和整理出来的文字不跟着变。
 
@@ -43,14 +49,15 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `src/renderer/`、`src/preload/` | 各个窗口的页面，一个窗口一个目录：`bar/`（悬浮条：状态机、录音、听写协议的客户端、画面）、`hub/`（主窗口：首页、历史记录、设置对话框）、`onboarding/`（首次引导），共用的样式和填 key 那一块在 `shared/` |
 | `src/themes/` | 主题：界面要哪些颜色（一组 token）、每套主题给的值、合不合格怎么查。加一套主题是加一个文件、登记一行（名字和介绍写进各语言的文案） |
 | `src/i18n/` | 界面语言：每种语言一个文案文件（`locales/`），跟随系统时怎么挑、翻译函数。内核和主进程不写死哪种语言的话，交出一句"还没定语言的话"（名字加参数），由显示它的那一端（窗口、命令行）按自己的语言翻。回给命令行的，后台按命令行带来的语言翻成字：旧版本的命令行和 `status --json` 的读者只认字 |
-| `src/server/` | 听写服务：`protocol/` 收分块音频，`refine/` 交给模型整理（各家共用的流程，每次调用记一笔账），`providers/` 每家模型一个适配器（`prices/` 是各家的价目表），`audio/` 把录音解成识别用的统一格式（16 kHz 单声道）、转成别家收的格式，`asr/` 是本地转写（模型清单、每个运行库一个适配器、下载校验模型的仓）。平时跑在后台应用的进程里 |
+| `src/server/` | 听写服务：`protocol/` 收分块音频，`refine/` 交给模型整理（各家共用的流程，每次调用记一笔账），`providers/` 每家模型一个适配器（`prices/` 是各家的价目表），`audio/` 把录音解成识别用的统一格式（16 kHz 单声道）、转成别家收的格式，`asr/` 是本地转写（每个运行库一个适配器、长录音分段、装着模型的转写进程），`modes.mjs` 是两种识别模式。平时跑在后台应用的进程里 |
+| `src/models/` | 本地模型的配置表 `catalog.mjs`：全局只有这一份，下载源（国内源、原始地址）、每个模型的文件和校验值、许可、标签和实测数字都在这里，别处不另写；`store.mjs` 下载、校验、列出、删除模型；`describe.mjs` 把标签和实测写成话 |
 | `src/usage/` | 用量报表（今天、本月、累计、按型号）、首页的统计（字数、语速、连续天数、热力图）和数字的写法，命令和主窗口共用 |
 | `native/` | 听热键、贴字、说话时截住 `esc` 和悬浮条上点击的小程序（Swift） |
 | `assets/` | 图标：`icon.svg` 是那方印，`tray.svg` 是菜单栏上的五道；`.icns` 和 `trayTemplate*.png` 由 `scripts/build/make-icon.sh` 从它们生成 |
 | `src/storage/` | `~/.speakmore` 里的东西：放在哪、设置、历史库、旧数据的迁移。命令和后台应用共用 |
 | `src/control.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道、日志 |
 | `test/` | 自动测试，目录和 `src/` 对应 |
-| `scripts/` | 开发用的脚本，按用途分四组：`build/` 编译小程序、打 .app；`release/` 发新版本（`ship.sh`：把关、打包、上传、核对）；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
+| `scripts/` | 开发用的脚本，按用途分四组：`build/` 编译小程序、打 .app；`release/` 发新版本（`ship.sh`：把关、打包、上传、核对）、把本地模型传到国内源（`sync-models.mjs`）；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
 | `bench/` | 本地转写的评测（[说明](../bench/README.md)）：洗样本、跑参照和各个本地模型、判分、出报告 |
 | `docs/` | [实现笔记](implementation-notes.md)、这份开发说明、README 用的截图（`images/`） |
 | `website/` | 官网（[说明](../website/README.md)）：React + Tailwind CSS v4 的单页静态站，中英双语，Docker 部署；截图从 App 的真页面离屏截、放在单独的 COS 桶 |
@@ -146,5 +153,12 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
   - 容器：本机 OrbStack 上构建、起过一遍：只读文件系统、64 MB 内存、0.25 核都生效，写文件报 Read-only，响应头和内容安全策略对，脚本和样式带一年缓存并且 gzip，不存在的 `/assets/` 文件 404；无头 Chrome 里中英两种语言都显示正常，截图从图片域名加载。验完删了容器和镜像。
   - 上线：`npm run deploy` 在服务器上构建 2 分 37 秒（多半是第一次拉基础镜像），打出来的文件名指纹和本机构建的一样；容器起来后占 3.5 MB 内存，同机另外两个站的容器、端口照旧、都回 200。宿主机站点文件换成 `host-nginx.conf`（原文件备份在服务器上），`nginx -t` 通过后 reload。从外网看：https 200，带 HSTS 和容器加的安全头，http 301 到 https，`/health` 200，截图带官网来源 200、陌生来源 403。
   - **没验证的**：Safari 和 Firefox（只在 Chromium 里看过；不支持滚动驱动动画的浏览器里各段直接显示、不浮上来，这是照代码说的，没实测）；线上的手机宽度（无头 Chrome 的窗口最窄 500 像素，390 宽只在第一版时用浏览器的设备模拟看过）。
+- 两种识别模式、本地模型的配置表和国内源（2026-10-16，从源码跑的，发布包还没打）：
+  - 单测 752 条在 Node 26.0 上全过（之前一版 751 条在 Electron 自带的 Node 24.21 上也全过），安装脚本的 19 条全过；lint 和本机信息检查都过。
+  - 本地转写整条链路（[记录](../bench/results/e2e-local-2026-10-16.md)）：回放三条真实录音，松开到出字 1.5–1.75 秒；`scripts/dev/e2e.mjs` 在 App 里走一遍，新的数据目录、模型从国内源下（850 MB，91.7 秒），松开后 1.24 秒出字，贴字、存历史、记账都走通。
+  - 打包：按 `npm run release` 的办法给两种芯片各摆一份，arm64 那份装的是 transcribe.cpp 的 Metal 版和 sherpa-onnx 的 arm64 版，x64 那份是 CPU 版和 x64 版，许可证检查通过。拿 arm64 那份（只有运行时依赖）跑 e2e，两个运行库各走通一遍：SenseVoice Q8 在 Metal 上、SenseVoice int8 在 CPU 上。改之前这两个运行库是开发依赖，打出来的包里根本没有它们，本地转写会装不上。
+  - 国内源：四个模型传进模型桶，从 CDN 逐个核对过大小，预热了大陆的节点。下载速度见上面那份记录：Hugging Face 0.6 MB/s，国内源没预热时 3.3 MB/s、预热后 9–10 MB/s。
+  - 设置里的"模型"一页，用调试协议驱动真窗口（临时目录，DeepSeek、Gemini 的 key 从环境变量来）：两种模式的标签、标签和实测数字、下载进度和"就绪 · Metal"；在 local 里换润色模型、换第一步的模型、换下载源都当场生效并写进设置；没有 Gemini 的 key 时"改用原生"被拒、说清原因、模式不变；自定义服务填一个连不上的地址，验证不过、设置不变；在原生里先点选第一步的模型再"改用本地转写"，那个模型一起带过去；切回原生，本地模型卸掉。中英文各看过一遍。
+  - **没验证的**：签名、公证后的安装包（没打）；Intel 的 Mac（x64 那份只核对了装进去的包对不对，没在 Intel 上跑过）；国内源超了每天 50 GB 封顶时自动改从 Hugging Face 下（只在自动测试里用假的 404 试过）；`speakmore config set` 仍是直接写设置再重启，不经过模式的状态机，比如在原生模式里也能写 `transcriber`，切到 local 时才用上。
 - 只有自动测试、没在真机上试的：启动时断网、从 0.1 版搬数据、重新检查权限时不再反复弹系统授权框。
 

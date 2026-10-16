@@ -49,14 +49,14 @@
 - 🧹 **边说边整理**：口头禅、改口、重复删掉，长的话分段、分点，像你自己打出来的。
 - ⚡ **快**：边说边上传，说完一般 2 秒出字。
 - 🔒 **数据在你手里**：没有账号，没有中间服务器，没有统计上报。key 加密存在钥匙串里，说过的话只存在本机。
-- 🔀 **模型自己选**：Gemini（默认）或 OpenAI，设置里点一下就换。
+- 🔀 **两种模式自己选**：*原生*是录音直接交给 Gemini（默认）或 OpenAI；*本地转写*是本机的小模型先转成文字，再交给任意大模型润色，可以是 DeepSeek，也可以是你自己的兼容 OpenAI 接口的服务。本地转写时录音不出本机。
 - 📊 **花多少钱一清二楚**：每次调用都记账；首页看字数、省下的时间、连续天数。
 - 🎨 **三套主题**：墨、朱砂、靛青，跟随系统深浅色。
 - 🌐 **简体中文和英文**：菜单栏、窗口、`speakmore` 命令都跟着系统的语言走，设置里随时能换，当场生效。
 
 ## 📦 安装
 
-需要 macOS 12 以上，和一把 [Gemini key](https://aistudio.google.com/apikey)（有免费额度）或 [OpenAI key](https://platform.openai.com/api-keys)。
+需要 macOS 12 以上，和一把 [Gemini key](https://aistudio.google.com/apikey)（有免费额度）或 [OpenAI key](https://platform.openai.com/api-keys)。用本地转写的话，换成一把 [DeepSeek key](https://platform.deepseek.com/api_keys) 或任意兼容 OpenAI 接口的服务，本机模型约 850 MB。
 
 ### 方式一：下载安装包（推荐）
 
@@ -92,12 +92,15 @@ curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 flowchart LR
   A["⌨️ 热键"] --> B["🎙️ 录音<br/>边录边分块上传"]
   B --> C["🖥️ 本机的听写服务"]
-  C --> D["🤖 Gemini / OpenAI<br/>一次调用：识别加整理"]
+  C -- 原生 --> D["🤖 Gemini / OpenAI<br/>一次调用：识别加整理"]
+  C -- 本地转写 --> L["💻 本机模型<br/>转成文字"]
+  L --> P["🤖 任意大模型<br/>整理"]
   D --> E["📋 贴进输入框"]
+  P --> E
 ```
 
 - **先逆向，再重写**：拆了 Typeless 的 macOS 客户端，读了安装包、还原出来的代码、本机数据和自己账号的流量，写成 [18 篇文档](targets/typeless/docs/00-overview.md)。然后照着它的协议和交互从头写了一个，只做语音转写，不含 Typeless 的任何代码和密钥。
-- **一次调用出成品**：录音和提示词一起交给模型，识别和整理一步完成。
+- **两种模式平级**：原生是录音和提示词一起交给模型，识别和整理一次调用完成。本地转写在本机跑 [Qwen3-ASR 0.6B](https://huggingface.co/Qwen/Qwen3-ASR-0.6B)（Apple 芯片上用 Metal），只把文字发给你选的模型。在作者的 Mac 上，本地转写说完 1.2–1.75 秒出字，其中转写本身不到 0.7 秒（[实测记录](bench/results/e2e-local-2026-10-16.md)）。
 - **提示词用真实录音调**：60 条真实录音逐条对照 Typeless 的成品。模型偶尔写出的繁体字、开头多出的外文词，在代码里兜底。
 - **提示词缓存**：用 Gemini 时，一开口就把提示词缓存起来，一句的花费从 $0.0012 降到 $0.0003。
 - **Electron 加一个 Swift 小程序**：小程序负责听热键、贴字、截住 `esc`。桌面应用和命令行共用一套内核。
@@ -110,6 +113,7 @@ flowchart LR
 - **提示词是按中文调的**（夹着英文词也行）。纯英文听写没有调过，也没测过（界面有英文，提示词没有）。
 - **换成 OpenAI 时整理得比 Gemini 粗**：提示词是对着 Gemini 调的。
 - **话说到一半就按停，模型可能自己把后半句补上。**
+- **本地转写只在 Apple 芯片上测过**，Intel 的 Mac 没试过。
 - 只有听写，没有翻译和“问任何事”。悬浮条只在主屏幕上。Windows 和 Linux 还没有。
 
 ## 📚 更多
@@ -125,9 +129,12 @@ flowchart LR
 | `speakmore update` | 更新到最新版本，装着 SpeakMore.app 的话连它一起。有新版本时 `status` 会提醒 |
 | `speakmore history [-n 条数] [--json]` | 看说过的话。失败的那条会写原因，录音还留着 |
 | `speakmore usage [--json]` | 今天、本月、累计的花费、token、次数、模型一般多久回话，按型号分开 |
-| `speakmore model` | 能用哪几家的模型、各家的 key 有没有、现在用的哪个 |
-| `speakmore model <厂商>[/<模型>]` | 换一家或换个模型，正在运行就自动重启。还没有那一家的 key 会先问 |
+| `speakmore mode [native\|local]` | 看两种模式各用什么 / 切过去。当场生效，先验证要用的 key |
+| `speakmore model` | 原生模式：能用哪几家的模型、各家的 key 有没有、现在用的哪个 |
+| `speakmore model <厂商>[/<模型>]` | 换一家或换个模型。还没有那一家的 key 会先问 |
 | `speakmore model check [<厂商>[/<模型>]]` | 发一个最小的请求，看能不能用、来回多久 |
+| `speakmore transcriber [<模型>]` | 本地转写第一步：本机模型的大小、标签、实测速度 / 换一个，没下载过的在后台下载 |
+| `speakmore polish [<厂商>[/<模型>]] [--url <地址>]` | 本地转写第二步：文字交给谁润色 / 换一个。自定义服务写 `custom/<模型名> --url <地址>`；`polish check` 看能不能用 |
 | `speakmore key [<厂商>]` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key`。别把 key 写在命令后面，会进 shell 历史 |
 | `speakmore key --forget [<厂商>]` | 删掉存着的 key |
 | `speakmore config` / `config set <名字> <值>` / `config unset <名字>` | 看设置 / 改一项 / 回到默认 |
@@ -144,12 +151,17 @@ flowchart LR
 | 名字 | 默认值 | 能填什么 |
 | --- | --- | --- |
 | `hotkey` | `right_option` | `right_option` / `right_command` / `right_control` / `fn`，都是单独按一下。Typeless 用 `fn`，默认避开它，两个可以同时开着 |
-| `model` | `gemini/gemini-3.6-flash` | `厂商/模型`，只写厂商就用它的默认模型 |
+| `mode` | `native` | `native` 原生 / `local` 本地转写。用 `speakmore mode` 切，会先验证 key |
+| `model` | `gemini/gemini-3.6-flash` | 原生模式用。`厂商/模型`，只写厂商就用它的默认模型 |
 | `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`，越高越慢，只有 Gemini 用得上 |
+| `transcriber` | `qwen3-asr-0.6b-q8` | 本地转写第一步，能选的见 `speakmore transcriber` |
+| `polish` | `deepseek/deepseek-flash` | 本地转写第二步。`deepseek` / `deepseek/deepseek-v4-pro` / `custom/<模型名>` |
+| `customUrl` | 空 | 自定义服务（兼容 OpenAI 接口）的地址，比如 `http://127.0.0.1:11434/v1` |
+| `modelSource` | `cn` | 本机模型从哪下：`cn` 是 SpeakMore 的国内源（CDN），`original` 是 Hugging Face。选的那个下不动会自动换另一个 |
 | `theme` | `ink` | `ink` 墨 / `cinnabar` 朱砂 / `indigo` 靛青 |
 | `language` | `system` | `system` 跟随系统 / `en` / `zh-CN`。跟随系统时，应用看 macOS 的语言，`speakmore` 命令看终端的 `LANG`；我们没有的语言用英文 |
 
-设置存在 `~/.speakmore/settings.json`。主题和语言改了当场生效，别的会重启后台。临时换一次可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_THEME`、`SPEAKMORE_LANGUAGE`，写在启动它的那条命令上；`GEMINI_API_KEY`、`OPENAI_API_KEY` 设着时优先于存着的 key。
+设置存在 `~/.speakmore/settings.json`。`speakmore mode`、`model`、`transcriber`、`polish` 当场换，主题、语言、下载源改了也当场生效；别的 `config set` 会重启后台。临时换一次可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_TRANSCRIBER`、`SPEAKMORE_POLISH`、`SPEAKMORE_CUSTOM_URL`、`SPEAKMORE_MODEL_SOURCE`、`SPEAKMORE_THEME`、`SPEAKMORE_LANGUAGE`，写在启动它的那条命令上；`GEMINI_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`SPEAKMORE_CUSTOM_API_KEY` 设着时优先于存着的 key。
 
 | 厂商 | 默认模型 | 说明 |
 | --- | --- | --- |
@@ -157,6 +169,17 @@ flowchart LR
 | `openai` | `gpt-audio-mini` | 只收 WAV 和 MP3，录音先在本机转成 WAV 再发。2–5 秒出字，口头禅删得没有 Gemini 干净；三分钟以上的长录音可能等不到成品（录音会留着） |
 
 每家的 key 各存一份，来回换不用重新填。设置里换的只换厂商；要指定模型用 `speakmore model openai/gpt-audio-1.5` 这样的命令。
+
+本地转写第一步的本机模型，在 Apple 芯片上用 97 条真实录音测过（[第一轮](bench/results/asr-round1-2026-10-16.md)；Intel 的 Mac 没测）：
+
+| 模型 | 下载 | 均分（0–5） | 每条录音转写的中位耗时 | 说明 |
+| --- | --- | --- | --- | --- |
+| `qwen3-asr-0.6b-q8`（默认） | 850 MB | 4.14 | 231 ms（Metal） | 最准，中英夹杂领先最多 |
+| `sensevoice-small-q8` | 253 MB | 3.94 | 73 ms（Metal） | 快约 3 倍、体积约三分之一，英文词弱一些 |
+| `qwen3-asr-0.6b-int8` | 987 MB | 4.02 | 1081 ms（CPU） | 只用 CPU |
+| `sensevoice-small-int8` | 237 MB | 3.78 | 145 ms（CPU） | 只用 CPU |
+
+第二步：`deepseek`（默认模型 `deepseek-flash`），或者 `custom`，任意兼容 OpenAI 接口的服务。
 
 </details>
 
@@ -187,14 +210,15 @@ flowchart LR
 <details>
 <summary><b>🗂️ 东西都放在哪</b></summary>
 
-**发出去的只有录音**，直接发给你选的那一家的接口，用你自己的 key。留在本机的全在 `~/.speakmore/`，只有你自己进得去：
+**发出去的只有录音**（原生模式）**或转好的文字**（本地转写），直接发给你选的那一家的接口，用你自己的 key。留在本机的全在 `~/.speakmore/`，只有你自己进得去：
 
 | 里面的东西 | 说明 |
 | --- | --- |
 | `settings.json` | 设置 |
-| `gemini-key.bin`、`openai-key.bin` | 加密后的 key（安装包装的应用用带 `.app` 的那一份）。解密的密钥在钥匙串的“SpeakMore Safe Storage”里，文件被拷走也解不开 |
+| `gemini-key.bin`、`openai-key.bin`、`deepseek-key.bin`… | 加密后的 key，每家一份（安装包装的应用用带 `.app` 的那一份）。解密的密钥在钥匙串的“SpeakMore Safe Storage”里，文件被拷走也解不开 |
 | `data/history.db`、`data/Recordings/` | 说过的话、录音和账。失败的听写也留着录音，话不会白说 |
 | `logs/main.log` | 日志。只记长度、耗时和用量，不记说的话，也不记 key |
+| `models/` | 本地转写用的本机模型，下载后按 SHA-256 校验过 |
 | `bin/`、`app/`、`runtime/` | 命令行装的程序本身，升级时整个换掉 |
 
 目录以外只有：`~/.local/bin/speakmore` 这个链接、钥匙串里的那一条、你给的系统权限，以及用安装包装的“应用程序”里的 SpeakMore。想装到别处，安装时设环境变量 `SPEAKMORE_HOME`。

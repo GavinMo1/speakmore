@@ -49,14 +49,14 @@
 - 🧹 **Cleans up as it writes** — drops filler words, false starts and repeats; breaks long speech into paragraphs and lists. Reads like you typed it.
 - ⚡ **Fast** — audio streams while you talk; text is usually back about 2 seconds after you stop.
 - 🔒 **Your data stays yours** — no account, no middleman server, no analytics. Your key is encrypted with the macOS Keychain; your history never leaves your Mac.
-- 🔀 **Pick your model** — Gemini (default) or OpenAI, one click to switch.
+- 🔀 **Two modes, your pick** — *Native*: the audio goes straight to Gemini (default) or OpenAI. *Local*: a small model on your Mac transcribes, then any text LLM polishes it — DeepSeek, or your own OpenAI-compatible service. In local mode the audio never leaves your Mac.
 - 📊 **See what it costs** — every call is metered; the home window shows words, time saved and streaks.
 - 🎨 **Three themes** — Ink, Cinnabar, Indigo. Follows light and dark mode.
 - 🌐 **English and 简体中文** — menus, windows and the `speakmore` command follow your Mac's language. Switch any time in Settings; it applies right away.
 
 ## 📦 Install
 
-You need macOS 12 or later and a [Gemini key](https://aistudio.google.com/apikey) (has a free tier) or an [OpenAI key](https://platform.openai.com/api-keys).
+You need macOS 12 or later and a [Gemini key](https://aistudio.google.com/apikey) (has a free tier) or an [OpenAI key](https://platform.openai.com/api-keys). Local mode instead needs a [DeepSeek key](https://platform.deepseek.com/api_keys) or any OpenAI-compatible service, plus about 850 MB for the on-device model.
 
 ### Option 1: Download the app (recommended)
 
@@ -92,12 +92,15 @@ SpeakMore lives in the menu bar, not the Dock. From the menu bar icon you can op
 flowchart LR
   A["⌨️ Hotkey"] --> B["🎙️ Recorder<br/>streams chunks as you talk"]
   B --> C["🖥️ Local dictation server"]
-  C --> D["🤖 Gemini / OpenAI<br/>one call: transcribe + clean up"]
+  C -- native --> D["🤖 Gemini / OpenAI<br/>one call: transcribe + clean up"]
+  C -- local --> L["💻 On-device model<br/>transcribe"]
+  L --> P["🤖 Any text LLM<br/>clean up"]
   D --> E["📋 Paste at cursor"]
+  P --> E
 ```
 
 - **Reverse-engineered, then rebuilt.** The author took apart the Typeless macOS client (app bundle, recovered code, local data, network traffic from their own account) and wrote it up in [18 notes](targets/typeless/docs/00-overview.md) (Chinese). SpeakMore was then written from scratch to follow its protocol and interaction, keeping only dictation. It contains no Typeless code or keys.
-- **One call, finished text.** The audio and the prompt go to the model together; recognition and cleanup happen in one step.
+- **Two modes, side by side.** Native sends the audio and the prompt together, so recognition and cleanup happen in one call. Local runs [Qwen3-ASR 0.6B](https://huggingface.co/Qwen/Qwen3-ASR-0.6B) on your Mac (Metal on Apple silicon), then sends only the text to the model you picked. On the author's Mac, local mode has text back 1.2–1.75 s after you stop; transcription itself takes under 0.7 s ([measurements](bench/results/e2e-local-2026-10-16.md)).
 - **Tuned on real recordings.** 60 real recordings, each checked against Typeless's output. The odd slip, like traditional characters or a stray foreign word at the start, is fixed up in code.
 - **Prompt caching.** With Gemini, the prompt is cached the moment you start talking, which cuts a dictation from $0.0012 to $0.0003.
 - **Electron plus a small Swift helper.** The helper listens for the hotkey, pastes, and catches `esc`. The app and the CLI share one core.
@@ -110,6 +113,7 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 - **Tuned for Mandarin**, with English terms mixed in. English-only dictation hasn't been tuned or tested yet (the interface is in English; the prompt isn't).
 - **OpenAI cleans up less thoroughly than Gemini.** The prompt was tuned against Gemini.
 - **If you stop mid-sentence, the model may finish the sentence for you.**
+- **Local mode has only been measured on Apple silicon.** Intel Macs are untested.
 - Dictation only: no translation or "ask anything". The bar shows on the main display only. No Windows or Linux.
 
 ## 📚 More
@@ -125,9 +129,12 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 | `speakmore update` | Update to the latest version, SpeakMore.app included if you have it. `status` tells you when there's a new one |
 | `speakmore history [-n count] [--json]` | What you said. Failed ones show why, and keep the recording |
 | `speakmore usage [--json]` | Spend, tokens, count and typical model latency for today, this month and all time, per model |
-| `speakmore model` | Available models, which providers have a key, which one is in use |
-| `speakmore model <provider>[/<model>]` | Switch provider or model; restarts if running. Asks for a key if needed |
+| `speakmore mode [native\|local]` | Show both modes / switch. Takes effect immediately; checks the key first |
+| `speakmore model` | Native mode: available models, which providers have a key, which one is in use |
+| `speakmore model <provider>[/<model>]` | Switch provider or model. Asks for a key if needed |
 | `speakmore model check [<provider>[/<model>]]` | Send a tiny request to see if it works and how fast |
+| `speakmore transcriber [<model>]` | Local mode, step 1: on-device models with size, tags and measured speed / switch. Downloads in the background |
+| `speakmore polish [<provider>[/<model>]] [--url <url>]` | Local mode, step 2: who polishes the text / switch. `custom/<model> --url <url>` for an OpenAI-compatible service. `polish check` tests it |
 | `speakmore key [<provider>]` | Replace a key. Can be piped: `pbpaste \| speakmore key`. Don't type the key on the command line — it ends up in shell history |
 | `speakmore key --forget [<provider>]` | Delete a stored key |
 | `speakmore config` / `config set <name> <value>` / `config unset <name>` | Show settings / change one / reset it |
@@ -144,12 +151,17 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 | Name | Default | Values |
 | --- | --- | --- |
 | `hotkey` | `right_option` | `right_option` / `right_command` / `right_control` / `fn`, each a single tap. Typeless uses `fn`, so the default avoids it and both can run side by side |
-| `model` | `gemini/gemini-3.6-flash` | `provider/model`; a provider alone uses its default model |
+| `mode` | `native` | `native` / `local`. Switch with `speakmore mode` so the key is checked first |
+| `model` | `gemini/gemini-3.6-flash` | Native mode. `provider/model`; a provider alone uses its default model |
 | `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`. Higher is slower. Gemini only |
+| `transcriber` | `qwen3-asr-0.6b-q8` | Local mode, step 1. See `speakmore transcriber` for the list |
+| `polish` | `deepseek/deepseek-flash` | Local mode, step 2. `deepseek` / `deepseek/deepseek-v4-pro` / `custom/<model>` |
+| `customUrl` | empty | Address of your OpenAI-compatible service, e.g. `http://127.0.0.1:11434/v1` |
+| `modelSource` | `cn` | Where on-device models download from: `cn` (SpeakMore's CDN, fast in China) / `original` (Hugging Face). If one stalls, the other is tried |
 | `theme` | `ink` | `ink` / `cinnabar` / `indigo` |
 | `language` | `system` | `system` / `en` / `zh-CN`. `system` follows macOS; the `speakmore` command follows your terminal's `LANG`. Languages we don't have fall back to English |
 
-Settings live in `~/.speakmore/settings.json`. Theme and language apply immediately; the rest restart the background app. For a one-off, put `SPEAKMORE_HOTKEY`, `SPEAKMORE_MODEL`, `GEMINI_THINKING_LEVEL`, `SPEAKMORE_THEME` or `SPEAKMORE_LANGUAGE` on the command that starts it; `GEMINI_API_KEY` and `OPENAI_API_KEY` override stored keys.
+Settings live in `~/.speakmore/settings.json`. `speakmore mode`, `model`, `transcriber` and `polish` switch on the fly, and so do theme, language and download source; other `config set` changes restart the background app. For a one-off, put `SPEAKMORE_HOTKEY`, `SPEAKMORE_MODE`, `SPEAKMORE_MODEL`, `GEMINI_THINKING_LEVEL`, `SPEAKMORE_TRANSCRIBER`, `SPEAKMORE_POLISH`, `SPEAKMORE_CUSTOM_URL`, `SPEAKMORE_MODEL_SOURCE`, `SPEAKMORE_THEME` or `SPEAKMORE_LANGUAGE` on the command that starts it; `GEMINI_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY` and `SPEAKMORE_CUSTOM_API_KEY` override stored keys.
 
 | Provider | Default model | Notes |
 | --- | --- | --- |
@@ -157,6 +169,17 @@ Settings live in `~/.speakmore/settings.json`. Theme and language apply immediat
 | `openai` | `gpt-audio-mini` | Takes WAV and MP3 only, so audio is converted to WAV locally first. Text in 2–5 seconds, with more filler left in than Gemini. Recordings over 3 minutes may time out (the recording is kept) |
 
 Each provider keeps its own key, so switching back and forth doesn't ask again. Settings switches provider only; for a specific model use e.g. `speakmore model openai/gpt-audio-1.5`.
+
+Local mode, step 1 — on-device models, measured on Apple silicon with 97 real recordings ([round 1](bench/results/asr-round1-2026-10-16.md); not yet measured on Intel Macs):
+
+| Model | Download | Score (0–5) | Typical time per recording | Notes |
+| --- | --- | --- | --- | --- |
+| `qwen3-asr-0.6b-q8` (default) | 850 MB | 4.14 | 231 ms (Metal) | Most accurate, best on mixed Chinese–English |
+| `sensevoice-small-q8` | 253 MB | 3.94 | 73 ms (Metal) | About 3× faster and a third the size; weaker on English words |
+| `qwen3-asr-0.6b-int8` | 987 MB | 4.02 | 1081 ms (CPU) | CPU only |
+| `sensevoice-small-int8` | 237 MB | 3.78 | 145 ms (CPU) | CPU only |
+
+Step 2 — `deepseek` (default model `deepseek-flash`) or `custom`: any OpenAI-compatible service.
 
 </details>
 
@@ -187,14 +210,15 @@ For the app, permissions belong to SpeakMore. When started with the `speakmore` 
 <details>
 <summary><b>🗂️ Where things live</b></summary>
 
-**The only thing sent out is your audio**, straight to the provider you picked, with your own key. Everything kept locally is in `~/.speakmore/`, readable only by you:
+**The only thing sent out is your audio** (native mode) **or the transcribed text** (local mode), straight to the provider you picked, with your own key. Everything kept locally is in `~/.speakmore/`, readable only by you:
 
 | What | Notes |
 | --- | --- |
 | `settings.json` | Settings |
-| `gemini-key.bin`, `openai-key.bin` | Encrypted keys (the app uses the `.app` copies). The decryption key is "SpeakMore Safe Storage" in your Keychain, so a copied file is useless |
+| `gemini-key.bin`, `openai-key.bin`, `deepseek-key.bin`… | Encrypted keys, one per provider (the app uses the `.app` copies). The decryption key is "SpeakMore Safe Storage" in your Keychain, so a copied file is useless |
 | `data/history.db`, `data/Recordings/` | What you said, the recordings and the cost log. Failed dictations keep their recording |
 | `logs/main.log` | Logs. Lengths, timings and usage only — never what you said, never the key |
+| `models/` | On-device models for local mode, checked against their SHA-256 after download |
 | `bin/`, `app/`, `runtime/` | The Terminal install itself; replaced on upgrade |
 
 Outside that folder: the `~/.local/bin/speakmore` link, the Keychain entry, the permissions you granted, and SpeakMore in Applications if you installed the app. To install elsewhere, set `SPEAKMORE_HOME` when installing.

@@ -1,6 +1,6 @@
 # 本地转写评测
 
-识别要分成两条平级的链路，让用户自己选：一条是原生链路，录音直接交给收音频的大模型（Gemini、OpenAI）；另一条是先用本地小模型转写，再把文字交给任意大模型润色。这里评的是后一条里的本地转写这一跳：转得准不准、快不快、占多少内存。模型从 [`src/server/asr/`](../src/server/asr/) 的清单里取，测的就是以后装进 CLI 和 App 的那一份。
+识别要分成两条平级的链路，让用户自己选：一条是原生链路，录音直接交给收音频的大模型（Gemini、OpenAI）；另一条是先用本地小模型转写，再把文字交给任意大模型润色。这里评的是后一条里的本地转写这一跳：转得准不准、快不快、占多少内存。模型从配置表 [`src/models/catalog.mjs`](../src/models/catalog.mjs) 里取，测的就是装进 CLI 和 App 的那一份；测出来的数字和标签也写回那张表（`measured`、`tags`）。
 
 - **样本**：各来源的录音抽样后统一成 16 kHz 单声道 WAV，每个候选读的都是同一份。来源在 `lib/sources.mjs`，现在有原版 Typeless 的历史和 SpeakMore 自己的历史。
 - **参照**：App 现在的原生链路，也就是 Gemini 3.6 Flash（思考档位 MINIMAL）加 App 的提示词出的成品。它同时是原生链路的耗时基线。
@@ -36,7 +36,7 @@ node bench/report.mjs                                     # 只出报告
 
 ## 加东西
 
-- **加模型**：在 `src/server/asr/catalog.mjs` 加一项，在 `lib/candidates.mjs` 加一个候选。
+- **加模型**：在 `src/models/catalog.mjs` 加一项，在 `lib/candidates.mjs` 加一个候选。要给用户用的，再把文件传到国内源（`npm run sync-models`，见 [开发说明](../docs/development.md)）。
 - **加运行库**：在 `src/server/asr/engines/` 写一个适配器，并在 `index.mjs` 登记。
 - **加样本来源**（比如公开数据集）：在 `lib/sources.mjs` 加一项。
 
@@ -52,5 +52,6 @@ node bench/report.mjs                                     # 只出报告
 | 轮次 | 评的是 | 记录 |
 | --- | --- | --- |
 | asr-round1-2026-10-16 | 本地转写这一跳，5 个候选 | [results/asr-round1-2026-10-16.md](results/asr-round1-2026-10-16.md) |
+| e2e-local-2026-10-16 | local 模式整条链路（转写加润色），和从哪个下载源下得快 | [results/e2e-local-2026-10-16.md](results/e2e-local-2026-10-16.md) |
 
 `_work/` 不进仓库：里面有洗好的录音、下载的模型、结果库和报告，都包含说过的话。
