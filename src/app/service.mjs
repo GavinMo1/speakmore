@@ -18,6 +18,7 @@ const PROGRESS_EVERY_MS = 500;
  * @param {{ info: Function, warn: Function, error: Function }} options.log
  * @param {object} options.route 一开始走哪条路线（设置里的 mode 和各项，storage/settings.mjs 的 routeOf）
  * @param {string} [options.modelsDir] 本地模型放在哪（storage/paths.mjs 的 modelsDir）
+ * @param {string} [options.modelSource] 本地模型没下载过时先从哪个源下（设置里的 modelSource，models/catalog.mjs 的 SOURCES）
  * @param {(record: object) => void} [options.onModelCall] 记账：每一次回了话的模型调用（听写和验证 key 都算），
  *   见 ../server/refine/meter.mjs
  * @param {() => void} [options.onLocalModel] 本地模型的状态变了（开始下载、进度、装好了、出错）
@@ -28,6 +29,7 @@ export async function startService({
   log,
   route: initialRoute,
   modelsDir,
+  modelSource,
   onModelCall,
   onLocalModel = () => {},
   createRefiner = createModeRefiner,
@@ -48,6 +50,8 @@ export async function startService({
   let local = { state: "off" };
   /** 正在下载或已经装好的那一次：换模型时用 abort 停掉下载，用 transcriber 卸掉模型 */
   let loading = null;
+  /** 先从哪个源下，设置里改了当场换（setModelSource） */
+  let source = modelSource;
 
   function setLocal(next) {
     local = next;
@@ -70,6 +74,7 @@ export async function startService({
     startLocal({
       modelId: model,
       modelsDir,
+      source,
       log,
       signal: job.abort.signal,
       onProgress: ({ received, total }) => {
@@ -185,7 +190,7 @@ export async function startService({
     /**
      * 只换 local 模式第一跳的本地模型（没装上的那个再选一次就是重试）。润色那一跳和 key 都不动，不用重新验证：
      * 转写器是按名字取的（上面的 transcriber），装好的 refiner 照用，新模型在后台下载、装载
-     * @param {string} model 本地模型的 id（asr/catalog.mjs），调用方校验过
+     * @param {string} model 本地模型的 id（models/catalog.mjs），调用方校验过
      */
     switchTranscriber(model) {
       if (route.mode !== "local") throw new Error(`现在不是 local 模式（${route.mode}），没有本地模型可换`);
@@ -194,6 +199,22 @@ export async function startService({
       log.info("transcriber_switched", { from: route.transcriber, to: model, retry: model === route.transcriber });
       route = { ...route, transcriber: model };
       followRoute();
+    },
+
+    /**
+     * 换下载源（设置里的 modelSource）。还没装好的（下载中、上次没下下来，或者还在等第一个字节）从新的源重新接着下：
+     * 已经下好、校验过的文件不重下，只有正下到一半的那个文件从头来。原来的源卡着不给数据时状态还是 loading，
+     * 这时正是用户想换源的时候
+     * @param {string} next 下载源的 id，调用方校验过
+     */
+    setModelSource(next) {
+      if (next === source) return;
+      log.info("model_source_changed", { from: source, to: next, local: local.state });
+      source = next;
+      if (local.state === "downloading" || local.state === "failed" || local.state === "loading") {
+        releaseLocal();
+        followRoute();
+      }
     },
 
     /** 把正在用的那把再验一次，没通过就抛错。启动时没连上网的，之后靠它补上验证 */

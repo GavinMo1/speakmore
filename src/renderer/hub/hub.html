@@ -259,9 +259,64 @@
           <p class="setting-note" id="general-problem" role="alert" hidden></p>
         </section>
 
+        <!-- 先选识别模式，再在模式里选模型（model-pane.mjs）。标签只切换看哪种，改用要按按钮 -->
         <section class="pane" data-pane="model" hidden>
           <h3 class="pane-title" data-i18n="preferences.model">Model</h3>
-          <div class="key-panel" id="key-panel"></div>
+          <div class="mode-tabs" role="tablist" data-i18n-aria-label="preferences.modes.label">
+            <button type="button" class="mode-tab" role="tab" data-mode="native" aria-controls="mode-native">
+              <span data-i18n="preferences.modes.native">Native</span><span class="mode-live" hidden></span>
+            </button>
+            <button type="button" class="mode-tab" role="tab" data-mode="local" aria-controls="mode-local">
+              <span data-i18n="preferences.modes.local">Local</span><span class="mode-live" hidden></span>
+            </button>
+          </div>
+          <div class="mode-head">
+            <p class="mode-hint" id="mode-hint"></p>
+            <span class="mode-in-use" id="mode-in-use" data-i18n="preferences.modes.inUse" hidden>In use</span>
+            <button type="button" class="button primary" id="use-mode" hidden></button>
+          </div>
+          <p class="setting-note" id="mode-problem" role="alert" hidden></p>
+          <p class="setting-note" id="mode-note" role="status" hidden></p>
+
+          <div class="mode-body" id="mode-native" role="tabpanel">
+            <div class="key-panel" id="key-panel"></div>
+          </div>
+
+          <div class="mode-body" id="mode-local" role="tabpanel" hidden>
+            <h4 class="step-title" data-i18n="preferences.local.step1">Step 1 · On-device transcription</h4>
+            <div class="transcribers" id="transcribers" role="radiogroup" data-i18n-aria-label="preferences.local.step1"></div>
+            <div class="transcriber-failed">
+              <p class="setting-note" id="transcriber-problem" role="alert" hidden></p>
+              <button type="button" class="button" id="transcriber-retry" data-i18n="preferences.local.retry" hidden>Retry</button>
+            </div>
+            <div class="setting">
+              <label class="setting-title" for="model-source" data-i18n="preferences.local.source">Download from</label>
+              <select class="select" id="model-source"></select>
+            </div>
+            <p class="setting-note" id="source-note" role="status" hidden></p>
+
+            <h4 class="step-title" data-i18n="preferences.local.step2">Step 2 · Polishing</h4>
+            <div class="key-panel" id="polish-panel"></div>
+            <!-- 放进上面面板的空格里（key-panel.mjs 的 slot）：选哪家和填 key 之间 -->
+            <div class="polish-extra" id="polish-extra">
+              <label class="field" id="polish-model-row" hidden>
+                <span data-i18n="preferences.local.polishModel">Model</span>
+                <select class="select" id="polish-model"></select>
+              </label>
+              <div class="custom-fields" id="custom-fields" hidden>
+                <label class="field">
+                  <span data-i18n="preferences.local.customModel">Model name</span>
+                  <input class="input" id="custom-model" spellcheck="false" autocomplete="off" data-i18n-placeholder="preferences.local.customModelPlaceholder" />
+                </label>
+                <label class="field">
+                  <span data-i18n="preferences.local.customUrl">Address</span>
+                  <input class="input" id="custom-url" type="url" spellcheck="false" autocomplete="off" data-i18n-placeholder="preferences.local.customUrlPlaceholder" />
+                </label>
+                <button type="button" class="button" id="apply-custom" data-i18n="preferences.local.apply" hidden>Apply</button>
+              </div>
+            </div>
+            <p class="setting-note" id="local-problem" role="alert" hidden></p>
+          </div>
         </section>
 
         <section class="pane" data-pane="permissions" hidden>

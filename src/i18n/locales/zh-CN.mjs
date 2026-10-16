@@ -68,6 +68,7 @@ export default {
   providers: {
     gemini: { getKey: "去 Google AI Studio 申请" },
     openai: { getKey: "去 OpenAI 开发者平台申请" },
+    deepseek: { getKey: "去 DeepSeek 开放平台申请" },
   },
 
   language: {
@@ -83,6 +84,8 @@ export default {
       transcriber: "local 那条路上用哪个本机模型转文字，第一次用时自动下载",
       polish: "local 那条路上把文字交给哪一家的哪个模型润色，写成 厂商/模型；自定义服务写 custom/模型名",
       customUrl: "自定义润色服务的地址（兼容 OpenAI 接口的那种），比如 https://api.example.com/v1",
+      modelSource:
+        "本机模型从哪下载：cn 是 SpeakMore 的国内源，original 是 Hugging Face 原始地址。选的那个下不动会自动换另一个",
       theme: "界面用哪套主题",
       language: "界面用哪种语言；system 是跟随系统",
     },
@@ -118,6 +121,30 @@ export default {
     modelFailed: "本地模型没装上：{reason}",
     undecodable: "录音解不开：{reason}",
     transcribeFailed: "本地转写失败：{reason}",
+  },
+  modelSources: {
+    cn: "国内源（SpeakMore 的 CDN）",
+    original: "原始地址（Hugging Face）",
+  },
+  localModels: {
+    tags: {
+      "apple-silicon": "适合 Apple 芯片",
+      metal: "Metal 加速",
+      cpu: "能只用 CPU",
+      "zh-en": "中英夹杂准",
+      fast: "快",
+      small: "体积小",
+    },
+    chips: {
+      "apple-silicon": "Apple 芯片",
+      "intel-mac": "Intel Mac",
+      "windows-x64": "Windows（x64）",
+      "windows-arm64": "Windows（ARM）",
+    },
+    backends: { metal: "Metal", cpu: "CPU" },
+    measured: "{chip}上实测（{backend}）：均分 {score}/5 · {realtime} 倍实时 · 内存 {memory}",
+    notMeasured: "{chip}上还没实测",
+    unknownChip: "这类机器上还没实测",
   },
   chat: {
     modelRequired: "{vendor} 没有默认模型，要写成 {vendor}/模型名",
@@ -312,6 +339,32 @@ export default {
     version: "版本",
     dataFolder: "数据目录",
     source: "源代码",
+    modes: {
+      label: "识别模式",
+      native: "原生",
+      local: "本地转写",
+      nativeHint: "录音直接交给收音频的模型，一步出成品。",
+      localHint: "本机先把录音转成文字，再交给大模型润色。录音不出本机。",
+      inUse: "使用中",
+      use: "改用{mode}",
+    },
+    local: {
+      step1: "第一步 · 本机转写",
+      step2: "第二步 · 润色",
+      source: "下载源",
+      downloaded: "已下载",
+      downloading: "下载中 {percent}%（{size}）",
+      loading: "装载中",
+      ready: "就绪 · {backend}",
+      failed: "没装上",
+      retry: "重试",
+      polishModel: "模型",
+      customModel: "模型名",
+      customModelPlaceholder: "比如 qwen3:8b",
+      customUrl: "地址",
+      customUrlPlaceholder: "https://api.example.com/v1",
+      apply: "应用",
+    },
   },
 
   keyPanel: {
@@ -320,6 +373,7 @@ export default {
     use: "改用 {provider}",
     placeholder: "粘贴 key",
     paste: "粘贴",
+    customName: "自定义服务",
     save: "保存并验证",
     saveAndUse: "保存并改用 {provider}",
     forget: "删除 key",
@@ -551,6 +605,7 @@ export default {
       appliedLive: "已经生效，不用重启。",
       themeOverridden: "正在运行的 SpeakMore 用的还是{theme}：启动它的环境里设着 {variable}，它盖过设置文件。",
       languageOverridden: "正在运行的 SpeakMore 用的还是{language}：启动它的环境里设着 {variable}，它盖过设置文件。",
+      modelSourceOverridden: "正在运行的 SpeakMore 用的还是{source}：启动它的环境里设着 {variable}，它盖过设置文件。",
       envWarning: "注意：环境变量 {variable} 现在设着，它会盖过这个值。",
       changed: "{name} 改成了 {value}。",
       unset: "{name} 回到了默认值 {value}。",
@@ -614,6 +669,8 @@ export default {
       polishCheck: "看能不能用：speakmore polish check",
       polishSwitched: "第二跳换成了 {model}。",
       urlNeeded: "润色交给自定义服务时要给它的地址：--url <地址>（兼容 OpenAI 接口，多数以 /v1 结尾）",
+      sourceCurrent: "下载源：{source}",
+      sourceSwitch: "换下载源：speakmore config set modelSource {other}（下不动时会自动换另一个）",
     },
     choose: {
       question: "先选怎么把录音变成文字（以后可以用 speakmore mode、speakmore model 换）：",

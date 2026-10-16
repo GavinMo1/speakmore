@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld("speakmore", {
   setModel: (model) => ipcRenderer.invoke("setup:set-model", model),
   setTranscriber: (id) => ipcRenderer.invoke("setup:set-transcriber", id),
   setPolish: (polish, customUrl) => ipcRenderer.invoke("setup:set-polish", polish, customUrl),
+  setModelSource: (id) => ipcRenderer.invoke("setup:set-model-source", id),
   readClipboard: () => ipcRenderer.invoke("setup:read-clipboard"),
   openKeyPage: (provider) => ipcRenderer.invoke("setup:open-key-page", provider),
   openPrivacySettings: (permission) => ipcRenderer.invoke("setup:open-privacy", permission),

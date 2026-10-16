@@ -17,7 +17,7 @@ import {
 import { renderConfig, renderThemes, themeTitle } from "../render/settings.mjs";
 
 // 设置：speakmore config、theme，以及打开设置的 speakmore settings。
-// 主题和语言改了当场生效（让正在运行的那个重新读一遍设置），别的要重启后台。
+// 主题、语言、下载源改了当场生效（让正在运行的那个重新读一遍设置），别的要重启后台。
 
 /**
  * 设置改完之后让它生效：在运行就重启，并看重启之后的结果。
@@ -80,11 +80,16 @@ const LIVE = {
     overridden: (t, applied, variable) =>
       t("cli.config.languageOverridden", { language: languageTitle(t, applied.language), variable }),
   },
+  modelSource: {
+    command: "reload-model-source",
+    overridden: (t, applied, variable) =>
+      t("cli.config.modelSourceOverridden", { source: t(`modelSources.${applied.modelSource}`), variable }),
+  },
 };
 
 /**
- * 主题、语言改完之后让它生效。这两项不用重启：让正在运行的那个重新读一遍设置，开着的窗口当场换。
- * @param {"theme" | "language"} name
+ * 主题、语言、下载源改完之后让它生效。这几项不用重启：让正在运行的那个重新读一遍设置，开着的窗口当场换。
+ * @param {"theme" | "language" | "modelSource"} name
  * @param {string} wanted 设置里现在写的值
  * @returns {Promise<number>} 退出码
  */

@@ -1,4 +1,5 @@
 import { msg } from "../../i18n/index.mjs";
+import { measuredText, tagTexts } from "../../models/describe.mjs";
 import { findChatVendor } from "../../server/chat/vendors.mjs";
 import { findProvider } from "../../server/providers/index.mjs";
 import { displayWidth, INDENT, padEnd, paint } from "./text.mjs";
@@ -60,14 +61,18 @@ const notInLocal = (t, current) =>
 const megabytes = (bytes) => `${Math.round(bytes / 1_000_000)} MB`;
 
 /**
- * 第一跳：本机转写模型
+ * 第一跳：本机转写模型。每个模型下面两行灰字：标签，和在这类芯片上的实测
  * @param {object} view
- * @param {ReadonlyArray<{ id: string, name: string, license: string, bytes: number, installed: boolean }>} view.models
+ * @param {ReadonlyArray<{ id: string, name: string, bytes: number, installed: boolean, tags: readonly string[], measured: readonly object[] }>} view.models
+ *   measured 是在这类芯片上的实测（models/catalog.mjs 的 measuredOn）
+ * @param {string | null} view.chip 这台机器是哪类芯片
  * @param {string} view.setting 设置里选的那个
+ * @param {string} view.source 设置里的下载源
+ * @param {readonly string[]} view.sources 能选的下载源
  * @param {string} view.current 现在是哪种模式
  * @param {{ color: boolean, t: Function }} options
  */
-export function renderTranscribers({ models, setting, current }, { color, t }) {
+export function renderTranscribers({ models, chip, setting, source, sources, current }, { color, t }) {
   const c = paint(color);
   const idWidth = Math.max(...models.map(({ id }) => id.length)) + 3;
   const nameWidth = Math.max(...models.map(({ name }) => displayWidth(name))) + 3;
@@ -79,12 +84,18 @@ export function renderTranscribers({ models, setting, current }, { color, t }) {
     lines.push(
       `${INDENT}${mark} ${c.bold(padEnd(model.id, idWidth))}${padEnd(model.name, nameWidth)}${padEnd(megabytes(model.bytes), sizeWidth)}${state}`,
     );
+    const under = `${INDENT}  ${" ".repeat(idWidth)}`;
+    lines.push(c.dim(`${under}${tagTexts(model.tags).map(t.text).join(" · ")}`));
+    lines.push(c.dim(`${under}${t.text(measuredText(model.measured, chip))}`));
   }
   const other = models.find(({ id }) => id !== setting) ?? models[0];
+  const otherSource = sources.find((id) => id !== source);
   lines.push(
     "",
     `${INDENT}${t("cli.local.transcriberCurrent", { model: setting })}`,
     `${INDENT}${t("cli.local.transcriberSwitch", { id: other.id })}`,
+    `${INDENT}${t("cli.local.sourceCurrent", { source: t(`modelSources.${source}`) })}`,
+    `${INDENT}${t("cli.local.sourceSwitch", { other: otherSource })}`,
     "",
   );
   return lines.join("\n");

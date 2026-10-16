@@ -6,6 +6,9 @@
 //   scripts/dev/with-key.sh gemini node scripts/dev/e2e.mjs <一段 16 位 PCM 的 WAV>
 //   SPEAKMORE_MODEL=openai scripts/dev/with-key.sh openai node scripts/dev/e2e.mjs <一段 16 位 PCM 的 WAV>
 // 录音时长默认 7.5 秒（跨过两个 3 秒的分块边界），可用 SPEAKMORE_E2E_RECORD_MS 改。
+// 本地转写那条（local 模式）：数据目录是新的，本地模型会真从下载源下一遍（SPEAKMORE_MODEL_SOURCE 可以换），装好才开始录：
+//   SPEAKMORE_MODE=local scripts/dev/with-key.sh deepseek node scripts/dev/e2e.mjs <WAV>
+// 想用打包时摆出来的那一份跑（只带运行时依赖，看漏没漏包）：SPEAKMORE_E2E_APP=<摆好的目录>
 
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
@@ -36,15 +39,17 @@ const child = spawn(
     "--disable-features=AudioServiceSandbox",
   ],
   {
-    cwd: resolve(import.meta.dirname, "../.."),
+    cwd: process.env.SPEAKMORE_E2E_APP ?? resolve(import.meta.dirname, "../.."),
     env: { ...process.env, SPEAKMORE_E2E_OUT: outPath, SPEAKMORE_HOME: join(workDir, "home") },
     stdio: ["ignore", "inherit", "inherit"],
   },
 );
 
-// Electron 万一卡住（比如启动就出错），到时间强制结束，测试算失败而不是一直挂着
+// Electron 万一卡住（比如启动就出错），到时间强制结束，测试算失败而不是一直挂着。
+// local 模式另给下载和装载模型的时间
 const recordMs = Number(process.env.SPEAKMORE_E2E_RECORD_MS ?? 7_500);
-const watchdog = setTimeout(() => child.kill("SIGKILL"), recordMs + 60_000);
+const setupMs = process.env.SPEAKMORE_MODE === "local" ? 20 * 60_000 : 0;
+const watchdog = setTimeout(() => child.kill("SIGKILL"), setupMs + recordMs + 60_000);
 
 child.on("exit", (code) => {
   clearTimeout(watchdog);
@@ -75,6 +80,10 @@ child.on("exit", (code) => {
         `调了 ${usage.calls} 次模型：输入 ${usage.inputTokens} token、输出 ${usage.outputTokens} token，${cost}，模型 ${usage.latencyMs} 毫秒`,
       );
     }
+  }
+  if (result?.localModel) {
+    const { downloadMs, loadMs, backend } = result.localModel;
+    console.log(`本地模型：下载 ${(downloadMs / 1000).toFixed(1)} 秒，装载 ${loadMs} 毫秒，跑在 ${backend}`);
   }
   if (result?.delivered) console.log(`成品：${result.delivered}`);
   rmSync(workDir, { recursive: true, force: true });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { downloadSize, findModel } from "../../../src/server/asr/catalog.mjs";
+import { downloadSize, findModel } from "../../../src/models/catalog.mjs";
 import { startTranscriber } from "../../../src/server/asr/start.mjs";
 
 const quiet = { info() {}, warn() {}, error() {} };

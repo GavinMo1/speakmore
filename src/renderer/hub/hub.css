@@ -743,6 +743,207 @@ code.setting-value {
   color: var(--problem);
 }
 
+/* "模型"一页（model-pane.mjs）：上面两种识别模式的标签，下面是看着的那种模式里的东西 */
+.mode-tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--fill-hover);
+  border-radius: var(--radius-control);
+}
+
+.mode-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.9rem;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 560;
+  color: var(--ink-2);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-control) - 0.125rem);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.mode-tab:hover {
+  color: var(--ink);
+}
+
+.mode-tab[aria-selected="true"] {
+  color: var(--ink);
+  background: var(--surface-solid);
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.08);
+}
+
+.mode-tab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* 正在用的那种模式：标签上一个小圆点 */
+.mode-live {
+  width: 0.4rem;
+  height: 0.4rem;
+  background: var(--ok);
+  border-radius: 50%;
+}
+
+.mode-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.mode-hint {
+  flex: 1 1 18rem;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+.mode-in-use {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ok);
+}
+
+.mode-body {
+  margin-top: 1rem;
+}
+
+.step-title {
+  margin: 1.25rem 0 0.6rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.step-title:first-child {
+  margin-top: 0;
+}
+
+/* 第一跳的本机模型：一行一个，名字和状态在上，标签和实测在下 */
+.transcribers {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.transcriber {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem 1rem;
+  padding: 0.7rem 0.9rem;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: var(--bg);
+  border: none;
+  border-radius: 0.75rem;
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: pointer;
+  transition: box-shadow var(--dur-base) var(--ease-out);
+}
+
+.transcriber:hover:not(:disabled) {
+  background: var(--raised);
+}
+
+.transcriber[aria-checked="true"] {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.transcriber:disabled {
+  cursor: default;
+}
+
+.transcriber:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.transcriber-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.transcriber-state {
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.transcriber-state[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.transcriber-state[data-tone="problem"] {
+  color: var(--problem);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  grid-column: 1 / -1;
+}
+
+.tag {
+  padding: 0.05rem 0.5rem;
+  font-size: 0.75rem;
+  color: var(--ink-2);
+  background: var(--fill-hover);
+  border-radius: var(--radius-full);
+}
+
+.transcriber-measured {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+  color: var(--ink-2);
+}
+
+.transcriber-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.transcriber-failed:has(:not([hidden])) {
+  margin-top: 0.5rem;
+}
+
+/* 第二跳那一家另填的：模型、自定义服务的模型名和地址 */
+.field {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.875rem;
+}
+
+.polish-extra .field,
+.custom-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.custom-fields .field {
+  flex: 1 1 14rem;
+}
+
+.custom-fields .input {
+  flex: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .nav-item,
   .menu-item,
@@ -757,5 +958,10 @@ code.setting-value {
   .settings[open],
   .settings::backdrop {
     animation: none;
+  }
+
+  .mode-tab,
+  .transcriber {
+    transition: none;
   }
 }

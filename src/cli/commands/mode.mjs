@@ -1,5 +1,5 @@
 import { msg } from "../../i18n/index.mjs";
-import { downloadSize, findModel } from "../../server/asr/catalog.mjs";
+import { downloadSize, findModel } from "../../models/catalog.mjs";
 import { CHAT_VENDORS } from "../../server/chat/vendors.mjs";
 import { keyVendorOf, MODES } from "../../server/modes.mjs";
 import { PROVIDERS } from "../../server/providers/index.mjs";

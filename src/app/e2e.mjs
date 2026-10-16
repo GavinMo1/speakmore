@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 // 端到端测试时由主进程加载（设了 SPEAKMORE_E2E_OUT 才会）。它代替人做两件事：
 // 模拟"按一下热键、说几秒、再按一下"，以及在该贴字的时候只记下文字、不真的去贴。
 // 麦克风由 Chromium 的假设备提供（scripts/dev/e2e.mjs 传的启动参数），整条链路其余部分都是真的。
+// 走 local 模式时，先等本地模型下载、装好再按热键（数据目录是新的，模型真的要从下载源下一遍），记下各花了多久。
 
 const OUT_PATH = process.env.SPEAKMORE_E2E_OUT;
 const RECORD_MS = Number(process.env.SPEAKMORE_E2E_RECORD_MS ?? 7_500);
@@ -29,11 +30,42 @@ export function onFinished(outcome) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function run({ bar, history, quit }) {
+/**
+ * 本地模型装好之前一直等，下载每过 10% 说一声。不走 local 模式时直接返回
+ * @param {() => object | null} localModel 服务报的本地模型状态（app/service.mjs 的 localModel）
+ * @returns {Promise<{ downloadMs: number, loadMs: number, backend: string } | { failed: string } | null>}
+ */
+async function waitForLocalModel(localModel) {
+  if (!localModel() || localModel().state === "off") return null;
+  const startedAt = performance.now();
+  let downloadedAt = null;
+  let reported = -1;
+  for (;;) {
+    const local = localModel();
+    if (local.state === "failed") return { failed: JSON.stringify(local.problem) };
+    if (local.state === "downloading") {
+      const percent = Math.floor((local.received / local.total) * 10) * 10;
+      if (percent !== reported) console.log(`本地模型下载中 ${percent}%`);
+      reported = percent;
+    } else if (downloadedAt === null) downloadedAt = performance.now();
+    if (local.state === "ready") {
+      return {
+        downloadMs: Math.round(downloadedAt - startedAt),
+        loadMs: Math.round(performance.now() - downloadedAt),
+        backend: local.backend,
+      };
+    }
+    await sleep(200);
+  }
+}
+
+export async function run({ bar, history, localModel, quit }) {
   const done = (result, code) => {
     writeFileSync(OUT_PATH, JSON.stringify({ ...result, pasted, history: history.list() }, null, 2));
     quit(code);
   };
+  const local = await waitForLocalModel(localModel);
+  if (local?.failed) return done({ failed: `本地模型没装上：${local.failed}` }, 1);
   const giveUp = setTimeout(() => done({ failed: `等了 ${GIVE_UP_MS / 1000} 秒没有结局` }, 1), GIVE_UP_MS);
   const outcome = new Promise((resolve) => {
     finish = resolve;
@@ -55,5 +87,5 @@ export async function run({ bar, history, quit }) {
 
   const result = await outcome;
   clearTimeout(giveUp);
-  done(result, result.failed ? 1 : 0);
+  done({ ...result, ...(local ? { localModel: local } : {}) }, result.failed ? 1 : 0);
 }

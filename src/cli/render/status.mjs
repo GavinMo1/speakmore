@@ -1,4 +1,5 @@
 import { findLocale, msg, SYSTEM_LOCALE } from "../../i18n/index.mjs";
+import { backendText } from "../../models/describe.mjs";
 import { parseChatChoice } from "../../server/chat/vendors.mjs";
 import { findProvider, parseModelChoice } from "../../server/providers/index.mjs";
 import { findVendor } from "../../server/vendors.mjs";
@@ -50,8 +51,7 @@ function keyLine(key, provider, t) {
 function localModelLine(localModel, t) {
   switch (localModel?.state) {
     case "ready":
-      // 运行库报的后端名：MTL0 是第一块 GPU 走 Metal
-      return t("cli.status.localReady", { backend: /^MTL/.test(localModel.backend) ? "Metal" : localModel.backend });
+      return t("cli.status.localReady", { backend: backendText(localModel.backend) });
     case "downloading":
       return t("cli.status.localDownloading", {
         percent: Math.floor((localModel.received / localModel.total) * 100),

@@ -1,4 +1,4 @@
-import { downloadSize } from "../../src/server/asr/catalog.mjs";
+import { downloadSize } from "../../src/models/catalog.mjs";
 import { formatChatChoice } from "../../src/server/chat/vendors.mjs";
 import { durationBucket } from "./dataset.mjs";
 import { judgeKey, KINDS } from "./stages/judge.mjs";

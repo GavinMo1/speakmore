@@ -4,14 +4,15 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, test } from "node:test";
-import { createModelStore, hfMirror, huggingFace } from "../../../src/server/asr/store.mjs";
+import { CN_BASE } from "../../src/models/catalog.mjs";
+import { createModelStore } from "../../src/models/store.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const BYTES = { "a.onnx": Buffer.from("weights ".repeat(1000)), "tokenizer/vocab.json": Buffer.from('{"a":1}') };
 const fileOf = (path) => ({ path, size: BYTES[path].length, sha256: sha256(BYTES[path]) });
 const MODEL = {
   id: "fake-asr",
-  source: { repo: "someone/fake-asr", revision: "a".repeat(40) },
+  origin: { repo: "someone/fake-asr", revision: "a".repeat(40) },
   files: { model: fileOf("a.onnx"), vocab: fileOf("tokenizer/vocab.json") },
 };
 
@@ -20,47 +21,39 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
+const CN_HOST = new URL(CN_BASE).host;
+/** 地址里那次提交后面的就是文件的路径：国内源和原始地址都这么排 */
+const pathOf = (url) => url.split(`/${MODEL.origin.revision}/`)[1];
+
 /** 一个临时的仓，下载走假的 fetch：按地址最后的路径给内容，记下下了哪些 */
 function setUp({ serve = (path) => new Response(BYTES[path]) } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "speakmore-models-"));
   dirs.push(dir);
   const fetched = [];
   const fetch = async (url) => {
-    const path = url.split(`/resolve/${MODEL.source.revision}/`)[1];
+    const path = pathOf(url);
     fetched.push(path);
     return serve(path);
   };
   return { dir, fetched, store: createModelStore({ dir, fetch }) };
 }
 
-test("下载地址是 Hugging Face 上钉在那次提交的文件", () => {
-  assert.equal(
-    huggingFace(MODEL, MODEL.files.vocab),
-    `https://huggingface.co/someone/fake-asr/resolve/${"a".repeat(40)}/tokenizer/vocab.json`,
-  );
-});
-
-test("镜像的地址和 Hugging Face 的一样排，只换主机", () => {
-  assert.equal(
-    hfMirror(MODEL, MODEL.files.vocab),
-    `https://hf-mirror.com/someone/fake-asr/resolve/${"a".repeat(40)}/tokenizer/vocab.json`,
-  );
-});
-
-test("第一个地址连不上、回错误码：换下一个接着下，都不行才报错，报错里列出每个地址的原因", async () => {
+test("默认先走国内源：它连不上、回错误码就换原始地址接着下，都不行才报错，报错里列出每个地址的原因", async () => {
   const dir = mkdtempSync(join(tmpdir(), "speakmore-models-"));
   dirs.push(dir);
   const hosts = [];
   const fetch = async (url) => {
     const { host, pathname } = new URL(url);
     hosts.push(host);
+    if (host === CN_HOST) return new Response("", { status: 404 });
     if (host === "huggingface.co") throw new TypeError("fetch failed");
-    return new Response(BYTES[pathname.split(`/resolve/${MODEL.source.revision}/`)[1]]);
+    return new Response(BYTES[pathOf(pathname)]);
   };
   const store = createModelStore({ dir, fetch });
   await store.install(MODEL);
   assert.equal(store.isInstalled(MODEL), true);
-  assert.deepEqual(hosts, ["huggingface.co", "hf-mirror.com", "huggingface.co", "hf-mirror.com"]);
+  const tried = [CN_HOST, "huggingface.co", "hf-mirror.com"];
+  assert.deepEqual(hosts, [...tried, ...tried]);
 
   const failing = createModelStore({
     dir: mkdtempSync(join(tmpdir(), "speakmore-models-")),
@@ -71,8 +64,24 @@ test("第一个地址连不上、回错误码：换下一个接着下，都不�
   });
   await assert.rejects(
     failing.install(MODEL),
-    (error) => /huggingface\.co.*fetch failed/s.test(error.message) && /hf-mirror\.com.*HTTP 503/s.test(error.message),
+    (error) =>
+      new RegExp(`${CN_HOST}.*HTTP 503`, "s").test(error.message) &&
+      /huggingface\.co.*fetch failed/s.test(error.message) &&
+      /hf-mirror\.com.*HTTP 503/s.test(error.message),
   );
+});
+
+test("选了原始地址：先从 Hugging Face 下，国内源垫在最后", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "speakmore-models-"));
+  dirs.push(dir);
+  const hosts = [];
+  const fetch = async (url) => {
+    const { host, pathname } = new URL(url);
+    hosts.push(host);
+    return host === CN_HOST ? new Response(BYTES[pathOf(pathname)]) : new Response("", { status: 503 });
+  };
+  await createModelStore({ dir, fetch, source: "original" }).install(MODEL);
+  assert.deepEqual(hosts.slice(0, 3), ["huggingface.co", "hf-mirror.com", CN_HOST]);
 });
 
 test("连上了但迟迟不给数据：到时候放弃这个地址，换下一个", async () => {
@@ -80,10 +89,10 @@ test("连上了但迟迟不给数据：到时候放弃这个地址，换下一�
   dirs.push(dir);
   const fetch = async (url, { signal }) => {
     const { host, pathname } = new URL(url);
-    if (host === "huggingface.co") {
+    if (host === CN_HOST) {
       return new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
     }
-    return new Response(BYTES[pathname.split(`/resolve/${MODEL.source.revision}/`)[1]]);
+    return new Response(BYTES[pathOf(pathname)]);
   };
   const store = createModelStore({ dir, fetch, stallMs: 50 });
   await store.install(MODEL);
@@ -146,7 +155,7 @@ test("已经在那儿的文件内容不对（下坏了、被改过）：重新�
 test("清单换了版本，旧收据就不算数：重新核对文件，内容没变的不重下", async () => {
   const { fetched, store } = setUp();
   await store.install(MODEL);
-  const moved = { ...MODEL, source: { ...MODEL.source, revision: "b".repeat(40) } };
+  const moved = { ...MODEL, origin: { ...MODEL.origin, revision: "b".repeat(40) } };
   assert.equal(store.isInstalled(moved), false);
   await createModelStore({
     dir: store.dirOf(MODEL).replace(/\/fake-asr$/, ""),

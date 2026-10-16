@@ -1,16 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
-import { findModel } from "../../src/server/asr/catalog.mjs";
-import {
-  createModeRefiner,
-  DEFAULT_TRANSCRIBER,
-  describeRoute,
-  findMode,
-  keyVendorOf,
-  MODES,
-  parseMode,
-} from "../../src/server/modes.mjs";
+import { DEFAULT_TRANSCRIBER, findModel } from "../../src/models/catalog.mjs";
+import { createModeRefiner, describeRoute, findMode, keyVendorOf, MODES, parseMode } from "../../src/server/modes.mjs";
 
 const zh = createTranslator("zh-CN");
 const quiet = { info() {}, warn() {}, error() {} };

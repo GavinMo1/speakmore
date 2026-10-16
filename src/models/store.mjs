@@ -13,35 +13,23 @@ import {
 import { dirname, join } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { DEFAULT_SOURCE, downloadUrls } from "./catalog.mjs";
 
-// 模型仓：把清单（catalog.mjs）里的模型下载到本机、校验、列出、删除。模型广场和评测用的都是它。
-// 一个模型一个目录 <仓>/<模型 id>/，文件照清单里的相对路径放。每个文件先写成 .part，sha256 对上了才改回原名；
-// 全部下齐后写一张收据 .complete.json（钉着的那次提交和每个文件的 sha256）。有收据、且和清单对得上，才算装好了。
-// 依次试几个下载地址（SOURCES）。只用 Node 自带的 fetch 和文件操作，哪个系统都一样。
+// 模型仓：把配置表（catalog.mjs）里的模型下载到本机、校验、列出、删除。App、命令行、评测用的都是它。
+// 一个模型一个目录 <仓>/<模型 id>/，文件照配置表里的相对路径放。每个文件先写成 .part，sha256 对上了才改回原名；
+// 全部下齐后写一张收据 .complete.json（钉着的那次提交和每个文件的 sha256）。有收据、且和配置表对得上，才算装好了。
+// 依次试几个下载地址：用户选的下载源在前，别的源垫后（catalog.mjs 的 downloadUrls）。
+// 只用 Node 自带的 fetch 和文件操作，哪个系统都一样。
 
 const RECEIPT = ".complete.json";
-
-/** 下载地址：Hugging Face 上钉在某一次提交的那个文件 */
-export const huggingFace = (model, file) =>
-  `https://huggingface.co/${model.source.repo}/resolve/${model.source.revision}/${file.path}`;
-
-/** 国内常用的 Hugging Face 镜像，路径的排法和 Hugging Face 一样 */
-export const hfMirror = (model, file) =>
-  `https://hf-mirror.com/${model.source.repo}/resolve/${model.source.revision}/${file.path}`;
-
-/**
- * 依次试的下载地址：Hugging Face 连不上、卡住（国内常见）就换镜像。每个文件都按清单里的 sha256 校验，
- * 从哪儿下的都一样，所以不用让用户自己挑
- */
-export const SOURCES = Object.freeze([huggingFace, hfMirror]);
 
 /** 多久收不到一个字节就算卡住了，放弃这个地址换下一个 */
 const STALL_MS = 30_000;
 
-/** 收据的内容：清单里决定"装的是不是这一份"的那几样 */
+/** 收据的内容：配置表里决定"装的是不是这一份"的那几样 */
 const receiptOf = (model) => ({
   id: model.id,
-  revision: model.source.revision,
+  revision: model.origin.revision,
   files: Object.fromEntries(Object.values(model.files).map((file) => [file.path, file.sha256])),
 });
 
@@ -49,10 +37,10 @@ const receiptOf = (model) => ({
  * @param {object} options
  * @param {string} options.dir 仓放在哪
  * @param {typeof globalThis.fetch} [options.fetch] 测试时换成假的
- * @param {((model: object, file: object) => string)[]} [options.sources] 文件依次从哪下
+ * @param {string} [options.source] 先从哪个下载源下（catalog.mjs 的 SOURCES，设置里的 modelSource）
  * @param {number} [options.stallMs] 多久收不到数据算卡住，测试时换成短的
  */
-export function createModelStore({ dir, fetch = globalThis.fetch, sources = SOURCES, stallMs = STALL_MS }) {
+export function createModelStore({ dir, fetch = globalThis.fetch, source = DEFAULT_SOURCE, stallMs = STALL_MS }) {
   const dirOf = (model) => join(dir, model.id);
 
   function isInstalled(model) {
@@ -75,8 +63,7 @@ export function createModelStore({ dir, fetch = globalThis.fetch, sources = SOUR
     }
     mkdirSync(dirname(target), { recursive: true });
     const failures = [];
-    for (const urlOf of sources) {
-      const url = urlOf(model, file);
+    for (const url of downloadUrls(model, file, source)) {
       try {
         await fetchTo(url, target, file, { signal, onProgress });
         return;
@@ -115,10 +102,10 @@ export function createModelStore({ dir, fetch = globalThis.fetch, sources = SOUR
       const response = await fetch(url, { signal: aborted, redirect: "follow" });
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
       await pipeline(Readable.fromWeb(response.body), meter, createWriteStream(partial), { signal: aborted });
-      if (received !== file.size) throw new Error(`${file.path} 下载到 ${received} 字节，清单里是 ${file.size} 字节`);
+      if (received !== file.size) throw new Error(`${file.path} 下载到 ${received} 字节，配置表里是 ${file.size} 字节`);
       const digest = hash.digest("hex");
       if (digest !== file.sha256)
-        throw new Error(`${file.path} 的 sha256 对不上：下载到的是 ${digest}，清单里是 ${file.sha256}`);
+        throw new Error(`${file.path} 的 sha256 对不上：下载到的是 ${digest}，配置表里是 ${file.sha256}`);
       renameSync(partial, target);
     } catch (error) {
       rmSync(partial, { force: true });

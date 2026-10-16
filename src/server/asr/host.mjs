@@ -27,7 +27,7 @@ function forkWorker(workerPath) {
 
 /**
  * @param {object} request
- * @param {object} request.model 清单里的一项（catalog.mjs）
+ * @param {object} request.model 配置表里的一项（models/catalog.mjs）
  * @param {string} request.dir 模型下载到的目录
  * @param {object} [request.options] 交给运行库的参数（backend、threads…）
  * @param {{ info: Function, warn: Function, error: Function }} request.log

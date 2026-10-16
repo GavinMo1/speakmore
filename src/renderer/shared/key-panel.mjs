@@ -4,46 +4,55 @@ import { describeError } from "./setup-text.mjs";
 
 // 选用哪家的模型、填 key：主窗口设置里的"模型"一页和首次引导的第一步用的是这同一块。
 // 一块面板只管一层的厂商（layer）：native 模式收音频的那几家，或者 local 模式第二跳润色的那几家。
-// 列哪几家、选的是哪家、"改用"做什么都由那一层说，两层互不相干（见下面的 KEY_LAYERS）。
+// 列哪几家、选的是哪家、"改用"要换哪几项设置都由那一层说，两层互不相干（见下面的 KEY_LAYERS）。
+// "改用"时正在用的就是这一层的模式：当场换这一层的模型；不是的话连同这家一起切到那种模式（内核只许这么换，app/modes.mjs）。
 // 状态都在主进程，这里只负责画出来和转达用户的操作。key 只从这里往主进程走一趟，不会从主进程回到页面上。
 
 /**
- * 先存 key 再换：key 拿要换成的设置验证过才存，存好了再让那一层换过去
+ * 改用某一层的某家：有新 key 先拿要换成的设置验证过存好，再换。
+ * 正在用的就是这一层的模式时当场换这一层的模型（apply），不是的话连同这些设置一起切到那种模式
+ * @param {(typeof KEY_LAYERS)["native"]} layer
+ * @param {object} setup 最近一次的状态
  * @param {string} id
  * @param {string | undefined} key 顺带填的一把新的；不填就用那一家现有的
- * @param {Record<string, string>} changes
- * @param {() => Promise<object>} apply
  */
-async function saveThenApply(id, key, changes, apply) {
+export async function useVendor(layer, setup, id, key) {
+  const changes = layer.changes(id);
   if (key !== undefined) {
     const saved = await window.speakmore.saveKey(key, id, changes);
     if (!saved.ok) return saved;
   }
-  return apply();
+  return setup.mode.value === layer.mode ? layer.apply(changes) : window.speakmore.setMode(layer.mode, changes);
 }
 
-/** 两层的厂商：列哪几家、这一层选的是哪家、改用某家时做什么 */
+/** 两层的厂商：属于哪种模式、列哪几家、这一层选的是哪家、改用某家时换哪几项设置、在那种模式里怎么当场换 */
 export const KEY_LAYERS = {
   /** native 模式：收音频的模型，改用一家就是换成它的默认模型 */
   native: {
+    mode: "native",
     vendors: (setup) => setup.native.providers,
     chosen: (setup) => setup.native.model.split("/")[0],
-    use: (id, key) => saveThenApply(id, key, { model: id }, () => window.speakmore.setModel(id)),
+    changes: (id) => ({ model: id }),
+    apply: (changes) => window.speakmore.setModel(changes.model),
   },
   /**
    * local 模式第二跳：润色的模型。polish(id) 给出改用这家时的写法（厂商/模型），
    * customUrl() 是自定义服务的地址；不给时用它的默认模型、地址不变
    */
   polish: ({ polish = (id) => id, customUrl = () => undefined } = {}) => ({
+    mode: "local",
     vendors: (setup) => setup.local.vendors,
     chosen: (setup) => setup.local.polish.split("/")[0],
-    use(id, key) {
+    changes(id) {
       const url = customUrl();
-      const changes = url === undefined ? { polish: polish(id) } : { polish: polish(id), customUrl: url };
-      return saveThenApply(id, key, changes, () => window.speakmore.setPolish(changes.polish, url));
+      return url === undefined ? { polish: polish(id) } : { polish: polish(id), customUrl: url };
     },
+    apply: (changes) => window.speakmore.setPolish(changes.polish, changes.customUrl),
   }),
 };
+
+/** 厂商在界面上叫什么：自定义服务没有牌子，按界面语言写 */
+const named = (provider) => (provider.id === "custom" ? { ...provider, name: t("keyPanel.customName") } : provider);
 
 /** 不是正在用的那家：只说它有没有 key、在哪（主进程只报来源，不解密） */
 function otherKeyText(provider) {
@@ -82,6 +91,7 @@ const MARKUP = `
     <p class="state"></p>
     <button type="button" class="button primary use-provider" hidden></button>
   </div>
+  <div class="vendor-extra"></div>
   <form class="key-form">
     <input type="password" class="input key-input" autocomplete="off" spellcheck="false"
       data-i18n-placeholder="keyPanel.placeholder" aria-label="API key" />
@@ -98,11 +108,12 @@ const MARKUP = `
 /**
  * 把这一块放进 container。
  * @param {HTMLElement} container
- * @param {{ refresh: () => Promise<unknown>, layer: (typeof KEY_LAYERS)["native"] }} options
- *   refresh：存完、换完以后让整个窗口重新问一遍状态；layer：管哪一层的厂商（KEY_LAYERS）
- * @returns {{ render: (setup: object) => void }}
+ * @param {{ refresh: () => Promise<unknown>, layer: (typeof KEY_LAYERS)["native"], onSelect?: (id: string) => void }} options
+ *   refresh：存完、换完以后让整个窗口重新问一遍状态；layer：管哪一层的厂商（KEY_LAYERS）；
+ *   onSelect：每次画完说一声现在看着的是哪家（设置页按它画那一家的模型、地址）
+ * @returns {{ render: (setup: object) => void, slot: HTMLElement }} slot：选哪家和填 key 之间的一格，用的人往里放那一家要另填的（模型、地址）
  */
-export function createKeyPanel(container, { refresh, layer }) {
+export function createKeyPanel(container, { refresh, layer, onSelect }) {
   container.innerHTML = MARKUP;
   localize(container);
   const find = (selector) => container.querySelector(selector);
@@ -162,7 +173,7 @@ export function createKeyPanel(container, { refresh, layer }) {
   function render(setup) {
     latest = setup;
     // 这一块说的是选中的那一家：它的 key 在不在、去哪申请；不是这一层选的那家时可以改用它
-    const providers = layer.vendors(setup);
+    const providers = layer.vendors(setup).map(named);
     const chosen = layer.chosen(setup);
     if (!providers.some(({ id }) => id === selected)) selected = chosen;
     const provider = providers.find(({ id }) => id === selected);
@@ -194,6 +205,7 @@ export function createKeyPanel(container, { refresh, layer }) {
     keyInput.disabled = !editable;
     find(".paste-key").disabled = !editable;
     saveButton.disabled = saving || !editable;
+    onSelect?.(selected);
   }
 
   /**
@@ -233,12 +245,12 @@ export function createKeyPanel(container, { refresh, layer }) {
     const isCurrent = selected === layer.chosen(latest);
     const holding = selected === latest.provider.id;
     submit(saveButton, () => {
-      if (!isCurrent) return layer.use(selected, value);
+      if (!isCurrent) return useVendor(layer, latest, selected, value);
       return holding ? window.speakmore.saveKey(value) : window.speakmore.saveKey(value, selected, {});
     });
   });
 
-  useButton.addEventListener("click", () => submit(useButton, () => layer.use(selected)));
+  useButton.addEventListener("click", () => submit(useButton, () => useVendor(layer, latest, selected)));
 
   find(".paste-key").addEventListener("click", async () => {
     const text = (await window.speakmore.readClipboard()).trim();
@@ -252,7 +264,7 @@ export function createKeyPanel(container, { refresh, layer }) {
   });
 
   find(".forget-key").addEventListener("click", async () => {
-    const provider = layer.vendors(latest).find(({ id }) => id === selected) ?? latest.provider;
+    const provider = named(layer.vendors(latest).find(({ id }) => id === selected) ?? latest.provider);
     const inUse = provider.id === latest.provider.id;
     const question = t(inUse ? "keyPanel.confirmForgetInUse" : "keyPanel.confirmForget", { provider: provider.name });
     if (!window.confirm(question)) return;
@@ -262,5 +274,5 @@ export function createKeyPanel(container, { refresh, layer }) {
 
   find(".open-key-page").addEventListener("click", () => window.speakmore.openKeyPage(selected));
 
-  return { render };
+  return { render, slot: find(".vendor-extra") };
 }

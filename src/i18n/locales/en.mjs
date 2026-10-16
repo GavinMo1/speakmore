@@ -69,6 +69,7 @@ export default {
   providers: {
     gemini: { getKey: "Get one at Google AI Studio" },
     openai: { getKey: "Get one at OpenAI Platform" },
+    deepseek: { getKey: "Get one at DeepSeek Platform" },
   },
 
   language: {
@@ -86,6 +87,8 @@ export default {
       polish:
         "On the local path, which provider and model polishes the text, as provider/model; for a custom service write custom/<model>",
       customUrl: "Address of your custom polishing service (OpenAI-compatible), e.g. https://api.example.com/v1",
+      modelSource:
+        "Where on-device models download from: cn is SpeakMore's mirror in China, original is Hugging Face. If the chosen one stalls, the other is tried",
       theme: "Which theme the windows use",
       language: "Interface language; system follows your Mac",
     },
@@ -122,6 +125,30 @@ export default {
     modelFailed: "The local model couldn't be set up: {reason}",
     undecodable: "Couldn't read the recording: {reason}",
     transcribeFailed: "Local transcription failed: {reason}",
+  },
+  modelSources: {
+    cn: "China mirror (SpeakMore CDN)",
+    original: "Original (Hugging Face)",
+  },
+  localModels: {
+    tags: {
+      "apple-silicon": "suits Apple silicon",
+      metal: "Metal-accelerated",
+      cpu: "runs on CPU alone",
+      "zh-en": "strong on mixed Chinese–English",
+      fast: "fast",
+      small: "small",
+    },
+    chips: {
+      "apple-silicon": "Apple silicon",
+      "intel-mac": "Intel Macs",
+      "windows-x64": "Windows (x64)",
+      "windows-arm64": "Windows (ARM)",
+    },
+    backends: { metal: "Metal", cpu: "CPU" },
+    measured: "Measured on {chip} ({backend}): {score}/5 · {realtime}× real time · {memory} memory",
+    notMeasured: "Not yet measured on {chip}",
+    unknownChip: "Not yet measured on this kind of machine",
   },
   chat: {
     modelRequired: "{vendor} has no default model; write it as {vendor}/<model name>",
@@ -319,6 +346,32 @@ export default {
     version: "Version",
     dataFolder: "Data folder",
     source: "Source code",
+    modes: {
+      label: "Recognition mode",
+      native: "Native",
+      local: "Local",
+      nativeHint: "Your recording goes straight to a model that takes audio, finished in one step.",
+      localHint: "This Mac transcribes first, then an LLM polishes the text. Audio stays on your Mac.",
+      inUse: "In use",
+      use: "Use {mode}",
+    },
+    local: {
+      step1: "Step 1 · On-device transcription",
+      step2: "Step 2 · Polishing",
+      source: "Download from",
+      downloaded: "Downloaded",
+      downloading: "Downloading {percent}% ({size})",
+      loading: "Loading",
+      ready: "Ready · {backend}",
+      failed: "Not set up",
+      retry: "Retry",
+      polishModel: "Model",
+      customModel: "Model name",
+      customModelPlaceholder: "e.g. qwen3:8b",
+      customUrl: "Address",
+      customUrlPlaceholder: "https://api.example.com/v1",
+      apply: "Apply",
+    },
   },
 
   keyPanel: {
@@ -327,6 +380,7 @@ export default {
     use: "Use {provider}",
     placeholder: "Paste key",
     paste: "Paste",
+    customName: "Custom service",
     save: "Save & verify",
     saveAndUse: "Save & use {provider}",
     forget: "Delete key",
@@ -573,6 +627,8 @@ export default {
         "The running SpeakMore still uses {theme}: {variable} is set where it was started, and it overrides the settings file.",
       languageOverridden:
         "The running SpeakMore still uses {language}: {variable} is set where it was started, and it overrides the settings file.",
+      modelSourceOverridden:
+        "The running SpeakMore still uses {source}: {variable} is set where it was started, and it overrides the settings file.",
       envWarning: "Note: the {variable} env var is set and overrides this value.",
       changed: "{name} set to {value}.",
       unset: "{name} reset to the default, {value}.",
@@ -639,6 +695,8 @@ export default {
       polishCheck: "Check it works: speakmore polish check",
       polishSwitched: "Step 2 is now {model}.",
       urlNeeded: "A custom polishing service needs its address: --url <url> (OpenAI-compatible; most end in /v1)",
+      sourceCurrent: "Downloads from: {source}",
+      sourceSwitch: "Change: speakmore config set modelSource {other} (falls back to the other if one stalls)",
     },
     choose: {
       question: "First, pick how recordings become text (change it later with speakmore mode or speakmore model):",

@@ -1,6 +1,6 @@
-import { findModel } from "../../src/server/asr/catalog.mjs";
+import { findModel } from "../../src/models/catalog.mjs";
 
-// 本地转写的候选：清单（src/server/asr/catalog.mjs）里的一个模型，加上跑它的参数。
+// 本地转写的候选：清单（src/models/catalog.mjs）里的一个模型，加上跑它的参数。
 // id 默认就是模型的 id；同一个模型换参数另起一个 id（比如强制只用 CPU，看没有 GPU 的机器上多慢）。
 
 const candidate = (id, modelId, options = {}) => {

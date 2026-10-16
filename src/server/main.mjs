@@ -36,6 +36,7 @@ const transcriber =
     ? await startTranscriber({
         modelId: route.transcriber,
         modelsDir,
+        source: config.modelSource,
         log,
         onProgress: progressLogger(route.transcriber),
       })

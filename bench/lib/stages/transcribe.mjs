@@ -7,7 +7,7 @@ import { decodeWav, SPEECH_SAMPLE_RATE } from "../../../src/server/audio/pcm.mjs
 import { fingerprint } from "../results.mjs";
 
 // 转写：每个候选在一个子进程里把要跑的样本一条条转完（transcribe-worker.mjs），结果一条条进结果库，
-// 中途崩了已经转完的也留着，下次只补剩下的。模型没下载的先下载（src/server/asr/store.mjs）。
+// 中途崩了已经转完的也留着，下次只补剩下的。模型没下载的先下载（src/models/store.mjs）。
 
 const WORKER = join(import.meta.dirname, "transcribe-worker.mjs");
 
@@ -25,7 +25,7 @@ export function transcribeKey(clip, candidate, engineVersion, datasetDir) {
 
 /** 一个候选的配置：模型文件、运行库版本、参数。每跑一轮的记录（加载、首次、内存）按它归在一起 */
 const configOf = ({ model, options }, engineVersion) => ({
-  model: { id: model.id, revision: model.source.revision, files: Object.values(model.files).map((f) => f.sha256) },
+  model: { id: model.id, revision: model.origin.revision, files: Object.values(model.files).map((f) => f.sha256) },
   engine: { id: model.engine, version: engineVersion },
   options,
 });

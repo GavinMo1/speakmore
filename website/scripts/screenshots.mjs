@@ -88,6 +88,15 @@ const wait = (ms) => new Promise((done) => setTimeout(done, ms));
 let current = { theme: findTheme("ink"), locale: "en", history: null };
 const gemini = { id: "gemini", name: "Gemini", keyEnv: "GEMINI_API_KEY", key: "stored" };
 const openai = { id: "openai", name: "OpenAI", keyEnv: "OPENAI_API_KEY", key: null };
+const deepseek = {
+  id: "deepseek",
+  name: "DeepSeek",
+  keyEnv: "DEEPSEEK_API_KEY",
+  key: null,
+  hasKeyPage: true,
+  defaultModel: "deepseek-flash",
+  models: ["deepseek-flash", "deepseek-v4-pro"],
+};
 ipcMain.on("theme:get", (event) => {
   event.returnValue = themeCss(current.theme);
 });
@@ -111,7 +120,19 @@ ipcMain.handle("setup:get", () => ({
   home: "~/.speakmore",
   version: VERSION,
   provider: gemini,
-  providers: [gemini, openai],
+  // 设置里"模型"那一页按识别模式画（src/app/main.mjs 的 describeModes）。截图用不到本地转写，给个空的模型列表
+  mode: { value: "native", choices: ["native", "local"] },
+  native: { model: "gemini/gemini-3.6-flash", providers: [gemini, openai] },
+  local: {
+    transcriber: "qwen3-asr-0.6b-q8",
+    transcribers: [],
+    chip: "apple-silicon",
+    source: { value: "cn", choices: ["cn", "original"] },
+    polish: "deepseek/deepseek-flash",
+    customUrl: "",
+    vendors: [deepseek],
+  },
+  localModel: null,
   switchable: true,
 }));
 ipcMain.handle("config:get", () => ({ serverUrl: "ws://127.0.0.1:9/none", hotkey: "right_option", barControls: true }));

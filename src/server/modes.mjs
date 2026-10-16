@@ -18,8 +18,6 @@ import { createModelRefiner } from "./refine/refiner.mjs";
 // 本地转写链路的转写器（装着模型的子进程，asr/host.mjs）由调用方装好交进来：它的去留跟着模型走，
 // 换一把 key、换一家润色都不该把模型重装一遍。
 
-/** 设置里没写时用哪个本地模型：第一轮评测里最准的那个（bench/results/asr-round1-2026-10-16.md）。用户可以换 */
-export const DEFAULT_TRANSCRIBER = "qwen3-asr-0.6b-q8";
 /** 设置里没写时润色交给谁 */
 export const DEFAULT_POLISH = "deepseek";
 

@@ -8,6 +8,7 @@ test("只给 Gemini 的密钥时，其余用默认值，只监听本机", () => 
     port: 8790,
     route: { mode: "native", model: { provider: "gemini", model: "gemini-3.6-flash" }, thinkingLevel: "MINIMAL" },
     apiKey: "k",
+    modelSource: "cn",
   });
 });
 
@@ -72,6 +73,7 @@ test("SPEAKMORE_MODE=local：本地模型和润色那家用默认的，key 从�
       customUrl: null,
     },
     apiKey: "sk-d",
+    modelSource: "cn",
   });
   assert.throws(() => loadConfig({ SPEAKMORE_MODE: "local", GEMINI_API_KEY: "k" }), /DEEPSEEK_API_KEY/);
 });
@@ -107,4 +109,10 @@ test("链路、本地模型、润色写错时说清是哪个环境变量", () =>
     () => loadConfig({ SPEAKMORE_MODE: "local", SPEAKMORE_POLISH: "nobody/x", DEEPSEEK_API_KEY: "k" }),
     /SPEAKMORE_POLISH/,
   );
+});
+
+test("下载源：SPEAKMORE_MODEL_SOURCE 选先从哪下，写错了说能填什么", () => {
+  const env = { SPEAKMORE_MODE: "local", DEEPSEEK_API_KEY: "k" };
+  assert.equal(loadConfig({ ...env, SPEAKMORE_MODEL_SOURCE: "original" }).modelSource, "original");
+  assert.throws(() => loadConfig({ ...env, SPEAKMORE_MODEL_SOURCE: "s3" }), /SPEAKMORE_MODEL_SOURCE.*cn \/ original/);
 });

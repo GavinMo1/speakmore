@@ -1,10 +1,10 @@
 import { LOCALES, SYSTEM_LOCALE } from "../../i18n/index.mjs";
 import { t } from "../shared/i18n.mjs";
-import { createKeyPanel, KEY_LAYERS } from "../shared/key-panel.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
+import { createModelPane } from "./model-pane.mjs";
 
 // 设置对话框：原版的"设置中心"，左边一列菜单。我们的四页：通用（热键、主题、语言、开机启动）、
-// 模型（用哪家、填 key，对应原版"账户"的位置）、权限、关于。
+// 模型（识别模式和各模式里的模型、key，对应原版"账户"的位置，见 model-pane.mjs）、权限、关于。
 // 状态都在主进程，这里只负责画出来和转达用户的操作。
 
 const $ = (id) => document.getElementById(id);
@@ -22,7 +22,7 @@ export function paneFor(setup) {
  */
 export function createSettings({ refresh }) {
   const dialog = $("settings");
-  const keyPanel = createKeyPanel($("key-panel"), { refresh, layer: KEY_LAYERS.native });
+  const modelPane = createModelPane({ refresh });
   /** 最近一次拿到的状态 */
   let latest = null;
 
@@ -163,13 +163,17 @@ export function createSettings({ refresh }) {
     /** @param {string} [pane] 打开哪一页；"auto" 是还差东西的那一页 */
     open(pane = "general") {
       showPane(pane === "auto" && latest ? paneFor(latest) : pane);
-      if (!dialog.open) dialog.showModal();
+      if (!dialog.open) {
+        modelPane.reset();
+        if (latest) modelPane.render(latest);
+        dialog.showModal();
+      }
     },
 
     render(setup) {
       latest = setup;
       renderGeneral(setup);
-      keyPanel.render(setup);
+      modelPane.render(setup);
       renderPermissions(setup);
       $("about-version").textContent = `v${setup.version}`;
       $("about-home").textContent = setup.home;

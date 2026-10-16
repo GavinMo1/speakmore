@@ -17,8 +17,8 @@ import {
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale } from "../i18n/index.mjs";
 import { alsoLogTo, log } from "../log.mjs";
-import { downloadSize, MODELS } from "../server/asr/catalog.mjs";
-import { createModelStore } from "../server/asr/store.mjs";
+import { chipOf, downloadSize, MODELS, measuredOn, SOURCES } from "../models/catalog.mjs";
+import { createModelStore } from "../models/store.mjs";
 import { CHAT_VENDORS, formatChatChoice } from "../server/chat/vendors.mjs";
 import { describeRoute, keyVendorOf, MODES } from "../server/modes.mjs";
 import { formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
@@ -73,6 +73,8 @@ const thinkingFor = (provider) => (provider.thinkingLevels ? SETTINGS.thinking.v
 const TRAY_ICON = join(import.meta.dirname, "../../assets/trayTemplate.png");
 /** 关于里"在 GitHub 上看"打开的地方 */
 const HOMEPAGE = "https://github.com/zephyr4123/speakmore";
+/** 这台机器是哪类芯片：本地模型的实测按它挑（models/catalog.mjs 的 CHIPS） */
+const CHIP = chipOf();
 /** 主窗口的大小，照原版（targets/typeless 的 hub 窗口：1080×750，最小 988×685） */
 const HUB_SIZE = { width: 1080, height: 750, minWidth: 988, minHeight: 685 };
 /** 悬浮条的窗口。比条本身大一圈：上面要放一行提示，四周要留出阴影，报错时条会变宽变高 */
@@ -156,6 +158,7 @@ async function main() {
         log,
         route: ROUTE,
         modelsDir: PATHS.modelsDir,
+        modelSource: SETTINGS.modelSource.value,
         onModelCall: (call) => {
           history.addCall(call);
           historyChanged();
@@ -539,10 +542,16 @@ async function main() {
         transcribers: MODELS.map((model) => ({
           id: model.id,
           name: model.name,
-          license: model.license,
+          license: model.license.name,
           bytes: downloadSize(model),
           installed: store.isInstalled(model),
+          tags: model.tags,
+          // 在这类芯片上的实测，跑得快的在前；没测过是空的
+          measured: measuredOn(model, CHIP),
         })),
+        chip: CHIP,
+        // 本地模型从哪下：哪种模式里都能换
+        source: { value: settings.modelSource.value, choices: SOURCES.map(({ id }) => id) },
         polish: settings.polish.value,
         customUrl: settings.customUrl.value,
         vendors: CHAT_VENDORS.map(describeVendor),
@@ -619,6 +628,12 @@ async function main() {
     const variable = overridingEnv("theme", process.env);
     return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
   });
+  handle("setup:set-model-source", (_event, wanted) => {
+    saveSetting(PATHS.settingsFile, "modelSource", wanted);
+    reloadModelSource();
+    const variable = overridingEnv("modelSource", process.env);
+    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
+  });
   handle("setup:set-language", (_event, wanted) => {
     saveSetting(PATHS.settingsFile, "language", wanted);
     // 是在设置的"通用"那一页换的：主窗口换好语言后回到这一页
@@ -626,6 +641,17 @@ async function main() {
     const variable = overridingEnv("language", process.env);
     return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
   });
+
+  /**
+   * 重新读一遍设置里的下载源，交给服务：正在下载的、上次没下下来的从新的源接着下。不用重启
+   * @returns {{ modelSource: string }} 实际用的那个（被环境变量盖着时是环境变量里的）
+   */
+  function reloadModelSource() {
+    const { value } = resolveSettings({ file: PATHS.settingsFile, env: process.env }).modelSource;
+    service?.setModelSource(value);
+    setupChanged();
+    return { modelSource: value };
+  }
 
   /**
    * 重新读一遍设置里的语言，变了就当场换：菜单栏重画，主窗口和首次引导重新加载（页面上的字都按新的语言写），
@@ -924,6 +950,7 @@ async function main() {
             ),
           "reload-theme": reloadTheme,
           "reload-language": () => reloadLanguage(),
+          "reload-model-source": () => reloadModelSource(),
           // 命令行的名字沿用窗口还分开时的叫法：show-settings 打开设置里还差东西的那一页，
           // 第一次启动时命令行会带上 onboarding，打开首次引导
           "show-settings": ({ onboarding = false }) => (onboarding ? showOnboarding() : showHub({ pane: "auto" })),
@@ -940,7 +967,7 @@ async function main() {
     const loaded = await keyLoaded;
     if (loaded.state !== "ready")
       throw new Error(`端到端测试需要能用的 key：${t.text(loaded.problem) || loaded.state}`);
-    await e2e.run({ bar, history, quit: (code) => app.exit(code) });
+    await e2e.run({ bar, history, localModel: () => service?.localModel, quit: (code) => app.exit(code) });
     return;
   }
 

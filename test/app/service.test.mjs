@@ -272,6 +272,7 @@ function fakeLocal() {
   const startLocal = (options) =>
     new Promise((resolve, reject) => {
       control.started.push(options.modelId);
+      control.sources = [...(control.sources ?? []), options.source];
       control.progress = (received, total) => options.onProgress({ received, total });
       control.finish = () =>
         resolve({
@@ -401,4 +402,63 @@ test("本地模型没装上时再选同一个：重新下载、装载（重试�
   assert.equal(service.localModel.state, "ready");
   service.switchTranscriber("qwen3-asr-0.6b-q8");
   assert.equal(control.started.length, 2);
+});
+
+test("换下载源：正在下载的从新的源接着下（已经下好的文件由模型仓跳过）；装好了的不动，下次下载才用新的", async (t) => {
+  const { control, startLocal } = fakeLocal();
+  const service = await startService({
+    log: quietLog,
+    route: LOCAL,
+    modelSource: "cn",
+    startLocal,
+    createRefiner: throughTranscriber,
+  });
+  t.after(() => service.close());
+  control.progress(10, 100);
+  await tick();
+  assert.equal(service.localModel.state, "downloading");
+
+  service.setModelSource("original");
+  assert.deepEqual(control.sources, ["cn", "original"]);
+  service.setModelSource("original");
+  assert.equal(control.started.length, 2, "同一个源不重来");
+
+  control.finish();
+  await tick();
+  assert.equal(service.localModel.state, "ready");
+  service.setModelSource("cn");
+  assert.equal(control.started.length, 2, "装好了的不重下");
+});
+
+test("换下载源：原来的源一个字节都还没给（还在 loading）也换过去", async (t) => {
+  const { control, startLocal } = fakeLocal();
+  const service = await startService({
+    log: quietLog,
+    route: LOCAL,
+    modelSource: "cn",
+    startLocal,
+    createRefiner: throughTranscriber,
+  });
+  t.after(() => service.close());
+  assert.equal(service.localModel.state, "loading");
+  service.setModelSource("original");
+  assert.deepEqual(control.sources, ["cn", "original"]);
+});
+
+test("换下载源：上次没下下来的，换了源就重新下", async (t) => {
+  const { control, startLocal } = fakeLocal();
+  const service = await startService({
+    log: quietLog,
+    route: LOCAL,
+    modelSource: "cn",
+    startLocal,
+    createRefiner: throughTranscriber,
+  });
+  t.after(() => service.close());
+  control.fail(new Error("哪个地址都没下下来"));
+  await tick();
+  assert.equal(service.localModel.state, "failed");
+  service.setModelSource("original");
+  assert.deepEqual(control.sources, ["cn", "original"]);
+  assert.equal(service.localModel.state, "loading");
 });

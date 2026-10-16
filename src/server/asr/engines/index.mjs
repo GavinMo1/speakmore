@@ -30,7 +30,7 @@ export function findEngine(id) {
 
 /**
  * 按清单里的一项装出一个转写器。
- * @param {{ model: object, dir: string, options?: object }} request dir 是模型下载到的目录（store.mjs 的 dirOf）
+ * @param {{ model: object, dir: string, options?: object }} request dir 是模型下载到的目录（models/store.mjs 的 dirOf）
  */
 export async function loadTranscriber({ model, dir, options = {} }) {
   const engine = findEngine(model.engine);

@@ -1,7 +1,7 @@
 import { LocalizedError } from "../i18n/index.mjs";
-import { findModel, MODELS } from "./asr/catalog.mjs";
+import { DEFAULT_SOURCE, DEFAULT_TRANSCRIBER, findModel, findSource, MODELS, SOURCES } from "../models/catalog.mjs";
 import { normalizeBaseUrl, parseChatChoice } from "./chat/vendors.mjs";
-import { DEFAULT_MODE, DEFAULT_POLISH, DEFAULT_TRANSCRIBER, keyVendorOf, parseMode } from "./modes.mjs";
+import { DEFAULT_MODE, DEFAULT_POLISH, keyVendorOf, parseMode } from "./modes.mjs";
 import {
   apiKeyProblem,
   DEFAULT_MODEL_CHOICE,
@@ -62,11 +62,23 @@ function localRouteFrom(env) {
   return { mode: "local", transcriber, polish, customUrl };
 }
 
+/** 本地模型没下载过时先从哪个源下（models/catalog.mjs 的 SOURCES） */
+function modelSourceFrom(env) {
+  const source = given(env, "SPEAKMORE_MODEL_SOURCE") ?? DEFAULT_SOURCE;
+  if (!findSource(source)) {
+    throw new Error(
+      `SPEAKMORE_MODEL_SOURCE 写的是 ${JSON.stringify(source)}，能填的有 ${SOURCES.map(({ id }) => id).join(" / ")}`,
+    );
+  }
+  return source;
+}
+
 /** 从环境变量读配置。写错了就报错退出，不悄悄换成默认值。 */
 export function loadConfig(env) {
   const mode = given(env, "SPEAKMORE_MODE") ? read(env, "SPEAKMORE_MODE", parseMode) : DEFAULT_MODE;
   const thinkingLevel = thinkingFrom(env);
   const route = mode === "local" ? localRouteFrom(env) : { mode: "native", model: modelFrom(env), thinkingLevel };
+  const modelSource = modelSourceFrom(env);
 
   const { keyEnv } = keyVendorOf(route);
   const apiKey = env[keyEnv]?.trim();
@@ -81,5 +93,5 @@ export function loadConfig(env) {
   }
 
   // 只监听本机：这个服务没有登录，不该被局域网里的其他机器连到
-  return { host: "127.0.0.1", port, route, apiKey };
+  return { host: "127.0.0.1", port, route, apiKey, modelSource };
 }

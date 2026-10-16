@@ -1,6 +1,6 @@
 import { msg } from "../../i18n/index.mjs";
-import { downloadSize, MODELS } from "../../server/asr/catalog.mjs";
-import { createModelStore } from "../../server/asr/store.mjs";
+import { chipOf, downloadSize, MODELS, measuredOn, SOURCES } from "../../models/catalog.mjs";
+import { createModelStore } from "../../models/store.mjs";
 import { CHAT_VENDORS, findChatVendor, parseChatChoice } from "../../server/chat/vendors.mjs";
 import { currentSettings, ensureRunning, parse, renderOptions, UsageError } from "../common.mjs";
 import { polishTitle, renderPolish, renderTranscribers } from "../render/modes.mjs";
@@ -22,14 +22,24 @@ export async function transcriber(args, io) {
   const status = await io.daemon.status();
   if (wanted === undefined) {
     const store = createModelStore({ dir: io.paths.modelsDir });
+    const chip = chipOf();
     const models = MODELS.map((model) => ({
       id: model.id,
       name: model.name,
-      license: model.license,
       bytes: downloadSize(model),
       installed: store.isInstalled(model),
+      tags: model.tags,
+      measured: measuredOn(model, chip),
     }));
-    const view = { models, setting: currentSettings(io).transcriber.value, current: modeNow(io, status) };
+    const settings = currentSettings(io);
+    const view = {
+      models,
+      chip,
+      setting: settings.transcriber.value,
+      source: settings.modelSource.value,
+      sources: SOURCES.map(({ id }) => id),
+      current: modeNow(io, status),
+    };
     io.out(renderTranscribers(view, renderOptions(io)));
     return 0;
   }

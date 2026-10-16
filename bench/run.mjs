@@ -10,7 +10,7 @@
 
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { createModelStore } from "../src/server/asr/store.mjs";
+import { createModelStore } from "../src/models/store.mjs";
 import { findChatVendor } from "../src/server/chat/vendors.mjs";
 import { engineVersionsOf, fail, SELECTION_OPTIONS, saveReport, selectionFrom } from "./lib/cli.mjs";
 import { WORK_DIR } from "./lib/dataset.mjs";

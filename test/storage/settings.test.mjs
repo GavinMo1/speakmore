@@ -38,6 +38,7 @@ test("没有文件也没有环境变量时全用默认值", () => {
     transcriber: { value: "qwen3-asr-0.6b-q8", source: "default" },
     polish: { value: "deepseek/deepseek-flash", source: "default" },
     customUrl: { value: "", source: "default" },
+    modelSource: { value: "cn", source: "default" },
     theme: { value: "ink", source: "default" },
     language: { value: "system", source: "default" },
   });

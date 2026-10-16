@@ -45,7 +45,7 @@ export function resolvePaths(env = process.env, userHome = homedir()) {
     settingsFile: join(home, "settings.json"),
     historyDb: join(home, "data", "history.db"),
     recordingsDir: join(home, "data", "Recordings"),
-    /** 本地转写的模型，一个模型一个目录（server/asr/store.mjs） */
+    /** 本地转写的模型，一个模型一个目录（models/store.mjs） */
     modelsDir: join(home, "models"),
 
     logFile: join(home, "logs", "main.log"),

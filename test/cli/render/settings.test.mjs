@@ -29,6 +29,8 @@ test("设置逐项列出现在的值、从哪来、能填什么，后面是文�
   assert.match(text, /native \/ local/);
   assert.match(text, /polish\s+deepseek\/deepseek-flash\s+默认/);
   assert.match(text, /customUrl\s+默认/);
+  assert.match(text, /modelSource\s+cn\s+国内源（SpeakMore 的 CDN） · 默认/);
+  assert.match(text, /cn \/ original/);
   assert.match(text, /theme\s+ink\s+墨 · 默认/);
   assert.match(text, /ink \/ cinnabar \/ indigo/);
   assert.match(text, /speakmore config set hotkey fn/);

@@ -35,6 +35,7 @@ export const settings = {
   transcriber: { value: "qwen3-asr-0.6b-q8", source: "default" },
   polish: { value: "deepseek/deepseek-flash", source: "default" },
   customUrl: { value: "", source: "default" },
+  modelSource: { value: "cn", source: "default" },
   theme: { value: "ink", source: "default" },
   language: { value: "system", source: "default" },
 };

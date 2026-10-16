@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
-import { MODELS } from "../server/asr/catalog.mjs";
+import { DEFAULT_SOURCE, DEFAULT_TRANSCRIBER, MODELS, SOURCES } from "../models/catalog.mjs";
 import { formatChatChoice, normalizeBaseUrl, parseChatChoice } from "../server/chat/vendors.mjs";
-import { DEFAULT_MODE, DEFAULT_POLISH, DEFAULT_TRANSCRIBER, MODES, parseMode } from "../server/modes.mjs";
+import { DEFAULT_MODE, DEFAULT_POLISH, MODES, parseMode } from "../server/modes.mjs";
 import {
   DEFAULT_MODEL_CHOICE,
   DEFAULT_THINKING_LEVEL,
@@ -30,6 +30,7 @@ export const hotkeyKeycap = (id) => msg(`hotkeys.${id}.keycap`);
 const THEME_IDS = THEMES.map((theme) => theme.id);
 const MODE_IDS = MODES.map((mode) => mode.id);
 const TRANSCRIBER_IDS = MODELS.map((model) => model.id);
+const SOURCE_IDS = SOURCES.map((source) => source.id);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
 
@@ -118,6 +119,18 @@ export const SETTINGS = {
     default: "",
     choices: null,
     parse: (value) => (value.trim() === "" ? "" : normalizeBaseUrl(value)),
+  },
+  modelSource: {
+    // 本地模型没下载过时先从哪下，哪种模式里都能改（切到 local 之前先选好）。选的那个下不动会换另一个，只影响快慢
+    env: "SPEAKMORE_MODEL_SOURCE",
+    default: DEFAULT_SOURCE,
+    choices: SOURCE_IDS,
+    parse(value) {
+      const id = value.trim().toLowerCase();
+      if (!SOURCE_IDS.includes(id)) throw oneOf(SOURCE_IDS);
+      return id;
+    },
+    label: (value) => msg(`modelSources.${value}`),
   },
   theme: {
     env: "SPEAKMORE_THEME",
