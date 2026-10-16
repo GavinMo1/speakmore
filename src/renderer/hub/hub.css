@@ -918,6 +918,9 @@ code.setting-value {
 }
 
 .transcriber-name {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   font-size: 0.875rem;
   font-weight: 600;
 }

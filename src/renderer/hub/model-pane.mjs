@@ -1,6 +1,7 @@
 import { backendText, measuredText, sizeText, tagTexts } from "../../models/describe.mjs";
 import { t } from "../shared/i18n.mjs";
 import { createKeyPanel, KEY_LAYERS } from "../shared/key-panel.mjs";
+import { providerIcon } from "../shared/provider-icons.mjs";
 import { describeError } from "../shared/setup-text.mjs";
 
 // 设置里"模型"那一页：先选识别模式，再在模式里选模型。两种模式要选的东西不一样，各画各的：
@@ -245,9 +246,13 @@ export function createModelPane({ refresh }) {
         // 没下载的选不了：先下载
         pick.disabled = busy || !setup.switchable || !model.installed;
         if (!model.installed) pick.title = t("preferences.local.downloadFirst");
+        // 名字前面是出自哪家的图标
         const name = document.createElement("span");
         name.className = "transcriber-name";
-        name.textContent = model.name;
+        const label = document.createElement("span");
+        label.textContent = model.name;
+        const icon = providerIcon(model.maker);
+        name.append(...(icon ? [icon, label] : [label]));
         const [text, tone] = modelStateText(model, setup);
         const state = document.createElement("span");
         state.className = "transcriber-state";

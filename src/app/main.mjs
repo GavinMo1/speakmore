@@ -17,7 +17,7 @@ import {
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale } from "../i18n/index.mjs";
 import { alsoLogTo, log } from "../log.mjs";
-import { chipOf, downloadSize, MODELS, measuredOn, SOURCES } from "../models/catalog.mjs";
+import { chipOf, downloadSize, MODELS, makerOf, measuredOn, SOURCES } from "../models/catalog.mjs";
 import { createLocalModels, freeBytesAt } from "../models/library.mjs";
 import { CHAT_VENDORS, formatChatChoice } from "../server/chat/vendors.mjs";
 import { describeRoute, keyVendorOf, MODES } from "../server/modes.mjs";
@@ -561,6 +561,8 @@ async function main() {
         transcribers: MODELS.map((model) => ({
           id: model.id,
           name: model.name,
+          // 出自哪家，界面按它配图标
+          maker: makerOf(model),
           license: model.license.name,
           bytes: downloadSize(model),
           // 下好了没有、正在下到哪、下过一半的有多少、上次为什么没下下来

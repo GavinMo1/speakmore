@@ -259,6 +259,9 @@ export function findModel(id) {
   return MODELS.find((model) => model.id === id) ?? null;
 }
 
+/** 出自哪家：作者仓库的组织名，小写（qwen、funaudiollm）。界面按它配图标 */
+export const makerOf = (model) => model.author.split("/")[0].toLowerCase();
+
 /** 一个模型要下载的总字节数 */
 export function downloadSize(model) {
   return Object.values(model.files).reduce((sum, file) => sum + file.size, 0);
