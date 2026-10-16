@@ -500,6 +500,7 @@ export default {
                                 删掉存着的 key
   speakmore config              看设置：热键、模型、思考档位、主题、语言，以及数据和日志在哪
   speakmore config set <名字> <值>
+                                直接改一项，不检查能不能用（换模式、换模型用上面的命令，它们先检查）
   speakmore config unset <名字>  回到默认值
   speakmore theme               看有哪几套主题、现在用的哪套
   speakmore theme <名字>         换一套（{themes}），当场生效不用重启
@@ -575,7 +576,7 @@ export default {
       getOne: "没有的话在这里申请一把：{url}",
       storage: "它会用系统钥匙串加密后存在这台电脑上，不会发到别处。",
       skip: "现在不想填就直接按回车。",
-      legacyDaemon: "正在运行的 SpeakMore 是旧版本，只认 Gemini 的 key：先{restart}，再来一次。",
+      legacyDaemon: "正在运行的 SpeakMore 是旧版本，还不认得 {provider} 的 key：先{restart}，再来一次。",
       verifying: "正在验证…",
       saved: "key 已保存，验证通过。",
       rejected: "这把 key 没有通过：{problem}",
@@ -608,6 +609,8 @@ export default {
       modelSourceOverridden: "正在运行的 SpeakMore 用的还是{source}：启动它的环境里设着 {variable}，它盖过设置文件。",
       envWarning: "注意：环境变量 {variable} 现在设着，它会盖过这个值。",
       changed: "{name} 改成了 {value}。",
+      modeCommand: "这一项平时用 {command} 换：它先检查能不能用，不行就不换。config set 不检查，直接写进设置。",
+      otherMode: "现在是 {current} 模式，这一项切到 {mode} 模式时才用上。",
       unset: "{name} 回到了默认值 {value}。",
       themeChanged: "主题换成了{theme}。",
       notRunning: "SpeakMore 没有在运行。先运行 speakmore 启动。",

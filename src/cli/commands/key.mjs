@@ -59,17 +59,24 @@ export function keyPrompter(io, provider) {
   };
 }
 
+/** 0.6 及以前的后台应用认得 key 的几家：那时只有收音频的这两家 */
+const BEFORE_MODES_VENDORS = ["gemini", "openai"];
+
 /**
- * 0.3 的后台应用不认按厂商区分的 set-key、forget-key：它会忽略 provider，把别家的 key 拿去问 Gemini、
- * 删 key 时删掉的是 Gemini 那把。它的状态里没有 provider 这一项，凭这个认出来，先拦下。
- * Gemini 的 key 它本来就会存、会删，不拦。
+ * 升级之前启动的后台应用不认得的那家，先拦下，说要重启：
+ * - 0.3 的不认按厂商区分的 set-key、forget-key：它会忽略 provider，把别家的 key 拿去问 Gemini、
+ *   删 key 时删掉的是 Gemini 那把。它的状态里没有 provider 这一项。Gemini 的 key 它本来就会存、会删，不拦。
+ * - 0.6 及以前的没有模式这一层，不认得润色的那几家（DeepSeek、自定义服务），存 key 会被它拒掉、说不认识。
+ *   它的状态里没有 mode 这一项。
  */
-async function refuseLegacyDaemon(io, provider) {
+export async function refuseLegacyDaemon(io, provider) {
   if (provider.id === "gemini") return;
   const status = await io.daemon.status();
-  if (status === null || "provider" in status) return;
+  if (status === null) return;
+  const unknown = !("provider" in status) || (!("mode" in status) && !BEFORE_MODES_VENDORS.includes(provider.id));
+  if (!unknown) return;
   const restart = status.packaged ? PACKAGED_RELAUNCH : msg("cli.runRestart");
-  throw new LocalizedError(msg("cli.key.legacyDaemon", { restart }));
+  throw new LocalizedError(msg("cli.key.legacyDaemon", { provider: provider.name, restart }));
 }
 
 /**
@@ -147,9 +154,10 @@ export async function key(args, io) {
     throw new UsageError(msg("cli.key.notInline", { providers: VENDORS.map(({ id }) => id).join(" / ") }));
   }
   const provider = named ?? currentProvider(io);
+  // 在问 key 之前拦：不让人粘贴了一把 key 才听说存不了
+  await refuseLegacyDaemon(io, provider);
 
   if (values.forget) {
-    await refuseLegacyDaemon(io, provider);
     // 在运行的话让它把手里的那把也放下；没在运行时不必为了删文件把它启动起来
     if ((await io.daemon.status()) !== null) await io.daemon.request("forget-key", { provider: provider.id });
     // 命令启动的和装成应用的各存各的一份，都删

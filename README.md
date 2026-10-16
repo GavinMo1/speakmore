@@ -137,7 +137,7 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 | `speakmore polish [<provider>[/<model>]] [--url <url>]` | Local mode, step 2: who polishes the text / switch. `custom/<model> --url <url>` for an OpenAI-compatible service. `polish check` tests it |
 | `speakmore key [<provider>]` | Replace a key. Can be piped: `pbpaste \| speakmore key`. Don't type the key on the command line — it ends up in shell history |
 | `speakmore key --forget [<provider>]` | Delete a stored key |
-| `speakmore config` / `config set <name> <value>` / `config unset <name>` | Show settings / change one / reset it |
+| `speakmore config` / `config set <name> <value>` / `config unset <name>` | Show settings / change one directly, with no checks / reset it |
 | `speakmore theme [name]` | List themes / switch, takes effect immediately |
 | `speakmore settings` | Open settings |
 | `speakmore logs [-n lines] [-f]` | Show logs |
@@ -161,7 +161,7 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 | `theme` | `ink` | `ink` / `cinnabar` / `indigo` |
 | `language` | `system` | `system` / `en` / `zh-CN`. `system` follows macOS; the `speakmore` command follows your terminal's `LANG`. Languages we don't have fall back to English |
 
-Settings live in `~/.speakmore/settings.json`. `speakmore mode`, `model`, `transcriber` and `polish` switch on the fly, and so do theme, language and download source; other `config set` changes restart the background app. For a one-off, put `SPEAKMORE_HOTKEY`, `SPEAKMORE_MODE`, `SPEAKMORE_MODEL`, `GEMINI_THINKING_LEVEL`, `SPEAKMORE_TRANSCRIBER`, `SPEAKMORE_POLISH`, `SPEAKMORE_CUSTOM_URL`, `SPEAKMORE_MODEL_SOURCE`, `SPEAKMORE_THEME` or `SPEAKMORE_LANGUAGE` on the command that starts it; `GEMINI_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY` and `SPEAKMORE_CUSTOM_API_KEY` override stored keys.
+Settings live in `~/.speakmore/settings.json`. `speakmore mode`, `model`, `transcriber` and `polish` check first and switch on the fly; theme, language and download source also apply on the fly. `config set` is the manual back door: it writes any setting without those checks, even one for the other mode, and other changes restart the background app. For a one-off, put `SPEAKMORE_HOTKEY`, `SPEAKMORE_MODE`, `SPEAKMORE_MODEL`, `GEMINI_THINKING_LEVEL`, `SPEAKMORE_TRANSCRIBER`, `SPEAKMORE_POLISH`, `SPEAKMORE_CUSTOM_URL`, `SPEAKMORE_MODEL_SOURCE`, `SPEAKMORE_THEME` or `SPEAKMORE_LANGUAGE` on the command that starts it; `GEMINI_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY` and `SPEAKMORE_CUSTOM_API_KEY` override stored keys.
 
 | Provider | Default model | Notes |
 | --- | --- | --- |

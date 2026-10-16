@@ -18,6 +18,8 @@ import { renderConfig, renderThemes, themeTitle } from "../render/settings.mjs";
 
 // 设置：speakmore config、theme，以及打开设置的 speakmore settings。
 // 主题、语言、下载源改了当场生效（让正在运行的那个重新读一遍设置），别的要重启后台。
+// config set 是手动改设置的后门：只按存设置的规矩查写法，不经过模式那一层（app/modes.mjs）的检查，
+// 不在那种模式里的设置也照写、切过去时才用上。平时换模式、换模型走 mode、model、transcriber、polish。
 
 /**
  * 设置改完之后让它生效：在运行就重启，并看重启之后的结果。
@@ -112,6 +114,23 @@ async function applyLive(io, name, wanted) {
   return 0;
 }
 
+/** 模式那一层管的几项平时用哪个命令换：那些命令先检查能不能用，不行就不换 */
+const MODE_COMMANDS = {
+  mode: "speakmore mode",
+  model: "speakmore model",
+  transcriber: "speakmore transcriber",
+  polish: "speakmore polish",
+  customUrl: "speakmore polish",
+};
+
+/** config set 写了模式那一层的设置：说平时走哪条路；这一项不属于现在的模式时，说切过去才用上 */
+function noteModeSetting(io, name) {
+  if (Object.hasOwn(MODE_COMMANDS, name)) io.out(io.t("cli.config.modeCommand", { command: MODE_COMMANDS[name] }));
+  const { ofMode } = SETTINGS[name];
+  const current = currentSettings(io).mode.value;
+  if (ofMode && ofMode !== current) io.out(io.t("cli.config.otherMode", { current, mode: ofMode }));
+}
+
 /** 校验并存下一项设置。@returns {string} 规整后的值 */
 export function storeSetting(io, name, value) {
   try {
@@ -139,6 +158,7 @@ export async function config(args, io) {
     const saved = storeSetting(io, name, value);
     io.out(io.t("cli.config.changed", { name, value: saved }));
     warnIfEnvOverrides(io, name);
+    noteModeSetting(io, name);
     if (Object.hasOwn(LIVE, name)) return applyLive(io, name, saved);
     return applySettings(io, `speakmore config unset ${name}`);
   }

@@ -27,6 +27,7 @@ const READY = {
   hotkey: "right_option",
   hotkeyLabel: "右 Option 键",
   provider: "gemini",
+  mode: "native",
   model: "gemini/gemini-3.6-flash",
   thinking: "MINIMAL",
   packaged: false,
@@ -961,6 +962,26 @@ test("config set：这一项正被环境变量盖着时提醒一句", async () =
   assert.match(output.out, /SPEAKMORE_HOTKEY/);
 });
 
+test("config set 是不检查的后门：模式那一层管的几项照写，说平时用哪个命令换；不在那种模式里的说切过去才用上", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("config", "set", "transcriber", "sensevoice-small-q8"), 0);
+  assert.equal(saved("transcriber"), "sensevoice-small-q8");
+  assert.match(output.out, /平时用 speakmore transcriber 换.*config set 不检查/);
+  assert.match(output.out, /现在是 native 模式，这一项切到 local 模式时才用上/);
+
+  const native = harness();
+  assert.equal(await native.speakmore("config", "set", "model", "openai"), 0);
+  assert.match(native.output.out, /平时用 speakmore model 换/);
+  assert.doesNotMatch(native.output.out, /才用上/);
+
+  // 只有 config set 能改的几项不提别的命令
+  const plain = harness();
+  assert.equal(await plain.speakmore("config", "set", "thinking", "low"), 0);
+  assert.doesNotMatch(plain.output.out, /平时用|才用上/);
+  assert.equal(await plain.speakmore("config", "set", "hotkey", "fn"), 0);
+  assert.doesNotMatch(plain.output.out, /平时用|才用上/);
+});
+
 test("config unset：回到默认值", async () => {
   const { speakmore, output } = harness();
   await speakmore("config", "set", "hotkey", "fn");
@@ -1722,10 +1743,32 @@ test("后台是 0.3 的：给别家存 key、删别家的 key 都先拦下，说
   const save = harness({ daemon: fakeDaemon({ running: LEGACY_DAEMON }), secrets: ["sk-new"] });
   assert.equal(await save.speakmore("key", "openai"), 1);
   assert.ok(!save.daemon.calls.includes("set-key"));
+  assert.equal(save.asked.length, 0);
 
   // Gemini 的 key 旧后台本来就会存
   const gemini = harness({ daemon: fakeDaemon({ running: LEGACY_DAEMON }), secrets: ["AIza-new"] });
   assert.equal(await gemini.speakmore("key", "gemini"), 0);
+});
+
+/** 0.6 及以前的后台应用：状态里没有 mode，只认 Gemini 和 OpenAI 的 key */
+const BEFORE_MODES_DAEMON = (() => {
+  const { mode: _mode, ...rest } = READY;
+  return rest;
+})();
+
+test("后台是 0.6 的：切 local 要给 DeepSeek 存 key 时先拦下，说要重启；不发请求、不切；OpenAI 的 key 照常存", async () => {
+  const daemon = fakeDaemon({ running: BEFORE_MODES_DAEMON });
+  const { speakmore, output, asked } = harness({ daemon, secrets: ["sk-ds"] });
+  assert.equal(await speakmore("mode", "local"), 1);
+  assert.match(output.err, /旧版本.*DeepSeek.*speakmore restart/);
+  assert.ok(!daemon.calls.includes("set-key") && !daemon.calls.includes("set-mode"));
+  assert.equal(saved("mode"), "native");
+  // 先拦再问：不让人粘贴了 key 才听说存不了
+  assert.equal(asked.length, 0);
+
+  const openai = harness({ daemon: fakeDaemon({ running: BEFORE_MODES_DAEMON }), secrets: ["sk-openai"] });
+  assert.equal(await openai.speakmore("key", "openai"), 0);
+  assert.ok(openai.daemon.calls.includes("set-key"));
 });
 
 test("换模型时那家的 key 被拒：不换，说原因，设置不动，以 1 退出", async () => {

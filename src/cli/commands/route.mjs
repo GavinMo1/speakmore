@@ -2,7 +2,7 @@ import { msg, problemOf } from "../../i18n/index.mjs";
 import { patchSettings, routeOf } from "../../storage/settings.mjs";
 import { ConfigError, currentSettings, ensureRunning } from "../common.mjs";
 import { applySettings, storeSetting, warnIfEnvOverrides } from "./config.mjs";
-import { keyPrompter, keySourceFor, submitKey } from "./key.mjs";
+import { keyPrompter, keySourceFor, refuseLegacyDaemon, submitKey } from "./key.mjs";
 
 // 切模式、换各模式里的模型，几个命令（mode、model、transcriber、polish）共用的几步：
 // 现在是哪种模式、不在那种模式时拦下、缺 key 时先问、交给正在运行的那个当场换。
@@ -53,6 +53,7 @@ export const routeWith = (io, mode, changes = {}) => routeOf(patchSettings(curre
  */
 export async function ensureKey(io, vendor, changes) {
   if (keySourceFor(io, vendor, await io.daemon.status()) !== null) return true;
+  await refuseLegacyDaemon(io, vendor);
   if (!io.interactive) {
     io.err(io.t("cli.model.noKeyNonInteractive", { provider: vendor.name, id: vendor.id }));
     return false;

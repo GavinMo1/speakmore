@@ -137,7 +137,7 @@ flowchart LR
 | `speakmore polish [<厂商>[/<模型>]] [--url <地址>]` | 本地转写第二步：文字交给谁润色 / 换一个。自定义服务写 `custom/<模型名> --url <地址>`；`polish check` 看能不能用 |
 | `speakmore key [<厂商>]` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key`。别把 key 写在命令后面，会进 shell 历史 |
 | `speakmore key --forget [<厂商>]` | 删掉存着的 key |
-| `speakmore config` / `config set <名字> <值>` / `config unset <名字>` | 看设置 / 改一项 / 回到默认 |
+| `speakmore config` / `config set <名字> <值>` / `config unset <名字>` | 看设置 / 直接改一项、不检查 / 回到默认 |
 | `speakmore theme [名字]` | 看有哪几套主题 / 换一套，当场生效 |
 | `speakmore settings` | 打开设置 |
 | `speakmore logs [-n 行数] [-f]` | 看日志 |
@@ -161,7 +161,7 @@ flowchart LR
 | `theme` | `ink` | `ink` 墨 / `cinnabar` 朱砂 / `indigo` 靛青 |
 | `language` | `system` | `system` 跟随系统 / `en` / `zh-CN`。跟随系统时，应用看 macOS 的语言，`speakmore` 命令看终端的 `LANG`；我们没有的语言用英文 |
 
-设置存在 `~/.speakmore/settings.json`。`speakmore mode`、`model`、`transcriber`、`polish` 当场换，主题、语言、下载源改了也当场生效；别的 `config set` 会重启后台。临时换一次可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_TRANSCRIBER`、`SPEAKMORE_POLISH`、`SPEAKMORE_CUSTOM_URL`、`SPEAKMORE_MODEL_SOURCE`、`SPEAKMORE_THEME`、`SPEAKMORE_LANGUAGE`，写在启动它的那条命令上；`GEMINI_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`SPEAKMORE_CUSTOM_API_KEY` 设着时优先于存着的 key。
+设置存在 `~/.speakmore/settings.json`。`speakmore mode`、`model`、`transcriber`、`polish` 先检查再当场换，主题、语言、下载源改了也当场生效。`config set` 是手动改设置的后门：不做这些检查，另一种模式的设置也照写；别的改动会重启后台。临时换一次可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_TRANSCRIBER`、`SPEAKMORE_POLISH`、`SPEAKMORE_CUSTOM_URL`、`SPEAKMORE_MODEL_SOURCE`、`SPEAKMORE_THEME`、`SPEAKMORE_LANGUAGE`，写在启动它的那条命令上；`GEMINI_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`SPEAKMORE_CUSTOM_API_KEY` 设着时优先于存着的 key。
 
 | 厂商 | 默认模型 | 说明 |
 | --- | --- | --- |

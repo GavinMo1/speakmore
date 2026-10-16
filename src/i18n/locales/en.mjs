@@ -511,6 +511,7 @@ export default {
                                 Delete the saved key
   speakmore config              Settings: hotkey, model, thinking level, theme, language, and where data and logs live
   speakmore config set <name> <value>
+                                Change one directly, with no checks (the mode and model commands above check first)
   speakmore config unset <name> Reset to the default
   speakmore theme               List themes and the one in use
   speakmore theme <name>        Switch theme ({themes}); applies right away, no restart
@@ -592,7 +593,7 @@ export default {
       storage: "It's encrypted with the system keychain and stays on this Mac.",
       skip: "Press Enter to skip for now.",
       legacyDaemon:
-        "The running SpeakMore is an old version that only knows Gemini keys: {restart} first, then try again.",
+        "The running SpeakMore is an old version that doesn't know {provider} keys yet: {restart} first, then try again.",
       verifying: "Verifying…",
       saved: "Key saved and verified.",
       rejected: "This key didn't pass: {problem}",
@@ -631,6 +632,9 @@ export default {
         "The running SpeakMore still uses {source}: {variable} is set where it was started, and it overrides the settings file.",
       envWarning: "Note: the {variable} env var is set and overrides this value.",
       changed: "{name} set to {value}.",
+      modeCommand:
+        "This is usually changed with {command}, which checks it works first and leaves it alone if not. config set skips the checks and writes it straight in.",
+      otherMode: "You're in {current} mode now; this takes effect when you switch to {mode} mode.",
       unset: "{name} reset to the default, {value}.",
       themeChanged: "Theme set to {theme}.",
       notRunning: "SpeakMore isn't running. Run speakmore to start it first.",
