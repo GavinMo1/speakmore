@@ -154,7 +154,7 @@ export function createLocalModels({
       return { ok: true };
     },
 
-    /** 取消正在下的：停下来，不算失败。已经下好、校验过的文件留着，下次接着下 */
+    /** 取消正在下的：停下来，不算失败。下完、校验过的文件留着；下到一半的那个不留（store.mjs 不续传），下次从头来 */
     cancel(id) {
       if (stop(id, "cancelled")) onChange(id);
     },

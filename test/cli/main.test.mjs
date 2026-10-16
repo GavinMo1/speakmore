@@ -1023,6 +1023,17 @@ test("config set 是不检查的后门：模式那一层管的几项照写，说
   assert.doesNotMatch(plain.output.out, /平时用|才用上/);
 });
 
+test("config set 把 local 的第一跳改成没下载的：重启后说还没下载、怎么下，不替用户下", async () => {
+  const missing = { ...LOCAL_READY, localModel: { state: "missing", model: "qwen3-asr-0.6b-q8" } };
+  const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: LOCAL_READY, afterStart: missing }) });
+  assert.equal(await speakmore("config", "set", "transcriber", "qwen3-asr-0.6b-q8"), 0);
+  assert.match(
+    output.out,
+    /Qwen3-ASR 0\.6B \(Q8_0\) 还没下载：先运行 speakmore transcriber download qwen3-asr-0\.6b-q8/,
+  );
+  assert.ok(!daemon.calls.includes("download-model"));
+});
+
 test("config unset：回到默认值", async () => {
   const { speakmore, output } = harness();
   await speakmore("config", "set", "hotkey", "fn");

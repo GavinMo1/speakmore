@@ -47,17 +47,23 @@ function keyLine(key, provider, t) {
   }
 }
 
+/** 下到哪了：用户正在下的（0.7.1 起是 missing 带着进度），或者 0.7.0 的后台自己在下的（downloading） */
+const downloadingLine = (localModel, t) =>
+  t("cli.status.localDownloading", {
+    percent: Math.floor((localModel.received / localModel.total) * 100),
+    received: Math.round(localModel.received / 1_000_000),
+    total: Math.round(localModel.total / 1_000_000),
+  });
+
 /** 本地模型（local 模式的第一跳）现在怎样 */
 function localModelLine(localModel, t) {
   switch (localModel?.state) {
     case "ready":
       return t("cli.status.localReady", { backend: backendText(localModel.backend) });
+    case "missing":
+      return localModel.total ? downloadingLine(localModel, t) : t("cli.status.localMissing", { id: localModel.model });
     case "downloading":
-      return t("cli.status.localDownloading", {
-        percent: Math.floor((localModel.received / localModel.total) * 100),
-        received: Math.round(localModel.received / 1_000_000),
-        total: Math.round(localModel.total / 1_000_000),
-      });
+      return downloadingLine(localModel, t);
     case "loading":
       return t("cli.status.localLoading");
     case "failed":

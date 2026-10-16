@@ -723,11 +723,11 @@ export default {
       downloadDone: "{model} is downloaded.",
       downloadAlready: "{model} is already downloaded.",
       downloadStopped:
-        "The {model} download stopped (cancelled elsewhere). Finished files are kept, so it resumes next time.",
+        "The {model} download stopped (cancelled elsewhere). Finished files are kept; a half-done file starts over next time.",
       downloadInterrupted:
-        "SpeakMore quit during the download. Finished files are kept; run speakmore transcriber download {id} to resume.",
+        "SpeakMore quit during the download. Finished files are kept; run speakmore transcriber download {id} to continue.",
       nothingToCancel: "{model} isn't downloading.",
-      cancelled: "Stopped downloading {model}. Finished files are kept, so it resumes next time.",
+      cancelled: "Stopped downloading {model}. Finished files are kept; a half-done file starts over next time.",
       notOnDisk: "{model} isn't downloaded, so there's nothing to delete.",
       deleteConfirm: "Delete {model} ({size})? You'll need to download it again to use it. Type y to confirm: ",
       deleteNeedsConfirm:
@@ -822,6 +822,7 @@ export default {
       localReady: "ready · {backend}",
       localDownloading: "downloading {percent}% ({received} / {total} MB)",
       localLoading: "loading",
+      localMissing: "not downloaded: speakmore transcriber download {id}",
       modelInUse: "{provider} {model}",
       modelWithThinking: "{provider} {model} ({thinking})",
       keyEnv: "Using the one in the {variable} env var this run, not saved",

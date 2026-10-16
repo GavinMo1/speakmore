@@ -171,7 +171,7 @@ export function createModelPane({ refresh }) {
         model.partial > 0
           ? t("preferences.local.resume", { size: sizeText(model.bytes - model.partial) })
           : t("preferences.local.download", { size: sizeText(model.bytes) });
-      actions.push(button(label, () => modelAction(() => window.speakmore.downloadModel(model.id)), "primary"));
+      actions.push(button(label, () => modelAction(() => window.speakmore.downloadModel(model.id))));
     }
     if (removable && !inUse) {
       const sure = confirming === model.id;

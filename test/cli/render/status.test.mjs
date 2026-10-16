@@ -248,4 +248,19 @@ test("local 模式：写模式、两跳各用什么（key 说的是润色那家�
     plain,
   );
   assert.match(readyText, /本地模型\s+就绪 · Metal/);
+
+  // 0.7.1 起不自己下：还没下载的说怎么下；用户正在下它时说下到哪了
+  const missing = (localModel) =>
+    renderStatus(
+      { status: { ...status, localModel }, version: "0.1.0", settings: localSettings, stats: noStats },
+      plain,
+    );
+  assert.match(
+    missing({ state: "missing", model: "qwen3-asr-0.6b-q8" }),
+    /本地模型\s+还没下载：speakmore transcriber download qwen3-asr-0\.6b-q8/,
+  );
+  assert.match(
+    missing({ state: "missing", model: "qwen3-asr-0.6b-q8", received: 425_000_000, total: 850_000_000 }),
+    /本地模型\s+下载中 50%（425 \/ 850 MB）/,
+  );
 });

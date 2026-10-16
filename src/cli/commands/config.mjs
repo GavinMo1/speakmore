@@ -1,4 +1,5 @@
 import { findLocale, msg, problemOf, SYSTEM_LOCALE } from "../../i18n/index.mjs";
+import { findModel } from "../../models/catalog.mjs";
 import { findProvider, parseModelChoice } from "../../server/providers/index.mjs";
 import { findVendor } from "../../server/vendors.mjs";
 import { ensureHome } from "../../storage/paths.mjs";
@@ -63,6 +64,11 @@ export async function applySettings(io, undo) {
   if (restarted.starting) io.out(t("cli.config.restartedStarting"));
   else if (restarted.key.verified === false) io.out(t("cli.config.restartedUnverified", named));
   else io.out(t("cli.config.applied"));
+  // local 要的本机模型还没下载（config set 不检查）：说怎么下，不替用户下
+  const local = restarted.localModel;
+  if (local?.state === "missing" && !local.total) {
+    io.out(t("cli.local.notDownloadedHint", { model: findModel(local.model)?.name ?? local.model, id: local.model }));
+  }
   return 0;
 }
 
