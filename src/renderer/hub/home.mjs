@@ -144,7 +144,7 @@ export function createHome() {
     const name = document.createElement("span");
     name.textContent = row.name;
     const detail = document.createElement("span");
-    detail.className = row.local ? "spend-model-tag" : "spend-model-id";
+    detail.className = row.local ? "tag" : "spend-model-id";
     detail.textContent = row.local ? t("home.local") : row.model;
     label.append(...(icon ? [icon] : []), name, detail);
     return label;

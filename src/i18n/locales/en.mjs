@@ -151,6 +151,8 @@ export default {
     },
     backends: { metal: "Metal", cpu: "CPU" },
     measured: "Measured on {chip} ({backend}): {score}/5 · {realtime}× real time · {memory} memory",
+    figures: { score: "score", speed: "speed", memory: "memory" },
+    measuredOn: "Measured on {chip} · {backend}",
     notMeasured: "Not yet measured on {chip}",
     unknownChip: "Not yet measured on this kind of machine",
     unknown: "There's no model called {id}",

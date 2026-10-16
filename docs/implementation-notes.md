@@ -284,7 +284,7 @@ src/usage/report.mjs                    今天、本月、累计、按型号分�
 | `src/renderer/bar/bar-view.mjs`、`bar-ui.mjs`、`bar.mjs` | 悬浮条：该是什么样子、把它画出来、控制 | 原版的悬浮条页面 |
 | `src/renderer/hub/` | 主窗口：首页、历史记录、设置对话框 | 原版的 hub 页面 |
 | `src/renderer/onboarding/` | 首次引导：接上模型 → 授权 → 测麦克风 → 测快捷键 → 说一句 → 完成 | 原版的 onboarding 页面 |
-| `src/renderer/shared/` | 三个页面共用：`tokens.css`（不随主题变的字号、间距、圆角、动效）、`window.css`（窗口的光晕、玻璃、按钮）、填 key 那一块和权限的说法（设置和引导都用） | |
+| `src/renderer/shared/` | 三个页面共用：`tokens.css`（不随主题变的字号、字重、间距、圆角、动效；字号七档、字重四档，样式里只能用它们，`test/renderer/shared/type-scale.test.mjs` 守着）、`window.css`（窗口的光晕、玻璃、按钮）、填 key 那一块和权限的说法（设置和引导都用） | |
 | `src/renderer/bar/recorder.mjs` | 录音，每 3 秒一块 | 录音与编码（[11](../targets/typeless/docs/11-audio-recorder.md)） |
 | `src/renderer/bar/voice-socket.mjs` | 听写协议的客户端一侧 | 网络协议（[05](../targets/typeless/docs/05-network-protocol.md)） |
 | `src/server/` | 听写服务：收分块音频（`protocol/`），交给选的那一家模型整理成文字（`refine/`、`providers/`、`audio/`），见上面“不止一家模型” | 原版的服务端（内部看不到，只照着协议做） |

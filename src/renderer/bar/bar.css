@@ -86,7 +86,7 @@ body[data-shown="false"] .shell {
 /* 键名：用和正文一样的字体，等宽字体里 ⌥ ⌘ 这些符号又小又偏 */
 .hint kbd {
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--bar-ink);
 }
 

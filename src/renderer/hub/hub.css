@@ -42,7 +42,7 @@
   gap: 0.5rem;
   margin: 0 0.5rem 1.25rem;
   font-size: var(--text-heading);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   letter-spacing: -0.01em;
 }
 
@@ -68,8 +68,8 @@
   height: 2.25rem;
   padding: 0 0.75rem;
   font: inherit;
-  font-size: 0.875rem;
-  font-weight: 510;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
   color: var(--ink);
   text-align: left;
   background: transparent;
@@ -150,8 +150,8 @@
 
 .page-title {
   margin: 0 0 1.75rem;
-  font-size: 2.5rem;
-  font-weight: 700;
+  font-size: var(--text-display);
+  font-weight: var(--weight-bold);
   line-height: 1.2;
   letter-spacing: -0.025em;
   text-wrap: balance;
@@ -176,8 +176,7 @@
 
 .banner-text {
   flex: 1;
-  font-size: 0.875rem;
-  font-weight: 510;
+  font-weight: var(--weight-medium);
 }
 
 /* 能用、只是打了折扣：不用那么扎眼 */
@@ -247,25 +246,25 @@
 
 .stat-value {
   font-family: var(--font-rounded);
-  font-size: 1.625rem;
-  font-weight: 600;
-  line-height: 2rem;
+  font-size: var(--text-figure);
+  font-weight: var(--weight-semibold);
+  line-height: 1.2;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .stat-value .unit {
-  margin-left: 0.2rem;
+  margin-left: 0.25rem;
   font-family: var(--font);
-  font-size: 0.75rem;
-  font-weight: 510;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
   letter-spacing: 0;
   color: var(--ink-2);
 }
 
 .stat-label {
-  margin-top: 0.2rem;
+  margin-top: 0.3rem;
   font-size: var(--text-small);
   color: var(--ink-2);
 }
@@ -283,8 +282,7 @@
 }
 
 .streaks .stat-value {
-  font-size: 1.375rem;
-  line-height: 1.75rem;
+  font-size: var(--text-title);
 }
 
 /* 热力图：一列一周，周日在最上面。格子多少列由宽度定（hub/home.mjs）。
@@ -304,7 +302,7 @@
   display: grid;
   grid-template-rows: repeat(7, var(--cell));
   row-gap: var(--gap);
-  font-size: 0.625rem;
+  font-size: var(--text-micro);
   line-height: var(--cell);
   color: var(--ink-2);
 }
@@ -361,7 +359,7 @@
   grid-area: 2 / 2;
   position: relative;
   height: 1rem;
-  font-size: 0.625rem;
+  font-size: var(--text-micro);
   color: var(--ink-2);
 }
 
@@ -420,7 +418,7 @@
   justify-content: flex-end;
   gap: 0.25rem;
   margin-top: 0.6rem;
-  font-size: 0.75rem;
+  font-size: var(--text-micro);
   color: var(--ink-2);
 }
 
@@ -467,16 +465,18 @@
   text-align: left;
 }
 
+/* 表头是一行小字：比表里的数小一档，不和数抢 */
 .spend-table thead th {
   padding-top: 0;
-  font-weight: 500;
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
   color: var(--ink-2);
 }
 
 /* 合计：和上面分开，字重一点 */
 .spend-table tfoot :is(th, td) {
   border-top: 1px solid color-mix(in oklch, var(--ink) 16%, transparent);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .spend-table tbody tr + tr :is(th, td) {
@@ -484,7 +484,7 @@
 }
 
 .spend-table tbody th {
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .spend-model {
@@ -494,17 +494,8 @@
 }
 
 .spend-model-id {
-  font-weight: 400;
+  font-weight: var(--weight-regular);
   color: var(--ink-2);
-}
-
-.spend-model-tag {
-  padding: 0.05rem 0.45rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--ink-2);
-  background: var(--fill-hover);
-  border-radius: var(--radius-full);
 }
 
 .spend-empty {
@@ -513,7 +504,7 @@
 }
 
 .spend-note {
-  font-size: 0.75rem;
+  font-size: var(--text-micro);
   color: var(--ink-2);
 }
 
@@ -540,7 +531,7 @@
   flex: none;
   min-width: 2.75rem;
   padding: 0.3rem 0.55rem;
-  font: 600 0.9375rem / 1.3 var(--font-rounded);
+  font: var(--weight-semibold) var(--text-body) / 1.3 var(--font-rounded);
   text-align: center;
   color: var(--on-primary);
   background: var(--gradient);
@@ -552,13 +543,12 @@
 
 .dictate-title {
   white-space: nowrap;
-  font-size: 0.875rem;
-  font-weight: 590;
+  font-weight: var(--weight-semibold);
   line-height: 1.35;
 }
 
 .version {
-  font-size: 0.75rem;
+  font-size: var(--text-micro);
   text-align: right;
   color: var(--ink-2);
 }
@@ -575,11 +565,11 @@
   color: var(--ink-2);
 }
 
+/* 按天分组的标题：比一条记录的字重一档，和上一组空开 */
 .day-title {
-  margin: 1.75rem 0.25rem 0.6rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--ink-2);
+  margin: 2rem 0.25rem 0.6rem;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
 }
 
 .rows {
@@ -610,8 +600,8 @@
 }
 
 .row-time {
-  padding-top: 0.1rem;
-  font-size: 0.8125rem;
+  padding-top: 0.15rem;
+  font-size: var(--text-small);
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
@@ -737,9 +727,9 @@
 }
 
 .pane-title {
-  margin: 0 0 0.75rem;
-  font-size: 1.375rem;
-  font-weight: 650;
+  margin: 0 0 1rem;
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
 }
 
 .setting {
@@ -753,8 +743,7 @@
 
 .setting-title {
   display: block;
-  font-size: 0.875rem;
-  font-weight: 590;
+  font-weight: var(--weight-medium);
 }
 
 .recheck-row {
@@ -762,7 +751,7 @@
 }
 
 .setting-value {
-  font-size: 0.875rem;
+  font-size: var(--text-small);
   color: var(--ink-2);
   text-align: right;
   overflow-wrap: anywhere;
@@ -770,13 +759,12 @@
 
 code.setting-value {
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
   user-select: text;
 }
 
 .setting-note {
   margin-top: 0.5rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-small);
   color: var(--ink-2);
 }
 
@@ -802,7 +790,7 @@ code.setting-value {
   padding: 0.35rem 0.9rem;
   font: inherit;
   font-size: var(--text-small);
-  font-weight: 560;
+  font-weight: var(--weight-medium);
   color: var(--ink-2);
   background: transparent;
   border: none;
@@ -850,25 +838,19 @@ code.setting-value {
 .mode-hint {
   flex: 1 1 18rem;
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-small);
   color: var(--ink-2);
-}
-
-.mode-in-use {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--ok);
 }
 
 .mode-body {
   margin-top: 1rem;
 }
 
+/* 一种模式里的几步（第一步 · 本机转写、第二步 · 润色）：区块标题，比列表里的名字大一档、和上一块空开 */
 .step-title {
-  margin: 1.25rem 0 0.6rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--ink-2);
+  margin: 2rem 0 0.75rem;
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
 }
 
 .step-title:first-child {
@@ -878,10 +860,15 @@ code.setting-value {
 /* 第一跳的本机模型：上面一行说本机下了几个、磁盘还剩多少；下面一行一个，
    左边点了是选它（没下载的选不了），右边是下载、取消、删除 */
 .models-summary {
-  margin: 0 0 0.6rem;
-  font-size: 0.8125rem;
+  margin: 0 0 0.75rem;
+  font-size: var(--text-small);
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
+}
+
+/* 标题下面紧跟的一行说明贴着标题 */
+.step-title + .models-summary {
+  margin-top: -0.5rem;
 }
 
 /* 每行的按钮有一个、两个的：按钮那一列各行共用一个宽度（subgrid），右边的状态才对得齐 */
@@ -912,11 +899,14 @@ code.setting-value {
   box-shadow: 0 0 0 2px var(--primary);
 }
 
+/* 一行里分三级：名字（正文、加粗）→ 实测的三个数（数加粗，单位和名目小一档）→ 特点标签（最小、带底色）。
+   图标单占一列，下面两行和名字的字对齐 */
 .transcriber-pick {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.35rem 1rem;
-  padding: 0.7rem 0 0.7rem 0.9rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem 0.6rem;
+  padding: 0.85rem 0 0.85rem 0.9rem;
   font: inherit;
   text-align: left;
   color: var(--ink);
@@ -941,11 +931,12 @@ code.setting-value {
   gap: 0.4rem;
 }
 
-/* 检查的结果：整行宽，在名字、按钮下面 */
+/* 检查的结果：整行宽，在名字、按钮下面，和名字的字对齐 */
 .transcriber-check {
   grid-column: 1 / -1;
-  margin: -0.2rem 0 0.7rem 0.9rem;
-  font-size: 0.8125rem;
+  margin: -0.35rem 0 0.85rem calc(0.9rem + 1.125rem + 0.6rem);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
   color: var(--ink-2);
 }
 
@@ -985,45 +976,76 @@ code.setting-value {
 
 .transcriber-name {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.45rem;
-  font-size: 0.875rem;
-  font-weight: 600;
+  gap: 0.25rem 0.5rem;
+  min-width: 0;
+  font-weight: var(--weight-semibold);
+}
+
+/* 量化档（Q8_0、int8）：型号的一部分，用等宽字放进小标签，不和名字挤成一串 */
+.transcriber-variant {
+  font-family: var(--font-mono);
 }
 
 .transcriber-state {
-  font-size: 0.8125rem;
-  color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
 
-.transcriber-state[data-tone="ok"] {
-  color: var(--ok);
+.transcriber-pick > :is(.figures, .tags) {
+  grid-column: 2 / -1;
 }
 
-.transcriber-state[data-tone="problem"] {
-  color: var(--problem);
+/* 实测的三个数：数值用圆体加粗，单位、名目小一档；在什么机器上测的放在最右，最淡 */
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1.25rem;
+}
+
+.figure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.figure-value {
+  font-family: var(--font-rounded);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.figure-unit {
+  margin-left: 0.1rem;
+  font-family: var(--font);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+}
+
+.figure-label,
+.figures-where {
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+}
+
+.figures-where {
+  margin-left: auto;
+}
+
+/* 没实测过：只有这一句，靠左 */
+.figures-where:only-child {
+  margin-left: 0;
 }
 
 .tags {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
-  grid-column: 1 / -1;
-}
-
-.tag {
-  padding: 0.05rem 0.5rem;
-  font-size: 0.75rem;
-  color: var(--ink-2);
-  background: var(--fill-hover);
-  border-radius: var(--radius-full);
-}
-
-.transcriber-measured {
-  grid-column: 1 / -1;
-  font-size: 0.75rem;
-  color: var(--ink-2);
 }
 
 .transcriber-failed {
@@ -1042,7 +1064,7 @@ code.setting-value {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font-size: 0.875rem;
+  font-size: var(--text-small);
 }
 
 .polish-extra .field,

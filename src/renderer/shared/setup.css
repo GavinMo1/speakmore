@@ -3,7 +3,7 @@
 .hint {
   margin-top: 0.75rem;
   max-width: 34rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-small);
   color: var(--ink-2);
 }
 
@@ -47,12 +47,13 @@
 }
 
 .provider-name {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
+/* 正在用的那家：名字右边一个勾 */
 .provider-in-use {
   margin-left: auto;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--ok);
 }
 
@@ -68,7 +69,8 @@
 
 .check-result {
   margin: 0.4rem 0 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
   color: var(--ink-2);
 }
 
@@ -85,7 +87,11 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-small);
+}
+
+.key-state-row .state {
+  font-weight: var(--weight-medium);
 }
 
 .key-form {
@@ -101,7 +107,7 @@
 
 #key-problem {
   margin-top: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-small);
 }
 
 .links {
@@ -127,13 +133,10 @@
 }
 
 .granted {
-  font-size: 0.8125rem;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
   color: var(--ink-2);
   white-space: nowrap;
-}
-
-.granted[data-tone="problem"] {
-  font-weight: 600;
 }
 
 @media (prefers-reduced-motion: reduce) {

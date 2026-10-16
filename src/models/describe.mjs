@@ -38,3 +38,32 @@ export function measuredText(measured, chip) {
     memory: `${(best.peakMB / 1000).toFixed(1)} GB`,
   });
 }
+
+/**
+ * 同一份实测拆开给 App 的模型列表：三个数各一格（数值、单位、名目），在什么机器上用什么跑的另一句。
+ * 没测过、认不出芯片时没有数，那一句照 measuredText 说
+ * @param {ReadonlyArray<{ backend: string, score: number, realtime: number, peakMB: number }>} measured
+ * @param {string | null} chip
+ * @returns {{ figures: Array<{ value: string, unit: string, label: object }>, where: object }}
+ */
+export function measuredFacts(measured, chip) {
+  if (chip === null || measured.length === 0) return { figures: [], where: measuredText(measured, chip) };
+  const [best] = measured;
+  return {
+    figures: [
+      { value: best.score.toFixed(2), unit: "/5", label: msg("localModels.figures.score") },
+      { value: String(Math.round(best.realtime)), unit: "×", label: msg("localModels.figures.speed") },
+      { value: (best.peakMB / 1000).toFixed(1), unit: "GB", label: msg("localModels.figures.memory") },
+    ],
+    where: msg("localModels.measuredOn", {
+      chip: msg(`localModels.chips.${chip}`),
+      backend: msg(`localModels.backends.${best.backend}`),
+    }),
+  };
+}
+
+/** 型号的名字分成名字和括号里的量化档（"Qwen3-ASR 0.6B (Q8_0)" → Qwen3-ASR 0.6B、Q8_0），App 把量化档放进小标签 */
+export function nameParts(name) {
+  const match = /^(.+?)\s*\(([^()]+)\)$/.exec(name);
+  return match ? { base: match[1], variant: match[2] } : { base: name, variant: null };
+}
