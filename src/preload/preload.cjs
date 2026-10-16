@@ -60,6 +60,8 @@ contextBridge.exposeInMainWorld("speakmore", {
   downloadModel: (id) => ipcRenderer.invoke("setup:download-model", id),
   cancelDownload: (id) => ipcRenderer.invoke("setup:cancel-download", id),
   deleteModel: (id) => ipcRenderer.invoke("setup:delete-model", id),
+  // 检查本机模型：念一句交给它转，看能不能正常出字
+  checkTranscriber: (id) => ipcRenderer.invoke("setup:check-transcriber", id),
   readClipboard: () => ipcRenderer.invoke("setup:read-clipboard"),
   openKeyPage: (provider) => ipcRenderer.invoke("setup:open-key-page", provider),
   openPrivacySettings: (permission) => ipcRenderer.invoke("setup:open-privacy", permission),

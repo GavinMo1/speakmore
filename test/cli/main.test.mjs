@@ -2287,6 +2287,35 @@ test("transcriber download：用户自己点的，不再问；后台没在运行
   assert.equal(await wrong.speakmore("transcriber", "download", "gemini"), 2);
 });
 
+test("transcriber check：交给后台念一句、转一次，说念的、转出来的和用了多久；不写就查现在选的", async () => {
+  const daemon = modelDaemon();
+  const request = daemon.request;
+  daemon.request = async (cmd, params, options) => {
+    if (cmd !== "check-transcriber") return request.call(daemon, cmd, params, options);
+    daemon.calls.push(cmd);
+    daemon.requests.push({ cmd, params });
+    if (params.id === "sensevoice-small-q8") {
+      return { ok: false, problem: "SenseVoice Small (Q8_0) 还没下载（253 MB）：先下载再用" };
+    }
+    const said = "今天下午三点开会，记得带上电脑。";
+    return { ok: true, said, text: said, transcribeMs: 312, loadMs: 1840, backend: "metal" };
+  };
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore("transcriber", "check"), 0);
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "check-transcriber", params: { id: "qwen3-asr-0.6b-q8" } });
+  assert.match(output.out, /正在检查 Qwen3-ASR 0\.6B \(Q8_0\)/);
+  assert.match(
+    output.out,
+    /能用。念的是「今天下午三点开会，记得带上电脑。」，转出来「今天下午三点开会，记得带上电脑。」，转写用了 0\.3 秒/,
+  );
+  assert.match(output.out, /临时装上用了 1\.8 秒/);
+
+  assert.equal(await speakmore("transcriber", "check", "sensevoice-small-q8"), 1);
+  assert.match(output.err, /还没下载（253 MB）/);
+  assert.equal(await speakmore("transcriber", "check", "gemini"), 2);
+  assert.equal(await speakmore("transcriber", "check", "qwen3-asr-0.6b-q8", "extra"), 2);
+});
+
 test("transcriber cancel：后台正在下的停下；没在下的直说", async () => {
   const daemon = modelDaemon();
   const { speakmore, output } = harness({ daemon });

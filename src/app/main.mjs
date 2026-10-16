@@ -612,6 +612,8 @@ async function main() {
     return { ok: true };
   });
   handle("setup:delete-model", (_event, id) => viaModes((m) => m.removeModel(id)));
+  // 检查本机模型：按界面语言念一句交给它转
+  handle("setup:check-transcriber", (_event, id) => viaModes((m) => m.checkTranscriber(id, { locale })));
   handle("setup:read-clipboard", () => clipboard.readText());
   handle("setup:open-key-page", (_event, id) => {
     // 自定义服务没有申请 key 的页面
@@ -996,6 +998,12 @@ async function main() {
           },
           "delete-model": async ({ id, locale: wanted }) =>
             withProblemText(await viaModes((m) => m.removeModel(id)), translatorFor(wanted)),
+          // 念的那句跟着命令行的语言走
+          "check-transcriber": async ({ id, locale: wanted }) =>
+            withProblemText(
+              await viaModes((m) => m.checkTranscriber(id, { locale: wanted ?? locale })),
+              translatorFor(wanted),
+            ),
           // 命令行的名字沿用窗口还分开时的叫法：show-settings 打开设置里还差东西的那一页，
           // 第一次启动时命令行会带上 onboarding，打开首次引导
           "show-settings": ({ onboarding = false }) => (onboarding ? showOnboarding() : showHub({ pane: "auto" })),

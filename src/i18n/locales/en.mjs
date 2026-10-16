@@ -157,6 +157,9 @@ export default {
     noSpace: "Not enough disk space: {model} needs {need} more, and only {free} is free",
     downloadFailed: "{model} didn't download: {reason}",
     inUse: "{model} is in use and can't be deleted: switch to another model or back to native first",
+    checkNoSpeech: "Couldn't speak the test sentence (uses the system voice): {reason}",
+    checkFailed: "{model} failed to transcribe: {reason}",
+    checkEmpty: "{model} didn't transcribe a single word",
   },
   chat: {
     modelRequired: "{vendor} has no default model; write it as {vendor}/<model name>",
@@ -377,6 +380,9 @@ export default {
       cancel: "Cancel",
       delete: "Delete",
       confirmDelete: "Confirm delete",
+      check: "Check",
+      checking: "Checking: reading it a sentence…",
+      checkOk: "Works · got “{text}” · took {seconds}",
       downloadFirst: "Download it first to choose it",
       summary: "{count} of {all} downloaded on this Mac, {size} in total",
       freeSpace: "{size} free on disk",
@@ -529,6 +535,8 @@ export default {
                                 Local mode, step 1: list or switch the on-device transcription model. Asks before downloading one you don't have
   speakmore transcriber download|cancel|delete <model> [--yes]
                                 Download, stop downloading, or delete an on-device model (in any mode; the one in use can't be deleted)
+  speakmore transcriber check [<model>]
+                                Check an on-device model: the system voice reads a sentence and the model transcribes it. Defaults to the selected one
   speakmore polish [<provider>[/<model>] [--url <url>]]
                                 Local mode, step 2: list or switch the polishing model ({polishers}). custom is any OpenAI-compatible service
   speakmore polish check [<provider>[/<model>]]
@@ -581,7 +589,7 @@ export default {
         "Usage: speakmore model | speakmore model <provider>[/<model>] | speakmore model check [<provider>[/<model>]]",
       mode: "Usage: speakmore mode | speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]",
       transcriber:
-        "Usage: speakmore transcriber | speakmore transcriber <model> | speakmore transcriber download|cancel|delete <model> [--yes]",
+        "Usage: speakmore transcriber | speakmore transcriber <model> | speakmore transcriber download|cancel|delete <model> [--yes] | speakmore transcriber check [<model>]",
       polish:
         "Usage: speakmore polish | speakmore polish <provider>[/<model>] [--url <url>] | speakmore polish check [<provider>[/<model>]]",
     },
@@ -723,7 +731,7 @@ export default {
       freeSpace: "{size} free on disk",
       transcriberCurrent: "In use: {model}",
       transcriberSwitch: "Switch: speakmore transcriber {id}",
-      transcriberManage: "Download: speakmore transcriber download {id} · stop: cancel · remove: delete",
+      transcriberManage: "Download: speakmore transcriber download {id} · stop: cancel · remove: delete · check: check",
       downloadStart: "Downloading {model} ({size}, from {source})…",
       downloadBackground:
         "SpeakMore is downloading it in the background: Ctrl-C only stops watching; to stop the download, run speakmore transcriber cancel {id}",
@@ -744,6 +752,11 @@ export default {
       deleted: "Deleted {model}, freeing {size}.",
       oldDaemonDelete:
         "The running SpeakMore is an old version that can't tell which model is in use, so nothing was deleted: run speakmore restart, then try again.",
+      checking: "Checking {model}: reading it a sentence…",
+      checkOk: "{model} works. Read “{said}”, got “{text}”, transcribed in {seconds}.",
+      checkLoaded: "It wasn't in use: loading it took {seconds}, and it's unloaded again.",
+      oldDaemonCheck:
+        "The running SpeakMore is an old version that can't check on-device models: run speakmore restart, then check again.",
       notDownloadedAsk: "{model} isn't downloaded yet ({size}, from {source}). Download it now? Type y to download: ",
       notDownloadedHint: "{model} isn't downloaded yet: run speakmore transcriber download {id} first",
       notDownloadedLater:

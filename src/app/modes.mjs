@@ -1,6 +1,7 @@
 import { msg, problemOf } from "../i18n/index.mjs";
 import { downloadSize, findModel } from "../models/catalog.mjs";
 import { sizeText } from "../models/describe.mjs";
+import { speechSample } from "../server/asr/probe.mjs";
 import { findChatVendor } from "../server/chat/vendors.mjs";
 import { describeRoute } from "../server/modes.mjs";
 import { findProvider } from "../server/providers/index.mjs";
@@ -29,14 +30,16 @@ import {
 
 /**
  * @param {object} options
- * @param {{ route: object, switchTranscriber(model: string): void }} options.service 内置的听写服务（service.mjs）
+ * @param {{ route: object, switchTranscriber(model: string): void, checkTranscriber: Function }} options.service
+ *   内置的听写服务（service.mjs）
  * @param {{ use: Function, check: Function }} options.keys key 管理（keys/key-manager.mjs）
  * @param {{ isInstalled(id: string): boolean, remove(id: string): object }} options.models 本机的模型库（models/library.mjs）
  * @param {string} options.settingsFile
  * @param {Record<string, string | undefined>} options.env
- * @param {{ info: Function }} options.log
+ * @param {{ info: Function, warn: Function }} options.log
+ * @param {typeof speechSample} [options.speech] 检查本机模型时念的那句（asr/probe.mjs）；测试时换成假的
  */
-export function createModeSwitch({ service, keys, models, settingsFile, env, log }) {
+export function createModeSwitch({ service, keys, models, settingsFile, env, log, speech = speechSample }) {
   /** 一件一件来：前一件还在验证时又来一件，后一件要看到前一件换好的模式和存好的设置 */
   let queue = Promise.resolve();
   const serial = (task) => {
@@ -180,6 +183,43 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
     setPolish(polish, { customUrl } = {}) {
       const changes = customUrl === undefined ? { polish } : { polish, customUrl };
       return within("local", "polish", changes, useRoute);
+    },
+
+    /**
+     * 检查一个本机模型能不能正常转写：用系统朗读念一句，交给它转。哪种模式里都能查，不换掉正在用的。
+     * 不排队：它不改设置，也不换路线
+     * @param {string} id
+     * @param {{ locale: string }} options 按界面语言念
+     * @returns {Promise<{ ok: true, said: string, text: string, transcribeMs: number, loadMs: number | null, backend: string }
+     *   | { ok: false, problem: object }>}
+     */
+    async checkTranscriber(id, { locale }) {
+      const model = findModel(id);
+      if (!model) return { ok: false, problem: msg("localModels.unknown", { id }) };
+      if (!models.isInstalled(id)) {
+        return {
+          ok: false,
+          problem: msg("modes.notDownloaded", { model: model.name, size: sizeText(downloadSize(model)) }),
+        };
+      }
+      let sample;
+      try {
+        sample = await speech(locale);
+      } catch (error) {
+        log.warn("probe_speech_failed", { error: String(error?.message ?? error) });
+        return { ok: false, problem: msg("localModels.checkNoSpeech", { reason: problemOf(error) }) };
+      }
+      let result;
+      try {
+        result = await service.checkTranscriber(id, sample.samples);
+      } catch (error) {
+        log.warn("transcriber_check_failed", { model: id, error: String(error?.message ?? error) });
+        return { ok: false, problem: msg("localModels.checkFailed", { model: model.name, reason: problemOf(error) }) };
+      }
+      if (result.text.trim() === "") {
+        return { ok: false, problem: msg("localModels.checkEmpty", { model: model.name }) };
+      }
+      return { ok: true, said: sample.said, ...result };
     },
 
     /**

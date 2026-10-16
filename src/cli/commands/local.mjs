@@ -4,6 +4,7 @@ import { sizeText } from "../../models/describe.mjs";
 import { freeBytesAt } from "../../models/library.mjs";
 import { createModelStore } from "../../models/store.mjs";
 import { CHAT_VENDORS, findChatVendor, parseChatChoice } from "../../server/chat/vendors.mjs";
+import { formatSeconds } from "../../usage/format.mjs";
 import { currentSettings, ensureRunning, parse, renderOptions, UsageError } from "../common.mjs";
 import { polishTitle, renderPolish, renderTranscribers } from "../render/modes.mjs";
 import { keySourceFor } from "./key.mjs";
@@ -12,12 +13,15 @@ import { needUrl } from "./mode.mjs";
 import { applyChange, checked, ensureKey, inMode, modeNow, routeWith } from "./route.mjs";
 
 // local 模式的两跳，各一个命令，只在 local 模式里能换（不在就说先 speakmore mode local）：
-//   speakmore transcriber   第一跳：本机转写模型。不用 key；要先下载好（download / cancel / delete 管下载和删除）
+//   speakmore transcriber   第一跳：本机转写模型。不用 key；要先下载好（download / cancel / delete 管下载和删除，
+//                           check 念一句交给它转，看能不能正常出字）
 //   speakmore polish        第二跳：润色的厂商和模型；自定义服务（兼容 OpenAI 接口）连同地址
 // 列出来看在哪种模式里都行，不在 local 时开头说一句现在用不上。下载、删除在哪种模式里都能做。
 
 /** 检查要等后台应用问一次那一家，那边的超时是 30 秒 */
 const CHECK_TIMEOUT_MS = 45_000;
+/** 检查本机模型：没在用的要临时装一次（CPU 上装大的要十几秒），再转一句 */
+const TRANSCRIBER_CHECK_TIMEOUT_MS = 90_000;
 
 /** 管下载和删除的几个动作：speakmore transcriber <动作> <模型> */
 const MODEL_ACTIONS = { download, cancel, delete: remove };
@@ -25,6 +29,12 @@ const MODEL_ACTIONS = { download, cancel, delete: remove };
 export async function transcriber(args, io) {
   const { values, positionals } = parse(args, { yes: { type: "boolean", short: "y", default: false } });
   const [first, second, ...extra] = positionals;
+  if (first === "check") {
+    if (extra.length > 0 || values.yes) throw new UsageError(msg("cli.syntax.transcriber"));
+    const id =
+      second === undefined ? currentSettings(io).transcriber.value : checked(io, { transcriber: second }).transcriber;
+    return checkTranscriber(io, id);
+  }
   if (Object.hasOwn(MODEL_ACTIONS, first ?? "")) {
     if (second === undefined || extra.length > 0) throw new UsageError(msg("cli.syntax.transcriber"));
     const { transcriber: id } = checked(io, { transcriber: second });
@@ -73,6 +83,36 @@ function listTranscribers(io, status) {
     current: modeNow(io, status),
   };
   io.out(renderTranscribers(view, renderOptions(io)));
+  return 0;
+}
+
+/** 检查一个本机模型：交给后台应用念一句、转一次（没在用的它会临时装上，查完卸掉）。后台没在运行先启动 */
+async function checkTranscriber(io, id) {
+  const model = findModel(id);
+  await ensureRunning(io);
+  io.out(io.t("cli.local.checking", { model: model.name }));
+  let result;
+  try {
+    result = await io.daemon.request("check-transcriber", { id }, { timeoutMs: TRANSCRIBER_CHECK_TIMEOUT_MS });
+  } catch (error) {
+    // 正在运行的是升级之前启动的那一个，还不认识这条命令
+    if (!/^不认识的命令/.test(error?.message ?? "")) throw error;
+    io.err(io.t("cli.local.oldDaemonCheck"));
+    return 1;
+  }
+  if (!result.ok) {
+    io.err(io.t("common.sentence", { text: result.problem }));
+    return 1;
+  }
+  io.out(
+    io.t("cli.local.checkOk", {
+      model: model.name,
+      said: result.said,
+      text: result.text,
+      seconds: formatSeconds(result.transcribeMs, io.t),
+    }),
+  );
+  if (result.loadMs !== null) io.out(io.t("cli.local.checkLoaded", { seconds: formatSeconds(result.loadMs, io.t) }));
   return 0;
 }
 

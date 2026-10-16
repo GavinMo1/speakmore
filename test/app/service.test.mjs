@@ -435,3 +435,51 @@ test("本地模型没装上时再选同一个：重新装载（重试的办法�
   service.switchTranscriber("qwen3-asr-0.6b-q8");
   assert.equal(control.started.length, 2);
 });
+
+// ---------- 检查本机模型 ----------
+
+test("检查正在用的本机模型：装好了就直接拿它转，不另装一份", async (t) => {
+  const { service, control } = await localService(t);
+  control.finish();
+  await tick();
+  const result = await service.checkTranscriber("qwen3-asr-0.6b-q8", new Float32Array(7));
+  assert.equal(result.text, "转写了 7");
+  assert.equal(result.loadMs, null);
+  assert.equal(result.backend, "fake");
+  assert.equal(typeof result.transcribeMs, "number");
+  assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8"]);
+  assert.equal(control.disposed, 0);
+});
+
+test("检查正在装载的那个：等它装好再转，不另装一份", async (t) => {
+  const { service, control } = await localService(t);
+  const pending = service.checkTranscriber("qwen3-asr-0.6b-q8", new Float32Array(2));
+  control.finish();
+  assert.equal((await pending).text, "转写了 2");
+  assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8"]);
+});
+
+test("检查没在用的本机模型：临时装一个，转完就卸掉，正在用的照旧", async (t) => {
+  const { service, control } = await localService(t);
+  control.finish();
+  await tick();
+  const pending = service.checkTranscriber("sensevoice-small-q8", new Float32Array(5));
+  control.finish();
+  const result = await pending;
+  assert.equal(result.text, "转写了 5");
+  assert.equal(typeof result.loadMs, "number");
+  assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8", "sensevoice-small-q8"]);
+  assert.equal(control.disposed, 1);
+  assert.equal(service.localModel.state, "ready");
+  assert.equal(service.localModel.model, "qwen3-asr-0.6b-q8");
+});
+
+test("检查时装不上：照实抛出来，正在用的照旧", async (t) => {
+  const { service, control } = await localService(t);
+  control.finish();
+  await tick();
+  const pending = service.checkTranscriber("sensevoice-small-q8", new Float32Array(5));
+  control.fail(new Error("模型文件坏了"));
+  await assert.rejects(pending, /模型文件坏了/);
+  assert.equal(service.localModel.state, "ready");
+});

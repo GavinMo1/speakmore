@@ -1,4 +1,5 @@
 import { backendText, measuredText, sizeText, tagTexts } from "../../models/describe.mjs";
+import { formatSeconds } from "../../usage/format.mjs";
 import { t } from "../shared/i18n.mjs";
 import { createKeyPanel, KEY_LAYERS } from "../shared/key-panel.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
@@ -124,6 +125,8 @@ export function createModelPane({ refresh }) {
   /** 点了一次"删除"、等着确认的那个；过一会儿或者点了别的就作废 */
   let confirming = null;
   let confirmTimer = null;
+  /** 每个本机模型最近一次检查：{ tone, text, ticket }。ticket 认是哪一次，查到一半又点了一次的，旧结果不要 */
+  const transcriberChecks = new Map();
 
   /** 一个模型现在怎样：[说什么, 语气]。正在用的那个（local 模式里）先看服务报的装载状态 */
   function modelStateText(model, setup) {
@@ -150,7 +153,7 @@ export function createModelPane({ refresh }) {
     return [t("preferences.local.notDownloaded", { size: sizeText(model.bytes) }), ""];
   }
 
-  /** 右边的按钮：没下载的给下载（下过一半的是继续），正在下的给取消，下好了的给删除（正在用的不给） */
+  /** 右边的按钮：没下载的给下载（下过一半的是继续），正在下的给取消，下好了的给检查和删除（正在用的不给删） */
   function modelActions(model, setup) {
     const inUse = setup.mode.value === "local" && setup.local.transcriber === model.id;
     const button = (label, onClick, tone = "") => {
@@ -167,6 +170,11 @@ export function createModelPane({ refresh }) {
       ];
     const removable = model.installed || model.partial > 0;
     const actions = [];
+    if (model.installed && setup.switchable) {
+      const node = button(t("preferences.local.check"), () => checkTranscriber(model.id));
+      node.disabled = transcriberChecks.get(model.id)?.tone === "pending";
+      actions.push(node);
+    }
     if (!model.installed) {
       const label =
         model.partial > 0
@@ -197,6 +205,34 @@ export function createModelPane({ refresh }) {
       show($("models-problem"), t("keyPanel.failed", { reason: describeError(error) }), "problem");
     }
     await refresh();
+  }
+
+  /** 检查一个下载好的模型：主进程念一句交给它转（没在用的临时装上），说转出了什么、用了多久 */
+  async function checkTranscriber(id) {
+    const ticket = {};
+    transcriberChecks.set(id, { tone: "pending", text: t("preferences.local.checking"), ticket });
+    render(latest);
+    let result;
+    try {
+      result = await window.speakmore.checkTranscriber(id);
+    } catch (error) {
+      result = { ok: false, problem: t("keyPanel.failed", { reason: describeError(error) }) };
+    }
+    if (transcriberChecks.get(id)?.ticket !== ticket) return;
+    transcriberChecks.set(
+      id,
+      result.ok
+        ? {
+            tone: "ok",
+            text: t("preferences.local.checkOk", {
+              text: result.text,
+              seconds: formatSeconds(result.transcribeMs, t),
+            }),
+            ticket,
+          }
+        : { tone: "problem", text: t.text(result.problem), ticket },
+    );
+    render(latest);
   }
 
   function askToConfirm(id) {
@@ -285,6 +321,17 @@ export function createModelPane({ refresh }) {
         actions.className = "transcriber-actions";
         actions.append(...modelActions(model, setup));
         row.append(pick, actions);
+        // 删掉了的模型，之前查的那次不再作数
+        if (!model.installed) transcriberChecks.delete(model.id);
+        const checked = transcriberChecks.get(model.id);
+        if (checked) {
+          const line = document.createElement("p");
+          line.className = "transcriber-check";
+          line.dataset.tone = checked.tone;
+          line.setAttribute("role", "status");
+          line.textContent = checked.text;
+          row.append(line);
+        }
         return row;
       }),
     );

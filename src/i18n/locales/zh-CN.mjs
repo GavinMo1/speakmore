@@ -151,6 +151,9 @@ export default {
     noSpace: "磁盘空间不够：下载 {model} 还要 {need}，磁盘只剩 {free}",
     downloadFailed: "{model} 没下下来：{reason}",
     inUse: "{model} 正在用，删不了：先换一个模型，或切回 native",
+    checkNoSpeech: "念不出检查用的那句话（用的是系统朗读）：{reason}",
+    checkFailed: "{model} 转写出错：{reason}",
+    checkEmpty: "{model} 一个字都没转出来",
   },
   chat: {
     modelRequired: "{vendor} 没有默认模型，要写成 {vendor}/模型名",
@@ -368,6 +371,9 @@ export default {
       cancel: "取消",
       delete: "删除",
       confirmDelete: "确认删除",
+      check: "检查",
+      checking: "检查中：念一句话交给它转…",
+      checkOk: "能用 · 转出「{text}」· 用了 {seconds}",
       downloadFirst: "先下载才能选",
       summary: "本机已下载 {count} / {all} 个，共 {size}",
       freeSpace: "磁盘剩余 {size}",
@@ -516,6 +522,8 @@ export default {
                                 local 模式第一跳：看、换本机转写模型。要用的还没下载时先问要不要下
   speakmore transcriber download|cancel|delete <模型> [--yes]
                                 下载、停下、删除本机转写模型（哪种模式里都能做；正在用的删不了）
+  speakmore transcriber check [<模型>]
+                                检查本机转写模型：用系统朗读念一句交给它转，看能不能正常出字。不写就查现在选的
   speakmore polish [<厂商>[/<模型>] [--url <地址>]]
                                 local 模式第二跳：看、换润色的模型（{polishers}）。custom 是兼容 OpenAI 接口的任意服务
   speakmore polish check [<厂商>[/<模型>]]
@@ -566,7 +574,7 @@ export default {
       model: "用法：speakmore model | speakmore model <厂商>[/<模型>] | speakmore model check [<厂商>[/<模型>]]",
       mode: "用法：speakmore mode | speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]",
       transcriber:
-        "用法：speakmore transcriber | speakmore transcriber <模型> | speakmore transcriber download|cancel|delete <模型> [--yes]",
+        "用法：speakmore transcriber | speakmore transcriber <模型> | speakmore transcriber download|cancel|delete <模型> [--yes] | speakmore transcriber check [<模型>]",
       polish:
         "用法：speakmore polish | speakmore polish <厂商>[/<模型>] [--url <地址>] | speakmore polish check [<厂商>[/<模型>]]",
     },
@@ -694,7 +702,7 @@ export default {
       freeSpace: "磁盘剩余 {size}",
       transcriberCurrent: "现在用的是 {model}",
       transcriberSwitch: "换一个：speakmore transcriber {id}",
-      transcriberManage: "下载：speakmore transcriber download {id} · 停下：cancel · 删除：delete",
+      transcriberManage: "下载：speakmore transcriber download {id} · 停下：cancel · 删除：delete · 检查：check",
       downloadStart: "下载 {model}（{size}，从{source}）……",
       downloadBackground:
         "交给后台下了：按 Ctrl-C 只是不看进度，下载接着进行；要停下用 speakmore transcriber cancel {id}",
@@ -712,6 +720,10 @@ export default {
       deleteAborted: "没有删。",
       deleted: "删掉了 {model}，腾出 {size}。",
       oldDaemonDelete: "正在运行的 SpeakMore 是旧版本，不知道哪个模型正在用，先不删：运行 speakmore restart 再删。",
+      checking: "正在检查 {model}：念一句话交给它转……",
+      checkOk: "{model} 能用。念的是「{said}」，转出来「{text}」，转写用了 {seconds}。",
+      checkLoaded: "它没在用，临时装上用了 {seconds}，查完已经卸掉。",
+      oldDaemonCheck: "正在运行的 SpeakMore 是旧版本，查不了本机模型：运行 speakmore restart 之后再查。",
       notDownloadedAsk: "{model} 还没下载（{size}，从{source}下）。现在下载吗？输入 y 下载：",
       notDownloadedHint: "{model} 还没下载：先运行 speakmore transcriber download {id}",
       notDownloadedLater: "没有下载，也没有换。想下的时候运行 speakmore transcriber download {id}",

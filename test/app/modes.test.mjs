@@ -27,6 +27,8 @@ function setup({
   verdict = () => ({ ok: true }),
   env = {},
   installed = ["qwen3-asr-0.6b-q8", "sensevoice-small-q8"],
+  transcribe = async () => ({ text: "今天下午三点开会。", transcribeMs: 300, loadMs: null, backend: "metal" }),
+  speech = async (locale) => ({ samples: new Float32Array(16), said: `念的是 ${locale}` }),
 } = {}) {
   const calls = [];
   const models = {
@@ -45,6 +47,10 @@ function setup({
       service.route = { ...service.route, transcriber: model };
     },
   };
+  service.checkTranscriber = async (model, samples) => {
+    calls.push({ checkTranscriber: model, samples: samples.length });
+    return transcribe(model, samples);
+  };
   const keys = {
     async use({ route }) {
       calls.push({ use: route });
@@ -57,7 +63,8 @@ function setup({
       return { ok: true, source: "stored", ms: 5 };
     },
   };
-  const modes = createModeSwitch({ service, keys, models, settingsFile: file, env, log: { info() {} } });
+  const log = { info() {}, warn() {} };
+  const modes = createModeSwitch({ service, keys, models, settingsFile: file, env, log, speech });
   return { modes, service, calls, models };
 }
 
@@ -293,4 +300,52 @@ test("检查：按那一层拼出路线交给 key 管理去试，不换掉正在
   assert.deepEqual(calls[1].check.model, { provider: "gemini", model: "gemini-3.6-flash" });
   const wrong = await modes.check("native", { model: "nobody/x" });
   assert.deepEqual([wrong.ok, wrong.cause], [false, "other"]);
+});
+
+// ---------- 检查本机模型 ----------
+
+test("检查本机模型：按界面语言念一句交给它转，说念的是什么、转出了什么；哪种模式里都能查", async () => {
+  const { modes, calls } = setup();
+  const result = await modes.checkTranscriber("sensevoice-small-q8", { locale: "en" });
+  assert.deepEqual(result, {
+    ok: true,
+    said: "念的是 en",
+    text: "今天下午三点开会。",
+    transcribeMs: 300,
+    loadMs: null,
+    backend: "metal",
+  });
+  assert.deepEqual(calls, [{ checkTranscriber: "sensevoice-small-q8", samples: 16 }]);
+});
+
+test("检查本机模型：不认识的、没下载的不去转，说先下载", async () => {
+  const { modes, calls } = setup({ installed: ["qwen3-asr-0.6b-q8"] });
+  assert.match(zh.text((await modes.checkTranscriber("nope", { locale: "zh-CN" })).problem), /没有 nope/);
+  const missing = await modes.checkTranscriber("sensevoice-small-q8", { locale: "zh-CN" });
+  assert.equal(missing.ok, false);
+  assert.match(zh.text(missing.problem), /SenseVoice Small \(Q8_0\) 还没下载/);
+  assert.deepEqual(calls, []);
+});
+
+test("检查本机模型：念不出来、转写出错、一个字都没转出来，各说各的", async () => {
+  const noVoice = setup({
+    speech: async () => {
+      throw new Error("say: command not found");
+    },
+  });
+  const spoken = await noVoice.modes.checkTranscriber("qwen3-asr-0.6b-q8", { locale: "zh-CN" });
+  assert.equal(spoken.ok, false);
+  assert.match(zh.text(spoken.problem), /念不出.*say: command not found/);
+
+  const broken = setup({
+    transcribe: async () => {
+      throw new Error("转写进程退出了");
+    },
+  });
+  const failed = await broken.modes.checkTranscriber("qwen3-asr-0.6b-q8", { locale: "zh-CN" });
+  assert.match(zh.text(failed.problem), /Qwen3-ASR 0\.6B \(Q8_0\) 转写出错：转写进程退出了/);
+
+  const silent = setup({ transcribe: async () => ({ text: "  ", transcribeMs: 1, loadMs: 9, backend: "cpu" }) });
+  const empty = await silent.modes.checkTranscriber("qwen3-asr-0.6b-q8", { locale: "zh-CN" });
+  assert.match(zh.text(empty.problem), /一个字都没转出来/);
 });

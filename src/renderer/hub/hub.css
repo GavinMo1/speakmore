@@ -891,6 +891,22 @@ code.setting-value {
   gap: 0.4rem;
 }
 
+/* 检查的结果：整行宽，在名字、按钮下面 */
+.transcriber-check {
+  grid-column: 1 / -1;
+  margin: -0.35rem 0 0.7rem 0.9rem;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+.transcriber-check[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.transcriber-check[data-tone="problem"] {
+  color: var(--problem);
+}
+
 .button.danger {
   color: var(--problem);
 }

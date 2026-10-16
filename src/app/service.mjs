@@ -48,7 +48,7 @@ export async function startService({
    *   off（没走本地转写）/ missing（还没下载）/ loading / ready / failed（problem 是原因）
    */
   let local = { state: "off" };
-  /** 正在装载或已经装好的那一次：换模型时用 transcriber 卸掉模型 */
+  /** 正在装载或已经装好的那一次：换模型时用 transcriber 卸掉模型；ready 是装载的那个 Promise，检查时等它 */
   let loading = null;
 
   function setLocal(next) {
@@ -70,10 +70,11 @@ export async function startService({
   }
 
   function loadLocal(model) {
-    const job = { model, transcriber: null };
+    const job = { model, transcriber: null, ready: null };
     loading = job;
     setLocal({ state: "loading", model });
-    startLocal({ modelId: model, modelsDir, log }).then(
+    job.ready = startLocal({ modelId: model, modelsDir, log });
+    job.ready.then(
       (transcriber) => {
         if (loading !== job) {
           // 等它装好的这段时间里用户已经换了模型
@@ -206,6 +207,42 @@ export async function startService({
       log.info("transcriber_switched", { from: route.transcriber, to: model, retry: model === route.transcriber });
       route = { ...route, transcriber: model };
       followRoute();
+    },
+
+    /**
+     * 检查一个本机模型：拿一段样本转写一次，看它能不能正常出字。正在用的那个（装好了或正在装）直接用它；
+     * 别的临时装一个，转完就卸掉，不碰正在用的。要下载好了的，调用方先查过（modes.mjs）
+     * @param {string} model 本地模型的 id
+     * @param {Float32Array} samples 16 kHz 单声道（asr/probe.mjs 念的那句）
+     * @returns {Promise<{ text: string, transcribeMs: number, loadMs: number | null, backend: string }>}
+     *   loadMs：临时装的那个装了多久；用的是已经装着的是 null
+     */
+    async checkTranscriber(model, samples) {
+      let transcriber;
+      let loadMs = null;
+      if (loading?.model === model) {
+        transcriber = loading.transcriber ?? (await loading.ready);
+      } else {
+        const startedAt = performance.now();
+        transcriber = await startLocal({ modelId: model, modelsDir, log });
+        loadMs = Math.round(performance.now() - startedAt);
+      }
+      try {
+        const startedAt = performance.now();
+        const { text } = await transcriber.transcribe(samples);
+        const transcribeMs = Math.round(performance.now() - startedAt);
+        // 只记长度和耗时：转出来的是念的那句检查用的话，不是用户说的，但也没必要进日志
+        log.info("transcriber_checked", {
+          model,
+          backend: transcriber.backend,
+          load_ms: loadMs,
+          transcribe_ms: transcribeMs,
+          text_length: text.length,
+        });
+        return { text, transcribeMs, loadMs, backend: transcriber.backend };
+      } finally {
+        if (loadMs !== null) transcriber.dispose();
+      }
     },
 
     /** 把正在用的那把再验一次，没通过就抛错。启动时没连上网的，之后靠它补上验证 */
