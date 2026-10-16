@@ -1,9 +1,11 @@
 import { formatCount, formatSeconds, formatSpan, formatTokens, formatUsd } from "../../usage/format.mjs";
 import { activityGrid } from "../../usage/insights.mjs";
 import { keycapOf, t } from "../shared/i18n.mjs";
+import { providerIcon } from "../shared/provider-icons.mjs";
 
 // 首页：原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费；右边一列是口述卡和版本。
-// 数是主进程从全部历史里算好的（src/usage/insights.mjs），这里只管画。
+// 数是主进程从全部历史里算好的（src/usage/insights.mjs、src/usage/report.mjs），这里只管画。
+// 花费按模型分开列：哪家、哪个型号、本机的那一跳各花了多少、用了多少次，选今天、本月或累计看。
 
 const $ = (id) => document.getElementById(id);
 
@@ -114,44 +116,101 @@ export function createHome() {
     $("heatmap-back").disabled = latest.firstDay === null || first <= latest.firstDay;
   }
 
-  /** 用量表里的一行：今天、本月或累计 */
-  function spendRow(label, period) {
-    const tr = document.createElement("tr");
-    const head = document.createElement("th");
-    head.scope = "row";
-    head.textContent = label;
-    const cells = [
-      [formatUsd(period.costUsd), "cost"],
-      [formatTokens(period.tokens)],
-      [String(period.dictations)],
-      [period.latency ? formatSeconds(period.latency.medianMs, t) : "—"],
-    ].map(([text, className]) => {
+  /** 花费那张卡看的是哪一段：today / month / total。默认本月 */
+  let spendPeriod = "month";
+  /** 最近一次的用量报表，切换时段时重画用 */
+  let usage = null;
+
+  /** 表里的一行：头一格是名字（或"合计"），后面是花费、token、次数、一般多久 */
+  function spendRow(head, { cost, tokens, count, latency }, { tag = "tr" } = {}) {
+    const tr = document.createElement(tag === "tr" ? "tr" : tag);
+    const th = document.createElement("th");
+    th.scope = "row";
+    th.append(head);
+    const cells = [cost, tokens, count, latency].map((text) => {
       const td = document.createElement("td");
       td.textContent = text;
-      if (className) td.className = className;
       return td;
     });
-    tr.append(head, ...cells);
+    tr.append(th, ...cells);
     return tr;
   }
 
-  function renderSpend(report) {
+  /** 一个型号叫什么：图标、名字；云上的跟着型号，本机的标"本机" */
+  function modelLabel(row) {
+    const label = document.createElement("span");
+    label.className = "spend-model";
+    const icon = row.icon ? providerIcon(row.icon) : null;
+    const name = document.createElement("span");
+    name.textContent = row.name;
+    const detail = document.createElement("span");
+    detail.className = row.local ? "spend-model-tag" : "spend-model-id";
+    detail.textContent = row.local ? t("home.local") : row.model;
+    label.append(...(icon ? [icon] : []), name, detail);
+    return label;
+  }
+
+  const waited = (latency) => (latency ? formatSeconds(latency.medianMs, t) : "—");
+  /** 有的型号没有标价时，钱只加得上知道价的那几笔 */
+  const costText = (row) => (row.calls > 0 && row.unpricedCalls === row.calls ? "—" : formatUsd(row.costUsd));
+
+  function renderSpend() {
     const card = $("spend");
-    card.hidden = report.total.calls === 0;
+    card.hidden = usage === null || usage.total.calls === 0;
     if (card.hidden) return;
-    $("spend-month").textContent = formatUsd(report.month.costUsd);
-    $("spend-rows").replaceChildren(
-      spendRow(t("periods.today"), report.today),
-      spendRow(t("periods.month"), report.month),
-      spendRow(t("periods.total"), report.total),
+    const period = usage[spendPeriod];
+    for (const tab of document.querySelectorAll(".period-tab")) {
+      tab.setAttribute("aria-selected", String(tab.dataset.period === spendPeriod));
+    }
+    $("spend-total").textContent = formatUsd(period.costUsd);
+    $("spend-label").textContent = t(`home.spend.${spendPeriod}`);
+    const rows = period.models.map((row) =>
+      spendRow(modelLabel(row), {
+        cost: row.local ? t("home.free") : costText(row),
+        tokens: row.local ? "—" : formatTokens(row.tokens),
+        count: String(row.dictations),
+        latency: waited(row.latency),
+      }),
     );
-    // 只在数字不全时说一句：有的型号没有标价，那几次没算进花费
-    const unpriced = report.models.filter(({ unpricedCalls }) => unpricedCalls > 0);
-    $("spend-note").hidden = unpriced.length === 0;
-    $("spend-note").textContent =
-      unpriced.length === 0
-        ? ""
-        : t("home.unpriced", { models: t.list(unpriced.map(({ model }) => model)), count: report.total.unpricedCalls });
+    if (rows.length === 0) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 5;
+      td.className = "spend-empty";
+      td.textContent = t("home.emptyPeriod");
+      tr.append(td);
+      rows.push(tr);
+    }
+    $("spend-rows").replaceChildren(...rows);
+    // 合计：次数是听写的次数（本机转写加润色的两跳算一次），耗时是整次听写等模型的时间
+    $("spend-sum").replaceChildren(
+      spendRow(t("home.sum"), {
+        cost: formatUsd(period.costUsd),
+        tokens: formatTokens(period.tokens),
+        count: String(period.dictations),
+        latency: waited(period.latency),
+      }),
+    );
+    // 底下一行小字：里面含了几次检查、多少是提示词缓存，有的型号没标价，钱是估算的
+    const notes = [];
+    if (period.checks > 0) notes.push(t("home.checks", { count: period.checks }));
+    if (period.cacheCostUsd > 0) notes.push(t("home.cache", { cost: formatUsd(period.cacheCostUsd) }));
+    const unpriced = period.models.filter(({ unpricedCalls }) => unpricedCalls > 0);
+    if (unpriced.length > 0) {
+      notes.push(
+        t("home.unpriced", { models: t.list(unpriced.map(({ model }) => model)), count: period.unpricedCalls }),
+      );
+    }
+    notes.push(t("home.estimate"));
+    $("spend-note").hidden = false;
+    $("spend-note").textContent = notes.join(" · ");
+  }
+
+  for (const tab of document.querySelectorAll(".period-tab")) {
+    tab.addEventListener("click", () => {
+      spendPeriod = tab.dataset.period;
+      renderSpend();
+    });
   }
 
   $("heatmap-back").addEventListener("click", () => {
@@ -169,11 +228,12 @@ export function createHome() {
     /**
      * @param {{ insights: object, usage: object, app: { version: string, hotkey: string } }} data
      */
-    render({ insights, usage, app }) {
+    render({ insights, usage: report, app }) {
       latest = insights;
       renderStats(insights);
       renderHeatmap();
-      renderSpend(usage);
+      usage = report;
+      renderSpend();
       $("home-keycap").textContent = keycapOf(app.hotkey);
       $("home-version").textContent = `v${app.version}`;
     },

@@ -31,7 +31,7 @@ const MIGRATIONS = [
      id              INTEGER PRIMARY KEY,
      audio_id        TEXT,               -- 哪一次听写（history.id）；验证 key、提示词缓存的为空
      purpose         TEXT NOT NULL CHECK (purpose IN ('dictation', 'check', 'cache')),
-     provider        TEXT NOT NULL,      -- gemini / openai
+     provider        TEXT NOT NULL,      -- gemini / openai / deepseek…；本机转写那一跳是 local
      model           TEXT NOT NULL,      -- 实际回话、按它算钱的型号
      input_tokens    INTEGER NOT NULL,   -- 输入，含音频和命中缓存的
      audio_tokens    INTEGER NOT NULL,   -- 其中音频
@@ -150,7 +150,13 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
     `SELECT provider, model, ${USAGE_COLUMNS} FROM model_calls WHERE created_at >= :since
      GROUP BY provider, model ORDER BY costUsd DESC, calls DESC`,
   );
-  // 每次听写等了模型多久：夹着时间戳重来过的，几次加在一起才是用户等的
+  // 每次听写等了模型多久：夹着时间戳重来过的，几次加在一起才是用户等的；本机转写的两跳（local 那一笔加润色那一笔）
+  // 也加在一起。按型号分开时各算各的
+  const totalLatencies = db.prepare(
+    `SELECT sum(latency_ms) AS ms FROM model_calls
+     WHERE purpose = 'dictation' AND audio_id IS NOT NULL AND created_at >= :since
+     GROUP BY audio_id ORDER BY ms`,
+  );
   const dictationLatencies = db.prepare(
     `SELECT provider, model, sum(latency_ms) AS ms FROM model_calls
      WHERE purpose = 'dictation' AND audio_id IS NOT NULL AND created_at >= :since
@@ -220,7 +226,7 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
         latencies.filter((row) => row.provider === provider && row.model === model).map(({ ms }) => ms);
       return {
         ...usageTotals.get({ since }),
-        latenciesMs: latencies.map(({ ms }) => ms),
+        latenciesMs: totalLatencies.all({ since }).map(({ ms }) => ms),
         models: usageByModel
           .all({ since })
           .map((row) => ({ ...row, latenciesMs: latenciesOf(row.provider, row.model) })),

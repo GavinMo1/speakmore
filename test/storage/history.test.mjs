@@ -296,6 +296,31 @@ test("用量汇总：几次听写、几次验证 key、token 分项、多少钱�
   history.close();
 });
 
+test("本机转写那一跳也记账：一次听写不数两次；整次等了多久是两跳加起来，按型号分开时各算各的", () => {
+  const history = openHistory(join(dir, "history.db"));
+  const local = { provider: "local", model: "qwen3-asr-0.6b-q8", inputTokens: 0, audioTokens: 0, outputTokens: 0 };
+  history.addCall(call({ audioId: "l1", ...local, costUsd: 0, latencyMs: 300 }));
+  history.addCall(
+    call({ audioId: "l1", provider: "deepseek", model: "deepseek-flash", costUsd: 0.0001, latencyMs: 1200 }),
+  );
+  history.addCall(call({ audioId: "l2", ...local, costUsd: 0, latencyMs: 250 }));
+  history.addCall(
+    call({ audioId: "l2", provider: "deepseek", model: "deepseek-flash", costUsd: 0.0001, latencyMs: 900 }),
+  );
+  const usage = history.usage();
+  assert.equal(usage.dictations, 2);
+  assert.equal(usage.unpricedCalls, 0);
+  assert.deepEqual(usage.latenciesMs, [1150, 1500]);
+  assert.deepEqual(
+    usage.models.map(({ provider, dictations, latenciesMs }) => ({ provider, dictations, latenciesMs })),
+    [
+      { provider: "deepseek", dictations: 2, latenciesMs: [900, 1200] },
+      { provider: "local", dictations: 2, latenciesMs: [250, 300] },
+    ],
+  );
+  history.close();
+});
+
 test("今天花了多少钱也在统计里，验证 key 的那几次也算", () => {
   const history = openHistory(join(dir, "history.db"));
   history.add(entry({ id: "a", createdAt: "2026-10-13T08:00:00.000Z" }));

@@ -47,7 +47,7 @@ test("今天从本机时区的零点算，本月从 1 号零点算，累计不�
   );
 });
 
-test("每段给出 token 合计和模型一般多久回话（中位数）、慢的时候多久（九成都比它快）；按型号分开的是累计的", () => {
+test("每段给出 token 合计和模型一般多久回话（中位数）、慢的时候多久（九成都比它快）；最外面按型号分开的是累计的", () => {
   const all = {
     ...totals({
       calls: 12,
@@ -70,7 +70,8 @@ test("每段给出 token 合计和模型一般多久回话（中位数）、慢�
   const report = usageReport(fakeHistory({ "": all }), { now: new Date(2026, 9, 14, 15, 30) });
 
   const { latenciesMs: _raw, models: _models, ...expectedTotals } = all;
-  assert.deepEqual(report.total, {
+  const { models: _totalModels, ...reportedTotals } = report.total;
+  assert.deepEqual(reportedTotals, {
     ...expectedTotals,
     tokens: 15_400,
     latency: { medianMs: 1400, p90Ms: 1800 },
@@ -89,4 +90,47 @@ test("每段给出 token 合计和模型一般多久回话（中位数）、慢�
       },
     ],
   );
+});
+
+test("每一段都按型号分开，每个型号说清是谁家的、本机的还是云上的，图标按谁家取", () => {
+  const now = new Date(2026, 9, 14, 15, 30);
+  const month = {
+    ...totals({ calls: 5, dictations: 2 }),
+    models: [
+      {
+        provider: "deepseek",
+        model: "deepseek-flash",
+        ...totals({ calls: 2, dictations: 2, costUsd: 0.0002, latenciesMs: [900, 1200] }),
+      },
+      { provider: "local", model: "sensevoice-small-q8", ...totals({ calls: 2, dictations: 2, latenciesMs: [300] }) },
+      { provider: "local", model: "gone-model", ...totals({ calls: 1, dictations: 1 }) },
+      { provider: "someone", model: "x", ...totals({ calls: 1 }) },
+    ],
+  };
+  const report = usageReport(fakeHistory({ [new Date(2026, 9, 1).toISOString()]: month }), { now });
+  assert.deepEqual(
+    report.month.models.map(({ name, icon, local, model, latency }) => ({ name, icon, local, model, latency })),
+    [
+      {
+        name: "DeepSeek",
+        icon: "deepseek",
+        local: false,
+        model: "deepseek-flash",
+        latency: { medianMs: 900, p90Ms: 1200 },
+      },
+      {
+        name: "SenseVoice Small (Q8_0)",
+        icon: "funaudiollm",
+        local: true,
+        model: "sensevoice-small-q8",
+        latency: { medianMs: 300, p90Ms: 300 },
+      },
+      // 清单里已经没有的本机模型：照 id 说
+      { name: "gone-model", icon: null, local: true, model: "gone-model", latency: null },
+      { name: "someone", icon: "someone", local: false, model: "x", latency: null },
+    ],
+  );
+  assert.deepEqual(report.today.models, []);
+  // 累计的那份照旧也放在最外面
+  assert.equal(report.models, report.total.models);
 });

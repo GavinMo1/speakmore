@@ -52,6 +52,9 @@ const report = {
     {
       provider: "gemini",
       model: "gemini-3.6-flash",
+      name: "Gemini",
+      icon: "gemini",
+      local: false,
       ...period({
         calls: 734,
         dictations: 720,
@@ -63,6 +66,9 @@ const report = {
     {
       provider: "openai",
       model: "gpt-audio-mini-2025-12-15",
+      name: "OpenAI",
+      icon: "openai",
+      local: false,
       ...period({
         calls: 100,
         dictations: 90,
@@ -126,6 +132,9 @@ test("有的型号不在价目表里：说出是哪几个，它们的钱没算�
       {
         provider: "gemini",
         model: "gemini-9-ultra",
+        name: "Gemini",
+        icon: "gemini",
+        local: false,
         ...period({ calls: 3, dictations: 3, unpricedCalls: 3, tokens: 4000 }),
       },
     ],
@@ -133,6 +142,24 @@ test("有的型号不在价目表里：说出是哪几个，它们的钱没算�
   const text = renderUsage(unknown, plain);
   assert.match(text, /gemini-9-ultra\s+价格不明/);
   assert.match(text, /gemini-9-ultra 不在价目表里，这 3 次的钱没算进去/);
+});
+
+test("本机转写那一跳单列一行：写明是本机的、免费，没有 token", () => {
+  const local = {
+    ...report,
+    models: [
+      ...report.models,
+      {
+        provider: "local",
+        model: "qwen3-asr-0.6b-q8",
+        name: "Qwen3-ASR 0.6B (Q8_0)",
+        icon: "qwen",
+        local: true,
+        ...period({ calls: 40, dictations: 40, latency: { medianMs: 300, p90Ms: 500 } }),
+      },
+    ],
+  };
+  assert.match(renderUsage(local, plain), /Qwen3-ASR 0\.6B \(Q8_0\)（本机）\s+免费\s+—\s+40 次\s+一般 0\.3 秒/);
 });
 
 test("还没有用量记录时说一句", () => {

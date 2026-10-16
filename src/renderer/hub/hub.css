@@ -433,16 +433,22 @@
   margin-left: 0.2rem;
 }
 
-/* 花费（原版没有：它是包月的。放在原版"个性化"那张卡的位置） */
+/* 花费（原版没有：它是包月的。放在原版"个性化"那张卡的位置）：上面是这段时间花了多少和选时段，下面按模型分开 */
 .spend {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.5rem 2rem;
-  align-items: start;
+  gap: 0.9rem;
+}
+
+.spend-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
 }
 
 .spend-table {
-  justify-self: end;
+  width: 100%;
   border-collapse: collapse;
   font-size: var(--text-small);
   font-variant-numeric: tabular-nums;
@@ -450,7 +456,7 @@
 
 .spend-table th,
 .spend-table td {
-  padding: 0.15rem 0 0.15rem 1.25rem;
+  padding: 0.4rem 0 0.4rem 1.25rem;
   text-align: right;
   white-space: nowrap;
 }
@@ -460,18 +466,52 @@
   text-align: left;
 }
 
-.spend-table thead th,
-.spend-table tbody th {
+.spend-table thead th {
+  padding-top: 0;
   font-weight: 500;
   color: var(--ink-2);
 }
 
-.spend-table tbody tr:last-child .cost {
+/* 合计：和上面分开，字重一点 */
+.spend-table tfoot :is(th, td) {
+  border-top: 1px solid color-mix(in oklch, var(--ink) 16%, transparent);
   font-weight: 600;
 }
 
+.spend-table tbody tr + tr :is(th, td) {
+  border-top: 1px solid var(--line);
+}
+
+.spend-table tbody th {
+  font-weight: 500;
+}
+
+.spend-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.spend-model-id {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+.spend-model-tag {
+  padding: 0.05rem 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: var(--fill-hover);
+  border-radius: var(--radius-full);
+}
+
+.spend-empty {
+  color: var(--ink-2);
+  text-align: left;
+}
+
 .spend-note {
-  grid-column: 1 / -1;
   font-size: 0.75rem;
   color: var(--ink-2);
 }
@@ -744,7 +784,8 @@ code.setting-value {
 }
 
 /* "模型"一页（model-pane.mjs）：上面两种识别模式的标签，下面是看着的那种模式里的东西 */
-.mode-tabs {
+.mode-tabs,
+.period-tabs {
   display: inline-flex;
   gap: 0.25rem;
   padding: 0.25rem;
@@ -752,7 +793,8 @@ code.setting-value {
   border-radius: var(--radius-control);
 }
 
-.mode-tab {
+.mode-tab,
+.period-tab {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -770,17 +812,20 @@ code.setting-value {
     color var(--dur-fast) var(--ease-out);
 }
 
-.mode-tab:hover {
+.mode-tab:hover,
+.period-tab:hover {
   color: var(--ink);
 }
 
-.mode-tab[aria-selected="true"] {
+.mode-tab[aria-selected="true"],
+.period-tab[aria-selected="true"] {
   color: var(--ink);
   background: var(--surface-solid);
   box-shadow: 0 1px 3px oklch(0 0 0 / 0.08);
 }
 
-.mode-tab:focus-visible {
+.mode-tab:focus-visible,
+.period-tab:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
@@ -1029,6 +1074,7 @@ code.setting-value {
   }
 
   .mode-tab,
+  .period-tab,
   .transcriber,
   .transcriber-progress::-webkit-progress-value {
     transition: none;

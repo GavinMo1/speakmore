@@ -1,8 +1,8 @@
-import { findVendor } from "../../server/vendors.mjs";
 import { formatSeconds, formatTokens, formatUsd } from "../../usage/format.mjs";
 import { displayWidth, INDENT, paint } from "./text.mjs";
 
 // 用量（speakmore usage）：今天、本月、累计花了多少钱、多少 token、模型多久回话，再按型号分开列累计。
+// 本机转写那一跳单列一行（不花钱、没有 token），听写的时间花在哪一跳、钱花在谁身上一眼看得出。
 
 const GAP = "   ";
 
@@ -61,9 +61,9 @@ export function renderUsage(report, { color, t }) {
   );
   const models = columns(
     report.models.map((it) => [
-      `${findVendor(it.provider)?.name ?? it.provider} ${it.model}`,
-      costOf(it, t),
-      formatTokens(it.tokens),
+      it.local ? t("cli.usage.localModel", { name: it.name }) : `${it.name} ${it.model}`,
+      it.local ? t("cli.usage.free") : costOf(it, t),
+      it.local ? "—" : formatTokens(it.tokens),
       t("cli.usage.times", { count: it.dictations }),
       it.latency ? t("cli.usage.usually", { median: formatSeconds(it.latency.medianMs, t) }) : "",
     ]),

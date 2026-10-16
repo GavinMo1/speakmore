@@ -149,15 +149,23 @@
                 </p>
               </div>
 
+              <!-- 花费：选一段时间，按模型分开列，最后一行合计（home.mjs 的 renderSpend） -->
               <div class="card spend" id="spend" hidden>
                 <div class="spend-head">
-                  <p class="stat-value" id="spend-month"></p>
-                  <p class="stat-label" data-i18n="home.spend">Spent this month</p>
+                  <div>
+                    <p class="stat-value" id="spend-total"></p>
+                    <p class="stat-label" id="spend-label"></p>
+                  </div>
+                  <div class="period-tabs" role="tablist" data-i18n-aria-label="home.spendPeriods">
+                    <button type="button" class="period-tab" role="tab" data-period="today" data-i18n="periods.today">Today</button>
+                    <button type="button" class="period-tab" role="tab" data-period="month" data-i18n="periods.month">This month</button>
+                    <button type="button" class="period-tab" role="tab" data-period="total" data-i18n="periods.total">All time</button>
+                  </div>
                 </div>
                 <table class="spend-table">
                   <thead>
                     <tr>
-                      <td></td>
+                      <th scope="col" data-i18n="home.model">Model</th>
                       <th scope="col" data-i18n="home.cost">Cost</th>
                       <th scope="col" data-i18n="home.tokens">Tokens</th>
                       <th scope="col" data-i18n="home.count">Count</th>
@@ -165,6 +173,7 @@
                     </tr>
                   </thead>
                   <tbody id="spend-rows"></tbody>
+                  <tfoot id="spend-sum"></tfoot>
                 </table>
                 <p class="spend-note" id="spend-note" hidden></p>
               </div>

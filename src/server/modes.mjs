@@ -44,7 +44,14 @@ export const MODES = Object.freeze([
         onCall,
         fetch,
       });
-      return createLocalRefiner({ transcriber, polisher, log, ...(decode ? { decode } : {}) });
+      return createLocalRefiner({
+        transcriber,
+        polisher,
+        log,
+        model: route.transcriber,
+        onCall,
+        ...(decode ? { decode } : {}),
+      });
     },
   }),
 ]);

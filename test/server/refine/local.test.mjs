@@ -113,3 +113,47 @@ test("转写完时客户端已经断开：不再花润色的钱", async () => {
   await assert.rejects(refiner.refine(Buffer.from("x"), { mimeType: "audio/webm", signal: abort.signal }));
   assert.equal(seen.polished.length, 0);
 });
+
+test("本机转写那一跳也记一笔账：是哪个模型、转了多久，不花钱；记不上不耽误这次听写", async () => {
+  const { decode, transcriber, polisher } = parts();
+  const calls = [];
+  const refiner = createLocalRefiner({
+    transcriber,
+    polisher,
+    log: recordingLog(),
+    decode,
+    model: "qwen3-asr-0.6b-q8",
+    onCall: (call) => calls.push(call),
+  });
+  await refiner.refine(Buffer.from("webm"), { mimeType: "audio/webm", audioId: "a1" });
+  assert.equal(calls.length, 1);
+  const { latencyMs, createdAt, ...rest } = calls[0];
+  assert.deepEqual(rest, {
+    purpose: "dictation",
+    audioId: "a1",
+    provider: "local",
+    model: "qwen3-asr-0.6b-q8",
+    inputTokens: 0,
+    audioTokens: 0,
+    cachedTokens: 0,
+    outputTokens: 0,
+    thinkingTokens: 0,
+    costUsd: 0,
+  });
+  assert.equal(typeof latencyMs, "number");
+  assert.ok(Number.isFinite(Date.parse(createdAt)));
+
+  const log = recordingLog();
+  const broken = createLocalRefiner({
+    transcriber,
+    polisher,
+    log,
+    decode,
+    model: "qwen3-asr-0.6b-q8",
+    onCall: () => {
+      throw new Error("库锁住了");
+    },
+  });
+  assert.equal(await broken.refine(Buffer.from("webm"), { mimeType: "audio/webm", audioId: "a2" }), "成品：原文");
+  assert.ok(log.events.some(({ event }) => event === "model_call_not_recorded"));
+});
