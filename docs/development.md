@@ -11,7 +11,7 @@ git clone https://github.com/zephyr4123/speakmore.git
 cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
-npm run check                 # 代码检查 + 全部测试（586 条，不联网、不开窗口）
+npm run check                 # 代码检查 + 全部测试（627 条，不联网、不开窗口）
 npm run release               # 打发布包：dist/release/ 下两种芯片各一个压缩包和一个安装包（dmg），外加 install.sh，摆成下载地址上的样子
 ```
 
@@ -43,7 +43,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `src/renderer/`、`src/preload/` | 各个窗口的页面，一个窗口一个目录：`bar/`（悬浮条：状态机、录音、听写协议的客户端、画面）、`hub/`（主窗口：首页、历史记录、设置对话框）、`onboarding/`（首次引导），共用的样式和填 key 那一块在 `shared/` |
 | `src/themes/` | 主题：界面要哪些颜色（一组 token）、每套主题给的值、合不合格怎么查。加一套主题是加一个文件、登记一行（名字和介绍写进各语言的文案） |
 | `src/i18n/` | 界面语言：每种语言一个文案文件（`locales/`），跟随系统时怎么挑、翻译函数。内核和主进程不写死哪种语言的话，交出一句"还没定语言的话"（名字加参数），由显示它的那一端（窗口、命令行）按自己的语言翻。回给命令行的，后台按命令行带来的语言翻成字：旧版本的命令行和 `status --json` 的读者只认字 |
-| `src/server/` | 听写服务：`protocol/` 收分块音频，`refine/` 交给模型整理（各家共用的流程，每次调用记一笔账），`providers/` 每家模型一个适配器（`prices/` 是各家的价目表），`audio/` 把录音转成别家收的格式。平时跑在后台应用的进程里 |
+| `src/server/` | 听写服务：`protocol/` 收分块音频，`refine/` 交给模型整理（各家共用的流程，每次调用记一笔账），`providers/` 每家模型一个适配器（`prices/` 是各家的价目表），`audio/` 把录音解成识别用的统一格式（16 kHz 单声道）、转成别家收的格式，`asr/` 是本地转写（模型清单、每个运行库一个适配器、下载校验模型的仓）。平时跑在后台应用的进程里 |
 | `src/usage/` | 用量报表（今天、本月、累计、按型号）、首页的统计（字数、语速、连续天数、热力图）和数字的写法，命令和主窗口共用 |
 | `native/` | 听热键、贴字、说话时截住 `esc` 和悬浮条上点击的小程序（Swift） |
 | `assets/` | 图标：`icon.svg` 是那方印，`tray.svg` 是菜单栏上的五道；`.icns` 和 `trayTemplate*.png` 由 `scripts/build/make-icon.sh` 从它们生成 |
@@ -51,6 +51,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `src/control.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道、日志 |
 | `test/` | 自动测试，目录和 `src/` 对应 |
 | `scripts/` | 开发用的脚本，按用途分四组：`build/` 编译小程序、打 .app；`release/` 发新版本（`ship.sh`：把关、打包、上传、核对）；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
+| `bench/` | 本地转写的评测（[说明](../bench/README.md)）：洗样本、跑参照和各个本地模型、判分、出报告 |
 | `docs/` | [实现笔记](implementation-notes.md)、这份开发说明、README 用的截图（`images/`） |
 | `website/` | 官网（[说明](../website/README.md)）：React + Tailwind CSS v4 的单页静态站，中英双语，Docker 部署；截图从 App 的真页面离屏截、放在单独的 COS 桶 |
 | `targets/typeless/` | 对 Typeless 的[逆向分析](../targets/typeless/README.md)，18 篇文档。SpeakMore 是照着它做的 |

@@ -6,6 +6,8 @@
       "src/**",
       "test/**",
       "scripts/**",
+      "bench/**",
+      "!bench/_work",
       "website/**",
       "!website/node_modules",
       "!website/dist",

@@ -5,6 +5,16 @@ import { downsample, encodeWav, mixDown, SPEECH_SAMPLE_RATE } from "./pcm.mjs";
 // Gemini 两种都直接收，用不到这里；OpenAI 只收 wav 和 mp3（实测，别的格式回 400）。
 // Ogg 不转：拆 Ogg 要用 LGPL 的 codec-parser，作者定了不随程序分发；SpeakMore 自己只录 WebM。
 
+const CONTAINERS = [
+  { magic: Buffer.from("OggS"), mimeType: "audio/ogg" },
+  { magic: Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), mimeType: "audio/webm" },
+];
+
+/** 靠文件头认录音的容器：audio/ogg、audio/webm，别的是 null */
+export function audioTypeOf(bytes) {
+  return CONTAINERS.find(({ magic }) => bytes.subarray(0, magic.length).equals(magic))?.mimeType ?? null;
+}
+
 /**
  * 程序自己认的录音格式：格式 → 加载它的解码器。用到才加载：解码器带着 WASM，只用 Gemini 的人不必付这个启动开销。
  * 评测要解原版的 Ogg，自己另传一份（bench/），程序里不放。

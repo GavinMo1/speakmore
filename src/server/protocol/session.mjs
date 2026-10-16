@@ -1,15 +1,5 @@
+import { audioTypeOf } from "../audio/transcode.mjs";
 import { ProtocolError } from "./protocol.mjs";
-
-// 靠文件头认容器，不信客户端在 start_audio 里自报的格式
-const CONTAINERS = [
-  { magic: Buffer.from("OggS"), mimeType: "audio/ogg" },
-  { magic: Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), mimeType: "audio/webm" },
-];
-
-function mimeTypeOf(firstChunk) {
-  const found = CONTAINERS.find(({ magic }) => firstChunk.subarray(0, magic.length).equals(magic));
-  return found?.mimeType ?? null;
-}
 
 /**
  * 一次录音在服务端的状态：按序收下各个音频块，最后合并成一段。
@@ -65,8 +55,9 @@ export class RecordingSession {
         `第 ${announced.index} 块声明 ${announced.size} 字节，实际 ${data.length} 字节`,
       );
     }
+    // 靠文件头认容器，不信客户端在 start_audio 里自报的格式。
     // 只认第一块的文件头：浏览器录的 WebM 后面各块是接着写的数据，没有文件头
-    const mimeType = this.#mimeType ?? mimeTypeOf(data);
+    const mimeType = this.#mimeType ?? audioTypeOf(data);
     if (!mimeType) {
       throw new ProtocolError("unsupported_audio", "录音的开头既不是 Ogg 也不是 WebM");
     }

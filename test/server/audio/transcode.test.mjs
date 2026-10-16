@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createTranslator } from "../../../src/i18n/index.mjs";
-import { DECODERS, toSpeech, toWav } from "../../../src/server/audio/transcode.mjs";
+import { audioTypeOf, DECODERS, toSpeech, toWav } from "../../../src/server/audio/transcode.mjs";
 
 const zh = createTranslator("zh-CN");
 /** 报错里给人看的那句，按中文翻出来对得上 */
@@ -51,4 +51,11 @@ test("解码器可以换：传进来的认得 Ogg 就解 Ogg，多声道、48 kH
   assert.equal(samples.length, 16_000);
   // 程序自己用的那份只认 WebM：拆 Ogg 的库是 LGPL，不随程序分发
   assert.deepEqual([...DECODERS.keys()], ["audio/webm"]);
+});
+
+test("靠文件头认容器：Ogg、WebM 认得出，别的是 null", () => {
+  assert.equal(audioTypeOf(fixture("tone-1s.ogg")), "audio/ogg");
+  assert.equal(audioTypeOf(fixture("tone-1s.webm")), "audio/webm");
+  assert.equal(audioTypeOf(Buffer.from("RIFF....WAVE")), null);
+  assert.equal(audioTypeOf(Buffer.alloc(0)), null);
 });
