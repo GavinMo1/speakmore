@@ -9,6 +9,8 @@
 // 本地转写那条（local 模式）：数据目录是新的，本地模型会真从下载源下一遍（SPEAKMORE_MODEL_SOURCE 可以换），装好才开始录：
 //   SPEAKMORE_MODE=local scripts/dev/with-key.sh deepseek node scripts/dev/e2e.mjs <WAV>
 // 想用打包时摆出来的那一份跑（只带运行时依赖，看漏没漏包）：SPEAKMORE_E2E_APP=<摆好的目录>
+// 想用打好的应用跑（签了名、开着 hardened runtime，看本地转写的原生库加载不加载得了）：
+//   SPEAKMORE_E2E_ELECTRON=<SpeakMore.app>/Contents/MacOS/SpeakMore
 
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
@@ -27,10 +29,12 @@ const electron = createRequire(import.meta.url)("electron");
 const workDir = mkdtempSync(join(tmpdir(), "sm-e2e-"));
 const outPath = join(workDir, "result.json");
 
+// 打好的应用自己知道程序在哪，不用指给它
+const packaged = process.env.SPEAKMORE_E2E_ELECTRON;
 const child = spawn(
-  electron,
+  packaged ?? electron,
   [
-    ".",
+    ...(packaged ? [] : ["."]),
     "--use-fake-device-for-media-stream",
     "--use-fake-ui-for-media-stream",
     // %noloop：文件放完就静音，不从头再放
