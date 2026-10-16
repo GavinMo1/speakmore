@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createTranslator, msg } from "../../../src/i18n/index.mjs";
 import { ModelError } from "../../../src/server/providers/errors.mjs";
-import { NO_SPEECH_MARK, SYSTEM_PROMPT, TASK_REMINDER } from "../../../src/server/refine/prompt.mjs";
+import { SYSTEM_PROMPT, TASK_REMINDER } from "../../../src/server/refine/prompt.mjs";
 import { createModelRefiner, createRefiner, generateClean } from "../../../src/server/refine/refiner.mjs";
 
 const zh = createTranslator("zh-CN");

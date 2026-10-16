@@ -100,6 +100,17 @@ export default {
     unknownProvider: "unknown provider {name}; available: {providers}",
     badName: "model name {model} is invalid: only letters, digits, and . _ : - are allowed",
   },
+  chat: {
+    modelRequired: "{vendor} has no default model; write it as {vendor}/<model name>",
+    badModelName: "model name {model} is invalid: only letters, digits, and . _ : / @ + - are allowed",
+    urlEmpty: "the address is empty",
+    urlNotHttp: "{url} isn't a web address; it should start with https:// or http://",
+    urlCredentials: "don't put a username or password in the address; the key goes in separately",
+    urlQuery: "the address can't contain ? or #",
+    urlMissing: "no address set for the custom service (customUrl)",
+    endpointNotFound:
+      "{provider} has no chat API at this address (HTTP 404). Check the address is complete; most end in /v1",
+  },
 
   setup: {
     openSettings: "menu bar icon › Settings",

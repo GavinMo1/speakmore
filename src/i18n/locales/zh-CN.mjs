@@ -97,6 +97,16 @@ export default {
     unknownProvider: "不认识 {name} 这家，能用的有 {providers}",
     badName: "模型名 {model} 不对：只能有字母、数字和 . _ : -",
   },
+  chat: {
+    modelRequired: "{vendor} 没有默认模型，要写成 {vendor}/模型名",
+    badModelName: "模型名 {model} 不对：只能有字母、数字和 . _ : / @ + -",
+    urlEmpty: "地址是空的",
+    urlNotHttp: "{url} 不是网址，要以 https:// 或 http:// 开头",
+    urlCredentials: "地址里不要带账号密码，key 另外填",
+    urlQuery: "地址里不能有 ? 或 #",
+    urlMissing: "还没填自定义服务的地址（customUrl）",
+    endpointNotFound: "{provider} 的这个地址上没有对话接口（HTTP 404）：检查地址是否写全，多数以 /v1 结尾",
+  },
 
   setup: {
     openSettings: "菜单栏图标 › 设置",
