@@ -13,7 +13,7 @@ import {
 import { dirname, join } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { DEFAULT_SOURCE, downloadUrls } from "./catalog.mjs";
+import { DEFAULT_SOURCE, downloadSize, downloadUrls } from "./catalog.mjs";
 
 // 模型仓：把配置表（catalog.mjs）里的模型下载到本机、校验、列出、删除。App、命令行、评测用的都是它。
 // 一个模型一个目录 <仓>/<模型 id>/，文件照配置表里的相对路径放。每个文件先写成 .part，sha256 对上了才改回原名；
@@ -58,7 +58,7 @@ export function createModelStore({ dir, fetch = globalThis.fetch, source = DEFAU
   async function download(model, file, { signal, onProgress }) {
     const target = join(dirOf(model), file.path);
     if (await alreadyThere(target, file)) {
-      onProgress?.({ file: file.path, received: file.size, total: file.size });
+      onProgress?.(file.size);
       return;
     }
     mkdirSync(dirname(target), { recursive: true });
@@ -93,7 +93,7 @@ export function createModelStore({ dir, fetch = globalThis.fetch, source = DEFAU
         kick();
         hash.update(chunk);
         received += chunk.length;
-        onProgress?.({ file: file.path, received, total: file.size });
+        onProgress?.(received);
         done(null, chunk);
       },
     });
@@ -122,16 +122,34 @@ export function createModelStore({ dir, fetch = globalThis.fetch, source = DEFAU
 
     /**
      * 下载并校验一个模型的全部文件。已经装好的直接返回。
-     * @param {{ signal?: AbortSignal, onProgress?: (p: { file: string, received: number, total: number }) => void }} [options]
+     * @param {{ signal?: AbortSignal, onProgress?: (p: { received: number, total: number }) => void }} [options]
+     *   onProgress：进度按整个模型算，已经下好的文件算满
      * @returns {Promise<string>} 模型目录
      */
-    async install(model, options = {}) {
+    async install(model, { signal, onProgress } = {}) {
       if (isInstalled(model)) return dirOf(model);
       // 收据最后写：中途失败、被打断时没有收据，下次还会接着补
       rmSync(join(dirOf(model), RECEIPT), { force: true });
-      for (const file of Object.values(model.files)) await download(model, file, options);
+      const total = downloadSize(model);
+      let done = 0;
+      for (const file of Object.values(model.files)) {
+        await download(model, file, {
+          signal,
+          onProgress: (received) => onProgress?.({ received: done + received, total }),
+        });
+        done += file.size;
+      }
       writeFileSync(join(dirOf(model), RECEIPT), JSON.stringify(receiptOf(model), null, 2));
       return dirOf(model);
+    },
+
+    /**
+     * 还差多少字节没下：最终的文件还不在的，按清单里的大小算（不核对内容，下载时会核对）。下载前查磁盘空间用
+     */
+    missingBytes(model) {
+      return Object.values(model.files)
+        .filter((file) => !existsSync(join(dirOf(model), file.path)))
+        .reduce((sum, file) => sum + file.size, 0);
     },
 
     /** 删掉一个模型的整个目录。没装过的什么也不做 */

@@ -266,14 +266,12 @@ const LOCAL = {
   customUrl: null,
 };
 
-/** 假的本地模型：手动控制下载进度和装好的时机，记下卸掉了几次 */
+/** 假的本地模型：手动控制装好的时机，记下卸掉了几次 */
 function fakeLocal() {
   const control = { started: [], disposed: 0 };
   const startLocal = (options) =>
     new Promise((resolve, reject) => {
       control.started.push(options.modelId);
-      control.sources = [...(control.sources ?? []), options.source];
-      control.progress = (received, total) => options.onProgress({ received, total });
       control.finish = () =>
         resolve({
           backend: "fake",
@@ -281,9 +279,19 @@ function fakeLocal() {
           dispose: () => control.disposed++,
         });
       control.fail = (error) => reject(error);
-      options.signal.addEventListener("abort", () => reject(new Error("下载取消了")));
     });
   return { control, startLocal };
+}
+
+/** 假的模型库：installed 是下载好了的；downloads 是正在下的进度 */
+function fakeModels(installed = ["qwen3-asr-0.6b-q8", "sensevoice-small-q8"]) {
+  const models = {
+    installed: new Set(installed),
+    downloads: new Map(),
+    isInstalled: (id) => models.installed.has(id),
+    status: (id) => ({ download: models.downloads.get(id) ?? null }),
+  };
+  return models;
 }
 
 /** 假的 refiner：照路线把转写器用起来，好看出本地模型这一跳的状态 */
@@ -294,48 +302,78 @@ const throughTranscriber = async ({ transcriber }) => ({
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-test("本地转写链路：启动时就在后台准备模型；下载中、装载中按下热键会说清在干什么；装好了就能用", async (t) => {
+/** 走本地转写链路的服务，本地模型和模型库都是假的 */
+async function localService(t, { models = fakeModels(), onLocalModel, createRefiner = throughTranscriber } = {}) {
   const { control, startLocal } = fakeLocal();
-  let changes = 0;
   const service = await startService({
     log: quietLog,
     route: LOCAL,
+    models,
     startLocal,
-    createRefiner: throughTranscriber,
-    onLocalModel: () => changes++,
+    createRefiner,
+    onLocalModel,
   });
   t.after(() => service.close());
+  return { service, control, models };
+}
+
+test("本地转写链路：下载好了的启动时就装上；装载中按下热键说稍等；装好了就能用", async (t) => {
+  let changes = 0;
+  const { service, control } = await localService(t, { onLocalModel: () => changes++ });
   assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8"]);
   assert.equal(service.localModel.state, "loading");
   await service.useKey("deepseek-key");
-
-  control.progress(50, 100);
-  assert.deepEqual(service.localModel, { state: "downloading", model: "qwen3-asr-0.6b-q8", received: 50, total: 100 });
-  assert.match(zh.text((await dictateOnce(service.url)).V.problem), /还在下载（50%）/);
+  assert.match(zh.text((await dictateOnce(service.url)).V.problem), /正在装载/);
 
   control.finish();
   await tick();
   assert.equal(service.localModel.state, "ready");
   assert.equal((await dictateOnce(service.url)).V.refined_text, "转写了 3");
-  assert.ok(changes >= 3);
+  assert.ok(changes >= 2);
+});
+
+test("要的模型还没下载：不自己去下，停在 missing；按下热键时说去哪下", async (t) => {
+  const { service, control } = await localService(t, { models: fakeModels([]) });
+  assert.deepEqual(control.started, []);
+  assert.deepEqual(service.localModel, { state: "missing", model: "qwen3-asr-0.6b-q8" });
+  await service.useKey("deepseek-key");
+  const problem = zh.text((await dictateOnce(service.url)).V.problem);
+  assert.match(problem, /Qwen3-ASR 0\.6B \(Q8_0\) 还没下载.*speakmore transcriber download qwen3-asr-0\.6b-q8/);
+});
+
+test("用户在下它的时候：状态带着进度，按下热键说下到哪了；下好了马上装上", async (t) => {
+  const models = fakeModels([]);
+  const { service, control } = await localService(t, { models });
+  await service.useKey("deepseek-key");
+  models.downloads.set("qwen3-asr-0.6b-q8", { received: 50, total: 100 });
+  service.modelsChanged();
+  assert.deepEqual(service.localModel, { state: "missing", model: "qwen3-asr-0.6b-q8", received: 50, total: 100 });
+  assert.match(zh.text((await dictateOnce(service.url)).V.problem), /还在下载（50%）/);
+
+  models.downloads.delete("qwen3-asr-0.6b-q8");
+  models.installed.add("qwen3-asr-0.6b-q8");
+  service.modelsChanged();
+  assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8"]);
+  control.finish();
+  await tick();
+  assert.equal(service.localModel.state, "ready");
+  // 已经装好了，模型库再变（下别的模型）也不重装
+  service.modelsChanged();
+  assert.equal(control.started.length, 1);
 });
 
 test("本地模型没装上：状态是失败，带着原因；按下热键时说的就是这个原因", async (t) => {
-  const { control, startLocal } = fakeLocal();
-  const service = await startService({ log: quietLog, route: LOCAL, startLocal, createRefiner: throughTranscriber });
-  t.after(() => service.close());
+  const { service, control } = await localService(t);
   await service.useKey("deepseek-key");
-  control.fail(new Error("哪个地址都没下下来"));
+  control.fail(new Error("转写进程起不来"));
   await tick();
   assert.equal(service.localModel.state, "failed");
-  assert.match(zh.text(service.localModel.problem), /本地模型没装上：哪个地址都没下下来/);
+  assert.match(zh.text(service.localModel.problem), /本地模型没装上：转写进程起不来/);
   assert.match(zh.text((await dictateOnce(service.url)).V.problem), /本地模型没装上/);
 });
 
 test("改走原生链路：本地模型卸掉，内存还回去；再换回来重新装", async (t) => {
-  const { control, startLocal } = fakeLocal();
-  const service = await startService({ log: quietLog, route: LOCAL, startLocal, createRefiner: throughTranscriber });
-  t.after(() => service.close());
+  const { service, control } = await localService(t);
   control.finish();
   await tick();
   assert.equal(service.localModel.state, "ready");
@@ -348,10 +386,8 @@ test("改走原生链路：本地模型卸掉，内存还回去；再换回来�
   assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8", "qwen3-asr-0.6b-q8"]);
 });
 
-test("换 key、换润色的那家不动本地模型；换本地模型才重装，没下完的那次停掉", async (t) => {
-  const { control, startLocal } = fakeLocal();
-  const service = await startService({ log: quietLog, route: LOCAL, startLocal, createRefiner: throughTranscriber });
-  t.after(() => service.close());
+test("换 key、换润色的那家不动本地模型；换本地模型才重装", async (t) => {
+  const { service, control } = await localService(t);
   await service.useKey("key-1");
   await service.useKey("key-2", {
     route: { ...LOCAL, polish: { vendor: "custom", model: "m" }, customUrl: "http://x/v1" },
@@ -364,14 +400,12 @@ test("换 key、换润色的那家不动本地模型；换本地模型才重装�
 });
 
 test("local 的第一跳单独换：只换本地模型，不重新验证润色的那家、不动 key；不在 local 模式时不让换", async (t) => {
-  const { control, startLocal } = fakeLocal();
   let built = 0;
   const createRefiner = async (options) => {
     built++;
     return throughTranscriber(options);
   };
-  const service = await startService({ log: quietLog, route: LOCAL, startLocal, createRefiner });
-  t.after(() => service.close());
+  const { service, control } = await localService(t, { createRefiner });
   await service.useKey("ds-key");
   assert.equal(built, 1);
 
@@ -387,11 +421,9 @@ test("local 的第一跳单独换：只换本地模型，不重新验证润色�
   assert.throws(() => native.switchTranscriber("sensevoice-small-q8"), /local/);
 });
 
-test("本地模型没装上时再选同一个：重新下载、装载（重试的办法）；装好了再选同一个不重装", async (t) => {
-  const { control, startLocal } = fakeLocal();
-  const service = await startService({ log: quietLog, route: LOCAL, startLocal, createRefiner: throughTranscriber });
-  t.after(() => service.close());
-  control.fail(new Error("哪个地址都没下下来"));
+test("本地模型没装上时再选同一个：重新装载（重试的办法）；装好了再选同一个不重装", async (t) => {
+  const { service, control } = await localService(t);
+  control.fail(new Error("转写进程起不来"));
   await tick();
   assert.equal(service.localModel.state, "failed");
 
@@ -402,63 +434,4 @@ test("本地模型没装上时再选同一个：重新下载、装载（重试�
   assert.equal(service.localModel.state, "ready");
   service.switchTranscriber("qwen3-asr-0.6b-q8");
   assert.equal(control.started.length, 2);
-});
-
-test("换下载源：正在下载的从新的源接着下（已经下好的文件由模型仓跳过）；装好了的不动，下次下载才用新的", async (t) => {
-  const { control, startLocal } = fakeLocal();
-  const service = await startService({
-    log: quietLog,
-    route: LOCAL,
-    modelSource: "cn",
-    startLocal,
-    createRefiner: throughTranscriber,
-  });
-  t.after(() => service.close());
-  control.progress(10, 100);
-  await tick();
-  assert.equal(service.localModel.state, "downloading");
-
-  service.setModelSource("original");
-  assert.deepEqual(control.sources, ["cn", "original"]);
-  service.setModelSource("original");
-  assert.equal(control.started.length, 2, "同一个源不重来");
-
-  control.finish();
-  await tick();
-  assert.equal(service.localModel.state, "ready");
-  service.setModelSource("cn");
-  assert.equal(control.started.length, 2, "装好了的不重下");
-});
-
-test("换下载源：原来的源一个字节都还没给（还在 loading）也换过去", async (t) => {
-  const { control, startLocal } = fakeLocal();
-  const service = await startService({
-    log: quietLog,
-    route: LOCAL,
-    modelSource: "cn",
-    startLocal,
-    createRefiner: throughTranscriber,
-  });
-  t.after(() => service.close());
-  assert.equal(service.localModel.state, "loading");
-  service.setModelSource("original");
-  assert.deepEqual(control.sources, ["cn", "original"]);
-});
-
-test("换下载源：上次没下下来的，换了源就重新下", async (t) => {
-  const { control, startLocal } = fakeLocal();
-  const service = await startService({
-    log: quietLog,
-    route: LOCAL,
-    modelSource: "cn",
-    startLocal,
-    createRefiner: throughTranscriber,
-  });
-  t.after(() => service.close());
-  control.fail(new Error("哪个地址都没下下来"));
-  await tick();
-  assert.equal(service.localModel.state, "failed");
-  service.setModelSource("original");
-  assert.deepEqual(control.sources, ["cn", "original"]);
-  assert.equal(service.localModel.state, "loading");
 });

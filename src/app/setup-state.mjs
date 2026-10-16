@@ -2,6 +2,7 @@
 // 说的话都是还没定语言的（msg），由显示它的那一端按自己的语言翻。
 
 import { msg } from "../i18n/index.mjs";
+import { findModel } from "../models/catalog.mjs";
 
 const OPEN_SETTINGS = msg("setup.openSettings");
 
@@ -13,8 +14,9 @@ const OPEN_SETTINGS = msg("setup.openSettings");
  *   microphone 是系统给的状态（granted / denied / not-determined…）；listen、trusted 为 null 表示按键监听还没报上来
  * @param {"starting" | "running" | "stopped"} [setup.helper] 按键监听的小程序。stopped：退出了或者根本没起来
  * @param {string} [setup.providerName] 正在用哪一家的模型，缺 key 时点名
- * @param {{ state: string, received?: number, total?: number, problem?: object } | null} [setup.localModel]
- *   本地转写链路的模型（service.mjs 的 localModel）；没走这条链路时是 off 或 null
+ * @param {{ state: string, model?: string, received?: number, total?: number, problem?: object } | null} [setup.localModel]
+ *   本地转写链路的模型（service.mjs 的 localModel）；没走这条链路时是 off 或 null。还没下载（missing）、
+ *   而用户正在下它时带着 received、total
  * @returns {{ ready: boolean, missing: object[], blocker: object | null, degraded: object | null }}
  *   ready：现在按热键能不能听写；missing：确定缺的东西；blocker：按了热键却不能用时提示的那句话；
  *   degraded：能用但打了折扣时的说明
@@ -38,14 +40,18 @@ export function summarizeSetup({ key, permissions, helper, providerName = "Gemin
     blocker = msg("setup.blocker.checking");
   }
 
-  // 下载和装载会自己做完，不算缺东西；没装上要人去处理（多半是网络或磁盘），算缺
+  // 还没下载、没装上都要人去处理（下载由用户点；装不上多半是文件坏了），算缺；装载会自己做完，不算
   if (localModel?.state === "failed") {
     missing.push(msg("setup.missing.localModel"));
     blocker ??= localModel.problem;
-  } else if (localModel?.state === "downloading") {
-    blocker ??= msg("local.modelDownloading", {
-      percent: Math.floor((localModel.received / localModel.total) * 100),
-    });
+  } else if (localModel?.state === "missing") {
+    missing.push(msg("setup.missing.localModel"));
+    blocker ??= localModel.total
+      ? msg("local.modelDownloading", { percent: Math.floor((localModel.received / localModel.total) * 100) })
+      : msg("local.modelMissing", {
+          model: findModel(localModel.model)?.name ?? localModel.model,
+          id: localModel.model,
+        });
   } else if (localModel?.state === "loading") {
     blocker ??= msg("local.modelLoading");
   }

@@ -1,47 +1,37 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { downloadSize, findModel } from "../../../src/models/catalog.mjs";
+import { findModel } from "../../../src/models/catalog.mjs";
 import { startTranscriber } from "../../../src/server/asr/start.mjs";
 
 const quiet = { info() {}, warn() {}, error() {} };
 const MODEL = findModel("qwen3-asr-0.6b-q8");
 
-/** 假的模型仓：installed 决定装没装；装的时候按文件报一次满进度 */
+/** 假的模型仓：installed 决定装没装；有人让它下载就记下来（不该有） */
 function fakeStore(installed) {
   const calls = [];
   return {
     calls,
     isInstalled: () => installed,
     dirOf: (model) => `/models/${model.id}`,
-    async install(model, { onProgress }) {
+    async install(model) {
       calls.push(model.id);
-      for (const file of Object.values(model.files))
-        onProgress({ file: file.path, received: file.size, total: file.size });
     },
   };
 }
 
 const fakeSpawn = async (request) => ({ request });
 
-test("没下载过的先下载，进度按整个模型算；装好以后在转写进程里装上", async () => {
-  const store = fakeStore(false);
-  const progress = [];
-  const { request } = await startTranscriber({
-    modelId: MODEL.id,
-    log: quiet,
-    store,
-    spawn: fakeSpawn,
-    onProgress: (p) => progress.push(p),
-  });
-  assert.deepEqual(store.calls, [MODEL.id]);
-  assert.deepEqual(progress.at(-1), { received: downloadSize(MODEL), total: downloadSize(MODEL) });
+test("下载好了的：在转写进程里装上", async () => {
+  const store = fakeStore(true);
+  const { request } = await startTranscriber({ modelId: MODEL.id, log: quiet, store, spawn: fakeSpawn });
   assert.equal(request.model, MODEL);
   assert.equal(request.dir, `/models/${MODEL.id}`);
+  assert.deepEqual(store.calls, []);
 });
 
-test("已经装好的不再下载", async () => {
-  const store = fakeStore(true);
-  await startTranscriber({ modelId: MODEL.id, log: quiet, store, spawn: fakeSpawn });
+test("没下载过的不自己去下：直接报错。下不下由用户点（models/library.mjs）", async () => {
+  const store = fakeStore(false);
+  await assert.rejects(startTranscriber({ modelId: MODEL.id, log: quiet, store, spawn: fakeSpawn }), /还没下载/);
   assert.deepEqual(store.calls, []);
 });
 

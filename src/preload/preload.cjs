@@ -54,6 +54,10 @@ contextBridge.exposeInMainWorld("speakmore", {
   setTranscriber: (id) => ipcRenderer.invoke("setup:set-transcriber", id),
   setPolish: (polish, customUrl) => ipcRenderer.invoke("setup:set-polish", polish, customUrl),
   setModelSource: (id) => ipcRenderer.invoke("setup:set-model-source", id),
+  // 本机模型：用户点了才下载；取消、删除（正在用的删不了）
+  downloadModel: (id) => ipcRenderer.invoke("setup:download-model", id),
+  cancelDownload: (id) => ipcRenderer.invoke("setup:cancel-download", id),
+  deleteModel: (id) => ipcRenderer.invoke("setup:delete-model", id),
   readClipboard: () => ipcRenderer.invoke("setup:read-clipboard"),
   openKeyPage: (provider) => ipcRenderer.invoke("setup:open-key-page", provider),
   openPrivacySettings: (permission) => ipcRenderer.invoke("setup:open-privacy", permission),

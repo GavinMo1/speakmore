@@ -18,7 +18,7 @@ import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale } from "../i18n/index.mjs";
 import { alsoLogTo, log } from "../log.mjs";
 import { chipOf, downloadSize, MODELS, measuredOn, SOURCES } from "../models/catalog.mjs";
-import { createModelStore } from "../models/store.mjs";
+import { createLocalModels, freeBytesAt } from "../models/library.mjs";
 import { CHAT_VENDORS, formatChatChoice } from "../server/chat/vendors.mjs";
 import { describeRoute, keyVendorOf, MODES } from "../server/modes.mjs";
 import { formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
@@ -151,6 +151,17 @@ async function main() {
   );
   /** 本地模型的状态一变，菜单栏和主窗口跟着更新。菜单栏建好之前变的不用管：建的时候读的就是最新的 */
   let localModelChanged = () => {};
+  // 本机的模型库：下载、取消、删除都由用户点。下好了、删了，服务按路线装上或卸掉
+  const localModels = createLocalModels({
+    dir: PATHS.modelsDir,
+    source: SETTINGS.modelSource.value,
+    log,
+    // 只在用户点了下载、取消、删除之后才会来，那时服务早就建好了
+    onChange: () => {
+      service?.modelsChanged();
+      localModelChanged();
+    },
+  });
   // 每次调模型记一笔账，开着的历史窗口跟着更新花费（记账出错由整理流程写日志，不连累听写）
   const service = EXTERNAL_SERVER_URL
     ? null
@@ -158,7 +169,7 @@ async function main() {
         log,
         route: ROUTE,
         modelsDir: PATHS.modelsDir,
-        modelSource: SETTINGS.modelSource.value,
+        models: localModels,
         onModelCall: (call) => {
           history.addCall(call);
           historyChanged();
@@ -180,7 +191,7 @@ async function main() {
   });
   /** 切模式、换各模式里的模型（app/modes.mjs）。连着单独启动的服务端时这些都归那边，是 null */
   const modes = service
-    ? createModeSwitch({ service, keys, settingsFile: PATHS.settingsFile, env: process.env, log })
+    ? createModeSwitch({ service, keys, models: localModels, settingsFile: PATHS.settingsFile, env: process.env, log })
     : null;
   /** 按键监听的小帮手：starting（还没报上来）/ running / stopped（退出了，或者根本没起来） */
   let helperState = "starting";
@@ -533,7 +544,12 @@ async function main() {
    */
   function describeModes() {
     const settings = resolveSettings({ file: PATHS.settingsFile, env: process.env });
-    const store = createModelStore({ dir: PATHS.modelsDir });
+    let freeBytes = null;
+    try {
+      freeBytes = freeBytesAt(PATHS.modelsDir);
+    } catch (error) {
+      log.warn("disk_space_unknown", { error: String(error) });
+    }
     return {
       mode: { value: service?.route.mode ?? ROUTE.mode, choices: MODES.map(({ id }) => id) },
       native: { model: settings.model.value, providers: PROVIDERS.map(describeVendor) },
@@ -544,12 +560,15 @@ async function main() {
           name: model.name,
           license: model.license.name,
           bytes: downloadSize(model),
-          installed: store.isInstalled(model),
+          // 下好了没有、正在下到哪、下过一半的有多少、上次为什么没下下来
+          ...localModels.status(model.id),
           tags: model.tags,
           // 在这类芯片上的实测，跑得快的在前；没测过是空的
           measured: measuredOn(model, CHIP),
         })),
         chip: CHIP,
+        // 模型目录那块磁盘还剩多少，查不了是 null
+        freeBytes,
         // 本地模型从哪下：哪种模式里都能换
         source: { value: settings.modelSource.value, choices: SOURCES.map(({ id }) => id) },
         polish: settings.polish.value,
@@ -579,6 +598,13 @@ async function main() {
   handle("setup:set-polish", (_event, polish, customUrl) =>
     viaModes((m) => m.setPolish(polish, customUrl === undefined ? {} : { customUrl })),
   );
+  // 本机模型：下载、取消、删除都由用户点；正在用的不能删（模式那一层管）
+  handle("setup:download-model", (_event, id) => localModels.download(id));
+  handle("setup:cancel-download", (_event, id) => {
+    localModels.cancel(id);
+    return { ok: true };
+  });
+  handle("setup:delete-model", (_event, id) => viaModes((m) => m.removeModel(id)));
   handle("setup:read-clipboard", () => clipboard.readText());
   handle("setup:open-key-page", (_event, id) => {
     // 自定义服务没有申请 key 的页面
@@ -643,12 +669,12 @@ async function main() {
   });
 
   /**
-   * 重新读一遍设置里的下载源，交给服务：正在下载的、上次没下下来的从新的源接着下。不用重启
+   * 重新读一遍设置里的下载源，交给模型库：正在下的从新的源接着下，以后的下载也用它。不用重启
    * @returns {{ modelSource: string }} 实际用的那个（被环境变量盖着时是环境变量里的）
    */
   function reloadModelSource() {
     const { value } = resolveSettings({ file: PATHS.settingsFile, env: process.env }).modelSource;
-    service?.setModelSource(value);
+    localModels.setSource(value);
     setupChanged();
     return { modelSource: value };
   }
@@ -837,6 +863,7 @@ async function main() {
     helperGeneration++;
     helper.stop();
     history.close();
+    localModels.close();
     // 应用正在退出，这两样关不干净也不拦着；记一笔方便排查
     service?.close().catch((error) => log.warn("service_close_failed", { error: String(error) }));
     control?.close().catch((error) => log.warn("control_close_failed", { error: String(error) }));
@@ -894,6 +921,8 @@ async function main() {
       ...setup,
       key: withProblemText(setup.key, say),
       localModel: setup.localModel && withProblemText(setup.localModel, say),
+      // 每个本机模型下好了没有、正在下到哪（命令行看下载进度用）
+      localModels: localModels.list().map((model) => withProblemText(model, say)),
       summary: summaryAsText(summarizeSetup(setup), say),
     };
   }
@@ -951,6 +980,15 @@ async function main() {
           "reload-theme": reloadTheme,
           "reload-language": () => reloadLanguage(),
           "reload-model-source": () => reloadModelSource(),
+          // 本机模型：下载在后台下，进度看 status 的 localModels
+          "download-model": async ({ id, locale: wanted }) =>
+            withProblemText(await localModels.download(id), translatorFor(wanted)),
+          "cancel-download": ({ id }) => {
+            localModels.cancel(id);
+            return { ok: true };
+          },
+          "delete-model": async ({ id, locale: wanted }) =>
+            withProblemText(await viaModes((m) => m.removeModel(id)), translatorFor(wanted)),
           // 命令行的名字沿用窗口还分开时的叫法：show-settings 打开设置里还差东西的那一页，
           // 第一次启动时命令行会带上 onboarding，打开首次引导
           "show-settings": ({ onboarding = false }) => (onboarding ? showOnboarding() : showHub({ pane: "auto" })),
@@ -967,7 +1005,13 @@ async function main() {
     const loaded = await keyLoaded;
     if (loaded.state !== "ready")
       throw new Error(`端到端测试需要能用的 key：${t.text(loaded.problem) || loaded.state}`);
-    await e2e.run({ bar, history, localModel: () => service?.localModel, quit: (code) => app.exit(code) });
+    await e2e.run({
+      bar,
+      history,
+      localModel: () => service?.localModel,
+      downloadModel: (id) => localModels.download(id),
+      quit: (code) => app.exit(code),
+    });
     return;
   }
 

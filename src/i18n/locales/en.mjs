@@ -83,7 +83,8 @@ export default {
       model:
         "Which provider and model refines your words, as provider/model; a provider alone uses its default. Switch with speakmore model",
       thinking: "Gemini's thinking level; higher is slower. Other providers don't use it",
-      transcriber: "On the local path, which on-device model transcribes; downloaded automatically on first use",
+      transcriber:
+        "On the local path, which on-device model transcribes; download it first (speakmore transcriber download)",
       polish:
         "On the local path, which provider and model polishes the text, as provider/model; for a custom service write custom/<model>",
       customUrl: "Address of your custom polishing service (OpenAI-compatible), e.g. https://api.example.com/v1",
@@ -113,6 +114,7 @@ export default {
     local: "Local: transcribed on this Mac, then polished by a model",
     notIn: "You're in {current} mode; {what} can only be changed in {mode} mode",
     notOfMode: "{name} isn't a {mode} setting; switching to {mode} can also set {names}",
+    notDownloaded: "{model} isn't downloaded yet ({size}): download it first",
     what: {
       model: "the audio model",
       transcriber: "the on-device transcription model (step 1)",
@@ -123,6 +125,8 @@ export default {
     modelDownloading: "The local model is still downloading ({percent}%); it'll work once it's done",
     modelLoading: "The local model is loading; give it a few seconds",
     modelFailed: "The local model couldn't be set up: {reason}",
+    modelMissing:
+      "The local model {model} isn't downloaded: download it on the Models page in Settings, or run speakmore transcriber download {id}",
     undecodable: "Couldn't read the recording: {reason}",
     transcribeFailed: "Local transcription failed: {reason}",
   },
@@ -149,6 +153,10 @@ export default {
     measured: "Measured on {chip} ({backend}): {score}/5 · {realtime}× real time · {memory} memory",
     notMeasured: "Not yet measured on {chip}",
     unknownChip: "Not yet measured on this kind of machine",
+    unknown: "There's no model called {id}",
+    noSpace: "Not enough disk space: {model} needs {need} more, and only {free} is free",
+    downloadFailed: "{model} didn't download: {reason}",
+    inUse: "{model} is in use and can't be deleted: switch to another model or back to native first",
   },
   chat: {
     modelRequired: "{vendor} has no default model; write it as {vendor}/<model name>",
@@ -361,6 +369,17 @@ export default {
       source: "Download from",
       downloaded: "Downloaded",
       downloading: "Downloading {percent}% ({size})",
+      notDownloaded: "Not downloaded · {size}",
+      partial: "{percent}% downloaded",
+      downloadFailed: "Download failed",
+      download: "Download · {size}",
+      resume: "Resume · {size} left",
+      cancel: "Cancel",
+      delete: "Delete",
+      confirmDelete: "Confirm delete",
+      downloadFirst: "Download it first to choose it",
+      summary: "{count} of {all} downloaded on this Mac, {size} in total",
+      freeSpace: "{size} free on disk",
       loading: "Loading",
       ready: "Ready · {backend}",
       failed: "Not set up",
@@ -499,7 +518,9 @@ export default {
   speakmore model <provider>[/<model>]
                                 Switch provider or model in native mode, e.g. speakmore model openai. Asks for its key if missing
   speakmore transcriber [<model>]
-                                Local mode, step 1: list or switch the on-device transcription model. Downloads in the background if needed
+                                Local mode, step 1: list or switch the on-device transcription model. Asks before downloading one you don't have
+  speakmore transcriber download|cancel|delete <model> [--yes]
+                                Download, stop downloading, or delete an on-device model (in any mode; the one in use can't be deleted)
   speakmore polish [<provider>[/<model>] [--url <url>]]
                                 Local mode, step 2: list or switch the polishing model ({polishers}). custom is any OpenAI-compatible service
   speakmore polish check [<provider>[/<model>]]
@@ -551,7 +572,8 @@ export default {
       model:
         "Usage: speakmore model | speakmore model <provider>[/<model>] | speakmore model check [<provider>[/<model>]]",
       mode: "Usage: speakmore mode | speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]",
-      transcriber: "Usage: speakmore transcriber | speakmore transcriber <model>",
+      transcriber:
+        "Usage: speakmore transcriber | speakmore transcriber <model> | speakmore transcriber download|cancel|delete <model> [--yes]",
       polish:
         "Usage: speakmore polish | speakmore polish <provider>[/<model>] [--url <url>] | speakmore polish check [<provider>[/<model>]]",
     },
@@ -686,8 +708,38 @@ export default {
       transcribersTitle: "On-device transcription models (local mode, step 1)",
       installed: "downloaded",
       notInstalled: "not downloaded",
+      downloading: "downloading {percent}%",
+      partial: "{percent}% downloaded",
+      downloadFailed: "download failed",
+      summary: "{count} of {all} downloaded on this Mac, {size} in total",
+      freeSpace: "{size} free on disk",
       transcriberCurrent: "In use: {model}",
-      transcriberSwitch: "Switch: speakmore transcriber {id} (downloads in the background if needed)",
+      transcriberSwitch: "Switch: speakmore transcriber {id}",
+      transcriberManage: "Download: speakmore transcriber download {id} · stop: cancel · remove: delete",
+      downloadStart: "Downloading {model} ({size}, from {source})…",
+      downloadBackground:
+        "SpeakMore is downloading it in the background: Ctrl-C only stops watching; to stop the download, run speakmore transcriber cancel {id}",
+      downloadProgress: "Downloading {percent}% ({received} / {total})",
+      downloadDone: "{model} is downloaded.",
+      downloadAlready: "{model} is already downloaded.",
+      downloadStopped:
+        "The {model} download stopped (cancelled elsewhere). Finished files are kept, so it resumes next time.",
+      downloadInterrupted:
+        "SpeakMore quit during the download. Finished files are kept; run speakmore transcriber download {id} to resume.",
+      nothingToCancel: "{model} isn't downloading.",
+      cancelled: "Stopped downloading {model}. Finished files are kept, so it resumes next time.",
+      notOnDisk: "{model} isn't downloaded, so there's nothing to delete.",
+      deleteConfirm: "Delete {model} ({size})? You'll need to download it again to use it. Type y to confirm: ",
+      deleteNeedsConfirm:
+        "Deleting needs confirmation: run it in a terminal, or add --yes (speakmore transcriber delete {id} --yes)",
+      deleteAborted: "Nothing deleted.",
+      deleted: "Deleted {model}, freeing {size}.",
+      oldDaemonDelete:
+        "The running SpeakMore is an old version that can't tell which model is in use, so nothing was deleted: run speakmore restart, then try again.",
+      notDownloadedAsk: "{model} isn't downloaded yet ({size}, from {source}). Download it now? Type y to download: ",
+      notDownloadedHint: "{model} isn't downloaded yet: run speakmore transcriber download {id} first",
+      notDownloadedLater:
+        "Nothing downloaded or switched. To download it later, run speakmore transcriber download {id}",
       transcriberSwitched: "Step 1 is now {model}.",
       polishTitle: "Polishing models (local mode, step 2)",
       customName: "Custom service",

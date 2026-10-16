@@ -9,6 +9,7 @@ import { currentSettings, parse, renderOptions, UsageError } from "../common.mjs
 import { renderModes, routeTitle } from "../render/modes.mjs";
 import { storeSetting } from "./config.mjs";
 import { currentProvider, keySource } from "./key.mjs";
+import { modelStatus, offerDownload } from "./local-models.mjs";
 import { applyChange, checked, ensureKey, modeNow, routeWith } from "./route.mjs";
 
 // speakmore mode：识别模式这一层。看两种模式各用什么、切到另一种。
@@ -55,6 +56,10 @@ export async function mode(args, io) {
   if (modeNow(io, status) === target && flags.length === 0) {
     io.out(io.t("cli.modes.already", { mode: target, route: io.t.text(routeTitle(route)) }));
     return 0;
+  }
+  // local 要用的本机模型还没下载：先问要不要下（下几百兆要用户点头），下好了再问 key、再切
+  if (route.mode === "local" && !modelStatus(io, status, route.transcriber).installed) {
+    if (!(await offerDownload(io, route.transcriber))) return 1;
   }
   if (!(await ensureKey(io, keyVendorOf(route), { mode: target, ...changes }))) return 1;
   return applyChange(io, {

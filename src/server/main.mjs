@@ -1,4 +1,6 @@
 import { log } from "../log.mjs";
+import { findModel } from "../models/catalog.mjs";
+import { createModelStore } from "../models/store.mjs";
 import { resolvePaths } from "../storage/paths.mjs";
 import { startTranscriber } from "./asr/start.mjs";
 import { loadConfig } from "./config.mjs";
@@ -30,17 +32,18 @@ function progressLogger(modelId) {
   };
 }
 
-// 本地转写链路先把模型准备好：没下载过就下载，装进转写进程
+// 本地转写链路先把模型准备好，装进转写进程。单独启动服务端是开发时用的：用的人明说了要 local，没下载过就直接下
+// （App 里不这样，下不下由用户点）
+if (route.mode === "local") {
+  const store = createModelStore({ dir: modelsDir, source: config.modelSource });
+  const model = findModel(route.transcriber);
+  if (!store.isInstalled(model)) {
+    log.info("model_downloading", { model: model.id, source: config.modelSource });
+    await store.install(model, { onProgress: progressLogger(model.id) });
+  }
+}
 const transcriber =
-  route.mode === "local"
-    ? await startTranscriber({
-        modelId: route.transcriber,
-        modelsDir,
-        source: config.modelSource,
-        log,
-        onProgress: progressLogger(route.transcriber),
-      })
-    : null;
+  route.mode === "local" ? await startTranscriber({ modelId: route.transcriber, modelsDir, log }) : null;
 const refiner = await createModeRefiner({ route, apiKey, transcriber, log });
 
 let server;

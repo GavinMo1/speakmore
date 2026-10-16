@@ -1,18 +1,16 @@
-import { backendText, measuredText, tagTexts } from "../../models/describe.mjs";
+import { backendText, measuredText, sizeText, tagTexts } from "../../models/describe.mjs";
 import { t } from "../shared/i18n.mjs";
 import { createKeyPanel, KEY_LAYERS } from "../shared/key-panel.mjs";
 import { describeError } from "../shared/setup-text.mjs";
 
 // 设置里"模型"那一页：先选识别模式，再在模式里选模型。两种模式要选的东西不一样，各画各的：
 //   native  一跳：收音频的那几家（key 面板，KEY_LAYERS.native）
-//   local   两跳：第一跳是本机转写模型（列表、下载进度、下载源），第二跳是润色的那几家（key 面板，连同模型和地址）
+//   local   两跳：第一跳是本机转写模型（列表、下载、取消、删除、下载源），第二跳是润色的那几家（key 面板，连同模型和地址）
 // 上面的标签只是切换看哪一种；真要换模式按"改用"，验证过才换（内核 app/modes.mjs 的状态机）。
 // 不在用的那种模式里也能先看、先填 key：第二跳的那家没有 key 就进不去 local，所以 key 要能先存。
 // 那种模式里的模型只能在那种模式里当场换；没在用时点选的第一跳模型先记着，改用这种模式时一起带过去。
 
 const $ = (id) => document.getElementById(id);
-
-const megabytes = (bytes) => `${Math.round(bytes / 1_000_000)} MB`;
 
 /** 显示一句话：msg 按界面语言翻，现成的字照写；空的就藏起来 */
 function show(node, message, tone = "") {
@@ -120,46 +118,137 @@ export function createModelPane({ refresh }) {
   }
 
   // ---------- local 第一跳：本机转写模型 ----------
+  // 下载、取消、删除都由用户点，哪种模式里都能做；只有下载好了的能选。正在用的那个不能删（内核会拦）。
 
-  /** 正在用的那个本地模型现在怎样（只有 local 模式里有）：[说什么, 语气] */
-  function localStateText(model, setup) {
+  /** 点了一次"删除"、等着确认的那个；过一会儿或者点了别的就作废 */
+  let confirming = null;
+  let confirmTimer = null;
+
+  /** 一个模型现在怎样：[说什么, 语气]。正在用的那个（local 模式里）先看服务报的装载状态 */
+  function modelStateText(model, setup) {
     const local = setup.localModel;
-    if (setup.mode.value === "local" && local && local.model === model.id) {
-      switch (local.state) {
-        case "downloading":
-          return [
-            t("preferences.local.downloading", {
-              percent: Math.floor((local.received / local.total) * 100),
-              size: `${megabytes(local.received)} / ${megabytes(local.total)}`,
-            }),
-            "pending",
-          ];
-        case "loading":
-          return [t("preferences.local.loading"), "pending"];
-        case "ready":
-          return [t("preferences.local.ready", { backend: backendText(local.backend) }), "ok"];
-        case "failed":
-          return [t("preferences.local.failed"), "problem"];
-      }
+    const inUse = setup.mode.value === "local" && local?.model === model.id;
+    if (model.download) {
+      const { received, total } = model.download;
+      const percent = Math.floor((received / total) * 100);
+      return [
+        t("preferences.local.downloading", { percent, size: `${sizeText(received)} / ${sizeText(total)}` }),
+        "pending",
+      ];
     }
-    return model.installed ? [t("preferences.local.downloaded"), ""] : [megabytes(model.bytes), ""];
+    if (inUse && local.state === "loading") return [t("preferences.local.loading"), "pending"];
+    if (inUse && local.state === "ready") {
+      return [t("preferences.local.ready", { backend: backendText(local.backend) }), "ok"];
+    }
+    if (inUse && local.state === "failed") return [t("preferences.local.failed"), "problem"];
+    if (model.problem) return [t("preferences.local.downloadFailed"), "problem"];
+    if (model.installed) return [t("preferences.local.downloaded"), ""];
+    if (model.partial > 0) {
+      return [t("preferences.local.partial", { percent: Math.floor((model.partial / model.bytes) * 100) }), ""];
+    }
+    return [t("preferences.local.notDownloaded", { size: sizeText(model.bytes) }), ""];
+  }
+
+  /** 右边的按钮：没下载的给下载（下过一半的是继续），正在下的给取消，下好了的给删除（正在用的不给） */
+  function modelActions(model, setup) {
+    const inUse = setup.mode.value === "local" && setup.local.transcriber === model.id;
+    const button = (label, onClick, tone = "") => {
+      const node = document.createElement("button");
+      node.type = "button";
+      node.className = `button${tone ? ` ${tone}` : ""}`;
+      node.textContent = label;
+      node.addEventListener("click", onClick);
+      return node;
+    };
+    if (model.download)
+      return [
+        button(t("preferences.local.cancel"), () => modelAction(() => window.speakmore.cancelDownload(model.id))),
+      ];
+    const removable = model.installed || model.partial > 0;
+    const actions = [];
+    if (!model.installed) {
+      const label =
+        model.partial > 0
+          ? t("preferences.local.resume", { size: sizeText(model.bytes - model.partial) })
+          : t("preferences.local.download", { size: sizeText(model.bytes) });
+      actions.push(button(label, () => modelAction(() => window.speakmore.downloadModel(model.id)), "primary"));
+    }
+    if (removable && !inUse) {
+      const sure = confirming === model.id;
+      actions.push(
+        button(
+          t(sure ? "preferences.local.confirmDelete" : "preferences.local.delete"),
+          () => (sure ? deleteModel(model.id) : askToConfirm(model.id)),
+          sure ? "danger" : "",
+        ),
+      );
+    }
+    return actions;
+  }
+
+  /** 下载、取消、删除：出了问题显示在列表下面，做完刷新（进度由主进程推过来） */
+  async function modelAction(action) {
+    show($("models-problem"), null);
+    try {
+      const result = await action();
+      if (result && !result.ok && result.problem) show($("models-problem"), result.problem, "problem");
+    } catch (error) {
+      show($("models-problem"), t("keyPanel.failed", { reason: describeError(error) }), "problem");
+    }
+    await refresh();
+  }
+
+  function askToConfirm(id) {
+    confirming = id;
+    clearTimeout(confirmTimer);
+    confirmTimer = setTimeout(() => {
+      confirming = null;
+      render(latest);
+    }, 4000);
+    render(latest);
+  }
+
+  function deleteModel(id) {
+    confirming = null;
+    clearTimeout(confirmTimer);
+    modelAction(() => window.speakmore.deleteModel(id));
+  }
+
+  /** 列表上面那一行：本机下了几个、一共多大，磁盘还剩多少 */
+  function renderSummary(setup) {
+    const { transcribers, freeBytes } = setup.local;
+    const installed = transcribers.filter((model) => model.installed);
+    const parts = [
+      t("preferences.local.summary", {
+        count: String(installed.length),
+        all: String(transcribers.length),
+        size: sizeText(installed.reduce((sum, model) => sum + model.bytes, 0)),
+      }),
+    ];
+    if (freeBytes !== null) parts.push(t("preferences.local.freeSpace", { size: sizeText(freeBytes) }));
+    $("models-summary").textContent = parts.join(" · ");
   }
 
   function renderTranscribers(setup) {
     const local = setup.local;
     const chosen = setup.mode.value === "local" ? local.transcriber : (pendingTranscriber ?? local.transcriber);
+    renderSummary(setup);
     $("transcribers").replaceChildren(
       ...local.transcribers.map((model) => {
-        const row = document.createElement("button");
-        row.type = "button";
+        const row = document.createElement("div");
         row.className = "transcriber";
-        row.setAttribute("role", "radio");
-        row.setAttribute("aria-checked", String(model.id === chosen));
-        row.disabled = busy || !setup.switchable;
+        const pick = document.createElement("button");
+        pick.type = "button";
+        pick.className = "transcriber-pick";
+        pick.setAttribute("role", "radio");
+        pick.setAttribute("aria-checked", String(model.id === chosen));
+        // 没下载的选不了：先下载
+        pick.disabled = busy || !setup.switchable || !model.installed;
+        if (!model.installed) pick.title = t("preferences.local.downloadFirst");
         const name = document.createElement("span");
         name.className = "transcriber-name";
         name.textContent = model.name;
-        const [text, tone] = localStateText(model, setup);
+        const [text, tone] = modelStateText(model, setup);
         const state = document.createElement("span");
         state.className = "transcriber-state";
         state.dataset.tone = tone;
@@ -177,16 +266,31 @@ export function createModelPane({ refresh }) {
         const measured = document.createElement("span");
         measured.className = "transcriber-measured";
         measured.textContent = t.text(measuredText(model.measured, local.chip));
-        row.append(name, state, tags, measured);
-        row.addEventListener("click", () => chooseTranscriber(model.id));
+        pick.append(name, state, tags, measured);
+        if (model.download) {
+          const progress = document.createElement("progress");
+          progress.className = "transcriber-progress";
+          progress.max = model.download.total;
+          progress.value = model.download.received;
+          pick.append(progress);
+        }
+        if (model.problem) pick.title = t.text(model.problem);
+        pick.addEventListener("click", () => chooseTranscriber(model.id));
+        const actions = document.createElement("div");
+        actions.className = "transcriber-actions";
+        actions.append(...modelActions(model, setup));
+        row.append(pick, actions);
         return row;
       }),
     );
-    // 正在用的那个没装上：说原因，给一个重试（再选一次同一个就是重试）
-    const failed = setup.mode.value === "local" && setup.localModel?.state === "failed";
-    $("transcriber-retry").hidden = !failed;
+    // 下载没成的：原因写在列表下面（只说最近的那一个，按钮上的"继续下载"就是重试）
+    const failed = local.transcribers.find((model) => model.problem && !model.download);
+    if (failed && $("models-problem").hidden) show($("models-problem"), failed.problem, "problem");
+    // 正在用的那个装不上：说原因，给一个重试（再选一次同一个就是重试）
+    const loadFailed = setup.mode.value === "local" && setup.localModel?.state === "failed";
+    $("transcriber-retry").hidden = !loadFailed;
     $("transcriber-retry").disabled = busy;
-    show($("transcriber-problem"), failed ? setup.localModel.problem : null, "problem");
+    show($("transcriber-problem"), loadFailed ? setup.localModel.problem : null, "problem");
   }
 
   function chooseTranscriber(id) {

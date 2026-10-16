@@ -96,15 +96,22 @@ test("用的是别家模型时，缺的 key、没通过的验证都点名是哪�
   assert.match(rejected.blocker, /^OpenAI 验证没通过/);
 });
 
-test("本地模型还在下载、装载：暂时不能用，说到哪了，不算缺东西", () => {
+test("本地模型还没下载：算缺东西，说去哪下；用户正在下时说下到哪了；装载中暂时不能用、不算缺", () => {
+  const missing = summarize({ ...allGood, localModel: { state: "missing", model: "qwen3-asr-0.6b-q8" } });
+  assert.equal(missing.ready, false);
+  assert.deepEqual(missing.missing, ["本地模型"]);
+  assert.match(missing.blocker, /Qwen3-ASR 0\.6B \(Q8_0\) 还没下载.*speakmore transcriber download qwen3-asr-0\.6b-q8/);
+
   const downloading = summarize({
     ...allGood,
-    localModel: { state: "downloading", model: "qwen3-asr-0.6b-q8", received: 425, total: 850 },
+    localModel: { state: "missing", model: "qwen3-asr-0.6b-q8", received: 425, total: 850 },
   });
   assert.equal(downloading.ready, false);
-  assert.deepEqual(downloading.missing, []);
+  assert.deepEqual(downloading.missing, ["本地模型"]);
   assert.match(downloading.blocker, /下载.*50%/);
-  assert.match(summarize({ ...allGood, localModel: { state: "loading", model: "m" } }).blocker, /装载/);
+  const loading = summarize({ ...allGood, localModel: { state: "loading", model: "m" } });
+  assert.match(loading.blocker, /装载/);
+  assert.deepEqual(loading.missing, []);
 });
 
 test("本地模型没装上：列进要补的，把原因带给用户", () => {
@@ -123,7 +130,7 @@ test("本地模型就绪或没走本地转写：不影响结论；key 的问题�
   }
   const both = summarize({
     ...withKey({ state: "missing" }),
-    localModel: { state: "downloading", model: "m", received: 0, total: 1 },
+    localModel: { state: "missing", model: "qwen3-asr-0.6b-q8" },
   });
   assert.match(both.blocker, /key/);
 });

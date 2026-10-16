@@ -81,7 +81,7 @@ export default {
       mode: "识别走哪条路：native 是录音直接交给收音频的模型，local 是本机的小模型先转成文字、再交给任意大模型润色",
       model: "用哪一家的哪个模型整理，写成 厂商/模型；只写厂商就用它的默认模型。换模型用 speakmore model",
       thinking: "Gemini 的思考档位，越高越慢。别家的模型用不上",
-      transcriber: "local 那条路上用哪个本机模型转文字，第一次用时自动下载",
+      transcriber: "local 那条路上用哪个本机模型转文字，要先下载好（speakmore transcriber download）",
       polish: "local 那条路上把文字交给哪一家的哪个模型润色，写成 厂商/模型；自定义服务写 custom/模型名",
       customUrl: "自定义润色服务的地址（兼容 OpenAI 接口的那种），比如 https://api.example.com/v1",
       modelSource:
@@ -109,6 +109,7 @@ export default {
     local: "本地转写，再交给模型润色",
     notIn: "现在是 {current} 模式，{what}要在 {mode} 模式里才能换",
     notOfMode: "{name} 不是 {mode} 模式的设置；切到 {mode} 时能连带的是 {names}",
+    notDownloaded: "{model} 还没下载（{size}）：先下载再用",
     what: {
       model: "收音频的模型",
       transcriber: "本机转写模型（第一跳）",
@@ -119,6 +120,7 @@ export default {
     modelDownloading: "本地模型还在下载（{percent}%），下好就能用",
     modelLoading: "本地模型正在装载，稍等几秒",
     modelFailed: "本地模型没装上：{reason}",
+    modelMissing: "本地模型 {model} 还没下载：在设置的“模型”页下载，或运行 speakmore transcriber download {id}",
     undecodable: "录音解不开：{reason}",
     transcribeFailed: "本地转写失败：{reason}",
   },
@@ -145,6 +147,10 @@ export default {
     measured: "{chip}上实测（{backend}）：均分 {score}/5 · {realtime} 倍实时 · 内存 {memory}",
     notMeasured: "{chip}上还没实测",
     unknownChip: "这类机器上还没实测",
+    unknown: "模型清单里没有 {id}",
+    noSpace: "磁盘空间不够：下载 {model} 还要 {need}，磁盘只剩 {free}",
+    downloadFailed: "{model} 没下下来：{reason}",
+    inUse: "{model} 正在用，删不了：先换一个模型，或切回 native",
   },
   chat: {
     modelRequired: "{vendor} 没有默认模型，要写成 {vendor}/模型名",
@@ -354,6 +360,17 @@ export default {
       source: "下载源",
       downloaded: "已下载",
       downloading: "下载中 {percent}%（{size}）",
+      notDownloaded: "未下载 · {size}",
+      partial: "下了 {percent}%",
+      downloadFailed: "没下下来",
+      download: "下载 · {size}",
+      resume: "继续下载 · 还差 {size}",
+      cancel: "取消",
+      delete: "删除",
+      confirmDelete: "确认删除",
+      downloadFirst: "先下载才能选",
+      summary: "本机已下载 {count} / {all} 个，共 {size}",
+      freeSpace: "磁盘剩余 {size}",
       loading: "装载中",
       ready: "就绪 · {backend}",
       failed: "没装上",
@@ -488,7 +505,9 @@ export default {
   speakmore model <厂商>[/<模型>]
                                 native 模式里换一家或换个模型，比如 speakmore model openai。没有它的 key 会先问
   speakmore transcriber [<模型>]
-                                local 模式第一跳：看、换本机转写模型。没下载过的在后台下载
+                                local 模式第一跳：看、换本机转写模型。要用的还没下载时先问要不要下
+  speakmore transcriber download|cancel|delete <模型> [--yes]
+                                下载、停下、删除本机转写模型（哪种模式里都能做；正在用的删不了）
   speakmore polish [<厂商>[/<模型>] [--url <地址>]]
                                 local 模式第二跳：看、换润色的模型（{polishers}）。custom 是兼容 OpenAI 接口的任意服务
   speakmore polish check [<厂商>[/<模型>]]
@@ -538,7 +557,8 @@ export default {
       theme: "用法：speakmore theme | speakmore theme <名字>",
       model: "用法：speakmore model | speakmore model <厂商>[/<模型>] | speakmore model check [<厂商>[/<模型>]]",
       mode: "用法：speakmore mode | speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]",
-      transcriber: "用法：speakmore transcriber | speakmore transcriber <模型>",
+      transcriber:
+        "用法：speakmore transcriber | speakmore transcriber <模型> | speakmore transcriber download|cancel|delete <模型> [--yes]",
       polish:
         "用法：speakmore polish | speakmore polish <厂商>[/<模型>] [--url <地址>] | speakmore polish check [<厂商>[/<模型>]]",
     },
@@ -659,8 +679,34 @@ export default {
       transcribersTitle: "本机转写模型（local 模式的第一跳）",
       installed: "已下载",
       notInstalled: "还没下载",
+      downloading: "下载中 {percent}%",
+      partial: "下了 {percent}%",
+      downloadFailed: "没下下来",
+      summary: "本机已下载 {count} / {all} 个，共 {size}",
+      freeSpace: "磁盘剩余 {size}",
       transcriberCurrent: "现在用的是 {model}",
-      transcriberSwitch: "换一个：speakmore transcriber {id}（没下载过的会在后台下载）",
+      transcriberSwitch: "换一个：speakmore transcriber {id}",
+      transcriberManage: "下载：speakmore transcriber download {id} · 停下：cancel · 删除：delete",
+      downloadStart: "下载 {model}（{size}，从{source}）……",
+      downloadBackground:
+        "交给后台下了：按 Ctrl-C 只是不看进度，下载接着进行；要停下用 speakmore transcriber cancel {id}",
+      downloadProgress: "下载中 {percent}%（{received} / {total}）",
+      downloadDone: "{model} 下好了。",
+      downloadAlready: "{model} 已经下载好了。",
+      downloadStopped: "{model} 的下载停下了（在别处取消了）。已经下好的文件留着，下次接着下。",
+      downloadInterrupted:
+        "SpeakMore 在下载途中退出了。已经下好的文件留着，再运行 speakmore transcriber download {id} 接着下。",
+      nothingToCancel: "{model} 没有在下载。",
+      cancelled: "停下了 {model} 的下载。已经下好的文件留着，下次接着下。",
+      notOnDisk: "{model} 本来就没下载，不用删。",
+      deleteConfirm: "删掉 {model}（{size}）？以后要用得重新下载。输入 y 确认：",
+      deleteNeedsConfirm: "删除要确认：在终端里运行，或者加 --yes（speakmore transcriber delete {id} --yes）",
+      deleteAborted: "没有删。",
+      deleted: "删掉了 {model}，腾出 {size}。",
+      oldDaemonDelete: "正在运行的 SpeakMore 是旧版本，不知道哪个模型正在用，先不删：运行 speakmore restart 再删。",
+      notDownloadedAsk: "{model} 还没下载（{size}，从{source}下）。现在下载吗？输入 y 下载：",
+      notDownloadedHint: "{model} 还没下载：先运行 speakmore transcriber download {id}",
+      notDownloadedLater: "没有下载，也没有换。想下的时候运行 speakmore transcriber download {id}",
       transcriberSwitched: "第一跳换成了 {model}。",
       polishTitle: "润色模型（local 模式的第二跳）",
       customName: "自定义服务",

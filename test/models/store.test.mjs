@@ -109,7 +109,10 @@ test("装一个模型：文件照清单的路径放好，校验过，写上收�
   assert.deepEqual(readFileSync(join(modelDir, "a.onnx")), BYTES["a.onnx"]);
   assert.equal(store.isInstalled(MODEL), true);
   assert.deepEqual(store.installed(), ["fake-asr"]);
-  assert.deepEqual(progress.at(-1), { file: "tokenizer/vocab.json", received: 7, total: 7 });
+  // 进度按整个模型算：下好的文件算满，正在下的算到哪
+  const total = BYTES["a.onnx"].length + 7;
+  assert.deepEqual(progress.at(-1), { received: total, total });
+  assert.ok(progress.every((p) => p.total === total && p.received <= total));
 
   await store.install(MODEL);
   assert.deepEqual(fetched, ["a.onnx", "tokenizer/vocab.json"]);
@@ -163,6 +166,26 @@ test("清单换了版本，旧收据就不算数：重新核对文件，内容�
   }).install(moved);
   assert.equal(store.isInstalled(moved), true);
   assert.equal(fetched.length, 2);
+});
+
+test("还差多少字节：没下的文件按清单的大小算，已经在那儿的不算（下载前查磁盘空间用）", async () => {
+  const { dir, store } = setUp();
+  const total = BYTES["a.onnx"].length + 7;
+  assert.equal(store.missingBytes(MODEL), total);
+  mkdirSync(join(dir, "fake-asr"), { recursive: true });
+  writeFileSync(join(dir, "fake-asr", "a.onnx"), BYTES["a.onnx"]);
+  assert.equal(store.missingBytes(MODEL), 7);
+  await store.install(MODEL);
+  assert.equal(store.missingBytes(MODEL), 0);
+});
+
+test("断了重来时进度从已经下好的那部分算起，不从零开始", async () => {
+  const { dir, store } = setUp();
+  mkdirSync(join(dir, "fake-asr"), { recursive: true });
+  writeFileSync(join(dir, "fake-asr", "a.onnx"), BYTES["a.onnx"]);
+  const progress = [];
+  await store.install(MODEL, { onProgress: (p) => progress.push(p) });
+  assert.ok(progress[0].received >= BYTES["a.onnx"].length);
 });
 
 test("删掉：整个目录都不在了，列表里也没有；没装过的删了也不报错", async () => {

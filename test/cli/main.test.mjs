@@ -16,6 +16,7 @@ import { Cancelled } from "../../src/cli/ask-secret.mjs";
 import { run } from "../../src/cli/main.mjs";
 import { NotRunningError, TimeoutError } from "../../src/control.mjs";
 import { createTranslator, LocalizedError, msg } from "../../src/i18n/index.mjs";
+import { downloadSize, findModel } from "../../src/models/catalog.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
 import { keyFile, resolvePaths } from "../../src/storage/paths.mjs";
 import { resolveSettings } from "../../src/storage/settings.mjs";
@@ -159,6 +160,7 @@ function harness({
   packageDir = paths.appDir,
   app = null,
   appInstall = () => {},
+  modelDownload = "finish",
 } = {}) {
   const output = { out: "", err: "" };
   const asked = [];
@@ -171,6 +173,8 @@ function harness({
    * 找 App 时给的进程号（lookedFor）、换过的 App（apps：版本、位置、换的时候后台还在不在跑）、重新打开过的 App
    */
   const updates = { checks: [], installs: [], starts: [], lookedFor: [], apps: [], opened: [] };
+  /** 后台没在运行时命令行自己下载、删除的本机模型（假的模型库：下载一报进度就下完，或者没下下来） */
+  const local = { downloads: [], removed: [], sources: [] };
   const io = {
     out: (text) => {
       output.out += `${text}\n`;
@@ -187,6 +191,39 @@ function harness({
     paths,
     daemon,
     now: () => new Date("2026-10-13T07:00:00.000Z"),
+    sleep: async () => {},
+    localModels: ({ source, onChange = () => {} }) => {
+      local.sources.push(source);
+      const state = new Map();
+      const models = {
+        status: (id) => state.get(id) ?? { id, installed: false, download: null, problem: null },
+        async download(id) {
+          local.downloads.push(id);
+          const total = downloadSize(findModel(id));
+          state.set(id, { id, installed: false, download: { received: total / 2, total }, problem: null });
+          onChange(id);
+          if (modelDownload === "finish") {
+            haveModel(id);
+            state.set(id, { id, installed: true, download: null, problem: null });
+          } else {
+            state.set(id, {
+              id,
+              installed: false,
+              download: null,
+              problem: msg("localModels.downloadFailed", { model: id, reason: modelDownload }),
+            });
+          }
+          onChange(id);
+          return { ok: true };
+        },
+        remove(id) {
+          local.removed.push(id);
+          rmSync(join(paths.modelsDir, id), { recursive: true, force: true });
+          return { ok: true };
+        },
+      };
+      return models;
+    },
     timeZone: "Asia/Shanghai",
     openHistory,
     async askSecret(prompt) {
@@ -250,8 +287,18 @@ function harness({
     confirmed,
     daemon,
     updates,
+    local,
     speakmore: (...argv) => run(argv, io),
   };
+}
+
+/** 本机模型下好了：照模型仓的收据写一份（命令行只看收据，不读模型文件） */
+function haveModel(id = "qwen3-asr-0.6b-q8") {
+  const model = findModel(id);
+  const where = join(paths.modelsDir, id);
+  mkdirSync(where, { recursive: true });
+  const files = Object.fromEntries(Object.values(model.files).map((file) => [file.path, file.sha256]));
+  writeFileSync(join(where, ".complete.json"), JSON.stringify({ id, revision: model.origin.revision, files }));
 }
 
 /** 假装以前存过一把 key */
@@ -884,18 +931,12 @@ test("key --forget：两种启动方式各存的那一份都删掉；在运行�
   const running = harness({ daemon: fakeDaemon({ running: READY }) });
   assert.equal(await running.speakmore("key", "--forget"), 0);
   assert.deepEqual(running.daemon.calls, ["forget-key"]);
-  assert.deepEqual(
-    [existsSync(keyFile(paths, "gemini")), existsSync(keyFile(paths, "gemini", { packaged: true }))],
-    [false, false],
-  );
+  assert.deepEqual([existsSync(keyFile(paths, "gemini")), existsSync(keyFile(paths, "gemini", { packaged: true }))], [false, false]);
 
   seed();
   const idle = harness();
   assert.equal(await idle.speakmore("key", "--forget"), 0);
-  assert.deepEqual(
-    [existsSync(keyFile(paths, "gemini")), existsSync(keyFile(paths, "gemini", { packaged: true }))],
-    [false, false],
-  );
+  assert.deepEqual([existsSync(keyFile(paths, "gemini")), existsSync(keyFile(paths, "gemini", { packaged: true }))], [false, false]);
   assert.deepEqual(idle.daemon.calls, []);
   assert.match(idle.output.out, /已经删掉/);
 });
@@ -1757,6 +1798,7 @@ const BEFORE_MODES_DAEMON = (() => {
 })();
 
 test("后台是 0.6 的：切 local 要给 DeepSeek 存 key 时先拦下，说要重启；不发请求、不切；OpenAI 的 key 照常存", async () => {
+  haveModel();
   const daemon = fakeDaemon({ running: BEFORE_MODES_DAEMON });
   const { speakmore, output, asked } = harness({ daemon, secrets: ["sk-ds"] });
   assert.equal(await speakmore("mode", "local"), 1);
@@ -1920,6 +1962,7 @@ test("mode：列出两种模式、各自用的模型，现在用的打一个点�
 });
 
 test("mode <模式>：有那种模式要的 key 就让在运行的那个当场切，不重启", async () => {
+  haveModel();
   haveDeepSeekKey();
   const daemon = fakeDaemon({ running: READY });
   const { speakmore, output } = harness({ daemon });
@@ -1930,8 +1973,9 @@ test("mode <模式>：有那种模式要的 key 就让在运行的那个当场�
   assert.match(output.out, /已经换上，不用重启/);
 });
 
-test("mode local：本地模型还在下载时说一声，进度去哪看", async () => {
+test("mode local：0.7.0 的后台切过去后自己下载模型，照它报的说一声，进度去哪看", async () => {
   haveDeepSeekKey();
+  haveModel();
   const downloading = {
     ...LOCAL_READY,
     localModel: { state: "downloading", model: "qwen3-asr-0.6b-q8", received: 425, total: 850 },
@@ -1951,6 +1995,7 @@ test("mode local：本地模型还在下载时说一声，进度去哪看", asyn
 });
 
 test("mode <模式>：还没有那种模式要的 key 时先问，拿要切过去的设置验证过存好，再切", async () => {
+  haveModel();
   const saved = [];
   const daemon = fakeDaemon({
     running: READY,
@@ -1973,6 +2018,7 @@ test("mode <模式>：还没有那种模式要的 key 时先问，拿要切过�
 });
 
 test("mode <模式>：没有 key 又没法问时不切，说先做什么；没在运行时存进设置、下次启动生效", async () => {
+  haveModel();
   const quiet = harness({ interactive: false });
   assert.equal(await quiet.speakmore("mode", "local"), 1);
   assert.match(quiet.output.err, /还没有 DeepSeek 的 key.*speakmore key deepseek/);
@@ -1987,6 +2033,7 @@ test("mode <模式>：没有 key 又没法问时不切，说先做什么；没�
 });
 
 test("mode：写错的模式以 2 退出并说能填什么；切没通过以 1 退出说原因", async () => {
+  haveModel();
   const { speakmore, output } = harness();
   assert.equal(await speakmore("mode", "cloud"), 2);
   assert.match(output.err, /native \/ local/);
@@ -2030,6 +2077,7 @@ test("在 native 模式时换 local 的两跳：不能换，说先切到 local�
 });
 
 test("mode local 连带第二跳：没有 DeepSeek 的 key 也能直接用自定义服务进 local", async () => {
+  haveModel();
   const daemon = fakeDaemon({ running: READY });
   const { speakmore, asked } = harness({ daemon, secrets: ["sk-custom"] });
   assert.equal(
@@ -2056,15 +2104,46 @@ test("mode 连带的设置不是那种模式的：以 2 退出说能带什么", 
   assert.match(output.err, /--transcriber.*--polish.*--url/);
 });
 
-test("transcriber：列出本机转写模型（第一跳），大小、下载过没有，现在用的打一个点", async () => {
+test("transcriber：列出本机转写模型（第一跳），大小、下载过没有、在下的进度，现在用的打一个点；最后说本机下了几个、怎么下载删除", async () => {
+  haveModel("sensevoice-small-q8");
   const { speakmore, output } = harness();
   assert.equal(await speakmore("transcriber"), 0);
   assert.match(output.out, /local 模式的第一跳/);
   assert.match(output.out, /● qwen3-asr-0\.6b-q8\s+Qwen3-ASR 0\.6B \(Q8_0\)\s+850 MB\s+还没下载/);
-  assert.match(output.out, /换一个：speakmore transcriber sensevoice-/);
+  assert.match(output.out, /sensevoice-small-q8\s+SenseVoice Small \(Q8_0\)\s+253 MB\s+已下载/);
+  assert.match(output.out, /本机已下载 1 \/ 4 个，共 253 MB · 磁盘剩余 /);
+  assert.match(output.out, /换一个：speakmore transcriber sensevoice-small-q8/);
+  assert.match(output.out, /下载：speakmore transcriber download qwen3-asr-0\.6b-q8 · 停下：cancel · 删除：delete/);
+
+  // 后台在运行：以它报的为准（正在下的进度、上次没下下来的）
+  const total = downloadSize(findModel("qwen3-asr-0.6b-q8"));
+  const running = {
+    ...LOCAL_READY,
+    localModels: [
+      {
+        id: "qwen3-asr-0.6b-q8",
+        installed: false,
+        download: { received: total / 4, total },
+        partial: 0,
+        problem: null,
+      },
+      {
+        id: "sensevoice-small-q8",
+        installed: false,
+        download: null,
+        partial: 0,
+        problem: "SenseVoice 没下下来：断网了",
+      },
+    ],
+  };
+  const busy = harness({ daemon: fakeDaemon({ running }) });
+  assert.equal(await busy.speakmore("transcriber"), 0);
+  assert.match(busy.output.out, /qwen3-asr-0\.6b-q8.*下载中 25%/);
+  assert.match(busy.output.out, /sensevoice-small-q8.*没下下来\n(.*\n){2}.*断网了/);
 });
 
 test("transcriber <模型>：不用 key，让在运行的那个当场换；写错了以 2 退出说能填什么", async () => {
+  haveModel("sensevoice-small-q8");
   const daemon = fakeDaemon({ running: LOCAL_READY });
   const { speakmore, output, asked } = harness({ daemon });
   assert.equal(await speakmore("transcriber", "sensevoice-small-q8"), 0);
@@ -2075,6 +2154,192 @@ test("transcriber <模型>：不用 key，让在运行的那个当场换；写�
   const wrong = harness();
   assert.equal(await wrong.speakmore("transcriber", "gemini"), 2);
   assert.match(wrong.output.err, /qwen3-asr-0\.6b-q8/);
+});
+
+// ---------- 本机模型：下载、停下、删除 ----------
+
+/**
+ * 会下载的后台：download-model 之后每看一次状态前进一截，第二次看时下好了（outcome 为 "fail" 时报没下下来）。
+ * delete-model 照内核的规矩：正在用的（local 模式的第一跳）不让删
+ */
+function modelDaemon({ running = LOCAL_READY, outcome = "finish" } = {}) {
+  const daemon = fakeDaemon({ running });
+  const total = (id) => downloadSize(findModel(id));
+  const views = new Map();
+  const view = (id) =>
+    views.get(id) ?? {
+      id,
+      installed: existsSync(join(paths.modelsDir, id, ".complete.json")),
+      download: null,
+      partial: 0,
+      problem: null,
+    };
+  const polls = new Map();
+  const status = daemon.status;
+  daemon.status = async (params) => {
+    const current = await status.call(daemon, params);
+    if (current === null) return null;
+    for (const [id, count] of polls) {
+      polls.set(id, count + 1);
+      if (count >= 1) {
+        polls.delete(id);
+        if (outcome === "finish") {
+          haveModel(id);
+          views.delete(id);
+        } else views.set(id, { ...view(id), download: null, problem: `${id} 没下下来：${outcome}` });
+      }
+    }
+    return { ...current, localModels: ["qwen3-asr-0.6b-q8", "sensevoice-small-q8"].map(view) };
+  };
+  const request = daemon.request;
+  daemon.request = async (cmd, params) => {
+    if (cmd === "download-model") {
+      daemon.calls.push(cmd);
+      daemon.requests.push({ cmd, params });
+      views.set(params.id, {
+        ...view(params.id),
+        download: { received: total(params.id) / 2, total: total(params.id) },
+      });
+      polls.set(params.id, 0);
+      return { ok: true };
+    }
+    if (cmd === "cancel-download") {
+      daemon.calls.push(cmd);
+      polls.delete(params.id);
+      views.delete(params.id);
+      return { ok: true };
+    }
+    if (cmd === "delete-model") {
+      daemon.calls.push(cmd);
+      const current = daemon.current;
+      if (current.mode === "local" && current.transcriber === params.id) {
+        return { ok: false, problem: `${params.id} 正在用，删不了：先换一个模型，或切回 native` };
+      }
+      rmSync(join(paths.modelsDir, params.id), { recursive: true, force: true });
+      return { ok: true };
+    }
+    return request.call(daemon, cmd, params);
+  };
+  return daemon;
+}
+
+test("transcriber <模型>：要换的还没下载时先问；答是就交给后台下完再换，进度一截一截说", async () => {
+  const daemon = modelDaemon();
+  const { speakmore, output, confirmed } = harness({ daemon, confirms: [true] });
+  assert.equal(await speakmore("transcriber", "sensevoice-small-q8"), 0);
+  assert.match(
+    confirmed[0],
+    /SenseVoice Small \(Q8_0\) 还没下载（253 MB，从国内源（SpeakMore 的 CDN）下）。现在下载吗/,
+  );
+  assert.match(output.out, /交给后台下了：按 Ctrl-C 只是不看进度/);
+  assert.match(output.out, /下载中 50%/);
+  assert.match(output.out, /SenseVoice Small \(Q8_0\) 下好了/);
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "set-transcriber", params: { transcriber: "sensevoice-small-q8" } });
+});
+
+test("transcriber <模型>：不想下就不下也不换；不能问时说先运行哪条命令；没下下来时不换", async () => {
+  const declined = harness({ daemon: modelDaemon(), confirms: [false] });
+  assert.equal(await declined.speakmore("transcriber", "sensevoice-small-q8"), 1);
+  assert.match(declined.output.out, /没有下载，也没有换/);
+  assert.ok(!declined.daemon.calls.includes("download-model") && !declined.daemon.calls.includes("set-transcriber"));
+
+  const quiet = harness({ daemon: modelDaemon(), interactive: false });
+  assert.equal(await quiet.speakmore("transcriber", "sensevoice-small-q8"), 1);
+  assert.match(quiet.output.err, /还没下载：先运行 speakmore transcriber download sensevoice-small-q8/);
+
+  const failing = harness({ daemon: modelDaemon({ outcome: "断网了" }), confirms: [true] });
+  assert.equal(await failing.speakmore("transcriber", "sensevoice-small-q8"), 1);
+  assert.match(failing.output.err, /没下下来：断网了/);
+  assert.ok(!failing.daemon.calls.includes("set-transcriber"));
+});
+
+test("transcriber download：用户自己点的，不再问；后台没在运行就在命令行这个进程里下；已经下好的直说", async () => {
+  const idle = harness();
+  assert.equal(await idle.speakmore("transcriber", "download", "qwen3-asr-0.6b-q8"), 0);
+  assert.deepEqual(idle.local.downloads, ["qwen3-asr-0.6b-q8"]);
+  assert.deepEqual(idle.local.sources, ["cn"]);
+  assert.match(idle.output.out, /下载 Qwen3-ASR 0\.6B \(Q8_0\)（850 MB，从国内源（SpeakMore 的 CDN））/);
+  assert.match(idle.output.out, /下好了/);
+  assert.equal(idle.confirmed.length, 0);
+
+  const again = harness();
+  assert.equal(await again.speakmore("transcriber", "download", "qwen3-asr-0.6b-q8"), 0);
+  assert.match(again.output.out, /已经下载好了/);
+  assert.deepEqual(again.local.downloads, []);
+
+  const failing = harness({ modelDownload: "磁盘写不进去" });
+  assert.equal(await failing.speakmore("transcriber", "download", "sensevoice-small-q8"), 1);
+  assert.match(failing.output.err, /没下下来：磁盘写不进去/);
+
+  const wrong = harness();
+  assert.equal(await wrong.speakmore("transcriber", "download"), 2);
+  assert.equal(await wrong.speakmore("transcriber", "download", "gemini"), 2);
+});
+
+test("transcriber cancel：后台正在下的停下；没在下的直说", async () => {
+  const daemon = modelDaemon();
+  const { speakmore, output } = harness({ daemon });
+  await daemon.request("download-model", { id: "sensevoice-small-q8" });
+  assert.equal(await speakmore("transcriber", "cancel", "sensevoice-small-q8"), 0);
+  assert.ok(daemon.calls.includes("cancel-download"));
+  assert.match(output.out, /停下了 SenseVoice Small \(Q8_0\) 的下载/);
+  assert.equal(await speakmore("transcriber", "cancel", "sensevoice-small-q8"), 0);
+  assert.match(output.out, /没有在下载/);
+});
+
+test("transcriber delete：先确认；--yes 不问；不能问又没 --yes 时以 2 退出；正在用的删不了；没下载的不用删", async () => {
+  haveModel("sensevoice-small-q8");
+  const asked = harness({ daemon: modelDaemon(), confirms: [false] });
+  assert.equal(await asked.speakmore("transcriber", "delete", "sensevoice-small-q8"), 1);
+  assert.match(asked.confirmed[0], /删掉 SenseVoice Small \(Q8_0\)（253 MB）/);
+  assert.match(asked.output.out, /没有删/);
+  assert.ok(existsSync(join(paths.modelsDir, "sensevoice-small-q8")));
+
+  const quiet = harness({ daemon: modelDaemon(), interactive: false });
+  assert.equal(await quiet.speakmore("transcriber", "delete", "sensevoice-small-q8"), 2);
+  assert.match(quiet.output.err, /--yes/);
+
+  const sure = harness({ daemon: modelDaemon() });
+  assert.equal(await sure.speakmore("transcriber", "delete", "sensevoice-small-q8", "--yes"), 0);
+  assert.match(sure.output.out, /删掉了 SenseVoice Small \(Q8_0\)，腾出 253 MB/);
+  assert.equal(existsSync(join(paths.modelsDir, "sensevoice-small-q8")), false);
+
+  haveModel("qwen3-asr-0.6b-q8");
+  const inUse = harness({ daemon: modelDaemon() });
+  assert.equal(await inUse.speakmore("transcriber", "delete", "qwen3-asr-0.6b-q8", "--yes"), 1);
+  assert.match(inUse.output.err, /正在用，删不了/);
+
+  const nothing = harness();
+  assert.equal(await nothing.speakmore("transcriber", "delete", "sensevoice-small-q8", "--yes"), 0);
+  assert.match(nothing.output.out, /本来就没下载/);
+});
+
+test("transcriber delete：后台没在运行时自己删；设置里 local 模式用的就是它就不删", async () => {
+  haveModel("sensevoice-small-q8");
+  const idle = harness();
+  assert.equal(await idle.speakmore("transcriber", "delete", "sensevoice-small-q8", "--yes"), 0);
+  assert.deepEqual(idle.local.removed, ["sensevoice-small-q8"]);
+
+  haveModel("qwen3-asr-0.6b-q8");
+  writeFileSync(paths.settingsFile, JSON.stringify({ mode: "local" }));
+  const inUse = harness();
+  assert.equal(await inUse.speakmore("transcriber", "delete", "qwen3-asr-0.6b-q8", "--yes"), 1);
+  assert.match(inUse.output.err, /正在用，删不了/);
+  assert.deepEqual(inUse.local.removed, []);
+});
+
+test("mode local：要用的本机模型还没下载时先问；不下就不切，也不问 key", async () => {
+  const daemon = modelDaemon({ running: READY });
+  const { speakmore, output, asked } = harness({ daemon, confirms: [false] });
+  assert.equal(await speakmore("mode", "local"), 1);
+  assert.match(output.out, /没有下载，也没有换/);
+  assert.equal(asked.length, 0);
+  assert.ok(!daemon.calls.includes("set-mode"));
+
+  haveDeepSeekKey();
+  const yes = harness({ daemon: modelDaemon({ running: READY }), confirms: [true] });
+  assert.equal(await yes.speakmore("mode", "local"), 0);
+  assert.match(yes.output.out, /下好了[\s\S]*切到了 local 模式/);
 });
 
 test("polish：列出润色的那几家（第二跳），各家能挑的模型、key 有没有，自定义服务怎么填", async () => {

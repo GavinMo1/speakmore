@@ -12,6 +12,11 @@ export function backendText(reported) {
   return reported;
 }
 
+/** 多大，给人看：1 GB 以下按 MB，以上按 GB（十进制，和下载工具、访达一样） */
+export function sizeText(bytes) {
+  return bytes < 1_000_000_000 ? `${Math.round(bytes / 1_000_000)} MB` : `${(bytes / 1_000_000_000).toFixed(1)} GB`;
+}
+
 /** 一个模型的标签，一个标签一句 */
 export const tagTexts = (tags) => tags.map((tag) => msg(`localModels.tags.${tag}`));
 

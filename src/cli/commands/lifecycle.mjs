@@ -11,6 +11,7 @@ import {
 } from "../common.mjs";
 import { INDENT } from "../render/text.mjs";
 import { currentProvider, hasKeyAlready, keyPrompter, keySource, needsNewKey, submitKey } from "./key.mjs";
+import { offerDownload } from "./local-models.mjs";
 import { chooseProvider } from "./mode.mjs";
 import { newerVersion } from "./update.mjs";
 
@@ -48,6 +49,9 @@ export async function start(args, io) {
   for (let value = firstKey ?? null; value !== null; value = await nextKey()) {
     if (await submitKey(io, value, provider)) break;
   }
+  // local 模式要的本机模型还没下载（第一次就选了 local、或者删掉了）：问一句要不要现在下，不下也照常启动
+  const local = (await io.daemon.status())?.localModel;
+  if (io.interactive && !declined && local?.state === "missing" && !local.total) await offerDownload(io, local.model);
   // 重新查一遍系统权限：用户可能刚去系统设置里改过
   const status = (await io.daemon.status({ recheck: true })) ?? started;
 

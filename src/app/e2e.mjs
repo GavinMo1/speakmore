@@ -31,23 +31,29 @@ export function onFinished(outcome) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * 本地模型装好之前一直等，下载每过 10% 说一声。不走 local 模式时直接返回
+ * 本地模型装好之前一直等。还没下载的替用户点一下下载（App 不会自己下），每过 10% 说一声。不走 local 模式时直接返回
  * @param {() => object | null} localModel 服务报的本地模型状态（app/service.mjs 的 localModel）
+ * @param {(id: string) => Promise<{ ok: boolean, problem?: object }>} downloadModel 模型库的下载（models/library.mjs）
  * @returns {Promise<{ downloadMs: number, loadMs: number, backend: string } | { failed: string } | null>}
  */
-async function waitForLocalModel(localModel) {
+async function waitForLocalModel(localModel, downloadModel) {
   if (!localModel() || localModel().state === "off") return null;
   const startedAt = performance.now();
   let downloadedAt = null;
   let reported = -1;
+  let asked = false;
   for (;;) {
     const local = localModel();
     if (local.state === "failed") return { failed: JSON.stringify(local.problem) };
-    if (local.state === "downloading") {
+    if (local.state === "missing" && !local.total && !asked) {
+      asked = true;
+      const started = await downloadModel(local.model);
+      if (!started.ok) return { failed: JSON.stringify(started.problem) };
+    } else if (local.state === "missing" && local.total) {
       const percent = Math.floor((local.received / local.total) * 10) * 10;
       if (percent !== reported) console.log(`本地模型下载中 ${percent}%`);
       reported = percent;
-    } else if (downloadedAt === null) downloadedAt = performance.now();
+    } else if (local.state !== "missing" && downloadedAt === null) downloadedAt = performance.now();
     if (local.state === "ready") {
       return {
         downloadMs: Math.round(downloadedAt - startedAt),
@@ -59,12 +65,12 @@ async function waitForLocalModel(localModel) {
   }
 }
 
-export async function run({ bar, history, localModel, quit }) {
+export async function run({ bar, history, localModel, downloadModel, quit }) {
   const done = (result, code) => {
     writeFileSync(OUT_PATH, JSON.stringify({ ...result, pasted, history: history.list() }, null, 2));
     quit(code);
   };
-  const local = await waitForLocalModel(localModel);
+  const local = await waitForLocalModel(localModel, downloadModel);
   if (local?.failed) return done({ failed: `本地模型没装上：${local.failed}` }, 1);
   const giveUp = setTimeout(() => done({ failed: `等了 ${GIVE_UP_MS / 1000} 秒没有结局` }, 1), GIVE_UP_MS);
   const outcome = new Promise((resolve) => {

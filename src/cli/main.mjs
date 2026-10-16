@@ -14,6 +14,7 @@ import {
   SYSTEM_LOCALE,
 } from "../i18n/index.mjs";
 import { log } from "../log.mjs";
+import { createLocalModels } from "../models/library.mjs";
 import { CHAT_VENDORS } from "../server/chat/vendors.mjs";
 import { PROVIDERS } from "../server/providers/index.mjs";
 import { openHistory } from "../storage/history.mjs";
@@ -187,6 +188,15 @@ export function createIo({ packageDir, env = process.env }) {
     daemon: createDaemon({ paths, packageDir, env, locale: t.locale }),
     updater: createUpdater({ env, home: paths.home, progress: Boolean(process.stderr.isTTY) }),
     now: () => new Date(),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    // 后台没在运行时在这个进程里下载、删除本机模型
+    localModels: ({ source, onChange }) =>
+      createLocalModels({
+        dir: paths.modelsDir,
+        source,
+        log: { info() {}, warn: log.warn, error: log.error },
+        onChange,
+      }),
     timeZone: undefined,
     openHistory,
     askSecret,

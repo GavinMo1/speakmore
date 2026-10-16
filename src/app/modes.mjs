@@ -1,4 +1,6 @@
 import { msg, problemOf } from "../i18n/index.mjs";
+import { downloadSize, findModel } from "../models/catalog.mjs";
+import { sizeText } from "../models/describe.mjs";
 import { findChatVendor } from "../server/chat/vendors.mjs";
 import { describeRoute } from "../server/modes.mjs";
 import { findProvider } from "../server/providers/index.mjs";
@@ -15,24 +17,26 @@ import {
 //
 //   native ──switchMode("local", 第二跳等)──▶ local
 //     │  ◀──switchMode("native", 模型等)──     │
-//     └ setModel        换收音频的模型         ├ setTranscriber  第一跳：本机转写模型，不用 key，后台下载、装载
+//     └ setModel        换收音频的模型         ├ setTranscriber  第一跳：本机转写模型，不用 key，要下载好了的
 //                                              └ setPolish       第二跳：润色的厂商和模型（自定义服务连同地址）
 //
 // 两种模式要换的东西不一样，各走各的路：模型只能在它那种模式里换，不在那种模式时换是错的（没法选），
 // 直接说出来，不悄悄存下。第一次进 local 时还没法换第二跳，所以切模式时可以连带那种模式自己的设置
 // （storage/settings.mjs 的 MODE_SETTINGS），比如没有 DeepSeek 的 key、要直接用自定义服务的人。
 // 每一步都先按改后的设置拼出路线（routeOf），要的那家的 key 验证过（keys/key-manager.mjs 的 use）才换、才写设置；
-// 没通过就什么都不变，还是原来能用的那个。
+// 没通过就什么都不变，还是原来能用的那个。local 要的本机模型也一样：没下载好就不换（下载由用户点，models/library.mjs），
+// 正在用的本机模型不能删。
 
 /**
  * @param {object} options
  * @param {{ route: object, switchTranscriber(model: string): void }} options.service 内置的听写服务（service.mjs）
  * @param {{ use: Function, check: Function }} options.keys key 管理（keys/key-manager.mjs）
+ * @param {{ isInstalled(id: string): boolean, remove(id: string): object }} options.models 本机的模型库（models/library.mjs）
  * @param {string} options.settingsFile
  * @param {Record<string, string | undefined>} options.env
  * @param {{ info: Function }} options.log
  */
-export function createModeSwitch({ service, keys, settingsFile, env, log }) {
+export function createModeSwitch({ service, keys, models, settingsFile, env, log }) {
   /** 一件一件来：前一件还在验证时又来一件，后一件要看到前一件换好的模式和存好的设置 */
   let queue = Promise.resolve();
   const serial = (task) => {
@@ -91,6 +95,16 @@ export function createModeSwitch({ service, keys, settingsFile, env, log }) {
   /** 换成这条路线，要的那家的 key 验证过才换 */
   const useRoute = (route) => keys.use({ route });
 
+  /** local 的路线要的本机模型下载好了没有：没有就说先下载哪个、多大 */
+  function notDownloaded(route) {
+    if (route.mode !== "local" || models.isInstalled(route.transcriber)) return null;
+    const model = findModel(route.transcriber);
+    return {
+      ok: false,
+      problem: msg("modes.notDownloaded", { model: model.name, size: sizeText(downloadSize(model)) }),
+    };
+  }
+
   return {
     /**
      * 换模式。可以连带那种模式自己的设置一起换（只能是 MODE_SETTINGS[mode] 里的几项），一起验证、一起存
@@ -121,6 +135,8 @@ export function createModeSwitch({ service, keys, settingsFile, env, log }) {
         const from = service.route.mode;
         // 已经是这条路线（切到正在用的模式、没带别的）：不用再验证
         if (JSON.stringify(route) !== JSON.stringify(service.route)) {
+          const missing = notDownloaded(route);
+          if (missing) return missing;
           const result = await useRoute(route);
           if (!result.ok) return result;
         }
@@ -134,11 +150,25 @@ export function createModeSwitch({ service, keys, settingsFile, env, log }) {
       return within("native", "model", { model }, useRoute);
     },
 
-    /** local 第一跳：本机的转写模型。不用 key：润色那一跳照旧，服务只换模型（没装好的话重新装） */
+    /** local 第一跳：本机的转写模型，要下载好了的。不用 key：润色那一跳照旧，服务只换模型（没装好的话重新装） */
     setTranscriber(transcriber) {
       return within("local", "transcriber", { transcriber }, async (route) => {
+        const missing = notDownloaded(route);
+        if (missing) return missing;
         service.switchTranscriber(route.transcriber);
         return { ok: true };
+      });
+    },
+
+    /** 删一个本机模型：正在用的（local 模式的第一跳）不让删，说先换一个或切回 native */
+    removeModel(id) {
+      return serial(async () => {
+        const model = findModel(id);
+        if (!model) return { ok: false, problem: msg("localModels.unknown", { id }) };
+        if (service.route.mode === "local" && service.route.transcriber === id) {
+          return { ok: false, problem: msg("localModels.inUse", { model: model.name }) };
+        }
+        return models.remove(id);
       });
     },
 

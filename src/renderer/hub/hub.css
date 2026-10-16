@@ -829,7 +829,15 @@ code.setting-value {
   margin-top: 0;
 }
 
-/* 第一跳的本机模型：一行一个，名字和状态在上，标签和实测在下 */
+/* 第一跳的本机模型：上面一行说本机下了几个、磁盘还剩多少；下面一行一个，
+   左边点了是选它（没下载的选不了），右边是下载、取消、删除 */
+.models-summary {
+  margin: 0 0 0.6rem;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
 .transcribers {
   display: grid;
   gap: 0.5rem;
@@ -838,34 +846,75 @@ code.setting-value {
 .transcriber {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.35rem 1rem;
-  padding: 0.7rem 0.9rem;
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
+  align-items: center;
+  gap: 0.75rem;
+  padding-right: 0.9rem;
   background: var(--bg);
-  border: none;
   border-radius: 0.75rem;
   box-shadow: 0 0 0 1px var(--border);
-  cursor: pointer;
   transition: box-shadow var(--dur-base) var(--ease-out);
 }
 
-.transcriber:hover:not(:disabled) {
+.transcriber:has(.transcriber-pick:hover:not(:disabled)) {
   background: var(--raised);
 }
 
-.transcriber[aria-checked="true"] {
+.transcriber:has(.transcriber-pick[aria-checked="true"]) {
   box-shadow: 0 0 0 2px var(--primary);
 }
 
-.transcriber:disabled {
+.transcriber-pick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem 1rem;
+  padding: 0.7rem 0 0.7rem 0.9rem;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: none;
+  border-radius: 0.75rem;
+  cursor: pointer;
+}
+
+.transcriber-pick:disabled {
   cursor: default;
 }
 
-.transcriber:focus-visible {
+.transcriber-pick:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 3px;
+}
+
+.transcriber-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.button.danger {
+  color: var(--problem);
+}
+
+/* 下载进度：细细一条，跟着主题的渐变 */
+.transcriber-progress {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 0.25rem;
+  appearance: none;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--fill-hover);
+  overflow: hidden;
+}
+
+.transcriber-progress::-webkit-progress-bar {
+  background: var(--fill-hover);
+}
+
+.transcriber-progress::-webkit-progress-value {
+  background: var(--gradient);
+  border-radius: var(--radius-full);
+  transition: width var(--dur-base) var(--ease-out);
 }
 
 .transcriber-name {
@@ -961,7 +1010,8 @@ code.setting-value {
   }
 
   .mode-tab,
-  .transcriber {
+  .transcriber,
+  .transcriber-progress::-webkit-progress-value {
     transition: none;
   }
 }
