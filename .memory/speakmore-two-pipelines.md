@@ -26,6 +26,8 @@ metadata:
 - 2026-10-16 实现成两种"模式"（设置项 `mode`：`native` / `local`），按用户要求分层、严格状态机：模型只能在它那种模式里换（`speakmore model` 只管 native；`transcriber`、`polish` 只管 local 的两跳），不在那种模式里换就报错；切模式可以连带那种模式自己的设置。内核在 `src/app/modes.mjs`，App 设置页和命令行都走它。
 - `speakmore config set` 不经过状态机：2026-10-16 用户同意按我的建议留作手动改设置的后门，只在改模式管的几项时提示平时用哪个命令、写的是另一种模式的设置时说切过去才用上。别再把它收进状态机。
 - 端到端（[[speakmore-model-mirror]] 里也记了下载速度）：local 模式 Qwen3 Q8 + DeepSeek flash，松开到出字 1.2–1.75 s，转写不到 0.7 s，大头是润色请求。记录在 `bench/results/e2e-local-2026-10-16.md`。
+- 2026-10-16 用户在自己电脑上用 local（Qwen3-ASR Q8 + DeepSeek flash）实际听写后说："效果比原生 Gemini 的还好，这个是让我比较震惊的一个事"。两种模式仍然平级，不因此把 local 设成默认；但写宣传、README 时可以引用这条真实反馈。
+- 0.7.1 起（还没发）：本机模型由用户点了才下；每个模型（原生、润色、本机）都能"检查"，本机的是用系统朗读念一句交给它转；用量按模型分开，本机转写那一跳也记一笔（provider 是 local，不花钱）。
 - 不替用户选模型，做成模型广场、按实测打标签，见 [[speakmore-model-plaza]]。
 - 本地模型的调研（2026-10-16）：首选 Qwen3-ASR-0.6B（Apache-2.0，Q8 约 0.8 GB，FLEURS 普通话 CER 7.57%）；轻量备选 SenseVoice-Small（约 0.24 GB，CER 10.12%，许可证是 FunASR 自定义的）。运行库可选 sherpa-onnx-node（Apache-2.0）或 transcribe-cpp（MIT），两者在 npm 上都有 Mac 两种芯片和 Windows 的预编译包。榜单是朗读语音，中英夹杂的口述没有公开数字，要用真录音实测。
 

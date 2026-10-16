@@ -135,6 +135,7 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 | `speakmore model check [<provider>[/<model>]]` | Send a tiny request to see if it works and how fast |
 | `speakmore transcriber [<model>]` | Local mode, step 1: on-device models with size, tags, measured speed and what is downloaded / switch (asks before downloading one you don't have) |
 | `speakmore transcriber download\|cancel\|delete <model>` | Download, stop downloading or delete an on-device model. Nothing downloads until you ask; the one in use can't be deleted |
+| `speakmore transcriber check [<model>]` | The system voice reads a sentence to the on-device model to see that it transcribes |
 | `speakmore polish [<provider>[/<model>]] [--url <url>]` | Local mode, step 2: who polishes the text / switch. `custom/<model> --url <url>` for an OpenAI-compatible service. `polish check` tests it |
 | `speakmore key [<provider>]` | Replace a key. Can be piped: `pbpaste \| speakmore key`. Don't type the key on the command line — it ends up in shell history |
 | `speakmore key --forget [<provider>]` | Delete a stored key |
@@ -187,7 +188,7 @@ Step 2 — `deepseek` (default model `deepseek-flash`) or `custom`: any OpenAI-c
 <details>
 <summary><b>💰 What it costs</b></summary>
 
-Every model call is logged: tokens (including audio and thinking), model, cost and latency. The home window shows today, this month and all time; `speakmore usage` has the full breakdown.
+Every model call is logged: tokens (including audio and thinking), model, cost and latency. The home window breaks today, this month and all time down by model (the on-device step gets its own free row); `speakmore usage` has more detail.
 
 - Costs are **estimates** in US dollars, from each provider's standard list price. Gemini's free tier actually costs nothing, but the API doesn't say which tier a key is on, so everything is priced as paid.
 - For a few seconds of speech, most of the cost is the prompt sent every time (about 1,350 tokens). Gemini's prompt cache bills that part at a tenth of the price. The cache itself costs a little (about $0.001 to create, about $0.0007 an hour to keep) and expires after 30 quiet minutes. OpenAI's `gpt-audio` models have no cache.

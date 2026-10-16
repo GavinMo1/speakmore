@@ -135,6 +135,7 @@ flowchart LR
 | `speakmore model check [<厂商>[/<模型>]]` | 发一个最小的请求，看能不能用、来回多久 |
 | `speakmore transcriber [<模型>]` | 本地转写第一步：本机模型的大小、标签、实测速度、下没下载 / 换一个（要用的没下载时先问） |
 | `speakmore transcriber download\|cancel\|delete <模型>` | 下载、停下、删除本机模型。不点就不下；正在用的删不了 |
+| `speakmore transcriber check [<模型>]` | 系统朗读念一句交给本机模型转，看能不能正常出字 |
 | `speakmore polish [<厂商>[/<模型>]] [--url <地址>]` | 本地转写第二步：文字交给谁润色 / 换一个。自定义服务写 `custom/<模型名> --url <地址>`；`polish check` 看能不能用 |
 | `speakmore key [<厂商>]` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key`。别把 key 写在命令后面，会进 shell 历史 |
 | `speakmore key --forget [<厂商>]` | 删掉存着的 key |
@@ -187,7 +188,7 @@ flowchart LR
 <details>
 <summary><b>💰 花了多少钱</b></summary>
 
-每次调模型都记一笔账：多少 token（其中多少是音频、多少是思考）、哪个型号、多少钱、等了多久。主窗口首页有今天、本月、累计的花费，命令行用 `speakmore usage` 看得更细。
+每次调模型都记一笔账：多少 token（其中多少是音频、多少是思考）、哪个型号、多少钱、等了多久。主窗口首页按模型分开列今天、本月、累计的花费（本机转写那一步单列一行，不花钱），命令行用 `speakmore usage` 看得更细。
 
 - 钱是照两家官方价目页的标准价**估算**的美元。Gemini 在免费额度内其实不收钱，可接口不告诉我们 key 在哪一档，所以一律按付费价算。
 - 一句几秒钟的话，大头是每次都要带上的提示词（约 1350 个 token）。Gemini 的提示词缓存让这部分只收一成的价；缓存自己也要钱（建一次约 $0.001，存着每小时约 $0.0007），30 分钟没人说话就过期。OpenAI 的 `gpt-audio` 系列没有缓存。
