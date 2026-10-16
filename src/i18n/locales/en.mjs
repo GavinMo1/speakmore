@@ -108,6 +108,13 @@ export default {
   modes: {
     native: "Native: the recording goes straight to the model",
     local: "Local: transcribed on this Mac, then polished by a model",
+    notIn: "You're in {current} mode; {what} can only be changed in {mode} mode",
+    notOfMode: "{name} isn't a {mode} setting; switching to {mode} can also set {names}",
+    what: {
+      model: "the audio model",
+      transcriber: "the on-device transcription model (step 1)",
+      polish: "the polishing model (step 2)",
+    },
   },
   local: {
     modelDownloading: "The local model is still downloading ({percent}%); it'll work once it's done",
@@ -431,9 +438,18 @@ export default {
   speakmore history [-n count] [--json]
                                 What you said, grouped by day, newest first (latest {limit} by default)
   speakmore usage [--json]      What it cost: spend and tokens today, this month, and in total, model reply times, per model
-  speakmore model               Available providers ({providers}), whether each has a key, which one is in use
+  speakmore mode                The two recognition modes and what each uses: native sends the recording to the model; local transcribes on this Mac, then a model polishes it
+  speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]
+                                Switch mode, live. Can bring that mode's own settings, e.g. a custom service on first entering local
+  speakmore model               Native mode: available providers ({providers}), whether each has a key, which one is in use
   speakmore model <provider>[/<model>]
-                                Switch provider or model, e.g. speakmore model openai. Asks for its key if missing
+                                Switch provider or model in native mode, e.g. speakmore model openai. Asks for its key if missing
+  speakmore transcriber [<model>]
+                                Local mode, step 1: list or switch the on-device transcription model. Downloads in the background if needed
+  speakmore polish [<provider>[/<model>] [--url <url>]]
+                                Local mode, step 2: list or switch the polishing model ({polishers}). custom is any OpenAI-compatible service
+  speakmore polish check [<provider>[/<model>]]
+                                Check step 2 works
   speakmore model check [<provider>[/<model>]]
                                 Check it works: sends that provider a minimal request with its key. Defaults to the current one
   speakmore key [<provider>]    Replace a key; defaults to the current provider (input is hidden; can also be piped in)
@@ -479,6 +495,10 @@ export default {
       theme: "Usage: speakmore theme | speakmore theme <name>",
       model:
         "Usage: speakmore model | speakmore model <provider>[/<model>] | speakmore model check [<provider>[/<model>]]",
+      mode: "Usage: speakmore mode | speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]",
+      transcriber: "Usage: speakmore transcriber | speakmore transcriber <model>",
+      polish:
+        "Usage: speakmore polish | speakmore polish <provider>[/<model>] [--url <url>] | speakmore polish check [<provider>[/<model>]]",
     },
     update: {
       fromSource: "This copy runs from source ({dir}): update it with git pull.",
@@ -528,7 +548,11 @@ export default {
       cancelled: "Cancelled; the key is unchanged.",
       nothingRead: "No key read; the old one is unchanged.",
       badShapeUnchanged: "{problem}. The old one is unchanged.",
-      switchHint: "To use it: speakmore model {id}",
+      switchHint: "To use it: {command}",
+      needText:
+        "You need a {provider} API key: recordings are transcribed on this Mac, and only the text goes to {provider} for polishing.",
+      customWithModel:
+        "A custom service's key goes in together with its model and address: speakmore polish custom/<model> --url <url> (not in local mode yet: speakmore mode local --polish custom/<model> --url <url>)",
     },
     config: {
       nextLaunch: "Takes effect next launch.",
@@ -578,7 +602,56 @@ export default {
       current: "Using {theme} · {source}",
       switch: "Switch: speakmore theme {id} (applies right away, no restart)",
     },
+    modes: {
+      title: "Recognition modes",
+      notIn: "You're in {current} mode; {what} can only be changed in {mode} mode: run speakmore mode {mode} first",
+      notSwitched: "Not switched: {problem}",
+      applied: "Switched, no restart needed.",
+      downloading:
+        "The local model is downloading in the background ({percent}%); it'll work once it's done. Progress: speakmore status",
+      loading: "The local model is loading; a few seconds.",
+      switch: "Switch: speakmore mode {mode} (takes effect right away)",
+      nativeModels: "Change the model in native: speakmore model",
+      localHops:
+        "The two steps of local: speakmore transcriber (step 1, on-device) · speakmore polish (step 2, polishing)",
+      withSettings:
+        "Use a custom service on first entering local: speakmore mode local --polish custom/<model> --url <url>",
+      flagsFor: "{flag} isn't a {mode} setting; switching to {mode} can bring {flags}",
+      already: "Already in {mode} mode: {route}.",
+      switched: "Switched to {mode} mode: {route}.",
+      localRoute: "{transcriber} → {polish}",
+    },
+    local: {
+      notInLocal: "You're in {current} mode, so these aren't in use: switch first (speakmore mode local)",
+      transcribersTitle: "On-device transcription models (local mode, step 1)",
+      installed: "downloaded",
+      notInstalled: "not downloaded",
+      transcriberCurrent: "In use: {model}",
+      transcriberSwitch: "Switch: speakmore transcriber {id} (downloads in the background if needed)",
+      transcriberSwitched: "Step 1 is now {model}.",
+      polishTitle: "Polishing models (local mode, step 2)",
+      customName: "Custom service",
+      customModel: "your own model and address",
+      alsoModels: "also: {models}",
+      polishCurrent: "In use: {model}",
+      polishSwitch: "Switch: speakmore polish deepseek/deepseek-v4-pro",
+      polishCustom: "Custom service (OpenAI-compatible): speakmore polish custom/<model> --url <url>",
+      polishCheck: "Check it works: speakmore polish check",
+      polishSwitched: "Step 2 is now {model}.",
+      urlNeeded: "A custom polishing service needs its address: --url <url> (OpenAI-compatible; most end in /v1)",
+    },
+    choose: {
+      question: "First, pick how recordings become text (change it later with speakmore mode or speakmore model):",
+      native: "native mode: the recording goes straight to the model",
+      local:
+        "local mode: transcribed on this Mac, only the text goes to a model for polishing (first use downloads a {size} local model)",
+      custom:
+        "  To use another service (OpenAI-compatible): after setup, run speakmore mode local --polish custom/<model> --url <url>",
+    },
     model: {
+      textOnly:
+        "{provider} only takes text; it's step 2 of local mode: speakmore polish {id} (not in local mode yet? speakmore mode local first)",
+      notInNative: "You're in {current} mode, so these models aren't in use: switch back first (speakmore mode native)",
       unknownProvider: "Unknown provider {name}; available: {providers}. To pick a model, write provider/model",
       invalid: "Model is {value}: {reason}",
       describe: "{provider} {model}",
@@ -630,6 +703,11 @@ export default {
       today: "Today",
       total: "All time",
       modelExternal: "decided by the separately started server",
+      mode: "Mode",
+      localModel: "Local model",
+      localReady: "ready · {backend}",
+      localDownloading: "downloading {percent}% ({received} / {total} MB)",
+      localLoading: "loading",
       modelInUse: "{provider} {model}",
       modelWithThinking: "{provider} {model} ({thinking})",
       keyEnv: "Using the one in the {variable} env var this run, not saved",

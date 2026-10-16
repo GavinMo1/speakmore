@@ -54,10 +54,10 @@ export async function startService({
     onLocalModel();
   }
 
-  /** 让本地模型跟着路线走：要的是别的模型就换，不走本地转写就卸掉 */
+  /** 让本地模型跟着路线走：要的是别的模型就换，不走本地转写就卸掉；上次没装上的再装一次 */
   function followRoute() {
     const wanted = route.mode === "local" ? route.transcriber : null;
-    if (loading?.model === wanted) return;
+    if (loading?.model === wanted && local.state !== "failed") return;
     releaseLocal();
     if (wanted) loadLocal(wanted);
   }
@@ -183,14 +183,15 @@ export async function startService({
     },
 
     /**
-     * 只换 local 模式第一跳的本地模型。润色那一跳和 key 都不动，不用重新验证：
+     * 只换 local 模式第一跳的本地模型（没装上的那个再选一次就是重试）。润色那一跳和 key 都不动，不用重新验证：
      * 转写器是按名字取的（上面的 transcriber），装好的 refiner 照用，新模型在后台下载、装载
      * @param {string} model 本地模型的 id（asr/catalog.mjs），调用方校验过
      */
     switchTranscriber(model) {
       if (route.mode !== "local") throw new Error(`现在不是 local 模式（${route.mode}），没有本地模型可换`);
-      if (model === route.transcriber) return;
-      log.info("transcriber_switched", { from: route.transcriber, to: model });
+      // 同一个、也好好的：不用动。上次没装上的话照样往下走，再装一次
+      if (model === route.transcriber && local.state !== "failed") return;
+      log.info("transcriber_switched", { from: route.transcriber, to: model, retry: model === route.transcriber });
       route = { ...route, transcriber: model };
       followRoute();
     },

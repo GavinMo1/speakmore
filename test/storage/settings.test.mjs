@@ -6,6 +6,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
 import {
   HOTKEY_IDS,
+  MODE_SETTINGS,
   overridingEnv,
   patchSettings,
   resolveSettings,
@@ -227,6 +228,10 @@ test("每种模式的路线只看它自己那几项：可以拼出不是正在�
     customUrl: null,
   });
   assert.deepEqual(routeOf(settings, "native").model, { provider: "openai", model: "gpt-audio-mini" });
+});
+
+test("每种模式自己的那几项：native 是模型和思考档位，local 是两跳的", () => {
+  assert.deepEqual(MODE_SETTINGS, { native: ["model", "thinking"], local: ["transcriber", "polish", "customUrl"] });
 });
 
 test("patchSettings：按要改的几项拼出改后的设置（不写文件），写错了照保存时的规矩报错", () => {

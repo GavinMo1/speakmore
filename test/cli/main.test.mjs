@@ -82,6 +82,7 @@ afterEach(() => {
  * 假的后台应用。running 是它现在的状态（null 表示没在运行），afterStart 是启动之后的状态，
  * saveKey 决定存 key 的结果，stopped 是停止时的说法，hung 为 true 表示它卡住了不答话。
  * reloadTheme、reloadLanguage 是让它重新读主题、语言时的回答，默认和真的一样：照设置文件里现在写的换。
+ * changeRoute 是切模式、换各模式里的模型（set-mode、set-model、set-transcriber、set-polish）时的回答。
  * calls 记下命令行对它做过什么。
  */
 function fakeDaemon({
@@ -89,6 +90,7 @@ function fakeDaemon({
   afterStart = READY,
   saveKey = () => ({ ok: true }),
   checkModel = () => ({ ok: true, source: "stored", ms: 812 }),
+  changeRoute = () => ({ ok: true }),
   stopped = "quit",
   hung = false,
   reloadTheme = () => ({ theme: resolveSettings({ file: paths.settingsFile, env: {} }).theme.value }),
@@ -124,6 +126,8 @@ function fakeDaemon({
       daemon.requests.push({ cmd, params });
       if (daemon.current === null) throw new NotRunningError();
       if (cmd === "check-model") return checkModel(params.model);
+      if (cmd === "check-polish") return checkModel(params.polish);
+      if (["set-mode", "set-model", "set-transcriber", "set-polish"].includes(cmd)) return changeRoute(cmd, params);
       if (cmd === "set-key") {
         const result = saveKey(params.key, params.provider);
         // 存 key 只改 key 的状态，用的是哪一家不变
@@ -299,6 +303,17 @@ test("第一次用：先问 key，再启动；存好了直接能用；key 不出
   assert.ok(!(output.out + output.err).includes("AIza-my-secret"));
 });
 
+test("第一次用：按模式分组问用哪一家，选 DeepSeek 就进 local 模式、问 DeepSeek 的 key", async () => {
+  const daemon = fakeDaemon({ afterStart: { ...NO_KEY, provider: "deepseek", mode: "local" } });
+  const { speakmore, questions, asked, output } = harness({ daemon, answers: ["3"], secrets: ["sk-ds"] });
+  const code = await speakmore();
+  assert.equal(code, 0, output.out + output.err);
+  assert.match(questions[0], /native 模式[\s\S]*1.*Gemini[\s\S]*2.*OpenAI[\s\S]*local 模式.*850 MB[\s\S]*3.*DeepSeek/);
+  assert.match(questions[0], /custom\/<模型名> --url/);
+  assert.deepEqual([saved("mode"), saved("polish")], ["local", "deepseek/deepseek-flash"]);
+  assert.match(asked[0], /DeepSeek API key/);
+});
+
 test("第一次用：先问用哪一家，选 OpenAI 就记进设置、问 OpenAI 的 key，问完才启动", async () => {
   const saved = [];
   const daemon = fakeDaemon({
@@ -339,10 +354,10 @@ test("第一次用：直接回车就是 Gemini，设置文件不动", async () =
 
 test("选的时候写名字也认；写错了说能选什么，再问", async () => {
   const daemon = fakeDaemon({ afterStart: { ...NO_KEY, provider: "openai" } });
-  const { speakmore, questions, output } = harness({ daemon, answers: ["deepseek", "OpenAI"], secrets: ["sk-key"] });
+  const { speakmore, questions, output } = harness({ daemon, answers: ["nope", "OpenAI"], secrets: ["sk-key"] });
   assert.equal(await speakmore(), 0);
   assert.equal(questions.length, 2);
-  assert.match(output.err, /deepseek/);
+  assert.match(output.err, /nope/);
   assert.match(output.err, /1.*2/);
   assert.equal(resolveSettings({ file: paths.settingsFile, env: {} }).model.value, "openai/gpt-audio-mini");
 });
@@ -1491,14 +1506,14 @@ test("model：列出有哪几家、各用哪个模型、key 有没有、现在�
   assert.match(output.out, /openai\s+OpenAI\s+gpt-audio-mini（默认）\s+key 来自环境变量 OPENAI_API_KEY/);
 });
 
-test("model <厂商>：有它的 key 就直接换，在运行的话重启让它生效", async () => {
+test("model <厂商>：有它的 key 就直接换；在运行的话让它当场换，不重启", async () => {
   haveOpenAIKey();
   const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
   assert.equal(await speakmore("model", "openai"), 0);
-  assert.equal(savedModel(), "openai/gpt-audio-mini");
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "set-model", params: { model: "openai/gpt-audio-mini" } });
   assert.match(output.out, /换成了 OpenAI 的 gpt-audio-mini/);
-  assert.deepEqual(daemon.calls, ["stop", "start"]);
-  assert.match(output.out, /已经生效/);
+  assert.ok(!daemon.calls.includes("stop"));
+  assert.match(output.out, /已经换上，不用重启/);
 
   const notRunning = harness();
   assert.equal(await notRunning.speakmore("model", "openai/gpt-audio-1.5"), 0);
@@ -1521,7 +1536,7 @@ test("model <厂商>：还没有它的 key 时先问；问到的交给后台验�
   // 说的是 OpenAI 的 key、去哪申请
   assert.match(asked[0], /OpenAI API key/);
   assert.match(asked[0], /platform\.openai\.com\/api-keys/);
-  assert.equal(savedModel(), "openai/gpt-audio-mini");
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "set-model", params: { model: "openai/gpt-audio-mini" } });
   assert.ok(!(output.out + output.err).includes("sk-my-secret"));
 });
 
@@ -1545,10 +1560,12 @@ test("model <厂商>：没有它的 key 又没法问（不在终端里）、或�
   assert.equal(savedModel(), "gemini/gemini-3.6-flash");
 });
 
-test("model：不认识的厂商、写错的模型名，以 2 退出并说能填什么", async () => {
+test("model：不认识的厂商、写错的模型名，以 2 退出并说能填什么；写的是润色的那家时指到 local 模式", async () => {
   const { speakmore, output } = harness();
-  assert.equal(await speakmore("model", "deepseek"), 2);
+  assert.equal(await speakmore("model", "nope"), 2);
   assert.match(output.err, /gemini \/ openai/);
+  assert.equal(await speakmore("model", "deepseek"), 2);
+  assert.match(output.err, /DeepSeek.*local.*speakmore polish deepseek/);
   assert.equal(await speakmore("model", "openai/gpt audio"), 2);
   assert.equal(await speakmore("model", "openai", "extra"), 2);
 });
@@ -1598,7 +1615,7 @@ test("model check：没在运行就先启动；正在运行的是旧版本、不
 
 // ---------- 每家一把 key ----------
 
-test("key <厂商>：问的是那一家的 key，存进它那一份；不是正在用的那家时提示怎么换过去", async () => {
+test("key <厂商>：问的是那一家的 key，存进它那一份；不是正在用的那家时提示怎么换过去（按它在哪一层）", async () => {
   const saved = [];
   const daemon = fakeDaemon({
     running: READY,
@@ -1612,6 +1629,19 @@ test("key <厂商>：问的是那一家的 key，存进它那一份；不是正�
   assert.deepEqual(saved, [{ key: "sk-new", provider: "openai" }]);
   assert.match(asked[0], /OpenAI API key/);
   assert.match(output.out, /要换成用它：speakmore model openai/);
+
+  const deepseek = harness({ daemon: fakeDaemon({ running: READY }), secrets: ["sk-ds"] });
+  assert.equal(await deepseek.speakmore("key", "deepseek"), 0);
+  assert.match(deepseek.asked[0], /DeepSeek API key/);
+  // 录音不发给它，只发转出来的文字
+  assert.match(deepseek.asked[0], /本机/);
+  assert.match(deepseek.asked[0], /platform\.deepseek\.com/);
+  // 现在是 native 模式：polish 只在 local 里能用，提示连模式一起切
+  assert.match(deepseek.output.out, /要换成用它：speakmore mode local --polish deepseek/);
+
+  const fromLocal = harness({ daemon: fakeDaemon({ running: LOCAL_READY }), secrets: ["sk-ds", "sk-oa"] });
+  assert.equal(await fromLocal.speakmore("key", "openai"), 0);
+  assert.match(fromLocal.output.out, /要换成用它：speakmore mode native --model openai/);
 });
 
 test("key 后面写的不是厂商名：多半是把 key 本身写在了命令里，不照做也不把它打出来", async () => {
@@ -1698,19 +1728,32 @@ test("后台是 0.3 的：给别家存 key、删别家的 key 都先拦下，说
   assert.equal(await gemini.speakmore("key", "gemini"), 0);
 });
 
-test("换模型、重启之后那家的 key 被拒：说不能用、怎么换 key、怎么撤回，以 1 退出", async () => {
+test("换模型时那家的 key 被拒：不换，说原因，设置不动，以 1 退出", async () => {
   haveOpenAIKey();
-  const rejected = {
-    ...READY,
-    provider: "openai",
-    model: "openai/gpt-audio-mini",
-    key: { state: "rejected", source: "stored", cause: "key", problem: "这把 key 无效，检查有没有复制完整" },
-  };
-  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: READY, afterStart: rejected }) });
+  const daemon = fakeDaemon({
+    running: READY,
+    changeRoute: () => ({ ok: false, problem: "这把 key 无效，检查有没有复制完整" }),
+  });
+  const { speakmore, output } = harness({ daemon });
   assert.equal(await speakmore("model", "openai"), 1);
-  assert.match(output.err, /OpenAI 的 key 不能用：这把 key 无效.*speakmore key openai/);
-  assert.match(output.err, /撤回.*speakmore model gemini\/gemini-3\.6-flash/);
-  assert.doesNotMatch(output.out, /已经生效/);
+  assert.match(output.err, /没有换：这把 key 无效/);
+  assert.equal(savedModel(), "gemini/gemini-3.6-flash");
+  assert.doesNotMatch(output.out, /已经换上/);
+});
+
+test("换模型时正在运行的是旧版本、不认识当场换：存进设置，重启让它生效（老路）", async () => {
+  haveOpenAIKey();
+  const old = fakeDaemon({ running: READY });
+  const request = old.request;
+  old.request = async (cmd, params) => {
+    if (cmd === "set-model") throw new Error(`不认识的命令：${cmd}`);
+    return request(cmd, params);
+  };
+  const { speakmore, output } = harness({ daemon: old });
+  assert.equal(await speakmore("model", "openai"), 0);
+  assert.equal(savedModel(), "openai/gpt-audio-mini");
+  assert.deepEqual(old.calls.slice(-2), ["stop", "start"]);
+  assert.match(output.out, /已经生效/);
 });
 
 test("装成应用的在运行：它的 key 存在它自己那一份里，看 key 有没有以它报的为准", async () => {
@@ -1718,10 +1761,10 @@ test("装成应用的在运行：它的 key 存在它自己那一份里，看 ke
   const { speakmore, output, asked } = harness({ daemon: fakeDaemon({ running: app }) });
   assert.equal(await speakmore("model"), 0);
   assert.match(output.out, /openai\s+OpenAI\s+gpt-audio-mini（默认）\s+key 存着/);
-  // 不再问一遍 key；装成应用的不能从命令行重启，照常提示怎么让它生效
+  // 不再问一遍 key；装成应用的也能当场换，不用退出重开
   assert.equal(await speakmore("model", "openai"), 0);
   assert.equal(asked.length, 0);
-  assert.match(output.out, /SpeakMore\.app/);
+  assert.match(output.out, /已经换上，不用重启/);
 });
 
 test("英文时每个命令的输出里都没有漏翻的中文（用户自己说的话除外）", async () => {
@@ -1789,6 +1832,13 @@ test("英文时每个命令的输出里都没有漏翻的中文（用户自己�
     [["key", "--forget", "openai"], READY],
     [["uninstall"], null],
     [["model", "nope"], READY],
+    [["model", "deepseek"], READY],
+    [["mode"], READY],
+    [["mode", "local"], READY],
+    [["mode", "cloud"], READY],
+    [["transcriber"], READY],
+    [["polish"], READY],
+    [["polish", "custom/m"], READY],
     [["history", "extra"], null],
   ];
   for (const [argv, running] of commands) {
@@ -1796,4 +1846,244 @@ test("英文时每个命令的输出里都没有漏翻的中文（用户自己�
     await speakmore(...argv);
     assert.doesNotMatch(output.out + output.err, /[一-鿿]/, argv.join(" "));
   }
+});
+
+// ---------- 模式，和各模式里的模型 ----------
+
+/** 假装以前给 DeepSeek 存过一把 key */
+const haveDeepSeekKey = () => writeFileSync(keyFile(paths, "deepseek"), "密文");
+const saved = (name) => resolveSettings({ file: paths.settingsFile, env: {} })[name].value;
+/** 正在 local 模式的后台 */
+const LOCAL_READY = {
+  ...READY,
+  provider: "deepseek",
+  mode: "local",
+  model: null,
+  thinking: null,
+  transcriber: "qwen3-asr-0.6b-q8",
+  polish: "deepseek/deepseek-flash",
+  localModel: { state: "ready", model: "qwen3-asr-0.6b-q8", backend: "MTL0" },
+};
+
+test("mode：列出两种模式、各自用的模型，现在用的打一个点，说怎么切、两种模式里各自怎么换模型", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("mode"), 0);
+  assert.match(output.out, /● native\s+原生：录音直接交给模型\s+Gemini 的 gemini-3\.6-flash/);
+  assert.match(output.out, /\n {4}local\s+本地转写，再交给模型润色\s+qwen3-asr-0\.6b-q8 → DeepSeek 的 deepseek-flash/);
+  assert.match(output.out, /speakmore mode local/);
+  assert.match(output.out, /speakmore model\b/);
+  assert.match(output.out, /speakmore transcriber/);
+  assert.match(output.out, /speakmore polish/);
+});
+
+test("mode <模式>：有那种模式要的 key 就让在运行的那个当场切，不重启", async () => {
+  haveDeepSeekKey();
+  const daemon = fakeDaemon({ running: READY });
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore("mode", "local"), 0);
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "set-mode", params: { mode: "local", changes: {} } });
+  assert.ok(!daemon.calls.includes("stop"));
+  assert.match(output.out, /切到了 local 模式：qwen3-asr-0\.6b-q8 → DeepSeek 的 deepseek-flash/);
+  assert.match(output.out, /已经换上，不用重启/);
+});
+
+test("mode local：本地模型还在下载时说一声，进度去哪看", async () => {
+  haveDeepSeekKey();
+  const downloading = {
+    ...LOCAL_READY,
+    localModel: { state: "downloading", model: "qwen3-asr-0.6b-q8", received: 425, total: 850 },
+  };
+  const daemon = fakeDaemon({ running: READY });
+  daemon.request = (
+    ({ request }) =>
+    async (cmd, params) => {
+      const result = await request.call(daemon, cmd, params);
+      if (cmd === "set-mode") daemon.current = downloading;
+      return result;
+    }
+  )(daemon);
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore("mode", "local"), 0);
+  assert.match(output.out, /本地模型在后台下载（50%）.*speakmore status/);
+});
+
+test("mode <模式>：还没有那种模式要的 key 时先问，拿要切过去的设置验证过存好，再切", async () => {
+  const saved = [];
+  const daemon = fakeDaemon({
+    running: READY,
+    saveKey: (key, provider) => {
+      saved.push({ key, provider });
+      return { ok: true };
+    },
+  });
+  const { speakmore, asked, output } = harness({ daemon, secrets: ["sk-ds"] });
+  assert.equal(await speakmore("mode", "local"), 0);
+  assert.deepEqual(saved, [{ key: "sk-ds", provider: "deepseek" }]);
+  assert.deepEqual(daemon.requests.find(({ cmd }) => cmd === "set-key").params, {
+    key: "sk-ds",
+    provider: "deepseek",
+    changes: { mode: "local" },
+  });
+  assert.match(asked[0], /DeepSeek API key/);
+  assert.equal(daemon.requests.at(-1).cmd, "set-mode");
+  assert.ok(!(output.out + output.err).includes("sk-ds"));
+});
+
+test("mode <模式>：没有 key 又没法问时不切，说先做什么；没在运行时存进设置、下次启动生效", async () => {
+  const quiet = harness({ interactive: false });
+  assert.equal(await quiet.speakmore("mode", "local"), 1);
+  assert.match(quiet.output.err, /还没有 DeepSeek 的 key.*speakmore key deepseek/);
+  assert.equal(saved("mode"), "native");
+
+  haveDeepSeekKey();
+  const notRunning = harness();
+  assert.equal(await notRunning.speakmore("mode", "local"), 0);
+  assert.equal(saved("mode"), "local");
+  assert.match(notRunning.output.out, /下次启动生效/);
+  assert.deepEqual(notRunning.daemon.calls, []);
+});
+
+test("mode：写错的模式以 2 退出并说能填什么；切没通过以 1 退出说原因", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("mode", "cloud"), 2);
+  assert.match(output.err, /native \/ local/);
+
+  haveDeepSeekKey();
+  const refused = harness({
+    daemon: fakeDaemon({ running: READY, changeRoute: () => ({ ok: false, problem: "DeepSeek 余额不足" }) }),
+  });
+  assert.equal(await refused.speakmore("mode", "local"), 1);
+  assert.match(refused.output.err, /没有换：DeepSeek 余额不足/);
+});
+
+test("在 local 模式时换 native 的模型：不能换，说先切回 native；不问 key、不发请求、不改设置", async () => {
+  const daemon = fakeDaemon({ running: LOCAL_READY });
+  const { speakmore, output, asked } = harness({ daemon, secrets: ["sk-x"] });
+  assert.equal(await speakmore("model", "openai"), 1);
+  assert.match(output.err, /现在是 local 模式.*收音频的模型.*native 模式.*speakmore mode native/);
+  assert.equal(asked.length, 0);
+  assert.ok(!daemon.calls.includes("set-model"));
+  assert.equal(savedModel(), "gemini/gemini-3.6-flash");
+
+  // 没在运行时看设置里的模式
+  writeFileSync(paths.settingsFile, JSON.stringify({ mode: "local" }));
+  const offline = harness();
+  assert.equal(await offline.speakmore("model", "openai"), 1);
+  assert.match(offline.output.err, /现在是 local 模式/);
+});
+
+test("在 native 模式时换 local 的两跳：不能换，说先切到 local；列出来看可以，但标明现在用不上", async () => {
+  const daemon = fakeDaemon({ running: READY });
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore("transcriber", "sensevoice-small-q8"), 1);
+  assert.match(output.err, /现在是 native 模式.*本机转写模型（第一跳）.*local 模式.*speakmore mode local/);
+  assert.equal(await speakmore("polish", "deepseek/deepseek-v4-pro"), 1);
+  assert.match(output.err, /润色模型（第二跳）/);
+  assert.ok(!daemon.calls.some((call) => call.startsWith("set-")));
+
+  const list = harness({ daemon: fakeDaemon({ running: READY }) });
+  assert.equal(await list.speakmore("transcriber"), 0);
+  assert.match(list.output.out, /现在是 native 模式，用不上.*speakmore mode local/);
+});
+
+test("mode local 连带第二跳：没有 DeepSeek 的 key 也能直接用自定义服务进 local", async () => {
+  const daemon = fakeDaemon({ running: READY });
+  const { speakmore, asked } = harness({ daemon, secrets: ["sk-custom"] });
+  assert.equal(
+    await speakmore("mode", "local", "--polish", "custom/qwen3:8b", "--url", "http://127.0.0.1:11434/v1"),
+    0,
+  );
+  assert.match(asked[0], /Custom|自定义服务/);
+  assert.deepEqual(daemon.requests.find(({ cmd }) => cmd === "set-key").params, {
+    key: "sk-custom",
+    provider: "custom",
+    changes: { mode: "local", polish: "custom/qwen3:8b", customUrl: "http://127.0.0.1:11434/v1" },
+  });
+  assert.deepEqual(daemon.requests.at(-1), {
+    cmd: "set-mode",
+    params: { mode: "local", changes: { polish: "custom/qwen3:8b", customUrl: "http://127.0.0.1:11434/v1" } },
+  });
+});
+
+test("mode 连带的设置不是那种模式的：以 2 退出说能带什么", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("mode", "native", "--polish", "deepseek"), 2);
+  assert.match(output.err, /--model/);
+  assert.equal(await speakmore("mode", "local", "--model", "openai"), 2);
+  assert.match(output.err, /--transcriber.*--polish.*--url/);
+});
+
+test("transcriber：列出本机转写模型（第一跳），大小、下载过没有，现在用的打一个点", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("transcriber"), 0);
+  assert.match(output.out, /local 模式的第一跳/);
+  assert.match(output.out, /● qwen3-asr-0\.6b-q8\s+Qwen3-ASR 0\.6B \(Q8_0\)\s+850 MB\s+还没下载/);
+  assert.match(output.out, /换一个：speakmore transcriber sensevoice-/);
+});
+
+test("transcriber <模型>：不用 key，让在运行的那个当场换；写错了以 2 退出说能填什么", async () => {
+  const daemon = fakeDaemon({ running: LOCAL_READY });
+  const { speakmore, output, asked } = harness({ daemon });
+  assert.equal(await speakmore("transcriber", "sensevoice-small-q8"), 0);
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "set-transcriber", params: { transcriber: "sensevoice-small-q8" } });
+  assert.equal(asked.length, 0);
+  assert.match(output.out, /第一跳换成了 sensevoice-small-q8/);
+
+  const wrong = harness();
+  assert.equal(await wrong.speakmore("transcriber", "gemini"), 2);
+  assert.match(wrong.output.err, /qwen3-asr-0\.6b-q8/);
+});
+
+test("polish：列出润色的那几家（第二跳），各家能挑的模型、key 有没有，自定义服务怎么填", async () => {
+  haveDeepSeekKey();
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("polish"), 0);
+  assert.match(output.out, /local 模式的第二跳/);
+  assert.match(output.out, /● deepseek\s+DeepSeek\s+deepseek-flash\s+key 存着/);
+  assert.match(output.out, /deepseek-v4-pro/);
+  assert.match(output.out, /custom\s+自定义服务/);
+  assert.match(output.out, /speakmore polish custom\/<模型名> --url <地址>/);
+});
+
+test("polish <厂商>/<模型>：有 key 就让在运行的那个当场换", async () => {
+  haveDeepSeekKey();
+  const daemon = fakeDaemon({ running: LOCAL_READY });
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore("polish", "deepseek/deepseek-v4-pro"), 0);
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "set-polish", params: { polish: "deepseek/deepseek-v4-pro" } });
+  assert.match(output.out, /第二跳换成了 DeepSeek 的 deepseek-v4-pro/);
+});
+
+test("polish custom/<模型> --url <地址>：先问自定义服务的 key，连模型和地址一起验证，再换", async () => {
+  const daemon = fakeDaemon({ running: LOCAL_READY });
+  const { speakmore, asked } = harness({ daemon, secrets: ["sk-custom"] });
+  assert.equal(await speakmore("polish", "custom/qwen3:8b", "--url", "http://127.0.0.1:11434/v1/chat/completions"), 0);
+  // 自定义服务没有申请 key 的页面
+  assert.doesNotMatch(asked[0], /申请/);
+  assert.deepEqual(daemon.requests.find(({ cmd }) => cmd === "set-key").params, {
+    key: "sk-custom",
+    provider: "custom",
+    changes: { polish: "custom/qwen3:8b", customUrl: "http://127.0.0.1:11434/v1" },
+  });
+  assert.deepEqual(daemon.requests.at(-1), {
+    cmd: "set-polish",
+    params: { polish: "custom/qwen3:8b", customUrl: "http://127.0.0.1:11434/v1" },
+  });
+});
+
+test("polish：自定义服务没给地址、写的是收音频的那家，以 2 退出说清楚", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("polish", "custom/m"), 2);
+  assert.match(output.err, /--url/);
+  assert.equal(await speakmore("polish", "openai"), 2);
+  assert.match(output.err, /deepseek \/ custom/);
+});
+
+test("polish check：查第二跳现在用的那个能不能用", async () => {
+  haveDeepSeekKey();
+  const daemon = fakeDaemon({ running: LOCAL_READY });
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore("polish", "check"), 0);
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "check-polish", params: { polish: "deepseek/deepseek-flash" } });
+  assert.match(output.out, /能用：DeepSeek 的 deepseek-flash/);
 });

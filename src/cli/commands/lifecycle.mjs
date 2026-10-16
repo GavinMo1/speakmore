@@ -11,7 +11,7 @@ import {
 } from "../common.mjs";
 import { INDENT } from "../render/text.mjs";
 import { currentProvider, hasKeyAlready, keyPrompter, keySource, needsNewKey, submitKey } from "./key.mjs";
-import { chooseProvider } from "./model.mjs";
+import { chooseProvider } from "./mode.mjs";
 import { newerVersion } from "./update.mjs";
 
 // 起停和看状态：speakmore（start）、stop、restart、status。
@@ -28,8 +28,9 @@ export async function start(args, io) {
   const firstRun = started === null && io.interactive && !hasKeyAlready(io);
   /** 选哪家时按了 Ctrl-C：后面的 key 也不问了 */
   let declined = false;
-  // 设置里（或者环境变量）已经定了用哪家的，就是那家，不再问
-  if (firstRun && currentSettings(io).model.source === "default") {
+  // 设置里（或者环境变量）已经定了用哪种模式、哪家的，就是那家，不再问
+  const settings = currentSettings(io);
+  if (firstRun && settings.mode.source === "default" && settings.model.source === "default") {
     const chosen = await chooseProvider(io);
     if (chosen === null) declined = true;
     else provider = chosen;

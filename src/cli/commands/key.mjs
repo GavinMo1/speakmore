@@ -1,12 +1,16 @@
 import { existsSync, rmSync } from "node:fs";
 import { LocalizedError, msg } from "../../i18n/index.mjs";
-import { apiKeyProblem, findProvider, PROVIDERS, parseModelChoice } from "../../server/providers/index.mjs";
+import { keyVendorOf } from "../../server/modes.mjs";
+import { apiKeyProblem, findProvider } from "../../server/providers/index.mjs";
+import { findVendor, VENDORS } from "../../server/vendors.mjs";
 import { keyFile } from "../../storage/paths.mjs";
+import { routeOf } from "../../storage/settings.mjs";
 import { Cancelled } from "../ask-secret.mjs";
 import { currentSettings, ensureRunning, PACKAGED_RELAUNCH, parse, UsageError } from "../common.mjs";
 
-// speakmore key：问 key、交给后台应用验证并保存、删掉。每家模型一把，不写厂商就是设置里正在用的那家。
-// 启动时（speakmore start）和换模型时（speakmore model）缺 key 也从这里问。
+// speakmore key：问 key、交给后台应用验证并保存、删掉。每家模型一把，不写厂商就是设置里正在用的那家
+// （native 模式是收音频的那家，local 模式是润色的那家）。
+// 启动时（speakmore start）、切模式和换模型时（mode、model、polish）缺 key 也从这里问。
 
 const MAX_KEY_ATTEMPTS = 3;
 
@@ -21,8 +25,10 @@ const SAVE_KEY_TIMEOUT_MS = 45_000;
 const keyPreamble = (t, provider, skippable) =>
   [
     "",
-    t("cli.key.need", { provider: provider.name }),
-    t("cli.key.getOne", { url: provider.keyPage }),
+    // 收音频的那家拿到的是录音，润色的那家只拿到本机转出来的文字
+    t(findProvider(provider.id) ? "cli.key.need" : "cli.key.needText", { provider: provider.name }),
+    // 自定义服务没有申请的页面
+    ...(provider.keyPage ? [t("cli.key.getOne", { url: provider.keyPage })] : []),
     t("cli.key.storage"),
     ...(skippable ? [t("cli.key.skip")] : []),
     t("cli.key.prompt"),
@@ -66,13 +72,17 @@ async function refuseLegacyDaemon(io, provider) {
   throw new LocalizedError(msg("cli.key.legacyDaemon", { restart }));
 }
 
-/** 把某一家的一把 key 交给后台应用验证并保存。@returns {Promise<boolean>} 通过了没有 */
-export async function submitKey(io, value, provider) {
+/**
+ * 把某一家的一把 key 交给后台应用验证并保存。
+ * @param {Record<string, string>} [changes] 要一起换成的设置（切模式、换模型前先存 key 时给），拿它们验证
+ * @returns {Promise<boolean>} 通过了没有
+ */
+export async function submitKey(io, value, provider, changes) {
   await refuseLegacyDaemon(io, provider);
   io.out(io.t("cli.key.verifying"));
   const result = await io.daemon.request(
     "set-key",
-    { key: value, provider: provider.id },
+    changes ? { key: value, provider: provider.id, changes } : { key: value, provider: provider.id },
     { timeoutMs: SAVE_KEY_TIMEOUT_MS },
   );
   if (result.ok) io.out(io.t("cli.key.saved"));
@@ -80,8 +90,21 @@ export async function submitKey(io, value, provider) {
   return result.ok;
 }
 
-/** 设置里选的是哪一家 */
-export const currentProvider = (io) => findProvider(parseModelChoice(currentSettings(io).model.value).provider);
+/** 设置里那种模式要用谁家的 key：native 是收音频的那家，local 是润色的那家 */
+export const currentProvider = (io) => keyVendorOf(routeOf(currentSettings(io)));
+
+/**
+ * 要换成用某一家，在哪一层换：收音频的在 native（speakmore model），润色的在 local 第二跳（speakmore polish）。
+ * 不在那一层的模式里时，换的命令只在那种模式里能用，要连模式一起切
+ * @param {string} current 现在是哪种模式
+ */
+function switchCommand(provider, current) {
+  if (findProvider(provider.id)) {
+    return current === "native" ? `speakmore model ${provider.id}` : `speakmore mode native --model ${provider.id}`;
+  }
+  const polish = provider.defaultModel ? provider.id : `${provider.id}/<model> --url <url>`;
+  return current === "local" ? `speakmore polish ${polish}` : `speakmore mode local --polish ${polish}`;
+}
 
 /**
  * 不用启动后台就看得出某一家的 key 在哪：stored（存过）、env（环境变量给了），都没有是 null。
@@ -119,9 +142,9 @@ export const needsNewKey = (key) =>
 export async function key(args, io) {
   const { values, positionals } = parse(args, { forget: { type: "boolean", default: false } });
   // 后面可以写一个厂商名。别的东西多半就是一把 key：不照做，也不把它再打一遍
-  const named = positionals.length === 1 ? findProvider(positionals[0]) : null;
+  const named = positionals.length === 1 ? findVendor(positionals[0]) : null;
   if (positionals.length > 0 && named === null) {
-    throw new UsageError(msg("cli.key.notInline", { providers: PROVIDERS.map(({ id }) => id).join(" / ") }));
+    throw new UsageError(msg("cli.key.notInline", { providers: VENDORS.map(({ id }) => id).join(" / ") }));
   }
   const provider = named ?? currentProvider(io);
 
@@ -135,6 +158,11 @@ export async function key(args, io) {
     return 0;
   }
 
+  // 自定义服务没有默认模型，单给一把 key 验证不了：跟着模型名和地址一起填
+  if (provider.id === "custom" && provider.id !== currentProvider(io).id) {
+    io.err(io.t("cli.key.customWithModel"));
+    return 1;
+  }
   let value;
   try {
     value = await io.askSecret(keyPreamble(io.t, provider, false));
@@ -154,6 +182,11 @@ export async function key(args, io) {
   }
   await ensureRunning(io);
   if (!(await submitKey(io, value, provider))) return 1;
-  if (provider.id !== currentProvider(io).id) io.out(io.t("cli.key.switchHint", { id: provider.id }));
+  if (provider.id !== currentProvider(io).id) {
+    // 在运行就以它报的模式为准（0.6 及以前的不报，那时只有 native）
+    const status = await io.daemon.status();
+    const current = status ? (status.mode ?? "native") : currentSettings(io).mode.value;
+    io.out(io.t("cli.key.switchHint", { command: switchCommand(provider, current) }));
+  }
   return 0;
 }

@@ -1,5 +1,6 @@
 import { findLocale, msg, problemOf, SYSTEM_LOCALE } from "../../i18n/index.mjs";
 import { findProvider, parseModelChoice } from "../../server/providers/index.mjs";
+import { findVendor } from "../../server/vendors.mjs";
 import { ensureHome } from "../../storage/paths.mjs";
 import { overridingEnv, SETTINGS, saveSetting, unsetSetting } from "../../storage/settings.mjs";
 import { THEMES } from "../../themes/index.mjs";
@@ -39,7 +40,9 @@ export async function applySettings(io, undo) {
   await io.daemon.stop();
   const restarted = await io.daemon.start({ onProgress: progressOf(io) });
   // 0.3 的后台应用不报 provider，那时只有 Gemini
-  const provider = findProvider(restarted.provider ?? parseModelChoice(restarted.model ?? "gemini").provider);
+  const provider = restarted.provider
+    ? findVendor(restarted.provider)
+    : findProvider(parseModelChoice(restarted.model ?? "gemini").provider);
   // 模型名、思考档位写得对不对，要问过那一家才知道
   const named = { provider: provider.name, id: provider.id, problem: restarted.key.problem };
   const failed = (key) => {

@@ -104,6 +104,13 @@ export default {
   modes: {
     native: "原生：录音直接交给模型",
     local: "本地转写，再交给模型润色",
+    notIn: "现在是 {current} 模式，{what}要在 {mode} 模式里才能换",
+    notOfMode: "{name} 不是 {mode} 模式的设置；切到 {mode} 时能连带的是 {names}",
+    what: {
+      model: "收音频的模型",
+      transcriber: "本机转写模型（第一跳）",
+      polish: "润色模型（第二跳）",
+    },
   },
   local: {
     modelDownloading: "本地模型还在下载（{percent}%），下好就能用",
@@ -420,9 +427,18 @@ export default {
   speakmore history [-n 条数] [--json]
                                 看说过的话，按天分组，新的在前（默认最近 {limit} 条）
   speakmore usage [--json]      看花了多少钱：今天、本月、累计的花费、token，模型多久回话，按型号分开
-  speakmore model               看能用哪几家的模型（{providers}）、各家的 key 有没有、现在用的哪个
+  speakmore mode                看两种识别模式各用什么：native 录音直接交给模型，local 本机先转写、再交给模型润色
+  speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]
+                                切模式，当场生效。可以连带那种模式自己的设置，比如第一次进 local 就用自定义服务
+  speakmore model               native 模式：看能用哪几家的模型（{providers}）、各家的 key 有没有、现在用的哪个
   speakmore model <厂商>[/<模型>]
-                                换一家或换个模型，比如 speakmore model openai。没有它的 key 会先问
+                                native 模式里换一家或换个模型，比如 speakmore model openai。没有它的 key 会先问
+  speakmore transcriber [<模型>]
+                                local 模式第一跳：看、换本机转写模型。没下载过的在后台下载
+  speakmore polish [<厂商>[/<模型>] [--url <地址>]]
+                                local 模式第二跳：看、换润色的模型（{polishers}）。custom 是兼容 OpenAI 接口的任意服务
+  speakmore polish check [<厂商>[/<模型>]]
+                                检查第二跳能不能用
   speakmore model check [<厂商>[/<模型>]]
                                 检查能不能用：拿那一家的 key 发一个最小的请求。不写就查现在用的
   speakmore key [<厂商>]         换一把 key，不写厂商就是现在用的那家（输入不会显示出来；也可以从管道喂进来）
@@ -466,6 +482,10 @@ export default {
       config: "用法：speakmore config | speakmore config set <名字> <值> | speakmore config unset <名字>",
       theme: "用法：speakmore theme | speakmore theme <名字>",
       model: "用法：speakmore model | speakmore model <厂商>[/<模型>] | speakmore model check [<厂商>[/<模型>]]",
+      mode: "用法：speakmore mode | speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]",
+      transcriber: "用法：speakmore transcriber | speakmore transcriber <模型>",
+      polish:
+        "用法：speakmore polish | speakmore polish <厂商>[/<模型>] [--url <地址>] | speakmore polish check [<厂商>[/<模型>]]",
     },
     update: {
       fromSource: "这一份是从源码跑的（{dir}）：用 git pull 更新。",
@@ -511,7 +531,10 @@ export default {
       cancelled: "已取消，key 没有改动。",
       nothingRead: "没有读到 key，原来的没有改动。",
       badShapeUnchanged: "{problem}。原来的没有改动。",
-      switchHint: "要换成用它：speakmore model {id}",
+      switchHint: "要换成用它：{command}",
+      needText: "需要一把 {provider} API key：录音在本机转成文字，只把文字发给 {provider} 润色。",
+      customWithModel:
+        "自定义服务的 key 要和模型名、地址一起填：speakmore polish custom/<模型名> --url <地址>（还没在 local 模式时：speakmore mode local --polish custom/<模型名> --url <地址>）",
     },
     config: {
       nextLaunch: "下次启动生效。",
@@ -557,7 +580,52 @@ export default {
       current: "现在用的是{theme} · {source}",
       switch: "换一套：speakmore theme {id}（当场生效，不用重启）",
     },
+    modes: {
+      title: "识别模式",
+      notIn: "现在是 {current} 模式，{what}要在 {mode} 模式里才能换：先运行 speakmore mode {mode}",
+      notSwitched: "没有换：{problem}",
+      applied: "已经换上，不用重启。",
+      downloading: "本地模型在后台下载（{percent}%），下好就能用：进度看 speakmore status",
+      loading: "本地模型正在装载，几秒就好。",
+      switch: "切换：speakmore mode {mode}（当场生效）",
+      nativeModels: "native 里换模型：speakmore model",
+      localHops: "local 的两跳：speakmore transcriber（第一跳，本机转写）· speakmore polish（第二跳，润色）",
+      withSettings: "第一次进 local 就用自定义服务：speakmore mode local --polish custom/<模型名> --url <地址>",
+      flagsFor: "{flag} 不是 {mode} 模式的设置；切到 {mode} 时能带的是 {flags}",
+      already: "已经是 {mode} 模式：{route}。",
+      switched: "切到了 {mode} 模式：{route}。",
+      localRoute: "{transcriber} → {polish}",
+    },
+    local: {
+      notInLocal: "现在是 {current} 模式，用不上这些：要用先切过去（speakmore mode local）",
+      transcribersTitle: "本机转写模型（local 模式的第一跳）",
+      installed: "已下载",
+      notInstalled: "还没下载",
+      transcriberCurrent: "现在用的是 {model}",
+      transcriberSwitch: "换一个：speakmore transcriber {id}（没下载过的会在后台下载）",
+      transcriberSwitched: "第一跳换成了 {model}。",
+      polishTitle: "润色模型（local 模式的第二跳）",
+      customName: "自定义服务",
+      customModel: "自己填模型名和地址",
+      alsoModels: "也能选：{models}",
+      polishCurrent: "现在用的是 {model}",
+      polishSwitch: "换一个：speakmore polish deepseek/deepseek-v4-pro",
+      polishCustom: "自定义服务（兼容 OpenAI 接口）：speakmore polish custom/<模型名> --url <地址>",
+      polishCheck: "看能不能用：speakmore polish check",
+      polishSwitched: "第二跳换成了 {model}。",
+      urlNeeded: "润色交给自定义服务时要给它的地址：--url <地址>（兼容 OpenAI 接口，多数以 /v1 结尾）",
+    },
+    choose: {
+      question: "先选怎么把录音变成文字（以后可以用 speakmore mode、speakmore model 换）：",
+      native: "native 模式：录音直接交给模型",
+      local: "local 模式：本机先转写，只把文字交给模型润色（第一次要下载约 {size} 的本地模型）",
+      custom:
+        "  想用别的服务（兼容 OpenAI 接口）：装好后运行 speakmore mode local --polish custom/<模型名> --url <地址>",
+    },
     model: {
+      textOnly:
+        "{provider} 只收文字，用在 local 模式的第二跳：speakmore polish {id}（还没在 local 模式时先 speakmore mode local）",
+      notInNative: "现在是 {current} 模式，这里的模型用不上：要用先切回去（speakmore mode native）",
       unknownProvider: "不认识 {name} 这家，能用的有 {providers}。指定模型写成 厂商/模型",
       invalid: "模型写的是 {value}，{reason}",
       describe: "{provider} 的 {model}",
@@ -607,6 +675,11 @@ export default {
       today: "今天",
       total: "累计",
       modelExternal: "由单独启动的服务端决定",
+      mode: "模式",
+      localModel: "本地模型",
+      localReady: "就绪 · {backend}",
+      localDownloading: "下载中 {percent}%（{received} / {total} MB）",
+      localLoading: "装载中",
       modelInUse: "{provider} 的 {model}",
       modelWithThinking: "{provider} 的 {model}（{thinking}）",
       keyEnv: "这次运行用的是环境变量 {variable} 里的，没有保存",

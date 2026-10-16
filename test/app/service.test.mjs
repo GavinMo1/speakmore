@@ -385,3 +385,20 @@ test("local 的第一跳单独换：只换本地模型，不重新验证润色�
   t.after(() => native.close());
   assert.throws(() => native.switchTranscriber("sensevoice-small-q8"), /local/);
 });
+
+test("本地模型没装上时再选同一个：重新下载、装载（重试的办法）；装好了再选同一个不重装", async (t) => {
+  const { control, startLocal } = fakeLocal();
+  const service = await startService({ log: quietLog, route: LOCAL, startLocal, createRefiner: throughTranscriber });
+  t.after(() => service.close());
+  control.fail(new Error("哪个地址都没下下来"));
+  await tick();
+  assert.equal(service.localModel.state, "failed");
+
+  service.switchTranscriber("qwen3-asr-0.6b-q8");
+  assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8", "qwen3-asr-0.6b-q8"]);
+  control.finish();
+  await tick();
+  assert.equal(service.localModel.state, "ready");
+  service.switchTranscriber("qwen3-asr-0.6b-q8");
+  assert.equal(control.started.length, 2);
+});

@@ -217,3 +217,35 @@ test("0.3 的后台应用报的模型名不带厂商：照样认成 Gemini 的�
   assert.match(text, /模型\s+Gemini 的 gemini-3\.6-flash（MINIMAL）/);
   assert.doesNotMatch(text, /speakmore restart/);
 });
+
+test("local 模式：写模式、两跳各用什么（key 说的是润色那家），本地模型下到哪了", () => {
+  const status = {
+    ...ready,
+    provider: "deepseek",
+    mode: "local",
+    model: null,
+    thinking: null,
+    transcriber: "qwen3-asr-0.6b-q8",
+    polish: "deepseek/deepseek-flash",
+    key: { state: "ready", source: "env", problem: null, verified: true },
+    localModel: { state: "downloading", model: "qwen3-asr-0.6b-q8", received: 425_000_000, total: 850_000_000 },
+  };
+  const localSettings = { ...settings, mode: { value: "local", source: "file" } };
+  const text = renderStatus({ status, version: "0.1.0", settings: localSettings, stats: noStats }, plain);
+  assert.match(text, /模式\s+本地转写，再交给模型润色/);
+  assert.match(text, /模型\s+qwen3-asr-0\.6b-q8 → DeepSeek 的 deepseek-flash/);
+  assert.match(text, /本地模型\s+下载中 50%（425 \/ 850 MB）/);
+  assert.match(text, /环境变量 DEEPSEEK_API_KEY/);
+  assert.doesNotMatch(text, /speakmore restart/);
+
+  const readyText = renderStatus(
+    {
+      status: { ...status, localModel: { state: "ready", model: "qwen3-asr-0.6b-q8", backend: "MTL0" } },
+      version: "0.1.0",
+      settings: localSettings,
+      stats: noStats,
+    },
+    plain,
+  );
+  assert.match(readyText, /本地模型\s+就绪 · Metal/);
+});

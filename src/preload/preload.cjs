@@ -49,7 +49,7 @@ contextBridge.exposeInMainWorld("speakmore", {
   saveKey: (key, provider, changes) => ipcRenderer.invoke("setup:save-key", key, provider, changes),
   forgetKey: (provider) => ipcRenderer.invoke("setup:forget-key", provider),
   // 模式这一层，和各模式里的模型（src/app/modes.mjs）
-  setMode: (mode) => ipcRenderer.invoke("setup:set-mode", mode),
+  setMode: (mode, changes) => ipcRenderer.invoke("setup:set-mode", mode, changes),
   setModel: (model) => ipcRenderer.invoke("setup:set-model", model),
   setTranscriber: (id) => ipcRenderer.invoke("setup:set-transcriber", id),
   setPolish: (polish, customUrl) => ipcRenderer.invoke("setup:set-polish", polish, customUrl),

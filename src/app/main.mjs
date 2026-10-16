@@ -563,7 +563,8 @@ async function main() {
   );
   handle("setup:forget-key", (_event, id) => keys.forget({ provider: id ?? keys.provider.id }));
   // 模式这一层，和各模式里的模型：分开的几件事
-  handle("setup:set-mode", (_event, mode) => viaModes((m) => m.switchMode(mode)));
+  // 切模式时可以连带那种模式自己的设置（changes），比如第一次进 local 就用自定义服务
+  handle("setup:set-mode", (_event, mode, changes) => viaModes((m) => m.switchMode(mode, changes ?? {})));
   handle("setup:set-model", (_event, model) => viaModes((m) => m.setModel(model)));
   handle("setup:set-transcriber", (_event, id) => viaModes((m) => m.setTranscriber(id)));
   handle("setup:set-polish", (_event, polish, customUrl) =>
@@ -826,8 +827,13 @@ async function main() {
   /** 命令行说了它用哪种语言就按它的翻，没说（0.5 及以前的命令行）就按界面的 */
   const translatorFor = (wanted) => (wanted ? createTranslator(wanted) : t);
   /** 回给命令行的结果里那句 problem 翻成字：命令行（含旧版本的）和 --json 的读者都只认字 */
-  const withProblemText = (result, say) =>
-    result?.problem ? { ...result, problem: say.text(result.problem) } : result;
+  const withProblemText = (result, say) => {
+    if (!result) return result;
+    const translated = { ...result };
+    if (result.problem) translated.problem = say.text(result.problem);
+    if (result.note) translated.note = say.text(result.note);
+    return translated;
+  };
 
   /** 交给命令行的状态。要给人看的话都按 say 的语言翻成字，原因见 summaryAsText */
   function describeStatus(say) {
@@ -896,8 +902,8 @@ async function main() {
             return withProblemText(await keys.save(key, { provider, route }), say);
           },
           // 模式这一层，和各模式里的模型。都是当场换，不用重启
-          "set-mode": async ({ mode, locale: wanted }) =>
-            withProblemText(await viaModes((m) => m.switchMode(mode)), translatorFor(wanted)),
+          "set-mode": async ({ mode, changes, locale: wanted }) =>
+            withProblemText(await viaModes((m) => m.switchMode(mode, changes ?? {})), translatorFor(wanted)),
           "set-model": async ({ model, locale: wanted }) =>
             withProblemText(await viaModes((m) => m.setModel(model)), translatorFor(wanted)),
           "set-transcriber": async ({ transcriber, locale: wanted }) =>

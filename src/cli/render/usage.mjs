@@ -1,4 +1,4 @@
-import { findProvider } from "../../server/providers/index.mjs";
+import { findVendor } from "../../server/vendors.mjs";
 import { formatSeconds, formatTokens, formatUsd } from "../../usage/format.mjs";
 import { displayWidth, INDENT, paint } from "./text.mjs";
 
@@ -61,7 +61,7 @@ export function renderUsage(report, { color, t }) {
   );
   const models = columns(
     report.models.map((it) => [
-      `${findProvider(it.provider)?.name ?? it.provider} ${it.model}`,
+      `${findVendor(it.provider)?.name ?? it.provider} ${it.model}`,
       costOf(it, t),
       formatTokens(it.tokens),
       t("cli.usage.times", { count: it.dictations }),

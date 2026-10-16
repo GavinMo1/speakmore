@@ -14,6 +14,7 @@ import {
   SYSTEM_LOCALE,
 } from "../i18n/index.mjs";
 import { log } from "../log.mjs";
+import { CHAT_VENDORS } from "../server/chat/vendors.mjs";
 import { PROVIDERS } from "../server/providers/index.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
@@ -25,7 +26,9 @@ import { config, settings, theme } from "./commands/config.mjs";
 import { DEFAULT_HISTORY_LIMIT, history } from "./commands/history.mjs";
 import { key } from "./commands/key.mjs";
 import { restart, start, status, stop } from "./commands/lifecycle.mjs";
+import { polish, transcriber } from "./commands/local.mjs";
 import { logs } from "./commands/logs.mjs";
+import { mode } from "./commands/mode.mjs";
 import { model } from "./commands/model.mjs";
 import { uninstall } from "./commands/uninstall.mjs";
 import { update } from "./commands/update.mjs";
@@ -44,6 +47,7 @@ const help = (t) =>
   t("cli.help", {
     limit: DEFAULT_HISTORY_LIMIT,
     providers: PROVIDERS.map(({ id }) => id).join(" / "),
+    polishers: CHAT_VENDORS.map(({ id }) => id).join(" / "),
     themes: THEMES.map(({ id }) => `${id} ${t(`themes.${id}.name`)}`).join(" / "),
   });
 
@@ -54,7 +58,10 @@ const COMMANDS = {
   status,
   update,
   key,
+  mode,
   model,
+  transcriber,
+  polish,
   config,
   theme,
   history,

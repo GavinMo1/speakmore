@@ -41,6 +41,8 @@ const oneOf = (choices) => new LocalizedError(msg("settings.oneOf", { choices: c
  * label 可有可无：值本身不好懂时（right_option、cinnabar）给出它叫什么，是一句话（msg）或者一个名字。
  * legacyEnv 可有可无：改名之前的环境变量，env 没设时照样认（README 里写过，用的人可能还在用）。
  * store 可有可无：规整后的值写进文件时换成什么样子（默认原样）。
+ * ofMode 可有可无：这一项属于哪种识别模式（server/modes.mjs），只在那种模式里能换（app/modes.mjs）。
+ *   local 的两跳各有各的：transcriber 是第一跳，polish 和 customUrl 是第二跳。
  */
 export const SETTINGS = {
   hotkey: {
@@ -62,6 +64,7 @@ export const SETTINGS = {
     label: (value) => msg(`modes.${value}`),
   },
   model: {
+    ofMode: "native",
     env: "SPEAKMORE_MODEL",
     // 0.3 以前只有 Gemini，这个环境变量只写模型名
     legacyEnv: "GEMINI_MODEL",
@@ -79,6 +82,7 @@ export const SETTINGS = {
     },
   },
   thinking: {
+    ofMode: "native",
     env: "GEMINI_THINKING_LEVEL",
     default: DEFAULT_THINKING_LEVEL,
     choices: THINKING_LEVELS,
@@ -89,6 +93,7 @@ export const SETTINGS = {
     },
   },
   transcriber: {
+    ofMode: "local",
     env: "SPEAKMORE_TRANSCRIBER",
     default: DEFAULT_TRANSCRIBER,
     choices: TRANSCRIBER_IDS,
@@ -99,6 +104,7 @@ export const SETTINGS = {
     },
   },
   polish: {
+    ofMode: "local",
     env: "SPEAKMORE_POLISH",
     default: formatChatChoice(parseChatChoice(DEFAULT_POLISH)),
     choices: null,
@@ -106,6 +112,7 @@ export const SETTINGS = {
     parse: (value) => formatChatChoice(parseChatChoice(value)),
   },
   customUrl: {
+    ofMode: "local",
     env: "SPEAKMORE_CUSTOM_URL",
     // 空的是没填：只有润色交给自定义服务时才要
     default: "",
@@ -247,6 +254,13 @@ export function patchSettings(settings, changes) {
   }
   return patched;
 }
+
+/** 每种模式自己的那几项设置（ofMode） */
+export const MODE_SETTINGS = Object.freeze(
+  Object.fromEntries(
+    MODE_IDS.map((mode) => [mode, Object.keys(SETTINGS).filter((name) => SETTINGS[name].ofMode === mode)]),
+  ),
+);
 
 /**
  * 每种模式由哪几项设置拼成路线（server/modes.mjs）。各看各的：改了 local 的润色，native 的路线不变

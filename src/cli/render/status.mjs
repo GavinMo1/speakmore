@@ -1,7 +1,10 @@
 import { findLocale, msg, SYSTEM_LOCALE } from "../../i18n/index.mjs";
+import { parseChatChoice } from "../../server/chat/vendors.mjs";
 import { findProvider, parseModelChoice } from "../../server/providers/index.mjs";
+import { findVendor } from "../../server/vendors.mjs";
 import { HOTKEY_IDS, SETTINGS } from "../../storage/settings.mjs";
 import { formatUsd } from "../../usage/format.mjs";
+import { routeTitle } from "./modes.mjs";
 import { themeTitle } from "./settings.mjs";
 import { duration, INDENT, paint, rows } from "./text.mjs";
 
@@ -43,6 +46,27 @@ function keyLine(key, provider, t) {
   }
 }
 
+/** 本地模型（local 模式的第一跳）现在怎样 */
+function localModelLine(localModel, t) {
+  switch (localModel?.state) {
+    case "ready":
+      // 运行库报的后端名：MTL0 是第一块 GPU 走 Metal
+      return t("cli.status.localReady", { backend: /^MTL/.test(localModel.backend) ? "Metal" : localModel.backend });
+    case "downloading":
+      return t("cli.status.localDownloading", {
+        percent: Math.floor((localModel.received / localModel.total) * 100),
+        received: Math.round(localModel.received / 1_000_000),
+        total: Math.round(localModel.total / 1_000_000),
+      });
+    case "loading":
+      return t("cli.status.localLoading");
+    case "failed":
+      return t.text(localModel.problem);
+    default:
+      return null;
+  }
+}
+
 /** 热键叫什么。比这个命令新的版本里才有的热键叫不出名字，用后台报的说法 hotkeyLabel */
 const hotkeyTitle = (status, t) =>
   HOTKEY_IDS.includes(status.hotkey) ? t(`hotkeys.${status.hotkey}.name`) : (status.hotkeyLabel ?? status.hotkey);
@@ -65,6 +89,49 @@ function pendingSettings(status, settings) {
     }
   };
   return Object.keys(SETTINGS).filter((name) => status[name] != null && !same(name, status[name]));
+}
+
+/** native 模式：key、模型 */
+function nativeEntries(status, settings, t) {
+  const inUse = modelInUse(status, settings);
+  const provider = findProvider(inUse?.provider ?? parseModelChoice(settings.model.value).provider);
+  // 旧版本的后台应用不报思考档位；用不上档位的模型（报 null）就不写
+  const thinking = provider.thinkingLevels ? (status.thinking ?? settings.thinking.value) : null;
+  const model =
+    inUse === null
+      ? t("cli.status.modelExternal")
+      : t(thinking ? "cli.status.modelWithThinking" : "cli.status.modelInUse", {
+          provider: provider.name,
+          model: inUse.model,
+          thinking,
+        });
+  const entries = [
+    [t("cli.status.key"), keyLine(status.key, provider, t)],
+    [t("cli.status.model"), model],
+  ];
+  // 报了模式的版本才写这一行
+  if (status.mode) entries.splice(1, 0, [t("cli.status.mode"), t("modes.native")]);
+  return entries;
+}
+
+/** local 模式：key（润色那家的）、两跳各用什么、本地模型下好了没有 */
+function localEntries(status, settings, t) {
+  const provider = findVendor(status.provider);
+  // 后台没报的项照设置里的写
+  const route = {
+    mode: "local",
+    transcriber: status.transcriber ?? settings.transcriber.value,
+    polish: parseChatChoice(status.polish ?? settings.polish.value),
+    customUrl: settings.customUrl.value || null,
+  };
+  const entries = [
+    [t("cli.status.key"), keyLine(status.key, provider, t)],
+    [t("cli.status.mode"), t("modes.local")],
+    [t("cli.status.model"), t.text(routeTitle(route))],
+  ];
+  const localModel = localModelLine(status.localModel, t);
+  if (localModel) entries.push([t("cli.status.localModel"), localModel]);
+  return entries;
 }
 
 function statsLine({ dictations, characters, seconds, costUsd, unpricedCalls }, { withPace, t }) {
@@ -124,25 +191,16 @@ export function renderStatus({ status, version, settings, stats }, { color, t })
     `${t("permissions.listen")} ${mark(permissions.listen)}`,
     `${t("permissions.trusted")} ${mark(permissions.trusted)}`,
   ];
-  // 写后台应用正在用的，不是现在设置里的：设置改了还没重启、或者启动它的那条命令上带着环境变量时，两者不一样
-  const inUse = modelInUse(status, settings);
-  const provider = findProvider(inUse?.provider ?? parseModelChoice(settings.model.value).provider);
-  // 旧版本的后台应用不报思考档位；用不上档位的模型（报 null）就不写
-  const thinking = provider.thinkingLevels ? (status.thinking ?? settings.thinking.value) : null;
-  const model =
-    inUse === null
-      ? t("cli.status.modelExternal")
-      : t(thinking ? "cli.status.modelWithThinking" : "cli.status.modelInUse", {
-          provider: provider.name,
-          model: inUse.model,
-          thinking,
-        });
-  const entries = [
-    [t("cli.status.key"), keyLine(status.key, provider, t)],
+  // 写后台应用正在用的，不是现在设置里的：设置改了还没重启、或者启动它的那条命令上带着环境变量时，两者不一样。
+  // 0.6 及以前的不报模式，那时只有 native
+  const local = status.mode === "local";
+  const entries = local ? localEntries(status, settings, t) : nativeEntries(status, settings, t);
+  entries.splice(
+    1,
+    0,
     [t("cli.status.permissions"), cells.join("   ")],
     [t("cli.status.hotkey"), hotkeyTitle(status, t)],
-    [t("cli.status.model"), model],
-  ];
+  );
   // 旧版本的后台应用不报这两项
   if (status.theme != null) entries.push([t("cli.status.theme"), themeTitle(t, status.theme)]);
   if (status.language != null) entries.push([t("cli.status.language"), languageTitle(status, t)]);
