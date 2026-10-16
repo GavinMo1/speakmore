@@ -19,7 +19,7 @@ import {
   SOURCES,
   TAGS,
 } from "../../src/models/catalog.mjs";
-import { measuredText, tagTexts } from "../../src/models/describe.mjs";
+import { measuredFacts, measuredText, nameParts, tagTexts } from "../../src/models/describe.mjs";
 import { findEngine } from "../../src/server/asr/engines/index.mjs";
 
 const ROOT = join(import.meta.dirname, "../..");
@@ -145,6 +145,31 @@ test("某类芯片上的实测：跑得快的在前，写成一句话；没测�
     tagTexts(["metal", "zh-en"]).map((text) => zh.text(text)),
     ["Metal 加速", "中英夹杂准"],
   );
+});
+
+test("App 的模型列表把实测拆开摆：三个数各一格，在什么机器上测的另一句；没测过的只有那一句", () => {
+  const zh = createTranslator("zh-CN");
+  const facts = measuredFacts(measuredOn(findModel("qwen3-asr-0.6b-q8"), "apple-silicon"), "apple-silicon");
+  assert.deepEqual(
+    facts.figures.map(({ value, unit, label }) => [value, unit, zh.text(label)]),
+    [
+      ["4.14", "/5", "均分"],
+      ["68", "×", "速度"],
+      ["2.0", "GB", "内存"],
+    ],
+  );
+  assert.equal(zh.text(facts.where), "Apple 芯片 · Metal 实测");
+  const untested = measuredFacts([], "windows-x64");
+  assert.deepEqual(untested.figures, []);
+  assert.equal(zh.text(untested.where), "Windows（x64）上还没实测");
+  assert.equal(zh.text(measuredFacts([], null).where), "这类机器上还没实测");
+});
+
+test("型号的名字分成名字和量化档两段；没有括号的整个是名字", () => {
+  assert.deepEqual(nameParts("Qwen3-ASR 0.6B (Q8_0)"), { base: "Qwen3-ASR 0.6B", variant: "Q8_0" });
+  assert.deepEqual(nameParts("SenseVoice Small (int8)"), { base: "SenseVoice Small", variant: "int8" });
+  assert.deepEqual(nameParts("Whisper"), { base: "Whisper", variant: null });
+  for (const { name } of MODELS) assert.notEqual(nameParts(name).variant, null, name);
 });
 
 test("下载源：默认国内源在前，原始地址垫后；选了原始地址就倒过来。都按 sha256 校验，从哪下的都一样", () => {

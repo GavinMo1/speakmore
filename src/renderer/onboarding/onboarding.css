@@ -29,8 +29,8 @@ body {
   position: relative;
   min-width: 6.5rem;
   padding: 0.6rem 0 0;
-  font-size: 0.8125rem;
-  font-weight: 510;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
   text-align: center;
   color: var(--ink-2);
   transition: color var(--dur-base) var(--ease-out);
@@ -87,8 +87,8 @@ body {
   margin: 0 0 1.5rem;
   /* 中文标题只在标点和空格处换行，不把"设置"拆成两行 */
   word-break: keep-all;
-  font-size: 2.25rem;
-  font-weight: 700;
+  font-size: var(--text-display);
+  font-weight: var(--weight-bold);
   line-height: 1.25;
   letter-spacing: -0.02em;
   text-wrap: balance;
@@ -137,7 +137,6 @@ body {
 .flow-card {
   max-width: 18rem;
   padding: 0.75rem 1rem;
-  font-size: 0.875rem;
   background: var(--surface-solid);
   border-radius: 0.75rem;
   box-shadow: 0 0 0 1px var(--line);
@@ -148,7 +147,7 @@ body {
   align-items: center;
   gap: 0.45rem;
   padding: 0.4rem 1rem;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--on-primary);
   background: var(--gradient);
   border-radius: var(--radius-full);
@@ -156,7 +155,7 @@ body {
 }
 
 .flow-card.result {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .flow-arrow {
@@ -186,8 +185,7 @@ body {
 }
 
 .grant-primary {
-  font-size: 0.9375rem;
-  font-weight: 590;
+  font-weight: var(--weight-semibold);
 }
 
 /* 给了以后按钮换成一个勾，不再能点 */
@@ -201,7 +199,7 @@ body {
 }
 
 .privacy-name {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .privacy-name::before {
@@ -214,7 +212,7 @@ body {
 
 .question {
   margin: 0.5rem 0 0.75rem;
-  font-weight: 590;
+  font-weight: var(--weight-semibold);
 }
 
 .answers {
@@ -250,9 +248,9 @@ body {
   height: 5.5rem;
   padding: 0 1.5rem;
   font: inherit;
-  font-size: 2rem;
+  font-size: var(--text-figure);
   font-family: var(--font-rounded);
-  font-weight: 650;
+  font-weight: var(--weight-semibold);
   background: var(--surface-solid);
   border-radius: 1rem;
   box-shadow:
@@ -279,7 +277,7 @@ body {
   align-items: center;
   gap: 0.75rem;
   margin-top: 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-small);
 }
 
 /* ---------- 体验一下 ---------- */
@@ -287,7 +285,6 @@ body {
 .sample {
   margin: 0 0 1.25rem;
   padding: 0.9rem 1.1rem;
-  font-size: 1rem;
   background: var(--surface);
   border-radius: 0.75rem;
   box-shadow: var(--edge);
@@ -332,12 +329,11 @@ body {
 
 .done .step-title {
   margin-bottom: 2rem;
-  font-size: 3rem;
 }
 
 .button.big {
   padding: 0.6rem 1.75rem;
-  font-size: 0.9375rem;
+  font-size: var(--text-body);
 }
 
 @media (prefers-reduced-motion: reduce) {

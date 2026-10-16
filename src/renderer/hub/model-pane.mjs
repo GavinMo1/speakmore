@@ -1,4 +1,4 @@
-import { backendText, measuredText, sizeText, tagTexts } from "../../models/describe.mjs";
+import { backendText, measuredFacts, measuredText, nameParts, sizeText, tagTexts } from "../../models/describe.mjs";
 import { t } from "../shared/i18n.mjs";
 import { createKeyPanel, KEY_LAYERS } from "../shared/key-panel.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
@@ -12,6 +12,14 @@ import { describeError } from "../shared/setup-text.mjs";
 // 那种模式里的模型只能在那种模式里当场换；没在用时点选的第一跳模型先记着，改用这种模式时一起带过去。
 
 const $ = (id) => document.getElementById(id);
+
+/** 一小段字：类名、内容都可以不给 */
+function span(className, text = "") {
+  const node = document.createElement("span");
+  if (className) node.className = className;
+  node.textContent = text;
+  return node;
+}
 
 /** 显示一句话：msg 按界面语言翻，现成的字照写；空的就藏起来 */
 function show(node, message, tone = "") {
@@ -274,32 +282,32 @@ export function createModelPane({ refresh }) {
         // 没下载的选不了：先下载
         pick.disabled = busy || !setup.switchable || !model.installed;
         if (!model.installed) pick.title = t("preferences.local.downloadFirst");
-        // 名字前面是出自哪家的图标
-        const name = document.createElement("span");
-        name.className = "transcriber-name";
-        const label = document.createElement("span");
-        label.textContent = model.name;
-        const icon = providerIcon(model.maker);
-        name.append(...(icon ? [icon, label] : [label]));
+        // 第一行：出自哪家的图标（单占一列，没有图标也留出位置，各行的名字才对得齐）、名字和量化档、状态
+        const icon = providerIcon(model.maker) ?? span("provider-icon");
+        const { base, variant } = nameParts(model.name);
+        const name = span("transcriber-name");
+        name.append(span("", base), ...(variant ? [span("tag transcriber-variant", variant)] : []));
         const [text, tone] = modelStateText(model, setup);
-        const state = document.createElement("span");
-        state.className = "transcriber-state";
-        state.dataset.tone = tone;
-        state.textContent = text;
-        const tags = document.createElement("span");
-        tags.className = "tags";
-        tags.append(
-          ...tagTexts(model.tags).map((tag) => {
-            const chip = document.createElement("span");
-            chip.className = "tag";
-            chip.textContent = t.text(tag);
-            return chip;
+        const state = span("transcriber-state status", text);
+        if (tone) state.dataset.tone = tone;
+        // 第二行：实测的三个数；整句话放在悬停提示里
+        const facts = measuredFacts(model.measured, local.chip);
+        const figures = span("figures");
+        figures.title = t.text(measuredText(model.measured, local.chip));
+        figures.append(
+          ...facts.figures.map(({ value, unit, label }) => {
+            const figure = span("figure");
+            const number = span("figure-value", value);
+            number.append(span("figure-unit", unit));
+            figure.append(number, span("figure-label", t.text(label)));
+            return figure;
           }),
+          span("figures-where", t.text(facts.where)),
         );
-        const measured = document.createElement("span");
-        measured.className = "transcriber-measured";
-        measured.textContent = t.text(measuredText(model.measured, local.chip));
-        pick.append(name, state, tags, measured);
+        // 第三行：特点标签
+        const tags = span("tags");
+        tags.append(...tagTexts(model.tags).map((tag) => span("tag", t.text(tag))));
+        pick.append(icon, name, state, figures, tags);
         if (model.download) {
           const progress = document.createElement("progress");
           progress.className = "transcriber-progress";

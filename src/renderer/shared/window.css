@@ -70,7 +70,50 @@ body {
   color: var(--ink);
   background: var(--aura-layer), var(--bg);
   font: var(--text-body) / 1.6 var(--font);
+  font-kerning: normal;
   -webkit-font-smoothing: antialiased;
+}
+
+/* 小圆角的标签：模型的特点、型号的量化档、"本机"这类。比说明再小一档，靠底色和说明分开 */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.45rem;
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  line-height: 1.5;
+  color: var(--ink-2);
+  white-space: nowrap;
+  background: var(--fill-hover);
+  border-radius: var(--radius-full);
+}
+
+/* 带一个小圆点的状态：就绪、正在用、出错。圆点和字同色 */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.status[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.status[data-tone="problem"] {
+  color: var(--problem);
+}
+
+.status[data-tone]::before {
+  content: "";
+  flex: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  background: currentColor;
+  border-radius: 50%;
 }
 
 p {
@@ -104,7 +147,7 @@ p {
   padding: 0.3rem 0.8rem;
   font: inherit;
   font-size: var(--text-small);
-  font-weight: 510;
+  font-weight: var(--weight-medium);
   color: var(--ink);
   background: var(--fill-hover);
   border: none;

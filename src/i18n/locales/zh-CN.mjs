@@ -145,6 +145,8 @@ export default {
     },
     backends: { metal: "Metal", cpu: "CPU" },
     measured: "{chip}上实测（{backend}）：均分 {score}/5 · {realtime} 倍实时 · 内存 {memory}",
+    figures: { score: "均分", speed: "速度", memory: "内存" },
+    measuredOn: "{chip} · {backend} 实测",
     notMeasured: "{chip}上还没实测",
     unknownChip: "这类机器上还没实测",
     unknown: "模型清单里没有 {id}",
