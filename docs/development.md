@@ -25,6 +25,7 @@ npm run release               # 打发布包：dist/release/ 下两种芯片各�
 scripts/dev/with-key.sh gemini node scripts/dev/e2e.mjs 一段录音.wav   # 端到端：真的 Electron、录音编码、模型；麦克风和贴字是假的
 SPEAKMORE_MODEL=openai scripts/dev/with-key.sh openai node scripts/dev/e2e.mjs 一段录音.wav   # 同上，换成 OpenAI
 SPEAKMORE_MODE=local scripts/dev/with-key.sh deepseek node scripts/dev/e2e.mjs 一段录音.wav   # 本地转写加 DeepSeek 润色：新的数据目录，模型真从下载源下
+SPEAKMORE_E2E_ELECTRON=dist/SpeakMore-darwin-arm64/SpeakMore.app/Contents/MacOS/SpeakMore …   # 同上，用打好的应用跑（npm run dist 打的，签了名时开着 hardened runtime）
 scripts/dev/with-key.sh gemini node scripts/dev/eval-prompt.mjs --label v1   # 拿自己 Typeless 的历史录音评估提示词
 scripts/dev/with-key.sh gemini node src/server/main.mjs           # 单独启动听写服务，配合 SPEAKMORE_SERVER_URL 调试
 node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现成的录音发给单独启动的服务
@@ -81,7 +82,7 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 
 ## 验证到哪一步
 
-- 自动测试 586 条，在 Node 26.0 上全过；其中 567 条单测在 Node 24.21（Electron 自带的版本，程序就跑在它上面）上也全过；Node 22.13 上跑过的是更早的 269 条（之后加的没在 22 上重跑）。其中 19 条是安装脚本的，17 条拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
+- 自动测试 773 条，在 Node 26.0 上全过；其中 754 条单测在 Node 24.21（Electron 自带的版本，程序就跑在它上面）上也全过；Node 22.13 上跑过的是更早的 269 条（之后加的没在 22 上重跑）。其中 19 条是安装脚本的，17 条拿假的发布包真的跑安装脚本：全新安装、升级、指定版本、各项预检查不过、校验不过、停不掉、路径里有空格和引号。
 - 用真的发布包走过一遍，装在临时目录里，`PATH` 里没有 Node：
   - 安装脚本从管道读入，装完直接启动并问 key，输入不显示。
   - 启动、状态、设置、重启、停止；合成的语音经过录音编码、Gemini、存历史，成品正确。
@@ -154,11 +155,15 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
   - 上线：`npm run deploy` 在服务器上构建 2 分 37 秒（多半是第一次拉基础镜像），打出来的文件名指纹和本机构建的一样；容器起来后占 3.5 MB 内存，同机另外两个站的容器、端口照旧、都回 200。宿主机站点文件换成 `host-nginx.conf`（原文件备份在服务器上），`nginx -t` 通过后 reload。从外网看：https 200，带 HSTS 和容器加的安全头，http 301 到 https，`/health` 200，截图带官网来源 200、陌生来源 403。
   - **没验证的**：Safari 和 Firefox（只在 Chromium 里看过；不支持滚动驱动动画的浏览器里各段直接显示、不浮上来，这是照代码说的，没实测）；线上的手机宽度（无头 Chrome 的窗口最窄 500 像素，390 宽只在第一版时用浏览器的设备模拟看过）。
 - 两种识别模式、本地模型的配置表和国内源（2026-10-16，从源码跑的，发布包还没打）：
-  - 单测 752 条在 Node 26.0 上全过（之前一版 751 条在 Electron 自带的 Node 24.21 上也全过），安装脚本的 19 条全过；lint 和本机信息检查都过。
+  - 单测 754 条在 Node 26.0 和 Electron 自带的 Node 24.21 上都全过，安装脚本的 19 条全过；lint 和本机信息检查都过。
   - 本地转写整条链路（[记录](../bench/results/e2e-local-2026-10-16.md)）：回放三条真实录音，松开到出字 1.5–1.75 秒；`scripts/dev/e2e.mjs` 在 App 里走一遍，新的数据目录、模型从国内源下（850 MB，91.7 秒），松开后 1.24 秒出字，贴字、存历史、记账都走通。
   - 打包：按 `npm run release` 的办法给两种芯片各摆一份，arm64 那份装的是 transcribe.cpp 的 Metal 版和 sherpa-onnx 的 arm64 版，x64 那份是 CPU 版和 x64 版，许可证检查通过。拿 arm64 那份（只有运行时依赖）跑 e2e，两个运行库各走通一遍：SenseVoice Q8 在 Metal 上、SenseVoice int8 在 CPU 上。改之前这两个运行库是开发依赖，打出来的包里根本没有它们，本地转写会装不上。
   - 国内源：四个模型传进模型桶，从 CDN 逐个核对过大小，预热了大陆的节点。下载速度见上面那份记录：Hugging Face 0.6 MB/s，国内源没预热时 3.3 MB/s、预热后 9–10 MB/s。
   - 设置里的"模型"一页，用调试协议驱动真窗口（临时目录，DeepSeek、Gemini 的 key 从环境变量来）：两种模式的标签、标签和实测数字、下载进度和"就绪 · Metal"；在 local 里换润色模型、换第一步的模型、换下载源都当场生效并写进设置；没有 Gemini 的 key 时"改用原生"被拒、说清原因、模式不变；自定义服务填一个连不上的地址，验证不过、设置不变；在原生里先点选第一步的模型再"改用本地转写"，那个模型一起带过去；切回原生，本地模型卸掉。中英文各看过一遍。
-  - **没验证的**：签名、公证后的安装包（没打）；Intel 的 Mac（x64 那份只核对了装进去的包对不对，没在 Intel 上跑过）；国内源超了每天 50 GB 封顶时自动改从 Hugging Face 下（只在自动测试里用假的 404 试过）；`speakmore config set` 仍是直接写设置再重启，不经过模式的状态机，比如在原生模式里也能写 `transcriber`，切到 local 时才用上。
+  - 签了名的应用（0.7.0，`npm run dist` 用 Developer ID 签、开着 hardened runtime，没公证）：转写子进程是应用自己以 Node 的身份跑，四个模型都装载、转写得了，Qwen3 Q8 和 SenseVoice Q8 在 Metal 上，两个 int8 在 CPU 上；`node_modules` 里两个运行库的原生库都签上了同一个团队。拿它跑 local 端到端（`SPEAKMORE_E2E_ELECTRON`，新的数据目录）：国内源下 850 MB 用 96.9 秒，装载 3.0 秒，松开后 1.3 秒出字。
+  - Intel：x64 的应用同样签了名，在 Apple 芯片上用 Rosetta 跑，四个模型都装载、转写得了（transcribe.cpp 是 CPU 版），一段系统合成的中英夹杂录音转出来的字和 arm64 的一样，只有 Qwen3 int8 把 GitHub 听成了 "G Tech"。Rosetta 下的速度不代表 Intel 的机器。
+  - 下载源换着下：拿一个国内源上没有的 id 造出真的 404，国内源回 404 之后自动改从 Hugging Face 下，200，校验通过、装好；同一个文件用真的 id 从国内源第一下就是 200。
+  - `speakmore config set` 留作手动改设置的后门：照旧直接写设置、不经过模式那一层的检查；改模式管的几项时说平时用哪个命令换，写的不是现在这种模式的设置时说切过去才用上（真跑过一遍，中英文各看了）。
+  - **没验证的**：公证（本机打发布包要把应用传给苹果公证，留到发版时 `npm run ship` 一起做）；真的 Intel 机器；超了每天 50 GB 封顶时 CDN 回的那个 404（造不出这么大的流量，只验了国内源 404 时会换源）。
 - 只有自动测试、没在真机上试的：启动时断网、从 0.1 版搬数据、重新检查权限时不再反复弹系统授权框。
 

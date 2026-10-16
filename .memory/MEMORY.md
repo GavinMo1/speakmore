@@ -33,4 +33,4 @@
 - [判官是 Claude 自己](bench-judge-is-claude.md) — 评测打分由 Claude 来，不调 Gemini 等接口；Gemini 3.6 Flash MINIMAL 的成品只当参照，参照听错时不扣分
 - [统一输入输出、策略模式](architecture-unified-io-strategy.md) — 插件化、可热插拔；录音先统一成 16 kHz 单声道，转写统一成 transcribe → { text }；不打补丁，从分层上根治
 - [本地模型的配置表和国内源](speakmore-model-mirror.md) — 全局只有 src/models/catalog.mjs 一份；国内源是隔离桶加 models.speakmore 子域名，传完必须预热；证书 2027-01-14 到期要续
-- [云上改动交给用户跑](cloud-changes-user-runs.md) — 证书、CDN、解析写成自己挂后台的脚本，只给一行路径，放在回复最后
+- [云上改动交给用户跑](cloud-changes-user-runs.md) — 证书、CDN、解析、发版公证由用户跑：写成自己挂后台的脚本或一行命令，放在回复最后

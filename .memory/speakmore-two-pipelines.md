@@ -24,6 +24,7 @@ metadata:
   - 原生链路（Gemini 一步到成品）整条 p50 4.0 s。
   - 他室友说"0.6B 很慢"：只用 CPU 时确实慢，用 Metal 后快 4 到 5 倍。
 - 2026-10-16 实现成两种"模式"（设置项 `mode`：`native` / `local`），按用户要求分层、严格状态机：模型只能在它那种模式里换（`speakmore model` 只管 native；`transcriber`、`polish` 只管 local 的两跳），不在那种模式里换就报错；切模式可以连带那种模式自己的设置。内核在 `src/app/modes.mjs`，App 设置页和命令行都走它。
+- `speakmore config set` 不经过状态机：2026-10-16 用户同意按我的建议留作手动改设置的后门，只在改模式管的几项时提示平时用哪个命令、写的是另一种模式的设置时说切过去才用上。别再把它收进状态机。
 - 端到端（[[speakmore-model-mirror]] 里也记了下载速度）：local 模式 Qwen3 Q8 + DeepSeek flash，松开到出字 1.2–1.75 s，转写不到 0.7 s，大头是润色请求。记录在 `bench/results/e2e-local-2026-10-16.md`。
 - 不替用户选模型，做成模型广场、按实测打标签，见 [[speakmore-model-plaza]]。
 - 本地模型的调研（2026-10-16）：首选 Qwen3-ASR-0.6B（Apache-2.0，Q8 约 0.8 GB，FLEURS 普通话 CER 7.57%）；轻量备选 SenseVoice-Small（约 0.24 GB，CER 10.12%，许可证是 FunASR 自定义的）。运行库可选 sherpa-onnx-node（Apache-2.0）或 transcribe-cpp（MIT），两者在 npm 上都有 Mac 两种芯片和 Windows 的预编译包。榜单是朗读语音，中英夹杂的口述没有公开数字，要用真录音实测。
