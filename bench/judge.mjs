@@ -46,7 +46,9 @@ if (command === "pending") {
   writeFileSync(BATCH_JSON, JSON.stringify(chosen, null, 2));
   writeFileSync(BATCH_MD, markdownOf(chosen));
   const cellsIn = (list) => list.reduce((sum, group) => sum + group.items.length, 0);
-  const missing = cells.length - ready.length;
+  // 参照是空的（判成没有人声）不判；缺参照或缺转写的要先跑 run.mjs 补上
+  const emptyReference = cells.filter((cell) => cell.transcript && cell.reference?.text === "").length;
+  const missing = cells.length - ready.length - emptyReference;
   console.log(
     `待判 ${cellsIn(groups)} 格（${groups.length} 条样本），这一批 ${cellsIn(chosen)} 格（${chosen.length} 条）→ ${BATCH_MD}` +
       (missing > 0 ? `\n还有 ${missing} 格缺参照或转写，先跑 run.mjs 补上` : ""),
