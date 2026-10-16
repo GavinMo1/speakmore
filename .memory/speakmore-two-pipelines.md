@@ -1,6 +1,6 @@
 ---
 name: speakmore-two-pipelines
-description: 识别分两条平级链路让用户选：原生（音频直接给能收音频的模型）和本地小模型转写再交任意 API 润色；先搭内核，Windows 之后再做
+description: 识别分两条平级链路让用户选：原生（音频直接给能收音频的模型）和本地小模型转写再交任意 API 润色；先搭内核，Windows 之后再做；本地模型不替用户选
 metadata:
   node_type: memory
   type: project
@@ -23,6 +23,7 @@ metadata:
   - sherpa-onnx 的 Qwen3 int8 有两个坑：导出时 KV 缓存定死 512，要按 20 秒分段；有一段输入会输出乱码。
   - 原生链路（Gemini 一步到成品）整条 p50 4.0 s。"本地转写 + 文字润色"的端到端还没测。
   - 他室友说"0.6B 很慢"：只用 CPU 时确实慢，用 Metal 后快 4 到 5 倍。
-- 本地模型的调研（2026-10-16，他还没选）：首选 Qwen3-ASR-0.6B（Apache-2.0，Q8 约 0.8 GB，FLEURS 普通话 CER 7.57%）；轻量备选 SenseVoice-Small（约 0.24 GB，CER 10.12%，许可证是 FunASR 自定义的）。运行库可选 sherpa-onnx-node（Apache-2.0）或 transcribe-cpp（MIT），两者在 npm 上都有 Mac 两种芯片和 Windows 的预编译包。榜单是朗读语音，中英夹杂的口述没有公开数字，要用真录音实测。
+- 不替用户选模型，做成模型广场、按实测打标签，见 [[speakmore-model-plaza]]。
+- 本地模型的调研（2026-10-16）：首选 Qwen3-ASR-0.6B（Apache-2.0，Q8 约 0.8 GB，FLEURS 普通话 CER 7.57%）；轻量备选 SenseVoice-Small（约 0.24 GB，CER 10.12%，许可证是 FunASR 自定义的）。运行库可选 sherpa-onnx-node（Apache-2.0）或 transcribe-cpp（MIT），两者在 npm 上都有 Mac 两种芯片和 Windows 的预编译包。榜单是朗读语音，中英夹杂的口述没有公开数字，要用真录音实测。
 
 相关：[[speakmore-model-providers]]、[[typeless-clone-open-source-panel]]、[[typeless-clone-scope-dictation]]。
