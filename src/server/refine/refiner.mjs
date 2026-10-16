@@ -1,19 +1,14 @@
-import { Converter } from "opencc-js/t2cn";
 import { LocalizedError, msg } from "../../i18n/index.mjs";
 import { toWav } from "../audio/transcode.mjs";
 import { toModelError } from "../providers/errors.mjs";
 import { findProvider } from "../providers/index.mjs";
-import { NO_SPEECH_MARK, SYSTEM_PROMPT, TASK_REMINDER } from "./prompt.mjs";
+import { createMeter } from "./meter.mjs";
+import { textFromModelOutput } from "./output.mjs";
+import { SYSTEM_PROMPT, TASK_REMINDER } from "./prompt.mjs";
 
-// 下面三样都是模型偶尔写坏的地方，提示词里说了也压不住，所以在代码里兜底。
+// 原生链路：录音直接交给收音频的大模型，一次请求出成品。
 // 数字来自 scripts/dev/eval-prompt.mjs：同一批 60 条真实录音跑了 12 遍，共 720 条成品。
 
-const toSimplified = Converter({ from: "t", to: "cn" });
-/**
- * 成品前面多出来的一个外文词（720 条里 14 条，像 "me""thought""get_prompt""особен"）。
- * 它们要么紧贴着后面的汉字，要么单独占一行；他真以英文开头时后面是空格或标点（原版 2853 条成品里只有 1 条例外）。
- */
-const LEAKED_PREFIX = /^[A-Za-z_Ѐ-ӿ]+(?:\.?(?=[一-鿿])|[ \t]*\n\s*)/;
 /** 模型听音频时自带"几分几秒"的定位，偶尔会写进正文（720 条里 10 条，像"全面开干、 00:30 全面迁移"） */
 const STRAY_TIMESTAMP = /(?<!\d)\d{1,2}:\d{2}(?!\d)/;
 
@@ -24,9 +19,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * "音频进、成品文字出"的那一步。各家共用这一个流程：录音的格式这家不收就先换好，交给适配器拿原文，
  * 再统一收尾；适配器只管"这一家的请求怎么拼、报错怎么认"。
  *
- * 每一次回了话的调用都记一笔账（onCall）：哪次听写、用的哪个型号、多少 token、多少钱、等了多久。
- * 回了话但用不了的（被截断、被拦下）也收了钱，照记。没回话的拿不到用量、记不了：连不上的本来就不收钱；
- * 发出去了却等不到回话（超时、断开）的对方可能照样收了钱，只记一条警告。
+ * 每一次回了话的调用都记一笔账（onCall，规矩见 meter.mjs）。
  *
  * @param {object} options
  * @param {{ id: string, name: string }} options.provider 厂商清单里的那一项（providers/index.mjs）
@@ -36,8 +29,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * @param {(error: unknown, detail: string) => object | null} [options.classify] 这一家的报错怎么认
  * @param {string} [options.apiKey] 只用来从报错里抹掉它
  * @param {(audio: Buffer, mimeType: string) => Promise<{ audio: Buffer, mimeType: string }>} [options.transcode]
- * @param {(record: object) => void} [options.onCall] 记账：{ purpose: "dictation" | "check" | "cache", audioId, provider,
- *   ...适配器带回的用量, latencyMs, createdAt }。它出错不影响这次听写
+ * @param {(record: object) => void} [options.onCall] 记账，见 meter.mjs
  * @returns {{ warmUp(): Promise<void>, prepare(): Promise<void>, refine(audio: Buffer, o: { mimeType: string, signal?: AbortSignal, audioId?: string }): Promise<string> }}
  *   出错时抛的都是 ModelError
  */
@@ -58,55 +50,7 @@ export function createRefiner({
     return signal ? AbortSignal.any([signal, timeout]) : timeout;
   };
 
-  /** 调一次适配器，回了话就记一笔账。没回话（抛错）的拿不到用量，记不了 */
-  async function metered(purpose, audioId, call) {
-    const startedAt = performance.now();
-    let reply;
-    try {
-      reply = await call();
-    } catch (error) {
-      // 请求发出去了、我们等不及先断开的（超时、用户那头断了）：对方可能已经算完、照样收钱，账上会少这一笔。
-      // 收没收没法知道，记一条警告，对账时有据可查
-      if (error?.name === "TimeoutError" || error?.name === "AbortError") {
-        log.warn("model_call_unmetered", {
-          purpose,
-          audio_id: audioId,
-          provider: provider.id,
-          reason: error.name,
-          latency_ms: Math.round(performance.now() - startedAt),
-        });
-      }
-      throw error;
-    }
-    const latencyMs = Math.round(performance.now() - startedAt);
-    // null：这一次没花钱（比如缓存正在建），没什么可记的
-    if (reply === null) return null;
-    if (!reply?.usage) {
-      log.warn("usage_missing", { purpose, audio_id: audioId, provider: provider.id });
-      return reply;
-    }
-    const { usage } = reply;
-    // 只记数，不记成品：成品是用户说的话
-    log.info("model_call", {
-      purpose,
-      audio_id: audioId,
-      model: usage.model,
-      input_tokens: usage.inputTokens,
-      audio_tokens: usage.audioTokens,
-      cached_tokens: usage.cachedTokens,
-      output_tokens: usage.outputTokens,
-      thinking_tokens: usage.thinkingTokens,
-      cost_usd: usage.costUsd,
-      latency_ms: latencyMs,
-    });
-    try {
-      onCall({ purpose, audioId, provider: provider.id, ...usage, latencyMs, createdAt: new Date().toISOString() });
-    } catch (error) {
-      // 账没记上只是少一笔统计，不能因此把用户的这句话丢掉
-      log.error("model_call_not_recorded", { audio_id: audioId, error: String(error?.stack ?? error) });
-    }
-    return reply;
-  }
+  const metered = createMeter({ provider, log, onCall });
 
   return {
     /**
@@ -211,15 +155,4 @@ export async function generateClean(generateOnce, log) {
   if (!STRAY_TIMESTAMP.test(first)) return first;
   log.warn("refine_retry", { reason: "成品里夹着时间戳" });
   return generateOnce();
-}
-
-/**
- * 模型的原始输出 → 要贴出去的文字。没有人声（标记）或没有输出时是空字符串。
- * - 繁转简：提示词里写了"一律写简体字"，模型仍会在一长段话中间冒出"這個"，同一条录音 6 遍里出现 5 遍。
- * - 去掉最后的句号：原版近两个月的成品里，以陈述句收尾的有八成多不带句号，中间各段的句号都在。
- */
-export function textFromModelOutput(output) {
-  const text = (output ?? "").trim();
-  if (text === NO_SPEECH_MARK) return "";
-  return toSimplified(text.replace(LEAKED_PREFIX, "")).replace(/。$/, "");
 }
