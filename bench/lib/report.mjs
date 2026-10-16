@@ -2,7 +2,7 @@ import { downloadSize } from "../../src/server/asr/catalog.mjs";
 import { durationBucket } from "./dataset.mjs";
 import { judgeKey } from "./stages/judge.mjs";
 import { REFERENCE, referenceKey } from "./stages/reference.mjs";
-import { transcribeKey } from "./stages/transcribe.mjs";
+import { runConfig, transcribeKey } from "./stages/transcribe.mjs";
 import { similarity } from "./text.mjs";
 
 // 报告：按这次选中的样本和候选、按现在的配置算出每一格的指纹，到结果库里取数。
@@ -14,6 +14,25 @@ export const quantile = (numbers, q) =>
     ? null
     : [...numbers].sort((a, b) => a - b)[Math.min(numbers.length - 1, Math.floor(numbers.length * q))];
 export const mean = (numbers) => (numbers.length === 0 ? null : numbers.reduce((a, b) => a + b, 0) / numbers.length);
+/**
+ * 一个配置跑过的几轮合成一份：加载、首次取中位数（一轮偶尔慢不算数），内存取最大（峰值就是最坏的那次），跑在哪取最近一轮。
+ * 几轮跑的样本不一样多，内存跟着最长的那条录音走，所以只取最大不取平均
+ */
+export function summarizeRuns(runs) {
+  return {
+    loadMs: quantile(
+      runs.map((run) => run.loadMs),
+      0.5,
+    ),
+    coldMs: quantile(
+      runs.map((run) => run.coldMs),
+      0.5,
+    ),
+    maxRssMb: runs.length === 0 ? null : Math.max(...runs.map((run) => run.maxRssMb)),
+    backend: runs.at(-1)?.backend ?? null,
+  };
+}
+
 const share = (rows, test) => (rows.length === 0 ? null : rows.filter(test).length / rows.length);
 
 const fmt = {
@@ -104,7 +123,7 @@ export function buildReport({ clips, candidates, results, engineVersions, datase
 
   const overview = candidates.map((candidate) => {
     const s = summarize(forCandidate(candidate));
-    const run = results.latestRun(candidate.id) ?? {};
+    const run = summarizeRuns(results.runsOf(runConfig(candidate, engineVersions[candidate.model.engine])));
     return [
       candidate.id,
       run.backend ?? "–",
@@ -117,8 +136,8 @@ export function buildReport({ clips, candidates, results, engineVersions, datase
       fmt.ms(s.p50),
       fmt.ms(s.p90),
       fmt.x(s.realtime),
-      fmt.ms(run.loadMs ?? null),
-      fmt.ms(run.coldMs ?? null),
+      fmt.ms(run.loadMs),
+      fmt.ms(run.coldMs),
       run.maxRssMb ? `${run.maxRssMb} MB` : "–",
     ];
   });

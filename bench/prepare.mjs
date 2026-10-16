@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { isSilent } from "../src/server/asr/segment.mjs";
 import { encodeWav, SPEECH_SAMPLE_RATE } from "../src/server/audio/pcm.mjs";
 import { audioTypeOf, toSpeech } from "../src/server/audio/transcode.mjs";
 import { datasetDir, durationBucket, readManifest, stratify, writeManifest } from "./lib/dataset.mjs";
@@ -19,8 +20,6 @@ import { BENCH_DECODERS, findSource, SOURCES } from "./lib/sources.mjs";
 /** 解出来的时长和来源记的差多少算对不上：链式 Ogg 只解出第一段这类问题会在这里露出来 */
 const DURATION_TOLERANCE = (seconds) => Math.max(0.5, seconds * 0.03);
 const MIN_SECONDS = 0.5;
-/** 整段最响的一下都不到这个数，就是没录上声音 */
-const SILENT_PEAK = 0.005;
 
 const { values: args } = parseArgs({
   options: {
@@ -92,9 +91,7 @@ async function clean(item) {
     return "时长对不上";
   }
   if (durationSec < MIN_SECONDS) return "太短";
-  let peak = 0;
-  for (const value of samples) peak = Math.max(peak, Math.abs(value));
-  if (peak < SILENT_PEAK) return "没有声音";
+  if (isSilent(samples)) return "没有声音";
   return { wav: encodeWav(samples, SPEECH_SAMPLE_RATE), durationSec: Math.round(durationSec * 100) / 100 };
 }
 

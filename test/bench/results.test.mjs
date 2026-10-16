@@ -34,15 +34,16 @@ test("结果库：按环节和指纹存取；没有的是 null；同一格再存
   results.close();
 });
 
-test("结果库：每个候选跑过一轮记一笔（加载耗时、内存…），报告取最近的那一笔", () => {
+test("结果库：每跑一轮按候选的配置记一笔（加载耗时、内存…）；同一配置的各轮都取得到，别的配置的不混进来", () => {
   const path = tempDb();
   const results = openResults(path);
-  results.addRun("qwen", { loadMs: 900 });
-  results.addRun("sensevoice", { loadMs: 300 });
-  results.addRun("qwen", { loadMs: 800 });
+  results.addRun("qwen", "config-a", { loadMs: 900 });
+  results.addRun("sensevoice", "config-b", { loadMs: 300 });
+  results.addRun("qwen", "config-a", { loadMs: 800 });
+  results.addRun("qwen", "config-c", { loadMs: 100 });
   results.close();
   const reopened = openResults(path);
-  assert.deepEqual(reopened.latestRun("qwen"), { loadMs: 800 });
-  assert.equal(reopened.latestRun("nope"), null);
+  assert.deepEqual(reopened.runsOf("config-a"), [{ loadMs: 900 }, { loadMs: 800 }]);
+  assert.deepEqual(reopened.runsOf("nope"), []);
   reopened.close();
 });

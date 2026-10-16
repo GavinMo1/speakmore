@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { joinTexts, splitPoints } from "../../../src/server/asr/segment.mjs";
+import { isSilent, joinTexts, planWindows, splitPoints } from "../../../src/server/asr/segment.mjs";
 
 const RATE = 16_000;
 /** 一段"录音"：说话（440 Hz 的音）和停顿（静音）交替，单位秒 */
@@ -65,4 +65,33 @@ test("接文字：中文直接接，两边都是英文或数字时加一个空�
   assert.equal(joinTexts(["把代码推到 GitHub", "然后开 PR"]), "把代码推到 GitHub然后开 PR");
   assert.equal(joinTexts(["deploy to", "staging now"]), "deploy to staging now");
   assert.equal(joinTexts(["", " 好的 ", ""]), "好的");
+});
+
+test("静音：整段最响的一下都不到门槛就是静音；有一点声音就不是", () => {
+  assert.equal(isSilent(speech([["quiet", 3]])), true);
+  assert.equal(
+    isSilent(
+      speech([
+        ["quiet", 3],
+        ["talk", 0.1],
+      ]),
+    ),
+    false,
+  );
+  assert.equal(isSilent(new Float32Array(0)), true);
+});
+
+test("交给模型的段：切好之后去掉全是静音的段；整段静音的录音一段都不交", () => {
+  const samples = speech([
+    ["talk", 15],
+    ["quiet", 0.6],
+    ["talk", 3],
+    ["quiet", 25],
+  ]);
+  const windows = planWindows(samples, RATE, 20);
+  assert.ok(windows.length > 0);
+  for (const [start, end] of windows) assert.equal(isSilent(samples.subarray(start, end)), false);
+  assert.ok(samples.length - windows.at(-1)[1] >= 15 * RATE, "结尾那一大段纯静音没交");
+  assert.deepEqual(planWindows(speech([["quiet", 5]]), RATE, 20), []);
+  assert.deepEqual(planWindows(speech([["talk", 5]]), RATE, null), [[0, 5 * RATE]], "没有上限就整段交");
 });

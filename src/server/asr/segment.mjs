@@ -2,6 +2,7 @@
 // 再按顺序把文字接起来（engines/index.mjs 的 loadTranscriber 统一做这件事，适配器只管一段）。
 // 切点放在两句话之间最安静的地方：在"上限的一半到上限"这一截里，找平均音量最低的一小段，从它中间切开。
 // 只看音量，不另用语音检测模型，所以和用哪个模型、哪个运行库都无关。
+// 全是静音的段不交给模型：实测 Qwen3-ASR 拿到 7.9 秒的纯静音会吐出一个 "None"，有的模型还会编出字来。
 
 /** 每 20 ms 算一次音量 */
 const FRAME_SECONDS = 0.02;
@@ -9,6 +10,24 @@ const FRAME_SECONDS = 0.02;
 const QUIET_SECONDS = 0.3;
 /** 切点从上限的一半往后找，段不至于切得太碎 */
 const SEARCH_FROM = 0.5;
+/** 整段最响的一下都不到这个数就是静音：16 位录音里约 160，说话再轻也远高于它 */
+const SILENT_PEAK = 0.005;
+
+/** 这一段是不是静音（空的也算） */
+export function isSilent(samples) {
+  for (const value of samples) if (Math.abs(value) >= SILENT_PEAK) return false;
+  return true;
+}
+
+/**
+ * 真正要交给模型的几段：有上限的先切开（splitPoints），再去掉全是静音的段。整段静音的录音一段都不交。
+ * @param {number | null | undefined} maxSeconds 没有上限时整段交
+ * @returns {[number, number][]}
+ */
+export function planWindows(samples, sampleRate, maxSeconds) {
+  const windows = maxSeconds ? splitPoints(samples, sampleRate, maxSeconds) : [[0, samples.length]];
+  return windows.filter(([start, end]) => !isSilent(samples.subarray(start, end)));
+}
 
 /**
  * @param {Float32Array} samples

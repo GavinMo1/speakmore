@@ -8,6 +8,17 @@ import { readFileSync } from "node:fs";
 import { loadTranscriber } from "../../../src/server/asr/engines/index.mjs";
 import { decodeWav, SPEECH_SAMPLE_RATE } from "../../../src/server/audio/pcm.mjs";
 
+/** 暖机用的 3 秒声音：固定种子的白噪声，每次一模一样；够响，不会被当成静音跳过 */
+const WARM_UP = (() => {
+  const samples = new Float32Array(3 * SPEECH_SAMPLE_RATE);
+  let seed = 1;
+  for (let i = 0; i < samples.length; i++) {
+    seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+    samples[i] = (seed / 2_147_483_648 - 0.5) * 0.2;
+  }
+  return samples;
+})();
+
 process.once("message", async ({ model, dir, options, clips }) => {
   const read = (clip) => {
     const { samples, sampleRate } = decodeWav(readFileSync(clip.file));
@@ -20,9 +31,10 @@ process.once("message", async ({ model, dir, options, clips }) => {
   process.send({ type: "loaded", loadMs: Math.round(performance.now() - startedAt), backend: transcriber.backend });
 
   // 第一次调用要分配缓冲、准备 GPU 程序，比之后慢得多。单独记下来，不算进各条样本的耗时：
-  // App 里模型会常驻，用户说话时碰到的是之后的速度
+  // App 里模型会常驻，用户说话时碰到的是之后的速度。暖机用一段固定的声音，不用这一轮的第一条录音：
+  // 不然只补跑一条长录音的那一轮，"首次"就成了那条录音的耗时，和别的轮比不了
   startedAt = performance.now();
-  await transcriber.transcribe(read(clips[0]));
+  await transcriber.transcribe(WARM_UP);
   const coldMs = Math.round(performance.now() - startedAt);
 
   for (const clip of clips) {

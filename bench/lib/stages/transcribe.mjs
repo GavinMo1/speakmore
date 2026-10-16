@@ -2,7 +2,7 @@ import { fork } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { findEngine } from "../../../src/server/asr/engines/index.mjs";
-import { splitPoints } from "../../../src/server/asr/segment.mjs";
+import { planWindows } from "../../../src/server/asr/segment.mjs";
 import { decodeWav, SPEECH_SAMPLE_RATE } from "../../../src/server/audio/pcm.mjs";
 import { fingerprint } from "../results.mjs";
 
@@ -13,21 +13,34 @@ const WORKER = join(import.meta.dirname, "transcribe-worker.mjs");
 
 /**
  * 录音、模型文件、运行库版本、参数，哪样变了这一格就要重跑。
- * 一次吃不下要分段的模型，再加上这条录音实际的切点：分段的上限或算法一变，切出来不一样的格子自然重跑。
- * @param {string} datasetDir 要分段时读录音算切点
+ * 实际交给模型的几段（分段、去掉静音之后，segment.mjs 的 planWindows）和"整段交一次"不一样时也记进去：
+ * 分段的上限、算法、静音门槛一变，交出去的不一样的格子自然重跑；整段交的格子指纹不变。
+ * @param {string} datasetDir 读录音算这几段
  */
 export function transcribeKey(clip, candidate, engineVersion, datasetDir) {
-  const { model, options } = candidate;
-  const segments = model.maxSeconds
-    ? splitPoints(decodeWav(readFileSync(join(datasetDir, clip.file))).samples, SPEECH_SAMPLE_RATE, model.maxSeconds)
-    : null;
-  return fingerprint({
-    clip: clip.sha256,
-    model: { id: model.id, revision: model.source.revision, files: Object.values(model.files).map((f) => f.sha256) },
-    engine: { id: model.engine, version: engineVersion },
-    options,
-    ...(segments ? { segments } : {}),
-  });
+  const segments = windowsOf(clip, candidate.model, datasetDir);
+  const whole = segments.length === 1 && segments[0][0] === 0 && segments[0][1] === clip.samples;
+  return fingerprint({ clip: clip.sha256, ...configOf(candidate, engineVersion), ...(whole ? {} : { segments }) });
+}
+
+/** 一个候选的配置：模型文件、运行库版本、参数。每跑一轮的记录（加载、首次、内存）按它归在一起 */
+const configOf = ({ model, options }, engineVersion) => ({
+  model: { id: model.id, revision: model.source.revision, files: Object.values(model.files).map((f) => f.sha256) },
+  engine: { id: model.engine, version: engineVersion },
+  options,
+});
+export const runConfig = (candidate, engineVersion) => fingerprint(configOf(candidate, engineVersion));
+
+/** 同一条录音、同一个上限只算一次：报告要对每个候选每条录音算指纹 */
+const planned = new Map();
+function windowsOf(clip, model, datasetDir) {
+  const key = `${clip.sha256}:${model.maxSeconds ?? ""}`;
+  if (!planned.has(key)) {
+    const { samples } = decodeWav(readFileSync(join(datasetDir, clip.file)));
+    clip.samples ??= samples.length;
+    planned.set(key, planWindows(samples, SPEECH_SAMPLE_RATE, model.maxSeconds));
+  }
+  return planned.get(key);
 }
 
 export async function engineVersionOf(model) {
@@ -65,7 +78,7 @@ export async function runTranscribe({ clips, candidate, results, store, datasetD
       }
     },
   );
-  results.addRun(candidate.id, { ...info, engineVersion, clips: todo.length });
+  results.addRun(candidate.id, runConfig(candidate, engineVersion), { ...info, engineVersion, clips: todo.length });
   return { ran: todo.length, failed, info };
 }
 

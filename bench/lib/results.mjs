@@ -41,12 +41,22 @@ export function openResults(path) {
       info       TEXT NOT NULL,   -- JSON：加载耗时、第一次的耗时、内存峰值、跑在哪…
       created_at TEXT NOT NULL
     );`);
+  // 每一轮记的是哪个配置（模型文件、运行库版本、参数的指纹）：配置变了，旧的几轮不该算进新配置的数字里。
+  // 早先建的库没有这一列，补上；那时记的几轮没有配置，不算进任何配置
+  if (
+    !db
+      .prepare("PRAGMA table_info(runs)")
+      .all()
+      .some((column) => column.name === "config")
+  ) {
+    db.exec("ALTER TABLE runs ADD COLUMN config TEXT");
+  }
   const getOne = db.prepare("SELECT output FROM results WHERE stage = ? AND key = ?");
   const putOne = db.prepare(
     "INSERT OR REPLACE INTO results (stage, key, clip, subject, output, created_at) VALUES (?, ?, ?, ?, ?, ?)",
   );
-  const addOne = db.prepare("INSERT INTO runs (candidate, info, created_at) VALUES (?, ?, ?)");
-  const latest = db.prepare("SELECT info FROM runs WHERE candidate = ? ORDER BY id DESC LIMIT 1");
+  const addOne = db.prepare("INSERT INTO runs (candidate, config, info, created_at) VALUES (?, ?, ?, ?)");
+  const ofConfig = db.prepare("SELECT info FROM runs WHERE config = ? ORDER BY id");
 
   return {
     /** @returns {object | null} */
@@ -57,13 +67,12 @@ export function openResults(path) {
     put(stage, key, { clip, subject, output }) {
       putOne.run(stage, key, clip, subject, JSON.stringify(output), new Date().toISOString());
     },
-    addRun(candidate, info) {
-      addOne.run(candidate, JSON.stringify(info), new Date().toISOString());
+    addRun(candidate, config, info) {
+      addOne.run(candidate, config, JSON.stringify(info), new Date().toISOString());
     },
-    /** @returns {object | null} */
-    latestRun(candidate) {
-      const row = latest.get(candidate);
-      return row ? JSON.parse(row.info) : null;
+    /** 这个配置跑过的各轮，从早到晚 */
+    runsOf(config) {
+      return ofConfig.all(config).map((row) => JSON.parse(row.info));
     },
     close() {
       db.close();

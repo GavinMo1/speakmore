@@ -36,7 +36,7 @@ test("清单：用的运行库登记过，它认得这一族，填配置时要�
     const { FAMILIES } = await engine.load();
     assert.ok(FAMILIES[model.family], `${engine.name} 认不认 ${model.family}`);
     const asked = [];
-    FAMILIES[model.family]((role) => {
+    FAMILIES[model.family].config((role) => {
       assert.ok(model.files[role], `${model.id} 缺 ${role}`);
       asked.push(role);
       return `/models/${model.id}/${model.files[role].path}`;
