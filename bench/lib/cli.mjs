@@ -2,9 +2,10 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CANDIDATES, findCandidate } from "./candidates.mjs";
 import { datasetDir, readManifest, select, WORK_DIR } from "./dataset.mjs";
+import { DEFAULT_POLISHER, parsePolisher } from "./stages/polish.mjs";
 import { engineVersionOf } from "./stages/transcribe.mjs";
 
-// run.mjs 和 report.mjs 共用的选择参数：评哪个数据集、哪些样本、哪些候选。
+// run.mjs、judge.mjs 和 report.mjs 共用的选择参数：评哪个数据集、哪些样本、哪些候选，润色交给谁。
 
 export const SELECTION_OPTIONS = {
   dataset: { type: "string", default: "default" },
@@ -12,6 +13,7 @@ export const SELECTION_OPTIONS = {
   lang: { type: "string" },
   limit: { type: "string" },
   clips: { type: "string" },
+  polisher: { type: "string", default: DEFAULT_POLISHER },
 };
 
 const list = (value) =>
@@ -32,7 +34,13 @@ export function selectionFrom(args) {
       (id) => findCandidate(id) ?? fail(`不认识的候选：${id}（有 ${CANDIDATES.map((c) => c.id).join("、")}）`),
     ) ?? CANDIDATES;
   if (clips.length === 0) fail("按这些条件选不出样本");
-  return { dataset: args.dataset, datasetDir: datasetDir(args.dataset), clips, candidates };
+  let polisher;
+  try {
+    polisher = parsePolisher(args.polisher);
+  } catch (error) {
+    fail(`--polisher 写的是 ${args.polisher}：${error.message}`);
+  }
+  return { dataset: args.dataset, datasetDir: datasetDir(args.dataset), clips, candidates, polisher };
 }
 
 /** 各个候选用到的运行库的版本：转写的指纹里有它 */

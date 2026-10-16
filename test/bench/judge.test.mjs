@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, test } from "node:test";
 import { openResults } from "../../bench/lib/results.mjs";
-import { judgeKey, pendingJudgements, recordEmpty, recordJudgements } from "../../bench/lib/stages/judge.mjs";
+import { judgeKey, KINDS, pendingJudgements, recordEmpty, recordJudgements } from "../../bench/lib/stages/judge.mjs";
 
 const dirs = [];
 afterEach(() => {
@@ -17,11 +17,11 @@ function tempResults() {
 }
 
 const clip = (id) => ({ id, lang: "zh", durationSec: 3 });
-const cell = (clipId, candidate, reference, transcript) => ({
+const cell = (clipId, subject, reference, text) => ({
   clip: clip(clipId),
-  candidate: { id: candidate },
+  subject,
   reference: { text: reference },
-  transcript: { text: transcript },
+  text,
 });
 
 test("待判：按样本分组，一份参照下面列各个候选；转得一模一样的并成一项，只判一次", () => {
@@ -37,7 +37,7 @@ test("待判：按样本分组，一份参照下面列各个候选；转得一�
   );
   assert.deepEqual(empty, []);
   assert.deepEqual(
-    groups.map((group) => [group.clip, group.reference, group.items.map((item) => [item.candidates, item.transcript])]),
+    groups.map((group) => [group.clip, group.reference, group.items.map((item) => [item.candidates, item.text])]),
     [
       [
         "c1",
@@ -61,6 +61,7 @@ test("待判：判过的不再导出（--force 才重判）；空的转写不给
   assert.equal(first.empty.length, 1);
   recordEmpty(results, first.empty);
   assert.deepEqual(results.get("judge", judgeKey("好的", " ")), {
+    kind: "transcript",
     score: 0,
     problems: ["认不出"],
     note: "转写是空的",
@@ -107,10 +108,29 @@ test("记分：存进库里，记着是谁判的；一批里有一处不对就�
     2,
   );
   assert.deepEqual(results.get("judge", judgeKey("参照", "转写二")), {
+    kind: "transcript",
     score: 2,
     problems: ["漏内容"],
     note: "后半段没了",
     by: "claude-opus-5-5",
   });
+  results.close();
+});
+
+test("成品另有一套标准：指纹和判转写的分开，能挑的问题不一样，空的成品记 0 分", () => {
+  const results = tempResults();
+  assert.notEqual(KINDS.final.key("参照", "成品"), judgeKey("参照", "成品"));
+  const cells = [cell("c1", "q8 → deepseek", "参照", "成品"), cell("c1", "sv → deepseek", "参照", "")];
+  const { groups, empty } = pendingJudgements(cells, results, { kind: "final" });
+  assert.equal(groups[0].items[0].id, KINDS.final.key("参照", "成品").slice(0, 12));
+  recordEmpty(results, empty, "final");
+  assert.equal(results.get("judge", KINDS.final.key("参照", "")).note, "成品是空的");
+  const [{ id }] = groups[0].items;
+  // 转写那套里没有"答非所问"，成品这套有；反过来"语言不对"只在转写那套里
+  assert.throws(() =>
+    recordJudgements(results, [{ id, score: 1, problems: ["语言不对"], note: "x" }], groups, "final"),
+  );
+  recordJudgements(results, [{ id, score: 0, problems: ["答非所问"], note: "回答了问题" }], groups, "final");
+  assert.equal(results.get("judge", KINDS.final.key("参照", "成品")).kind, "final");
   results.close();
 });

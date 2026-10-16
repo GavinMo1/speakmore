@@ -1,6 +1,8 @@
 import { downloadSize } from "../../src/server/asr/catalog.mjs";
+import { formatChatChoice } from "../../src/server/chat/vendors.mjs";
 import { durationBucket } from "./dataset.mjs";
-import { judgeKey } from "./stages/judge.mjs";
+import { judgeKey, KINDS } from "./stages/judge.mjs";
+import { polishKey } from "./stages/polish.mjs";
 import { REFERENCE, referenceKey } from "./stages/reference.mjs";
 import { runConfig, transcribeKey } from "./stages/transcribe.mjs";
 import { similarity } from "./text.mjs";
@@ -53,9 +55,11 @@ const table = (head, rows) =>
 
 /**
  * 每个候选在每条样本上的那一格：转写、参照、判分、字面相似度、耗时、实时倍数。
+ * 给了润色的模型（polisher）时，每一格还带上润色出的成品（final）、它的判分（finalJudged）和端到端的耗时（转写 + 润色）。
  * @param {Record<string, string>} engineVersions 运行库 id → 版本（算转写的指纹要用）
+ * @param {{ vendor: string, model: string } | null} [polisher]
  */
-export function collect({ clips, candidates, results, engineVersions, datasetDir }) {
+export function collect({ clips, candidates, results, engineVersions, datasetDir, polisher = null }) {
   const references = new Map(clips.map((clip) => [clip.id, results.get("reference", referenceKey(clip))]));
   const cells = candidates.flatMap((candidate) =>
     clips.map((clip) => {
@@ -66,6 +70,9 @@ export function collect({ clips, candidates, results, engineVersions, datasetDir
       const reference = references.get(clip.id);
       const judged =
         transcript && reference?.text ? results.get("judge", judgeKey(reference.text, transcript.text)) : null;
+      const final = polisher && transcript ? results.get("polish", polishKey(transcript.text, polisher)) : null;
+      const finalJudged =
+        final && reference?.text ? results.get("judge", KINDS.final.key(reference.text, final.text)) : null;
       return {
         clip,
         candidate,
@@ -74,10 +81,28 @@ export function collect({ clips, candidates, results, engineVersions, datasetDir
         judged,
         similarity: transcript && reference?.text ? similarity(reference.text, transcript.text) : null,
         realtime: transcript ? (clip.durationSec * 1000) / Math.max(transcript.ms, 1) : null,
+        final,
+        finalJudged,
+        endToEndMs: final ? transcript.ms + final.ms : null,
       };
     }),
   );
   return { references, cells };
+}
+
+/**
+ * 能交给判官的格子（有参照、参照不是空的、有要判的文字），整理成 pendingJudgements 要的样子。
+ * @param {keyof typeof KINDS} kind transcript 判转写，final 判润色后的成品
+ */
+export function judgeable(cells, kind, polisher = null) {
+  return cells
+    .filter((cell) => cell.reference?.text && (kind === "final" ? cell.final : cell.transcript))
+    .map((cell) => ({
+      clip: cell.clip,
+      subject: kind === "final" ? `${cell.candidate.id} → ${formatChatChoice(polisher)}` : cell.candidate.id,
+      reference: cell.reference,
+      text: kind === "final" ? cell.final.text : cell.transcript.text,
+    }));
 }
 
 /** 一组格子的汇总：准确（判官、字面）和速度 */
@@ -110,8 +135,8 @@ function summarize(cells) {
   };
 }
 
-export function buildReport({ clips, candidates, results, engineVersions, dataset, datasetDir }) {
-  const { references, cells } = collect({ clips, candidates, results, engineVersions, datasetDir });
+export function buildReport({ clips, candidates, results, engineVersions, dataset, datasetDir, polisher = null }) {
+  const { references, cells } = collect({ clips, candidates, results, engineVersions, datasetDir, polisher });
   const refRows = [...references.values()].filter(Boolean);
   const emptyRefs = refRows.filter((ref) => ref.text === "").length;
   const minutes = clips.reduce((sum, clip) => sum + clip.durationSec, 0) / 60;
@@ -210,20 +235,118 @@ export function buildReport({ clips, candidates, results, engineVersions, datase
       }),
     ),
   ];
+  if (polisher) sections.push(...endToEndSections({ cells, candidates, clips, langs, refMs, polisher }));
   return { markdown: `${sections.join("\n\n")}\n`, details: detailsOf(cells) };
 }
 
-/** 细节：每一格的分数、问题和两份文字，分低的在前。给人核对判官，只写进 _work */
+/** 一组格子的成品汇总：判官、端到端和润色的耗时、花费 */
+function summarizeFinals(cells) {
+  const done = cells.filter((cell) => cell.final);
+  const scores = cells.filter((cell) => cell.finalJudged).map((cell) => cell.finalJudged.score);
+  const costs = done.map((cell) => cell.final.costUsd).filter((cost) => cost !== null);
+  return {
+    done: done.length,
+    score: mean(scores),
+    good: share(scores, (score) => score >= 4),
+    lost: share(scores, (score) => score <= 1),
+    p50: quantile(
+      done.map((cell) => cell.endToEndMs),
+      0.5,
+    ),
+    p90: quantile(
+      done.map((cell) => cell.endToEndMs),
+      0.9,
+    ),
+    polishP50: quantile(
+      done.map((cell) => cell.final.ms),
+      0.5,
+    ),
+    polishP90: quantile(
+      done.map((cell) => cell.final.ms),
+      0.9,
+    ),
+    cost: costs.length === done.length ? mean(costs) : null,
+  };
+}
+
+/** 端到端：本地转写的原文交给润色模型之后的成品，和原生链路比准确和快慢 */
+function endToEndSections({ cells, candidates, clips, langs, refMs, polisher }) {
+  const name = formatChatChoice(polisher);
+  const forCandidate = (candidate) => cells.filter((cell) => cell.candidate === candidate && cell.final);
+  const withFinals = candidates.filter((candidate) => forCandidate(candidate).length > 0);
+  if (withFinals.length === 0) return [];
+  return [
+    `## 端到端：本地转写 → 润色（${name}）`,
+    `成品和参照（原生链路的成品）比，判官均分 0–5。端到端耗时 = 转写 + 润色，不含解码录音；原生链路整条耗时 p50 ${fmt.ms(quantile(refMs, 0.5))}、p90 ${fmt.ms(quantile(refMs, 0.9))}。花费是润色那一次请求的，按官方标准价估算。`,
+    table(
+      ["候选", "成品", "判官均分", "≥4", "≤1", "端到端 p50", "端到端 p90", "润色 p50", "润色 p90", "每条花费"],
+      withFinals.map((candidate) => {
+        const s = summarizeFinals(forCandidate(candidate));
+        return [
+          candidate.id,
+          `${s.done}/${clips.length}`,
+          fmt.score(s.score),
+          fmt.pct(s.good),
+          fmt.pct(s.lost),
+          fmt.ms(s.p50),
+          fmt.ms(s.p90),
+          fmt.ms(s.polishP50),
+          fmt.ms(s.polishP90),
+          s.cost === null ? "–" : `$${s.cost.toFixed(5)}`,
+        ];
+      }),
+    ),
+    "### 成品按语言",
+    table(
+      [
+        "候选",
+        ...langs.map((lang) => `${lang}（${clips.filter((clip) => clip.lang === lang).length} 条）均分 / 端到端 p50`),
+      ],
+      withFinals.map((candidate) => [
+        candidate.id,
+        ...langs.map((lang) => {
+          const s = summarizeFinals(forCandidate(candidate).filter((cell) => cell.clip.lang === lang));
+          return `${fmt.score(s.score)} / ${fmt.ms(s.p50)}`;
+        }),
+      ]),
+    ),
+    "### 成品扣分的原因（出现的条数）",
+    table(
+      ["候选", "判了", "问题"],
+      withFinals.map((candidate) => {
+        const judged = forCandidate(candidate).filter((cell) => cell.finalJudged);
+        const counts = new Map();
+        for (const cell of judged)
+          for (const problem of cell.finalJudged.problems) counts.set(problem, (counts.get(problem) ?? 0) + 1);
+        const listed = [...counts].sort((a, b) => b[1] - a[1]).map(([problem, n]) => `${problem} ${n}`);
+        return [candidate.id, String(judged.length), listed.join("、") || "–"];
+      }),
+    ),
+  ];
+}
+
+/** 细节：每一格的分数、问题和几份文字，分低的在前。给人核对判官，只写进 _work */
 function detailsOf(cells) {
+  const finals = cells.filter((cell) => cell.finalJudged).sort((a, b) => a.finalJudged.score - b.finalJudged.score);
+  const finalPart = finals.map((cell) =>
+    [
+      `## 成品 · ${cell.clip.id} · ${cell.candidate.id} · ${cell.finalJudged.score} 分`,
+      `${cell.clip.lang}，${cell.clip.durationSec} 秒，端到端 ${cell.endToEndMs} ms（润色 ${cell.final.ms} ms）；${cell.finalJudged.problems.join("、") || "无问题"}：${cell.finalJudged.note}`,
+      `参照：${cell.reference.text}`,
+      `转写：${cell.transcript.text}`,
+      `成品：${cell.final.text}`,
+    ].join("\n\n"),
+  );
   const judged = cells.filter((cell) => cell.judged).sort((a, b) => a.judged.score - b.judged.score);
-  return `${judged
-    .map((cell) =>
+  return `${[
+    ...finalPart,
+    ...judged.map((cell) =>
       [
         `## ${cell.clip.id} · ${cell.candidate.id} · ${cell.judged.score} 分`,
         `${cell.clip.lang}，${cell.clip.durationSec} 秒，${cell.transcript.ms} ms，字面相似 ${fmt.num(cell.similarity)}；${cell.judged.problems.join("、") || "无问题"}：${cell.judged.note}`,
         `参照：${cell.reference.text}`,
         `转写：${cell.transcript.text}`,
       ].join("\n\n"),
-    )
-    .join("\n\n")}\n`;
+    ),
+  ].join("\n\n")}\n`;
 }

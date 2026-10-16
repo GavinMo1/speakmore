@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // 只出报告，不跑任何东西：按现在的配置到结果库里取数。选择参数和 run.mjs 一样。
 //   node bench/report.mjs [--dataset default] [--candidates a,b] [--lang zh,mixed,en] [--limit 20] [--clips id1,id2]
+//     [--polisher deepseek/deepseek-flash]   端到端那一节看哪个润色模型的成品
 
 import { join } from "node:path";
 import { parseArgs } from "node:util";
