@@ -77,7 +77,7 @@ export default {
   settings: {
     describe: {
       hotkey: "按哪个键开始和结束说话",
-      pipeline: "识别走哪条路：native 是录音直接交给收音频的模型，local 是本机的小模型先转成文字、再交给任意大模型润色",
+      mode: "识别走哪条路：native 是录音直接交给收音频的模型，local 是本机的小模型先转成文字、再交给任意大模型润色",
       model: "用哪一家的哪个模型整理，写成 厂商/模型；只写厂商就用它的默认模型。换模型用 speakmore model",
       thinking: "Gemini 的思考档位，越高越慢。别家的模型用不上",
       transcriber: "local 那条路上用哪个本机模型转文字，第一次用时自动下载",
@@ -101,7 +101,7 @@ export default {
     unknownProvider: "不认识 {name} 这家，能用的有 {providers}",
     badName: "模型名 {model} 不对：只能有字母、数字和 . _ : -",
   },
-  pipelines: {
+  modes: {
     native: "原生：录音直接交给模型",
     local: "本地转写，再交给模型润色",
   },
@@ -220,7 +220,7 @@ export default {
   },
 
   notes: {
-    saveFailed: "已改用 {provider}，但没存进设置（{reason}）· 下次启动换回原来那家",
+    settingNotSaved: "已经换上，但 {name} 没存进设置（{reason}）· 下次启动换回原来的",
     envNextLaunch: "环境变量 {variable} 优先 · 下次启动仍按它",
     envRemove: "环境变量 {variable} 优先 · 删掉它才生效",
   },

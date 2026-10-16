@@ -1,5 +1,5 @@
 import { keycapOf, localize, t } from "../shared/i18n.mjs";
-import { createKeyPanel } from "../shared/key-panel.mjs";
+import { createKeyPanel, KEY_LAYERS } from "../shared/key-panel.mjs";
 import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
 import { describeError, permissionGranted } from "../shared/setup-text.mjs";
 import { canContinue, groupStates, STEPS, startStep } from "./steps.mjs";
@@ -16,7 +16,9 @@ localize();
 
 let setup = null;
 let step = null;
-const keyPanel = createKeyPanel($("key-panel"), { refresh });
+// 第一步接上的是现在这种模式要的那家：native 是收音频的模型，local 是润色的模型。换模式在主窗口的设置里
+let keyPanel = null;
+let keyLayer = null;
 
 async function refresh() {
   setup = await window.speakmore.getSetup();
@@ -55,6 +57,12 @@ function render() {
   const states = groupStates(step);
   for (const item of document.querySelectorAll("[data-group]")) item.dataset.state = states[item.dataset.group];
 
+  const wanted = setup.mode.value === "local" ? "polish" : "native";
+  if (keyLayer !== wanted) {
+    keyLayer = wanted;
+    const layer = wanted === "polish" ? KEY_LAYERS.polish() : KEY_LAYERS.native;
+    keyPanel = createKeyPanel($("key-panel"), { refresh, layer });
+  }
   keyPanel.render(setup);
 
   for (const row of document.querySelectorAll("[data-permission]")) {

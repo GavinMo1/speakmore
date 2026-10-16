@@ -6,7 +6,7 @@ test("只给 Gemini 的密钥时，其余用默认值，只监听本机", () => 
   assert.deepEqual(loadConfig({ GEMINI_API_KEY: "k" }), {
     host: "127.0.0.1",
     port: 8790,
-    route: { pipeline: "native", model: { provider: "gemini", model: "gemini-3.6-flash" }, thinkingLevel: "MINIMAL" },
+    route: { mode: "native", model: { provider: "gemini", model: "gemini-3.6-flash" }, thinkingLevel: "MINIMAL" },
     apiKey: "k",
   });
 });
@@ -61,50 +61,50 @@ test("模型的环境变量是空的：当作没设，用默认的（0.3 单独�
   assert.equal(loadConfig({ GEMINI_API_KEY: "k", SPEAKMORE_MODEL: " " }).route.model.provider, "gemini");
 });
 
-test("SPEAKMORE_PIPELINE=local：本地模型和润色那家用默认的，key 从润色那家的环境变量来", () => {
-  assert.deepEqual(loadConfig({ SPEAKMORE_PIPELINE: "local", DEEPSEEK_API_KEY: "sk-d" }), {
+test("SPEAKMORE_MODE=local：本地模型和润色那家用默认的，key 从润色那家的环境变量来", () => {
+  assert.deepEqual(loadConfig({ SPEAKMORE_MODE: "local", DEEPSEEK_API_KEY: "sk-d" }), {
     host: "127.0.0.1",
     port: 8790,
     route: {
-      pipeline: "local",
+      mode: "local",
       transcriber: "qwen3-asr-0.6b-q8",
       polish: { vendor: "deepseek", model: "deepseek-flash" },
       customUrl: null,
     },
     apiKey: "sk-d",
   });
-  assert.throws(() => loadConfig({ SPEAKMORE_PIPELINE: "local", GEMINI_API_KEY: "k" }), /DEEPSEEK_API_KEY/);
+  assert.throws(() => loadConfig({ SPEAKMORE_MODE: "local", GEMINI_API_KEY: "k" }), /DEEPSEEK_API_KEY/);
 });
 
 test("本地转写链路：换模型、换润色的那家；自定义服务要给地址", () => {
   const config = loadConfig({
-    SPEAKMORE_PIPELINE: "local",
+    SPEAKMORE_MODE: "local",
     SPEAKMORE_TRANSCRIBER: "sensevoice-small-q8",
     SPEAKMORE_POLISH: "custom/qwen3:8b",
     SPEAKMORE_CUSTOM_URL: "http://127.0.0.1:11434/v1/",
     SPEAKMORE_CUSTOM_API_KEY: "ollama",
   });
   assert.deepEqual(config.route, {
-    pipeline: "local",
+    mode: "local",
     transcriber: "sensevoice-small-q8",
     polish: { vendor: "custom", model: "qwen3:8b" },
     customUrl: "http://127.0.0.1:11434/v1",
   });
   assert.equal(config.apiKey, "ollama");
   assert.throws(
-    () => loadConfig({ SPEAKMORE_PIPELINE: "local", SPEAKMORE_POLISH: "custom/m", SPEAKMORE_CUSTOM_API_KEY: "k" }),
+    () => loadConfig({ SPEAKMORE_MODE: "local", SPEAKMORE_POLISH: "custom/m", SPEAKMORE_CUSTOM_API_KEY: "k" }),
     /SPEAKMORE_CUSTOM_URL/,
   );
 });
 
 test("链路、本地模型、润色写错时说清是哪个环境变量", () => {
-  assert.throws(() => loadConfig({ SPEAKMORE_PIPELINE: "cloud", GEMINI_API_KEY: "k" }), /SPEAKMORE_PIPELINE.*native/);
+  assert.throws(() => loadConfig({ SPEAKMORE_MODE: "cloud", GEMINI_API_KEY: "k" }), /SPEAKMORE_MODE.*native/);
   assert.throws(
-    () => loadConfig({ SPEAKMORE_PIPELINE: "local", SPEAKMORE_TRANSCRIBER: "whisper-9", DEEPSEEK_API_KEY: "k" }),
+    () => loadConfig({ SPEAKMORE_MODE: "local", SPEAKMORE_TRANSCRIBER: "whisper-9", DEEPSEEK_API_KEY: "k" }),
     /SPEAKMORE_TRANSCRIBER.*qwen3-asr-0\.6b-q8/,
   );
   assert.throws(
-    () => loadConfig({ SPEAKMORE_PIPELINE: "local", SPEAKMORE_POLISH: "nobody/x", DEEPSEEK_API_KEY: "k" }),
+    () => loadConfig({ SPEAKMORE_MODE: "local", SPEAKMORE_POLISH: "nobody/x", DEEPSEEK_API_KEY: "k" }),
     /SPEAKMORE_POLISH/,
   );
 });

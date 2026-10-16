@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -7,6 +7,7 @@ import { createTranslator } from "../../src/i18n/index.mjs";
 import {
   HOTKEY_IDS,
   overridingEnv,
+  patchSettings,
   resolveSettings,
   routeOf,
   SETTINGS,
@@ -30,7 +31,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 test("没有文件也没有环境变量时全用默认值", () => {
   assert.deepEqual(resolveSettings({ file, env: {} }), {
     hotkey: { value: "right_option", source: "default" },
-    pipeline: { value: "native", source: "default" },
+    mode: { value: "native", source: "default" },
     model: { value: "gemini/gemini-3.6-flash", source: "default" },
     thinking: { value: "MINIMAL", source: "default" },
     transcriber: { value: "qwen3-asr-0.6b-q8", source: "default" },
@@ -187,35 +188,60 @@ test("Gemini 的模型存成 0.3 也读得懂的写法（只写模型名），�
 
 test("识别链路：默认是原生的；改成 local 后，路线里是本地模型、润色的那家和自定义地址", () => {
   assert.deepEqual(routeOf(resolveSettings({ file, env: {} })), {
-    pipeline: "native",
+    mode: "native",
     model: { provider: "gemini", model: "gemini-3.6-flash" },
     thinkingLevel: "MINIMAL",
   });
-  saveSetting(file, "pipeline", "Local");
+  saveSetting(file, "mode", "Local");
   saveSetting(file, "polish", "custom/Qwen/Qwen3-8B");
   saveSetting(file, "customUrl", "https://api.siliconflow.cn/v1/chat/completions");
   const settings = resolveSettings({ file, env: {} });
   assert.deepEqual(settings.customUrl, { value: "https://api.siliconflow.cn/v1", source: "file" });
   assert.deepEqual(routeOf(settings), {
-    pipeline: "local",
+    mode: "local",
     transcriber: "qwen3-asr-0.6b-q8",
     polish: { vendor: "custom", model: "Qwen/Qwen3-8B" },
     customUrl: "https://api.siliconflow.cn/v1",
   });
   // 环境变量也能换，和单独启动服务端时同名
   const env = {
-    SPEAKMORE_PIPELINE: "native",
+    SPEAKMORE_MODE: "native",
     SPEAKMORE_POLISH: "deepseek",
     SPEAKMORE_TRANSCRIBER: "sensevoice-small-q8",
   };
   const overridden = resolveSettings({ file, env });
-  assert.equal(overridden.pipeline.value, "native");
+  assert.equal(overridden.mode.value, "native");
   assert.equal(overridden.polish.value, "deepseek/deepseek-flash");
   assert.equal(overridden.transcriber.value, "sensevoice-small-q8");
 });
 
+test("每种模式的路线只看它自己那几项：可以拼出不是正在用的那种模式的路线", () => {
+  saveSetting(file, "model", "openai");
+  saveSetting(file, "polish", "deepseek/deepseek-v4-pro");
+  const settings = resolveSettings({ file, env: {} });
+  assert.equal(settings.mode.value, "native");
+  assert.deepEqual(routeOf(settings, "local"), {
+    mode: "local",
+    transcriber: "qwen3-asr-0.6b-q8",
+    polish: { vendor: "deepseek", model: "deepseek-v4-pro" },
+    customUrl: null,
+  });
+  assert.deepEqual(routeOf(settings, "native").model, { provider: "openai", model: "gpt-audio-mini" });
+});
+
+test("patchSettings：按要改的几项拼出改后的设置（不写文件），写错了照保存时的规矩报错", () => {
+  const settings = resolveSettings({ file, env: {} });
+  const patched = patchSettings(settings, { mode: "LOCAL", polish: "deepseek" });
+  assert.equal(patched.mode.value, "local");
+  assert.equal(patched.polish.value, "deepseek/deepseek-flash");
+  assert.equal(patched.model, settings.model);
+  assert.equal(existsSync(file), false);
+  assert.throws(() => patchSettings(settings, { polish: "nobody/x" }), said(/polish.*deepseek/));
+  assert.throws(() => patchSettings(settings, { colour: "red" }), said(/colour/));
+});
+
 test("识别链路的几项写错了拒绝保存，说能填什么；自定义地址可以清空", () => {
-  assert.throws(() => saveSetting(file, "pipeline", "cloud"), said(/native \/ local/));
+  assert.throws(() => saveSetting(file, "mode", "cloud"), said(/native \/ local/));
   assert.throws(() => saveSetting(file, "transcriber", "whisper-9"), said(/qwen3-asr-0\.6b-q8/));
   assert.throws(() => saveSetting(file, "polish", "nobody/x"), said(/deepseek/));
   assert.throws(() => saveSetting(file, "customUrl", "api.example.com"), said(/https:\/\//));

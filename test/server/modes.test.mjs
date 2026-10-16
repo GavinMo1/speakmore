@@ -3,22 +3,20 @@ import { test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
 import { findModel } from "../../src/server/asr/catalog.mjs";
 import {
-  createPipelineRefiner,
+  createModeRefiner,
   DEFAULT_TRANSCRIBER,
   describeRoute,
-  findPipeline,
-  formatFinalModel,
+  findMode,
   keyVendorOf,
-  PIPELINES,
-  parseFinalModel,
-  parsePipeline,
-} from "../../src/server/pipelines.mjs";
+  MODES,
+  parseMode,
+} from "../../src/server/modes.mjs";
 
 const zh = createTranslator("zh-CN");
 const quiet = { info() {}, warn() {}, error() {} };
-const NATIVE = { pipeline: "native", model: { provider: "openai", model: "gpt-audio-mini" }, thinkingLevel: "MINIMAL" };
+const NATIVE = { mode: "native", model: { provider: "openai", model: "gpt-audio-mini" }, thinkingLevel: "MINIMAL" };
 const LOCAL = {
-  pipeline: "local",
+  mode: "local",
   transcriber: "qwen3-asr-0.6b-q8",
   polish: { vendor: "deepseek", model: "deepseek-flash" },
   customUrl: null,
@@ -26,58 +24,19 @@ const LOCAL = {
 
 test("两条链路平级登记，默认的转写模型在清单里", () => {
   assert.deepEqual(
-    PIPELINES.map(({ id }) => id),
+    MODES.map(({ id }) => id),
     ["native", "local"],
   );
   assert.ok(findModel(DEFAULT_TRANSCRIBER));
-  assert.equal(findPipeline("LOCAL").id, "local");
-  assert.equal(findPipeline("nope"), null);
+  assert.equal(findMode("LOCAL").id, "local");
+  assert.equal(findMode("nope"), null);
 });
 
 test("链路的写法：认 native / local，大小写不论；写错了说能填什么", () => {
-  assert.equal(parsePipeline(" Local "), "local");
+  assert.equal(parseMode(" Local "), "local");
   assert.throws(
-    () => parsePipeline("cloud"),
+    () => parseMode("cloud"),
     (error) => /native/.test(zh.text(error.problem)) && /local/.test(zh.text(error.problem)),
-  );
-});
-
-test("出成品的模型：收音频的那几家走原生链路，只收文字的走本地转写链路", () => {
-  assert.deepEqual(parseFinalModel("openai"), {
-    pipeline: "native",
-    model: { provider: "openai", model: "gpt-audio-mini" },
-  });
-  assert.deepEqual(parseFinalModel("gemini/gemini-3.6-flash"), {
-    pipeline: "native",
-    model: { provider: "gemini", model: "gemini-3.6-flash" },
-  });
-  // 0.3 以前只写 Gemini 的模型名，照样认
-  assert.equal(parseFinalModel("gemini-3.6-flash").pipeline, "native");
-  assert.deepEqual(parseFinalModel(" DeepSeek "), {
-    pipeline: "local",
-    polish: { vendor: "deepseek", model: "deepseek-flash" },
-  });
-  assert.deepEqual(parseFinalModel("custom/Qwen/Qwen3-8B"), {
-    pipeline: "local",
-    polish: { vendor: "custom", model: "Qwen/Qwen3-8B" },
-  });
-  for (const choice of [parseFinalModel("openai/gpt-audio-1.5"), parseFinalModel("deepseek/deepseek-v4-pro")]) {
-    assert.deepEqual(parseFinalModel(formatFinalModel(choice)), choice);
-  }
-});
-
-test("出成品的模型写错了：不认识的厂商列出所有能填的，自定义的没写模型名要说", () => {
-  assert.throws(
-    () => parseFinalModel("nope/x"),
-    (error) => /gemini/.test(zh.text(error.problem)) && /deepseek/.test(zh.text(error.problem)),
-  );
-  assert.throws(
-    () => parseFinalModel("custom"),
-    (error) => /custom\/模型名/.test(zh.text(error.problem)),
-  );
-  assert.throws(
-    () => parseFinalModel(""),
-    (error) => /空/.test(zh.text(error.problem)),
   );
 });
 
@@ -104,7 +63,7 @@ test("本地转写链路：拿交进来的转写器和按路线装的润色器�
     });
   };
   const transcriber = { transcribe: async () => ({ text: "好的" }) };
-  const refiner = await createPipelineRefiner({
+  const refiner = await createModeRefiner({
     route: LOCAL,
     apiKey: "sk-test",
     transcriber,
@@ -117,5 +76,5 @@ test("本地转写链路：拿交进来的转写器和按路线装的润色器�
 });
 
 test("本地转写链路没有转写器时直接报错（调用方要先装好模型）", async () => {
-  await assert.rejects(createPipelineRefiner({ route: LOCAL, apiKey: "k", log: quiet }), /转写器/);
+  await assert.rejects(createModeRefiner({ route: LOCAL, apiKey: "k", log: quiet }), /转写器/);
 });

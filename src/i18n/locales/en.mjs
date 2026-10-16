@@ -78,8 +78,7 @@ export default {
   settings: {
     describe: {
       hotkey: "Which key starts and stops dictation",
-      pipeline:
-        "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this Mac first, then has any LLM polish the text",
+      mode: "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this Mac first, then has any LLM polish the text",
       model:
         "Which provider and model refines your words, as provider/model; a provider alone uses its default. Switch with speakmore model",
       thinking: "Gemini's thinking level; higher is slower. Other providers don't use it",
@@ -106,7 +105,7 @@ export default {
     unknownProvider: "unknown provider {name}; available: {providers}",
     badName: "model name {model} is invalid: only letters, digits, and . _ : - are allowed",
   },
-  pipelines: {
+  modes: {
     native: "Native: the recording goes straight to the model",
     local: "Local: transcribed on this Mac, then polished by a model",
   },
@@ -228,7 +227,7 @@ export default {
   },
 
   notes: {
-    saveFailed: "Switched to {provider}, but couldn't save it to settings ({reason}) · next launch goes back",
+    settingNotSaved: "Switched, but couldn't save {name} to settings ({reason}) · next launch goes back",
     envNextLaunch: "The {variable} env var takes priority · next launch still uses it",
     envRemove: "The {variable} env var takes priority · remove it to apply",
   },

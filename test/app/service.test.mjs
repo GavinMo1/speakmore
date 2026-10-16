@@ -48,8 +48,8 @@ const OFFLINE = () =>
   new ModelError({ kind: "unavailable", problem: "连不上 Gemini，检查网络后再试", detail: "fetch failed" });
 const INVALID = () =>
   new ModelError({ kind: "key", problem: "这把 key 无效，检查有没有复制完整", detail: "API key not valid" });
-const GEMINI = { pipeline: "native", model: { provider: "gemini", model: "gemini-3.5-flash" }, thinkingLevel: "LOW" };
-const OPENAI = { pipeline: "native", model: { provider: "openai", model: "gpt-audio-mini" }, thinkingLevel: "LOW" };
+const GEMINI = { mode: "native", model: { provider: "gemini", model: "gemini-3.5-flash" }, thinkingLevel: "LOW" };
+const OPENAI = { mode: "native", model: { provider: "openai", model: "gpt-audio-mini" }, thinkingLevel: "LOW" };
 
 test("没有 key 时服务照样在听，听写会失败并说明要去填 key", async (t) => {
   const service = await startService({ log: quietLog, route: GEMINI, createRefiner: () => fakeRefiner("不该用到") });
@@ -260,7 +260,7 @@ test("开口时的准备交给正在用的那一个；还没有 key 时什么都
 });
 
 const LOCAL = {
-  pipeline: "local",
+  mode: "local",
   transcriber: "qwen3-asr-0.6b-q8",
   polish: { vendor: "deepseek", model: "deepseek-flash" },
   customUrl: null,
@@ -360,4 +360,28 @@ test("换 key、换润色的那家不动本地模型；换本地模型才重装�
   await service.useKey("key-2", { route: { ...LOCAL, transcriber: "sensevoice-small-q8" } });
   assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8", "sensevoice-small-q8"]);
   assert.equal(service.localModel.model, "sensevoice-small-q8");
+});
+
+test("local 的第一跳单独换：只换本地模型，不重新验证润色的那家、不动 key；不在 local 模式时不让换", async (t) => {
+  const { control, startLocal } = fakeLocal();
+  let built = 0;
+  const createRefiner = async (options) => {
+    built++;
+    return throughTranscriber(options);
+  };
+  const service = await startService({ log: quietLog, route: LOCAL, startLocal, createRefiner });
+  t.after(() => service.close());
+  await service.useKey("ds-key");
+  assert.equal(built, 1);
+
+  service.switchTranscriber("sensevoice-small-q8");
+  assert.equal(built, 1);
+  assert.equal(service.ready, true);
+  assert.equal(service.route.transcriber, "sensevoice-small-q8");
+  assert.deepEqual(service.route.polish, LOCAL.polish);
+  assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8", "sensevoice-small-q8"]);
+
+  const native = await startService({ log: quietLog, route: GEMINI, createRefiner: async () => fakeRefiner("x") });
+  t.after(() => native.close());
+  assert.throws(() => native.switchTranscriber("sensevoice-small-q8"), /local/);
 });

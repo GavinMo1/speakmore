@@ -3,13 +3,7 @@ import { dirname } from "node:path";
 import { findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
 import { MODELS } from "../server/asr/catalog.mjs";
 import { formatChatChoice, normalizeBaseUrl, parseChatChoice } from "../server/chat/vendors.mjs";
-import {
-  DEFAULT_PIPELINE,
-  DEFAULT_POLISH,
-  DEFAULT_TRANSCRIBER,
-  PIPELINES,
-  parsePipeline,
-} from "../server/pipelines.mjs";
+import { DEFAULT_MODE, DEFAULT_POLISH, DEFAULT_TRANSCRIBER, MODES, parseMode } from "../server/modes.mjs";
 import {
   DEFAULT_MODEL_CHOICE,
   DEFAULT_THINKING_LEVEL,
@@ -34,7 +28,7 @@ export const hotkeyName = (id) => msg(`hotkeys.${id}.name`);
 export const hotkeyKeycap = (id) => msg(`hotkeys.${id}.keycap`);
 
 const THEME_IDS = THEMES.map((theme) => theme.id);
-const PIPELINE_IDS = PIPELINES.map((pipeline) => pipeline.id);
+const MODE_IDS = MODES.map((mode) => mode.id);
 const TRANSCRIBER_IDS = MODELS.map((model) => model.id);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
@@ -59,13 +53,13 @@ export const SETTINGS = {
     },
     label: hotkeyName,
   },
-  pipeline: {
-    env: "SPEAKMORE_PIPELINE",
-    // 两条链路平级（server/pipelines.mjs）。原生是 0.6 以前唯一的一条，没选过的人照旧
-    default: DEFAULT_PIPELINE,
-    choices: PIPELINE_IDS,
-    parse: parsePipeline,
-    label: (value) => msg(`pipelines.${value}`),
+  mode: {
+    env: "SPEAKMORE_MODE",
+    // 两条链路平级（server/modes.mjs）。原生是 0.6 以前唯一的一条，没选过的人照旧
+    default: DEFAULT_MODE,
+    choices: MODE_IDS,
+    parse: parseMode,
+    label: (value) => msg(`modes.${value}`),
   },
   model: {
     env: "SPEAKMORE_MODEL",
@@ -240,17 +234,42 @@ export function unsetSetting(file, name) {
 }
 
 /**
- * 现在的设置走哪条路线（server/pipelines.mjs）：两条链路各要哪几项设置
+ * 按要改的几项拼出改后的设置，不写文件：先看改了之后走哪条路线、验证过了再存的时候用。
+ * 写错了照 saveSetting 的规矩报错
  * @param {ReturnType<typeof resolveSettings>} settings
+ * @param {Record<string, string>} changes
  */
-export function routeOf(settings) {
-  if (settings.pipeline.value === "local") {
-    return {
-      pipeline: "local",
-      transcriber: settings.transcriber.value,
-      polish: parseChatChoice(settings.polish.value),
-      customUrl: settings.customUrl.value || null,
-    };
+export function patchSettings(settings, changes) {
+  const patched = { ...settings };
+  for (const [name, value] of Object.entries(changes)) {
+    settingNamed(name);
+    patched[name] = { value: parseValue(name, value, name), source: "file" };
   }
-  return { pipeline: "native", model: parseModelChoice(settings.model.value), thinkingLevel: settings.thinking.value };
+  return patched;
+}
+
+/**
+ * 每种模式由哪几项设置拼成路线（server/modes.mjs）。各看各的：改了 local 的润色，native 的路线不变
+ */
+const ROUTES = {
+  native: (settings) => ({
+    mode: "native",
+    model: parseModelChoice(settings.model.value),
+    thinkingLevel: settings.thinking.value,
+  }),
+  local: (settings) => ({
+    mode: "local",
+    transcriber: settings.transcriber.value,
+    polish: parseChatChoice(settings.polish.value),
+    customUrl: settings.customUrl.value || null,
+  }),
+};
+
+/**
+ * 某种模式按现在的设置走哪条路线，不写就是设置里选的那种模式
+ * @param {ReturnType<typeof resolveSettings>} settings
+ * @param {string} [mode]
+ */
+export function routeOf(settings, mode = settings.mode.value) {
+  return ROUTES[mode](settings);
 }

@@ -2,7 +2,7 @@ import { log } from "../log.mjs";
 import { resolvePaths } from "../storage/paths.mjs";
 import { startTranscriber } from "./asr/start.mjs";
 import { loadConfig } from "./config.mjs";
-import { createPipelineRefiner, describeRoute } from "./pipelines.mjs";
+import { createModeRefiner, describeRoute } from "./modes.mjs";
 import { findProvider } from "./providers/index.mjs";
 import { startServer, WS_PATH } from "./server.mjs";
 
@@ -11,7 +11,7 @@ let config;
 let modelsDir = null;
 try {
   config = loadConfig(process.env);
-  if (config.route.pipeline === "local") modelsDir = resolvePaths(process.env).modelsDir;
+  if (config.route.mode === "local") modelsDir = resolvePaths(process.env).modelsDir;
 } catch (error) {
   // 配置写错是使用上的问题，给一句人话就够了，不需要调用栈
   console.error(error.message);
@@ -32,7 +32,7 @@ function progressLogger(modelId) {
 
 // 本地转写链路先把模型准备好：没下载过就下载，装进转写进程
 const transcriber =
-  route.pipeline === "local"
+  route.mode === "local"
     ? await startTranscriber({
         modelId: route.transcriber,
         modelsDir,
@@ -40,7 +40,7 @@ const transcriber =
         onProgress: progressLogger(route.transcriber),
       })
     : null;
-const refiner = await createPipelineRefiner({ route, apiKey, transcriber, log });
+const refiner = await createModeRefiner({ route, apiKey, transcriber, log });
 
 let server;
 try {
@@ -56,7 +56,7 @@ log.info("listening", {
   url: `ws://${config.host}:${server.port}${WS_PATH}`,
   route: describeRoute(route),
   // 思考档位只有 Gemini 用得上，别家不写，免得看日志的人以为它起了作用
-  ...(route.pipeline === "native" && findProvider(route.model.provider).thinkingLevels
+  ...(route.mode === "native" && findProvider(route.model.provider).thinkingLevels
     ? { thinking_level: route.thinkingLevel }
     : {}),
   ...(transcriber ? { transcriber_backend: transcriber.backend } : {}),

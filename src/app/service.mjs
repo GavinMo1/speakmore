@@ -1,10 +1,10 @@
 // 内置的听写服务：就是 ../server 那个服务端，跑在主进程里，这样用的人不用另开一个终端。
 // 页面和它之间仍然走 WebSocket，服务端照旧可以单独启动（调试、回放录音、评估提示词）。
-// 走哪条识别链路、用哪些模型由"路线"定（../server/pipelines.mjs），设置里改了当场换。
+// 走哪条识别链路、用哪些模型由"路线"定（../server/modes.mjs），设置里改了当场换。
 // 本地转写链路要的本地模型由这里管：没下载过就在后台下载，下好了装进转写进程，换模型或改走原生链路时卸掉。
 import { LocalizedError, msg, problemOf } from "../i18n/index.mjs";
 import { startTranscriber } from "../server/asr/start.mjs";
-import { createPipelineRefiner, describeRoute, keyVendorOf } from "../server/pipelines.mjs";
+import { createModeRefiner, describeRoute, keyVendorOf } from "../server/modes.mjs";
 import { startServer, WS_PATH } from "../server/server.mjs";
 
 /** 下载进度最多这么久报一次，不刷屏 */
@@ -16,12 +16,12 @@ const PROGRESS_EVERY_MS = 500;
  *
  * @param {object} options
  * @param {{ info: Function, warn: Function, error: Function }} options.log
- * @param {object} options.route 一开始走哪条路线（设置里的 pipeline 和各项，storage/settings.mjs 的 routeOf）
+ * @param {object} options.route 一开始走哪条路线（设置里的 mode 和各项，storage/settings.mjs 的 routeOf）
  * @param {string} [options.modelsDir] 本地模型放在哪（storage/paths.mjs 的 modelsDir）
  * @param {(record: object) => void} [options.onModelCall] 记账：每一次回了话的模型调用（听写和验证 key 都算），
  *   见 ../server/refine/meter.mjs
  * @param {() => void} [options.onLocalModel] 本地模型的状态变了（开始下载、进度、装好了、出错）
- * @param {typeof createPipelineRefiner} [options.createRefiner] 测试时换成假的
+ * @param {typeof createModeRefiner} [options.createRefiner] 测试时换成假的
  * @param {typeof startTranscriber} [options.startLocal] 测试时换成假的
  */
 export async function startService({
@@ -30,7 +30,7 @@ export async function startService({
   modelsDir,
   onModelCall,
   onLocalModel = () => {},
-  createRefiner = createPipelineRefiner,
+  createRefiner = createModeRefiner,
   startLocal = startTranscriber,
 }) {
   /** 正在走的路线。换一条要带着它要的那家的 key 一起换（useKey 的 route），验证过了才换 */
@@ -56,7 +56,7 @@ export async function startService({
 
   /** 让本地模型跟着路线走：要的是别的模型就换，不走本地转写就卸掉 */
   function followRoute() {
-    const wanted = route.pipeline === "local" ? route.transcriber : null;
+    const wanted = route.mode === "local" ? route.transcriber : null;
     if (loading?.model === wanted) return;
     releaseLocal();
     if (wanted) loadLocal(wanted);
@@ -180,6 +180,19 @@ export async function startService({
       route = nextRoute;
       followRoute();
       return { verified };
+    },
+
+    /**
+     * 只换 local 模式第一跳的本地模型。润色那一跳和 key 都不动，不用重新验证：
+     * 转写器是按名字取的（上面的 transcriber），装好的 refiner 照用，新模型在后台下载、装载
+     * @param {string} model 本地模型的 id（asr/catalog.mjs），调用方校验过
+     */
+    switchTranscriber(model) {
+      if (route.mode !== "local") throw new Error(`现在不是 local 模式（${route.mode}），没有本地模型可换`);
+      if (model === route.transcriber) return;
+      log.info("transcriber_switched", { from: route.transcriber, to: model });
+      route = { ...route, transcriber: model };
+      followRoute();
     },
 
     /** 把正在用的那把再验一次，没通过就抛错。启动时没连上网的，之后靠它补上验证 */

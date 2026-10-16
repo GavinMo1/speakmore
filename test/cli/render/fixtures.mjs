@@ -29,7 +29,7 @@ export const ready = {
 };
 export const settings = {
   hotkey: { value: "right_option", source: "default" },
-  pipeline: { value: "native", source: "default" },
+  mode: { value: "native", source: "default" },
   model: { value: "gemini/gemini-3.6-flash", source: "default" },
   thinking: { value: "MINIMAL", source: "default" },
   transcriber: { value: "qwen3-asr-0.6b-q8", source: "default" },

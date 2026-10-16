@@ -45,9 +45,14 @@ contextBridge.exposeInMainWorld("speakmore", {
   // 主窗口：设置
   getSetup: () => ipcRenderer.invoke("setup:get"),
   onSetupChanged: (callback) => ipcRenderer.on("setup:changed", () => callback()),
-  saveKey: (key) => ipcRenderer.invoke("setup:save-key", key),
+  // provider 不写是正在用的那家；给别家存时 changes 是要一起换成的设置，拿它们验证
+  saveKey: (key, provider, changes) => ipcRenderer.invoke("setup:save-key", key, provider, changes),
   forgetKey: (provider) => ipcRenderer.invoke("setup:forget-key", provider),
-  useProvider: (provider, key) => ipcRenderer.invoke("setup:use-provider", provider, key),
+  // 模式这一层，和各模式里的模型（src/app/modes.mjs）
+  setMode: (mode) => ipcRenderer.invoke("setup:set-mode", mode),
+  setModel: (model) => ipcRenderer.invoke("setup:set-model", model),
+  setTranscriber: (id) => ipcRenderer.invoke("setup:set-transcriber", id),
+  setPolish: (polish, customUrl) => ipcRenderer.invoke("setup:set-polish", polish, customUrl),
   readClipboard: () => ipcRenderer.invoke("setup:read-clipboard"),
   openKeyPage: (provider) => ipcRenderer.invoke("setup:open-key-page", provider),
   openPrivacySettings: (permission) => ipcRenderer.invoke("setup:open-privacy", permission),

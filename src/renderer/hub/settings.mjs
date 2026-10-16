@@ -1,6 +1,6 @@
 import { LOCALES, SYSTEM_LOCALE } from "../../i18n/index.mjs";
 import { t } from "../shared/i18n.mjs";
-import { createKeyPanel } from "../shared/key-panel.mjs";
+import { createKeyPanel, KEY_LAYERS } from "../shared/key-panel.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
 
 // 设置对话框：原版的"设置中心"，左边一列菜单。我们的四页：通用（热键、主题、语言、开机启动）、
@@ -22,7 +22,7 @@ export function paneFor(setup) {
  */
 export function createSettings({ refresh }) {
   const dialog = $("settings");
-  const keyPanel = createKeyPanel($("key-panel"), { refresh });
+  const keyPanel = createKeyPanel($("key-panel"), { refresh, layer: KEY_LAYERS.native });
   /** 最近一次拿到的状态 */
   let latest = null;
 

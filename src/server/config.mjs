@@ -1,7 +1,7 @@
 import { LocalizedError } from "../i18n/index.mjs";
 import { findModel, MODELS } from "./asr/catalog.mjs";
 import { normalizeBaseUrl, parseChatChoice } from "./chat/vendors.mjs";
-import { DEFAULT_PIPELINE, DEFAULT_POLISH, DEFAULT_TRANSCRIBER, keyVendorOf, parsePipeline } from "./pipelines.mjs";
+import { DEFAULT_MODE, DEFAULT_POLISH, DEFAULT_TRANSCRIBER, keyVendorOf, parseMode } from "./modes.mjs";
 import {
   apiKeyProblem,
   DEFAULT_MODEL_CHOICE,
@@ -59,15 +59,14 @@ function localRouteFrom(env) {
   if (polish.vendor === "custom" && customUrl === null) {
     throw new Error("润色交给自定义服务时要给它的地址：SPEAKMORE_CUSTOM_URL");
   }
-  return { pipeline: "local", transcriber, polish, customUrl };
+  return { mode: "local", transcriber, polish, customUrl };
 }
 
 /** 从环境变量读配置。写错了就报错退出，不悄悄换成默认值。 */
 export function loadConfig(env) {
-  const pipeline = given(env, "SPEAKMORE_PIPELINE") ? read(env, "SPEAKMORE_PIPELINE", parsePipeline) : DEFAULT_PIPELINE;
+  const mode = given(env, "SPEAKMORE_MODE") ? read(env, "SPEAKMORE_MODE", parseMode) : DEFAULT_MODE;
   const thinkingLevel = thinkingFrom(env);
-  const route =
-    pipeline === "local" ? localRouteFrom(env) : { pipeline: "native", model: modelFrom(env), thinkingLevel };
+  const route = mode === "local" ? localRouteFrom(env) : { mode: "native", model: modelFrom(env), thinkingLevel };
 
   const { keyEnv } = keyVendorOf(route);
   const apiKey = env[keyEnv]?.trim();
