@@ -366,8 +366,10 @@ export function createModelPane({ refresh }) {
 
   $("polish-model").addEventListener("change", () => {
     const [chosenVendor] = latest.local.polish.split("/");
-    if (polishVendor !== chosenVendor || latest.mode.value !== "local") return;
-    act(() => window.speakmore.setPolish(polishChoice(polishVendor)), $("local-problem"));
+    // 正在用的那家、正在 local 里：当场换，换的时候就验过了；别的先查一次选的这个模型能不能用
+    if (polishVendor === chosenVendor && latest.mode.value === "local") {
+      act(() => window.speakmore.setPolish(polishChoice(polishVendor)), $("local-problem"));
+    } else polishPanel.check();
   });
 
   $("apply-custom").addEventListener("click", () =>

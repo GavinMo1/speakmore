@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld("speakmore", {
   // provider 不写是正在用的那家；给别家存时 changes 是要一起换成的设置，拿它们验证
   saveKey: (key, provider, changes) => ipcRenderer.invoke("setup:save-key", key, provider, changes),
   forgetKey: (provider) => ipcRenderer.invoke("setup:forget-key", provider),
+  // 某种模式按改后的设置能不能用：拿那家的 key 发一个最小的请求，不换掉正在用的
+  checkModel: (mode, changes) => ipcRenderer.invoke("setup:check-model", mode, changes),
   // 模式这一层，和各模式里的模型（src/app/modes.mjs）
   setMode: (mode, changes) => ipcRenderer.invoke("setup:set-mode", mode, changes),
   setModel: (model) => ipcRenderer.invoke("setup:set-model", model),

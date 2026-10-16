@@ -595,6 +595,8 @@ async function main() {
     }),
   );
   handle("setup:forget-key", (_event, id) => keys.forget({ provider: id ?? keys.provider.id }));
+  // 设置里的"检查"：哪种模式里都能查，按页面上选的（还没换过去的）设置查
+  handle("setup:check-model", (_event, mode, changes) => viaModes((m) => m.check(mode, changes ?? {})));
   // 模式这一层，和各模式里的模型：分开的几件事
   // 切模式时可以连带那种模式自己的设置（changes），比如第一次进 local 就用自定义服务
   handle("setup:set-mode", (_event, mode, changes) => viaModes((m) => m.switchMode(mode, changes ?? {})));

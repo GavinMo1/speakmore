@@ -66,6 +66,20 @@
   color: var(--problem);
 }
 
+.check-result {
+  margin: 0.4rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+
+.check-result[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.check-result[data-tone="problem"] {
+  color: var(--problem);
+}
+
 .key-state-row {
   display: flex;
   flex-wrap: wrap;
