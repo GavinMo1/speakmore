@@ -3,14 +3,17 @@
 // 和原版当时给出的成品比排版（分没分段、用没用列表、长短、文字出入），并数出明显的异常。
 // 改提示词前后各跑一次，用 --label 区分，两次的数字就能直接对比。
 //
-// 用法：用哪个模型由 SPEAKMORE_MODEL 定（默认 Gemini），key 经 with-key.sh 喂进来：
+// 用法：评哪条链路、用哪个模型和服务端一样由环境变量定（src/server/config.mjs），key 经 with-key.sh 喂进来：
 //   scripts/dev/with-key.sh gemini node scripts/dev/eval-prompt.mjs --label <名字> [--out <目录>] [--concurrency 4]
-// 只评估 Gemini：Typeless 的录音是 Ogg，服务端不把 Ogg 转给 OpenAI（见 src/server/audio/transcode.mjs），
+//   SPEAKMORE_MODE=local scripts/dev/with-key.sh deepseek node scripts/dev/eval-prompt.mjs --label <名字>
+// 原生链路只评估 Gemini：Typeless 的录音是 Ogg，服务端不把 Ogg 转给 OpenAI（见 src/server/audio/transcode.mjs），
 // 作者也只同意这些录音发给 Gemini。OpenAI 的提示词边用边调。
+// 本地转写链路评的是润色的提示词：录音只在本机转写，发给润色那一家的是转出来的文字（2026-10-16 作者同意）。
 // 第一次运行会抽样，把清单写进 <目录>/samples.json，之后每次都用这同一批。
 // 加 --report-only 时不调模型，只拿这个标签上次的结果重新出一遍统计。
+// 本地转写链路可以加 --polish-prompt <文件>：用文件里的候选提示词润色，不用改源码，几个候选能同时跑。
 //
-// 录音会发给选的那一家。清单和结果文件里有说话的原文，所以输出目录必须在 git 之外，
+// 清单和结果文件里有说话的原文，所以输出目录必须在 git 之外，
 // 默认是 targets/typeless/_work/prompt-eval。终端上只打印统计数字，不打印文字。
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -18,11 +21,17 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { parseArgs } from "node:util";
+import { BENCH_DECODERS } from "../../bench/lib/sources.mjs";
+import { startTranscriber } from "../../src/server/asr/start.mjs";
+import { toSpeech } from "../../src/server/audio/transcode.mjs";
 import { loadConfig } from "../../src/server/config.mjs";
-import { formatModelChoice } from "../../src/server/providers/index.mjs";
+import { describeRoute } from "../../src/server/modes.mjs";
+import { createChatPolisher } from "../../src/server/refine/polisher.mjs";
 import { createModelRefiner } from "../../src/server/refine/refiner.mjs";
+import { resolvePaths } from "../../src/storage/paths.mjs";
 
 const TYPELESS_DB = join(homedir(), "Library/Application Support/Typeless/typeless.db");
+const QUIET = { info() {}, warn() {}, error() {} };
 /** 按录音时长分层抽样：[下限秒, 上限秒, 抽几条]。长录音才会分段分点，所以往长的那头多抽 */
 const SAMPLE_PLAN = [
   [0, 5, 4],
@@ -57,6 +66,7 @@ async function main() {
       out: { type: "string", default: resolve(import.meta.dirname, "../../targets/typeless/_work/prompt-eval") },
       concurrency: { type: "string", default: "4" },
       "report-only": { type: "boolean", default: false },
+      "polish-prompt": { type: "string" },
     },
   });
   const concurrency = Number(args.concurrency);
@@ -77,20 +87,22 @@ async function main() {
     console.log(`样本 ${samples.length} 条，标签 ${args.label}（用上次的结果，没有调模型）`);
   } else {
     const config = loadConfig(process.env);
-    let retries = 0;
-    const refiner = await createModelRefiner({
-      choice: config.model,
-      apiKey: config.apiKey,
-      thinkingLevel: config.thinkingLevel,
-      log: { info() {}, warn: () => retries++ },
-    });
-    const thinking = config.model.provider === "gemini" ? ` / ${config.thinkingLevel}` : "";
-    console.log(`样本 ${samples.length} 条，模型 ${formatModelChoice(config.model)}${thinking}，标签 ${args.label}`);
+    const { route } = config;
+    const thinking = route.mode === "native" && route.model.provider === "gemini" ? ` / ${route.thinkingLevel}` : "";
+    console.log(`样本 ${samples.length} 条，${describeRoute(route)}${thinking}，标签 ${args.label}`);
+    const promptFile = args["polish-prompt"];
+    if (promptFile && route.mode !== "local") {
+      console.error("--polish-prompt 只用在本地转写链路（SPEAKMORE_MODE=local）");
+      process.exit(2);
+    }
+    const prompt = promptFile ? readFileSync(promptFile, "utf8").trim() : undefined;
+    const runner =
+      route.mode === "local" ? await localRunner(config, samples, args.out, prompt) : await nativeRunner(config);
     // 进程里的第一次请求要多花一两秒建连接，先发掉，免得算进第一条样本的耗时
-    await refiner.warmUp();
-    results = await mapWithLimit(samples, concurrency, (sample) => runOne(refiner, sample));
+    await runner.warmUp();
+    results = await mapWithLimit(samples, concurrency, (sample) => runOne(runner, sample));
     writeFileSync(resultsPath, JSON.stringify(results, null, 2));
-    console.log(`因为成品写坏而重试：${retries} 次`);
+    runner.summarize();
     writeFileSync(join(args.out, `${args.label}.compare.md`), sideBySide(samples, results));
   }
 
@@ -124,11 +136,63 @@ function loadOrPickSamples(manifestPath) {
 
 // ---------- 跑模型 ----------
 
-async function runOne(refiner, sample) {
+/** 原生链路：录音整个交给模型，识别和整理一次做完 */
+async function nativeRunner({ route, apiKey }) {
+  let retries = 0;
+  const refiner = await createModelRefiner({
+    choice: route.model,
+    apiKey,
+    thinkingLevel: route.thinkingLevel,
+    log: { ...QUIET, warn: () => retries++ },
+  });
+  return {
+    warmUp: () => refiner.warmUp(),
+    run: async (sample) => ({ text: await refiner.refine(readFileSync(sample.audioPath), { mimeType: "audio/ogg" }) }),
+    summarize: () => console.log(`因为成品写坏而重试：${retries} 次`),
+  };
+}
+
+/**
+ * 本地转写链路：每条录音只在本机转写一次，原文存进 <目录>/transcripts.<模型>.json，之后只调润色那一跳。
+ * 这样改润色的提示词前后，比的是同一份原文，差别全在提示词上。耗时只算润色。prompt 不给就用源码里的
+ */
+async function localRunner({ route, apiKey }, samples, out, prompt) {
+  const cachePath = join(out, `transcripts.${route.transcriber}.json`);
+  const transcripts = existsSync(cachePath) ? JSON.parse(readFileSync(cachePath, "utf8")) : {};
+  const missing = samples.filter((sample) => !(sample.id in transcripts));
+  if (missing.length > 0) {
+    const { modelsDir } = resolvePaths(process.env);
+    const transcriber = await startTranscriber({ modelId: route.transcriber, modelsDir, log: QUIET });
+    try {
+      for (const sample of missing) {
+        const speech = await toSpeech(readFileSync(sample.audioPath), "audio/ogg", BENCH_DECODERS);
+        transcripts[sample.id] = (await transcriber.transcribe(speech)).text;
+      }
+    } finally {
+      transcriber.dispose();
+    }
+    writeFileSync(cachePath, JSON.stringify(transcripts, null, 2));
+    console.log(`本机转写了 ${missing.length} 条，原文存在 ${cachePath}，下次不再转`);
+  }
+  const polisher = await createChatPolisher({
+    choice: route.polish,
+    customUrl: route.customUrl,
+    apiKey,
+    log: QUIET,
+    prompt,
+  });
+  return {
+    warmUp: () => polisher.warmUp(),
+    run: async ({ id }) => ({ transcript: transcripts[id], text: await polisher.polish(transcripts[id]) }),
+    summarize: () => console.log("耗时只算润色那一跳"),
+  };
+}
+
+async function runOne(runner, sample) {
   const startedAt = performance.now();
   try {
-    const text = await refiner.refine(readFileSync(sample.audioPath), { mimeType: "audio/ogg" });
-    return { id: sample.id, ms: Math.round(performance.now() - startedAt), text };
+    const out = await runner.run(sample);
+    return { id: sample.id, ms: Math.round(performance.now() - startedAt), ...out };
   } catch (error) {
     return { id: sample.id, ms: Math.round(performance.now() - startedAt), error: String(error?.message ?? error) };
   }
@@ -278,9 +342,11 @@ function sideBySide(samples, results) {
     .map((sample, index) => {
       const result = results[index];
       const ours = result.error ? `（失败：${result.error}）` : result.text || "（空）";
+      // 本地转写链路把本机转出的原文也列上：成品哪里不对时，先分清是转写错了还是润色错了
+      const transcript = result.transcript === undefined ? "" : `### 本机转写\n\n${result.transcript || "（空）"}\n\n`;
       return (
         `## ${sample.id.slice(0, 8)}  ${sample.duration.toFixed(1)} 秒  ${result.ms} ms\n\n` +
-        `### 原版\n\n${sample.reference}\n\n### 我们\n\n${ours}\n`
+        `### 原版\n\n${sample.reference}\n\n${transcript}### 我们\n\n${ours}\n`
       );
     })
     .join("\n---\n\n");

@@ -19,6 +19,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * @param {(error: unknown, detail: string) => object | null} [options.classify] 这个协议的报错怎么认
  * @param {string} [options.apiKey] 只用来从报错里抹掉它
  * @param {(record: object) => void} [options.onCall] 记账，见 meter.mjs
+ * @param {string} [options.prompt] 系统提示词。调提示词时评测脚本（scripts/dev/eval-prompt.mjs）换成候选的版本
  * @returns {{ warmUp(): Promise<void>, polish(transcript: string, o: { signal?: AbortSignal, audioId?: string }): Promise<string> }}
  *   出错时抛的都是 ModelError
  */
@@ -30,6 +31,7 @@ export function createPolisher({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   log,
   onCall = () => {},
+  prompt = POLISH_PROMPT,
 }) {
   const described = (error) => toModelError(error, { provider: endpoint, apiKey, classify });
   const metered = createMeter({ provider: endpoint, log, onCall });
@@ -57,7 +59,7 @@ export function createPolisher({
       if (transcript.trim() === "") return "";
       try {
         const reply = await metered("dictation", audioId, () =>
-          client.complete({ system: POLISH_PROMPT, user: polishInput(transcript), signal: withTimeout(signal) }),
+          client.complete({ system: prompt, user: polishInput(transcript), signal: withTimeout(signal) }),
         );
         if (reply.problem) throw new LocalizedError(reply.problem);
         return textFromModelOutput(reply.text);
@@ -75,8 +77,9 @@ export function createPolisher({
  * @param {string | null} [options.customUrl] 自定义服务的地址（设置里的 customUrl）
  * @param {string} options.apiKey
  * @param {typeof fetch} [options.fetch] 测试时换成假的
+ * @param {string} [options.prompt] 见 createPolisher
  */
-export async function createChatPolisher({ choice, customUrl = null, apiKey, timeoutMs, log, onCall, fetch }) {
+export async function createChatPolisher({ choice, customUrl = null, apiKey, timeoutMs, log, onCall, fetch, prompt }) {
   const vendor = findChatVendor(choice.vendor);
   if (!vendor) throw new LocalizedError(msg("key.unknownProvider", { id: choice.vendor }));
   const { baseUrl, name } = chatEndpoint(vendor, { customUrl });
@@ -99,5 +102,6 @@ export async function createChatPolisher({ choice, customUrl = null, apiKey, tim
     timeoutMs,
     log,
     onCall,
+    prompt,
   });
 }

@@ -27,6 +27,7 @@ SPEAKMORE_MODEL=openai scripts/dev/with-key.sh openai node scripts/dev/e2e.mjs �
 SPEAKMORE_MODE=local scripts/dev/with-key.sh deepseek node scripts/dev/e2e.mjs 一段录音.wav   # 本地转写加 DeepSeek 润色：新的数据目录，模型真从下载源下
 SPEAKMORE_E2E_ELECTRON=dist/SpeakMore-darwin-arm64/SpeakMore.app/Contents/MacOS/SpeakMore …   # 同上，用打好的应用跑（npm run dist 打的，签了名时开着 hardened runtime）
 scripts/dev/with-key.sh gemini node scripts/dev/eval-prompt.mjs --label v1   # 拿自己 Typeless 的历史录音评估提示词
+SPEAKMORE_MODE=local scripts/dev/with-key.sh deepseek node scripts/dev/eval-prompt.mjs --label v1 --polish-prompt=候选.txt   # 评估润色的提示词：本机转写一次、存下原文，之后只调润色
 scripts/dev/with-key.sh gemini node src/server/main.mjs           # 单独启动听写服务，配合 SPEAKMORE_SERVER_URL 调试
 node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现成的录音发给单独启动的服务
 ```
