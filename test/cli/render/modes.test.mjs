@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderTranscribers } from "../../../src/cli/render/modes.mjs";
-import { downloadSize, MODELS, measuredOn } from "../../../src/models/catalog.mjs";
+import { downloadSize, MODELS, measuredOn, tagsOn } from "../../../src/models/catalog.mjs";
 import { english, plain } from "./fixtures.mjs";
 
 const view = (chip, overrides = {}) => ({
@@ -10,7 +10,8 @@ const view = (chip, overrides = {}) => ({
     name: model.name,
     bytes: downloadSize(model),
     installed: model.id === "qwen3-asr-0.6b-q8",
-    tags: model.tags,
+    // 和 speakmore transcriber 一样：标签按这类芯片挑
+    tags: tagsOn(model, chip),
     measured: measuredOn(model, chip),
   })),
   chip,
@@ -33,11 +34,16 @@ test("本机转写模型：一行一个，下面是标签和这类芯片上的�
 });
 
 test("没在这类芯片上测过的如实说；不在 local 模式时开头说用不上；英文照样排", () => {
-  const windows = renderTranscribers(view("windows-x64", { current: "native", source: "original" }), plain);
-  assert.match(windows, /现在是 native 模式，用不上这些/);
-  assert.match(windows, /Windows（x64）上还没实测/);
-  assert.match(windows, /下载源：原始地址（Hugging Face）/);
-  assert.match(windows, /modelSource cn/);
+  const intel = renderTranscribers(view("intel-mac", { current: "native", source: "original" }), plain);
+  assert.match(intel, /现在是 native 模式，用不上这些/);
+  assert.match(intel, /Intel Mac上还没实测/);
+  assert.match(intel, /下载源：原始地址（Hugging Face）/);
+  assert.match(intel, /modelSource cn/);
+  // Windows 上：标签和实测都是 Windows 的，不提 Apple 芯片和 Metal
+  const windows = renderTranscribers(view("windows-x64"), plain);
+  assert.match(windows, /\n\s+适合 Windows · Vulkan 显卡加速 · 能只用 CPU · 中英夹杂准\n/);
+  assert.match(windows, /Windows（x64）上实测（Vulkan）：均分 4\.16\/5 · 73 倍实时 · 内存 0\.5 GB/);
+  assert.doesNotMatch(windows, /Apple|Metal/);
   const en = renderTranscribers(view("apple-silicon"), english);
   assert.match(en, /Measured on Apple silicon \(Metal\): 4\.14\/5 · 68× real time · 2\.0 GB memory/);
   assert.match(en, /Downloads from: China mirror \(SpeakMore CDN\)/);

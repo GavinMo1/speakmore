@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { loadPriceBook } from "../../src/app/model-plaza.mjs";
 import { findLocale } from "../../src/i18n/index.mjs";
 import { CHIPS, findModel } from "../../src/models/catalog.mjs";
-import { PRESETS } from "../../src/models/presets.mjs";
+import { PRESETS, presetsFor } from "../../src/models/presets.mjs";
 import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../../src/server/asr/cloud/vendors.mjs";
 import { CHAT_VENDORS } from "../../src/server/chat/vendors.mjs";
 import { MODES } from "../../src/server/modes.mjs";
@@ -61,6 +61,21 @@ test("引用的模型都在清单里、拿真 key 调过；芯片写的是认识
         `${preset.id}：不认识的芯片 ${chip}`,
       );
     }
+  }
+});
+
+test("发布包覆盖的每类芯片都有用本机模型的组合（数据隐私和本机转写加润色各一个）", () => {
+  // 发布包打了这几类（scripts/release/release.mjs）；Windows ARM 没有发布包
+  for (const chip of ["apple-silicon", "intel-mac", "windows-x64"]) {
+    const ours = presetsFor(chip);
+    assert.ok(
+      ours.some(({ mode }) => mode === "private"),
+      `${chip}：没有数据隐私模式的组合`,
+    );
+    assert.ok(
+      ours.some(({ mode, settings }) => mode === "local" && findModel(settings.transcriber)),
+      `${chip}：没有本机转写加润色的组合`,
+    );
   }
 });
 

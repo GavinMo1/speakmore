@@ -150,7 +150,9 @@ export default {
   localModels: {
     tags: {
       "apple-silicon": "适合 Apple 芯片",
+      "windows-x64": "适合 Windows",
       metal: "Metal 加速",
+      vulkan: "Vulkan 显卡加速",
       cpu: "能只用 CPU",
       "zh-en": "中英夹杂准",
       fast: "快",
@@ -162,7 +164,7 @@ export default {
       "windows-x64": "Windows（x64）",
       "windows-arm64": "Windows（ARM）",
     },
-    backends: { metal: "Metal", cpu: "CPU" },
+    backends: { metal: "Metal", vulkan: "Vulkan", cpu: "CPU" },
     measured: "{chip}上实测（{backend}）：均分 {score}/5 · {realtime} 倍实时 · 内存 {memory}",
     figures: { score: "均分", speed: "速度", memory: "内存" },
     measuredOn: "{chip} · {backend} 实测",

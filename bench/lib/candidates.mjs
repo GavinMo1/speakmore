@@ -16,6 +16,7 @@ export const CANDIDATES = Object.freeze([
   candidate("qwen3-asr-0.6b-q8", "qwen3-asr-0.6b-q8"),
   // Intel Mac 和没有独显的 Windows 只有 CPU：同一个文件强制走 CPU，看差多少
   candidate("qwen3-asr-0.6b-q8@cpu", "qwen3-asr-0.6b-q8", { backend: "cpu" }),
+  candidate("sensevoice-small-q8@cpu", "sensevoice-small-q8", { backend: "cpu" }),
 ]);
 
 /** @returns {(typeof CANDIDATES)[number] | null} */

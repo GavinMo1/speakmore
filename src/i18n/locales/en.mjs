@@ -156,7 +156,9 @@ export default {
   localModels: {
     tags: {
       "apple-silicon": "suits Apple silicon",
+      "windows-x64": "suits Windows",
       metal: "Metal-accelerated",
+      vulkan: "GPU-accelerated (Vulkan)",
       cpu: "runs on CPU alone",
       "zh-en": "strong on mixed Chinese–English",
       fast: "fast",
@@ -168,7 +170,7 @@ export default {
       "windows-x64": "Windows (x64)",
       "windows-arm64": "Windows (ARM)",
     },
-    backends: { metal: "Metal", cpu: "CPU" },
+    backends: { metal: "Metal", vulkan: "Vulkan", cpu: "CPU" },
     measured: "Measured on {chip} ({backend}): {score}/5 · {realtime}× real time · {memory} memory",
     figures: { score: "score", speed: "speed", memory: "memory" },
     measuredOn: "Measured on {chip} · {backend}",

@@ -20,7 +20,7 @@ import {
   TAGS,
   tagsOn,
 } from "../../src/models/catalog.mjs";
-import { measuredFacts, measuredText, nameParts, tagTexts } from "../../src/models/describe.mjs";
+import { backendText, measuredFacts, measuredText, nameParts, tagTexts } from "../../src/models/describe.mjs";
 import { findEngine } from "../../src/server/asr/engines/index.mjs";
 
 const ROOT = join(import.meta.dirname, "../..");
@@ -121,6 +121,28 @@ test("给人看的标签按这台机器的芯片挑：在别类芯片上测出�
   assert.deepEqual(tagsOn(model, null), ["zh-en"]);
 });
 
+test("运行库报的设备名翻成加速方式：MTL0 是 Metal，Vulkan0 是 Vulkan，CPU 是 CPU，不认得的照原样", () => {
+  const t = createTranslator("zh-CN");
+  assert.equal(t.text(backendText("MTL0")), "Metal");
+  assert.equal(t.text(backendText("Vulkan0")), "Vulkan");
+  assert.equal(t.text(backendText("CPU")), "CPU");
+  assert.equal(t.text(backendText("CUDA0")), "CUDA0");
+});
+
+test("Windows（x64）上：两个 Q8 模型标着适合 Windows、能用 Vulkan 加速，测过 CPU 的标能只用 CPU；不提 Apple 芯片和 Metal", () => {
+  const qwen = findModel("qwen3-asr-0.6b-q8");
+  const sense = findModel("sensevoice-small-q8");
+  for (const model of [qwen, sense]) {
+    const tags = tagsOn(model, "windows-x64");
+    for (const tag of ["windows-x64", "vulkan", "cpu"]) assert.ok(tags.includes(tag), `${model.id} 缺 ${tag}`);
+    assert.ok(!tags.includes("apple-silicon") && !tags.includes("metal"), `${model.id}：${tags}`);
+    assert.equal(measuredOn(model, "windows-x64")[0].backend, "vulkan", `${model.id} 在 Windows 上最快的是 Vulkan`);
+  }
+  for (const id of ["qwen3-asr-0.6b-int8", "sensevoice-small-int8"]) {
+    assert.ok(measuredOn(findModel(id), "windows-x64").length > 0, `${id} 在 Windows 上测过`);
+  }
+});
+
 test("每个标签、芯片、加速后端在两种界面语言里都有说法", () => {
   for (const locale of ["zh-CN", "en"]) {
     const t = createTranslator(locale);
@@ -153,8 +175,12 @@ test("某类芯片上的实测：跑得快的在前，写成一句话；没测�
     zh.text(measuredText(measured, "apple-silicon")),
     "Apple 芯片上实测（Metal）：均分 4.14/5 · 68 倍实时 · 内存 2.0 GB",
   );
-  assert.deepEqual(measuredOn(q8, "windows-x64"), []);
-  assert.equal(zh.text(measuredText([], "windows-x64")), "Windows（x64）上还没实测");
+  assert.equal(
+    zh.text(measuredText(measuredOn(q8, "windows-x64"), "windows-x64")),
+    "Windows（x64）上实测（Vulkan）：均分 4.16/5 · 73 倍实时 · 内存 0.5 GB",
+  );
+  assert.deepEqual(measuredOn(q8, "intel-mac"), []);
+  assert.equal(zh.text(measuredText([], "intel-mac")), "Intel Mac上还没实测");
   assert.equal(zh.text(measuredText([], null)), "这类机器上还没实测");
   assert.deepEqual(
     tagTexts(["metal", "zh-en"]).map((text) => zh.text(text)),

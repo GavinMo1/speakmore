@@ -13,7 +13,7 @@ export const PRESETS = Object.freeze(
       id: "local-deepseek",
       mode: "local",
       settings: { transcriber: "qwen3-asr-0.6b-q8", polish: "deepseek/deepseek-flash" },
-      chips: ["apple-silicon"],
+      chips: ["apple-silicon", "windows-x64"],
     },
     {
       id: "native-gemini",
@@ -29,7 +29,7 @@ export const PRESETS = Object.freeze(
       id: "private-qwen",
       mode: "private",
       settings: { privateTranscriber: "qwen3-asr-0.6b-q8" },
-      chips: ["apple-silicon"],
+      chips: ["apple-silicon", "windows-x64"],
     },
     {
       id: "local-deepseek-cpu",
