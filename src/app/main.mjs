@@ -51,6 +51,7 @@ import { createKeyManager } from "./keys/key-manager.mjs";
 import { createKeyStore } from "./keys/key-store.mjs";
 import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
 import { createModeSwitch } from "./modes.mjs";
+import { createPendingSwitch } from "./pending-switch.mjs";
 import { startService } from "./service.mjs";
 import { summarizeSetup, summaryAsText } from "./setup-state.mjs";
 
@@ -261,6 +262,14 @@ async function main() {
   /** 切模式、换各模式里的模型（app/modes.mjs）。连着单独启动的服务端时这些都归那边，是 null */
   const modes = service
     ? createModeSwitch({ service, keys, models: localModels, settingsFile: PATHS.settingsFile, env: process.env, log })
+    : null;
+  /** 引导里选好了、只差本机模型下完的那一套：引导关了以后由它接着等，下好了切过去（app/pending-switch.mjs） */
+  const pendingSwitch = modes
+    ? createPendingSwitch({
+        isInstalled: (id) => localModels.isInstalled(id),
+        switchMode: (mode, changes) => modes.switchMode(mode, changes),
+        log,
+      })
     : null;
   /** 按键监听的小帮手：starting（还没报上来）/ running / stopped（退出了，或者根本没起来） */
   let helperState = "starting";
@@ -742,11 +751,16 @@ async function main() {
   handle("setup:check-model", (_event, mode, changes) => viaModes((m) => m.check(mode, changes ?? {})));
   // 模式这一层，和各模式里的模型：分开的几件事
   // 切模式时可以连带那种模式自己的设置（changes），比如第一次进 local 就用自定义服务
-  handle("setup:set-mode", (_event, mode, changes) => viaModes((m) => m.switchMode(mode, changes ?? {})));
-  handle("setup:set-model", (_event, model) => viaModes((m) => m.setModel(model)));
-  handle("setup:set-transcriber", (_event, id) => viaModes((m) => m.setTranscriber(id)));
+  // 用户自己换了方式或模型：引导里等着的那一套作罢（pendingSwitch）
+  const byUser = (action) => (m) => {
+    pendingSwitch.cancel();
+    return action(m);
+  };
+  handle("setup:set-mode", (_event, mode, changes) => viaModes(byUser((m) => m.switchMode(mode, changes ?? {}))));
+  handle("setup:set-model", (_event, model) => viaModes(byUser((m) => m.setModel(model))));
+  handle("setup:set-transcriber", (_event, id) => viaModes(byUser((m) => m.setTranscriber(id))));
   handle("setup:set-polish", (_event, polish, customUrl) =>
-    viaModes((m) => m.setPolish(polish, customUrl === undefined ? {} : { customUrl })),
+    viaModes(byUser((m) => m.setPolish(polish, customUrl === undefined ? {} : { customUrl }))),
   );
   // 本机模型：下载、取消、删除都由用户点；正在用的不能删（模式那一层管）
   handle("setup:download-model", (_event, id) => localModels.download(id));
@@ -956,6 +970,8 @@ async function main() {
       onboardingWindow.on("closed", () => {
         onboardingWindow = null;
         hotkeyToOnboarding = false;
+        // 走完、跳过或者点了关闭时模型可能已经下好了：引导没来得及切的，这里切
+        void pendingSwitch?.check();
       });
       // 页面崩了就没人说"测完了"
       onboardingWindow.webContents.on("render-process-gone", (_event, details) => {
@@ -970,6 +986,8 @@ async function main() {
   ipcMain.on("onboarding:capture-hotkey", (_event, capturing) => {
     hotkeyToOnboarding = capturing === true;
   });
+  // 引导里只差本机模型还在下的那一套（renderer/onboarding/plan.mjs 的 waitingDownload），null 是不等了
+  handle("onboarding:wait-download", (_event, way) => pendingSwitch?.set(way));
   handle("onboarding:finish", () => {
     log.info("onboarding_finished");
     onboardingWindow?.close();
@@ -1014,7 +1032,11 @@ async function main() {
   // Windows 上点通知区域的图标是打开主窗口（右键才是菜单），macOS 上点它就是菜单
   if (WINDOWS) tray.on("click", () => showMain());
   refreshTrayMenu();
-  localModelChanged = setupChanged;
+  localModelChanged = () => {
+    setupChanged();
+    // 引导开着时由引导自己切、当场说结果
+    if (onboardingWindow === null) void pendingSwitch?.check();
+  };
 
   // 没有窗口时也继续待在菜单栏里
   app.on("window-all-closed", () => {});
