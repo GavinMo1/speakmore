@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { pbkdf2 } from "node:crypto";
 import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -40,6 +41,27 @@ test("-f：接着把新写进来的打出来；日志被轮换（变小）时从
   writeFileSync(file, "轮换后\n");
   await until(() => written.includes("轮换后\n"));
   assert.ok(written.includes("轮换后\n"), JSON.stringify(written));
+  process.emit("SIGINT");
+  assert.equal(await done, 0);
+});
+
+test("-f：刚开始跟着时写进来的也打出来，系统忙的时候也一样（线程池被占满，第一次查文件大小会晚到写入之后）", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sm-tail-"));
+  const file = join(dir, "main.log");
+  writeFileSync(file, "旧的\n");
+  const written = [];
+  // 占满 libuv 的线程池（默认 4 个线程）：放在线程池里做的事都得排在它们后面
+  const busy = Array.from({ length: 4 }, () => new Promise((done) => pbkdf2("x", "y", 400_000, 32, "sha512", done)));
+  const done = tailFile(file, { lines: 1, follow: true, write: (text) => written.push(text), intervalMs: 20 });
+  t.after(() => {
+    process.emit("SIGINT");
+    rmSync(dir, { recursive: true, force: true });
+  });
+  appendFileSync(file, "刚开始写的\n");
+  await Promise.all(busy);
+  for (let waited = 0; !written.includes("刚开始写的\n") && waited < 2000; waited += 20)
+    await new Promise((r) => setTimeout(r, 20));
+  assert.ok(written.includes("刚开始写的\n"), JSON.stringify(written));
   process.emit("SIGINT");
   assert.equal(await done, 0);
 });
