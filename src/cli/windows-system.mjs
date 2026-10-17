@@ -1,13 +1,17 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 
 // 命令行在 Windows 上要动系统的那几处：install.ps1 在家目录以外留下的（用户 Path 里的一项、开始菜单的快捷方式）、
 // App 里开过的开机启动，卸载时照着删；还有删不掉正在跑的程序这件事。都经 PowerShell 做，要用的值走环境变量，
 // 脚本里不拼外来的字。macOS 上用不到这里。
 
-/** 跑一段 PowerShell，交出它的标准输出 */
+/**
+ * 跑一段 PowerShell，交出它的标准输出。出错就停、以非零退出（execFileSync 抛出来）；正常跑完明确以 0 退出：
+ * 不然 -Command 的退出码看最后一条命令，"没找到那一项"这种早料到的情况也会变成 1
+ */
 function powershell(script, env = {}) {
-  return execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], {
+  const wrapped = `$ErrorActionPreference = 'Stop'\n${script}\nexit 0`;
+  return execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", wrapped], {
     encoding: "utf8",
     windowsHide: true,
     env: { ...process.env, ...env },
@@ -39,23 +43,22 @@ export function removePathEntry(entry) {
 
 /**
  * 这个快捷方式是不是指着这个家目录里的程序。清单里记的东西卸载前要再认一遍：那个位置上可能已经换成了别的。
- * 快捷方式文件里存着目标的路径（UTF-16 和本地编码各一份，哪份都可能在），找得到家目录就算
+ * 目标路径请 Windows 自己读（WScript.Shell）：.lnk 文件里存的不是一整段连续的路径（本地编码那份拆成几截、
+ * UTF-16 那份是相对路径），按字节找找不到。比较也在 PowerShell 里做，路径不经过控制台编码
  */
-export function isOurShortcut(file, home, read = readFileSync) {
-  let bytes;
-  try {
-    bytes = read(file);
-  } catch (error) {
-    if (error.code === "ENOENT") return false;
-    throw error;
-  }
-  const wanted = `${home}\\runtime\\`.toLowerCase();
-  return [bytes.toString("utf16le"), bytes.toString("latin1")].some((text) => text.toLowerCase().includes(wanted));
+export function isOurShortcut(file, home) {
+  if (!existsSync(file)) return false;
+  const output = powershell(
+    `$target = (New-Object -ComObject WScript.Shell).CreateShortcut($env:SPEAKMORE_SHORTCUT).TargetPath
+     if ($target.StartsWith("$env:SPEAKMORE_HOME_DIR\\runtime\\", [StringComparison]::OrdinalIgnoreCase)) { 'ours' }`,
+    { SPEAKMORE_SHORTCUT: file, SPEAKMORE_HOME_DIR: home },
+  );
+  return output.trim() === "ours";
 }
 
 const RUN_KEYS = [
-  "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-  "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run",
+  "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+  "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run",
 ];
 
 /**
@@ -65,8 +68,9 @@ const RUN_KEYS = [
 export function removeLoginItem(home) {
   const output = powershell(
     `$run = Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'SpeakMore' -ErrorAction SilentlyContinue
-     if ($run -and $run.SpeakMore -like "*$env:SPEAKMORE_HOME_DIR\\runtime\\*") {
-       foreach ($key in $env:SPEAKMORE_RUN_KEYS.Split([char]10)) { & reg.exe delete $key /v SpeakMore /f 2>&1 | Out-Null }
+     # 按字面找家目录（不用 -like：路径里的 [ ] 会被当成通配符）
+     if ($run -and $run.SpeakMore.IndexOf("$env:SPEAKMORE_HOME_DIR\\runtime\\", [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+       foreach ($key in $env:SPEAKMORE_RUN_KEYS.Split([char]10)) { Remove-ItemProperty -Path $key -Name 'SpeakMore' -ErrorAction SilentlyContinue }
        'removed'
      }`,
     { SPEAKMORE_HOME_DIR: home, SPEAKMORE_RUN_KEYS: RUN_KEYS.join("\n") },

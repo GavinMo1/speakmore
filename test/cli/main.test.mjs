@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -1457,7 +1466,11 @@ test("uninstall（Windows）：用户 Path 里的那一项、开始菜单的快�
   const theirs = join(outside, "Other.lnk");
   writeFileSync(ours, "快捷方式");
   writeFileSync(theirs, "别人的快捷方式");
-  writeFileSync(paths.linksFile, `path %USERPROFILE%\\.speakmore\\bin\nshortcut ${ours}\nshortcut ${theirs}\n`);
+  // 照 install.ps1 真写出来的样子：Windows PowerShell 5.1 的 Add-Content -Encoding UTF8 开头带 BOM、按 CRLF 换行
+  writeFileSync(
+    paths.linksFile,
+    `\uFEFFpath %USERPROFILE%\\.speakmore\\bin\r\nshortcut ${ours}\r\nshortcut ${theirs}\r\n`,
+  );
   const { speakmore, output, windows } = harness({
     platform: "win32",
     keychain: () => false,
@@ -1470,9 +1483,21 @@ test("uninstall（Windows）：用户 Path 里的那一项、开始菜单的快�
   assert.match(output.out, /用户 Path 里的 %USERPROFILE%/);
   assert.match(output.out, /开机启动/);
   assert.doesNotMatch(output.out, /权限/);
-  // 这里没有正在跑的程序，删得掉，不用等退出
-  assert.deepEqual(windows.later, []);
-  assert.equal(existsSync(paths.home), false);
+  // bin 里的 speakmore.cmd 正在跑这条命令：cmd 等它退出后还要回头读这个文件，所以 bin 留到退出后连同家目录一起删
+  assert.deepEqual(readdirSync(paths.home), ["bin"]);
+  assert.deepEqual(windows.later, [paths.home]);
+  assert.match(output.out, /等它退出后/);
+});
+
+test("uninstall --keep-data（Windows）：bin 也留到退出后再删，你的东西不动", async () => {
+  mkdirSync(paths.binDir, { recursive: true });
+  writeFileSync(join(paths.binDir, "speakmore.cmd"), "@echo off");
+  writeFileSync(paths.settingsFile, "{}");
+  const { speakmore, windows } = harness({ platform: "win32", keychain: () => assert.fail("不该动 key") });
+  assert.equal(await speakmore("uninstall", "--keep-data", "--yes"), 0);
+  assert.equal(existsSync(join(paths.binDir, "speakmore.cmd")), true);
+  assert.equal(existsSync(paths.settingsFile), true);
+  assert.deepEqual(windows.later, [paths.binDir]);
 });
 
 test("uninstall：运行环境在别处留的那个共用的偏好文件，有的话提一句，不删", async () => {

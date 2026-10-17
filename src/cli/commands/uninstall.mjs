@@ -1,5 +1,5 @@
-import { existsSync, lstatSync, readFileSync, readlinkSync, rmSync } from "node:fs";
-import { dirname, resolve, sep } from "node:path";
+import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, rmSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 import { msg } from "../../i18n/index.mjs";
 import { noPositionals, parse, UsageError } from "../common.mjs";
 
@@ -21,7 +21,11 @@ function isOurLink(link, binDir) {
 
 function recordedLinks(io) {
   try {
-    return readFileSync(io.paths.linksFile, "utf8").split("\n").filter(Boolean);
+    // install.ps1 写的（Windows PowerShell 5.1）开头带 BOM、按 CRLF 换行
+    return readFileSync(io.paths.linksFile, "utf8")
+      .replace(/^\uFEFF/, "")
+      .split(/\r?\n/)
+      .filter(Boolean);
   } catch (error) {
     if (error.code === "ENOENT") return [];
     throw error;
@@ -71,6 +75,9 @@ export async function uninstall(args, io) {
 
   /** 删不掉、等这条命令退出后再删的（只有 Windows 会有） */
   const later = [];
+  // Windows 上这条命令是 bin\speakmore.cmd 起的：cmd 等它退出后还要回头读这个批处理文件，现在删掉的话
+  // 会报"找不到批处理文件"、退出码变成 1。bin 留到退出后再删（真机上试过，同一行接 exit 也躲不开）
+  const deferBin = io.platform === "win32";
   const remove = (dir) => {
     try {
       rmSync(dir, { recursive: true, force: true });
@@ -82,9 +89,9 @@ export async function uninstall(args, io) {
 
   if (keepData) {
     const logsDir = dirname(paths.logFile);
-    for (const dir of [paths.binDir, paths.appDir, paths.runtimeDir, paths.runDir, logsDir, paths.cacheDir]) {
-      remove(dir);
-    }
+    for (const dir of [paths.appDir, paths.runtimeDir, paths.runDir, logsDir, paths.cacheDir]) remove(dir);
+    if (deferBin) later.push(paths.binDir);
+    else remove(paths.binDir);
     removed.push(t("cli.uninstall.removedKeep", named));
   } else {
     try {
@@ -92,7 +99,15 @@ export async function uninstall(args, io) {
     } catch (error) {
       leftovers.push(t("cli.uninstall.keychainFailed", { reason: error.message }));
     }
-    remove(paths.home);
+    if (deferBin && existsSync(paths.home)) {
+      // 能删的现在删（删不掉的报出来、或者先记着），退出后把整个家目录连同 bin 再删一遍
+      for (const name of readdirSync(paths.home)) {
+        if (join(paths.home, name) !== paths.binDir) remove(join(paths.home, name));
+      }
+      later.splice(0, later.length, paths.home);
+    } else {
+      remove(paths.home);
+    }
     removed.push(t("cli.uninstall.removedAll", named));
   }
   if (later.length > 0) io.system.removeAfterExit(later);
