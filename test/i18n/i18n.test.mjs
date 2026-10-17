@@ -171,6 +171,9 @@ test("命令行的语言：先看 LC_ALL、LC_MESSAGES、LANG；Windows 的终�
   const systemLocale = () => "zh-CN";
   assert.deepEqual(terminalLocales({ LANG: "en_US.UTF-8" }, { platform: "win32", systemLocale }), ["en-US"]);
   assert.deepEqual(terminalLocales({}, { platform: "win32", systemLocale }), ["zh-CN"]);
+  // 明写了 C（Git Bash 这类终端会设）就照它，认不出的语言用英文，不再退回系统语言
+  assert.deepEqual(terminalLocales({ LANG: "C" }, { platform: "win32", systemLocale }), []);
+  assert.deepEqual(terminalLocales({ LANG: "  " }, { platform: "win32", systemLocale }), ["zh-CN"]);
   // macOS 的终端都会设，没设就是没说，不去猜
   assert.deepEqual(terminalLocales({}, { platform: "darwin", systemLocale }), []);
 });

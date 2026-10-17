@@ -68,8 +68,11 @@ export function matchLocale(preferred) {
  * zh_CN.UTF-8 → zh-CN；C、POSIX 是"没说"
  * @returns {string[]}
  */
+/** 终端用来说语言的环境变量，前面的优先 */
+const LOCALE_VARIABLES = ["LC_ALL", "LC_MESSAGES", "LANG"];
+
 export function localesFromEnv(env) {
-  for (const name of ["LC_ALL", "LC_MESSAGES", "LANG"]) {
+  for (const name of LOCALE_VARIABLES) {
     const value = env[name]?.trim();
     if (!value) continue;
     const tag = value.split(/[.@]/)[0];
@@ -89,8 +92,9 @@ export function terminalLocales(
   env,
   { platform = process.platform, systemLocale = () => Intl.DateTimeFormat().resolvedOptions().locale } = {},
 ) {
-  const fromEnv = localesFromEnv(env);
-  if (fromEnv.length > 0 || platform !== "win32") return fromEnv;
+  // 设了就照它（C、POSIX 这种说的是"不分语言"，用英文）；Windows 上一个都没设时才看系统
+  const said = LOCALE_VARIABLES.some((name) => env[name]?.trim());
+  if (said || platform !== "win32") return localesFromEnv(env);
   return [systemLocale()];
 }
 

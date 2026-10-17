@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
+import { pathToFileURL } from "node:url";
 import { compareVersions } from "../../src/cli/commands/update.mjs";
 import { createUpdater, DOWNLOAD_URL, downloadBase } from "../../src/cli/updater.mjs";
 import { createTranslator, LocalizedError } from "../../src/i18n/index.mjs";
@@ -74,7 +75,9 @@ test("下载地址问不到：报出地址和 curl 说的原因", async () => {
     await assert.rejects(attempt, (error) => {
       assert.ok(error instanceof LocalizedError);
       const said = zh.text(error.problem);
-      assert.ok(said.includes(join(dir, "nowhere")), said);
+      // 本机目录当下载地址时，Windows 上报的是它的 file:// 网址
+      const where = join(dir, "nowhere");
+      assert.ok(said.includes(where) || said.includes(pathToFileURL(where).href), said);
       assert.match(said, /curl/);
       return true;
     });

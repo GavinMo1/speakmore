@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { openHistory } from "../../src/storage/history.mjs";
 import { resolvePaths } from "../../src/storage/paths.mjs";
 
@@ -78,7 +79,8 @@ test("Node 太旧：按终端的语言说要哪个版本；旧到连文案那一
         (ancient ? "delete String.prototype.replaceAll;\ndelete Object.hasOwn;\n" : ""),
     );
     const { LC_ALL: _all, LC_MESSAGES: _messages, ...base } = process.env;
-    return spawnSync(process.execPath, ["--import", preload, BIN, "help"], {
+    // --import 认的是网址：Windows 上的盘符路径要先换成 file://
+    return spawnSync(process.execPath, ["--import", pathToFileURL(preload).href, BIN, "help"], {
       encoding: "utf8",
       env: { ...base, SPEAKMORE_HOME: dir, LANG },
     });
