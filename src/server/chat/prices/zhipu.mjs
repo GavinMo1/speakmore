@@ -15,7 +15,6 @@ const SHORT_OUTPUT = 200;
 export const PRICES = Object.freeze({
   "glm-5.2": { input: 8, cached: 2, output: 28 },
   "glm-4.7-flashx": { input: 0.5, cached: 0.1, output: 3 },
-  "glm-4.7-flash": { input: 0, cached: 0, output: 0 },
   "glm-4.5-air": { input: 0.8, cached: 0.16, output: 2, longOutput: 6 },
 });
 

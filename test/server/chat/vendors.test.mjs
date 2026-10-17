@@ -143,14 +143,14 @@ async function polishOnce(id, model, reply) {
   return { request: requests[0], result };
 }
 
-test("智谱：国内站地址，每个模型都关思考；强制思考的 GLM-5.3 系列不在清单里，没拿真 key 验过的都标出来", () => {
+test("智谱：国内站地址，每个模型都关思考；强制思考的 GLM-5.3 系列、跑不通的 GLM-4.7-Flash 不在清单里", () => {
   const zhipu = findChatVendor("zhipu");
   assert.equal(zhipu.baseUrl, "https://open.bigmodel.cn/api/paas/v4");
   for (const { id, unverified } of zhipu.models) {
     assert.deepEqual(requestFor(zhipu, id), { thinking: { type: "disabled" } }, id);
-    assert.equal(unverified, true, id);
+    assert.equal(unverified, undefined, id);
   }
-  assert.ok(!zhipu.models.some(({ id }) => id.startsWith("glm-5.3")));
+  assert.ok(!zhipu.models.some(({ id }) => id.startsWith("glm-5.3") || id === "glm-4.7-flash"));
   assert.deepEqual(parseChatChoice("zhipu"), { vendor: "zhipu", model: "glm-4.7-flashx" });
 });
 

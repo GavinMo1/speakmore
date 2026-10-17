@@ -47,7 +47,6 @@ test("智谱：免费的型号花费是 0；GLM-4.5-Air 按这一次输出的长
   const { costOf: zhipuCost } = await import("../../../src/server/chat/prices/zhipu.mjs");
   const { CNY_PER_USD } = await import("../../../src/server/currency.mjs");
   close(zhipuCost("glm-5.2", TOKENS), (8 + 2 + 28) / CNY_PER_USD);
-  assert.equal(zhipuCost("glm-4.7-flash", TOKENS), 0);
   close(zhipuCost("glm-4.5-air", { input: 1_000_000, cached: 0, output: 199 }), (0.8 + (199 * 2) / 1e6) / CNY_PER_USD);
   close(zhipuCost("glm-4.5-air", { input: 1_000_000, cached: 0, output: 200 }), (0.8 + (200 * 6) / 1e6) / CNY_PER_USD);
   assert.equal(zhipuCost("glm-5.3", TOKENS), null);

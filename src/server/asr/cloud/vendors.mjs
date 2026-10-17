@@ -41,9 +41,9 @@ export const CLOUD_TRANSCRIBERS = Object.freeze([
     keyEnv: "ZHIPU_API_KEY",
     keyPage: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
     defaultModel: "glm-asr-2512",
-    // 照官方文档写，未拿真 key 验证（zhipu.mjs）。文档写的是一段不超过 30 秒，切的时候留一秒余量，免得卡在边上被拒
+    // 2026-10-16 拿真 key 实测过（zhipu.mjs）。文档写的是一段不超过 30 秒，切的时候留一秒余量，免得卡在边上被拒
     models: Object.freeze([
-      Object.freeze({ id: "glm-asr-2512", name: "GLM-ASR-2512", maker: "zhipu", maxSeconds: 29, unverified: true }),
+      Object.freeze({ id: "glm-asr-2512", name: "GLM-ASR-2512", maker: "zhipu", maxSeconds: 29 }),
     ]),
     load: () => import("./zhipu.mjs"),
     prices: () => import("./prices/zhipu.mjs"),

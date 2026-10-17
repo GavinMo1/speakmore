@@ -109,18 +109,19 @@ export const CHAT_VENDORS = Object.freeze([
     // GLM-5.3、GLM-5.3-Flash、GLM-5.3-FlashX 强制思考、传 disabled 报错（同一页和
     // https://docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash），所以不收
     request: Object.freeze({ thinking: Object.freeze({ type: "disabled" }) }),
-    // 照官方文档写，未拿真 key 验证。每个档位收能关思考的最新一个（模型概览 https://docs.bigmodel.cn/cn/guide/start/model-overview，
-    // 2026-10-16）。不收：GLM-5.1、GLM-5、GLM-4.7（旗舰这一档有更新的 5.2）、GLM-5-Turbo（专为龙虾类智能体任务调的）、
+    // 每个档位收能关思考的最新一个（模型概览 https://docs.bigmodel.cn/cn/guide/start/model-overview，2026-10-16）。
+    // 不收：GLM-5.1、GLM-5、GLM-4.7（旗舰这一档有更新的 5.2）、GLM-5-Turbo（专为龙虾类智能体任务调的）、
     // GLM-4-Long（超长文本专用）、GLM-4.5-AirX（价目页上连历史价都没有它，拿不准国内站还卖不卖）、GLM-Z1 系列（只能推理）、
-    // 视觉理解模型（润色用不上看图）、GLM-4 那几个带日期的快照
+    // 视觉理解模型（润色用不上看图）、GLM-4 那几个带日期的快照。
+    // 2026-10-16 拿真 key 逐个调通：关思考时推理 token 是 0（开着是 108–164 个）。GLM-4.5-Air 开着思考时 usage 不报
+    // reasoning_tokens，记账认不出，好在关得掉。免费的 GLM-4.7-Flash 跑不通、先不上架：当天连试五次都回
+    // 429 业务码 1305"该模型当前访问量过大"，回头再试
     models: models(
       [
         { id: "glm-5.2", name: "GLM-5.2" },
         { id: "glm-4.7-flashx", name: "GLM-4.7-FlashX" },
-        // 免费的
-        { id: "glm-4.7-flash", name: "GLM-4.7-Flash" },
         { id: "glm-4.5-air", name: "GLM-4.5-Air" },
-      ].map((model) => ({ ...model, maker: "zhipu", unverified: true })),
+      ].map((model) => ({ ...model, maker: "zhipu" })),
     ),
     prices: () => import("./prices/zhipu.mjs"),
   }),

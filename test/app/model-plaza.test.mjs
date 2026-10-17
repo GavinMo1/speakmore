@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULTS, describePlaza, loadPriceBook } from "../../src/app/model-plaza.mjs";
+import { CLOUD_TRANSCRIBERS } from "../../src/server/asr/cloud/vendors.mjs";
+import { CHAT_VENDORS } from "../../src/server/chat/vendors.mjs";
+import { PROVIDERS } from "../../src/server/providers/index.mjs";
 
 const view = async (overrides = {}) =>
   describePlaza({
@@ -85,13 +88,20 @@ test("拿不到的价是 null，不编一个", async () => {
   assert.equal(plus.offers.bailian.price, null);
 });
 
-test("没拿真 key 调过的型号：那个渠道的一项记着未验证，验过的不记", async () => {
+test("没拿真 key 调过的型号：那个渠道的一项照清单记着未验证，验过的不记；不算这一行的标签", async () => {
   const { shelves } = await view();
-  const asr = group(shelves.transcribe, "zhipu").items.find(({ name }) => name === "GLM-ASR-2512");
-  assert.equal(asr.offers.zhipu.unverified, true);
-  const flash = group(shelves.polish, "deepseek").items.find(({ name }) => name === "DeepSeek V4.1 Flash");
-  assert.equal(flash.offers.deepseek.unverified, false);
-  assert.equal(flash.offers.bailian.unverified, false);
-  // 未验证跟着渠道走，不是这一行的标签：同一个模型换一家卖，可能就验过了
-  assert.ok(!asr.tags.some(({ kind }) => kind === "unverified"));
+  const registries = { transcribe: CLOUD_TRANSCRIBERS, polish: CHAT_VENDORS, native: PROVIDERS };
+  let offers = 0;
+  for (const [role, registry] of Object.entries(registries)) {
+    const listed = new Map(registry.flatMap((v) => v.models.map((m) => [`${v.id}/${m.id}`, Boolean(m.unverified)])));
+    for (const item of shelves[role].filter(({ kind }) => kind === "cloud").flatMap(({ items }) => items)) {
+      // 未验证跟着渠道走，不是这一行的标签：同一个模型换一家卖，可能就验过了
+      assert.ok(!item.tags.some(({ kind }) => kind === "unverified"), item.name);
+      for (const offer of Object.values(item.offers)) {
+        assert.equal(offer.unverified, listed.get(offer.choice), offer.choice);
+        offers += 1;
+      }
+    }
+  }
+  assert.ok(offers > 20);
 });
