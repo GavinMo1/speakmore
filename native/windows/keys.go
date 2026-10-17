@@ -25,8 +25,8 @@ const altGrFakeCtrlScan = 0x21D
 // 能选的热键：设置里的名字 → 虚拟键码。macOS 那几个（右 Option、右 Command、fn）在 Windows 上没有对应的键：
 // 右 Win 松开会弹开始菜单，fn 系统根本看不到
 var hotkeys = map[string]uint32{
-	"right_alt":     vkRMenu,
-	"right_control": vkRControl,
+	"right_alt":  vkRMenu,
+	"right_ctrl": vkRControl,
 }
 
 // 一个键盘事件

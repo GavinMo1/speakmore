@@ -18,6 +18,8 @@ const locale = ipcRenderer.sendSync("locale:get");
 
 contextBridge.exposeInMainWorld("speakmore", {
   locale,
+  // 哪个系统：按系统说法不同的文案（src/i18n）、按系统摆的窗口元素（html 上的 data-platform）用它
+  platform: process.platform,
   onLocaleChanged: (callback) => ipcRenderer.on("locale:changed", (_event, next) => callback(next)),
   config: () => ipcRenderer.invoke("config:get"),
 

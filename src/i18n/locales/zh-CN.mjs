@@ -57,6 +57,8 @@ export default {
     right_command: { name: "右 Command 键", keycap: "右⌘" },
     right_control: { name: "右 Control 键", keycap: "右⌃" },
     fn: { name: "地球仪（fn）键", keycap: "fn" },
+    right_alt: { name: "右 Alt 键", keycap: "右 Alt" },
+    right_ctrl: { name: "右 Ctrl 键", keycap: "右 Ctrl" },
   },
 
   themes: {
@@ -253,6 +255,8 @@ export default {
     silent: "没有听到声音",
     noAccessibility: "没有辅助功能权限：文字已复制，按 ⌘V 粘贴",
     pasteFailed: "没能自动粘贴：文字已复制，按 ⌘V 粘贴",
+    // 只有 Windows 有：系统不让模拟的按键进以管理员身份运行的窗口
+    elevated: "那个窗口是以管理员身份运行的，贴不进去：文字已复制，按 Ctrl+V 粘贴",
   },
 
   bar: {
@@ -1105,6 +1109,26 @@ speakmore help     全部命令`,
       needGo:
         "从源码运行时，编译 Windows 上按键监听的小程序需要 Go 1.27 或更新的版本（https://go.dev/dl/），装好后再启动",
       buildFailedGo: "Windows 上按键监听的小程序没有编译成功：\n{detail}",
+    },
+  },
+
+  // Windows 上说法不同的那几句，名字照抄通用的（见 src/i18n/index.mjs 开头）。"本机"这类不分系统的不写
+  windows: {
+    permissions: { openSettings: "设置" },
+    setup: { openSettings: "任务栏通知区域的图标 › 设置" },
+    key: {
+      keychainUnavailable: "系统的加密存储不可用，没法安全地保存 key",
+      noKeyService:
+        "还没有填 {provider} API key：在终端运行 speakmore key，或者点任务栏通知区域里 SpeakMore 的图标打开设置",
+      noKeyServiceFor:
+        "还没有填 {provider} API key：在终端运行 speakmore key {id}，或者点任务栏通知区域里 SpeakMore 的图标打开设置",
+    },
+    delivery: { pasteFailed: "没能自动粘贴：文字已复制，按 Ctrl+V 粘贴" },
+    bar: { noMicPermission: "缺麦克风权限：设置 › 隐私和安全性 › 麦克风" },
+    onboarding: {
+      // Windows 只有麦克风这一项
+      permissions: { soft: "确认", title: "麦克风权限" },
+      microphone: { help: "查 设置 › 系统 › 声音 › 输入：设备、音量 · 或麦克风权限没开" },
     },
   },
 };

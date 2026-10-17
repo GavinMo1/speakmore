@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, test } from "node:test";
 import { CN_BASE } from "../../src/models/catalog.mjs";
 import { createModelStore } from "../../src/models/store.mjs";
@@ -161,7 +161,7 @@ test("清单换了版本，旧收据就不算数：重新核对文件，内容�
   const moved = { ...MODEL, origin: { ...MODEL.origin, revision: "b".repeat(40) } };
   assert.equal(store.isInstalled(moved), false);
   await createModelStore({
-    dir: store.dirOf(MODEL).replace(/\/fake-asr$/, ""),
+    dir: dirname(store.dirOf(MODEL)),
     fetch: () => assert.fail("不该下载"),
   }).install(moved);
   assert.equal(store.isInstalled(moved), true);

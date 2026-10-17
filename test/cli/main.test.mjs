@@ -1,14 +1,5 @@
 import assert from "node:assert/strict";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -20,14 +11,22 @@ import { downloadSize, findModel } from "../../src/models/catalog.mjs";
 import { CHAT_VENDORS } from "../../src/server/chat/vendors.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
 import { keyFile, oldAppKeyFile, resolvePaths } from "../../src/storage/paths.mjs";
-import { resolveSettings } from "../../src/storage/settings.mjs";
+import { HOTKEY_IDS, resolveSettings } from "../../src/storage/settings.mjs";
+import { assertOwnerOnlyDir } from "../helpers/owner-only.mjs";
+
+/** 热键按系统分：默认的是第一个，另挑一个不是默认的；能填哪几个照本机这个系统的写 */
+const DEFAULT_HOTKEY = HOTKEY_IDS[0];
+const OTHER_HOTKEY = HOTKEY_IDS.at(-1);
+const HOTKEY_CHOICES = new RegExp(HOTKEY_IDS.join(" \\/ "));
+const zhHotkey = createTranslator("zh-CN")(`hotkeys.${DEFAULT_HOTKEY}.name`);
+const enHotkey = createTranslator("en")(`hotkeys.${DEFAULT_HOTKEY}.name`);
 
 const READY = {
   pid: 4321,
   version: "0.1.0",
   starting: false,
-  hotkey: "right_option",
-  hotkeyLabel: "右 Option 键",
+  hotkey: DEFAULT_HOTKEY,
+  hotkeyLabel: zhHotkey,
   provider: "gemini",
   mode: "native",
   model: "gemini/gemini-3.6-flash",
@@ -314,7 +313,7 @@ test("不带参数：没在运行就启动，然后给出状态面板", async ()
   assert.deepEqual(daemon.calls, ["start", "recheck"]);
   assert.match(output.out, /正在启动/);
   assert.match(output.out, /SpeakMore 0\.1\.0 · 运行中/);
-  assert.match(output.out, /按一下右 Option 键开始说话/);
+  assert.match(output.out, new RegExp(`按一下${zhHotkey}开始说话`));
 });
 
 test("已经在运行时不再启动一次，只给面板；start 和不带参数是一回事", async () => {
@@ -608,8 +607,8 @@ test("正在运行的是装成应用的那一个：不代它重启（会被换�
   assert.match(restarting.output.err, /退出/);
 
   const configuring = harness({ daemon: fakeDaemon({ running: packaged }) });
-  assert.equal(await configuring.speakmore("config", "set", "hotkey", "fn"), 0);
-  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { hotkey: "fn" });
+  assert.equal(await configuring.speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { hotkey: OTHER_HOTKEY });
   assert.deepEqual(configuring.daemon.calls, []);
   assert.match(configuring.output.out, /SpeakMore\.app/);
   assert.doesNotMatch(configuring.output.out, /已经生效/);
@@ -655,7 +654,7 @@ test("status --json：给程序读的，一行 JSON，带运行状态、设置�
   const parsed = JSON.parse(output.out);
   assert.equal(parsed.running, true);
   assert.equal(parsed.status.pid, 4321);
-  assert.equal(parsed.settings.hotkey.value, "right_option");
+  assert.equal(parsed.settings.hotkey.value, DEFAULT_HOTKEY);
   assert.deepEqual(parsed.stats, { today: null, total: null });
 });
 
@@ -951,16 +950,16 @@ test("key --forget：共用的那份和 0.7.0 及以前 App 另存的那份都�
 test("config：列出每一项和文件位置", async () => {
   const { speakmore, output } = harness();
   assert.equal(await speakmore("config"), 0);
-  assert.match(output.out, /hotkey\s+right_option/);
-  assert.match(output.out, new RegExp(paths.settingsFile.replaceAll("/", "\\/")));
+  assert.match(output.out, new RegExp(`hotkey\\s+${DEFAULT_HOTKEY}`));
+  assert.ok(output.out.includes(paths.settingsFile), output.out);
 });
 
 test("config set：存进文件；在运行的话重启让它生效", async () => {
   const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
-  assert.equal(await speakmore("config", "set", "hotkey", "fn"), 0);
-  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { hotkey: "fn" });
+  assert.equal(await speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { hotkey: OTHER_HOTKEY });
   assert.deepEqual(daemon.calls.slice(0, 2), ["stop", "start"]);
-  assert.match(output.out, /hotkey 改成了 fn/);
+  assert.match(output.out, new RegExp(`hotkey 改成了 ${OTHER_HOTKEY}`));
   assert.match(output.out, /已经生效/);
 
   const idle = harness();
@@ -989,22 +988,22 @@ test("config set：重启时没连上 Gemini，新设置对不对还不知道：
 test("config set：还没启动过就先改设置时，建出来的目录同样只有自己进得去", async () => {
   rmSync(dir, { recursive: true });
   const { speakmore } = harness();
-  assert.equal(await speakmore("config", "set", "hotkey", "fn"), 0);
-  assert.equal(statSync(paths.home).mode & 0o777, 0o700);
+  assert.equal(await speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
+  assertOwnerOnlyDir(paths.home);
 });
 
 test("config set：填错时说能填什么，不动文件，以 2 退出", async () => {
   const { speakmore, output } = harness();
   assert.equal(await speakmore("config", "set", "hotkey", "caps_lock"), 2);
-  assert.match(output.err, /right_option \/ right_command \/ right_control \/ fn/);
+  assert.match(output.err, HOTKEY_CHOICES);
   assert.equal(existsSync(paths.settingsFile), false);
   assert.equal(await speakmore("config", "set", "hotkey"), 2);
   assert.equal(await speakmore("config", "dance"), 2);
 });
 
 test("config set：这一项正被环境变量盖着时提醒一句", async () => {
-  const { speakmore, output } = harness({ env: { SPEAKMORE_HOTKEY: "right_command" } });
-  assert.equal(await speakmore("config", "set", "hotkey", "fn"), 0);
+  const { speakmore, output } = harness({ env: { SPEAKMORE_HOTKEY: DEFAULT_HOTKEY } });
+  assert.equal(await speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
   assert.match(output.out, /SPEAKMORE_HOTKEY/);
 });
 
@@ -1024,7 +1023,7 @@ test("config set 是不检查的后门：模式那一层管的几项照写，说
   const plain = harness();
   assert.equal(await plain.speakmore("config", "set", "thinking", "low"), 0);
   assert.doesNotMatch(plain.output.out, /平时用|才用上/);
-  assert.equal(await plain.speakmore("config", "set", "hotkey", "fn"), 0);
+  assert.equal(await plain.speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
   assert.doesNotMatch(plain.output.out, /平时用|才用上/);
 });
 
@@ -1041,10 +1040,10 @@ test("config set 把 local 的第一跳改成没下载的：重启后说还没�
 
 test("config unset：回到默认值", async () => {
   const { speakmore, output } = harness();
-  await speakmore("config", "set", "hotkey", "fn");
+  await speakmore("config", "set", "hotkey", OTHER_HOTKEY);
   assert.equal(await speakmore("config", "unset", "hotkey"), 0);
   assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), {});
-  assert.match(output.out, /hotkey 回到了默认值 right_option/);
+  assert.match(output.out, new RegExp(`hotkey 回到了默认值 ${DEFAULT_HOTKEY}`));
 });
 
 // ---------- 主题 ----------
@@ -1132,7 +1131,7 @@ test("英文：帮助、面板、用错了时的说法都是英文的", async ()
 
   assert.equal(await speakmore("status"), 0);
   assert.match(output.out, /SpeakMore 0\.1\.0 · running/);
-  assert.match(output.out, /press Right Option to start talking/);
+  assert.match(output.out, new RegExp(`press ${enHotkey} to start talking`));
   assert.match(output.out, /Permissions +Microphone ✓ {3}Input Monitoring ✓ {3}Accessibility ✓/);
   assert.match(output.out, /Model +Gemini gemini-3\.6-flash \(MINIMAL\)/);
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderStatus } from "../../../src/cli/render/status.mjs";
-import { noStats, plain, ready, settings } from "./fixtures.mjs";
+import { hotkeyZh, noStats, plain, ready, settings } from "./fixtures.mjs";
 
 test("没有在运行时只说一句怎么启动", () => {
   const text = renderStatus({ status: null, version: "0.1.0", settings, stats: noStats }, plain);
@@ -13,10 +13,10 @@ test("没有在运行时只说一句怎么启动", () => {
 test("一切就绪时说怎么用，并列出 key、权限、热键、模型", () => {
   const text = renderStatus({ status: ready, version: "0.1.0", settings, stats: noStats }, plain);
   assert.match(text, /SpeakMore 0\.1\.0 · 运行中/);
-  assert.match(text, /按一下右 Option 键开始说话/);
+  assert.match(text, new RegExp(`按一下${hotkeyZh}开始说话`));
   assert.match(text, /key\s+已保存，验证通过/);
   assert.match(text, /麦克风 ✓\s+输入监控 ✓\s+辅助功能 ✓/);
-  assert.match(text, /热键\s+右 Option 键/);
+  assert.match(text, new RegExp(`热键\\s+${hotkeyZh}`));
   assert.match(text, /模型\s+Gemini 的 gemini-3\.6-flash（MINIMAL）/);
 });
 

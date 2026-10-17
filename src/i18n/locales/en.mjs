@@ -58,6 +58,8 @@ export default {
     right_command: { name: "Right Command", keycap: "Right ⌘" },
     right_control: { name: "Right Control", keycap: "Right ⌃" },
     fn: { name: "Globe (fn)", keycap: "fn" },
+    right_alt: { name: "Right Alt", keycap: "Right Alt" },
+    right_ctrl: { name: "Right Ctrl", keycap: "Right Ctrl" },
   },
 
   themes: {
@@ -262,6 +264,8 @@ export default {
     silent: "Didn't hear anything",
     noAccessibility: "No Accessibility access: text copied, press ⌘V to paste",
     pasteFailed: "Couldn't paste: text copied, press ⌘V to paste",
+    // 只有 Windows 有：系统不让模拟的按键进以管理员身份运行的窗口
+    elevated: "That window runs as administrator, so text can't be pasted into it: text copied, press Ctrl+V to paste",
   },
 
   bar: {
@@ -1151,6 +1155,50 @@ speakmore help     all commands`,
       needGo:
         "Running from source on Windows, building the key-listening helper needs Go 1.27 or newer (https://go.dev/dl/). Install it, then start again.",
       buildFailedGo: "The Windows key-listening helper didn't build:\n{detail}",
+    },
+  },
+
+  // Windows 上说法不同的那几句，名字照抄通用的（见 src/i18n/index.mjs 开头）
+  windows: {
+    permissions: { openSettings: "Settings" },
+    settings: {
+      describe: {
+        mode: "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this PC first, then has any LLM polish the text; private only transcribes on this PC and uploads nothing",
+        language: "Interface language; system follows Windows",
+      },
+    },
+    modes: {
+      local: "Local: transcribed on this PC, then polished by a model",
+      private: "Private: transcribed on this PC only, nothing uploaded",
+    },
+    setup: { openSettings: "tray icon › Settings" },
+    key: {
+      keychainUnavailable: "Windows' encrypted storage isn't available, so the key can't be stored safely",
+      noKeyService:
+        "No {provider} API key yet: run speakmore key in a terminal, or open Settings from the SpeakMore icon in the taskbar tray",
+      noKeyServiceFor:
+        "No {provider} API key yet: run speakmore key {id} in a terminal, or open Settings from the SpeakMore icon in the taskbar tray",
+    },
+    delivery: { pasteFailed: "Couldn't paste: text copied, press Ctrl+V to paste" },
+    bar: { noMicPermission: "No microphone access: Settings › Privacy & security › Microphone" },
+    plaza: {
+      via: { local: "This PC" },
+      toolbar: { keysLocal: "Keys stay on this PC" },
+      groups: {
+        local: "On this PC",
+        localMeta: "Audio stays on this PC · {done}/{total} downloaded",
+        localMetaFree: "Audio stays on this PC · {done}/{total} downloaded · {free} free",
+      },
+    },
+    onboarding: {
+      permissions: {
+        // Windows 只有麦克风这一项
+        soft: "Check ",
+        title: "microphone access",
+        history: "History stays on this PC",
+        key: "Key encrypted on this PC",
+      },
+      microphone: { help: "Check the input device and volume in Settings › System › Sound, or turn on" },
     },
   },
 };

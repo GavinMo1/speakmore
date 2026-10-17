@@ -3,8 +3,9 @@ import { test } from "node:test";
 import { summarizeSetup, summaryAsText } from "../../src/app/setup-state.mjs";
 import { createTranslator, msg } from "../../src/i18n/index.mjs";
 
-const zh = createTranslator("zh-CN");
-const en = createTranslator("en");
+// 按 macOS 的说法查；Windows 那几句的说法在 i18n 的测试里查
+const zh = createTranslator("zh-CN", "darwin");
+const en = createTranslator("en", "darwin");
 /** 结论里的话按中文翻出来再比：说法和以前一样，只是改由显示的那一端翻 */
 const summarize = (setup, t = zh) => summaryAsText(summarizeSetup(setup), t);
 

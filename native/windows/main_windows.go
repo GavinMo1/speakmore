@@ -296,7 +296,7 @@ func main() {
 	}
 	vk, ok := hotkeys[name]
 	if !ok {
-		emit(event{"event": "error", "message": "不认识的热键 " + name + "，可选：right_alt、right_control"})
+		emit(event{"event": "error", "message": "不认识的热键 " + name + "，可选：right_alt、right_ctrl"})
 		exit(2)
 	}
 	state.hotkey = vk

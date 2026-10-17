@@ -35,9 +35,9 @@ function fakeBuild(run) {
 
 test("可执行文件、源码、指纹文件的位置", () => {
   assert.deepEqual(paths, {
-    source: "/pkg/native/main.swift",
-    binary: "/pkg/build/key-helper",
-    stamp: "/pkg/build/key-helper.source-sha256",
+    source: join("/pkg", "native", "main.swift"),
+    binary: join("/pkg", "build", "key-helper"),
+    stamp: join("/pkg", "build", "key-helper.source-sha256"),
   });
 });
 
@@ -64,7 +64,7 @@ test("平时只编本机的架构，编完记下是从哪份源码来的", () =>
   const calls = [];
   const build = fakeBuild((command, args) => calls.push([command, ...args]));
   buildHelper("/pkg", build.options);
-  assert.deepEqual(calls, [["swiftc", "-O", "-o", "/pkg/build/key-helper", "/pkg/native/main.swift"]]);
+  assert.deepEqual(calls, [["swiftc", "-O", "-o", paths.binary, paths.source]]);
   assert.deepEqual(build.written, { [paths.stamp]: `${stampOf(SOURCE)}\n` });
 });
 
@@ -81,11 +81,11 @@ test("发布时两种芯片各编一份再合成一个文件，中间文件删�
     "lipo",
     "-create",
     "-output",
-    "/pkg/build/key-helper",
-    "/pkg/build/key-helper-arm64",
-    "/pkg/build/key-helper-x86_64",
+    paths.binary,
+    `${paths.binary}-arm64`,
+    `${paths.binary}-x86_64`,
   ]);
-  assert.deepEqual(build.removed, ["/pkg/build/key-helper-arm64", "/pkg/build/key-helper-x86_64"]);
+  assert.deepEqual(build.removed, [`${paths.binary}-arm64`, `${paths.binary}-x86_64`]);
   assert.deepEqual(Object.keys(build.written), [paths.stamp]);
 });
 

@@ -150,3 +150,18 @@ test("LocalizedError：problem 留着给显示的那端翻，message 是英文�
   assert.equal(problemOf(new Error("磁盘满了")), "磁盘满了");
   assert.equal(problemOf("一句话"), "一句话");
 });
+
+test("按系统说法不同的话：Windows 上先找 windows 那一节，没有就用通用的；中文没写 Windows 那句时用通用的中文，不掉回英文", () => {
+  const macZh = createTranslator("zh-CN", "darwin");
+  const winZh = createTranslator("zh-CN", "win32");
+  const winEn = createTranslator("en", "win32");
+  assert.match(macZh("delivery.pasteFailed"), /⌘V/);
+  assert.match(winZh("delivery.pasteFailed"), /Ctrl\+V/);
+  assert.match(winEn("delivery.pasteFailed"), /Ctrl\+V/);
+  // 英文分 Mac 和 PC，中文都是"本机"
+  assert.equal(createTranslator("en", "darwin")("plaza.via.local"), "This Mac");
+  assert.equal(winEn("plaza.via.local"), "This PC");
+  assert.equal(winZh("plaza.via.local"), "本机");
+  // 不分系统的照常
+  assert.equal(winZh("hotkeys.right_alt.name"), "右 Alt 键");
+});

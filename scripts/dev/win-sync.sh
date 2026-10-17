@@ -14,14 +14,20 @@ root="$(cd "$here/../.." && pwd)"
 . "$root/.machine.env"
 key="$(printf '%s' "$WIN_SSH_KEY" | sed "s|^~|$HOME|")"
 
-"$here/win.sh" '$d = "$HOME\speakmore-dev\repo"; New-Item -ItemType Directory -Force $d | Out-Null; Get-ChildItem -Force $d | Where-Object Name -ne "node_modules" | Remove-Item -Recurse -Force' >/dev/null
+# 先清掉那边的旧文件（node_modules 和编好的小帮手留着）
+"$here/win.sh" '$d = "$HOME\speakmore-dev\repo"; New-Item -ItemType Directory -Force $d | Out-Null; Get-ChildItem -Force $d | Where-Object Name -notin "node_modules", "build" | Remove-Item -Recurse -Force' >/dev/null
 cd "$root"
 # 只传文件（被删掉的跟踪文件 ls-files 还会列出来，tar 找不到会报错）。
 # 编好的 Windows 小帮手不进 git，在 Mac 上交叉编译（node scripts/build/build-native.mjs --windows），
-# 有就连同它的指纹一起带过去：那边从源码启动时看指纹对得上，就不会去找 Go 重编
+# 有就连同它的指纹一起带过去：那边从源码启动时看指纹对得上，就不会去找 Go 重编。
+# 那边的指纹和这边一样就不带：App 开着时 exe 被占着，覆盖不了
+stamp=build/key-helper.exe.source-sha256
+remote_stamp="$("$here/win.sh" "Get-Content -ErrorAction SilentlyContinue \"\$HOME\\speakmore-dev\\repo\\$(printf '%s' "$stamp" | tr / '\\\\')\"" | tr -d '\r' || true)"
+send_helper=false
+if [ -f "$stamp" ] && [ "$(cat "$stamp")" != "$remote_stamp" ]; then send_helper=true; fi
 {
   git ls-files -co --exclude-standard -z
-  for built in build/key-helper.exe build/key-helper.exe.source-sha256; do [ -f "$built" ] && printf '%s\0' "$built"; done
+  if $send_helper; then printf '%s\0' build/key-helper.exe "$stamp"; fi
 } | xargs -0 sh -c 'for f; do [ -f "$f" ] && printf "%s\0" "$f"; done' sh |
   COPYFILE_DISABLE=1 tar --null -T - -czf - |
   ssh -o ConnectTimeout=10 -o BatchMode=yes -o IdentitiesOnly=yes -i "$key" "$WIN_SSH_TARGET" \

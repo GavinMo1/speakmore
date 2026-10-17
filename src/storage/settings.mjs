@@ -18,10 +18,22 @@ import { DEFAULT_THEME, findTheme, THEMES } from "../themes/index.mjs";
 // 取值的顺序：环境变量（只管这一次运行）优先于文件，文件优先于默认值。key 不在这里，它单独加密保存。
 
 /**
- * 热键是单独一个修饰键。原版 Typeless 用 fn；这里默认右 Option，这样两个可以同时开着用。
- * 叫什么、在悬浮条上写成什么（hotkeys.<id>.name / keycap）在文案里，按界面语言写。
+ * 热键是单独一个修饰键，能选哪几个按系统分（按键要由那个系统的原生小帮手认得）：
+ *   macOS    原版 Typeless 用 fn；这里默认右 Option，这样两个可以同时开着用。
+ *   Windows  右 Alt（默认，位置同 Mac 的右 Option）、右 Ctrl。右 Win 松开会弹开始菜单，fn 系统看不到，都不给。
+ * 叫什么、在悬浮条上写成什么（hotkeys.<id>.name / keycap）在文案里，按界面语言写。Windows 的右 Ctrl 和 Mac 的
+ * 右 Control 是同一个位置的键，叫法跟着各自系统的习惯，所以是两个 id。
  */
-export const HOTKEY_IDS = Object.freeze(["right_option", "right_command", "right_control", "fn"]);
+const HOTKEYS_BY_PLATFORM = {
+  darwin: ["right_option", "right_command", "right_control", "fn"],
+  win32: ["right_alt", "right_ctrl"],
+};
+
+/** 这个系统上能选的热键，第一个是默认的 */
+export const hotkeyIdsFor = (platform) =>
+  Object.freeze([...(HOTKEYS_BY_PLATFORM[platform] ?? HOTKEYS_BY_PLATFORM.darwin)]);
+
+export const HOTKEY_IDS = hotkeyIdsFor(process.platform);
 
 /** 热键叫什么：一句还没定语言的话 */
 export const hotkeyName = (id) => msg(`hotkeys.${id}.name`);
@@ -57,7 +69,7 @@ const oneOf = (choices) => new LocalizedError(msg("settings.oneOf", { choices: c
 export const SETTINGS = {
   hotkey: {
     env: "SPEAKMORE_HOTKEY",
-    default: "right_option",
+    default: HOTKEY_IDS[0],
     choices: HOTKEY_IDS,
     parse(value) {
       if (!HOTKEY_IDS.includes(value)) throw oneOf(HOTKEY_IDS);

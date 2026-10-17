@@ -41,7 +41,7 @@ function fakeSay(wav, { failVoice = false } = {}) {
 
 test("用系统朗读现念一句检查用的话，读回 16 kHz 单声道的样本；中间多出来的块跳过", async () => {
   const { calls, run } = fakeSay(sayLikeWav([0, 16384, -32768, 32767]));
-  const { samples, said } = await speechSample("zh-CN", { run });
+  const { samples, said } = await speechSample("zh-CN", { run, platform: "darwin" });
   assert.equal(said, PROBE_SPEECH["zh-CN"].text);
   assert.deepEqual(samples, new Float32Array([0, 16384 / 32767, -1, 1]));
   assert.equal(calls[0].file, "say");
@@ -52,21 +52,46 @@ test("用系统朗读现念一句检查用的话，读回 16 kHz 单声道的样
 
 test("界面是英文就念英文；不认识的语言按英文", async () => {
   const { calls, run } = fakeSay(sayLikeWav([1, 2]));
-  assert.equal((await speechSample("en", { run })).said, PROBE_SPEECH.en.text);
-  assert.equal((await speechSample("fr", { run })).said, PROBE_SPEECH.en.text);
+  assert.equal((await speechSample("en", { run, platform: "darwin" })).said, PROBE_SPEECH.en.text);
+  assert.equal((await speechSample("fr", { run, platform: "darwin" })).said, PROBE_SPEECH.en.text);
   assert.equal(calls[1].args[1], PROBE_SPEECH.en.voice);
 });
 
 test("这台电脑上没有那个声音：换系统默认的声音再念一次", async () => {
   const { calls, run } = fakeSay(sayLikeWav([1, 2, 3]), { failVoice: true });
-  const { samples } = await speechSample("zh-CN", { run });
+  const { samples } = await speechSample("zh-CN", { run, platform: "darwin" });
   assert.equal(samples.length, 3);
   assert.equal(calls.length, 2);
   assert.equal(calls[1].args.includes("-v"), false);
 });
 
 test("念出来的不是 16 kHz 单声道 16 位：照实报错，不拿错的样本去转写", async () => {
-  await assert.rejects(speechSample("en", fakeSay(sayLikeWav([1, 2], { rate: 22_050 }))), /22050/);
-  await assert.rejects(speechSample("en", fakeSay(sayLikeWav([1, 2], { channels: 2 }))), /声道/);
-  await assert.rejects(speechSample("en", fakeSay(Buffer.from("not a wav"))), /WAV/);
+  await assert.rejects(
+    speechSample("en", { ...fakeSay(sayLikeWav([1, 2], { rate: 22_050 })), platform: "darwin" }),
+    /22050/,
+  );
+  await assert.rejects(
+    speechSample("en", { ...fakeSay(sayLikeWav([1, 2], { channels: 2 })), platform: "darwin" }),
+    /声道/,
+  );
+  await assert.rejects(speechSample("en", { ...fakeSay(Buffer.from("not a wav")), platform: "darwin" }), /WAV/);
+});
+
+test("Windows：用系统自带的语音合成念，要念的话、写到哪、哪种语言都经环境变量交过去，读回的样本一样", async () => {
+  const calls = [];
+  const run = async (file, args, options) => {
+    calls.push({ file, args, env: options.env });
+    writeFileSync(options.env.SPEAKMORE_PROBE_FILE, sayLikeWav([0, 16384]));
+  };
+  const { samples, said } = await speechSample("zh-CN", { run, platform: "win32" });
+  assert.equal(said, PROBE_SPEECH["zh-CN"].text);
+  assert.equal(samples.length, 2);
+  const [{ file, args, env }] = calls;
+  assert.equal(file, "powershell");
+  assert.deepEqual(args.slice(0, 3), ["-NoProfile", "-NonInteractive", "-Command"]);
+  // 脚本里不拼外来的字：念的那句只在环境变量里
+  assert.ok(!args[3].includes(PROBE_SPEECH["zh-CN"].text));
+  assert.match(args[3], /SpeechAudioFormatInfo 16000/);
+  assert.equal(env.SPEAKMORE_PROBE_TEXT, PROBE_SPEECH["zh-CN"].text);
+  assert.equal(env.SPEAKMORE_PROBE_CULTURE, "zh-CN");
 });

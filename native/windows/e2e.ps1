@@ -76,7 +76,7 @@ function Send($helper, $object) {
 $VK_RCONTROL = 0xA3; $VK_RMENU = 0xA5; $VK_ESCAPE = 0x1B; $VK_A = 0x41; $VK_CONTROL = 0x11
 
 $saved = Get-Clipboard -Raw
-$helper = Start-Helper 'right_control'
+$helper = Start-Helper 'right_ctrl'
 try {
   $ready = Next-Event $helper 3000
   Check '启动报 ready，钩子装上了' ($ready.event -eq 'ready' -and $ready.listen -and $ready.capture) ($ready | ConvertTo-Json -Compress)

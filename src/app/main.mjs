@@ -14,6 +14,7 @@ import {
   systemPreferences,
   Tray,
 } from "electron";
+import { helperPaths } from "../cli/native-helper.mjs";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale } from "../i18n/index.mjs";
 import { alsoLogTo, log } from "../log.mjs";
@@ -84,8 +85,19 @@ let hotkey = SETTINGS.hotkey.value;
 const PROVIDER = keyVendorOf(ROUTE) ?? null;
 /** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
 const thinkingFor = (provider) => (provider?.thinkingLevels ? SETTINGS.thinking.value : null);
-/** 菜单栏图标：印章上的五道声波。文件名带 Template，系统按菜单栏的深浅反色；@2x 那张由系统自己挑（scripts/build/make-icon.sh） */
-const TRAY_ICON = join(import.meta.dirname, "../../assets/trayTemplate.png");
+const WINDOWS = process.platform === "win32";
+/**
+ * 菜单栏图标：印章上的五道声波。macOS 上文件名带 Template，系统按菜单栏的深浅反色，@2x 那张由系统自己挑；
+ * Windows 的通知区域不会反色，用带颜色的应用图标，.ico 里各个尺寸都有（scripts/build/make-icon.sh）
+ */
+const TRAY_ICON = join(import.meta.dirname, "../../assets", WINDOWS ? "icon.ico" : "trayTemplate.png");
+/** Windows 上窗口和任务栏的图标（macOS 上是应用包自己的图标） */
+const WINDOW_ICON = join(import.meta.dirname, "../../assets/icon.ico");
+/**
+ * Windows 上标题栏藏起来以后，系统的最小化、最大化、关闭三个按钮叠在页面右上角这么高的一条里。
+ * 和主窗口内容区最上面那条拖动区（hub.css 的 .content::before，2.75rem）一样高
+ */
+const CAPTION_HEIGHT = 44;
 /** 关于里"在 GitHub 上看"打开的地方 */
 const HOMEPAGE = "https://github.com/zephyr4123/speakmore";
 /** 这台机器是哪类芯片：本地模型的实测按它挑（models/catalog.mjs 的 CHIPS） */
@@ -94,12 +106,29 @@ const CHIP = chipOf();
 const HUB_SIZE = { width: 1080, height: 750, minWidth: 988, minHeight: 685 };
 /** 悬浮条的窗口。比条本身大一圈：上面要放一行提示，四周要留出阴影，报错时条会变宽变高 */
 const BAR_SIZE = { width: 380, height: 124 };
-/** 系统设置里三项权限各自的页面 */
-const PRIVACY_PANES = {
-  microphone: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
-  listen: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent",
-  trusted: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-};
+/**
+ * 系统设置里各项权限的页面。Windows 只有麦克风这一项：没有"输入监控""辅助功能"，
+ * 小帮手装上钩子就能听键、能模拟按键（报上来的 listen、trusted 总是 true）
+ */
+const PRIVACY_PANES = WINDOWS
+  ? { microphone: "ms-settings:privacy-microphone" }
+  : {
+      microphone: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+      listen: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent",
+      trusted: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+    };
+
+/**
+ * 问一下麦克风权限。macOS 上没问过时会弹系统的授权框；Windows 没有这种框（在系统设置里统一开关），照实报现在的状态
+ * @returns {Promise<boolean>} 能不能用
+ */
+async function askMicrophone() {
+  if (WINDOWS) return systemPreferences.getMediaAccessStatus("microphone") === "granted";
+  return systemPreferences.askForMediaAccess("microphone");
+}
+
+// Windows 认应用靠这个 id：任务栏把窗口归到一起、通知写谁发的。和 macOS 应用包的标识一样
+if (WINDOWS) app.setAppUserModelId("com.zephyrxiang.speakmore");
 
 // 所有东西都放在 paths.mjs 定的那一个目录里，命令行和这里用同一处。Electron 默认会按应用名在
 // ~/Library/Application Support 下另开一个目录放 Chromium 的缓存和状态，把它也收进来，和我们的数据分开放
@@ -311,11 +340,31 @@ async function main() {
     theme = findTheme(resolveSettings({ file: PATHS.settingsFile, env: process.env }).theme.value);
     const css = themeCss(theme);
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send("theme:changed", css);
+    recolorCaptionButtons();
     log.info("theme_changed", { theme: theme.id });
     return { theme: theme.id };
   }
+  const windowColors = () => theme.window[nativeTheme.shouldUseDarkColors ? "dark" : "light"];
   /** 窗口还没画出页面时的底色：和页面的底一样，免得深色模式下先闪一下白 */
-  const windowBackground = () => toHex(theme.window[nativeTheme.shouldUseDarkColors ? "dark" : "light"].bg);
+  const windowBackground = () => toHex(windowColors().bg);
+  /** Windows 右上角那三个系统按钮：底透明（透出页面），符号用正文的颜色，跟着主题和深浅色换 */
+  const captionButtons = () => ({ color: "#00000000", symbolColor: toHex(windowColors().ink), height: CAPTION_HEIGHT });
+  /**
+   * 主窗口和首次引导的标题栏：都藏起来，页面画到最顶上。macOS 的红绿灯放到 trafficLight 那里；
+   * Windows 留下系统的三个按钮叠在右上角，再给窗口挂上图标（不然任务栏上是 Electron 的）
+   */
+  const frame = (trafficLight) =>
+    WINDOWS
+      ? { titleBarStyle: "hidden", titleBarOverlay: captionButtons(), icon: WINDOW_ICON }
+      : { titleBarStyle: "hidden", trafficLightPosition: trafficLight };
+  /** 换了主题、系统换了深浅色：Windows 上那三个按钮的颜色跟着换 */
+  function recolorCaptionButtons() {
+    if (!WINDOWS) return;
+    for (const window of [hubWindow, onboardingWindow]) {
+      if (window && !window.isDestroyed()) window.setTitleBarOverlay(captionButtons());
+    }
+  }
+  nativeTheme.on("updated", recolorCaptionButtons);
 
   // ---------- 悬浮条 ----------
 
@@ -379,13 +428,11 @@ async function main() {
       return;
     }
     const origin = bar.getBounds();
-    const onScreen = regions.map(({ id, x, y, width, height }) => ({
-      id,
-      x: origin.x + x,
-      y: origin.y + y,
-      width,
-      height,
-    }));
+    const onScreen = regions.map(({ id, x, y, width, height }) => {
+      const rect = { x: origin.x + x, y: origin.y + y, width, height };
+      // Windows 的鼠标钩子报的是物理像素，窗口的位置是按缩放换算过的：换成那块屏上的物理像素再交过去
+      return { id, ...(WINDOWS ? screen.dipToScreenRect(bar, rect) : rect) };
+    });
     // "点了按钮没反应"时先看这条：位置对不对得上屏幕上画的那两个圆
     log.info("bar_capture", { regions: onScreen });
     helper.capture(onScreen);
@@ -412,7 +459,7 @@ async function main() {
     helperPermissions = null;
     helperState = "starting";
     setBarControls(false);
-    helper = startHelper(join(app.getAppPath(), "build", "key-helper"), {
+    helper = startHelper(helperPaths(app.getAppPath()).binary, {
       args: ["--key", hotkey, ...(prompt ? [] : ["--no-prompt"])],
       onEvent: (event) => {
         if (generation === helperGeneration) onHelperEvent(event);
@@ -693,8 +740,12 @@ async function main() {
 
   handle("setup:open-privacy", async (_event, permission) => {
     if (!Object.hasOwn(PRIVACY_PANES, permission)) throw new TypeError(`不认识的权限：${permission}`);
-    // 麦克风从没问过时，系统设置的列表里还没有这个应用，要先让系统弹一次授权框
-    if (permission === "microphone" && systemPreferences.getMediaAccessStatus("microphone") === "not-determined") {
+    // 麦克风从没问过时，系统设置的列表里还没有这个应用，要先让系统弹一次授权框（只有 macOS 有这种框）
+    if (
+      !WINDOWS &&
+      permission === "microphone" &&
+      systemPreferences.getMediaAccessStatus("microphone") === "not-determined"
+    ) {
       await systemPreferences.askForMediaAccess("microphone");
       setupChanged();
       return;
@@ -830,8 +881,7 @@ async function main() {
       title: "SpeakMore",
       backgroundColor: windowBackground(),
       // 和原版一样把标题栏藏起来，红绿灯放进侧栏的左上角
-      titleBarStyle: "hidden",
-      trafficLightPosition: { x: 26, y: 24 },
+      ...frame({ x: 26, y: 24 }),
       webPreferences,
     });
     // 第一次打开时去哪一页写在地址里：页面加载完之前发消息是收不到的
@@ -855,8 +905,7 @@ async function main() {
         ...HUB_SIZE,
         title: "SpeakMore",
         backgroundColor: windowBackground(),
-        titleBarStyle: "hidden",
-        trafficLightPosition: { x: 20, y: 16 },
+        ...frame({ x: 20, y: 16 }),
         webPreferences,
       });
       onboardingWindow.loadFile(join(sourceDir, "renderer", "onboarding", "onboarding.html"));
@@ -925,6 +974,8 @@ async function main() {
       ]),
     );
   }
+  // Windows 上点通知区域的图标是打开主窗口（右键才是菜单），macOS 上点它就是菜单
+  if (WINDOWS) tray.on("click", () => showMain());
   refreshTrayMenu();
   localModelChanged = setupChanged;
 
@@ -1103,7 +1154,7 @@ async function main() {
     return;
   }
 
-  const granted = await systemPreferences.askForMediaAccess("microphone");
+  const granted = await askMicrophone();
   log.info("microphone_access", { granted });
   await keyLoaded;
   startupChecked = true;

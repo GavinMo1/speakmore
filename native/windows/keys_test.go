@@ -18,7 +18,7 @@ func eventsOf(outs ...outcome) []event {
 }
 
 func TestHotkeyDownUpReportedOnceEachDespiteAutoRepeat(t *testing.T) {
-	s := newState("right_control")
+	s := newState("right_ctrl")
 	got := eventsOf(s.onKey(key(vkRControl, true)), s.onKey(key(vkRControl, true)), s.onKey(key(vkRControl, false)))
 	want := []event{{"event": "hotkey", "down": true}, {"event": "hotkey", "down": false}}
 	if !reflect.DeepEqual(got, want) {
@@ -27,7 +27,7 @@ func TestHotkeyDownUpReportedOnceEachDespiteAutoRepeat(t *testing.T) {
 }
 
 func TestOtherKeyWhileHeldReportedOnceWithoutNamingTheKey(t *testing.T) {
-	s := newState("right_control")
+	s := newState("right_ctrl")
 	s.onKey(key(vkRControl, true))
 	got := eventsOf(s.onKey(key('A', true)), s.onKey(key('A', false)), s.onKey(key('B', true)))
 	if want := []event{{"event": "other_key"}}; !reflect.DeepEqual(got, want) {
@@ -58,7 +58,7 @@ func TestRightAltAsksForMaskKeySoMenusDoNotOpen(t *testing.T) {
 	if out := s.onKey(key(vkRMenu, false)); out.mask {
 		t.Fatal("松开时不用插")
 	}
-	c := newState("right_control")
+	c := newState("right_ctrl")
 	if out := c.onKey(key(vkRControl, true)); out.mask {
 		t.Fatal("右 Ctrl 单按没有副作用，不用插")
 	}
