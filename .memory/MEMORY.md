@@ -21,7 +21,7 @@
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
 - [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、改完就收，不再派第二轮，除非他点名
-- [桌面端的文案和观感](desktop-copy-and-look.md) — 书面语、短词短句，不用"能用"这类口语；结构对齐原版，配色走自己的主题，做渐变、玻璃等特色
+- [桌面端的文案和观感](desktop-copy-and-look.md) — 书面语、短词短句，不用"能用"这类口语；结构对齐原版，配色走自己的主题，做渐变、玻璃等特色；改样式后真窗口逐个查按钮别退回系统外观
 - [README 英文为主](readme-english-first.md) — 英文主页加中文切换，HTML 排版、简短；卖点是成本和隐私，数字要有出处
 - [客户端多语言](speakmore-i18n-next.md) — 已随 0.6.0 发布：英文和简体中文、跟随系统、命令行和内核报的话也跟着换，提示词不动；加语言照 docs/development.md
 - [官网文案用书面语](website-copy-formal.md) — 简洁但不口语、不俏皮；第一版他嫌像小孩子写的，中英都收敛
@@ -29,7 +29,7 @@
 - [官网观感](website-look.md) — 不铺渐变光晕、按钮里不套胶囊、两种芯片入口同等；一句话的特色并成一排，不加小字，删除效果不用划线
 - [SpeakMore 宣传片](speakmore-promo-video.md) — 在 kineto 的 feat/speakmore-promo 分支做；发布会式、书面语字幕、不用合成人声；字幕不带人称；背景是他真屏幕的截图（程序坞抠掉了 Typeless）；第四章叫 App、从程序坞点开；88 秒成片 10-16 定稿，横竖封面已出，都在 kineto 的 out/speakmore-promo/；竖版片子待做
 - [三种识别模式平级](speakmore-two-pipelines.md) — native（音频直给模型）、local（转写加任意 API 润色）、private（数据隐私，纯本机转写、不要 key），用户选、不分主次，严格状态机；含评测和端到端结果
-- [模型广场不替用户选](speakmore-model-plaza.md) — 有什么加什么、尽量全；跑通不打标签、评测过才打已评测、没调过的打未验证；按角色分原生/转写/润色，侧栏单独一页；10-17 进度、端到端走过哪些、还剩哪些在里面
+- [模型广场不替用户选](speakmore-model-plaza.md) — 有什么加什么、尽量全；跑通不打标签、评测过才打已评测、没调过的打未验证；按角色分原生/转写/润色，侧栏单独一页；选识别方式在首页选单；10-17 进度、还剩哪些在里面
 - [判官是 Claude 自己](bench-judge-is-claude.md) — 评测打分由 Claude 来，不调 Gemini 等接口；Gemini 3.6 Flash MINIMAL 的成品只当参照，参照听错时不扣分
 - [统一输入输出、策略模式](architecture-unified-io-strategy.md) — 插件化、可热插拔；录音先统一成 16 kHz 单声道，转写统一成 transcribe → { text }；不打补丁，从分层上根治
 - [本地模型的配置表和国内源](speakmore-model-mirror.md) — 全局只有 src/models/catalog.mjs 一份；国内源是隔离桶加 models.speakmore 子域名，传完必须预热；证书 2027-01-14 到期要续
