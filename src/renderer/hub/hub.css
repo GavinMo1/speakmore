@@ -32,7 +32,7 @@
   padding: 3.5rem 0.75rem 0.75rem;
   background: var(--glass);
   backdrop-filter: var(--glass-filter);
-  border-radius: 1rem;
+  border-radius: var(--radius-card);
   box-shadow: var(--edge);
 }
 
@@ -74,7 +74,7 @@
   text-align: left;
   background: transparent;
   border: none;
-  border-radius: 0.625rem;
+  border-radius: var(--radius-block);
   cursor: pointer;
   transition:
     background-color var(--dur-fast) var(--ease-out),
@@ -166,7 +166,7 @@
   margin: 0 auto 1.5rem;
   padding: 0.6rem 0.7rem 0.6rem 1rem;
   background: color-mix(in oklab, var(--problem) 12%, var(--surface));
-  border-radius: 0.875rem;
+  border-radius: var(--radius-card);
   box-shadow: 0 0 0 1px color-mix(in oklch, var(--problem) 24%, transparent);
 }
 
@@ -207,7 +207,7 @@
 .card {
   padding: 1.1rem 1.25rem;
   background: var(--surface);
-  border-radius: 1rem;
+  border-radius: var(--radius-card);
   box-shadow: var(--edge), var(--lift);
 }
 
@@ -523,7 +523,7 @@
   gap: 0.75rem;
   padding: 0.8rem 0.9rem;
   background: var(--surface);
-  border-radius: 0.875rem;
+  border-radius: var(--radius-card);
   box-shadow: var(--edge), var(--lift);
 }
 
@@ -535,7 +535,7 @@
   text-align: center;
   color: var(--on-primary);
   background: var(--gradient);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-control);
   box-shadow:
     inset 0 1px 0 var(--sheen),
     0 2px 6px -2px var(--primary);
@@ -572,17 +572,17 @@
   font-weight: var(--weight-semibold);
 }
 
-.rows {
+.entries {
   margin: 0;
   padding: 0;
   list-style: none;
   background: var(--surface);
-  border-radius: 1rem;
+  border-radius: var(--radius-card);
   box-shadow: var(--edge), var(--lift);
   overflow: hidden;
 }
 
-.row {
+.entry {
   display: grid;
   grid-template-columns: 3.25rem minmax(0, 1fr) auto;
   align-items: start;
@@ -591,22 +591,22 @@
   transition: background-color var(--dur-fast) var(--ease-out);
 }
 
-.row + .row {
+.entry + .entry {
   border-top: 1px solid var(--line);
 }
 
-.row:hover {
+.entry:hover {
   background: var(--fill-hover);
 }
 
-.row-time {
+.entry-time {
   padding-top: 0.15rem;
   font-size: var(--text-small);
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
 
-.row-text {
+.entry-text {
   max-width: 48rem;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -614,18 +614,18 @@
 }
 
 /* 失败了、没声音的：一句灰字说明 */
-.row[data-kind="failed"] .row-text,
-.row[data-kind="silent"] .row-text {
+.entry[data-kind="failed"] .entry-text,
+.entry[data-kind="silent"] .entry-text {
   color: var(--ink-2);
 }
 
 /* "失败 · "按界面语言写，由 history.mjs 放进 data-prefix */
-.row[data-kind="failed"] .row-text::before {
+.entry[data-kind="failed"] .entry-text::before {
   content: attr(data-prefix);
   color: var(--problem);
 }
 
-.row-actions {
+.entry-actions {
   display: flex;
   gap: 0.15rem;
   margin: -0.3rem -0.4rem -0.3rem 0;
@@ -633,8 +633,8 @@
   transition: opacity var(--dur-fast) var(--ease-out);
 }
 
-.row:hover .row-actions,
-.row:focus-within .row-actions {
+.entry:hover .entry-actions,
+.entry:focus-within .entry-actions {
   opacity: 1;
 }
 
@@ -657,7 +657,7 @@
   background: var(--glass-strong);
   backdrop-filter: var(--glass-filter);
   border: none;
-  border-radius: 1.125rem;
+  border-radius: var(--radius-card);
   box-shadow:
     var(--edge),
     0 30px 80px -24px oklch(0 0 0 / 0.4);
@@ -772,326 +772,14 @@ code.setting-value {
   color: var(--problem);
 }
 
-/* "模型"一页（model-pane.mjs）：上面两种识别模式的标签，下面是看着的那种模式里的东西 */
-.mode-tabs,
-.period-tabs {
-  display: inline-flex;
-  gap: 0.25rem;
-  padding: 0.25rem;
-  background: var(--fill-hover);
-  border-radius: var(--radius-control);
-}
-
-.mode-tab,
-.period-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.9rem;
-  font: inherit;
-  font-size: var(--text-small);
-  font-weight: var(--weight-medium);
-  color: var(--ink-2);
-  background: transparent;
-  border: none;
-  border-radius: calc(var(--radius-control) - 0.125rem);
-  cursor: pointer;
-  transition:
-    background-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
-}
-
-.mode-tab:hover,
-.period-tab:hover {
-  color: var(--ink);
-}
-
-.mode-tab[aria-selected="true"],
-.period-tab[aria-selected="true"] {
-  color: var(--ink);
-  background: var(--surface-solid);
-  box-shadow: 0 1px 3px oklch(0 0 0 / 0.08);
-}
-
-.mode-tab:focus-visible,
-.period-tab:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-/* 正在用的那种模式：标签上一个小圆点 */
-.mode-live {
-  width: 0.4rem;
-  height: 0.4rem;
-  background: var(--ok);
-  border-radius: 50%;
-}
-
-.mode-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
-  margin: 0.75rem 0 0.25rem;
-}
-
-.mode-hint {
-  flex: 1 1 18rem;
-  margin: 0;
-  font-size: var(--text-small);
-  color: var(--ink-2);
-}
-
-.mode-body {
-  margin-top: 1rem;
-}
-
-/* 一种模式里的几步（第一步 · 本机转写、第二步 · 润色）：区块标题，比列表里的名字大一档、和上一块空开 */
-.step-title {
-  margin: 2rem 0 0.75rem;
-  font-size: var(--text-heading);
-  font-weight: var(--weight-semibold);
-}
-
-.step-title:first-child {
-  margin-top: 0;
-}
-
-/* 第一跳的本机模型：上面一行说本机下了几个、磁盘还剩多少；下面一行一个，
-   左边点了是选它（没下载的选不了），右边是下载、取消、删除 */
-.models-summary {
-  margin: 0 0 0.75rem;
-  font-size: var(--text-small);
-  color: var(--ink-2);
-  font-variant-numeric: tabular-nums;
-}
-
-/* 标题下面紧跟的一行说明贴着标题 */
-.step-title + .models-summary {
-  margin-top: -0.5rem;
-}
-
-/* 每行的按钮有一个、两个的：按钮那一列各行共用一个宽度（subgrid），右边的状态才对得齐 */
-.transcribers {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.5rem 0.75rem;
-}
-
-.transcriber {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
-  align-items: center;
-  gap: 0 0.75rem;
-  padding-right: 0.9rem;
-  background: var(--bg);
-  border-radius: 0.75rem;
-  box-shadow: 0 0 0 1px var(--border);
-  transition: box-shadow var(--dur-base) var(--ease-out);
-}
-
-.transcriber:has(.transcriber-pick:hover:not(:disabled)) {
-  background: var(--raised);
-}
-
-.transcriber:has(.transcriber-pick[aria-checked="true"]) {
-  box-shadow: 0 0 0 2px var(--primary);
-}
-
-/* 一行里分三级：名字（正文、加粗）→ 实测的三个数（数加粗，单位和名目小一档）→ 特点标签（最小、带底色）。
-   图标单占一列，下面两行和名字的字对齐 */
-.transcriber-pick {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.45rem 0.6rem;
-  padding: 0.85rem 0 0.85rem 0.9rem;
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
-  background: none;
-  border: none;
-  border-radius: 0.75rem;
-  cursor: pointer;
-}
-
-.transcriber-pick:disabled {
-  cursor: default;
-}
-
-.transcriber-pick:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 3px;
-}
-
-.transcriber-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.4rem;
-}
-
-/* 检查的结果：整行宽，在名字、按钮下面，和名字的字对齐 */
-.transcriber-check {
-  grid-column: 1 / -1;
-  margin: -0.35rem 0 0.85rem calc(0.9rem + 1.125rem + 0.6rem);
-  font-size: var(--text-small);
-  font-weight: var(--weight-medium);
-  color: var(--ink-2);
-}
-
-.transcriber-check[data-tone="ok"] {
-  color: var(--ok);
-}
-
-.transcriber-check[data-tone="problem"] {
-  color: var(--problem);
-}
-
-.button.danger {
-  color: var(--problem);
-}
-
-/* 下载进度：细细一条，跟着主题的渐变 */
-.transcriber-progress {
-  grid-column: 1 / -1;
-  width: 100%;
-  height: 0.25rem;
-  appearance: none;
-  border: none;
-  border-radius: var(--radius-full);
-  background: var(--fill-hover);
-  overflow: hidden;
-}
-
-.transcriber-progress::-webkit-progress-bar {
-  background: var(--fill-hover);
-}
-
-.transcriber-progress::-webkit-progress-value {
-  background: var(--gradient);
-  border-radius: var(--radius-full);
-  transition: width var(--dur-base) var(--ease-out);
-}
-
-.transcriber-name {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem 0.5rem;
-  min-width: 0;
-  font-weight: var(--weight-semibold);
-}
-
-/* 量化档（Q8_0、int8）：型号的一部分，用等宽字放进小标签，不和名字挤成一串 */
-.transcriber-variant {
-  font-family: var(--font-mono);
-}
-
-.transcriber-state {
-  font-variant-numeric: tabular-nums;
-}
-
-.transcriber-pick > :is(.figures, .tags) {
-  grid-column: 2 / -1;
-}
-
-/* 实测的三个数：数值用圆体加粗，单位、名目小一档；在什么机器上测的放在最右，最淡 */
-.figures {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.25rem 1.25rem;
-}
-
-.figure {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.3rem;
-  white-space: nowrap;
-}
-
-.figure-value {
-  font-family: var(--font-rounded);
-  font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
-  font-variant-numeric: tabular-nums;
-}
-
-.figure-unit {
-  margin-left: 0.1rem;
-  font-family: var(--font);
-  font-size: var(--text-micro);
-  font-weight: var(--weight-medium);
-  color: var(--ink-2);
-}
-
-.figure-label,
-.figures-where {
-  font-size: var(--text-micro);
-  font-weight: var(--weight-medium);
-  color: var(--ink-2);
-}
-
-.figures-where {
-  margin-left: auto;
-}
-
-/* 没实测过：只有这一句，靠左 */
-.figures-where:only-child {
-  margin-left: 0;
-}
-
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-
-.transcriber-failed {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
-}
-
-.transcriber-failed:has(:not([hidden])) {
-  margin-top: 0.5rem;
-}
-
-/* 第二跳那一家另填的：模型、自定义服务的模型名和地址 */
-.field {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: var(--text-small);
-}
-
-.polish-extra .field,
-.custom-fields {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.custom-fields .field {
-  flex: 1 1 14rem;
-}
-
-.custom-fields .input {
-  flex: 1;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .nav-item,
   .menu-item,
   .nav-item .icon,
   .menu-item .icon,
   .content::before,
-  .row,
-  .row-actions {
+  .entry,
+  .entry-actions {
     transition: none;
   }
 
@@ -1100,10 +788,7 @@ code.setting-value {
     animation: none;
   }
 
-  .mode-tab,
-  .period-tab,
-  .transcriber,
-  .transcriber-progress::-webkit-progress-value {
+  .period-tab {
     transition: none;
   }
 }

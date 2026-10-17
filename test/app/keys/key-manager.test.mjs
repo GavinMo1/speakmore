@@ -294,7 +294,7 @@ test("验证过了但存不下来：这次能用，如实说下次要重填", as
   keyStore.failOnSave = true;
   const result = await keys.save("new-key");
   assert.equal(result.ok, false);
-  assert.match(zh.text(result.problem), /没存下来.*钥匙串不可用/);
+  assert.match(zh.text(result.problem), /未能保存.*钥匙串不可用/);
   assert.equal(service.using, "new-key");
   assert.equal(keys.current.state, "ready");
 });

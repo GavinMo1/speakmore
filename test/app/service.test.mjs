@@ -348,7 +348,7 @@ test("用户在下它的时候：状态带着进度，按下热键说下到哪�
   models.downloads.set("qwen3-asr-0.6b-q8", { received: 50, total: 100 });
   service.modelsChanged();
   assert.deepEqual(service.localModel, { state: "missing", model: "qwen3-asr-0.6b-q8", received: 50, total: 100 });
-  assert.match(zh.text((await dictateOnce(service.url)).V.problem), /还在下载（50%）/);
+  assert.match(zh.text((await dictateOnce(service.url)).V.problem), /下载中（50%）/);
 
   models.downloads.delete("qwen3-asr-0.6b-q8");
   models.installed.add("qwen3-asr-0.6b-q8");

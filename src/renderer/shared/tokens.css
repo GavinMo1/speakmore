@@ -1,4 +1,4 @@
-/* 三个页面共用、不随主题变的 token：字、间距、圆角、动效。
+/* 三个页面共用、不随主题变的 token：字、间距、控件尺寸、圆角、动效。
    颜色不在这里：那是主题的事（src/themes），由预加载脚本赶在页面画出来之前注入。 */
 
 :root {
@@ -34,14 +34,27 @@
   --space-8: 2rem;
   --space-12: 3rem;
 
-  /* 圆角：按钮和输入框、窗口里的区块、悬浮条 */
-  --radius-control: 6px;
-  --radius-block: 10px;
+  /* 控件高度三档（界面规范 v1）：28 胶囊、徽标、分段里的项 · 32 按钮、输入框、分段控件 · 40 搜索框、分类标签。
+     同一行里的控件同一档，长短不一的字也不会把按钮撑得参差 */
+  --control-sm: 1.75rem;
+  --control-md: 2rem;
+  --control-lg: 2.5rem;
+
+  /* 圆角四档：控件 8 · 区块 12 · 卡片 16 · 胶囊 */
+  --radius-control: 8px;
+  --radius-block: 12px;
+  --radius-card: 1rem;
   --radius-full: 999px;
+
+  /* 列表里定宽的两列：状态、操作。控件撑满列宽，各行的边缘才对得齐 */
+  --col-status: 6rem;
+  --col-action: 6rem;
 
   /* 动效：按下和悬停这类小反馈、状态切换、出现和消失。先快后慢，不回弹 */
   --dur-fast: 120ms;
   --dur-base: 200ms;
   --dur-slow: 320ms;
+  /* 分类标签的下划线、分段控件的滑块从上一个位置滑过去 */
+  --dur-slide: 280ms;
   --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
 }
