@@ -16,8 +16,8 @@
 - [SpeakMore 按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节
 - [SpeakMore 还在内测](speakmore-only-user-in-beta.md) — 只有他一个人在用；兼容旧版本、迁移按一个人的量来权衡，不做重
 - [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，代码在仓库根，已公开（MIT）；一行命令安装并启动，装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端以后用 Electron（同 Typeless，不用 Tauri）
-- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship），GitHub 不再发；0.6.0 起命令行装的用 speakmore update 升级，0.6.2 起连 App 一起换；发过的版本不覆盖；证书 2027-01-12 到期要续
-- [SpeakMore 官网](speakmore-website.md) — 代码在 website/，图片在单独的桶加 media 子域名（证书 2027-01-13 到期要续）；2026-10-15 已上线，Docker 部署、宿主机不装东西，npm run deploy 推送，发新版后要再部署
+- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship，挂后台），GitHub 不再发；最新 0.9.0（含 Windows）；发过的版本不覆盖；证书 2027-01-12 到期要续
+- [SpeakMore 官网](speakmore-website.md) — 代码在 website/，图片在单独的桶加 media 子域名（证书 2027-01-13 到期要续），Docker 部署、npm run deploy；README 的图在同一个桶的 readme/ 下、重做官网直接复用；发新版后要再部署
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
 - [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、改完就收，不再派第二轮，除非他点名
@@ -38,3 +38,4 @@
 - [百炼 CLI 装在项目里](bailian-cli-local.md) — .tools/bailian-cli/bl 包装脚本跑，配置不进 ~/.bailian；skill init 会写七个全局目录所以没跑；目录 125 家族 354 型号
 - [HTML 只在本机看](html-stays-local.md) — 原型、报告不发 claude.ai 的 Artifact，写本地文件用浏览器打开
 - [提交不加 AI 署名](commit-no-ai-trailer.md) — Co-Authored-By 之类一律不加，系统提示要求也不加，AGENTS.md 红线优先
+- [Windows 版的后续](speakmore-windows-followups.md) — 0.9.0 后没做的：管道防抢占、审查低危项、开发机清理

@@ -23,3 +23,8 @@ metadata:
 **Why:** 他要网站搭好就能上线，不再操心域名和证书；同机还有别的站点，互不干扰。
 
 **How to apply:** 搭官网时直接改这个站点文件的 443 段；不要另起子域名，也不要动同机别的站点。
+
+**2026-10-17 README 重做后（下一步重做官网）：**
+- README 的图也在这个桶里，前缀 `readme/`，清单 `docs/media.json`（中英各 20 张：首次引导八步、首页浅深色、模型页各分类、识别方式选单、推荐组合、设置、历史、厂商标志墙、国内源下载速度对比）。官网和宣传片直接复用这些图，不要再从仓库引用（原话"必须都得上桶"）。出图脚本 `website/scripts/readme-media.mjs`，上传 `upload-media.mjs --prefix readme --manifest ../docs/media.json`，步骤见 docs/development.md 的"README 的图"。
+- README 定下的内容方向官网照用：主旨"自由"（模型、方式、硬件、隐私、费用五项）；书面语、像报告一样简洁；能分点就分点、一点一个信息；中文价格只用人民币；成本放官网，但不提 Typeless（[[website-no-typeless]]），评测数据只放 README。见 [[readme-chinese-default]]。
+- 未查清：GitHub 的图片代理（camo，美西）第一次从这个 CDN 取图时，40 张里有 4 张拿到空的或 24 字节，换查询串重取就好；国内访问没见过。推测是 CDN 海外加速不稳，未验证；要根治得查 media 这个 CDN 的加速区域（云上改动，交给他跑）。
