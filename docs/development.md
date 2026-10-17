@@ -48,7 +48,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 
 | 目录 | 内容 |
 | --- | --- |
-| `install.sh` | 安装脚本：预检查、下载、校验、装进 `~/.speakmore`、启动。输出只有英文，不跟界面语言 |
+| `install.sh`、`install.ps1` | 安装脚本（macOS、Windows）：预检查、下载、校验、装进 `~/.speakmore`（Windows 是 `%USERPROFILE%\.speakmore`）、启动。输出只有英文，不跟界面语言 |
 | `bin/`、`src/cli/` | `speakmore` 命令 |
 | `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、主窗口、首次引导；`keys/` 是 key 的保存和启用 |
 | `src/renderer/`、`src/preload/` | 各个窗口的页面，一个窗口一个目录：`bar/`（悬浮条：状态机、录音、听写协议的客户端、画面）、`hub/`（主窗口：首页、历史记录、设置对话框）、`onboarding/`（首次引导），共用的样式和填 key 那一块在 `shared/` |
@@ -57,12 +57,12 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `src/server/` | 听写服务：`protocol/` 收分块音频，`refine/` 交给模型整理（各家共用的流程，每次调用记一笔账），`providers/` 每家模型一个适配器（`prices/` 是各家的价目表），`audio/` 把录音解成识别用的统一格式（16 kHz 单声道）、转成别家收的格式，`asr/` 是本地转写（每个运行库一个适配器、长录音分段、装着模型的转写进程），`modes.mjs` 是三种识别模式。平时跑在后台应用的进程里 |
 | `src/models/` | 本地模型的配置表 `catalog.mjs`：全局只有这一份，下载源（国内源、原始地址）、每个模型的文件和校验值、许可、标签和实测数字都在这里，别处不另写；`store.mjs` 下载、校验、列出、删除模型；`describe.mjs` 把标签和实测写成话；`presets.mjs` 是模型页的推荐组合 |
 | `src/usage/` | 用量报表（今天、本月、累计、按型号）、首页的统计（字数、语速、连续天数、热力图）和数字的写法，命令和主窗口共用；`estimate.mjs` 估推荐组合的月成本 |
-| `native/` | 听热键、贴字、说话时截住 `esc` 和悬浮条上点击的小程序（Swift） |
-| `assets/` | 图标：`icon.svg` 是那方印，`tray.svg` 是菜单栏上的五道；`.icns` 和 `trayTemplate*.png` 由 `scripts/build/make-icon.sh` 从它们生成 |
+| `native/` | 听热键、贴字、说话时截住 `esc` 和悬浮条上点击的小程序：macOS 的是 Swift，`windows/` 是 Go（只用标准库，在 Mac 上交叉编译） |
+| `assets/` | 图标：`icon.svg` 是那方印，`tray.svg` 是菜单栏上的五道；`.icns`、Windows 用的 `icon.ico` 和 `trayTemplate*.png` 由 `scripts/build/make-icon.sh` 从它们生成 |
 | `src/storage/` | `~/.speakmore` 里的东西：放在哪、设置、历史库、旧数据的迁移。命令和后台应用共用 |
 | `src/control.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道、日志 |
 | `test/` | 自动测试，目录和 `src/` 对应 |
-| `scripts/` | 开发用的脚本，按用途分四组：`build/` 编译小程序、打 .app；`release/` 发新版本（`ship.sh`：把关、打包、上传、核对）、把本地模型传到国内源（`sync-models.mjs`）；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
+| `scripts/` | 开发用的脚本，按用途分四组：`build/` 编译小程序、打 .app；`release/` 发新版本（`ship.sh`：把关、打包、上传、核对）、把本地模型传到国内源（`sync-models.mjs`）；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key、在 Windows 开发机上跑（`win-*.sh`，见上面的 Windows 一节）；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
 | `bench/` | 本地转写的评测（[说明](../bench/README.md)）：洗样本、跑参照和各个本地模型、判分、出报告 |
 | `docs/` | [实现笔记](implementation-notes.md)、这份开发说明、README 用的截图（`images/`） |
 | `website/` | 官网（[说明](../website/README.md)）：React + Tailwind CSS v4 的单页静态站，中英双语，Docker 部署；截图从 App 的真页面离屏截、放在单独的 COS 桶 |
@@ -83,6 +83,38 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 它不在 `~/.speakmore` 里，`speakmore uninstall` 不会删它。
 
 .app 在运行时，`speakmore status`、`history`、`key`、`stop` 照常能用。`speakmore restart` 和 `config set` 不会代它重启：从命令行起来的是终端启动的那一个，权限和 key 是另一套。按提示从菜单栏退出，再打开一次。
+
+## Windows
+
+Windows 版和 Mac 版是同一份代码，差别关在几处：听热键、贴字的小帮手是 `native/windows/`（Go，只用标准库，协议和 Swift 那个一字不差）；控制通道是 named pipe；家目录的权限用访问控制表只给本人和 SYSTEM；key 用 DPAPI 加密（Electron 的 safeStorage）；系统朗读用 System.Speech；安装、升级、卸载是 `install.ps1` 和 `src/cli/windows-system.mjs`。文案里按系统说的话写在各语言文案的 `windows` 一节，名字照抄通用的那句（`test/i18n/` 会查盖的那句存在、参数一样）。
+
+装好的样子和 Mac 一样全在 `%USERPROFILE%\.speakmore` 里（`app\`、`runtime\`（原版 Electron）、`bin\speakmore.cmd`、数据、日志、模型）。家目录以外只动两处、都记在 `bin\links`：用户 Path 里的 `%USERPROFILE%\.speakmore\bin`，开始菜单的 SpeakMore 快捷方式；App 设置里开了开机启动的话还有注册表 Run 里的一条。`speakmore uninstall` 照着删。
+
+**在 Mac 上开发、在 Windows 上验**：Windows 开发机经 SSH 操作，连哪台、用哪把钥匙写在 `.machine.env` 的 `WIN_SSH_TARGET`、`WIN_SSH_KEY`。开发机上的东西全在 `%USERPROFILE%\speakmore-dev` 里，不用了整个删掉，再删掉计划任务 `speakmore-dev*`。
+
+```bash
+scripts/dev/win.sh 'Get-Date'                 # 在开发机上跑一段 PowerShell（编成 -EncodedCommand，输出按 UTF-8 拿回来）
+scripts/dev/win-sync.sh                       # 把工作区同步到 speakmore-dev\repo（node_modules、build、bench\_work 留着）
+scripts/dev/win-test.sh [测试文件…]            # 同步后在开发机上跑单测，日志拉回本机，按文件列出失败的
+scripts/dev/win-desktop.sh '<PowerShell>'     # 在桌面会话里跑（热键、剪贴板、麦克风、窗口只有这里碰得到）；JOB=名字 另起一个任务并行跑
+scripts/dev/win-app.sh [stop]                 # 从源码起 App（家目录 speakmore-dev\home，调试端口 9333），或者停掉
+scripts/dev/win-screenshot.sh 截图.png         # 截开发机的整个主屏
+node scripts/build/build-native.mjs --windows # 交叉编译小帮手 build/key-helper.exe；Go 由 scripts/build/go.sh 钉版本、核对校验值后装进 .tools/
+node scripts/release/release.mjs windows      # 只打 Windows 的包（speakmore-win32-x64.zip），连同 install.ps1 摆进 dist/release
+```
+
+不发布也可以在开发机上试安装：把 `dist/release` 传过去，`$env:SPEAKMORE_INSTALL_BASE = '<那个目录>'` 后照 README 那一行跑（`SPEAKMORE_NO_START=1` 只装不启动，`SPEAKMORE_VERSION` 指定版本）。小帮手的真机检查是 `native/windows/e2e.ps1`（要在桌面会话里跑）。
+
+真机上踩过的坑，改相关代码前先看一眼：
+
+- **Windows PowerShell 5.1**：没有 BOM 的 `.ps1` 按系统编码（中文系统是 GBK）读，所以下载来的脚本要按 UTF-8 读进来再当脚本块跑；`Add-Content -Encoding UTF8` 写的文件开头带 BOM、按 CRLF 换行，读的那一边要去掉 BOM、按 `\r?\n` 切（`bin\links` 就因为这个没删干净过）；`$ErrorActionPreference = 'Stop'` 时外部程序往标准错误写一行就会被当成异常，调外部程序前要放宽；输出被重定向时 `Write-Host` 会变成一大段 CLIXML。
+- **`powershell -Command` 的退出码看最后一条命令**：最后一条是 `-ErrorAction SilentlyContinue` 的"没找到"时退出码是 1。`windows-system.mjs` 的几段统一出错就停、正常跑完明确 `exit 0`。
+- **Node 起的子进程**：直接起的会被放进 libuv 的"父进程退出就全部结束"的作业对象，父进程一退出它就没了；加 `detached` 能躲开，可那样起的 PowerShell 没有控制台，一行都不跑就以 0 退出。要活过父进程就隔一层：同步跑一个 PowerShell，由它 `Start-Process` 干活的那个（孙进程不在那个作业对象里）。
+- **跑着的 Electron（哪怕只当 Node 用）一直占着自己所在的目录**：目录改不了名，里面的文件和子目录却挪得动；正在跑的 exe 删不掉，但能挪走。所以升级时挪目录里的每一项、不挪目录本身，删不掉的等那个进程退出后再删。普通的 exe 不占目录，拿它试会试错。
+- **`bin\speakmore.cmd` 正在跑命令时不能删**：cmd 等 Electron 退出后还要回头读这个批处理文件，删了会报"找不到批处理文件"、退出码变成 1；同一行接 `exit /b` 也躲不开，`(goto)` 能压住报错但退出码丢了。卸载时 bin 留到退出后再删。
+- **快捷方式（.lnk）里的目标路径不是连续的一段**：本地编码那份拆成几截，UTF-16 那份是相对路径。认是不是我们的，要请 WScript.Shell 读出目标。
+- **从 SSH 起的程序进不了桌面**，断开就被收掉：要碰热键、剪贴板、麦克风、窗口的，用计划任务（只在用户登录时、以交互方式运行）在桌面会话里起，`win-desktop.sh` 就是这么做的。同一个任务正跑着时再起会被忽略，长任务用 `JOB=` 另起一个。PowerShell 里直接 `& electron.exe` 不等它跑完（它是窗口程序），要等就经 `cmd /c` 或者把输出接住。
+- **显卡**：本机模型在显卡上（Vulkan）第一次转写要先编显卡程序，RTX 4060 Ti 上 6.8 秒，之后驱动按可执行文件缓存在磁盘上；所以装上模型就先预热一遍。显卡上没装起来（报错或者驱动把转写进程弄崩）会自动换 CPU 再装，设置里也能选只用 CPU（`acceleration`）。
 
 ## 验证到哪一步
 
