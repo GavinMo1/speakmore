@@ -674,8 +674,8 @@ export default {
   speakmore history [-n 条数] [--json]
                                 看说过的话，按天分组，新的在前（默认最近 {limit} 条）
   speakmore usage [--json]      看花了多少钱：今天、本月、累计的花费、token，模型多久回话，按型号分开
-  speakmore mode                看两种识别模式各用什么：native 录音直接交给模型，local 本机先转写、再交给模型润色
-  speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]
+  speakmore mode                看三种识别模式各用什么：native 录音直接交给模型，local 先转写、再交给模型润色，private 只用本机模型转写、什么都不上传
+  speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url …]
                                 切模式，当场生效。可以连带那种模式自己的设置，比如第一次进 local 就用自定义服务
   speakmore model               native 模式：看能用哪几家的模型（{providers}）、各家的 key 有没有、现在用的哪个
   speakmore model <厂商>[/<模型>]

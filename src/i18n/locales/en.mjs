@@ -684,8 +684,8 @@ export default {
   speakmore history [-n count] [--json]
                                 What you said, grouped by day, newest first (latest {limit} by default)
   speakmore usage [--json]      What it cost: spend and tokens today, this month, and in total, model reply times, per model
-  speakmore mode                The two recognition modes and what each uses: native sends the recording to the model; local transcribes on this Mac, then a model polishes it
-  speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]
+  speakmore mode                The three recognition modes and what each uses: native sends the recording to the model; local transcribes, then a model polishes it; private transcribes with an on-device model and uploads nothing
+  speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url …]
                                 Switch mode, live. Can bring that mode's own settings, e.g. a custom service on first entering local
   speakmore model               Native mode: available providers ({providers}), whether each has a key, which one is in use
   speakmore model <provider>[/<model>]
