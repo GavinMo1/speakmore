@@ -69,6 +69,7 @@ export default {
     gemini: { getKey: "去 Google AI Studio 申请" },
     openai: { getKey: "去 OpenAI 开发者平台申请" },
     deepseek: { getKey: "去 DeepSeek 开放平台申请" },
+    bailian: { name: "阿里云百炼", getKey: "去阿里云百炼控制台申请" },
   },
 
   language: {
@@ -216,6 +217,7 @@ export default {
     forbidden: "这把 key 没有权限：{said}",
     notFound: "{provider} 没有这个模型，或者这把 key 用不了它：{said}",
     blocked: "{provider} 没有处理这段录音：{reason}",
+    notActivated: "{provider} 上这个模型还没开通：去控制台开通后再试",
     unfinished: "{provider} 没有正常结束：{reason}",
   },
 

@@ -5,6 +5,10 @@ import { LocalizedError, msg } from "../../i18n/index.mjs";
 //
 // 协议是策略（PROTOCOLS）。现在只有 OpenAI 的 Chat Completions 一种：DeepSeek、通义、Kimi、智谱、OpenRouter、
 // Ollama、LM Studio 都支持它。要接只支持别的协议的服务（比如 Anthropic Messages），就写一个协议适配器、在 PROTOCOLS 登记。
+//
+// 每一家的 models 是给人挑的清单，一项一个模型：id 是发请求用的名字，name 是给人看的，maker 是谁做的（界面按它配图标，
+// 同一个平台上可能有好几家的模型，比如百炼上有通义、DeepSeek、Kimi），request 是这个模型在 vendor.request 之外
+// 还要多带、或者要改掉的参数（同一家的模型关思考的写法不一定一样）。清单外的模型名照样发，只带 vendor.request。
 // 清单里没有的服务不用等我们登记：选 custom，自己填地址、模型和 key（GitHub issue #2 要的就是这个）。
 //
 // key 按厂商存，和原生链路共用一套存放处（storage/paths.mjs 的 keyFile）。以后这里加上 openai、gemini，
@@ -14,6 +18,9 @@ import { LocalizedError, msg } from "../../i18n/index.mjs";
 export const PROTOCOLS = Object.freeze({
   "openai-chat": Object.freeze({ name: "OpenAI Chat Completions", load: () => import("./openai-chat.mjs") }),
 });
+
+/** 清单里的模型逐项冻上：模块之外谁也改不了 */
+const models = (entries) => Object.freeze(entries.map((entry) => Object.freeze({ ...entry })));
 
 export const CHAT_VENDORS = Object.freeze([
   Object.freeze({
@@ -25,12 +32,41 @@ export const CHAT_VENDORS = Object.freeze([
     baseUrl: "https://api.deepseek.com",
     // deepseek-flash 就是 DeepSeek-V4.1-Flash（官方 GET /models 和价目页，2026-10-16）
     defaultModel: "deepseek-flash",
-    /** 官方 GET /models 列出的（2026-10-16）。只用来给人挑：别的名字也照样发，由它判断有没有 */
-    models: Object.freeze(["deepseek-flash", "deepseek-v4-pro"]),
+    /** 官方 GET /models 列出的（2026-10-16） */
+    models: models([
+      { id: "deepseek-flash", name: "DeepSeek V4.1 Flash", maker: "deepseek" },
+      { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", maker: "deepseek" },
+    ]),
     // 它默认开着思考（档位 high）。2026-10-16 实测同一句话：开着要 1.5 秒、多出 185 个 token，关掉 0.7 秒，
     // 成品一样。润色用不着思考，所以关掉
     request: Object.freeze({ thinking: Object.freeze({ type: "disabled" }) }),
     prices: () => import("./prices/deepseek.mjs"),
+  }),
+  Object.freeze({
+    id: "bailian",
+    // 界面上按语言写成"阿里云百炼"或"Alibaba Cloud Bailian"（文案 providers.bailian.name），这里的名字给日志和报错用
+    name: "Bailian",
+    keyEnv: "BAILIAN_API_KEY",
+    keyPage: "https://bailian.console.aliyun.com/?tab=model#/api-key",
+    protocol: "openai-chat",
+    // 国内站的 OpenAI 兼容地址。不用带业务空间 id：2026-10-16 拿业务空间级的 key 实测，GET /models 和对话都通
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    defaultModel: "qwen3.8-flash",
+    // 百炼上的模型关思考都认 enable_thinking: false（2026-10-16 逐个实测，回话里没有推理内容）。
+    // 只认 true 的（glm-5.3、glm-5.3-prime、MiniMax-M2.5 回 400 "restricted to True"）关不掉思考，润色不上它们
+    request: Object.freeze({ enable_thinking: false }),
+    // 2026-10-16 拿这把 key 逐个调通的。原厂经百炼代理的（kimi/…、ZHIPU/…、MiniMax/… 这类带前缀的）要先在控制台开通，
+    // 没开通时回 400 "The product is not activated"，开通了再验、再加进来
+    models: models([
+      { id: "qwen3.8-max", name: "Qwen3.8 Max", maker: "qwen" },
+      { id: "qwen3.8-flash", name: "Qwen3.8 Flash", maker: "qwen" },
+      { id: "qwen3.7-plus", name: "Qwen3.7 Plus", maker: "qwen" },
+      { id: "qwen3.8-27b", name: "Qwen3.8 27B", maker: "qwen" },
+      { id: "deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", maker: "deepseek" },
+      { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", maker: "deepseek" },
+      { id: "kimi-k3", name: "Kimi K3", maker: "kimi" },
+    ]),
+    prices: () => import("./prices/bailian.mjs"),
   }),
   Object.freeze({
     id: "custom",
@@ -43,7 +79,7 @@ export const CHAT_VENDORS = Object.freeze([
     baseUrl: null,
     /** 用户填，没有默认的 */
     defaultModel: null,
-    models: Object.freeze([]),
+    models: models([]),
     // 不知道对面是谁，不多带任何参数：多带了不认识的参数，有的服务会回 400
     request: Object.freeze({}),
     // 不知道价，花费记成空
@@ -55,6 +91,12 @@ export const CHAT_VENDORS = Object.freeze([
 export function findChatVendor(id) {
   const wanted = String(id).toLowerCase();
   return CHAT_VENDORS.find((vendor) => vendor.id === wanted) ?? null;
+}
+
+/** 发给这一家的这个模型要多带的参数：这一家都带的，加上清单里这个模型自己的（同名的以模型的为准） */
+export function requestFor(vendor, model) {
+  const entry = vendor.models.find(({ id }) => id === model);
+  return { ...vendor.request, ...entry?.request };
 }
 
 /**

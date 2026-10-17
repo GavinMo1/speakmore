@@ -9,6 +9,7 @@ import {
   normalizeBaseUrl,
   PROTOCOLS,
   parseChatChoice,
+  requestFor,
 } from "../../../src/server/chat/vendors.mjs";
 
 const zh = createTranslator("zh-CN");
@@ -74,4 +75,33 @@ test("接口地址：登记了的用登记的；自定义的用用户填的，�
     name: "api.siliconflow.cn",
   });
   says(() => chatEndpoint(findChatVendor("custom"), {}), /地址/);
+});
+
+test("清单里的模型一项一个：id 不重复，有名字和出自哪家；默认模型在清单里", () => {
+  for (const vendor of CHAT_VENDORS) {
+    const ids = vendor.models.map(({ id }) => id);
+    assert.equal(new Set(ids).size, ids.length, `${vendor.id} 的模型有重复`);
+    for (const model of vendor.models) {
+      assert.ok(model.name && model.maker, `${vendor.id}/${model.id} 缺名字或出处`);
+      assert.ok(Object.isFrozen(model), `${vendor.id}/${model.id} 没冻上`);
+    }
+    if (vendor.defaultModel !== null) assert.ok(ids.includes(vendor.defaultModel), `${vendor.id} 的默认模型不在清单里`);
+  }
+});
+
+test("每个模型要带的参数：这一家都带的加上模型自己的；清单外的模型只带这一家的", () => {
+  const vendor = {
+    request: { enable_thinking: false, temperature: 1 },
+    models: [{ id: "a", request: { temperature: 0.7 } }, { id: "b" }],
+  };
+  assert.deepEqual(requestFor(vendor, "a"), { enable_thinking: false, temperature: 0.7 });
+  assert.deepEqual(requestFor(vendor, "b"), { enable_thinking: false, temperature: 1 });
+  assert.deepEqual(requestFor(vendor, "elsewhere"), { enable_thinking: false, temperature: 1 });
+});
+
+test("百炼润色的模型都关思考，用的是国内站的兼容地址", () => {
+  const bailian = findChatVendor("bailian");
+  assert.equal(bailian.baseUrl, "https://dashscope.aliyuncs.com/compatible-mode/v1");
+  for (const { id } of bailian.models) assert.equal(requestFor(bailian, id).enable_thinking, false, id);
+  assert.deepEqual(parseChatChoice("bailian"), { vendor: "bailian", model: "qwen3.8-flash" });
 });

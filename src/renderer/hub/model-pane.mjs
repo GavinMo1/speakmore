@@ -396,7 +396,7 @@ export function createModelPane({ refresh }) {
       if (many) {
         const selected = isChosen ? chosenModel : vendor.defaultModel;
         $("polish-model").replaceChildren(
-          ...vendor.models.map((model) => new Option(model, model, false, model === selected)),
+          ...vendor.models.map(({ id, name }) => new Option(name ?? id, id, false, id === selected)),
         );
       }
       if (custom) {

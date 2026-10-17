@@ -3,6 +3,7 @@
 //
 // 这里只放每家的说明，不加载它的 SDK：命令行看设置、列模型时也要用到这份清单，不该为此把各家的代码都读进来。
 // 真要发请求时再 load()。加一家 = 写一个适配器、在下面登记一行，再给每种语言的文案添上去哪申请 key（providers.<id>.getKey）。
+// models 是给人挑的清单，一项一个：{ id, name, maker }，写法同润色那边（chat/vendors.mjs）。清单外的模型名照样发。
 
 import { LocalizedError, msg } from "../../i18n/index.mjs";
 
@@ -17,6 +18,7 @@ export const PROVIDERS = Object.freeze([
     defaultModel: "gemini-3.6-flash",
     // 有的型号不接受 MINIMAL，所以档位也要能换
     thinkingLevels: Object.freeze(["MINIMAL", "LOW", "MEDIUM", "HIGH"]),
+    models: Object.freeze([Object.freeze({ id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", maker: "gemini" })]),
     load: () => import("./gemini.mjs"),
   }),
   Object.freeze({
@@ -27,7 +29,33 @@ export const PROVIDERS = Object.freeze([
     defaultModel: "gpt-audio-mini",
     // gpt-audio 系列没有思考档位
     thinkingLevels: null,
+    models: Object.freeze(
+      [
+        { id: "gpt-audio-mini", name: "GPT Audio Mini" },
+        { id: "gpt-audio-1.5", name: "GPT Audio 1.5" },
+      ].map((model) => Object.freeze({ ...model, maker: "openai" })),
+    ),
     load: () => import("./openai.mjs"),
+  }),
+  Object.freeze({
+    id: "bailian",
+    // 界面上按语言写成"阿里云百炼"或"Alibaba Cloud Bailian"（文案 providers.bailian.name），这里的名字给日志和报错用
+    name: "Bailian",
+    keyEnv: "BAILIAN_API_KEY",
+    keyPage: "https://bailian.console.aliyun.com/?tab=model#/api-key",
+    // 2026-10-16 四个都实测过（providers/bailian.mjs）。3.8 Flash 最便宜，音频和文字同价
+    defaultModel: "qwen3.8-omni-flash",
+    // 思考在适配器里一律关掉，没有档位可选
+    thinkingLevels: null,
+    models: Object.freeze(
+      [
+        { id: "qwen3.8-omni-flash", name: "Qwen3.8 Omni Flash" },
+        { id: "qwen3.5-omni-plus", name: "Qwen3.5 Omni Plus" },
+        { id: "qwen3.5-omni-flash", name: "Qwen3.5 Omni Flash" },
+        { id: "qwen3-omni-flash", name: "Qwen3 Omni Flash" },
+      ].map((model) => Object.freeze({ ...model, maker: "qwen" })),
+    ),
+    load: () => import("./bailian.mjs"),
   }),
 ]);
 

@@ -3,7 +3,7 @@ import { SPEECH_SAMPLE_RATE } from "../audio/pcm.mjs";
 import { toSpeech } from "../audio/transcode.mjs";
 import { ModelError } from "../providers/errors.mjs";
 
-// 本地转写链路：录音 → 统一成 16 kHz 单声道 → 本地模型转写（第一跳）→ 纯文字模型润色（第二跳）→ 成品。
+// 本地转写链路：录音 → 统一成 16 kHz 单声道 → 转写（第一跳，本机模型或云端模型）→ 纯文字模型润色（第二跳）→ 成品。
 // 和原生链路（refiner.mjs）平级，对外的接口一样（warmUp、prepare、refine），服务端不用知道走的是哪一条。
 // 两跳各是一个策略：转写器是哪个模型由模型清单和转写进程管（asr/），润色交给哪一家由润色器管（polisher.mjs），
 // 这里只管把它们按顺序接起来。
@@ -12,10 +12,12 @@ import { ModelError } from "../providers/errors.mjs";
 
 /**
  * @param {object} options
- * @param {{ transcribe(samples: Float32Array): Promise<{ text: string }> }} options.transcriber 第一跳（asr/host.mjs）
+ * @param {{ transcribe(samples: Float32Array, o: { signal?: AbortSignal, audioId?: string }): Promise<{ text: string }> }} options.transcriber
+ *   第一跳：本机模型（asr/host.mjs）或云端模型（asr/cloud/transcriber.mjs）
  * @param {{ warmUp(): Promise<void>, polish(text: string, o: object): Promise<string> }} options.polisher 第二跳（polisher.mjs）
  * @param {{ info: Function, error: Function }} options.log
- * @param {string} [options.model] 第一跳是哪个本机模型（models/catalog.mjs 的 id），记账用
+ * @param {string | null} [options.model] 第一跳是哪个本机模型（models/catalog.mjs 的 id），记账用。
+ *   第一跳是云端模型时不写：它自己记账（花钱、按时长或 token 算）
  * @param {(record: object) => void} [options.onCall] 记账，样子同 meter.mjs 的 onCall
  * @param {typeof toSpeech} [options.decode] 测试时换成假的
  */
@@ -64,15 +66,17 @@ export function createLocalRefiner({ transcriber, polisher, log, model, onCall =
       const decodedAt = performance.now();
       let transcript;
       try {
-        ({ text: transcript } = await transcriber.transcribe(samples));
+        ({ text: transcript } = await transcriber.transcribe(samples, { signal, audioId }));
       } catch (error) {
+        // 云端转写已经分好类了（key 不对、暂时够不着……），原样往上交
+        if (error instanceof ModelError) throw error;
         // 自己说得清的（模型还在下载、没装上）照它说的；别的是转写进程或运行库出的错
         const problem =
           error?.problem ?? msg("local.transcribeFailed", { reason: String(error?.message ?? error).slice(0, 200) });
         throw failed(problem, error);
       }
       const transcribedAt = performance.now();
-      record(audioId, Math.round(transcribedAt - decodedAt));
+      if (model) record(audioId, Math.round(transcribedAt - decodedAt));
       // 转写的这段时间里用户已经断开了：润色要花钱，不必再发
       signal?.throwIfAborted();
       const refined = await polisher.polish(transcript, { signal, audioId });

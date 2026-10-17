@@ -536,7 +536,7 @@ async function main() {
       key: sources[found.id] ?? null,
       hasKeyPage: Boolean(found.keyPage),
       defaultModel: found.defaultModel ?? null,
-      // 润色的那几家给出能挑的模型；收音频的那几家只有默认模型
+      // 能挑的模型：{ id, name, maker }
       models: found.models ?? [],
     };
   }

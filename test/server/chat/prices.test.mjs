@@ -28,3 +28,10 @@ test("旧名字按 Flash 的价算（官方说这些请求由 V4.1-Flash 处理�
   assert.equal(costOf("deepseek-v4-flash", TOKENS, at), costOf("deepseek-flash", TOKENS, at));
   assert.equal(costOf("deepseek-nope", TOKENS, at), null);
 });
+
+test("百炼：人民币价按汇率换成美元记；价目里没有的型号是空", async () => {
+  const { costOf: bailianCost } = await import("../../../src/server/chat/prices/bailian.mjs");
+  const { CNY_PER_USD } = await import("../../../src/server/currency.mjs");
+  close(bailianCost("qwen3.8-flash", TOKENS), (0.8 + 0.1 + 2.7) / CNY_PER_USD);
+  assert.equal(bailianCost("qwen3.7-plus", TOKENS), null);
+});

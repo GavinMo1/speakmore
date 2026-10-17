@@ -70,6 +70,7 @@ export default {
     gemini: { getKey: "Get one at Google AI Studio" },
     openai: { getKey: "Get one at OpenAI Platform" },
     deepseek: { getKey: "Get one at DeepSeek Platform" },
+    bailian: { name: "Alibaba Cloud Bailian", getKey: "Get one at the Bailian console" },
   },
 
   language: {
@@ -225,6 +226,7 @@ export default {
     forbidden: "This key lacks permission: {said}",
     notFound: "{provider} doesn't have this model, or this key can't use it: {said}",
     blocked: "{provider} didn't process this recording: {reason}",
+    notActivated: "This model isn't activated on {provider}. Activate it in the console, then try again",
     unfinished: "{provider} didn't finish normally: {reason}",
   },
 

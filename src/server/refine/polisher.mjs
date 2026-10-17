@@ -1,5 +1,5 @@
 import { LocalizedError, msg } from "../../i18n/index.mjs";
-import { chatEndpoint, findChatVendor, PROTOCOLS } from "../chat/vendors.mjs";
+import { chatEndpoint, findChatVendor, PROTOCOLS, requestFor } from "../chat/vendors.mjs";
 import { toModelError } from "../providers/errors.mjs";
 import { createMeter } from "./meter.mjs";
 import { textFromModelOutput } from "./output.mjs";
@@ -71,7 +71,7 @@ export function createPolisher({
 }
 
 /**
- * 按用户选的厂商和模型装出一个润色器：清单里找到那一家，加载它说的协议，带上它的地址、参数和价。
+ * 按用户选的厂商和模型装出一个润色器：清单里找到那一家，加载它说的协议，带上它的地址、这个模型要的参数和价。
  * @param {object} options
  * @param {{ vendor: string, model: string }} options.choice
  * @param {string | null} [options.customUrl] 自定义服务的地址（设置里的 customUrl）
@@ -90,7 +90,7 @@ export async function createChatPolisher({ choice, customUrl = null, apiKey, tim
     apiKey,
     model: choice.model,
     name,
-    request: vendor.request,
+    request: requestFor(vendor, choice.model),
     costOf,
     ...(fetch ? { fetch } : {}),
   });

@@ -353,10 +353,13 @@ test("第一次用：先问 key，再启动；存好了直接能用；key 不出
 
 test("第一次用：按模式分组问用哪一家，选 DeepSeek 就进 local 模式、问 DeepSeek 的 key", async () => {
   const daemon = fakeDaemon({ afterStart: { ...NO_KEY, provider: "deepseek", mode: "local" } });
-  const { speakmore, questions, asked, output } = harness({ daemon, answers: ["3"], secrets: ["sk-ds"] });
+  const { speakmore, questions, asked, output } = harness({ daemon, answers: ["4"], secrets: ["sk-ds"] });
   const code = await speakmore();
   assert.equal(code, 0, output.out + output.err);
-  assert.match(questions[0], /native 模式[\s\S]*1.*Gemini[\s\S]*2.*OpenAI[\s\S]*local 模式.*850 MB[\s\S]*3.*DeepSeek/);
+  assert.match(
+    questions[0],
+    /native 模式[\s\S]*1.*Gemini[\s\S]*2.*OpenAI[\s\S]*3.*Bailian[\s\S]*local 模式.*850 MB[\s\S]*4.*DeepSeek[\s\S]*5.*Bailian/,
+  );
   assert.match(questions[0], /custom\/<模型名> --url/);
   assert.deepEqual([saved("mode"), saved("polish")], ["local", "deepseek/deepseek-flash"]);
   assert.match(asked[0], /DeepSeek API key/);
@@ -2428,7 +2431,7 @@ test("polish：自定义服务没给地址、写的是收音频的那家，以 2
   assert.equal(await speakmore("polish", "custom/m"), 2);
   assert.match(output.err, /--url/);
   assert.equal(await speakmore("polish", "openai"), 2);
-  assert.match(output.err, /deepseek \/ custom/);
+  assert.match(output.err, /deepseek \/ bailian \/ custom/);
 });
 
 test("polish check：查第二跳现在用的那个能不能用", async () => {

@@ -137,7 +137,7 @@ const keyText = (t, vendor, where) => {
 /**
  * 第二跳：润色的那几家
  * @param {object} view
- * @param {ReadonlyArray<{ id: string, name: string, keyEnv: string, defaultModel: string | null, models: readonly string[] }>} view.vendors
+ * @param {ReadonlyArray<{ id: string, name: string, keyEnv: string, defaultModel: string | null, models: ReadonlyArray<{ id: string }> }>} view.vendors
  * @param {{ vendor: string, model: string }} view.polish 设置里选的那个
  * @param {string} view.customUrl 设置里的自定义地址（没填是空的）
  * @param {Record<string, "stored" | "env" | null>} view.keys
@@ -162,8 +162,9 @@ export function renderPolish({ vendors, polish, customUrl, keys, current }, { co
       `${INDENT}${mark} ${c.bold(padEnd(vendor.id, idWidth))}${padEnd(nameOf(vendor), nameWidth)}${padEnd(modelOf(vendor), modelWidth)}${keys[vendor.id] ? key : c.dim(key)}`,
     );
     // 能挑的别的模型列在下面一行
-    const others = vendor.models.filter((model) => model !== modelOf(vendor) && model !== vendor.defaultModel);
-    const listed = vendor.id === polish.vendor ? vendor.models.filter((model) => model !== polish.model) : others;
+    const ids = vendor.models.map(({ id }) => id);
+    const others = ids.filter((model) => model !== modelOf(vendor) && model !== vendor.defaultModel);
+    const listed = vendor.id === polish.vendor ? ids.filter((model) => model !== polish.model) : others;
     if (listed.length > 0) {
       lines.push(
         c.dim(
