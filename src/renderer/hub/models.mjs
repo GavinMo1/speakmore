@@ -10,7 +10,10 @@ import { describeError } from "../shared/setup-text.mjs";
 const $ = (id) => document.getElementById(id);
 const NS = "http://www.w3.org/2000/svg";
 
-/** 货架的三个角色 → 设置里那一项、属于哪种识别方式 */
+/**
+ * 货架的三个角色 → 设置里那一项、属于哪种识别方式。转写在两种方式里都有：数据隐私方式（private）用它自己的那一项
+ * （privateTranscriber），只认本机模型；见 settingOf、modeFor
+ */
 const ROLES = {
   native: { setting: "native", mode: "native" },
   transcribe: { setting: "transcriber", mode: "local" },
@@ -87,7 +90,8 @@ const makerName = (maker) => named(`plaza.makers.${maker}`, maker);
 
 /** 一个价：¥0.8、$0.3；数小于 1 的保留到小数点后两位以内 */
 const money = (currency) => (currency === "CNY" ? "¥" : "$");
-const amount = (value) => String(Math.round(value * 100) / 100);
+/** 价保留到分：两位小数以内 */
+const amount = (value) => Math.round(value * 100) / 100;
 
 /**
  * @param {{ refresh: () => Promise<object> }} options refresh：重新问主进程要一份状态，并让整个窗口跟着更新
@@ -113,6 +117,13 @@ export function createModels({ refresh }) {
   };
 
   const platformOf = (id) => setup.plaza.platforms.find((platform) => platform.id === id) ?? null;
+  const privateNow = () => setup.plaza.mode === "private";
+  /** 这个角色现在选的写在哪一项：数据隐私方式里转写是它自己的那一项 */
+  const settingOf = (role) => (role === "transcribe" && privateNow() ? "privateTranscriber" : ROLES[role].setting);
+  const chosenOf = (role) => setup.plaza.chosen[settingOf(role)];
+  /** 启用这一行要用哪种识别方式：数据隐私方式里启用本机模型还在它里面，别的照角色 */
+  const modeFor = (role, group) =>
+    role === "transcribe" && privateNow() && group.kind === "local" ? "private" : ROLES[role].mode;
   const hasKey = (id) => Boolean(platformOf(id)?.key);
   const modeName = (mode) => t(`plaza.modes.${mode}`);
 
@@ -131,7 +142,7 @@ export function createModels({ refresh }) {
 
   /** 这一组正在用的那个模型的渠道 */
   function chosenVia(role, group) {
-    const chosen = setup.plaza.chosen[ROLES[role].setting];
+    const chosen = chosenOf(role);
     for (const item of group.items) {
       for (const [via, offer] of Object.entries(item.offers ?? {})) if (offer.choice === chosen) return via;
     }
@@ -170,9 +181,10 @@ export function createModels({ refresh }) {
 
   const isChosen = (role, group, item) => {
     const choice = choiceOf(role, group, item);
-    return choice !== null && setup.plaza.chosen[ROLES[role].setting] === choice;
+    return choice !== null && chosenOf(role) === choice;
   };
-  const isLive = (role) => ROLES[role].mode === setup.plaza.mode;
+  /** 这个角色在正在用的识别方式里：转写在转写 + 润色、数据隐私两种里都算 */
+  const isLive = (role) => ROLES[role].mode === setup.plaza.mode || (role === "transcribe" && privateNow());
 
   // ---------- 检测：同一套状态（未检测、检测中、通过、失败），卡片、模型、密钥三处共用 ----------
 
@@ -273,7 +285,8 @@ export function createModels({ refresh }) {
   /** 启用一个模型：在它那种识别方式里就只换模型，不在就连方式一起换 */
   function use(role, group, item, rowKey) {
     const choice = choiceOf(role, group, item);
-    const { mode, setting } = ROLES[role];
+    const mode = modeFor(role, group);
+    const setting = mode === "private" ? "privateTranscriber" : ROLES[role].setting;
     const switching = setup.plaza.mode !== mode;
     const name = itemName(group, item);
     const customExtra = group.kind === "custom" ? { customUrl: customUrl() } : {};
@@ -328,9 +341,8 @@ export function createModels({ refresh }) {
 
   // ---------- 识别方式：两张单选卡片，各画一条从音频到成稿的路 ----------
 
-  /** 某个角色现在选的那一行：[组, 行]，找不到（清单里没有的模型）是 null */
-  function chosenRow(role) {
-    const chosen = setup.plaza.chosen[ROLES[role].setting];
+  /** 某个角色选的那一行：[组, 行]，找不到（清单里没有的模型）是 null。chosen 不写就是现在选的 */
+  function chosenRow(role, chosen = chosenOf(role)) {
     for (const group of setup.plaza.shelves[role]) {
       for (const item of group.items) {
         if (
@@ -347,8 +359,7 @@ export function createModels({ refresh }) {
   }
 
   /** 选的模型在哪个平台上：设置里写的厂商，本机模型是 local */
-  function platformOfChoice(role) {
-    const chosen = setup.plaza.chosen[ROLES[role].setting];
+  function platformOfChoice(role, chosen = setup.plaza.chosen[ROLES[role].setting]) {
     const slash = chosen.indexOf("/");
     return slash === -1 ? "local" : chosen.slice(0, slash);
   }
@@ -368,11 +379,11 @@ export function createModels({ refresh }) {
       h("span", { class: "flow-caption", text: caption }),
     );
 
-  function flowModel(role, caption) {
-    const found = chosenRow(role);
-    const chosen = setup.plaza.chosen[ROLES[role].setting];
+  /** 识别方式卡片上的一个模型：chosen 是那种方式选的（转写在两种方式里各有各的） */
+  function flowModel(role, caption, chosen = setup.plaza.chosen[ROLES[role].setting]) {
+    const found = chosenRow(role, chosen);
     const name = found ? itemName(found.group, found.item) : chosen;
-    const icon = found?.group.kind === "local" ? found.item.maker : (found?.group.id ?? platformOfChoice(role));
+    const icon = found?.group.kind === "local" ? found.item.maker : (found?.group.id ?? platformOfChoice(role, chosen));
     return h(
       "div",
       { class: "flow-stop flow-stop-model" },
@@ -426,6 +437,25 @@ export function createModels({ refresh }) {
             : ["i-cloud-upload", t("plaza.facts.upload", { platform: viaText(transcribeVia) })],
           ["i-cloud-upload", t("plaza.facts.textOnly", { platform: viaText(polishVia) })],
         ],
+      },
+      {
+        mode: "private",
+        desc: t("plaza.ways.privateDesc"),
+        stops: [
+          flowEnd("i-mic", t("plaza.flow.audio")),
+          flowModel(
+            "transcribe",
+            t("plaza.flow.transcribe", { via: viaText("local") }),
+            setup.plaza.chosen.privateTranscriber,
+          ),
+          flowEnd("i-letter-text", t("plaza.flow.raw")),
+        ],
+        facts: [
+          ["i-shield-check", t("plaza.facts.local")],
+          ["i-lock", t("plaza.facts.noUpload")],
+        ],
+        // 不用 key、也不连网：检测就是拿本机模型转一句
+        check: () => window.speakmore.checkTranscriber(setup.plaza.chosen.privateTranscriber),
       },
     ];
     $("plaza-ways").replaceChildren(
@@ -484,7 +514,11 @@ export function createModels({ refresh }) {
               h(
                 "div",
                 { class: "cell-fill way-status" },
-                statusControl(key, t("plaza.check.wayTip"), () => window.speakmore.checkModel(way.mode, {})),
+                statusControl(
+                  key,
+                  t("plaza.check.wayTip"),
+                  way.check ?? (() => window.speakmore.checkModel(way.mode, {})),
+                ),
               ),
             ),
             failNote(key),
@@ -743,9 +777,21 @@ export function createModels({ refresh }) {
         "span",
         { class: "metric-line" },
         h("span", { class: "metric-cur", text: `${price.approx ? "≈" : ""}${money(price.currency)}` }),
-        h("span", { class: "metric-value", text: amount(price[col.field]) }),
+        h("span", { class: "metric-value", text: amount(price[col.field]).toFixed(decimalsOf(col, role, group)) }),
       ),
     );
+  }
+
+  /** 同一列的小数位一致（界面规范第 1 节）：这一组在看的渠道上、这一列的价里最多几位（最多两位），都写成这么多位 */
+  function decimalsOf(col, role, group) {
+    let most = 0;
+    for (const it of group.items) {
+      const value = offerOf(role, group, it)?.price?.[col.field];
+      if (typeof value !== "number") continue;
+      const [, fraction = ""] = String(amount(value)).split(".");
+      most = Math.max(most, fraction.length);
+    }
+    return most;
   }
 
   const rowKey = (role, group, item) => `${role}:${group.id}:${item.choice ?? item.name ?? "custom"}`;
@@ -1006,8 +1052,17 @@ export function createModels({ refresh }) {
 
   function customDesc() {
     const choice = customChoice();
-    if (choice && customUrl()) return `${choice.slice("custom/".length)} · ${new URL(customUrl()).host}`;
+    if (choice && customUrl()) return `${choice.slice("custom/".length)} · ${hostOf(customUrl())}`;
     return t("plaza.custom.desc");
+  }
+
+  /** 地址的主机名。填的地址还没验证、可能写错（漏了 https://）：认不出就照填的写，不让整页画不出来 */
+  function hostOf(url) {
+    try {
+      return new URL(url).host;
+    } catch {
+      return url;
+    }
   }
 
   function groupHead(role, group, count) {
@@ -1125,7 +1180,7 @@ export function createModels({ refresh }) {
   }
 
   function keyValue(platform) {
-    if (platform.key === "env") return t("plaza.keys.env", { variable: platform.keyEnv });
+    if (platform.key === "env") return t("plaza.keys.env");
     if (platform.key === "stored") return t("plaza.keys.stored");
     return t("plaza.keys.none");
   }
@@ -1240,7 +1295,13 @@ export function createModels({ refresh }) {
         h(
           "span",
           { class: "metrics" },
-          h("span", { class: "key-value", role: "cell", "data-empty": !filled, text: keyValue(platform) }),
+          h("span", {
+            class: "key-value",
+            role: "cell",
+            "data-empty": !filled,
+            title: platform.key === "env" ? t("plaza.keys.envTip", { variable: platform.keyEnv }) : null,
+            text: keyValue(platform),
+          }),
         ),
         h(
           "div",

@@ -195,7 +195,8 @@ export function createKeyPanel(container, { refresh, layer, onSelect }) {
 
   /** 这家有没有能拿来用的 key。服务正拿着它的 key 时看那把的状态：不能用的、没有的都算没有 */
   function hasKey(setup, provider) {
-    if (provider.id === setup.provider.id) return setup.key.state === "ready" || setup.key.state === "checking";
+    // 数据隐私模式不用 key，服务手里没有哪一家的（setup.provider 是 null）
+    if (provider.id === setup.provider?.id) return setup.key.state === "ready" || setup.key.state === "checking";
     return provider.key !== null;
   }
 
@@ -230,7 +231,7 @@ export function createKeyPanel(container, { refresh, layer, onSelect }) {
     const provider = providers.find(({ id }) => id === selected);
     const isCurrent = provider.id === chosen;
     // 服务手里正拿着它的 key（正在用的模式选的就是它）：说那把 key 的状态；别的只说有没有
-    const holding = provider.id === setup.provider.id;
+    const holding = provider.id === setup.provider?.id;
     // 连着单独启动的服务端时用哪家由那边定，不给选
     find(".providers").hidden = !setup.switchable;
     if (setup.switchable) renderProviders(providers, chosen);
@@ -309,7 +310,7 @@ export function createKeyPanel(container, { refresh, layer, onSelect }) {
     // 选中的就是这一层选的那家：只存 key（服务正拿着它的 key 就当场换上）；
     // 不是的话存这把 key 的同时改用它，验证过才换
     const isCurrent = selected === layer.chosen(latest);
-    const holding = selected === latest.provider.id;
+    const holding = selected === latest.provider?.id;
     submit(saveButton, () => {
       if (!isCurrent) return useVendor(layer, latest, selected, value);
       return holding ? window.speakmore.saveKey(value) : window.speakmore.saveKey(value, selected, {});
@@ -331,7 +332,7 @@ export function createKeyPanel(container, { refresh, layer, onSelect }) {
 
   find(".forget-key").addEventListener("click", async () => {
     const provider = named(layer.vendors(latest).find(({ id }) => id === selected) ?? latest.provider);
-    const inUse = provider.id === latest.provider.id;
+    const inUse = provider.id === latest.provider?.id;
     const question = t(inUse ? "keyPanel.confirmForgetInUse" : "keyPanel.confirmForget", { provider: provider.name });
     if (!window.confirm(question)) return;
     await window.speakmore.forgetKey(selected);

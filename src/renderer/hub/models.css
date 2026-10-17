@@ -84,15 +84,10 @@
    宽时并排（转写 + 润色多一站，宽一些），窄时上下叠、卡片内部改成左右排。
    整张卡可点；选中的描主题色边、路上有光在走 */
 
+/* 三种方式平级，一种一张卡、上下排成一列：分栏的话宽窗口上会排成两张加一张，落单的那张很难看 */
 .ways {
   display: grid;
-  gap: 1rem;
-}
-
-@container page (min-width: 60rem) {
-  .ways {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
-  }
+  gap: 0.75rem;
 }
 
 .way {
@@ -132,9 +127,13 @@
   gap: 1.125rem;
 }
 
-@container way (min-width: 40rem) {
+/*
+ * 卡片够宽时排成一行：左边是方式的名字（定宽），右边是那条路。三张卡一样宽，三条路的起点、终点上下对齐，一眼能比。
+ * 右边要放下两个模型的全名（"Qwen3-ASR 0.6B · Metal 版"），窄于这个宽度就上下排，不截断
+ */
+@container way (min-width: 52rem) {
   .way-body {
-    grid-template-columns: minmax(12rem, 1fr) minmax(0, 2.2fr);
+    grid-template-columns: 14rem minmax(0, 1fr);
     grid-template-areas: "head flow" "foot foot";
     column-gap: 2rem;
     align-items: center;
@@ -581,13 +580,11 @@
 /* ---------- 密钥 ---------- */
 
 .key-value {
-  font-family: var(--font-mono);
   font-size: var(--text-small);
   color: var(--ink);
 }
 
 .key-value[data-empty] {
-  font-family: var(--font);
   color: var(--ink-2);
 }
 
