@@ -3,7 +3,7 @@
 // 引导里点了哪种、哪家就当场换上（app/modes.mjs 的 switchMode 不验 key、不等下载），所以打算就是现在的设置；
 // 还差的（缺 key、模型没下载）照实写出来，补齐了自己就能用。
 // 引导只摆最常见的搭法：原生选一家收音频的，转写 + 润色是本机模型加一家润色，数据隐私只要本机模型。
-// 云端转写、自定义服务这些更自由的搭法在主窗口的模型页。
+// 云端转写、自定义服务这些更自由的搭法在主窗口的模型页：引导照实显示、不去改它，除非用户在引导里点了别的。
 
 export const WAYS = ["native", "local", "private"];
 
@@ -16,15 +16,9 @@ export function vendorsFor(setup, mode) {
   return [];
 }
 
-/** 现在的打算：照现在的设置。润色选的是自定义服务时换成能挑的第一家（引导里不列自定义服务） */
+/** 现在的打算：照现在的设置。润色用的是自定义服务时就是 custom（引导里不列它，点了别家才换） */
 export function planOf(setup) {
-  const polish = vendorOf(setup.local.polish);
-  const polishVendors = vendorsFor(setup, "local");
-  return {
-    mode: setup.mode.value,
-    native: vendorOf(setup.native.model),
-    polish: polishVendors.some(({ id }) => id === polish) ? polish : polishVendors[0].id,
-  };
+  return { mode: setup.mode.value, native: vendorOf(setup.native.model), polish: vendorOf(setup.local.polish) };
 }
 
 /**
@@ -53,25 +47,38 @@ export function hasKey(setup, mode, id) {
   return vendorsFor(setup, mode).find((vendor) => vendor.id === id)?.key != null;
 }
 
-/** 这一套还差什么才能用：[{ kind: "download", model, downloading }, { kind: "key", vendor }]；不差是空的 */
+/**
+ * 这一套还差什么才能用：[{ kind: "download", model, downloading }, { kind: "key", vendor }, { kind: "url" }]；不差是空的。
+ * 按主进程照设置算好的那一份（app/model-plaza.mjs 的 ways：云端第一跳、自定义服务都算得对），
+ * 正在用的那种方式再补上存着却没通过、读不出的那把 key（主进程只看有没有）
+ */
 export function needsOf(plan, setup) {
-  const needs = [];
-  if (plan.mode !== "native") {
-    const model = localModelOf(setup, plan.mode);
-    const item = setup.local.transcribers.find(({ id }) => id === model);
-    if (!item?.installed) needs.push({ kind: "download", model, downloading: Boolean(item?.download) });
+  const transcriber = (id) => setup.local.transcribers.find((model) => model.id === id);
+  const needs = (setup.plaza.ways[plan.mode]?.needs ?? []).map((need) => {
+    if (need.kind === "key") return { kind: "key", vendor: need.platform };
+    if (need.kind === "download") {
+      return { kind: "download", model: need.model, downloading: Boolean(transcriber(need.model)?.download) };
+    }
+    return need;
+  });
+  const vendor = setup.key.vendor?.id ?? setup.provider?.id;
+  const broken = setup.key.state === "rejected" || setup.key.state === "unreadable";
+  if (plan.mode === setup.mode.value && broken && vendor && !needs.some((need) => need.vendor === vendor)) {
+    needs.push({ kind: "key", vendor });
   }
-  const vendor = plan.mode === "native" ? plan.native : plan.mode === "local" ? plan.polish : null;
-  if (vendor && !hasKey(setup, plan.mode, vendor)) needs.push({ kind: "key", vendor });
   return needs;
 }
 
 /**
  * 换过去时带上那种方式的哪几项设置（app/modes.mjs 的 switchMode 收的）。
- * 选的就是设置里那家时不带：设置里可能已经挑好了它的哪个模型，不用换回默认的
+ * 选的就是设置里那家时不带：设置里可能已经挑好了它的哪个模型，不用换回默认的。
+ * 就在这种方式里换一家：只带换的那一家，第一跳不动（可能是模型页配的云端转写）
  */
 export function changesOf(plan, setup) {
   if (plan.mode === "native") return plan.native === vendorOf(setup.native.model) ? {} : { model: plan.native };
+  if (plan.mode === setup.mode.value) {
+    return plan.mode === "local" && plan.polish !== vendorOf(setup.local.polish) ? { polish: plan.polish } : {};
+  }
   if (plan.mode === "local") {
     return {
       transcriber: localModelOf(setup, "local"),
@@ -95,19 +102,20 @@ export function inEffect(plan, setup) {
 
 /**
  * 按热键现在能不能说（体验一下、完成两步用）：null 是能；否则 { tone, needs, problem? }。
- * 还差的（needsOf）先说：只差模型在下是 progress，别的是 problem；不差了但 key 还在验、本机模型还在装是 progress；
- * key 没通过、模型没装上带着原因
+ * key 存着却没通过、读不出的带着原因先说；然后是还差的（needsOf）：只差模型在下是 progress，别的是 problem；
+ * 不差了但 key 还在验、本机模型还在装是 progress；本机模型没装上带着原因
  */
 export function readinessOf(setup) {
   const needs = needsOf(planOf(setup), setup);
+  // 存着却没通过、读不出：说原因（key 无效、模型名不对），比"缺密钥"准
+  if (setup.key.state === "rejected" || setup.key.state === "unreadable") {
+    return { tone: "problem", needs, problem: setup.key.problem };
+  }
   if (needs.length > 0) {
     const downloading = needs.every((need) => need.kind === "download" && need.downloading);
     return { tone: downloading ? "progress" : "problem", needs };
   }
   if (setup.key.state === "checking" || setup.localModel?.state === "loading") return { tone: "progress", needs };
-  if (setup.key.state === "rejected" || setup.key.state === "unreadable") {
-    return { tone: "problem", needs, problem: setup.key.problem };
-  }
   if (setup.localModel?.state === "failed") return { tone: "problem", needs, problem: setup.localModel.problem };
   return null;
 }

@@ -26,7 +26,9 @@ let step = null;
 let plan = null;
 /** 正在换的有几次（连着点了好几下时一次一次排着换） */
 let applying = 0;
-/** 上一次没换成：{ plan, problem }。点"重试"再换一次；换了别的、存了新密钥就不再说 */
+/** 点了第几次：只有最后点的那次说成没成 */
+let attempts = 0;
+/** 最后点的那次没换成：{ plan, problem }。点"重试"再换一次；换了别的、存了新密钥就不再说 */
 let failure = null;
 /** 准备那一步的密钥那一块：{ mode, section, panel }，换了方式就换一块 */
 let keySlot = null;
@@ -44,16 +46,19 @@ async function refresh() {
 
 // ---------- 换上点的那一套 ----------
 
-/** 点了一种方式或一家：当场换上，带着那种方式的设置（plan.mjs 的 changesOf）。已经是这一套就什么都不做 */
+/**
+ * 点了一种方式或一家：当场换上，带着那种方式的设置（plan.mjs 的 changesOf）。已经是这一套就什么都不做；
+ * 前一下还在换时照样发：手里的状态还没跟上，看不出是不是已经是这一套
+ */
 async function changePlan(next) {
   const wanted = { ...plan, ...next };
+  const ticket = ++attempts;
   failure = null;
-  if (inEffect(wanted, setup)) {
-    plan = wanted;
+  plan = wanted;
+  if (applying === 0 && inEffect(wanted, setup)) {
     render();
     return;
   }
-  plan = wanted;
   applying += 1;
   render();
   let result;
@@ -63,7 +68,7 @@ async function changePlan(next) {
     result = { ok: false, problem: describeError(error) };
   }
   applying -= 1;
-  if (!result.ok) failure = { plan: wanted, problem: result.problem };
+  if (ticket === attempts) failure = result.ok ? null : { plan: wanted, problem: result.problem };
   await refresh();
 }
 
@@ -164,6 +169,16 @@ function renderWays() {
   );
 }
 
+/**
+ * 正在用的这种方式第一跳交给云端（只能在模型页配）：那一跳 { maker, platform, name }（app/model-plaza.mjs 的 hops）；
+ * 否则是 null，第一跳是本机模型
+ */
+function cloudFirstHop() {
+  if (plan.mode === "native" || plan.mode !== setup.mode.value) return null;
+  const first = setup.plaza.ways[plan.mode]?.hops?.[0];
+  return first && first.platform !== "local" ? first : null;
+}
+
 /** 一路经过谁：录音 → 各个模型 → 文字 */
 function renderRoute() {
   const arrow = () => h("li", { class: "route-arrow", "aria-hidden": "true" }, svg("i-chevron-right"));
@@ -177,7 +192,9 @@ function renderRoute() {
       local && h("span", { class: "tag", "data-tone": "accent", text: t("onboarding.prepare.route.local") }),
     );
   const hops = [];
-  if (plan.mode !== "native") {
+  const cloud = cloudFirstHop();
+  if (cloud) hops.push(hop(cloud.maker ?? cloud.platform, cloud.name, false));
+  else if (plan.mode !== "native") {
     const model = transcriber(localModelOf(setup, plan.mode));
     hops.push(hop(model.maker ?? "local", nameParts(model.name)[0], true));
   }
@@ -337,7 +354,8 @@ function renderPrepare() {
   );
   renderRoute();
   renderStatus();
-  const model = plan.mode === "native" ? null : modelSection();
+  // 第一跳交给云端时没有要下的本机模型
+  const model = plan.mode === "native" || cloudFirstHop() ? null : modelSection();
   const key = plan.mode === "private" ? null : keySection();
   const host = $("prepare-sections");
   // 密钥那一块已经在页面上就不挪（挪了输入框丢焦点），只换本机模型那一块
@@ -364,6 +382,7 @@ function readiness() {
   const state = readinessOf(setup);
   if (state === null) return null;
   const needText = (need) => {
+    if (need.kind === "url") return t("home.mode.needs.url");
     if (need.kind === "key") return t("onboarding.try.needKey", { vendor: t(`providers.${need.vendor}.name`) });
     const model = transcriber(need.model);
     const name = nameParts(model.name)[0];
@@ -371,12 +390,11 @@ function readiness() {
     const percent = Math.round((model.download.received / (model.download.total || 1)) * 100);
     return t("onboarding.try.downloading", { model: name, percent });
   };
-  const text =
-    state.needs.length > 0
+  const text = state.problem
+    ? t.text(state.problem)
+    : state.needs.length > 0
       ? state.needs.map(needText).join(" · ")
-      : state.problem
-        ? t.text(state.problem)
-        : t("onboarding.try.preparing");
+      : t("onboarding.try.preparing");
   const icon =
     state.tone === "progress" ? (state.needs.length > 0 ? "i-download" : "i-loader-circle") : "i-circle-alert";
   // 只是在等（下载、验证、装载）就没什么要去做的，不给按钮

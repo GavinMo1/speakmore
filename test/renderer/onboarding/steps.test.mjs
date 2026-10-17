@@ -21,7 +21,15 @@ const setup = ({ mode = "native", key = "missing", installed = false, switchable
     vendors: [{ id: "deepseek", key: null }],
   },
   private: { transcriber: QWEN },
-  plaza: { presets: [] },
+  // 主进程按设置算好的每种方式差什么（app/model-plaza.mjs 的 ways）
+  plaza: {
+    presets: [],
+    ways: {
+      native: { hops: [], needs: key === "missing" ? [{ kind: "key", platform: "gemini" }] : [] },
+      local: { hops: [{ platform: "local" }], needs: [] },
+      private: { hops: [{ platform: "local" }], needs: installed ? [] : [{ kind: "download", model: QWEN }] },
+    },
+  },
   provider: mode === "private" ? null : { id: "gemini" },
   key: { state: key },
   switchable,
