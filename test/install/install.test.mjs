@@ -53,7 +53,7 @@ const SHIMS = {
   id: `#!/bin/sh\n[ "$1" = "-u" ] && [ -n "$FAKE_UID" ] && { echo "$FAKE_UID"; exit 0; }\nexec /usr/bin/id "$@"\n`,
   df: `#!/bin/sh\n[ -n "$FAKE_FREE_KB" ] && { echo "Filesystem 1024-blocks Used Available Capacity Mounted on"; echo "/dev/x 9 9 $FAKE_FREE_KB 1% /"; exit 0; }\nexec /bin/df "$@"\n`,
   // 只有问各家模型连不连得上的那几次是假的；下载用的 file:// 照常交给真的 curl
-  curl: `#!/bin/sh\ncase "$*" in *generativelanguage.googleapis.com*) exit "\${FAKE_GEMINI_EXIT:-0}" ;; *api.openai.com*) exit "\${FAKE_OPENAI_EXIT:-0}" ;; esac\nexec /usr/bin/curl "$@"\n`,
+  curl: `#!/bin/sh\ncase "$*" in *generativelanguage.googleapis.com*) exit "\${FAKE_GEMINI_EXIT:-0}" ;; *api.openai.com*) exit "\${FAKE_OPENAI_EXIT:-0}" ;; *dashscope.aliyuncs.com*) exit "\${FAKE_BAILIAN_EXIT:-0}" ;; esac\nexec /usr/bin/curl "$@"\n`,
 };
 
 function makeArchive(arch, version = "9.9.9") {
@@ -261,6 +261,7 @@ test("能用的几家模型都查一遍连不连得上：连得上的打勾，�
   assert.equal(both.code, 0);
   assert.match(both.out, /✓ Gemini reachable/);
   assert.match(both.out, /✓ OpenAI reachable/);
+  assert.match(both.out, /✓ Bailian reachable/);
 
   const noGemini = install({ env: { FAKE_GEMINI_EXIT: "7" } });
   assert.equal(noGemini.code, 0);
