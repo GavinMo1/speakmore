@@ -63,9 +63,9 @@
 
 | Apple 芯片（M1 及以后） | Intel 芯片 |
 | --- | --- |
-| ⬇️ [SpeakMore-arm64.dmg](https://dl.zephyrxiang.com/speakmore/v0.8.0/SpeakMore-arm64.dmg) | ⬇️ [SpeakMore-x64.dmg](https://dl.zephyrxiang.com/speakmore/v0.8.0/SpeakMore-x64.dmg) |
+| ⬇️ [SpeakMore-arm64.dmg](https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-arm64.dmg) | ⬇️ [SpeakMore-x64.dmg](https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-x64.dmg) |
 
-打开 dmg，把 SpeakMore 拖进“应用程序”，再打开它。安装包有开发者签名、过了苹果公证，系统不会拦。第一次打开会带你走一遍：填 key → 开三项权限 → 测麦克风和热键 → 真说一句。
+打开 dmg，把 SpeakMore 拖进“应用程序”，再打开它。安装包有开发者签名、过了苹果公证，系统不会拦。第一次打开会带你走一遍：选识别方式 → 填 key 或下载本机模型 → 开权限 → 测麦克风和热键 → 真说一句。每一步都能退回、能跳过，进去再配。
 
 想核对下回来的包：在链接后面加上 `.sha256` 就是它的校验值。
 
@@ -79,13 +79,19 @@ curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 
 **选哪个？** 安装包是一个独立的应用：权限记在 SpeakMore 名下，能开机启动。命令行装的从终端启动，权限记在终端名下，适合想用命令的人。两种用的是同一份设置和历史，同一时间只开一个。
 
-### Windows：PowerShell 里一行装好
+### Windows 方式一：下载安装程序（推荐）
+
+⬇️ [SpeakMore-Setup-x64.exe](https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-Setup-x64.exe)
+
+双击运行，装好自动打开 SpeakMore，接着走首次引导。安装程序里带着整个程序包，装的时候不用再联网。
+
+### Windows 方式二：PowerShell 里一行装好
 
 ```powershell
 irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 ```
 
-先检查系统，然后装进 `%USERPROFILE%\.speakmore`（不需要 Node，也不需要管理员权限），把 `speakmore` 命令加进 Path、把 SpeakMore 放进开始菜单，问你要 key，最后启动。之后从开始菜单打开，也能开机启动。暂时还没有代码签名。
+两种装法装的是同一份：都装进 `%USERPROFILE%\.speakmore`（不需要 Node，也不需要管理员权限），把 `speakmore` 命令加进 Path、把 SpeakMore 放进开始菜单。之后从开始菜单打开，也能开机启动。
 
 ## 🎙️ 怎么用
 
@@ -122,8 +128,7 @@ flowchart LR
 - **提示词是按中文调的**（夹着英文词也行）。纯英文听写没有调过，也没测过（界面有英文，提示词没有）。
 - **换成 OpenAI 时整理得比 Gemini 粗**：提示词是对着 Gemini 调的。
 - **话说到一半就按停，模型可能自己把后半句补上。**
-- **本地转写只在 Apple 芯片上测过**：Intel 版在 Rosetta 下四个本机模型都跑通了，但没在真的 Intel 机器上试过。
-- **Windows 版刚出**：只在一台 Windows 11 台式机上试过（Intel Core i5、RTX 4060 Ti）。安装脚本和听热键的小程序暂时还没有代码签名。
+- **Intel Mac 上的本地转写没在真机上评测过**：Rosetta 下四个本机模型都跑通了。Apple 芯片和 Windows 上都跑过成批评测。
 - 只有听写，没有翻译和“问任何事”。悬浮条只在主屏幕上。Linux 还没有。
 
 ## 📚 更多

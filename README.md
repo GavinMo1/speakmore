@@ -63,9 +63,9 @@ You need macOS 12 or later, or 64-bit Windows 10 (version 1809 or later) or 11, 
 
 | Apple silicon (M1 and later) | Intel |
 | --- | --- |
-| ⬇️ [SpeakMore-arm64.dmg](https://dl.zephyrxiang.com/speakmore/v0.8.0/SpeakMore-arm64.dmg) | ⬇️ [SpeakMore-x64.dmg](https://dl.zephyrxiang.com/speakmore/v0.8.0/SpeakMore-x64.dmg) |
+| ⬇️ [SpeakMore-arm64.dmg](https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-arm64.dmg) | ⬇️ [SpeakMore-x64.dmg](https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-x64.dmg) |
 
-Open the dmg, drag SpeakMore into Applications, and open it. It's signed with a Developer ID and notarized by Apple, so macOS lets it open normally. The first launch walks you through it: add your key → grant three permissions → test the mic and hotkey → say one sentence for real.
+Open the dmg, drag SpeakMore into Applications, and open it. It's signed with a Developer ID and notarized by Apple, so macOS lets it open normally. The first launch walks you through it: pick a recognition mode → add a key or download an on-device model → grant permissions → test the mic and hotkey → say one sentence for real. Every step can be revisited or skipped and set up later.
 
 To check a download, add `.sha256` to its link for the checksum.
 
@@ -79,13 +79,19 @@ It checks your system and network, installs into `~/.speakmore` (no Node, no sud
 
 **Which one?** The app is a standalone app: permissions belong to SpeakMore and it can open at login. The Terminal install runs from your terminal, and permissions belong to that terminal. Choose it if you like commands. Both share the same settings and history; run one at a time.
 
-### Windows: One line in PowerShell
+### Windows, option 1: Download the installer (recommended)
+
+⬇️ [SpeakMore-Setup-x64.exe](https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-Setup-x64.exe)
+
+Double-click it. SpeakMore opens when it's done and walks you through setup. The installer carries the whole package, so it needs no network while installing.
+
+### Windows, option 2: One line in PowerShell
 
 ```powershell
 irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 ```
 
-It checks your system, installs into `%USERPROFILE%\.speakmore` (no Node, no admin rights), adds the `speakmore` command to your Path and SpeakMore to the Start menu, asks for your key, and starts. Afterwards open it from the Start menu; it can also open at login. Not code-signed yet.
+Both install the same thing into `%USERPROFILE%\.speakmore` (no Node, no admin rights), add the `speakmore` command to your Path and SpeakMore to the Start menu. Afterwards open it from the Start menu; it can also open at login.
 
 ## 🎙️ Use it
 
@@ -122,8 +128,7 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 - **Tuned for Mandarin**, with English terms mixed in. English-only dictation hasn't been tuned or tested yet (the interface is in English; the prompt isn't).
 - **OpenAI cleans up less thoroughly than Gemini.** The prompt was tuned against Gemini.
 - **If you stop mid-sentence, the model may finish the sentence for you.**
-- **Local mode has only been measured on Apple silicon.** The Intel build ran all four on-device models under Rosetta, but nobody has tried it on a real Intel Mac.
-- **Windows is new.** It has been tried on one Windows 11 PC (Intel Core i5, RTX 4060 Ti). The installer and the hotkey helper aren't code-signed yet.
+- **Local mode hasn't been benchmarked on a real Intel Mac.** All four on-device models ran under Rosetta; Apple silicon and Windows have full benchmark runs.
 - Dictation only: no translation or "ask anything". The bar shows on the main display only. No Linux.
 
 ## 📚 More
