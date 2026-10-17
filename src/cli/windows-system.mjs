@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 // 命令行在 Windows 上要动系统的那几处：install.ps1 在家目录以外留下的（用户 Path 里的一项、开始菜单的快捷方式）、
@@ -75,28 +75,22 @@ export function removeLoginItem(home) {
 }
 
 /**
- * 等这个进程退出之后再把这几个目录删掉。Windows 上正在跑的程序删不掉，而卸载时正在跑的就是这条命令自己
- * （装好的那份 Electron）：交给一个隐藏的 PowerShell，等它退出、稍等一下再删，不留窗口
+ * 等这个进程退出之后再把这几个目录删掉。Windows 上正在跑的程序删不掉，而卸载、升级时正在跑的就是这条命令自己
+ * （装好的那份 Electron）：交给一个隐藏的 PowerShell，等它退出、稍等一下再删，不留窗口。
+ * 要隔一层起：Node 在 Windows 上把直接起的子进程放进一个"自己退出就全部结束"的作业对象，这条命令一退出它就没了；
+ * 加 detached 能躲开，可那样起的 PowerShell 没有控制台，一行都不跑就以 0 退出（真机上都试过）。
+ * 所以先同步跑一个 PowerShell，由它 Start-Process 干活的那个：孙进程不在那个作业对象里
  */
 export function removeAfterExit(dirs, pid = process.pid) {
-  const child = spawn(
-    "powershell",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-WindowStyle",
-      "Hidden",
-      "-Command",
-      `Wait-Process -Id $env:SPEAKMORE_WAIT_PID -ErrorAction SilentlyContinue
-       Start-Sleep -Milliseconds 800
-       foreach ($dir in $env:SPEAKMORE_REMOVE.Split([char]10)) { if ($dir) { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue } }`,
-    ],
+  const cleanup = `Wait-Process -Id $env:SPEAKMORE_WAIT_PID -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 800
+foreach ($dir in $env:SPEAKMORE_REMOVE.Split([char]10)) { if ($dir) { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue } }`;
+  powershell(
+    "Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand',$env:SPEAKMORE_CLEANUP",
     {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-      env: { ...process.env, SPEAKMORE_WAIT_PID: String(pid), SPEAKMORE_REMOVE: dirs.join("\n") },
+      SPEAKMORE_WAIT_PID: String(pid),
+      SPEAKMORE_REMOVE: dirs.join("\n"),
+      SPEAKMORE_CLEANUP: Buffer.from(cleanup, "utf16le").toString("base64"),
     },
   );
-  child.unref();
 }
