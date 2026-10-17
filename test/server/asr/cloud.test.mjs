@@ -87,7 +87,9 @@ test("转写器：录音编成 wav 交出去、记一笔账；报错分好类往
     onCall: (call) => calls.push(call),
     fetch: ok.fetch,
   });
-  assert.deepEqual(await transcriber.transcribe(new Float32Array(16_000), { audioId: "a1" }), { text: "好的" });
+  assert.deepEqual(await transcriber.transcribe(new Float32Array(16_000).fill(0.1), { audioId: "a1" }), {
+    text: "好的",
+  });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].provider, "bailian");
   assert.equal(calls[0].audioId, "a1");
@@ -237,4 +239,35 @@ test("MiniMax ASR：报错按状态码认（文档说状态码就是错误码）
   assert.equal(limited.kind, "unavailable");
   const sensitive = await uploadFailure(minimax, "asr-1.0", 422, said("unprocessable_entity_error", "sensitive"));
   assert.match(sensitive.problem, /拒绝了请求：sensitive/);
+});
+
+test("转写器：全是静音的段不发（同本机模型），整段静音、空录音一个请求都不发、不记账", async () => {
+  const { fetch, requests } = fakeUpload(200, (index) => ({ text: `第${index + 1}段` }));
+  const calls = [];
+  const transcriber = await createCloudTranscriber({
+    choice: { vendor: "zhipu", model: "glm-asr-2512" },
+    apiKey: "k",
+    log,
+    onCall: (call) => calls.push(call),
+    fetch,
+  });
+  assert.deepEqual(await transcriber.transcribe(new Float32Array(8 * 16_000)), { text: "" });
+  assert.deepEqual(await transcriber.transcribe(new Float32Array(0)), { text: "" });
+  assert.equal(requests.length, 0);
+  assert.equal(calls.length, 0);
+  // 35 秒说话加 30 秒静音：切成三段，最后那段全是静音，不发
+  const samples = new Float32Array(65 * 16_000);
+  samples.fill(0.1, 0, 35 * 16_000);
+  await transcriber.transcribe(samples);
+  assert.equal(requests.length, 2);
+});
+
+test("百炼：回了 2xx 却找不到原文，说明接口和这里对不上，照实报错，不当成没听到声音", async () => {
+  for (const [model, body] of [
+    ["qwen3-asr-flash", { choices: [{ message: {} }], usage: {} }],
+    ["fun-asr-flash-2026-06-15", { output: { choices: [] }, usage: { duration: 1 } }],
+  ]) {
+    const { fetch } = fakeFetch(200, body);
+    await assert.rejects(createClient({ apiKey: "k", model, fetch }).transcribe({ wav: Buffer.from("RIFF") }), /原文/);
+  }
 });

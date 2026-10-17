@@ -41,7 +41,7 @@ const WIRES = {
     });
     const reported = payload?.usage ?? {};
     return {
-      text: payload?.choices?.[0]?.message?.content ?? "",
+      text: payload?.choices?.[0]?.message?.content,
       usage: usage(payload?.model ?? model, {
         seconds: reported.seconds ?? 0,
         inputTokens: reported.prompt_tokens ?? 0,
@@ -67,7 +67,7 @@ const WIRES = {
     });
     const reported = payload?.usage ?? {};
     return {
-      text: payload?.output?.text ?? payload?.output?.output?.text ?? "",
+      text: payload?.output?.text ?? payload?.output?.output?.text,
       usage: usage(model, {
         seconds: reported.duration ?? 0,
         inputTokens: reported.input_tokens ?? 0,
@@ -88,8 +88,14 @@ export function createClient({ apiKey, model, fetch = globalThis.fetch }) {
   const vendor = findCloudTranscriber("bailian");
   const wire = WIRES[(cloudModelOf(vendor, model) ?? cloudModelOf(vendor, vendor.defaultModel)).wire];
   return {
+    // 验 key 只看回没回 2xx：拿静音去问，原文是空的、没有都正常
     ping: ({ signal }) => wire({ apiKey, model, wav: SILENCE, signal, fetch }),
-    transcribe: ({ wav, signal }) => wire({ apiKey, model, wav, signal, fetch }),
+    async transcribe({ wav, signal }) {
+      const reply = await wire({ apiKey, model, wav, signal, fetch });
+      // 回了 2xx 却找不到原文，说明接口和这里对不上：照实报错，不当成"没听到声音"、悄悄交出空文字
+      if (typeof reply.text !== "string") throw new Error(`${NAME} 的回话里没有识别出的原文`);
+      return reply;
+    },
   };
 }
 
