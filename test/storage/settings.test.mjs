@@ -6,6 +6,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
 import {
   HOTKEY_IDS,
+  hotkeyIdsFor,
   MODE_SETTINGS,
   overridingEnv,
   patchSettings,
@@ -29,9 +30,13 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
+/** 热键按系统分：这里用本机这个系统的，默认的是第一个，另挑一个不是默认的 */
+const DEFAULT_HOTKEY = HOTKEY_IDS[0];
+const OTHER_HOTKEY = HOTKEY_IDS.at(-1);
+
 test("没有文件也没有环境变量时全用默认值", () => {
   assert.deepEqual(resolveSettings({ file, env: {} }), {
-    hotkey: { value: "right_option", source: "default" },
+    hotkey: { value: DEFAULT_HOTKEY, source: "default" },
     mode: { value: "native", source: "default" },
     model: { value: "gemini/gemini-3.6-flash", source: "default" },
     thinking: { value: "MINIMAL", source: "default" },
@@ -40,31 +45,53 @@ test("没有文件也没有环境变量时全用默认值", () => {
     polish: { value: "deepseek/deepseek-flash", source: "default" },
     customUrl: { value: "", source: "default" },
     modelSource: { value: "cn", source: "default" },
+    acceleration: { value: "auto", source: "default" },
+    barHint: { value: "on", source: "default" },
     theme: { value: "ink", source: "default" },
     language: { value: "system", source: "default" },
   });
 });
 
 test("存下来的值下次读得到，没动过的仍是默认值", () => {
-  saveSetting(file, "hotkey", "fn");
+  saveSetting(file, "hotkey", OTHER_HOTKEY);
   saveSetting(file, "thinking", "low");
   const settings = resolveSettings({ file, env: {} });
-  assert.deepEqual(settings.hotkey, { value: "fn", source: "file" });
+  assert.deepEqual(settings.hotkey, { value: OTHER_HOTKEY, source: "file" });
   assert.deepEqual(settings.thinking, { value: "LOW", source: "file" });
   assert.deepEqual(settings.model, { value: "gemini/gemini-3.6-flash", source: "default" });
-  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { hotkey: "fn", thinking: "LOW" });
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { hotkey: OTHER_HOTKEY, thinking: "LOW" });
 });
 
 test("环境变量优先于文件", () => {
-  saveSetting(file, "hotkey", "fn");
+  saveSetting(file, "hotkey", OTHER_HOTKEY);
   saveSetting(file, "model", "gemini-3.8-flash");
   const settings = resolveSettings({
     file,
-    env: { SPEAKMORE_HOTKEY: "right_command", SPEAKMORE_MODEL: "openai", GEMINI_THINKING_LEVEL: "high" },
+    env: { SPEAKMORE_HOTKEY: DEFAULT_HOTKEY, SPEAKMORE_MODEL: "openai", GEMINI_THINKING_LEVEL: "high" },
   });
-  assert.deepEqual(settings.hotkey, { value: "right_command", source: "env" });
+  assert.deepEqual(settings.hotkey, { value: DEFAULT_HOTKEY, source: "env" });
   assert.deepEqual(settings.model, { value: "openai/gpt-audio-mini", source: "env" });
   assert.deepEqual(settings.thinking, { value: "HIGH", source: "env" });
+});
+
+test("本机模型的加速：auto（有显卡就用，出问题退回 CPU）或 cpu，大小写都认，别的不收", () => {
+  saveSetting(file, "acceleration", "CPU");
+  assert.deepEqual(resolveSettings({ file, env: {} }).acceleration, { value: "cpu", source: "file" });
+  assert.deepEqual(resolveSettings({ file, env: { SPEAKMORE_ACCELERATION: "auto" } }).acceleration, {
+    value: "auto",
+    source: "env",
+  });
+  assert.throws(() => saveSetting(file, "acceleration", "gpu"), /auto \/ cpu/);
+});
+
+test("悬浮条上方的操作提示能关掉（GitHub issue #3）：on 或 off，大小写都认，别的不收", () => {
+  saveSetting(file, "barHint", "OFF");
+  assert.deepEqual(resolveSettings({ file, env: {} }).barHint, { value: "off", source: "file" });
+  assert.deepEqual(resolveSettings({ file, env: { SPEAKMORE_BAR_HINT: "on" } }).barHint, {
+    value: "on",
+    source: "env",
+  });
+  assert.throws(() => saveSetting(file, "barHint", "hide"), /on \/ off/);
 });
 
 test("模型：写成 厂商/模型，只写厂商就用它的默认模型；存下来的都是 厂商/模型", () => {
@@ -125,7 +152,14 @@ test("带说明的设置项：热键给出键的名字，主题给出主题的�
   assert.equal(en.text(SETTINGS.theme.label("cinnabar")), "Cinnabar");
   assert.equal(en.text(SETTINGS.language.label("zh-CN")), "简体中文");
   assert.equal(zh.text(SETTINGS.language.label("system")), "跟随系统");
-  assert.deepEqual(HOTKEY_IDS, ["right_option", "right_command", "right_control", "fn"]);
+});
+
+test("热键能选哪几个按系统分，第一个是默认的；Windows 上是右 Alt 和右 Ctrl", () => {
+  assert.deepEqual(hotkeyIdsFor("darwin"), ["right_option", "right_command", "right_control", "fn"]);
+  assert.deepEqual(hotkeyIdsFor("win32"), ["right_alt", "right_ctrl"]);
+  assert.deepEqual(HOTKEY_IDS, hotkeyIdsFor(process.platform));
+  assert.equal(zh.text(SETTINGS.hotkey.label("right_alt")), "右 Alt 键");
+  assert.equal(en.text(SETTINGS.hotkey.label("right_ctrl")), "Right Ctrl");
 });
 
 test("界面语言：默认跟随系统；写哪种都认（大小写、_ 不论），存下来是规整的 id；写了没有的说能填什么", () => {
@@ -145,9 +179,7 @@ test("界面语言：默认跟随系统；写哪种都认（大小写、_ 不论
 test("写错时的说法也跟着语言换", () => {
   assert.throws(
     () => saveSetting(file, "hotkey", "caps_lock"),
-    (error) =>
-      en.text(error.problem) ===
-      'hotkey is "caps_lock": must be one of right_option / right_command / right_control / fn',
+    (error) => en.text(error.problem) === `hotkey is "caps_lock": must be one of ${HOTKEY_IDS.join(" / ")}`,
   );
   assert.throws(
     () => resolveSettings({ file, env: { SPEAKMORE_THEME: "neon" } }),
@@ -165,19 +197,19 @@ test("环境变量或文件里的值写错时报错，不悄悄换成默认值",
 });
 
 test("取消一项设置后回到默认值，其余的不动", () => {
-  saveSetting(file, "hotkey", "fn");
+  saveSetting(file, "hotkey", OTHER_HOTKEY);
   saveSetting(file, "model", "gemini-3.8-flash");
   unsetSetting(file, "hotkey");
   const settings = resolveSettings({ file, env: {} });
-  assert.deepEqual(settings.hotkey, { value: "right_option", source: "default" });
+  assert.deepEqual(settings.hotkey, { value: DEFAULT_HOTKEY, source: "default" });
   assert.deepEqual(settings.model, { value: "gemini/gemini-3.8-flash", source: "file" });
   assert.throws(() => unsetSetting(file, "volume"), said(/hotkey/));
 });
 
 test("数据目录还不存在时也能保存", () => {
   const nested = join(dir, "not-yet", "settings.json");
-  saveSetting(nested, "hotkey", "fn");
-  assert.equal(resolveSettings({ file: nested, env: {} }).hotkey.value, "fn");
+  saveSetting(nested, "hotkey", OTHER_HOTKEY);
+  assert.equal(resolveSettings({ file: nested, env: {} }).hotkey.value, OTHER_HOTKEY);
 });
 
 test("Gemini 的模型存成 0.3 也读得懂的写法（只写模型名），退回旧版本时设置照样能用；读出来统一是 厂商/模型", () => {

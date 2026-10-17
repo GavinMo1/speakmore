@@ -1,4 +1,4 @@
-import { rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   app,
@@ -14,10 +14,11 @@ import {
   systemPreferences,
   Tray,
 } from "electron";
+import { helperPaths } from "../cli/native-helper.mjs";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale } from "../i18n/index.mjs";
 import { alsoLogTo, log } from "../log.mjs";
-import { chipOf, downloadSize, MODELS, makerOf, measuredOn, SOURCES } from "../models/catalog.mjs";
+import { chipOf, downloadSize, MODELS, makerOf, measuredOn, SOURCES, tagsOn } from "../models/catalog.mjs";
 import { createLocalModels, freeBytesAt } from "../models/library.mjs";
 import { presetsFor } from "../models/presets.mjs";
 import { CHAT_VENDORS, formatChatChoice } from "../server/chat/vendors.mjs";
@@ -27,8 +28,9 @@ import { findVendor, VENDORS } from "../server/vendors.mjs";
 import { adoptAppKeys } from "../storage/app-keys.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
-import { ensureHome, keyFile, oldAppKeyFile, resolvePaths } from "../storage/paths.mjs";
+import { ensureHome, installedHomeOf, keyFile, oldAppKeyFile, resolvePaths } from "../storage/paths.mjs";
 import {
+  ACCELERATIONS,
   HOTKEY_IDS,
   hotkeyName,
   overridingEnv,
@@ -49,6 +51,7 @@ import { createKeyManager } from "./keys/key-manager.mjs";
 import { createKeyStore } from "./keys/key-store.mjs";
 import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
 import { createModeSwitch } from "./modes.mjs";
+import { createPendingSwitch } from "./pending-switch.mjs";
 import { startService } from "./service.mjs";
 import { summarizeSetup, summaryAsText } from "./setup-state.mjs";
 
@@ -66,10 +69,19 @@ let PATHS;
 let SETTINGS;
 /** 启动时走哪条路线（server/modes.mjs）。之后可以在设置里改用别家（keys.use），正在走的以 service.route 为准 */
 let ROUTE;
+/** 本机模型用不用显卡（设置里的 acceleration）。在设置里换了当场生效（service.setAcceleration） */
+let acceleration;
+// Windows 上从开始菜单、开机启动起的没有 SPEAKMORE_HOME：家目录照程序装在哪找回来（装在默认位置时两者一样）
+if (process.platform === "win32" && !process.env.SPEAKMORE_HOME) {
+  const home = installedHomeOf(process.execPath, existsSync);
+  if (home) process.env.SPEAKMORE_HOME = home;
+}
+
 try {
   PATHS = resolvePaths(process.env);
   SETTINGS = resolveSettings({ file: PATHS.settingsFile, env: process.env });
   ROUTE = routeOf(SETTINGS);
+  acceleration = SETTINGS.acceleration.value;
 } catch (error) {
   // 路径或设置写错是使用上的问题，说一句人话就退出，不留一个按了热键没反应的进程
   console.error(error.message);
@@ -84,8 +96,19 @@ let hotkey = SETTINGS.hotkey.value;
 const PROVIDER = keyVendorOf(ROUTE) ?? null;
 /** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
 const thinkingFor = (provider) => (provider?.thinkingLevels ? SETTINGS.thinking.value : null);
-/** 菜单栏图标：印章上的五道声波。文件名带 Template，系统按菜单栏的深浅反色；@2x 那张由系统自己挑（scripts/build/make-icon.sh） */
-const TRAY_ICON = join(import.meta.dirname, "../../assets/trayTemplate.png");
+const WINDOWS = process.platform === "win32";
+/**
+ * 菜单栏图标：印章上的五道声波。macOS 上文件名带 Template，系统按菜单栏的深浅反色，@2x 那张由系统自己挑；
+ * Windows 的通知区域不会反色，用带颜色的应用图标，.ico 里各个尺寸都有（scripts/build/make-icon.sh）
+ */
+const TRAY_ICON = join(import.meta.dirname, "../../assets", WINDOWS ? "icon.ico" : "trayTemplate.png");
+/** Windows 上窗口和任务栏的图标（macOS 上是应用包自己的图标） */
+const WINDOW_ICON = join(import.meta.dirname, "../../assets/icon.ico");
+/**
+ * Windows 上标题栏藏起来以后，系统的最小化、最大化、关闭三个按钮叠在页面右上角这么高的一条里。
+ * 和主窗口内容区最上面那条拖动区（hub.css 的 .content::before，2.75rem）一样高
+ */
+const CAPTION_HEIGHT = 44;
 /** 关于里"在 GitHub 上看"打开的地方 */
 const HOMEPAGE = "https://github.com/zephyr4123/speakmore";
 /** 这台机器是哪类芯片：本地模型的实测按它挑（models/catalog.mjs 的 CHIPS） */
@@ -94,19 +117,56 @@ const CHIP = chipOf();
 const HUB_SIZE = { width: 1080, height: 750, minWidth: 988, minHeight: 685 };
 /** 悬浮条的窗口。比条本身大一圈：上面要放一行提示，四周要留出阴影，报错时条会变宽变高 */
 const BAR_SIZE = { width: 380, height: 124 };
-/** 系统设置里三项权限各自的页面 */
-const PRIVACY_PANES = {
-  microphone: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
-  listen: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent",
-  trusted: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-};
+/**
+ * 系统设置里各项权限的页面。Windows 只有麦克风这一项：没有"输入监控""辅助功能"，
+ * 小帮手装上钩子就能听键、能模拟按键（报上来的 listen、trusted 总是 true）
+ */
+const PRIVACY_PANES = WINDOWS
+  ? { microphone: "ms-settings:privacy-microphone" }
+  : {
+      microphone: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+      listen: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent",
+      trusted: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+    };
+
+/**
+ * 问一下麦克风权限。macOS 上没问过时会弹系统的授权框；Windows 没有这种框（在系统设置里统一开关），照实报现在的状态
+ * @returns {Promise<boolean>} 能不能用
+ */
+async function askMicrophone() {
+  if (WINDOWS) return systemPreferences.getMediaAccessStatus("microphone") === "granted";
+  return systemPreferences.askForMediaAccess("microphone");
+}
+
+// Windows 认应用靠这个 id：任务栏把窗口归到一起、通知写谁发的。和 macOS 应用包的标识一样
+if (WINDOWS) app.setAppUserModelId("com.zephyrxiang.speakmore");
 
 // 所有东西都放在 paths.mjs 定的那一个目录里，命令行和这里用同一处。Electron 默认会按应用名在
 // ~/Library/Application Support 下另开一个目录放 Chromium 的缓存和状态，把它也收进来，和我们的数据分开放
 app.setPath("userData", PATHS.cacheDir);
 
-// 打成应用后没有终端，日志自己写文件。由命令启动时标准输出已经被接到同一个文件里了
-if (app.isPackaged) alsoLogTo(PATHS.logFile);
+/**
+ * Windows 上装好的那一份：程序就在家目录的 runtime 里。没有单独的"应用"：命令行起的、开始菜单起的都是它，
+ * 用的是同一套 key 和设置（不像 macOS 的 SpeakMore.app 有自己的一套权限）
+ */
+const INSTALLED_ON_WINDOWS =
+  WINDOWS && process.execPath.toLowerCase().startsWith(`${PATHS.runtimeDir.toLowerCase()}\\`);
+/** 开机启动登记的是这个可执行文件加上程序目录（Windows 上没有应用包，要把参数也记下来） */
+const LOGIN_ITEM = WINDOWS ? { path: process.execPath, args: [app.getAppPath()], name: "SpeakMore" } : {};
+
+/**
+ * 开机启动开着没有。Windows 上 openAtLogin 只认以 AppUserModelId 为名的那一项，我们写的名字是 SpeakMore，
+ * 读回来永远是 false（真机上试过）：看 executableWillLaunchAtLogin，Run 里有指向这个程序、这些参数的一项，
+ * 并且没在任务管理器里被停用
+ */
+function loginItemEnabled() {
+  const settings = app.getLoginItemSettings(LOGIN_ITEM);
+  return WINDOWS ? settings.executableWillLaunchAtLogin : settings.openAtLogin;
+}
+
+// 打成应用后没有终端，日志自己写文件。由命令启动时标准输出已经被接到同一个文件里了。
+// Windows 上从开始菜单起的（不是命令行起的）也没有终端
+if (app.isPackaged || (INSTALLED_ON_WINDOWS && !LAUNCHED_BY_CLI)) alsoLogTo(PATHS.logFile);
 
 // 同一个家目录只跑一个。这里给的数据会随 second-instance 事件送到已经在运行的那一个手里
 const isOnlyInstance = app.requestSingleInstanceLock({ byCli: LAUNCHED_BY_CLI });
@@ -194,6 +254,7 @@ async function main() {
           historyChanged();
         },
         onLocalModel: () => localModelChanged(),
+        acceleration,
       });
   const serverUrl = EXTERNAL_SERVER_URL ?? service.url;
   const e2e = process.env.SPEAKMORE_E2E_OUT ? await import("./e2e.mjs") : null;
@@ -211,6 +272,14 @@ async function main() {
   /** 切模式、换各模式里的模型（app/modes.mjs）。连着单独启动的服务端时这些都归那边，是 null */
   const modes = service
     ? createModeSwitch({ service, keys, models: localModels, settingsFile: PATHS.settingsFile, env: process.env, log })
+    : null;
+  /** 引导里选好了、只差本机模型下完的那一套：引导关了以后由它接着等，下好了切过去（app/pending-switch.mjs） */
+  const pendingSwitch = modes
+    ? createPendingSwitch({
+        isInstalled: (id) => localModels.isInstalled(id),
+        switchMode: (mode, changes) => modes.switchMode(mode, changes),
+        log,
+      })
     : null;
   /** 按键监听的小帮手：starting（还没报上来）/ running / stopped（退出了，或者根本没起来） */
   let helperState = "starting";
@@ -242,6 +311,7 @@ async function main() {
     route: describeRoute(ROUTE),
     thinking: ROUTE.mode === "native" ? thinkingFor(PROVIDER) : null,
     theme: SETTINGS.theme.value,
+    acceleration,
     language: languageSetting,
     locale,
     system_languages: app.getPreferredSystemLanguages(),
@@ -311,11 +381,31 @@ async function main() {
     theme = findTheme(resolveSettings({ file: PATHS.settingsFile, env: process.env }).theme.value);
     const css = themeCss(theme);
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send("theme:changed", css);
+    recolorCaptionButtons();
     log.info("theme_changed", { theme: theme.id });
     return { theme: theme.id };
   }
+  const windowColors = () => theme.window[nativeTheme.shouldUseDarkColors ? "dark" : "light"];
   /** 窗口还没画出页面时的底色：和页面的底一样，免得深色模式下先闪一下白 */
-  const windowBackground = () => toHex(theme.window[nativeTheme.shouldUseDarkColors ? "dark" : "light"].bg);
+  const windowBackground = () => toHex(windowColors().bg);
+  /** Windows 右上角那三个系统按钮：底透明（透出页面），符号用正文的颜色，跟着主题和深浅色换 */
+  const captionButtons = () => ({ color: "#00000000", symbolColor: toHex(windowColors().ink), height: CAPTION_HEIGHT });
+  /**
+   * 主窗口和首次引导的标题栏：都藏起来，页面画到最顶上。macOS 的红绿灯放到 trafficLight 那里；
+   * Windows 留下系统的三个按钮叠在右上角，再给窗口挂上图标（不然任务栏上是 Electron 的）
+   */
+  const frame = (trafficLight) =>
+    WINDOWS
+      ? { titleBarStyle: "hidden", titleBarOverlay: captionButtons(), icon: WINDOW_ICON }
+      : { titleBarStyle: "hidden", trafficLightPosition: trafficLight };
+  /** 换了主题、系统换了深浅色：Windows 上那三个按钮的颜色跟着换 */
+  function recolorCaptionButtons() {
+    if (!WINDOWS) return;
+    for (const window of [hubWindow, onboardingWindow]) {
+      if (window && !window.isDestroyed()) window.setTitleBarOverlay(captionButtons());
+    }
+  }
+  nativeTheme.on("updated", recolorCaptionButtons);
 
   // ---------- 悬浮条 ----------
 
@@ -352,6 +442,8 @@ async function main() {
     if (!bar.isDestroyed()) bar.webContents.send(channel, payload);
   };
   const notify = (message) => tellBar("notice", message);
+  /** 悬浮条上方的操作提示开不开（设置里的 barHint，on / off）。每次现读：被环境变量盖着时是环境变量里的 */
+  const currentBarHint = () => resolveSettings({ file: PATHS.settingsFile, env: process.env }).barHint.value;
   ipcMain.on("bar:set-visible", (_event, visible) => {
     if (visible) {
       bar.showInactive();
@@ -379,13 +471,11 @@ async function main() {
       return;
     }
     const origin = bar.getBounds();
-    const onScreen = regions.map(({ id, x, y, width, height }) => ({
-      id,
-      x: origin.x + x,
-      y: origin.y + y,
-      width,
-      height,
-    }));
+    const onScreen = regions.map(({ id, x, y, width, height }) => {
+      const rect = { x: origin.x + x, y: origin.y + y, width, height };
+      // Windows 的鼠标钩子报的是物理像素，窗口的位置是按缩放换算过的：换成那块屏上的物理像素再交过去
+      return { id, ...(WINDOWS ? screen.dipToScreenRect(bar, rect) : rect) };
+    });
     // "点了按钮没反应"时先看这条：位置对不对得上屏幕上画的那两个圆
     log.info("bar_capture", { regions: onScreen });
     helper.capture(onScreen);
@@ -412,7 +502,7 @@ async function main() {
     helperPermissions = null;
     helperState = "starting";
     setBarControls(false);
-    helper = startHelper(join(app.getAppPath(), "build", "key-helper"), {
+    helper = startHelper(helperPaths(app.getAppPath()).binary, {
       args: ["--key", hotkey, ...(prompt ? [] : ["--no-prompt"])],
       onEvent: (event) => {
         if (generation === helperGeneration) onHelperEvent(event);
@@ -500,7 +590,7 @@ async function main() {
     });
   }
 
-  handle("config:get", () => ({ serverUrl, hotkey, barControls }));
+  handle("config:get", () => ({ serverUrl, hotkey, barControls, barHint: currentBarHint() }));
   handle("dictation:deliver", async (_event, payload) => {
     const result = await delivery.completed(payload);
     // 只记长度：成品是用户说的话，不进日志
@@ -535,9 +625,13 @@ async function main() {
       // 叫什么由页面按界面语言写，这里只给 id
       hotkey: { value: hotkey, choices: HOTKEY_IDS },
       theme: { value: theme.id, choices: THEMES.map(({ id }) => id) },
+      barHint: currentBarHint(),
       language: { value: languageSetting, locale },
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
-      openAtLogin: { supported: app.isPackaged, enabled: app.getLoginItemSettings().openAtLogin },
+      openAtLogin: {
+        supported: app.isPackaged || INSTALLED_ON_WINDOWS,
+        enabled: loginItemEnabled(),
+      },
       home: PATHS.home,
       version: app.getVersion(),
       // 正在用 key 的那一家；数据隐私模式不用 key，是 null
@@ -636,7 +730,7 @@ async function main() {
           bytes: downloadSize(model),
           // 下好了没有、正在下到哪、下过一半的有多少、上次为什么没下下来
           ...localModels.status(model.id),
-          tags: model.tags,
+          tags: tagsOn(model, CHIP),
           // 在这类芯片上的实测，跑得快的在前；没测过是空的
           measured: measuredOn(model, CHIP),
         })),
@@ -645,6 +739,8 @@ async function main() {
         freeBytes,
         // 本地模型从哪下：哪种模式里都能换
         source: { value: settings.modelSource.value, choices: SOURCES.map(({ id }) => id) },
+        // 本机模型用不用显卡：正在用的那个（被环境变量盖着时是环境变量里的）
+        acceleration: { value: acceleration, choices: ACCELERATIONS },
         polish: settings.polish.value,
         customUrl: settings.customUrl.value,
         vendors: CHAT_VENDORS.map(describeVendor),
@@ -668,11 +764,16 @@ async function main() {
   handle("setup:check-model", (_event, mode, changes) => viaModes((m) => m.check(mode, changes ?? {})));
   // 模式这一层，和各模式里的模型：分开的几件事
   // 切模式时可以连带那种模式自己的设置（changes），比如第一次进 local 就用自定义服务
-  handle("setup:set-mode", (_event, mode, changes) => viaModes((m) => m.switchMode(mode, changes ?? {})));
-  handle("setup:set-model", (_event, model) => viaModes((m) => m.setModel(model)));
-  handle("setup:set-transcriber", (_event, id) => viaModes((m) => m.setTranscriber(id)));
+  // 用户自己换了方式或模型：引导里等着的那一套作罢（pendingSwitch）
+  const byUser = (action) => (m) => {
+    pendingSwitch.cancel();
+    return action(m);
+  };
+  handle("setup:set-mode", (_event, mode, changes) => viaModes(byUser((m) => m.switchMode(mode, changes ?? {}))));
+  handle("setup:set-model", (_event, model) => viaModes(byUser((m) => m.setModel(model))));
+  handle("setup:set-transcriber", (_event, id) => viaModes(byUser((m) => m.setTranscriber(id))));
   handle("setup:set-polish", (_event, polish, customUrl) =>
-    viaModes((m) => m.setPolish(polish, customUrl === undefined ? {} : { customUrl })),
+    viaModes(byUser((m) => m.setPolish(polish, customUrl === undefined ? {} : { customUrl }))),
   );
   // 本机模型：下载、取消、删除都由用户点；正在用的不能删（模式那一层管）
   handle("setup:download-model", (_event, id) => localModels.download(id));
@@ -693,8 +794,12 @@ async function main() {
 
   handle("setup:open-privacy", async (_event, permission) => {
     if (!Object.hasOwn(PRIVACY_PANES, permission)) throw new TypeError(`不认识的权限：${permission}`);
-    // 麦克风从没问过时，系统设置的列表里还没有这个应用，要先让系统弹一次授权框
-    if (permission === "microphone" && systemPreferences.getMediaAccessStatus("microphone") === "not-determined") {
+    // 麦克风从没问过时，系统设置的列表里还没有这个应用，要先让系统弹一次授权框（只有 macOS 有这种框）
+    if (
+      !WINDOWS &&
+      permission === "microphone" &&
+      systemPreferences.getMediaAccessStatus("microphone") === "not-determined"
+    ) {
       await systemPreferences.askForMediaAccess("microphone");
       setupChanged();
       return;
@@ -718,8 +823,8 @@ async function main() {
     reverifyKeyInBackground();
   });
   handle("setup:set-open-at-login", (_event, enabled) => {
-    if (!app.isPackaged) throw new Error("从终端启动时不能设置开机启动");
-    app.setLoginItemSettings({ openAtLogin: Boolean(enabled) });
+    if (!app.isPackaged && !INSTALLED_ON_WINDOWS) throw new Error("从终端启动时不能设置开机启动");
+    app.setLoginItemSettings({ ...LOGIN_ITEM, openAtLogin: Boolean(enabled) });
     log.info("open_at_login", { enabled: Boolean(enabled) });
     setupChanged();
   });
@@ -736,6 +841,26 @@ async function main() {
     saveSetting(PATHS.settingsFile, "modelSource", wanted);
     reloadModelSource();
     const variable = overridingEnv("modelSource", process.env);
+    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
+  });
+  handle("setup:set-acceleration", (_event, wanted) => {
+    saveSetting(PATHS.settingsFile, "acceleration", wanted);
+    acceleration = resolveSettings({ file: PATHS.settingsFile, env: process.env }).acceleration.value;
+    log.info("acceleration_changed", { acceleration });
+    // 装着本机模型的话按新的设置重装一遍
+    service?.setAcceleration(acceleration);
+    setupChanged();
+    const variable = overridingEnv("acceleration", process.env);
+    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
+  });
+  // 悬浮条上方的操作提示开不开：存下来，开着的悬浮条当场跟着变
+  handle("setup:set-bar-hint", (_event, wanted) => {
+    saveSetting(PATHS.settingsFile, "barHint", wanted);
+    const barHint = currentBarHint();
+    log.info("bar_hint_changed", { barHint });
+    tellBar("bar:hint", barHint);
+    setupChanged();
+    const variable = overridingEnv("barHint", process.env);
     return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
   });
   handle("setup:set-language", (_event, wanted) => {
@@ -830,8 +955,7 @@ async function main() {
       title: "SpeakMore",
       backgroundColor: windowBackground(),
       // 和原版一样把标题栏藏起来，红绿灯放进侧栏的左上角
-      titleBarStyle: "hidden",
-      trafficLightPosition: { x: 26, y: 24 },
+      ...frame({ x: 26, y: 24 }),
       webPreferences,
     });
     // 第一次打开时去哪一页写在地址里：页面加载完之前发消息是收不到的
@@ -855,8 +979,7 @@ async function main() {
         ...HUB_SIZE,
         title: "SpeakMore",
         backgroundColor: windowBackground(),
-        titleBarStyle: "hidden",
-        trafficLightPosition: { x: 20, y: 16 },
+        ...frame({ x: 20, y: 16 }),
         webPreferences,
       });
       onboardingWindow.loadFile(join(sourceDir, "renderer", "onboarding", "onboarding.html"));
@@ -870,6 +993,8 @@ async function main() {
       onboardingWindow.on("closed", () => {
         onboardingWindow = null;
         hotkeyToOnboarding = false;
+        // 走完、跳过或者点了关闭时模型可能已经下好了：引导没来得及切的，这里切
+        void pendingSwitch?.check();
       });
       // 页面崩了就没人说"测完了"
       onboardingWindow.webContents.on("render-process-gone", (_event, details) => {
@@ -884,6 +1009,8 @@ async function main() {
   ipcMain.on("onboarding:capture-hotkey", (_event, capturing) => {
     hotkeyToOnboarding = capturing === true;
   });
+  // 引导里只差本机模型还在下的那一套（renderer/onboarding/plan.mjs 的 waitingDownload），null 是不等了
+  handle("onboarding:wait-download", (_event, way) => pendingSwitch?.set(way));
   handle("onboarding:finish", () => {
     log.info("onboarding_finished");
     onboardingWindow?.close();
@@ -925,8 +1052,14 @@ async function main() {
       ]),
     );
   }
+  // Windows 上点通知区域的图标是打开主窗口（右键才是菜单），macOS 上点它就是菜单
+  if (WINDOWS) tray.on("click", () => showMain());
   refreshTrayMenu();
-  localModelChanged = setupChanged;
+  localModelChanged = () => {
+    setupChanged();
+    // 引导开着时由引导自己切、当场说结果
+    if (onboardingWindow === null) void pendingSwitch?.check();
+  };
 
   // 没有窗口时也继续待在菜单栏里
   app.on("window-all-closed", () => {});
@@ -992,6 +1125,7 @@ async function main() {
       transcriber: route?.mode === "local" || route?.mode === "private" ? route.transcriber : null,
       polish: route?.mode === "local" ? formatChatChoice(route.polish) : null,
       theme: theme.id,
+      acceleration,
       // 设置里的语言（system 是跟随系统）和实际用的那种
       language: languageSetting,
       locale,
@@ -1103,7 +1237,7 @@ async function main() {
     return;
   }
 
-  const granted = await systemPreferences.askForMediaAccess("microphone");
+  const granted = await askMicrophone();
   log.info("microphone_access", { granted });
   await keyLoaded;
   startupChecked = true;

@@ -6,13 +6,14 @@
 
 <p align="center">
   <b>按一下，说话，再按一下：整理好的文字就贴进你正在打字的地方。</b><br>
-  macOS 上的开源语音输入，用你自己的 Gemini 或 OpenAI key。<br>
+  macOS 和 Windows 上的开源语音输入，用你自己的 Gemini 或 OpenAI key。<br>
   <a href="https://speakmore.zephyrxiang.com/?lang=zh-CN">speakmore.zephyrxiang.com</a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/macOS-12%2B-111?logo=apple&logoColor=white" alt="macOS 12+" />
   <img src="https://img.shields.io/badge/Apple%20芯片%20%2B%20Intel-签名%20·%20公证-2f6feb" alt="Apple 芯片和 Intel，签名并公证" />
+  <img src="https://img.shields.io/badge/Windows-10%201809%2B%20·%20x64-0078d4" alt="Windows 10 1809 以上，x64" />
   <img src="https://img.shields.io/badge/模型-Gemini%20·%20OpenAI-8e44ad" alt="Gemini 和 OpenAI" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/许可-MIT-3fb950" alt="MIT 许可" /></a>
 </p>
@@ -45,30 +46,30 @@
 
 ## ✨ 特色
 
-- 🎙️ **一个键，哪都能用**：按一下右 Option 开始说，再按一下，文字贴进光标所在的地方。能粘贴的地方都行。
+- 🎙️ **一个键，哪都能用**：按一下右 Option（Windows 上是右 Alt）开始说，再按一下，文字贴进光标所在的地方。能粘贴的地方都行。
 - 🧹 **边说边整理**：口头禅、改口、重复删掉，长的话分段、分点，像你自己打出来的。
 - ⚡ **快**：边说边上传，说完一般 2 秒出字。
-- 🔒 **数据在你手里**：没有账号，没有中间服务器，没有统计上报。key 加密存在钥匙串里，说过的话只存在本机。
+- 🔒 **数据在你手里**：没有账号，没有中间服务器，没有统计上报。key 加密存在钥匙串里（Windows 上用系统的数据保护 DPAPI），说过的话只存在本机。
 - 🔀 **两种模式自己选**：*原生*是录音直接交给 Gemini（默认）、OpenAI 或阿里云百炼上的 Qwen-Omni；*本地转写*是本机的小模型（或百炼、智谱、MiniMax 的云端语音识别）先转成文字，再交给任意大模型润色，可以是 DeepSeek、百炼、Kimi、智谱、MiniMax，也可以是你自己的兼容 OpenAI 接口的服务。用本机模型转写时录音不出本机。
 - 📊 **花多少钱一清二楚**：每次调用都记账；首页看字数、省下的时间、连续天数。
 - 🎨 **三套主题**：墨、朱砂、靛青，跟随系统深浅色。
-- 🌐 **简体中文和英文**：菜单栏、窗口、`speakmore` 命令都跟着系统的语言走，设置里随时能换，当场生效。
+- 🌐 **简体中文和英文**：菜单、窗口、`speakmore` 命令都跟着系统的语言走，设置里随时能换，当场生效。
 
 ## 📦 安装
 
-需要 macOS 12 以上，和一把 [Gemini key](https://aistudio.google.com/apikey)（有免费额度）或 [OpenAI key](https://platform.openai.com/api-keys)。用本地转写的话，换成任一家润色厂商的 key（比如 [DeepSeek](https://platform.deepseek.com/api_keys)）或任意兼容 OpenAI 接口的服务，本机模型约 850 MB。
+需要 macOS 12 以上，或 64 位的 Windows 10（1809 及以后）、Windows 11，和一把 [Gemini key](https://aistudio.google.com/apikey)（有免费额度）或 [OpenAI key](https://platform.openai.com/api-keys)。用本地转写的话，换成任一家润色厂商的 key（比如 [DeepSeek](https://platform.deepseek.com/api_keys)）或任意兼容 OpenAI 接口的服务，本机模型约 850 MB。
 
-### 方式一：下载安装包（推荐）
+### macOS 方式一：下载安装包（推荐）
 
 | Apple 芯片（M1 及以后） | Intel 芯片 |
 | --- | --- |
-| ⬇️ [SpeakMore-arm64.dmg](https://dl.zephyrxiang.com/speakmore/v0.8.0/SpeakMore-arm64.dmg) | ⬇️ [SpeakMore-x64.dmg](https://dl.zephyrxiang.com/speakmore/v0.8.0/SpeakMore-x64.dmg) |
+| ⬇️ [SpeakMore-arm64.dmg](https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-arm64.dmg) | ⬇️ [SpeakMore-x64.dmg](https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-x64.dmg) |
 
-打开 dmg，把 SpeakMore 拖进“应用程序”，再打开它。安装包有开发者签名、过了苹果公证，系统不会拦。第一次打开会带你走一遍：填 key → 开三项权限 → 测麦克风和热键 → 真说一句。
+打开 dmg，把 SpeakMore 拖进“应用程序”，再打开它。安装包有开发者签名、过了苹果公证，系统不会拦。第一次打开会带你走一遍：选识别方式 → 填 key 或下载本机模型 → 开权限 → 测麦克风和热键 → 真说一句。每一步都能退回、能跳过，进去再配。
 
 想核对下回来的包：在链接后面加上 `.sha256` 就是它的校验值。
 
-### 方式二：命令行一行装好
+### macOS 方式二：命令行一行装好
 
 ```bash
 curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
@@ -78,13 +79,27 @@ curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 
 **选哪个？** 安装包是一个独立的应用：权限记在 SpeakMore 名下，能开机启动。命令行装的从终端启动，权限记在终端名下，适合想用命令的人。两种用的是同一份设置和历史，同一时间只开一个。
 
+### Windows 方式一：下载安装程序（推荐）
+
+⬇️ [SpeakMore-Setup-x64.exe](https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-Setup-x64.exe)
+
+双击运行，装好自动打开 SpeakMore，接着走首次引导。安装程序里带着整个程序包，装的时候不用再联网。
+
+### Windows 方式二：PowerShell 里一行装好
+
+```powershell
+irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
+```
+
+两种装法装的是同一份：都装进 `%USERPROFILE%\.speakmore`（不需要 Node，也不需要管理员权限），把 `speakmore` 命令加进 Path、把 SpeakMore 放进开始菜单。之后从开始菜单打开，也能开机启动。
+
 ## 🎙️ 怎么用
 
-1. 点进任意输入框，按一下 **右 Option**。
+1. 点进任意输入框，按一下 **右 Option**（Windows 上是 **右 Alt**）。
 2. 说话。屏幕下方的悬浮条跟着你的声音跳。
 3. 再按一下（或者点 ✓），文字就贴进去了。不想要了按 `esc`。
 
-它只待在菜单栏，不占程序坞。菜单栏图标能打开主窗口：首页统计、历史记录、设置。
+它只待在菜单栏，不占程序坞（Windows 上在任务栏右边的通知区域）。点它的图标能打开主窗口：首页统计、历史记录、设置。
 
 ## 🛠️ 怎么做的
 
@@ -100,10 +115,10 @@ flowchart LR
 ```
 
 - **先逆向，再重写**：拆了 Typeless 的 macOS 客户端，读了安装包、还原出来的代码、本机数据和自己账号的流量，写成 [18 篇文档](targets/typeless/docs/00-overview.md)。然后照着它的协议和交互从头写了一个，只做语音转写，不含 Typeless 的任何代码和密钥。
-- **两种模式平级**：原生是录音和提示词一起交给模型，识别和整理一次调用完成。本地转写在本机跑 [Qwen3-ASR 0.6B](https://huggingface.co/Qwen/Qwen3-ASR-0.6B)（Apple 芯片上用 Metal），只把文字发给你选的模型。在作者的 Mac 上，本地转写说完 1.2–1.75 秒出字，其中转写本身不到 0.7 秒（[实测记录](bench/results/e2e-local-2026-10-16.md)）。
+- **两种模式平级**：原生是录音和提示词一起交给模型，识别和整理一次调用完成。本地转写在本机跑 [Qwen3-ASR 0.6B](https://huggingface.co/Qwen/Qwen3-ASR-0.6B)（Apple 芯片上用 Metal，Windows 上有显卡就用 Vulkan，不行就退回 CPU），只把文字发给你选的模型。在作者的 Mac 上，本地转写说完 1.2–1.75 秒出字，其中转写本身不到 0.7 秒（[实测记录](bench/results/e2e-local-2026-10-16.md)）。
 - **提示词用真实录音调**：60 条真实录音逐条对照 Typeless 的成品。模型偶尔写出的繁体字、开头多出的外文词，在代码里兜底。
 - **提示词缓存**：用 Gemini 时，一开口就把提示词缓存起来，一句的花费从 $0.0012 降到 $0.0003。
-- **Electron 加一个 Swift 小程序**：小程序负责听热键、贴字、截住 `esc`。桌面应用和命令行共用一套内核。
+- **Electron 加一个原生小程序**（macOS 上是 Swift，Windows 上是 Go）：小程序负责听热键、贴字、截住 `esc`。桌面应用和命令行共用一套内核。
 
 细节在[实现笔记](docs/implementation-notes.md)里。
 
@@ -113,8 +128,8 @@ flowchart LR
 - **提示词是按中文调的**（夹着英文词也行）。纯英文听写没有调过，也没测过（界面有英文，提示词没有）。
 - **换成 OpenAI 时整理得比 Gemini 粗**：提示词是对着 Gemini 调的。
 - **话说到一半就按停，模型可能自己把后半句补上。**
-- **本地转写只在 Apple 芯片上测过**：Intel 版在 Rosetta 下四个本机模型都跑通了，但没在真的 Intel 机器上试过。
-- 只有听写，没有翻译和“问任何事”。悬浮条只在主屏幕上。Windows 和 Linux 还没有。
+- **Intel Mac 上的本地转写没在真机上评测过**：Rosetta 下四个本机模型都跑通了。Apple 芯片和 Windows 上都跑过成批评测。
+- 只有听写，没有翻译和“问任何事”。悬浮条只在主屏幕上。Linux 还没有。
 
 ## 📚 更多
 
@@ -125,7 +140,7 @@ flowchart LR
 | --- | --- |
 | `speakmore` | 启动。已经在运行就只显示状态；没有 key 时问你要 |
 | `speakmore stop` / `restart` | 停掉 / 重启，卡住了也停得掉 |
-| `speakmore status [--json]` | 在不在运行、key、三项权限、今天和累计说了多少 |
+| `speakmore status [--json]` | 在不在运行、key、系统权限、今天和累计说了多少 |
 | `speakmore update` | 更新到最新版本，装着 SpeakMore.app 的话连它一起。有新版本时 `status` 会提醒 |
 | `speakmore history [-n 条数] [--json]` | 看说过的话。失败的那条会写原因，录音还留着 |
 | `speakmore usage [--json]` | 今天、本月、累计的花费、token、次数、模型一般多久回话，按型号分开 |
@@ -137,7 +152,7 @@ flowchart LR
 | `speakmore transcriber download\|cancel\|delete <模型>` | 下载、停下、删除本机模型。不点就不下；正在用的删不了 |
 | `speakmore transcriber check [<模型>]` | 系统朗读念一句交给本机模型转，看能不能正常出字 |
 | `speakmore polish [<厂商>[/<模型>]] [--url <地址>]` | 本地转写第二步：文字交给谁润色 / 换一个。自定义服务写 `custom/<模型名> --url <地址>`；`polish check` 看能不能用 |
-| `speakmore key [<厂商>]` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key`。别把 key 写在命令后面，会进 shell 历史 |
+| `speakmore key [<厂商>]` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key`（Windows 上 `Get-Clipboard \| speakmore key`）。别把 key 写在命令后面，会进 shell 历史 |
 | `speakmore key --forget [<厂商>]` | 删掉存着的 key |
 | `speakmore config` / `config set <名字> <值>` / `config unset <名字>` | 看设置 / 直接改一项、不检查 / 回到默认 |
 | `speakmore theme [名字]` | 看有哪几套主题 / 换一套，当场生效 |
@@ -152,7 +167,7 @@ flowchart LR
 
 | 名字 | 默认值 | 能填什么 |
 | --- | --- | --- |
-| `hotkey` | `right_option` | `right_option` / `right_command` / `right_control` / `fn`，都是单独按一下。Typeless 用 `fn`，默认避开它，两个可以同时开着 |
+| `hotkey` | `right_option`（macOS）、`right_alt`（Windows） | macOS：`right_option` / `right_command` / `right_control` / `fn`；Windows：`right_alt` / `right_ctrl`。都是单独按一下。Typeless 用 `fn`，默认避开它，两个可以同时开着 |
 | `mode` | `native` | `native` 原生 / `local` 本地转写。用 `speakmore mode` 切，会先验证 key |
 | `model` | `gemini/gemini-3.6-flash` | 原生模式用。`厂商/模型`，只写厂商就用它的默认模型 |
 | `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`，越高越慢，只有 Gemini 用得上 |
@@ -160,10 +175,12 @@ flowchart LR
 | `polish` | `deepseek/deepseek-flash` | 本地转写第二步。`deepseek` / `deepseek/deepseek-v4-pro` / `custom/<模型名>` |
 | `customUrl` | 空 | 自定义服务（兼容 OpenAI 接口）的地址，比如 `http://127.0.0.1:11434/v1` |
 | `modelSource` | `cn` | 本机模型从哪下：`cn` 是 SpeakMore 的国内源（CDN），`original` 是 Hugging Face。选的那个下不动会自动换另一个 |
+| `acceleration` | `auto` | 本机模型：`auto` 有显卡就用，显卡上出问题自动退回 CPU；`cpu` 只用 CPU。在 App 里换了当场重新装载模型 |
+| `barHint` | `on` | 悬浮条上方那行操作提示（"再按一下 … 完成 · esc 取消"）。`off` 不显示，报错照样显示。设置 › 通用里也有开关，当场生效 |
 | `theme` | `ink` | `ink` 墨 / `cinnabar` 朱砂 / `indigo` 靛青 |
-| `language` | `system` | `system` 跟随系统 / `en` / `zh-CN`。跟随系统时，应用看 macOS 的语言，`speakmore` 命令看终端的 `LANG`；我们没有的语言用英文 |
+| `language` | `system` | `system` 跟随系统 / `en` / `zh-CN`。跟随系统时，应用看系统的语言，`speakmore` 命令看终端的 `LANG`；我们没有的语言用英文 |
 
-设置存在 `~/.speakmore/settings.json`。`speakmore mode`、`model`、`transcriber`、`polish` 先检查再当场换，主题、语言、下载源改了也当场生效。`config set` 是手动改设置的后门：不做这些检查，另一种模式的设置也照写；别的改动会重启后台。临时换一次可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_TRANSCRIBER`、`SPEAKMORE_POLISH`、`SPEAKMORE_CUSTOM_URL`、`SPEAKMORE_MODEL_SOURCE`、`SPEAKMORE_THEME`、`SPEAKMORE_LANGUAGE`，写在启动它的那条命令上；`GEMINI_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`BAILIAN_API_KEY`、`MOONSHOT_API_KEY`（Kimi）、`ZHIPU_API_KEY`、`MINIMAX_API_KEY`、`SPEAKMORE_CUSTOM_API_KEY` 设着时优先于存着的 key。
+设置存在 `~/.speakmore/settings.json`（Windows 上是 `%USERPROFILE%\.speakmore\settings.json`）。`speakmore mode`、`model`、`transcriber`、`polish` 先检查再当场换，主题、语言、下载源改了也当场生效。`config set` 是手动改设置的后门：不做这些检查，另一种模式的设置也照写；别的改动会重启后台。临时换一次可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_TRANSCRIBER`、`SPEAKMORE_POLISH`、`SPEAKMORE_CUSTOM_URL`、`SPEAKMORE_MODEL_SOURCE`、`SPEAKMORE_ACCELERATION`、`SPEAKMORE_THEME`、`SPEAKMORE_LANGUAGE`，写在启动它的那条命令上；`GEMINI_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`BAILIAN_API_KEY`、`MOONSHOT_API_KEY`（Kimi）、`ZHIPU_API_KEY`、`MINIMAX_API_KEY`、`SPEAKMORE_CUSTOM_API_KEY` 设着时优先于存着的 key。
 
 | 厂商 | 默认模型 | 说明 |
 | --- | --- | --- |
@@ -207,23 +224,25 @@ flowchart LR
 
 安装包装的应用，权限记在 SpeakMore 名下。用 `speakmore` 命令启动的，**记在你运行命令的那个终端名下**（终端、iTerm、Ghostty 等），在系统设置里要找的是它。开好之后运行 `speakmore status` 重新检查一遍。
 
+Windows 上只有麦克风要授权（设置 › 隐私和安全性 › 麦克风，打开“允许桌面应用访问你的麦克风”），听热键和贴字都不用。以管理员身份运行的窗口，Windows 不让普通程序往里贴字：这时文字留在剪贴板里，悬浮条会说一声。
+
 </details>
 
 <details>
 <summary><b>🗂️ 东西都放在哪</b></summary>
 
-**发出去的只有录音**（原生模式）**或转好的文字**（本地转写），直接发给你选的那一家的接口，用你自己的 key。留在本机的全在 `~/.speakmore/`，只有你自己进得去：
+**发出去的只有录音**（原生模式）**或转好的文字**（本地转写），直接发给你选的那一家的接口，用你自己的 key。留在本机的全在 `~/.speakmore/`（Windows 上是 `%USERPROFILE%\.speakmore\`），只有你自己进得去：
 
 | 里面的东西 | 说明 |
 | --- | --- |
 | `settings.json` | 设置 |
-| `gemini-key.bin`、`openai-key.bin`、`deepseek-key.bin`… | 加密后的 key，每家一份，App 和命令行共用。解密的密钥在钥匙串的“SpeakMore Safe Storage”里，文件被拷走也解不开。0.7.0 及以前 App 另存一份带 `.app` 的，原样留着，退回旧版时还能用 |
+| `gemini-key.bin`、`openai-key.bin`、`deepseek-key.bin`… | 加密后的 key，每家一份，App 和命令行共用。解密的密钥在钥匙串的“SpeakMore Safe Storage”里（Windows 上由 DPAPI 绑在你的 Windows 账户上），文件被拷走也解不开。0.7.0 及以前 App 另存一份带 `.app` 的，原样留着，退回旧版时还能用 |
 | `data/history.db`、`data/Recordings/` | 说过的话、录音和账。失败的听写也留着录音，话不会白说 |
 | `logs/main.log` | 日志。只记长度、耗时和用量，不记说的话，也不记 key |
 | `models/` | 本地转写用的本机模型，你点了才下，下载后按 SHA-256 校验过 |
 | `bin/`、`app/`、`runtime/` | 命令行装的程序本身，升级时整个换掉 |
 
-目录以外只有：`~/.local/bin/speakmore` 这个链接、钥匙串里的那一条、你给的系统权限，以及用安装包装的“应用程序”里的 SpeakMore。想装到别处，安装时设环境变量 `SPEAKMORE_HOME`。
+目录以外只有：`~/.local/bin/speakmore` 这个链接、钥匙串里的那一条、你给的系统权限，以及用安装包装的“应用程序”里的 SpeakMore。Windows 上是：用户 Path 里的一项、开始菜单的快捷方式，开了开机启动的话还有注册表里的一条。想装到别处，安装时设环境变量 `SPEAKMORE_HOME`。
 
 </details>
 
@@ -243,8 +262,8 @@ flowchart LR
 <details>
 <summary><b>🔄 升级和卸载</b></summary>
 
-- **升级**：命令行装的，运行 `speakmore update`，装着 SpeakMore.app 的话连它一起换，原来在跑的那个会重新打开；只装了 App 的，下载新的 dmg 再拖进去一次。设置、key、历史和录音都不动。
-- **卸载**：安装包装的，从菜单栏退出，把“应用程序”里的 SpeakMore 拖进废纸篓。命令行装的，运行 `speakmore uninstall`：停掉后台，删掉 `~/.speakmore`、命令链接和钥匙串里的那一条；只删程序、留下数据加 `--keep-data`。
+- **升级**：命令行装的和 Windows 上，运行 `speakmore update`，装着 SpeakMore.app 的话连它一起换，原来在跑的那个会重新打开；只装了 App 的，下载新的 dmg 再拖进去一次。设置、key、历史和录音都不动。
+- **卸载**：安装包装的，从菜单栏退出，把“应用程序”里的 SpeakMore 拖进废纸篓。命令行装的，运行 `speakmore uninstall`：停掉后台，删掉 `~/.speakmore`、命令链接和钥匙串里的那一条；只删程序、留下数据加 `--keep-data`。Windows 上运行 `speakmore uninstall`：删掉 `%USERPROFILE%\.speakmore`、Path 里的那一项、开始菜单的快捷方式和开机启动。
 - **装回 0.4.2 或更早**：新版本在历史库里加了一张账表，旧版本见到会启动不了。先运行 `sqlite3 ~/.speakmore/data/history.db "DROP TABLE model_calls; PRAGMA user_version = 1;"`，只丢账，说过的话都在。
 
 </details>

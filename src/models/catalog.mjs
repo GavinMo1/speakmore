@@ -78,7 +78,9 @@ export function chipOf(platform = process.platform, arch = process.arch) {
  */
 export const TAGS = Object.freeze({
   "apple-silicon": "chip",
+  "windows-x64": "chip",
   metal: "backend",
+  vulkan: "backend",
   cpu: "backend",
   "zh-en": "strength",
   fast: "strength",
@@ -90,6 +92,8 @@ export const TAGS = Object.freeze({
  * measured 里 score 是总均分，zh、mix 是按语言分的均分（中文 47 条、中英夹杂 45 条），满分 5
  */
 const ROUND1 = "asr-round1-2026-10-16";
+/** Windows 那一轮（bench/results/asr-windows-2026-10-17.md）：同一批录音，RTX 4060 Ti 走 Vulkan、i5-13400F 只用 CPU */
+const WINDOWS = "asr-windows-2026-10-17";
 
 // ---------- 模型 ----------
 
@@ -146,8 +150,8 @@ export const MODELS = Object.freeze(
           sha256: "f081b2d5e23bd669d92cc331d722a8a0681943b8e6f34b48996fd5c319b5acd8",
         },
       },
-      // 第一轮里最准，中英夹杂时领先最多
-      tags: ["apple-silicon", "metal", "cpu", "zh-en"],
+      // 第一轮里最准，中英夹杂时领先最多；Windows 上也是
+      tags: ["apple-silicon", "windows-x64", "metal", "vulkan", "cpu", "zh-en"],
       measured: [
         {
           chip: "apple-silicon",
@@ -168,6 +172,29 @@ export const MODELS = Object.freeze(
           p50Ms: 1061,
           realtime: 16,
           peakMB: 4499,
+        },
+        // 跑在显卡上时模型放在显存里，内存峰值不含显存
+        {
+          chip: "windows-x64",
+          backend: "vulkan",
+          run: WINDOWS,
+          score: 4.16,
+          zh: 4.34,
+          mix: 4.04,
+          p50Ms: 240,
+          realtime: 72.9,
+          peakMB: 509,
+        },
+        {
+          chip: "windows-x64",
+          backend: "cpu",
+          run: WINDOWS,
+          score: 4.18,
+          zh: 4.38,
+          mix: 4.04,
+          p50Ms: 2653,
+          realtime: 6.1,
+          peakMB: 3997,
         },
       ],
     },
@@ -191,7 +218,7 @@ export const MODELS = Object.freeze(
         },
       },
       // 速度约是 Qwen3 Q8 的 3 倍、体积约 1/3；纯中文和它差不多，弱在英文词
-      tags: ["apple-silicon", "metal", "fast", "small"],
+      tags: ["apple-silicon", "windows-x64", "metal", "vulkan", "cpu", "fast", "small"],
       measured: [
         {
           chip: "apple-silicon",
@@ -202,6 +229,28 @@ export const MODELS = Object.freeze(
           p50Ms: 73,
           realtime: 226,
           peakMB: 1214,
+        },
+        {
+          chip: "windows-x64",
+          backend: "vulkan",
+          run: WINDOWS,
+          score: 3.94,
+          zh: 4.38,
+          mix: 3.51,
+          p50Ms: 107,
+          realtime: 186.1,
+          peakMB: 917,
+        },
+        {
+          chip: "windows-x64",
+          backend: "cpu",
+          run: WINDOWS,
+          score: 3.93,
+          zh: 4.38,
+          mix: 3.49,
+          p50Ms: 887,
+          realtime: 19.6,
+          peakMB: 985,
         },
       ],
     },
@@ -263,6 +312,17 @@ export const MODELS = Object.freeze(
           realtime: 15.2,
           peakMB: 3526,
         },
+        {
+          chip: "windows-x64",
+          backend: "cpu",
+          run: WINDOWS,
+          score: 4.06,
+          zh: 4.36,
+          mix: 3.8,
+          p50Ms: 3388,
+          realtime: 5.2,
+          peakMB: 2475,
+        },
       ],
     },
     {
@@ -300,6 +360,17 @@ export const MODELS = Object.freeze(
           realtime: 107,
           peakMB: 1916,
         },
+        {
+          chip: "windows-x64",
+          backend: "cpu",
+          run: WINDOWS,
+          score: 3.75,
+          zh: 4.13,
+          mix: 3.44,
+          p50Ms: 463,
+          realtime: 36.8,
+          peakMB: 957,
+        },
       ],
     },
   ].map(freeze),
@@ -324,4 +395,17 @@ export function downloadSize(model) {
 /** 在某类芯片上的实测，跑得快的在前；没测过是空的 */
 export function measuredOn(model, chip) {
   return model.measured.filter((entry) => entry.chip === chip).sort((a, b) => b.realtime - a.realtime);
+}
+
+/**
+ * 在某类芯片上给人看的标签。适合哪类芯片、能用什么跑，只认这类芯片上的实测：在 Mac 上测出来的
+ * "适合 Apple 芯片""Metal 加速"不拿到 Windows 上说。比同类强在哪（strength）不分芯片
+ * @param {string | null} chip chipOf 认出来的；认不出来时只剩强项
+ */
+export function tagsOn(model, chip) {
+  return model.tags.filter((tag) => {
+    if (TAGS[tag] === "chip") return tag === chip;
+    if (TAGS[tag] === "backend") return model.measured.some((entry) => entry.chip === chip && entry.backend === tag);
+    return true;
+  });
 }

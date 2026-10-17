@@ -59,13 +59,13 @@ function repointRecordings(historyDb, from, to) {
 /**
  * @param {object} options
  * @param {ReturnType<import("./paths.mjs").resolvePaths>} options.paths
- * @param {string} [options.legacyDir]
+ * @param {string | null} [options.legacyDir] 不给是 legacyDataDir()；是 null（不是 macOS）时什么都不做
  * @param {{ info: Function, warn: Function }} options.log
  * @param {number} [options.quitTimeoutMs] 等旧版本的后台应用退出，最多等多久
  * @returns {Promise<string[]>} 搬了哪几样；没有旧目录时是空的
  */
 export async function migrateLegacyData({ paths, legacyDir = legacyDataDir(), log, quitTimeoutMs = 5_000 }) {
-  if (!existsSync(legacyDir)) return [];
+  if (legacyDir === null || !existsSync(legacyDir)) return [];
   // 它还开着那个库的话不能搬：搬走之后它会接着往旧位置写，两边各有一半
   if (!(await quitOldDaemon(join(legacyDir, "control.sock"), quitTimeoutMs))) {
     throw new LocalizedError(msg("storage.legacyRunning"));

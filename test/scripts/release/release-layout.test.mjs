@@ -3,21 +3,29 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { ARCHS, archiveName, dmgName, planUpload, publish, sha256 } from "../../../scripts/release/release-layout.mjs";
+import {
+  ARCHS,
+  archiveName,
+  dmgName,
+  planUpload,
+  publish,
+  sha256,
+  WINDOWS_ARCHIVE,
+  WINDOWS_SETUP,
+} from "../../../scripts/release/release-layout.mjs";
 
 let dir;
 
 /** 摆一个假的发布目录：包是几个字节的假货，其余和真的一样 */
 function makeRelease(version = "1.2.3") {
   mkdirSync(join(dir, `v${version}`), { recursive: true });
-  for (const arch of ARCHS) {
-    for (const name of [archiveName(arch), dmgName(arch)]) {
-      const file = join(dir, `v${version}`, name);
-      writeFileSync(file, `假的 ${name} ${version}`);
-      writeFileSync(`${file}.sha256`, `${sha256(file)}  ${name}\n`);
-    }
+  for (const name of [...ARCHS.flatMap((arch) => [archiveName(arch), dmgName(arch)]), WINDOWS_ARCHIVE, WINDOWS_SETUP]) {
+    const file = join(dir, `v${version}`, name);
+    writeFileSync(file, `假的 ${name} ${version}`);
+    writeFileSync(`${file}.sha256`, `${sha256(file)}  ${name}\n`);
   }
   writeFileSync(join(dir, "install.sh"), "#!/bin/bash\n");
+  writeFileSync(join(dir, "install.ps1"), "& { }\n");
   writeFileSync(join(dir, "latest"), `v${version}\n`);
 }
 
@@ -42,7 +50,7 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-test("清单：先是这个版本的包、安装包和校验值，再是安装脚本，latest 排最后", () => {
+test("清单：先是这个版本的包、安装包和校验值（Mac 两种芯片、Windows），再是两个安装脚本，latest 排最后", () => {
   const items = planUpload(dir);
   assert.deepEqual(
     items.map((item) => item.key),
@@ -55,21 +63,32 @@ test("清单：先是这个版本的包、安装包和校验值，再是安装�
       "speakmore/v1.2.3/speakmore-darwin-x64.tar.gz.sha256",
       "speakmore/v1.2.3/SpeakMore-x64.dmg",
       "speakmore/v1.2.3/SpeakMore-x64.dmg.sha256",
+      "speakmore/v1.2.3/speakmore-win32-x64.zip",
+      "speakmore/v1.2.3/speakmore-win32-x64.zip.sha256",
+      "speakmore/v1.2.3/SpeakMore-Setup-x64.exe",
+      "speakmore/v1.2.3/SpeakMore-Setup-x64.exe.sha256",
       "speakmore/install.sh",
+      "speakmore/install.ps1",
       "speakmore/latest",
     ],
   );
-  // 浏览器拿到 dmg 要认得出是磁盘映像
+  // 浏览器拿到 dmg 要认得出是磁盘映像；install.ps1 要按 UTF-8 解（irm 照 charset 解，里面有中文注释）
   assert.equal(items[2].contentType, "application/x-apple-diskimage");
+  assert.equal(items.find(({ key }) => key.endsWith("install.ps1")).contentType, "text/plain; charset=utf-8");
+  // 浏览器下回来的 exe 要当成程序，不能当成网页里的文字打开
+  assert.equal(
+    items.find(({ key }) => key.endsWith(".exe")).contentType,
+    "application/vnd.microsoft.portable-executable",
+  );
 });
 
 test("清单：版本目录里的长期缓存、不许改；安装脚本和 latest 只缓存一小会儿", () => {
   const items = planUpload(dir);
-  for (const item of items.slice(0, 8)) {
+  for (const item of items.slice(0, 12)) {
     assert.equal(item.immutable, true, item.key);
     assert.match(item.cacheControl, /immutable/);
   }
-  for (const item of items.slice(8)) {
+  for (const item of items.slice(12)) {
     assert.equal(item.immutable, false, item.key);
     assert.equal(item.cacheControl, "public, max-age=60");
   }
@@ -134,6 +153,10 @@ test("上传：发新版本时旧版本的不碰，安装脚本和 latest 换成
     "speakmore/v1.3.0/speakmore-darwin-x64.tar.gz.sha256",
     "speakmore/v1.3.0/SpeakMore-x64.dmg",
     "speakmore/v1.3.0/SpeakMore-x64.dmg.sha256",
+    "speakmore/v1.3.0/speakmore-win32-x64.zip",
+    "speakmore/v1.3.0/speakmore-win32-x64.zip.sha256",
+    "speakmore/v1.3.0/SpeakMore-Setup-x64.exe",
+    "speakmore/v1.3.0/SpeakMore-Setup-x64.exe.sha256",
     "speakmore/latest",
   ]);
   assert.deepEqual(store.objects.get("speakmore/v1.2.3/speakmore-darwin-arm64.tar.gz"), old);

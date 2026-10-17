@@ -51,14 +51,22 @@ function seedLegacy() {
   history.close();
 }
 
+// 0.1 只有 macOS 版；旧版本的后台在旧目录里听的是 Unix 套接字，Windows 上没法摆出这个样子，也不会遇到
+const macOnly = { skip: process.platform !== "darwin" && "0.1 只有 macOS 版，别的系统上没有要搬的旧数据" };
+
+test("不是 macOS：没有旧目录可找，什么都不做", async () => {
+  assert.deepEqual(await migrateLegacyData({ paths, legacyDir: null, log }), []);
+  assert.equal(existsSync(paths.home), false);
+});
+
 const migrate = (overrides = {}) => migrateLegacyData({ paths, legacyDir, log, ...overrides });
 
-test("没有旧目录：什么都不做", async () => {
+test("没有旧目录：什么都不做", macOnly, async () => {
   assert.deepEqual(await migrate(), []);
   assert.equal(existsSync(paths.home), false);
 });
 
-test("旧目录里的历史、录音、设置、key 搬进新的家目录；历史里记的录音位置跟着改；旧目录清掉", async () => {
+test("旧目录里的历史、录音、设置、key 搬进新的家目录；历史里记的录音位置跟着改；旧目录清掉", macOnly, async () => {
   seedLegacy();
   assert.deepEqual(await migrate(), ["history.db", "Recordings", "settings.json", "gemini-key.bin"]);
 
@@ -78,7 +86,7 @@ test("旧目录里的历史、录音、设置、key 搬进新的家目录；历�
   assert.deepEqual(await migrate(), []);
 });
 
-test("新目录里已经有的不覆盖：那一样留在旧目录里，旧目录也不删，并记一笔", async () => {
+test("新目录里已经有的不覆盖：那一样留在旧目录里，旧目录也不删，并记一笔", macOnly, async () => {
   seedLegacy();
   mkdirSync(paths.home, { recursive: true });
   writeFileSync(paths.settingsFile, '{"hotkey":"right_command"}\n');
@@ -88,7 +96,7 @@ test("新目录里已经有的不覆盖：那一样留在旧目录里，旧目�
   assert.deepEqual(logged.find((entry) => entry.event === "legacy_data_kept")?.kept, ["settings.json"]);
 });
 
-test("旧版本的后台应用还在运行：先请它退出，退了再搬", async () => {
+test("旧版本的后台应用还在运行：先请它退出，退了再搬", macOnly, async () => {
   seedLegacy();
   let app;
   app = await startControlServer({
@@ -100,7 +108,7 @@ test("旧版本的后台应用还在运行：先请它退出，退了再搬", as
   assert.equal(existsSync(paths.historyDb), true);
 });
 
-test("旧版本的后台应用请不走：不搬（它还开着那个库），把话说清楚", async () => {
+test("旧版本的后台应用请不走：不搬（它还开着那个库），把话说清楚", macOnly, async () => {
   seedLegacy();
   const app = await startControlServer({
     socketPath: join(legacyDir, "control.sock"),

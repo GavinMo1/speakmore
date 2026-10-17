@@ -1,7 +1,7 @@
+import { $, h, progressBadge, svg } from "../shared/dom.mjs";
 import { t } from "../shared/i18n.mjs";
 import { describeError } from "../shared/setup-text.mjs";
 import { createChecks } from "./checks.mjs";
-import { $, h, progressBadge, svg } from "./dom.mjs";
 import { hopChain, needText } from "./route-view.mjs";
 import { toast } from "./toast.mjs";
 

@@ -88,7 +88,13 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
   } else {
     mkdirSync(dirname(dbPath), { recursive: true });
     db = new DatabaseSync(dbPath);
-    migrate(db);
+    try {
+      migrate(db);
+    } catch (error) {
+      // 打不开（比如库比程序新）也要把文件关掉：Windows 上开着的文件删不掉、挪不走
+      db.close();
+      throw error;
+    }
   }
   // 另一个进程正好在写的时候等一下，不立刻报"库被锁住"
   db.exec("PRAGMA busy_timeout = 2000");

@@ -22,6 +22,7 @@ import { startServer, WS_PATH } from "../server/server.mjs";
  * @param {(record: object) => void} [options.onModelCall] 记账：每一次回了话的模型调用（听写和验证 key 都算），
  *   见 ../server/refine/meter.mjs
  * @param {() => void} [options.onLocalModel] 本地模型的状态变了（缺、装载中、装好了、出错）
+ * @param {"auto" | "cpu"} [options.acceleration] 本地模型用不用显卡（设置里的 acceleration），换了调 setAcceleration
  * @param {typeof createModeRefiner} [options.createRefiner] 测试时换成假的
  * @param {typeof startTranscriber} [options.startLocal] 测试时换成假的
  */
@@ -32,6 +33,7 @@ export async function startService({
   models,
   onModelCall,
   onLocalModel = () => {},
+  acceleration: initialAcceleration = "auto",
   createRefiner = createModeRefiner,
   startLocal = startTranscriber,
 }) {
@@ -55,6 +57,7 @@ export async function startService({
    *   off（没走本地转写）/ missing（还没下载）/ loading / ready / failed（problem 是原因）
    */
   let local = { state: "off" };
+  let acceleration = initialAcceleration;
   /** 正在装载或已经装好的那一次：换模型时用 transcriber 卸掉模型；ready 是装载的那个 Promise，检查时等它 */
   let loading = null;
 
@@ -81,7 +84,7 @@ export async function startService({
     const job = { model, transcriber: null, ready: null };
     loading = job;
     setLocal({ state: "loading", model });
-    job.ready = startLocal({ modelId: model, modelsDir, log });
+    job.ready = startLocal({ modelId: model, modelsDir, log, acceleration });
     job.ready.then(
       (transcriber) => {
         if (loading !== job) {
@@ -172,6 +175,15 @@ export async function startService({
     modelsChanged() {
       followRoute();
       if (local.state === "missing") onLocalModel();
+    },
+
+    /** 换加速设置：装着（或正在装）本地模型的话按新的设置重装一遍 */
+    setAcceleration(value) {
+      if (value === acceleration) return;
+      acceleration = value;
+      if (!loading) return;
+      releaseLocal();
+      followRoute();
     },
 
     /**

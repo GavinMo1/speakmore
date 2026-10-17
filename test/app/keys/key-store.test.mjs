@@ -6,7 +6,8 @@ import { test } from "node:test";
 import { createKeyStore } from "../../../src/app/keys/key-store.mjs";
 import { createTranslator } from "../../../src/i18n/index.mjs";
 
-const zh = createTranslator("zh-CN");
+// 按 macOS 的说法查；Windows 那几句的说法在 i18n 的测试里查
+const zh = createTranslator("zh-CN", "darwin");
 /** 报错里给人看的那句，按中文翻出来对得上 */
 const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
@@ -35,7 +36,8 @@ test("存进去能原样读回来；磁盘上不是明文，文件只有自己�
   store.save("AIza-not-a-real-key");
   assert.equal(store.load(), "AIza-not-a-real-key");
   assert.ok(!readFileSync(file).includes("AIza-not-a-real-key"));
-  assert.equal(statSync(file).mode & 0o777, 0o600);
+  // Windows 上权限位没有意义，只有自己能读靠的是家目录的访问控制（storage/owner-only.mjs，paths 的测试查）
+  if (process.platform !== "win32") assert.equal(statSync(file).mode & 0o777, 0o600);
 });
 
 test("清掉之后读出来是 null，重复清不报错", (t) => {

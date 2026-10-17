@@ -3,9 +3,9 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -20,14 +20,22 @@ import { downloadSize, findModel } from "../../src/models/catalog.mjs";
 import { CHAT_VENDORS } from "../../src/server/chat/vendors.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
 import { keyFile, oldAppKeyFile, resolvePaths } from "../../src/storage/paths.mjs";
-import { resolveSettings } from "../../src/storage/settings.mjs";
+import { HOTKEY_IDS, resolveSettings } from "../../src/storage/settings.mjs";
+import { assertOwnerOnlyDir } from "../helpers/owner-only.mjs";
+
+/** 热键按系统分：默认的是第一个，另挑一个不是默认的；能填哪几个照本机这个系统的写 */
+const DEFAULT_HOTKEY = HOTKEY_IDS[0];
+const OTHER_HOTKEY = HOTKEY_IDS.at(-1);
+const HOTKEY_CHOICES = new RegExp(HOTKEY_IDS.join(" \\/ "));
+const zhHotkey = createTranslator("zh-CN")(`hotkeys.${DEFAULT_HOTKEY}.name`);
+const enHotkey = createTranslator("en")(`hotkeys.${DEFAULT_HOTKEY}.name`);
 
 const READY = {
   pid: 4321,
   version: "0.1.0",
   starting: false,
-  hotkey: "right_option",
-  hotkeyLabel: "右 Option 键",
+  hotkey: DEFAULT_HOTKEY,
+  hotkeyLabel: zhHotkey,
   provider: "gemini",
   mode: "native",
   model: "gemini/gemini-3.6-flash",
@@ -163,6 +171,9 @@ function harness({
   app = null,
   appInstall = () => {},
   modelDownload = "finish",
+  // 卸载时按哪个系统的样子做；Windows 那几处（windows-system.mjs）换成记下来、照 system 给的回答
+  platform = "darwin",
+  system = {},
 } = {}) {
   const output = { out: "", err: "" };
   const asked = [];
@@ -177,6 +188,8 @@ function harness({
   const updates = { checks: [], installs: [], starts: [], lookedFor: [], apps: [], opened: [] };
   /** 后台没在运行时命令行自己下载、删除的本机模型（假的模型库：下载一报进度就下完，或者没下下来） */
   const local = { downloads: [], removed: [], sources: [] };
+  /** Windows 上卸载时删过的 Path 项、认过的快捷方式、要等退出后再删的目录 */
+  const windows = { pathEntries: [], shortcuts: [], later: [] };
   const io = {
     out: (text) => {
       output.out += `${text}\n`;
@@ -251,6 +264,19 @@ function harness({
       return confirms.shift() ?? false;
     },
     removeKeychainKey: keychain,
+    platform,
+    system: {
+      removePathEntry: (entry) => {
+        windows.pathEntries.push(entry);
+        return true;
+      },
+      isOurShortcut: (file) => {
+        windows.shortcuts.push(file);
+        return system.ourShortcut?.(file) ?? true;
+      },
+      removeLoginItem: () => system.loginItem ?? false,
+      removeAfterExit: (dirs) => windows.later.push(...dirs),
+    },
     sharedPreferencesFile: join(dir, "com.github.Electron.plist"),
     packageDir,
     updater: {
@@ -290,6 +316,7 @@ function harness({
     daemon,
     updates,
     local,
+    windows,
     speakmore: (...argv) => run(argv, io),
   };
 }
@@ -314,7 +341,7 @@ test("不带参数：没在运行就启动，然后给出状态面板", async ()
   assert.deepEqual(daemon.calls, ["start", "recheck"]);
   assert.match(output.out, /正在启动/);
   assert.match(output.out, /SpeakMore 0\.1\.0 · 运行中/);
-  assert.match(output.out, /按一下右 Option 键开始说话/);
+  assert.match(output.out, new RegExp(`按一下${zhHotkey}开始说话`));
 });
 
 test("已经在运行时不再启动一次，只给面板；start 和不带参数是一回事", async () => {
@@ -608,8 +635,8 @@ test("正在运行的是装成应用的那一个：不代它重启（会被换�
   assert.match(restarting.output.err, /退出/);
 
   const configuring = harness({ daemon: fakeDaemon({ running: packaged }) });
-  assert.equal(await configuring.speakmore("config", "set", "hotkey", "fn"), 0);
-  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { hotkey: "fn" });
+  assert.equal(await configuring.speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { hotkey: OTHER_HOTKEY });
   assert.deepEqual(configuring.daemon.calls, []);
   assert.match(configuring.output.out, /SpeakMore\.app/);
   assert.doesNotMatch(configuring.output.out, /已经生效/);
@@ -655,7 +682,7 @@ test("status --json：给程序读的，一行 JSON，带运行状态、设置�
   const parsed = JSON.parse(output.out);
   assert.equal(parsed.running, true);
   assert.equal(parsed.status.pid, 4321);
-  assert.equal(parsed.settings.hotkey.value, "right_option");
+  assert.equal(parsed.settings.hotkey.value, DEFAULT_HOTKEY);
   assert.deepEqual(parsed.stats, { today: null, total: null });
 });
 
@@ -951,16 +978,16 @@ test("key --forget：共用的那份和 0.7.0 及以前 App 另存的那份都�
 test("config：列出每一项和文件位置", async () => {
   const { speakmore, output } = harness();
   assert.equal(await speakmore("config"), 0);
-  assert.match(output.out, /hotkey\s+right_option/);
-  assert.match(output.out, new RegExp(paths.settingsFile.replaceAll("/", "\\/")));
+  assert.match(output.out, new RegExp(`hotkey\\s+${DEFAULT_HOTKEY}`));
+  assert.ok(output.out.includes(paths.settingsFile), output.out);
 });
 
 test("config set：存进文件；在运行的话重启让它生效", async () => {
   const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
-  assert.equal(await speakmore("config", "set", "hotkey", "fn"), 0);
-  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { hotkey: "fn" });
+  assert.equal(await speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { hotkey: OTHER_HOTKEY });
   assert.deepEqual(daemon.calls.slice(0, 2), ["stop", "start"]);
-  assert.match(output.out, /hotkey 改成了 fn/);
+  assert.match(output.out, new RegExp(`hotkey 改成了 ${OTHER_HOTKEY}`));
   assert.match(output.out, /已经生效/);
 
   const idle = harness();
@@ -989,22 +1016,22 @@ test("config set：重启时没连上 Gemini，新设置对不对还不知道：
 test("config set：还没启动过就先改设置时，建出来的目录同样只有自己进得去", async () => {
   rmSync(dir, { recursive: true });
   const { speakmore } = harness();
-  assert.equal(await speakmore("config", "set", "hotkey", "fn"), 0);
-  assert.equal(statSync(paths.home).mode & 0o777, 0o700);
+  assert.equal(await speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
+  assertOwnerOnlyDir(paths.home);
 });
 
 test("config set：填错时说能填什么，不动文件，以 2 退出", async () => {
   const { speakmore, output } = harness();
   assert.equal(await speakmore("config", "set", "hotkey", "caps_lock"), 2);
-  assert.match(output.err, /right_option \/ right_command \/ right_control \/ fn/);
+  assert.match(output.err, HOTKEY_CHOICES);
   assert.equal(existsSync(paths.settingsFile), false);
   assert.equal(await speakmore("config", "set", "hotkey"), 2);
   assert.equal(await speakmore("config", "dance"), 2);
 });
 
 test("config set：这一项正被环境变量盖着时提醒一句", async () => {
-  const { speakmore, output } = harness({ env: { SPEAKMORE_HOTKEY: "right_command" } });
-  assert.equal(await speakmore("config", "set", "hotkey", "fn"), 0);
+  const { speakmore, output } = harness({ env: { SPEAKMORE_HOTKEY: DEFAULT_HOTKEY } });
+  assert.equal(await speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
   assert.match(output.out, /SPEAKMORE_HOTKEY/);
 });
 
@@ -1024,7 +1051,7 @@ test("config set 是不检查的后门：模式那一层管的几项照写，说
   const plain = harness();
   assert.equal(await plain.speakmore("config", "set", "thinking", "low"), 0);
   assert.doesNotMatch(plain.output.out, /平时用|才用上/);
-  assert.equal(await plain.speakmore("config", "set", "hotkey", "fn"), 0);
+  assert.equal(await plain.speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
   assert.doesNotMatch(plain.output.out, /平时用|才用上/);
 });
 
@@ -1041,10 +1068,10 @@ test("config set 把 local 的第一跳改成没下载的：重启后说还没�
 
 test("config unset：回到默认值", async () => {
   const { speakmore, output } = harness();
-  await speakmore("config", "set", "hotkey", "fn");
+  await speakmore("config", "set", "hotkey", OTHER_HOTKEY);
   assert.equal(await speakmore("config", "unset", "hotkey"), 0);
   assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), {});
-  assert.match(output.out, /hotkey 回到了默认值 right_option/);
+  assert.match(output.out, new RegExp(`hotkey 回到了默认值 ${DEFAULT_HOTKEY}`));
 });
 
 // ---------- 主题 ----------
@@ -1132,7 +1159,7 @@ test("英文：帮助、面板、用错了时的说法都是英文的", async ()
 
   assert.equal(await speakmore("status"), 0);
   assert.match(output.out, /SpeakMore 0\.1\.0 · running/);
-  assert.match(output.out, /press Right Option to start talking/);
+  assert.match(output.out, new RegExp(`press ${enHotkey} to start talking`));
   assert.match(output.out, /Permissions +Microphone ✓ {3}Input Monitoring ✓ {3}Accessibility ✓/);
   assert.match(output.out, /Model +Gemini gemini-3\.6-flash \(MINIMAL\)/);
 
@@ -1431,6 +1458,57 @@ test("uninstall --yes：停掉后台，整个目录、家目录以外的命令�
   assert.doesNotMatch(output.out, /com\.github\.Electron/);
 });
 
+test("uninstall（Windows）：用户 Path 里的那一项、开始菜单的快捷方式、开机启动一起删；不是我们的快捷方式不碰；不提终端的权限", async () => {
+  mkdirSync(paths.binDir, { recursive: true });
+  // 家目录以外的东西放在另一个临时目录（afterEach 会删）
+  outside = mkdtempSync(join(tmpdir(), "sm-link-"));
+  const ours = join(outside, "SpeakMore.lnk");
+  const theirs = join(outside, "Other.lnk");
+  writeFileSync(ours, "快捷方式");
+  writeFileSync(theirs, "别人的快捷方式");
+  // 照 install.ps1 真写出来的样子：Windows PowerShell 5.1 的 Add-Content -Encoding UTF8 开头带 BOM、按 CRLF 换行
+  writeFileSync(
+    paths.linksFile,
+    `\uFEFFpath %USERPROFILE%\\.speakmore\\bin\r\nshortcut ${ours}\r\nshortcut ${theirs}\r\n`,
+  );
+  const { speakmore, output, windows } = harness({
+    platform: "win32",
+    keychain: () => false,
+    system: { ourShortcut: (file) => file === ours, loginItem: true },
+  });
+  assert.equal(await speakmore("uninstall", "--yes"), 0);
+  assert.deepEqual(windows.pathEntries, ["%USERPROFILE%\\.speakmore\\bin"]);
+  assert.equal(existsSync(ours), false);
+  assert.equal(readFileSync(theirs, "utf8"), "别人的快捷方式");
+  assert.match(output.out, /用户 Path 里的 %USERPROFILE%/);
+  assert.match(output.out, /开机启动/);
+  assert.doesNotMatch(output.out, /权限/);
+  // bin 里的 speakmore.cmd 正在跑这条命令：cmd 等它退出后还要回头读这个文件，所以 bin 留到退出后连同家目录一起删
+  assert.deepEqual(readdirSync(paths.home), ["bin"]);
+  assert.deepEqual(windows.later, [paths.home]);
+  assert.match(output.out, /等它退出后/);
+});
+
+test("uninstall --keep-data（Windows）：bin 也留到退出后再删，你的东西不动", async () => {
+  mkdirSync(paths.binDir, { recursive: true });
+  writeFileSync(join(paths.binDir, "speakmore.cmd"), "@echo off");
+  writeFileSync(paths.settingsFile, "{}");
+  const { speakmore, windows } = harness({ platform: "win32", keychain: () => assert.fail("不该动 key") });
+  assert.equal(await speakmore("uninstall", "--keep-data", "--yes"), 0);
+  assert.equal(existsSync(join(paths.binDir, "speakmore.cmd")), true);
+  assert.equal(existsSync(paths.settingsFile), true);
+  assert.deepEqual(windows.later, [paths.binDir]);
+});
+
+test("uninstall --keep-data（Windows）：缓存里的 Local State 留着，别的缓存照删（留着的 key 要靠它解开）", async () => {
+  mkdirSync(join(paths.cacheDir, "GPUCache"), { recursive: true });
+  writeFileSync(join(paths.cacheDir, "Local State"), "{}");
+  writeFileSync(join(paths.cacheDir, "Preferences"), "{}");
+  const { speakmore } = harness({ platform: "win32", keychain: () => assert.fail("不该动 key") });
+  assert.equal(await speakmore("uninstall", "--keep-data", "--yes"), 0);
+  assert.deepEqual(readdirSync(paths.cacheDir), ["Local State"]);
+});
+
 test("uninstall：运行环境在别处留的那个共用的偏好文件，有的话提一句，不删", async () => {
   seedInstalled();
   const { speakmore, output, io } = harness();
@@ -1521,8 +1599,8 @@ test("logs：把日志文件的最后几行打出来，-f 一直跟着；还没�
   await speakmore("logs");
   await speakmore("logs", "-n", "5", "-f");
   assert.deepEqual(tails, [
-    ["-n", "40", paths.logFile],
-    ["-n", "5", "-f", paths.logFile],
+    { file: paths.logFile, lines: 40, follow: false },
+    { file: paths.logFile, lines: 5, follow: true },
   ]);
 });
 

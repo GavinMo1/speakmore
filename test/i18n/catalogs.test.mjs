@@ -12,15 +12,19 @@ import { THEMES } from "../../src/themes/index.mjs";
 const base = findLocale(DEFAULT_LOCALE).messages;
 const isPlural = (node) => node !== null && typeof node === "object" && typeof node.other === "string";
 
-/** 拍平成 名字 → 模板（分单复数的是 { one, other }） */
+/** 拍平成 名字 → 模板（分单复数的是 { one, other }）。windows 那一节另算（见 src/i18n/index.mjs 开头），不在这里 */
 function flatten(node, prefix = "", out = new Map()) {
   for (const [name, value] of Object.entries(node)) {
     const key = prefix ? `${prefix}.${name}` : name;
+    if (key === "windows") continue;
     if (typeof value === "string" || isPlural(value)) out.set(key, value);
     else flatten(value, key, out);
   }
   return out;
 }
+
+/** windows 那一节拍平：名字去掉 windows. 前缀，就是它盖过的那一句 */
+const windowsVariants = (messages) => (messages.windows ? flatten(messages.windows) : new Map());
 
 const placeholders = (template) =>
   new Set(
@@ -46,6 +50,13 @@ for (const locale of LOCALES) {
     );
     for (const [key, template] of keys) {
       assert.deepEqual(placeholders(template), placeholders(baseKeys.get(key)), key);
+    }
+  });
+
+  test(`${locale.id}：Windows 的说法盖的都是有的那一句，参数一样；中文这类不分系统的可以不写`, () => {
+    for (const [key, template] of windowsVariants(locale.messages)) {
+      assert.ok(baseKeys.has(key), `windows.${key} 盖的那一句不存在`);
+      assert.deepEqual(placeholders(template), placeholders(baseKeys.get(key)), `windows.${key}`);
     }
   });
 

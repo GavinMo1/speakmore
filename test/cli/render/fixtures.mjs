@@ -2,22 +2,27 @@
 // 画面按中文画（原来的断言都是中文的）；要看英文的另给 english。
 
 import { createTranslator } from "../../../src/i18n/index.mjs";
+import { HOTKEY_IDS } from "../../../src/storage/settings.mjs";
 
 export const zh = createTranslator("zh-CN");
 export const en = createTranslator("en");
 
+/** 本机这个系统的默认热键（macOS 上是右 Option，Windows 上是右 Alt），和它的中文名字 */
+export const hotkey = HOTKEY_IDS[0];
+export const hotkeyZh = zh(`hotkeys.${hotkey}.name`);
+
 export const timeZone = "Asia/Shanghai";
 // 上海时间 2026-10-13 15:00
 export const now = new Date("2026-10-13T07:00:00.000Z");
-export const plain = { color: false, timeZone, now, t: zh };
+export const plain = { color: false, timeZone, now, t: zh, platform: "darwin" };
 export const english = { ...plain, t: en };
 
 export const ready = {
   pid: 4321,
   version: "0.1.0",
   starting: false,
-  hotkey: "right_option",
-  hotkeyLabel: "右 Option 键",
+  hotkey,
+  hotkeyLabel: hotkeyZh,
   provider: "gemini",
   model: "gemini/gemini-3.6-flash",
   thinking: "MINIMAL",
@@ -28,7 +33,7 @@ export const ready = {
   summary: { ready: true, missing: [], blocker: null, degraded: null },
 };
 export const settings = {
-  hotkey: { value: "right_option", source: "default" },
+  hotkey: { value: hotkey, source: "default" },
   mode: { value: "native", source: "default" },
   model: { value: "gemini/gemini-3.6-flash", source: "default" },
   thinking: { value: "MINIMAL", source: "default" },
@@ -37,6 +42,8 @@ export const settings = {
   polish: { value: "deepseek/deepseek-flash", source: "default" },
   customUrl: { value: "", source: "default" },
   modelSource: { value: "cn", source: "default" },
+  acceleration: { value: "auto", source: "default" },
+  barHint: { value: "on", source: "default" },
   theme: { value: "ink", source: "default" },
   language: { value: "system", source: "default" },
 };

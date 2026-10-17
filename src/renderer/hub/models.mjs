@@ -1,7 +1,7 @@
+import { $, brand, h, named, platformName, progressBadge, svg } from "../shared/dom.mjs";
 import { t } from "../shared/i18n.mjs";
 import { describeError } from "../shared/setup-text.mjs";
 import { createChecks } from "./checks.mjs";
-import { $, brand, h, named, platformName, progressBadge, svg } from "./dom.mjs";
 import { slidingIndicators } from "./indicators.mjs";
 import { toast } from "./toast.mjs";
 

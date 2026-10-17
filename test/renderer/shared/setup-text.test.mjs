@@ -3,8 +3,9 @@ import { test } from "node:test";
 import { createTranslator } from "../../../src/i18n/index.mjs";
 import { describeError, permissionGranted, permissionText } from "../../../src/renderer/shared/setup-text.mjs";
 
-const zh = createTranslator("zh-CN");
-const en = createTranslator("en");
+// 按 macOS 的说法查；Windows 那几句的说法在 i18n 的测试里查
+const zh = createTranslator("zh-CN", "darwin");
+const en = createTranslator("en", "darwin");
 
 test("主进程的报错去掉 Electron 加的前缀，只留那句话", () => {
   const wrapped = new Error("Error invoking remote method 'setup:set-theme': Error: theme 要是 ink / cinnabar 之一");

@@ -66,6 +66,7 @@ export const renderOptions = (io) => ({
   now: io.now(),
   timeZone: io.timeZone,
   t: io.t,
+  platform: io.platform,
 });
 
 export function showStatus(io, status, settings) {

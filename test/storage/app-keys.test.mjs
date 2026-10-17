@@ -30,7 +30,8 @@ test("只有 App 那一份：抄一份成共用的文件（只有自己能读写
   adoptAppKeys({ paths, log });
   assert.equal(readFileSync(keyFile(paths, "gemini"), "utf8"), "App 的密文");
   assert.equal(readFileSync(keyFile(paths, "deepseek"), "utf8"), "DeepSeek 的密文");
-  assert.equal(statSync(keyFile(paths, "gemini")).mode & 0o777, 0o600);
+  // Windows 上权限位没有意义，只有自己能读靠的是家目录的访问控制（storage/owner-only.mjs，paths 的测试查）
+  if (process.platform !== "win32") assert.equal(statSync(keyFile(paths, "gemini")).mode & 0o777, 0o600);
   assert.ok(existsSync(oldAppKeyFile(paths, "gemini")));
   assert.deepEqual(logged.map(({ event, provider }) => [event, provider]).sort(), [
     ["key_adopted", "deepseek"],

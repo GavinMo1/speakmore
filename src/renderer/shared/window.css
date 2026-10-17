@@ -1039,3 +1039,8 @@ button.badge:focus-visible {
     animation: none;
   }
 }
+
+/* Windows 没有"输入监控""辅助功能"这两项权限（小帮手装上钩子就能听键、贴字），首次引导和设置里都不列 */
+:root[data-platform="win32"] :is([data-permission="listen"], [data-permission="trusted"]) {
+  display: none;
+}

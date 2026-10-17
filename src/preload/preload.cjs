@@ -18,6 +18,8 @@ const locale = ipcRenderer.sendSync("locale:get");
 
 contextBridge.exposeInMainWorld("speakmore", {
   locale,
+  // 哪个系统：按系统说法不同的文案（src/i18n）、按系统摆的窗口元素（html 上的 data-platform）用它
+  platform: process.platform,
   onLocaleChanged: (callback) => ipcRenderer.on("locale:changed", (_event, next) => callback(next)),
   config: () => ipcRenderer.invoke("config:get"),
 
@@ -31,6 +33,7 @@ contextBridge.exposeInMainWorld("speakmore", {
   reportFailure: (payload) => ipcRenderer.invoke("dictation:failed", payload),
 
   onHotkeyChanged: (callback) => ipcRenderer.on("bar:hotkey", (_event, hotkey) => callback(hotkey)),
+  onBarHint: (callback) => ipcRenderer.on("bar:hint", (_event, value) => callback(value)),
 
   // 主窗口：首页、历史记录
   appInfo: () => ipcRenderer.invoke("app:info"),
@@ -56,6 +59,7 @@ contextBridge.exposeInMainWorld("speakmore", {
   setTranscriber: (id) => ipcRenderer.invoke("setup:set-transcriber", id),
   setPolish: (polish, customUrl) => ipcRenderer.invoke("setup:set-polish", polish, customUrl),
   setModelSource: (id) => ipcRenderer.invoke("setup:set-model-source", id),
+  setAcceleration: (id) => ipcRenderer.invoke("setup:set-acceleration", id),
   // 本机模型：用户点了才下载；取消、删除（正在用的删不了）
   downloadModel: (id) => ipcRenderer.invoke("setup:download-model", id),
   cancelDownload: (id) => ipcRenderer.invoke("setup:cancel-download", id),
@@ -68,11 +72,13 @@ contextBridge.exposeInMainWorld("speakmore", {
   recheckPermissions: () => ipcRenderer.invoke("setup:recheck"),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke("setup:set-open-at-login", enabled),
   setHotkey: (hotkey) => ipcRenderer.invoke("setup:set-hotkey", hotkey),
+  setBarHint: (value) => ipcRenderer.invoke("setup:set-bar-hint", value),
 
   // 首次引导
   captureHotkey: (capturing) => ipcRenderer.send("onboarding:capture-hotkey", capturing),
   onOnboardingHotkey: (callback) => ipcRenderer.on("onboarding:hotkey", (_event, key) => callback(key)),
   finishOnboarding: () => ipcRenderer.invoke("onboarding:finish"),
+  waitForDownload: (way) => ipcRenderer.invoke("onboarding:wait-download", way),
   setTheme: (theme) => ipcRenderer.invoke("setup:set-theme", theme),
   setLanguage: (language) => ipcRenderer.invoke("setup:set-language", language),
 });

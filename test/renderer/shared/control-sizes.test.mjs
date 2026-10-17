@@ -22,7 +22,11 @@ function rules(path) {
   const found = [];
   for (const match of css.matchAll(/([^{};]+)\{([^{}]*)\}/g)) {
     const line = css.slice(0, match.index).split("\n").length;
-    found.push({ selector: match[1].trim(), body: match[2], at: `${relative(RENDERER, path)}:${line}` });
+    found.push({
+      selector: match[1].trim(),
+      body: match[2],
+      at: `${relative(RENDERER, path).replaceAll("\\", "/")}:${line}`,
+    });
   }
   return found;
 }

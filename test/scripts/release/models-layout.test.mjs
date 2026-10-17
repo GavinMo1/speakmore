@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import { test } from "node:test";
 import { modelItems, noteItems, noticeText } from "../../../scripts/release/models-layout.mjs";
 import { findModel } from "../../../src/models/catalog.mjs";
@@ -11,7 +12,8 @@ test("模型文件：照本机模型仓的路径取，传到 <模型 id>/<提交
   assert.equal(items.length, Object.keys(QWEN_INT8.files).length);
   const vocab = items.find(({ key }) => key.endsWith("vocab.json"));
   assert.deepEqual(vocab, {
-    path: "/store/qwen3-asr-0.6b-int8/tokenizer/vocab.json",
+    // 本机的路径按本机的写法拼；传上去的 key 一律是 /
+    path: join("/store", "qwen3-asr-0.6b-int8", "tokenizer", "vocab.json"),
     key: `qwen3-asr-0.6b-int8/${REVISION}/tokenizer/vocab.json`,
     size: QWEN_INT8.files.tokenizerVocab.size,
     sha256: QWEN_INT8.files.tokenizerVocab.sha256,

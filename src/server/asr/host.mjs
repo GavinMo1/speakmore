@@ -66,7 +66,12 @@ export async function spawnTranscriber({
       child.on("message", (message) => {
         if (message.type === "loaded") {
           state.backend = message.backend;
-          log.info("transcriber_loaded", { model: model.id, backend: message.backend, load_ms: message.loadMs });
+          log.info("transcriber_loaded", {
+            model: model.id,
+            backend: message.backend,
+            load_ms: message.loadMs,
+            warmup_ms: message.warmupMs ?? null,
+          });
           resolve(state);
         } else if (message.type === "failed") {
           reject(new Error(`装不上模型 ${model.id}：${message.message}`));

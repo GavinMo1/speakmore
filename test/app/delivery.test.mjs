@@ -6,7 +6,8 @@ import { afterEach, beforeEach, test } from "node:test";
 import { createDelivery } from "../../src/app/delivery.mjs";
 import { createTranslator } from "../../src/i18n/index.mjs";
 
-const zh = createTranslator("zh-CN");
+// 按 macOS 的说法查（⌘V）；Windows 的说法在 i18n 的测试里查
+const zh = createTranslator("zh-CN", "darwin");
 
 const AUDIO_ID = "0b6f1c1e-5a44-4f0e-9d0b-2f9f3a1c7e55";
 const audio = () => Uint8Array.from([0x1a, 0x45, 0xdf, 0xa3, 7]).buffer;
@@ -76,6 +77,29 @@ test("没有辅助功能权限：提示用户自己粘贴", async () => {
   const { notice } = await delivery.completed(payload());
   assert.match(zh.text(notice), /没有辅助功能权限.*⌘V/);
   // 这种情况小帮手自己已经写过剪贴板，这里不重复写
+  assert.deepEqual(clipboard, []);
+});
+
+test("Windows 上目标窗口是管理员身份的：小帮手没按 Ctrl+V，文字留在剪贴板里，提示用户自己粘贴", async () => {
+  const { delivery, clipboard } = setup(async () => ({ ok: false, reason: "elevated" }));
+  const { notice } = await delivery.completed(payload());
+  assert.match(zh.text(notice), /管理员身份.*Ctrl\+V/);
+  assert.deepEqual(clipboard, []);
+});
+
+test("Windows 上小帮手没能把文字写进剪贴板（clipboard）：这里再放一次，提示自己粘贴，不提辅助功能", async () => {
+  const win = createTranslator("zh-CN", "win32");
+  const { delivery, clipboard } = setup(async () => ({ ok: false, reason: "clipboard" }));
+  const { notice } = await delivery.completed(payload());
+  assert.equal(win.text(notice), "没能自动粘贴：文字已复制，按 Ctrl+V 粘贴");
+  assert.deepEqual(clipboard, ["我们后天开会。"]);
+});
+
+test("Windows 上模拟按键没成（send_input）：文字已在剪贴板里，提示自己粘贴，不提辅助功能", async () => {
+  const win = createTranslator("zh-CN", "win32");
+  const { delivery, clipboard } = setup(async () => ({ ok: false, reason: "send_input" }));
+  const { notice } = await delivery.completed(payload());
+  assert.equal(win.text(notice), "没能自动粘贴：文字已复制，按 Ctrl+V 粘贴");
   assert.deepEqual(clipboard, []);
 });
 

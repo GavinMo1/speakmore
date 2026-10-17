@@ -53,5 +53,6 @@ node bench/report.mjs                                     # 只出报告
 | --- | --- | --- |
 | asr-round1-2026-10-16 | 本地转写这一跳，5 个候选 | [results/asr-round1-2026-10-16.md](results/asr-round1-2026-10-16.md) |
 | e2e-local-2026-10-16 | local 模式整条链路（转写加润色），和从哪个下载源下得快 | [results/e2e-local-2026-10-16.md](results/e2e-local-2026-10-16.md) |
+| asr-windows-2026-10-17 | 本地转写这一跳在 Windows 上（Vulkan 和 CPU），6 个候选 | [results/asr-windows-2026-10-17.md](results/asr-windows-2026-10-17.md) |
 
 `_work/` 不进仓库：里面有洗好的录音、下载的模型、结果库和报告，都包含说过的话。

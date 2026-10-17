@@ -1,4 +1,4 @@
-import { $ } from "./dom.mjs";
+import { $ } from "../shared/dom.mjs";
 
 // 窗口底部一闪而过的那句话（hub.html 的 #toast）：操作成功了说一声，几秒后自己收起。
 

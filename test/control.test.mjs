@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { ControlError, NotRunningError, requestControl, startControlServer, TimeoutError } from "../src/control.mjs";
 import { createTranslator } from "../src/i18n/index.mjs";
+import { resolvePaths } from "../src/storage/paths.mjs";
 
 const zh = createTranslator("zh-CN");
 
@@ -20,9 +21,11 @@ const log = {
 };
 
 beforeEach(() => {
-  // 套接字路径有长度上限，临时目录用短名字
+  // 套接字路径有长度上限，临时目录用短名字。地址照家目录的约定取：macOS 是套接字文件，Windows 是 named pipe
   dir = mkdtempSync(join(tmpdir(), "sm-"));
-  socketPath = join(dir, "control.sock");
+  const paths = resolvePaths({ SPEAKMORE_HOME: dir });
+  mkdirSync(paths.runDir);
+  socketPath = paths.controlSocket;
   server = null;
   logged = [];
 });
@@ -74,13 +77,19 @@ test("出错时日志里只记命令名，不记参数（参数里可能是 key�
   assert.ok(!JSON.stringify(logged).includes("SECRET-VALUE"));
 });
 
-test("没有在运行时抛 NotRunningError：没有套接字文件，或者只剩一个没人听的", async () => {
+/** 套接字文件才有的事：Windows 的 named pipe 不在磁盘上，进程一退就没了，权限是 pipe 自己的默认权限 */
+const socketFileOnly = { skip: process.platform === "win32" && "Windows 上是 named pipe，没有套接字文件" };
+
+test("没有在运行时抛 NotRunningError：没有人在听", async () => {
   await assert.rejects(requestControl(socketPath, "ping"), NotRunningError);
+});
+
+test("没有在运行时抛 NotRunningError：只剩一个没人听的套接字文件", socketFileOnly, async () => {
   writeFileSync(socketPath, "");
   await assert.rejects(requestControl(socketPath, "ping"), NotRunningError);
 });
 
-test("启动时遇到上次没清掉的套接字文件，清掉重建", async () => {
+test("启动时遇到上次没清掉的套接字文件，清掉重建", socketFileOnly, async () => {
   // 先起一个再粗暴地关掉监听但留下文件，模拟进程被杀
   const stale = createServer();
   await new Promise((resolve) => stale.listen(socketPath, resolve));
@@ -100,7 +109,7 @@ test("已经有一个在听时拒绝再启动，也不去动它的套接字", as
   assert.equal(await requestControl(socketPath, "ping"), "first");
 });
 
-test("套接字只有自己能读写；关闭后文件被删掉", async () => {
+test("套接字只有自己能读写；关闭后文件被删掉", socketFileOnly, async () => {
   server = await startControlServer({ socketPath, log, handlers: {} });
   assert.equal(statSync(socketPath).mode & 0o777, 0o600);
   await server.close();

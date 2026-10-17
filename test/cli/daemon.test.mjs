@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -8,8 +8,9 @@ import { createDaemon } from "../../src/cli/daemon.mjs";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer, TimeoutError } from "../../src/control.mjs";
 import { createTranslator } from "../../src/i18n/index.mjs";
 import { ensureHome, resolvePaths } from "../../src/storage/paths.mjs";
+import { assertOwnerOnlyDir } from "../helpers/owner-only.mjs";
 
-const zh = createTranslator("zh-CN");
+const zh = createTranslator("zh-CN", "darwin");
 /** 报错里给人看的那句，按中文翻出来对得上 */
 const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
@@ -141,7 +142,7 @@ test("启动时把家目录建出来，只有自己进得去（里面会有录�
   rmSync(dir, { recursive: true });
   const spawn = fakeSpawn(() => startFakeApp(() => RUNNING));
   await daemonWith({ spawn }).start({ onProgress() {} });
-  assert.equal(statSync(paths.home).mode & 0o777, 0o700);
+  assertOwnerOnlyDir(paths.home);
 });
 
 test("启动前先确保小帮手编好了；编了的话说一声", async () => {
@@ -192,7 +193,10 @@ test("应用刚启动就退出时报错，并带上日志最后几行", async ()
 
 test("应用一直不答话时按时放弃，并说去哪看日志", async () => {
   const spawn = fakeSpawn(() => {});
-  await assert.rejects(daemonWith({ spawn, connectTimeoutMs: 60 }).start({ onProgress() {} }), said(/logs\/main\.log/));
+  await assert.rejects(
+    daemonWith({ spawn, connectTimeoutMs: 60 }).start({ onProgress() {} }),
+    said(/logs[\\/]main\.log/),
+  );
 });
 
 test("同时启动了两个：后到的发现已经有一个就退出，这不算失败，接着等先到的那个答话", async () => {
@@ -242,6 +246,9 @@ test("卡住不答话时也停得掉：照它启动时记下的进程号结束�
   for (const command of [
     "/pkg/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron /pkg",
     "/Applications/SpeakMore.app/Contents/MacOS/SpeakMore",
+    // Windows：装好的那份和从源码跑的都是 electron.exe
+    "C:\\Users\\someone\\.speakmore\\runtime\\electron.exe",
+    "C:\\dev\\speakmore\\node_modules\\electron\\dist\\electron.exe",
   ]) {
     processes = fakeProcesses();
     processes.alive.add(4321);
@@ -266,6 +273,8 @@ test("卡住不答话，进程号又对不上（没记下来，或者那个号�
   const otherApp =
     "/Applications/Other.app/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler";
   await assert.rejects(stuck({ commandOf: () => otherApp }), said(/活动监视器/));
+  // Windows 上别的 Electron 应用（名字不叫 electron.exe）也不认
+  await assert.rejects(stuck({ commandOf: () => "C:\\Program Files\\Slack\\slack.exe" }), said(/活动监视器/));
   await assert.rejects(stuck({ commandOf: () => null }), said(/活动监视器/));
   writeFileSync(paths.pidFile, "不是数字");
   await assert.rejects(stuck(), said(/活动监视器/));

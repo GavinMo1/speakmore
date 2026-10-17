@@ -7,11 +7,15 @@ import { createTranslator } from "../../i18n/index.mjs";
  * 这个页面现在用的翻译。悬浮条换语言时会换掉它（setLocale），所以别处用的时候每次都从这里取。
  * 页面以外（单元测试在 Node 里加载这些模块）没有 window，按默认语言
  */
-export let t = createTranslator(globalThis.window?.speakmore?.locale);
+const platform = globalThis.window?.speakmore?.platform;
+export let t = createTranslator(globalThis.window?.speakmore?.locale, platform);
+
+// 页面按系统摆的地方（比如 Windows 上窗口右上角留给系统的三个按钮）看 html 上的 data-platform
+if (globalThis.document && platform) document.documentElement.dataset.platform = platform;
 
 /** 换一种语言（悬浮条用：它不重新加载） */
 export function setLocale(locale) {
-  t = createTranslator(locale);
+  t = createTranslator(locale, platform);
   document.documentElement.lang = t.locale;
 }
 

@@ -12,6 +12,7 @@ import {
   problemOf,
   resolveLocale,
   SYSTEM_LOCALE,
+  terminalLocales,
 } from "../../src/i18n/index.mjs";
 
 const en = createTranslator("en");
@@ -149,4 +150,30 @@ test("LocalizedError：problem 留着给显示的那端翻，message 是英文�
   // 别的错误用它自己的 message
   assert.equal(problemOf(new Error("磁盘满了")), "磁盘满了");
   assert.equal(problemOf("一句话"), "一句话");
+});
+
+test("按系统说法不同的话：Windows 上先找 windows 那一节，没有就用通用的；中文没写 Windows 那句时用通用的中文，不掉回英文", () => {
+  const macZh = createTranslator("zh-CN", "darwin");
+  const winZh = createTranslator("zh-CN", "win32");
+  const winEn = createTranslator("en", "win32");
+  assert.match(macZh("delivery.pasteFailed"), /⌘V/);
+  assert.match(winZh("delivery.pasteFailed"), /Ctrl\+V/);
+  assert.match(winEn("delivery.pasteFailed"), /Ctrl\+V/);
+  // 英文分 Mac 和 PC，中文都是"本机"
+  assert.equal(createTranslator("en", "darwin")("plaza.via.local"), "This Mac");
+  assert.equal(winEn("plaza.via.local"), "This PC");
+  assert.equal(winZh("plaza.via.local"), "本机");
+  // 不分系统的照常
+  assert.equal(winZh("hotkeys.right_alt.name"), "右 Alt 键");
+});
+
+test("命令行的语言：先看 LC_ALL、LC_MESSAGES、LANG；Windows 的终端一般都不设，这时用系统的显示语言", () => {
+  const systemLocale = () => "zh-CN";
+  assert.deepEqual(terminalLocales({ LANG: "en_US.UTF-8" }, { platform: "win32", systemLocale }), ["en-US"]);
+  assert.deepEqual(terminalLocales({}, { platform: "win32", systemLocale }), ["zh-CN"]);
+  // 明写了 C（Git Bash 这类终端会设）就照它，认不出的语言用英文，不再退回系统语言
+  assert.deepEqual(terminalLocales({ LANG: "C" }, { platform: "win32", systemLocale }), []);
+  assert.deepEqual(terminalLocales({ LANG: "  " }, { platform: "win32", systemLocale }), ["zh-CN"]);
+  // macOS 的终端都会设，没设就是没说，不去猜
+  assert.deepEqual(terminalLocales({}, { platform: "darwin", systemLocale }), []);
 });

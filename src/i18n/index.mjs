@@ -8,6 +8,10 @@ import zhCN from "./locales/zh-CN.mjs";
 // 后台和命令行可能各用各的语言，界面换语言时已经报上来的状态也跟着换。
 //
 // 加一种语言：照着 locales/en.mjs 写一个文件，在 LOCALES 里加一行。少了哪句、参数对不上，测试会指出来。
+//
+// 按系统说法不同的话（⌘V 和 Ctrl+V、"系统设置"和"设置"、活动监视器和任务管理器）：通用的那句照 macOS 写，
+// Windows 的写在同一个文件的 windows 一节里、名字照抄（windows.delivery.pasteFailed 盖过 delivery.pasteFailed）。
+// 在 Windows 上翻译时先找那一节，没有就用通用的；调用的地方不用分系统。说法本来就不分系统的（中文的"本机"）不用写。
 
 /**
  * 按这个顺序列给用户选。name 用它自己的语言写，不翻：认不出眼前语言的人也找得到自己的。
@@ -64,14 +68,34 @@ export function matchLocale(preferred) {
  * zh_CN.UTF-8 → zh-CN；C、POSIX 是"没说"
  * @returns {string[]}
  */
+/** 终端用来说语言的环境变量，前面的优先 */
+const LOCALE_VARIABLES = ["LC_ALL", "LC_MESSAGES", "LANG"];
+
 export function localesFromEnv(env) {
-  for (const name of ["LC_ALL", "LC_MESSAGES", "LANG"]) {
+  for (const name of LOCALE_VARIABLES) {
     const value = env[name]?.trim();
     if (!value) continue;
     const tag = value.split(/[.@]/)[0];
     return tag === "C" || tag === "POSIX" ? [] : [tag.replaceAll("_", "-")];
   }
   return [];
+}
+
+/**
+ * 命令行的"系统语言"。先照惯例看 LC_ALL、LC_MESSAGES、LANG；Windows 的终端一般不设这几个，
+ * 都没设时用系统的显示语言（Node 从系统取的那个，中文系统是 zh-CN）
+ * @param {Record<string, string | undefined>} env
+ * @param {{ platform?: NodeJS.Platform, systemLocale?: () => string }} [options] 测试时换掉
+ * @returns {string[]}
+ */
+export function terminalLocales(
+  env,
+  { platform = process.platform, systemLocale = () => Intl.DateTimeFormat().resolvedOptions().locale } = {},
+) {
+  // 设了就照它（C、POSIX 这种说的是"不分语言"，用英文）；Windows 上一个都没设时才看系统
+  const said = LOCALE_VARIABLES.some((name) => env[name]?.trim());
+  if (said || platform !== "win32") return localesFromEnv(env);
+  return [systemLocale()];
 }
 
 /**
@@ -105,7 +129,7 @@ const lookup = (messages, key) => key.split(".").reduce((node, part) => node?.[p
  *   t.number(数) 按这种语言写数字（1,234）
  *   t.locale     这种语言的 id
  */
-export function createTranslator(id) {
+export function createTranslator(id, platform = defaultPlatform()) {
   const locale = findLocale(id) ?? findLocale(DEFAULT_LOCALE);
   const fallback = findLocale(DEFAULT_LOCALE).messages;
   const plurals = new Intl.PluralRules(locale.id);
@@ -114,7 +138,13 @@ export function createTranslator(id) {
   const numbers = new Intl.NumberFormat(locale.id);
 
   function template(key, params) {
-    const found = lookup(locale.messages, key) ?? lookup(fallback, key);
+    // 先这种语言（Windows 的说法、通用的），再英文：中文里"本机"不分系统，没写 Windows 那句的照通用的中文
+    const variant = platform === "win32" ? `windows.${key}` : null;
+    const found =
+      (variant && lookup(locale.messages, variant)) ??
+      lookup(locale.messages, key) ??
+      (variant && lookup(fallback, variant)) ??
+      lookup(fallback, key);
     if (typeof found === "string") return found;
     if (found !== null && typeof found === "object" && typeof found.other === "string") {
       return found[plurals.select(Number(params.count))] ?? found.other;
@@ -160,6 +190,14 @@ export function createTranslator(id) {
   t.number = (value) => numbers.format(value);
   t.locale = locale.id;
   return t;
+}
+
+/**
+ * 这一端是哪个系统：Node 里（主进程、命令行、服务端）看 process；页面里没有 process，看预加载脚本给的
+ * window.speakmore.platform。都没有（在 Node 里跑页面模块的单元测试也有 process）按 macOS
+ */
+function defaultPlatform() {
+  return globalThis.process?.platform ?? globalThis.window?.speakmore?.platform ?? "darwin";
 }
 
 /** 英文的那一份：给日志、给错误的 message 用 */

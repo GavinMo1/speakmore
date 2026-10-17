@@ -18,9 +18,15 @@ import { joinTexts, planWindows } from "../segment.mjs";
 //
 // 以后各个系统要的运行库不一样（Mac 的 Metal、Windows 的 Vulkan/CUDA），差别都关在各自的适配器里。
 
+// gpu：能不能用显卡跑（options.backend 认 auto、cpu…）；不能的只跑在 CPU 上，不看 backend
 export const ENGINES = Object.freeze([
-  Object.freeze({ id: "sherpa-onnx", name: "sherpa-onnx", load: () => import("./sherpa-onnx.mjs") }),
-  Object.freeze({ id: "transcribe-cpp", name: "transcribe.cpp", load: () => import("./transcribe-cpp.mjs") }),
+  Object.freeze({ id: "sherpa-onnx", name: "sherpa-onnx", gpu: false, load: () => import("./sherpa-onnx.mjs") }),
+  Object.freeze({
+    id: "transcribe-cpp",
+    name: "transcribe.cpp",
+    gpu: true,
+    load: () => import("./transcribe-cpp.mjs"),
+  }),
 ]);
 
 /** @returns {(typeof ENGINES)[number] | null} */

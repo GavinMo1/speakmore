@@ -79,19 +79,31 @@ export function findCopyleft(nodeModulesDir) {
   return found;
 }
 
+/** build 里编好的小帮手按系统分（src/cli/native-helper.mjs），给哪个系统打包就只带那一个 */
+export const HELPER_FILES = {
+  darwin: ["key-helper", "key-helper.source-sha256"],
+  win32: ["key-helper.exe", "key-helper.exe.source-sha256"],
+};
+
 /**
  * @param {string} packageDir 源码仓库
  * @param {string} stagingDir 摆到哪。要是一个空目录
  * @param {string[]} entries 除了 package.json 和锁文件之外，还要从仓库里拷哪些
- * @param {"arm64" | "x64"} arch 给哪种芯片的 Mac 用
+ * @param {"arm64" | "x64"} arch 给哪种芯片用
+ * @param {"darwin" | "win32"} [platform] 给哪个系统用
  */
-export function stageApp(packageDir, stagingDir, entries, arch) {
+export function stageApp(packageDir, stagingDir, entries, arch, platform = "darwin") {
   for (const entry of ["package.json", "package-lock.json", ...entries]) {
     cpSync(join(packageDir, entry), join(stagingDir, entry), { recursive: true });
   }
+  // 别的系统的小帮手不带
+  for (const [system, files] of Object.entries(HELPER_FILES)) {
+    if (system === platform) continue;
+    for (const file of files) rmSync(join(stagingDir, "build", file), { force: true });
+  }
   // 本地转写的运行库按系统和芯片各有一个带原生库的包（optionalDependencies），npm 默认只装本机这一种：
-  // 在 Apple 芯片的 Mac 上给 Intel 打包时，要说清装哪种，不然装进去的是 arm64 的、到 Intel 的机器上加载不了
-  const target = ["--os=darwin", `--cpu=${arch}`];
+  // 在 Apple 芯片的 Mac 上给 Intel 或 Windows 打包时，要说清装哪种，不然装进去的是本机的、到那边加载不了
+  const target = [`--os=${platform}`, `--cpu=${arch}`];
   const npm = (args) => execFileSync("npm", [...args, ...target, ...NPM_FLAGS], { cwd: stagingDir, stdio: "inherit" });
   // 不直接拿源码仓库让打包工具去剔开发依赖：实测它剔不干净，代码检查工具几十兆的可执行文件会被带进去
   npm(["ci"]);

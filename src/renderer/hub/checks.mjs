@@ -1,6 +1,6 @@
+import { drawnCheck, h, svg } from "../shared/dom.mjs";
 import { t } from "../shared/i18n.mjs";
 import { describeError } from "../shared/setup-text.mjs";
-import { drawnCheck, h, svg } from "./dom.mjs";
 
 // 检测的一套状态（界面规范第 4 节）：未检测是描边按钮（检测），检测中转圈，结果是可再点的徽标
 // （检测通过 / 检测失败，悬停换成"重新检测"）；失败的原因用说明框挂在那一行下面。

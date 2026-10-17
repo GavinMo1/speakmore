@@ -182,7 +182,7 @@ function statsLine({ dictations, characters, seconds, costUsd, unpricedCalls }, 
  * @param {{ today: object | null, total: object | null }} view.stats 没有历史库时两项都是 null
  * @param {{ color: boolean, t: Function }} options t：界面语言的翻译函数。后台报上来的话（msg）也按它翻
  */
-export function renderStatus({ status, version, settings, stats }, { color, t }) {
+export function renderStatus({ status, version, settings, stats }, { color, t, platform }) {
   const c = paint(color);
   if (status === null) {
     return [
@@ -210,10 +210,15 @@ export function renderStatus({ status, version, settings, stats }, { color, t })
   }
 
   const mark = (granted) => (granted === null ? c.dim("…") : granted ? c.green("✓") : c.red("✗"));
+  // Windows 上只有麦克风要授权：听键、模拟按键不用（小帮手报上来的这两项总是 true）
   const cells = [
     `${t("permissions.microphone")} ${mark(permissions.microphone === "granted")}`,
-    `${t("permissions.listen")} ${mark(permissions.listen)}`,
-    `${t("permissions.trusted")} ${mark(permissions.trusted)}`,
+    ...(platform === "win32"
+      ? []
+      : [
+          `${t("permissions.listen")} ${mark(permissions.listen)}`,
+          `${t("permissions.trusted")} ${mark(permissions.trusted)}`,
+        ]),
   ];
   // 写后台应用正在用的，不是现在设置里的：设置改了还没重启、或者启动它的那条命令上带着环境变量时，两者不一样。
   // 0.6 及以前的不报模式，那时只有 native
@@ -253,10 +258,11 @@ export function renderStatus({ status, version, settings, stats }, { color, t })
   if (permissionMissing) {
     lines.push("");
     if (summary.degraded) lines.push(`${INDENT}${t("common.sentence", { text: summary.degraded })}`);
-    lines.push(
-      `${INDENT}${t("cli.status.openSettings", { command: c.bold("speakmore settings") })}`,
-      c.dim(`${INDENT}${t(status.packaged ? "cli.status.ownerApp" : "cli.status.ownerTerminal")}`),
-    );
+    lines.push(`${INDENT}${t("cli.status.openSettings", { command: c.bold("speakmore settings") })}`);
+    // 权限记在谁名下是 macOS 的事：Windows 的麦克风开关是全系统一个
+    if (platform !== "win32") {
+      lines.push(c.dim(`${INDENT}${t(status.packaged ? "cli.status.ownerApp" : "cli.status.ownerTerminal")}`));
+    }
   }
 
   lines.push(

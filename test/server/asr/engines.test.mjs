@@ -53,3 +53,34 @@ test("sherpa-onnx 的 Qwen3：没有人声时吐出的 None 换成空的，正�
   assert.equal(clean("好的，就这么干。"), "好的，就这么干。");
   assert.equal(SHERPA["sense-voice"].clean, undefined);
 });
+
+test("transcribe.cpp：跑在显卡上时，装上之后先拿一段合成的声音预热一遍；跑在 CPU 上不用", async () => {
+  const { load } = await import("../../../src/server/asr/engines/transcribe-cpp.mjs");
+  const fakeRuntime = (backend, runs) => async () => ({
+    TranscribeModel: {
+      load: async () => ({
+        backend,
+        createSession: () => ({
+          run: async (samples) => {
+            runs.push(samples.length);
+            return { text: "" };
+          },
+          dispose() {},
+        }),
+        dispose() {},
+      }),
+    },
+  });
+  const request = { model: { family: "qwen3-asr" }, file: () => "model.gguf" };
+
+  const gpuRuns = [];
+  const gpu = await load(request, { runtime: fakeRuntime("Vulkan0", gpuRuns) });
+  assert.equal(gpu.backend, "Vulkan0");
+  assert.deepEqual(gpuRuns, [16_000 * 1.5]);
+  assert.equal(typeof gpu.warmupMs, "number");
+
+  const cpuRuns = [];
+  const cpu = await load(request, { runtime: fakeRuntime("CPU", cpuRuns) });
+  assert.deepEqual(cpuRuns, []);
+  assert.equal(cpu.warmupMs, null);
+});

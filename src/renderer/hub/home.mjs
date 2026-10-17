@@ -1,8 +1,8 @@
 import { formatCount, formatSeconds, formatSpan, formatTokens, formatUsd } from "../../usage/format.mjs";
 import { activityGrid } from "../../usage/insights.mjs";
+import { platformName } from "../shared/dom.mjs";
 import { keycapOf, t } from "../shared/i18n.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
-import { platformName } from "./dom.mjs";
 import { slidingIndicators } from "./indicators.mjs";
 
 // 首页：原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费；右边一列是口述卡和版本。

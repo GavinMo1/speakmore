@@ -60,6 +60,12 @@ test("英文的提示：键在句子里的位置照英文的说法", () => {
   assert.deepEqual(hintFor(View.STARTING, { keycap: "fn", cancellable: true }, en), ["Opening microphone…"]);
 });
 
+test("设置里关了操作提示（GitHub issue #3）：哪个样子都不写，条上方空着", () => {
+  for (const view of Object.values(View)) {
+    assert.deepEqual(hintFor(view, { keycap: "右⌥", cancellable: true, shown: false }, zh), [], view);
+  }
+});
+
 test("取消不了的时候（没有辅助功能权限，截不住 esc）提示里不提 esc", () => {
   assert.deepEqual(hintFor(View.RECORDING, { keycap: "fn", cancellable: false }, zh), [
     "再按一下 ",

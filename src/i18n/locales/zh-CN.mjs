@@ -57,6 +57,8 @@ export default {
     right_command: { name: "右 Command 键", keycap: "右⌘" },
     right_control: { name: "右 Control 键", keycap: "右⌃" },
     fn: { name: "地球仪（fn）键", keycap: "fn" },
+    right_alt: { name: "右 Alt 键", keycap: "右 Alt" },
+    right_ctrl: { name: "右 Ctrl 键", keycap: "右 Ctrl" },
   },
 
   themes: {
@@ -92,6 +94,9 @@ export default {
       customUrl: "自定义润色服务的地址（兼容 OpenAI 接口的那种），比如 https://api.example.com/v1",
       modelSource:
         "本机模型从哪下载：cn 是 SpeakMore 的国内源，original 是 Hugging Face 原始地址。选的那个下不动会自动换另一个",
+      acceleration:
+        "本机模型用不用显卡：auto 有显卡就用，出问题自动退回 CPU；cpu 只用 CPU（显卡驱动有问题、或者想把显卡让给别的程序时）",
+      barHint: "悬浮条上方那行操作提示（再按一下 … 完成 · esc 取消）显示不显示：on 显示，off 不显示",
       theme: "界面用哪套主题",
       language: "界面用哪种语言；system 是跟随系统",
     },
@@ -139,10 +144,20 @@ export default {
     cn: "国内源（SpeakMore 的 CDN）",
     original: "原始地址（Hugging Face）",
   },
+  accelerations: {
+    auto: "自动（有显卡就用）",
+    cpu: "只用 CPU",
+  },
+  barHints: {
+    on: "显示",
+    off: "不显示",
+  },
   localModels: {
     tags: {
       "apple-silicon": "适合 Apple 芯片",
+      "windows-x64": "适合 Windows",
       metal: "Metal 加速",
+      vulkan: "Vulkan 显卡加速",
       cpu: "能只用 CPU",
       "zh-en": "中英夹杂准",
       fast: "快",
@@ -154,7 +169,7 @@ export default {
       "windows-x64": "Windows（x64）",
       "windows-arm64": "Windows（ARM）",
     },
-    backends: { metal: "Metal", cpu: "CPU" },
+    backends: { metal: "Metal", vulkan: "Vulkan", cpu: "CPU" },
     measured: "{chip}上实测（{backend}）：均分 {score}/5 · {realtime} 倍实时 · 内存 {memory}",
     figures: { score: "均分", speed: "速度", memory: "内存" },
     measuredOn: "{chip} · {backend} 实测",
@@ -253,6 +268,8 @@ export default {
     silent: "没有听到声音",
     noAccessibility: "没有辅助功能权限：文字已复制，按 ⌘V 粘贴",
     pasteFailed: "没能自动粘贴：文字已复制，按 ⌘V 粘贴",
+    // 只有 Windows 有：系统不让模拟的按键进以管理员身份运行的窗口
+    elevated: "那个窗口是以管理员身份运行的，贴不进去：文字已复制，按 Ctrl+V 粘贴",
   },
 
   bar: {
@@ -563,12 +580,16 @@ export default {
     theme: "主题",
     language: "语言",
     modelSource: "本地模型下载源",
+    acceleration: "本机模型加速",
+    barHint: "悬浮条操作提示",
     openAtLogin: "开机启动",
     hotkeyFailed: "没改成：{reason}",
     themeFailed: "主题没换成：{reason}",
     languageFailed: "语言没换成：{reason}",
     loginFailed: "开机启动没设上：{reason}",
     sourceFailed: "下载源未能更换：{reason}",
+    accelerationFailed: "加速方式未能更换：{reason}",
+    barHintFailed: "操作提示未能更改：{reason}",
     recheck: "重新检查",
     version: "版本",
     dataFolder: "数据目录",
@@ -576,60 +597,74 @@ export default {
   },
 
   keyPanel: {
-    models: "模型",
-    inUse: "使用中",
-    use: "改用 {provider}",
-    placeholder: "粘贴 key",
     paste: "粘贴",
-    customName: "自定义服务",
-    save: "保存并验证",
-    saveAndUse: "保存并改用 {provider}",
-    forget: "删除 key",
-    replace: "换 key",
-    keepKey: "不换了",
-    verifying: "验证中…",
-    failed: "没成功：{reason}",
-    clipboardEmpty: "剪贴板是空的",
-    confirmForget: "删除 {provider} key？",
+    verifying: "验证中",
+    failed: "未完成：{reason}",
+    clipboardEmpty: "剪贴板为空",
+    confirmForget: "删除 {provider} 密钥？",
     confirmForgetInUse: "删除 {provider} 密钥？删除后需重新填写方可使用",
     other: {
-      env: "用环境变量 {variable}",
-      stored: "已保存",
-      none: "未配置 · 配置密钥后即可改用 {provider}",
+      env: "环境变量 {variable}",
     },
     check: {
-      button: "检查",
-      running: "检查中…",
+      button: "检测",
+      running: "检测中",
       ok: "检测通过",
       failed: "检测失败：{problem}",
     },
     state: {
-      env: "用环境变量 {variable} · 未保存",
-      envUnverified: "用环境变量 {variable} · 未保存 · 未验证（启动时没连上 {provider}）",
+      env: "环境变量 {variable} · 未保存",
+      envUnverified: "环境变量 {variable} · 未保存 · 未验证（启动时没连上 {provider}）",
       external: "由单独启动的服务端配置",
       saved: "已保存 · 验证通过",
       savedUnverified: "已保存 · 未验证（启动时没连上 {provider}）",
-      checking: "验证中…",
-      checkFailed: "验证没通过：{problem} · key 未必有错，先查 speakmore model",
+      checking: "验证中",
+      checkFailed: "验证没通过：{problem} · 密钥未必有错，先查 speakmore model",
       envRejected: "环境变量 {variable} 的密钥未通过检测：{problem} · 修正或移除后重启",
       rejected: "密钥未通过检测：{problem}",
-      missing: "未配置",
     },
   },
 
   onboarding: {
-    groups: { key: "模型", setup: "设置", try: "试一下" },
-    key: {
-      soft: "先接上",
-      title: "模型",
-      spoken: "“嗯，我们明天九点开会，不对，九点半……”",
-      result: "我们明天九点半开会。",
+    groups: { model: "模型", setup: "设置", try: "试一下" },
+    way: {
+      soft: "先选一种",
+      title: "识别方式",
+      key: "需密钥",
+      local: "本机模型 · {size}",
+      offline: "无需密钥",
+      note: "随时可在主窗口更换 · 也可跳过，进入后配置",
+    },
+    prepare: {
+      native: { soft: "接入", title: "原生识别模型" },
+      local: { soft: "本机转写，", title: "云端润色" },
+      private: { soft: "下载", title: "本机模型" },
+      route: { label: "识别路线", audio: "录音", text: "文字", local: "本机" },
+      sections: { model: "本机模型", native: "原生识别", local: "润色" },
+      model: {
+        download: "下载",
+        retry: "重新下载",
+        ready: "已下载",
+        background: "后台下载 · 可先继续",
+        sources: { cn: "国内源", original: "Hugging Face" },
+      },
+      nativeOnly: "仅这几家支持音频直达 · DeepSeek、Kimi、GLM 等见转写 + 润色",
+      later: "可跳过 · 进入后在模型页配置",
+      laterModel: "可跳过 · 进入后在模型页下载",
+      more: "云端转写、自定义服务见模型页",
+      status: {
+        enabled: "已启用{mode}",
+        enabling: "启用中",
+        waiting: "下载完成后自动启用{mode}",
+        failed: "未启用",
+        retry: "重试",
+      },
     },
     permissions: {
       soft: "开三项",
       title: "权限",
       allow: "允许",
-      on: "✓ 已开",
+      on: "已开启",
       history: "历史只存本机",
       audio: "录音只发所选模型",
       key: "key 加密存本机",
@@ -660,11 +695,13 @@ export default {
       sample: "嗯，我们明天上午九点开会，不对，九点半吧，记得把上周的数据带上。",
       notes: "笔记",
       placeholder: "点这里，按 {keycap} 读左边那句，再按一下结束",
+      notReady: "尚未接入模型 · 可跳过此步",
+      downloading: "{model} 下载中 · {percent}%",
     },
-    done: { soft: "说话，", title: "别打字", start: "开始使用" },
+    done: { soft: "说话，", title: "别打字", start: "开始使用", mode: "识别方式", hotkey: "快捷键" },
     back: "返回",
     next: "继续",
-    skip: "跳过",
+    skipAll: "跳过引导",
   },
 
   paths: {
@@ -691,8 +728,8 @@ export default {
   speakmore start               同上
   speakmore stop                停掉
   speakmore restart             重启
-  speakmore status [--json]     看状态：在不在运行、key、三项系统权限、今天和累计说了多少
-  speakmore update              更新到最新版本：命令行装的这一份，装着 SpeakMore.app 的话连它一起。设置、key、历史和录音不动
+  speakmore status [--json]     看状态：在不在运行、key、系统权限、今天和累计说了多少
+  speakmore update              更新到最新版本（Mac 上装着 SpeakMore.app 的话连它一起）。设置、key、历史和录音不动
 
   speakmore history [-n 条数] [--json]
                                 看说过的话，按天分组，新的在前（默认最近 {limit} 条）
@@ -732,7 +769,7 @@ export default {
   speakmore help                这段说明
   speakmore --version           版本号
 `,
-    macOnly: "SpeakMore 目前只支持 macOS：听热键和贴字靠的是 macOS 的系统接口。",
+    macOnly: "SpeakMore 目前只支持 macOS 和 Windows：听热键和贴字靠的是这两个系统各自的接口。",
     nodeVersion: "SpeakMore 需要 Node 22.13 或更新的版本（23 系列要 23.4 以上），现在是 {version}。",
     unknownCommand: "没有 {name} 这个命令。",
     seeHelp: "运行 speakmore help 看全部命令。",
@@ -1075,6 +1112,10 @@ speakmore help     全部命令`,
       keychainItem: "钥匙串里用来加密 key 的那一条",
       keychainFailed: "钥匙串里用来加密 key 的那一条没删掉（{reason}）：可以在“钥匙串访问”里搜 SpeakMore 手动删",
       removedAll: "{home}（程序、运行环境，以及你的{yours}）",
+      // Windows：install.ps1 在用户 Path 里加的那一项、App 设置里开过的开机启动
+      pathEntry: "用户 Path 里的 {entry}",
+      loginItem: "开机启动",
+      afterExit: "程序文件正被这条命令用着，等它退出后几秒内删掉",
       done: "SpeakMore 已经卸载。",
       removed: "删掉了：{item}",
       kept: "留着：{home} 里的{yours}。重新安装之后接着用；不要了就把这个目录删掉",
@@ -1102,6 +1143,37 @@ speakmore help     全部命令`,
       cantStop: "SpeakMore 停不掉（进程号 {pid}）。在“活动监视器”里结束它。",
       needXcode: "编译按键监听的小程序需要 Xcode 命令行工具。先运行：xcode-select --install",
       buildFailed: "按键监听的小程序没有编译成功（没装 Xcode 命令行工具的话先运行 xcode-select --install）：\n{detail}",
+      needGo:
+        "从源码运行时，编译 Windows 上按键监听的小程序需要 Go 1.27 或更新的版本（https://go.dev/dl/），装好后再启动",
+      buildFailedGo: "Windows 上按键监听的小程序没有编译成功：\n{detail}",
+    },
+  },
+
+  // Windows 上说法不同的那几句，名字照抄通用的（见 src/i18n/index.mjs 开头）。"本机"这类不分系统的不写
+  windows: {
+    cli: {
+      daemon: {
+        stuckNoPid:
+          "SpeakMore 卡住了不答话，也认不出它的进程号。在“任务管理器”的“详细信息”里找到 electron.exe，结束它。",
+        cantStop: "SpeakMore 停不掉（进程号 {pid}）。在“任务管理器”里结束它。",
+      },
+      key: { storage: "它会用 Windows 的数据保护加密后存在这台电脑上，不会发到别处。" },
+    },
+    permissions: { openSettings: "设置" },
+    setup: { openSettings: "任务栏通知区域的图标 › 设置" },
+    key: {
+      keychainUnavailable: "系统的加密存储不可用，没法安全地保存 key",
+      noKeyService:
+        "还没有填 {provider} API key：在终端运行 speakmore key，或者点任务栏通知区域里 SpeakMore 的图标打开设置",
+      noKeyServiceFor:
+        "还没有填 {provider} API key：在终端运行 speakmore key {id}，或者点任务栏通知区域里 SpeakMore 的图标打开设置",
+    },
+    delivery: { pasteFailed: "没能自动粘贴：文字已复制，按 Ctrl+V 粘贴" },
+    bar: { noMicPermission: "缺麦克风权限：设置 › 隐私和安全性 › 麦克风" },
+    onboarding: {
+      // Windows 只有麦克风这一项
+      permissions: { soft: "确认", title: "麦克风权限" },
+      microphone: { help: "查 设置 › 系统 › 声音 › 输入：设备、音量 · 或麦克风权限没开" },
     },
   },
 };

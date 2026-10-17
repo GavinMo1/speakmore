@@ -1,12 +1,25 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from "node:fs";
+import {
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { LocalizedError, msg } from "../i18n/index.mjs";
+import { removeAfterExit } from "./windows-system.mjs";
 
 // 和下载地址打交道：问最新的是哪个版本，拿那边的安装脚本把它装上；装着 SpeakMore.app 的，下载新的安装包把它换掉。
 // 用 curl 而不是 Node 自己的 fetch：安装脚本也用它，终端里设的代理（https_proxy 这些）两边一样认。
+// Windows 10 起自带 curl.exe。Windows 上的安装脚本是 install.ps1，也没有单独的 App 要换。
+
+const WINDOWS = process.platform === "win32";
 
 /** 发布包放在这里，和 install.sh 里的 DOWNLOAD_URL 是同一个 */
 export const DOWNLOAD_URL = "https://dl.zephyrxiang.com/speakmore";
@@ -18,7 +31,29 @@ const APP_NAME = "SpeakMore.app";
 /** 从哪下载。和安装脚本一样认 SPEAKMORE_INSTALL_BASE：一个网址前缀，或者本机的一个目录（npm run release 打出来的） */
 export function downloadBase(env) {
   const base = env.SPEAKMORE_INSTALL_BASE || DOWNLOAD_URL;
-  return base.startsWith("/") ? `file://${base}` : base;
+  if (base.startsWith("/")) return `file://${base}`;
+  // Windows 的盘符路径：C:\dist\release → file:///C:/dist/release
+  if (/^[A-Za-z]:[\\/]/.test(base)) return `file:///${base.replaceAll("\\", "/")}`;
+  return base;
+}
+
+/**
+ * 在 Windows 上跑下载来的 install.ps1。按 UTF-8 读进来再当脚本块跑：存成文件直接 -File 的话，
+ * 5.1 把没有 BOM 的脚本当成系统编码（GBK）读；也绕开了执行策略（只允许跑文件这一层管着的那种）
+ */
+const RUN_INSTALL_PS1 =
+  "& ([scriptblock]::Create([IO.File]::ReadAllText($env:SPEAKMORE_INSTALL_SCRIPT, [Text.Encoding]::UTF8))); exit $LASTEXITCODE";
+
+/** 上一份换下来、当时还在用着没删掉的程序（install.ps1 改名挪开的 app.old.*、runtime.old.*） */
+function oldCopies(home) {
+  try {
+    return readdirSync(home)
+      .filter((name) => /^(app|runtime)\.old\./.test(name))
+      .map((name) => join(home, name));
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
 }
 
 /** 跑一条命令，交出标准输出。失败时连同它在标准错误里说的一起抛出 */
@@ -136,17 +171,31 @@ export function createUpdater({ env, home, progress = false }) {
     async install(version, { start = true } = {}) {
       const dir = mkdtempSync(join(tmpdir(), "speakmore-update-"));
       try {
-        const script = join(dir, "install.sh");
-        await curl(`${base}/install.sh`, ["--max-time", "60", "-o", script]);
-        return await new Promise((resolve, reject) => {
-          const child = spawn("/bin/bash", [script, ...(start ? [] : ["--no-start"])], {
-            stdio: "inherit",
-            env: { ...env, SPEAKMORE_HOME: home, SPEAKMORE_VERSION: version },
-          });
+        const script = join(dir, WINDOWS ? "install.ps1" : "install.sh");
+        await curl(`${base}/${WINDOWS ? "install.ps1" : "install.sh"}`, ["--max-time", "60", "-o", script]);
+        const installerEnv = { ...env, SPEAKMORE_HOME: home, SPEAKMORE_VERSION: version };
+        const [command, args] = WINDOWS
+          ? ["powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", RUN_INSTALL_PS1]]
+          : ["/bin/bash", [script, ...(start ? [] : ["--no-start"])]];
+        if (WINDOWS) {
+          installerEnv.SPEAKMORE_INSTALL_SCRIPT = script;
+          // install.ps1 从 irm | iex 跑时传不了参数，只认环境变量
+          if (!start) installerEnv.SPEAKMORE_NO_START = "1";
+          // 它自己用装好的那份 Electron 当 Node 跑命令，不要把这边的带过去
+          delete installerEnv.ELECTRON_RUN_AS_NODE;
+        }
+        const code = await new Promise((resolve, reject) => {
+          const child = spawn(command, args, { stdio: "inherit", env: installerEnv });
           child.on("error", reject);
           // 被信号打断时没有退出码，算没装成
-          child.on("exit", (code) => resolve(code ?? 1));
+          child.on("exit", (exitCode) => resolve(exitCode ?? 1));
         });
+        // Windows 上这条命令自己就跑在换下来的那份程序上，install.ps1 删不掉它：等这条命令退出后再删
+        if (WINDOWS && code === 0) {
+          const old = oldCopies(home);
+          if (old.length > 0) removeAfterExit(old);
+        }
+        return code;
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -159,6 +208,8 @@ export function createUpdater({ env, home, progress = false }) {
      * @returns {Promise<{ path: string, version: string } | null>}
      */
     async findApp(pid) {
+      // Windows 上没有单独的 App：开始菜单起的就是命令行装的这一份
+      if (WINDOWS) return null;
       const candidates = env.SPEAKMORE_APP
         ? [env.SPEAKMORE_APP]
         : [

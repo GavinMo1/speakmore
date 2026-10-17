@@ -3,11 +3,12 @@ import { msg } from "../i18n/index.mjs";
 // 把配置表（catalog.mjs）里的标签和实测数字写成话（msg），命令行和 App 的模型列表都用这一份，按界面语言翻。
 
 /**
- * 转写进程报的后端名写成什么：运行库报的是设备名（transcribe.cpp 的 MTL0 是第一块 GPU 走 Metal），
+ * 转写进程报的后端名写成什么：运行库报的是设备名（transcribe.cpp 的 MTL0 是第一块 GPU 走 Metal，Vulkan0 走 Vulkan），
  * 认得的按 localModels.backends 翻，不认得的照原样
  */
 export function backendText(reported) {
   if (/^MTL/i.test(reported)) return msg("localModels.backends.metal");
+  if (/^vulkan/i.test(reported)) return msg("localModels.backends.vulkan");
   if (/^cpu/i.test(reported)) return msg("localModels.backends.cpu");
   return reported;
 }

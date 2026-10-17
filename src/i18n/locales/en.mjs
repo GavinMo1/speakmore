@@ -58,6 +58,8 @@ export default {
     right_command: { name: "Right Command", keycap: "Right ⌘" },
     right_control: { name: "Right Control", keycap: "Right ⌃" },
     fn: { name: "Globe (fn)", keycap: "fn" },
+    right_alt: { name: "Right Alt", keycap: "Right Alt" },
+    right_ctrl: { name: "Right Ctrl", keycap: "Right Ctrl" },
   },
 
   themes: {
@@ -97,6 +99,9 @@ export default {
       customUrl: "Address of your custom polishing service (OpenAI-compatible), e.g. https://api.example.com/v1",
       modelSource:
         "Where on-device models download from: cn is SpeakMore's mirror in China, original is Hugging Face. If the chosen one stalls, the other is tried",
+      acceleration:
+        "Whether on-device models use the GPU: auto uses it when there is one and falls back to the CPU if it fails; cpu uses only the CPU (for GPU driver trouble, or to leave the GPU to other programs)",
+      barHint: "Whether the hint line above the voice bar (press … to finish · esc to cancel) shows: on or off",
       theme: "Which theme the windows use",
       language: "Interface language; system follows your Mac",
     },
@@ -145,10 +150,20 @@ export default {
     cn: "China mirror (SpeakMore CDN)",
     original: "Original (Hugging Face)",
   },
+  accelerations: {
+    auto: "Automatic (GPU if available)",
+    cpu: "CPU only",
+  },
+  barHints: {
+    on: "Shown",
+    off: "Hidden",
+  },
   localModels: {
     tags: {
       "apple-silicon": "suits Apple silicon",
+      "windows-x64": "suits Windows",
       metal: "Metal-accelerated",
+      vulkan: "GPU-accelerated (Vulkan)",
       cpu: "runs on CPU alone",
       "zh-en": "strong on mixed Chinese–English",
       fast: "fast",
@@ -160,7 +175,7 @@ export default {
       "windows-x64": "Windows (x64)",
       "windows-arm64": "Windows (ARM)",
     },
-    backends: { metal: "Metal", cpu: "CPU" },
+    backends: { metal: "Metal", vulkan: "Vulkan", cpu: "CPU" },
     measured: "Measured on {chip} ({backend}): {score}/5 · {realtime}× real time · {memory} memory",
     figures: { score: "score", speed: "speed", memory: "memory" },
     measuredOn: "Measured on {chip} · {backend}",
@@ -262,6 +277,8 @@ export default {
     silent: "Didn't hear anything",
     noAccessibility: "No Accessibility access: text copied, press ⌘V to paste",
     pasteFailed: "Couldn't paste: text copied, press ⌘V to paste",
+    // 只有 Windows 有：系统不让模拟的按键进以管理员身份运行的窗口
+    elevated: "That window runs as administrator, so text can't be pasted into it: text copied, press Ctrl+V to paste",
   },
 
   bar: {
@@ -570,12 +587,16 @@ export default {
     theme: "Theme",
     language: "Language",
     modelSource: "Model download source",
+    acceleration: "On-device model acceleration",
+    barHint: "Hints above the voice bar",
     openAtLogin: "Launch at login",
     hotkeyFailed: "Not changed: {reason}",
     themeFailed: "Theme not changed: {reason}",
     languageFailed: "Language not changed: {reason}",
     loginFailed: "Couldn't set launch at login: {reason}",
     sourceFailed: "Download source not changed: {reason}",
+    accelerationFailed: "Acceleration not changed: {reason}",
+    barHintFailed: "Hint setting not changed: {reason}",
     recheck: "Check again",
     version: "Version",
     dataFolder: "Data folder",
@@ -583,60 +604,74 @@ export default {
   },
 
   keyPanel: {
-    models: "Model",
-    inUse: "In use",
-    use: "Use {provider}",
-    placeholder: "Paste key",
     paste: "Paste",
-    customName: "Custom service",
-    save: "Save & verify",
-    saveAndUse: "Save & use {provider}",
-    forget: "Delete key",
-    replace: "Replace key",
-    keepKey: "Keep this key",
-    verifying: "Verifying…",
-    failed: "Didn't work: {reason}",
+    verifying: "Verifying",
+    failed: "Failed: {reason}",
     clipboardEmpty: "Clipboard is empty",
     confirmForget: "Delete the {provider} key?",
     confirmForgetInUse: "Delete the {provider} key? You'll need to add it again to dictate",
     other: {
-      env: "Using the {variable} env var",
-      stored: "Saved",
-      none: "Not set · add a key to switch to {provider}",
+      env: "Env var {variable}",
     },
     check: {
       button: "Check",
-      running: "Checking…",
-      ok: "Works",
-      failed: "Doesn't work: {problem}",
+      running: "Checking",
+      ok: "Check passed",
+      failed: "Check failed: {problem}",
     },
     state: {
-      env: "Using the {variable} env var · not saved",
-      envUnverified: "Using the {variable} env var · not saved · not verified (couldn't reach {provider} at launch)",
+      env: "Env var {variable} · not saved",
+      envUnverified: "Env var {variable} · not saved · not verified (couldn't reach {provider} at launch)",
       external: "Set by the separately started server",
       saved: "Saved · verified",
       savedUnverified: "Saved · not verified (couldn't reach {provider} at launch)",
-      checking: "Verifying…",
+      checking: "Verifying",
       checkFailed: "Check failed: {problem} · the key may be fine; see speakmore model",
-      envRejected: "The key in the {variable} env var doesn't work: {problem} · fix or remove it, then restart",
-      rejected: "The key doesn't work: {problem}",
-      missing: "Not set",
+      envRejected: "The key in the {variable} env var failed the check: {problem} · fix or remove it, then restart",
+      rejected: "The key failed the check: {problem}",
     },
   },
 
   onboarding: {
-    groups: { key: "Model", setup: "Set up", try: "Try it" },
-    key: {
-      soft: "Connect a ",
-      title: "model",
-      spoken: "“Um, let's meet at nine tomorrow, no wait, nine thirty…”",
-      result: "Let's meet at 9:30 tomorrow.",
+    groups: { model: "Model", setup: "Set up", try: "Try it" },
+    way: {
+      soft: "Pick a ",
+      title: "recognition mode",
+      key: "API key",
+      local: "On-device model · {size}",
+      offline: "No key",
+      note: "Change it anytime in the main window · or skip and set it up later",
+    },
+    prepare: {
+      native: { soft: "Connect a ", title: "native model" },
+      local: { soft: "Transcribe on device, ", title: "polish in the cloud" },
+      private: { soft: "Download an ", title: "on-device model" },
+      route: { label: "Route", audio: "Audio", text: "Text", local: "On-device" },
+      sections: { model: "On-device model", native: "Native recognition", local: "Polish" },
+      model: {
+        download: "Download",
+        retry: "Retry",
+        ready: "Downloaded",
+        background: "Downloads in the background · you can continue",
+        sources: { cn: "China mirror", original: "Hugging Face" },
+      },
+      nativeOnly: "Only these take audio directly · DeepSeek, Kimi, GLM and more are under Transcribe + Polish",
+      later: "Optional · set it up later on the Models page",
+      laterModel: "Optional · download it later on the Models page",
+      more: "Cloud transcription and custom services are on the Models page",
+      status: {
+        enabled: "{mode} enabled",
+        enabling: "Enabling",
+        waiting: "{mode} turns on when the download finishes",
+        failed: "Not enabled",
+        retry: "Retry",
+      },
     },
     permissions: {
       soft: "Turn on three ",
       title: "permissions",
       allow: "Allow",
-      on: "✓ On",
+      on: "On",
       history: "History stays on this Mac",
       audio: "Audio goes only to your model",
       key: "Key encrypted on this Mac",
@@ -667,11 +702,13 @@ export default {
       sample: "Um, let's meet tomorrow at nine, no wait, nine thirty, and bring last week's numbers.",
       notes: "Notes",
       placeholder: "Click here, press {keycap}, read the line on the left, then press it again",
+      notReady: "No model connected yet · you can skip this step",
+      downloading: "Downloading {model} · {percent}%",
     },
-    done: { soft: "Speak, ", title: "don't type", start: "Get started" },
+    done: { soft: "Speak, ", title: "don't type", start: "Get started", mode: "Recognition", hotkey: "Shortcut" },
     back: "Back",
     next: "Continue",
-    skip: "Skip",
+    skipAll: "Skip setup",
   },
 
   paths: {
@@ -702,8 +739,8 @@ export default {
   speakmore start               Same as above
   speakmore stop                Stop
   speakmore restart             Restart
-  speakmore status [--json]     Status: running or not, key, the three macOS permissions, how much you said today and in total
-  speakmore update              Update to the latest version: this Terminal install, and SpeakMore.app if you have it. Settings, keys, history, and recordings are kept
+  speakmore status [--json]     Status: running or not, key, system permissions, how much you said today and in total
+  speakmore update              Update to the latest version (on a Mac, SpeakMore.app too if you have it). Settings, keys, history, and recordings are kept
 
   speakmore history [-n count] [--json]
                                 What you said, grouped by day, newest first (latest {limit} by default)
@@ -744,7 +781,8 @@ export default {
   speakmore help                This help
   speakmore --version           Version
 `,
-    macOnly: "SpeakMore only supports macOS for now: listening for the hotkey and pasting rely on macOS system APIs.",
+    macOnly:
+      "SpeakMore only supports macOS and Windows for now: listening for the hotkey and pasting rely on each system's own APIs.",
     nodeVersion: "SpeakMore needs Node 22.13 or newer (23.4 or newer on the 23 line); this is {version}.",
     unknownCommand: "There's no command called {name}.",
     seeHelp: "Run speakmore help to see all commands.",
@@ -1117,6 +1155,9 @@ speakmore help     all commands`,
       keychainItem: "the keychain item used to encrypt keys",
       keychainFailed:
         "The keychain item used to encrypt keys wasn't deleted ({reason}): search for SpeakMore in Keychain Access and delete it by hand",
+      pathEntry: "{entry} in your user Path",
+      loginItem: "Open at login",
+      afterExit: "The program files are in use by this command; they're removed a few seconds after it exits",
       removedAll: "{home} (the program, runtime, and your {yours})",
       done: "SpeakMore uninstalled.",
       removed: "Deleted: {item}",
@@ -1148,6 +1189,61 @@ speakmore help     all commands`,
         "Building the key-listening helper needs the Xcode Command Line Tools. Run this first: xcode-select --install",
       buildFailed:
         "The key-listening helper didn't build (if the Xcode Command Line Tools aren't installed, run xcode-select --install first):\n{detail}",
+      needGo:
+        "Running from source on Windows, building the key-listening helper needs Go 1.27 or newer (https://go.dev/dl/). Install it, then start again.",
+      buildFailedGo: "The Windows key-listening helper didn't build:\n{detail}",
+    },
+  },
+
+  // Windows 上说法不同的那几句，名字照抄通用的（见 src/i18n/index.mjs 开头）
+  windows: {
+    cli: {
+      daemon: {
+        stuckNoPid:
+          "SpeakMore is stuck and not answering, and its process can't be identified. In Task Manager's Details tab, find electron.exe and end it.",
+        cantStop: "Can't stop SpeakMore (PID {pid}). End it in Task Manager.",
+      },
+      key: { storage: "It's encrypted with Windows data protection and stays on this PC." },
+    },
+    permissions: { openSettings: "Settings" },
+    settings: {
+      describe: {
+        mode: "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this PC first, then has any LLM polish the text; private only transcribes on this PC and uploads nothing",
+        language: "Interface language; system follows Windows",
+      },
+    },
+    modes: {
+      local: "Local: transcribed on this PC, then polished by a model",
+      private: "Private: transcribed on this PC only, nothing uploaded",
+    },
+    setup: { openSettings: "tray icon › Settings" },
+    key: {
+      keychainUnavailable: "Windows' encrypted storage isn't available, so the key can't be stored safely",
+      noKeyService:
+        "No {provider} API key yet: run speakmore key in a terminal, or open Settings from the SpeakMore icon in the taskbar tray",
+      noKeyServiceFor:
+        "No {provider} API key yet: run speakmore key {id} in a terminal, or open Settings from the SpeakMore icon in the taskbar tray",
+    },
+    delivery: { pasteFailed: "Couldn't paste: text copied, press Ctrl+V to paste" },
+    bar: { noMicPermission: "No microphone access: Settings › Privacy & security › Microphone" },
+    plaza: {
+      via: { local: "This PC" },
+      toolbar: { keysLocal: "Keys stay on this PC" },
+      groups: {
+        local: "On this PC",
+        localMeta: "Audio stays on this PC · {done}/{total} downloaded",
+        localMetaFree: "Audio stays on this PC · {done}/{total} downloaded · {free} free",
+      },
+    },
+    onboarding: {
+      permissions: {
+        // Windows 只有麦克风这一项
+        soft: "Check ",
+        title: "microphone access",
+        history: "History stays on this PC",
+        key: "Key encrypted on this PC",
+      },
+      microphone: { help: "Check the input device and volume in Settings › System › Sound, or turn on" },
     },
   },
 };

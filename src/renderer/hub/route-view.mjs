@@ -1,5 +1,5 @@
+import { brand, h, platformName } from "../shared/dom.mjs";
 import { t } from "../shared/i18n.mjs";
-import { brand, h, platformName } from "./dom.mjs";
 
 // 一条路线怎么画（首页的识别方式选单、模型页的推荐组合共用）：一路经过的模型、切过去之前还差什么。
 // 数据是主进程拼的（app/model-plaza.mjs 的 wayOf）：hops 按先后，needs 是缺的 key、没下载的本机模型、没写的地址。

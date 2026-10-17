@@ -9,11 +9,17 @@ export function siteLinks(site, version) {
   const media = site.mediaBase.replace(/\/+$/, "");
   return {
     version,
-    dmg: {
+    /** 三个直接下载的安装包：两种芯片的 Mac 各一个 dmg，Windows 一个安装程序 */
+    downloads: {
       arm64: `${base}/v${version}/SpeakMore-arm64.dmg`,
       x64: `${base}/v${version}/SpeakMore-x64.dmg`,
+      windows: `${base}/v${version}/SpeakMore-Setup-x64.exe`,
     },
-    install: `curl -fsSL ${base}/install.sh | bash`,
+    /** 终端里装的一行：macOS 的终端、Windows 的 PowerShell */
+    install: {
+      mac: `curl -fsSL ${base}/install.sh | bash`,
+      windows: `irm ${base}/install.ps1 | iex`,
+    },
     repository: site.repository,
     license: `${site.repository}/blob/main/LICENSE`,
     /** COS 上一张图的地址；path 是 src/media.json 里记的对象名 */

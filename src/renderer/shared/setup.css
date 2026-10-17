@@ -1,60 +1,10 @@
-/* 填 key、选哪家、权限那几行：主窗口的设置和首次引导共用（shared/key-panel.mjs、setup-text.mjs）。颜色由主题给。 */
+/* 密钥的状态、检测结果、权限那几行：主窗口的设置和首次引导共用（setup-text.mjs）。颜色由主题给。 */
 
 .hint {
   margin-top: 0.75rem;
   max-width: 34rem;
   font-size: var(--text-small);
   color: var(--ink-2);
-}
-
-/* 用哪家：一家一个按钮，按下的那个是现在看着的 */
-.providers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.9rem;
-}
-
-.provider {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 9rem;
-  padding: 0.6rem 0.9rem;
-  font: inherit;
-  line-height: 1.4;
-  text-align: left;
-  color: var(--ink);
-  background: var(--bg);
-  border: none;
-  border-radius: var(--radius-block);
-  box-shadow: 0 0 0 1px var(--border);
-  cursor: pointer;
-  transition: box-shadow var(--dur-base) var(--ease-out);
-}
-
-.provider:hover {
-  background: var(--raised);
-}
-
-.provider[aria-checked="true"] {
-  box-shadow: 0 0 0 2px var(--primary);
-}
-
-.provider:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 3px;
-}
-
-.provider-name {
-  font-weight: var(--weight-semibold);
-}
-
-/* 正在用的那家：名字右边一个勾 */
-.provider-in-use {
-  margin-left: auto;
-  font-weight: var(--weight-semibold);
-  color: var(--ok);
 }
 
 .state[data-tone="ok"],
@@ -105,11 +55,6 @@
   flex: 1 1 14rem;
 }
 
-#key-problem {
-  margin-top: 0.5rem;
-  font-size: var(--text-small);
-}
-
 .links {
   display: flex;
   flex-wrap: wrap;
@@ -137,10 +82,4 @@
   font-weight: var(--weight-medium);
   color: var(--ink-2);
   white-space: nowrap;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .provider {
-    transition: none;
-  }
 }

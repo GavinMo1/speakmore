@@ -1,6 +1,12 @@
-/* 首次引导。和主窗口一样大、一样藏起标题栏；左边一列字和操作，右边一块示意。
-   标题前半句淡一点，照原版（"<0>现在，</0>开始语音输入"那种写法）。
+/* 首次引导。和主窗口一样大、一样藏起标题栏。
+   选识别方式、准备两步是一栏表单：一项一行的列表（几项都排得齐），选中的那一行就地展开，样子同主窗口的密钥表；
+   后面几步左边一列字和操作，右边一块示意。标题前半句淡一点，照原版（"<0>现在，</0>开始语音输入"那种写法）。
    观感和主窗口一家：背后的光晕、半透明的面、主题渐变（shared/window.css）。 */
+
+/* 图标表只供 <use> 引用，不占位置 */
+.sprite {
+  display: none;
+}
 
 body {
   display: grid;
@@ -8,7 +14,9 @@ body {
   height: 100vh;
 }
 
-/* 标题栏藏起来了：最上面这一条用来拖窗口 */
+/* ---------- 顶上三段：进度条加名字，都能点 ---------- */
+
+/* 标题栏藏起来了：最上面这一条用来拖窗口，按钮本身不拖 */
 .steps {
   display: flex;
   justify-content: center;
@@ -24,20 +32,25 @@ body {
   list-style: none;
 }
 
-/* 三段进度：灰的底条上盖一条主题渐变，走到哪段亮到哪段 */
-.step-groups li {
+.step-groups button {
   position: relative;
   min-width: 6.5rem;
-  padding: 0.6rem 0 0;
+  padding: 0.6rem 0 0.2rem;
+  font: inherit;
   font-size: var(--text-small);
   font-weight: var(--weight-medium);
-  text-align: center;
   color: var(--ink-2);
+  background: none;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
   transition: color var(--dur-base) var(--ease-out);
 }
 
-.step-groups li::before,
-.step-groups li::after {
+/* 灰的底条上盖一条主题渐变，走到哪段亮到哪段 */
+.step-groups button::before,
+.step-groups button::after {
   content: "";
   position: absolute;
   inset: 0 0 auto;
@@ -46,18 +59,24 @@ body {
   background: var(--fill-selected);
 }
 
-.step-groups li::after {
+.step-groups button::after {
   background: var(--gradient);
   opacity: 0;
   transition: opacity var(--dur-base) var(--ease-out);
 }
 
-.step-groups li:is([data-state="done"], [data-state="current"])::after {
+.step-groups button:is([data-state="done"], [data-state="current"])::after {
   opacity: 1;
 }
 
-.step-groups li[data-state="current"] {
+.step-groups button[data-state="current"],
+.step-groups button:hover {
   color: var(--ink);
+}
+
+.step-groups button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
 }
 
 .stage {
@@ -109,57 +128,522 @@ body {
   box-shadow: var(--edge), var(--lift);
 }
 
-/* ---------- 底下的返回、继续 ---------- */
+/* ---------- 一栏的表单：选识别方式、准备 ---------- */
+
+.step.form-step {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 0;
+  max-width: 42rem;
+  padding-top: 0.5rem;
+}
+
+.form-step .step-title {
+  margin-bottom: 1.25rem;
+}
+
+/* 页底的一句：能跳过、去哪改 */
+.footnote {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.footnote .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: 0.2rem;
+}
+
+/* ---------- 选识别方式：一种一行，左图标、中间名字和要什么、右边经过谁家 ---------- */
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 1rem 1.125rem;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-card);
+  box-shadow: var(--edge);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.choice:hover {
+  background: var(--surface-solid);
+  box-shadow: var(--ring-strong), var(--lift);
+}
+
+.choice[aria-checked="true"] {
+  background: color-mix(in oklch, var(--primary) 6%, var(--surface-solid));
+  box-shadow:
+    0 0 0 1.5px color-mix(in oklch, var(--primary) 55%, transparent),
+    var(--lift);
+}
+
+.choice:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.choice:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* 方式的图标：一块小方砖，选中的换成主题渐变 */
+.choice-icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--ink);
+  background: var(--surface-solid);
+  border-radius: var(--radius-block);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 1px 2px oklch(0 0 0 / 0.06);
+  transition:
+    color var(--dur-base) var(--ease-out),
+    background var(--dur-base) var(--ease-out);
+}
+
+.choice-icon .icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.choice[aria-checked="true"] .choice-icon {
+  color: var(--on-primary);
+  background: var(--gradient);
+  box-shadow: 0 6px 16px -8px color-mix(in oklch, var(--primary) 80%, transparent);
+}
+
+.choice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.choice-name {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.choice-desc {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.needs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.875rem;
+  margin-top: 0.375rem;
+}
+
+.need {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+}
+
+.need .icon {
+  width: 0.8125rem;
+  height: 0.8125rem;
+}
+
+/* 小号的品牌图标底座：一路经过谁、经过谁家 */
+.mini-tile {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--ink);
+  background: var(--surface-solid);
+  border-radius: var(--radius-control);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.mini-tile > :is(.provider-icon, .icon) {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+
+/* 经过谁家：一排小图标，悬停看名字 */
+.brands {
+  display: flex;
+  gap: 0.25rem;
+}
+
+/* ---------- 准备：一路经过谁 ---------- */
+
+.route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.625rem 0.875rem;
+  list-style: none;
+  font-size: var(--text-small);
+  background: var(--surface);
+  border-radius: var(--radius-block);
+  box-shadow: var(--edge);
+}
+
+.route li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.route-end {
+  color: var(--ink-2);
+}
+
+.route-end .icon {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+
+.route-hop {
+  font-weight: var(--weight-semibold);
+}
+
+.route-arrow {
+  color: var(--ink-2);
+}
+
+.route-arrow .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  opacity: 0.6;
+}
+
+.plan-status {
+  margin-top: 0.75rem;
+}
+
+.plan-status > .callout {
+  align-items: center;
+}
+
+.plan-status .retry {
+  margin-left: auto;
+}
+
+/* ---------- 准备：本机模型、选哪家 ---------- */
+
+.prepare-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.section-label {
+  margin: 0 0 0.625rem;
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-2);
+}
+
+.section-hint {
+  margin-top: 0.625rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.prepare-section > .callout {
+  margin-top: 0.625rem;
+}
+
+/* 本机模型：一行，左图标、中间名字和体积、右边下载 / 进度 / 已下载 */
+.model-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--edge);
+}
+
+.model-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.model-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.model-meta {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+/* 右边那一格定宽：下载、进度、已下载换来换去时左边不跟着动 */
+.model-action {
+  display: flex;
+  justify-content: flex-end;
+  width: 7.5rem;
+}
+
+.model-action > * {
+  width: 100%;
+  height: var(--control-md);
+}
+
+/* 选哪家：一家一行，选中的那行展开填密钥 */
+.vendor-list {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--edge);
+}
+
+/* 圆角跟着整块：第一行、最后一行的悬停底色不出角 */
+.vendor {
+  overflow: hidden;
+}
+
+.vendor + .vendor {
+  border-top: 1px solid var(--line);
+}
+
+.vendor:first-child {
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+}
+
+.vendor:last-child {
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+}
+
+.vendor[data-open] {
+  background: color-mix(in oklch, var(--primary) 4%, transparent);
+}
+
+.vendor-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.5rem 1rem;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.vendor:not([data-open]) .vendor-head:hover {
+  background: var(--fill-hover);
+}
+
+.vendor-head:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.vendor-name {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+/* 有没有密钥：配好的带一个绿点 */
+.vendor-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.vendor-key[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.vendor-key[data-tone="ok"]::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  background: currentColor;
+  border-radius: 50%;
+}
+
+/* 展开的那一块和名字对齐：让出图标那一列（2rem 加间距） */
+.vendor-body {
+  padding: 0 1rem 1rem 3.75rem;
+}
+
+.vendor-body .key-state-row {
+  min-height: var(--control-sm);
+}
+
+.vendor-body .state[data-tone="pending"] {
+  color: var(--ink-2);
+}
+
+.vendor-body .key-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+}
+
+/* 密钥输入：一整块，前面钥匙图标、后面粘贴按钮；获得焦点时整块亮一圈主题色 */
+.key-field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  height: var(--control-md);
+  padding: 0 0.125rem 0 0.625rem;
+  color: var(--ink-2);
+  background: var(--surface-solid);
+  border-radius: var(--radius-control);
+  box-shadow: var(--ring), var(--shadow-control);
+  cursor: text;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.key-field:hover {
+  box-shadow: var(--ring-strong), var(--shadow-control);
+}
+
+.key-field:focus-within {
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--primary) 70%, transparent),
+    0 0 0 4px color-mix(in oklch, var(--primary) 16%, transparent);
+}
+
+.key-field > .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.key-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--ink);
+  background: none;
+  border: none;
+  outline: none;
+}
+
+.key-input::placeholder {
+  font-family: var(--font);
+  color: var(--ink-2);
+}
+
+.paste-key {
+  width: var(--control-sm);
+  height: var(--control-sm);
+}
+
+.paste-key .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.vendor-body .save-key {
+  min-width: 5rem;
+}
+
+.vendor-body .key-problem {
+  margin-top: 0.5rem;
+}
+
+.vendor-body .links {
+  gap: 1rem;
+  margin-top: 0.625rem;
+}
+
+.key-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.key-link:hover {
+  color: var(--ink);
+}
+
+.key-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.key-link .icon {
+  width: 0.8125rem;
+  height: 0.8125rem;
+}
+
+/* ---------- 底下的返回、跳过引导、继续 ---------- */
 
 .nav {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
   padding: 1rem 2rem 1.5rem;
 }
 
 .nav > .button {
   min-width: 6rem;
-  padding: 0.45rem 1.1rem;
 }
 
-/* 第一步没有"返回"：继续还是待在右边 */
-#next {
+/* 第一步没有"返回"：跳过引导和继续还是待在右边 */
+#skip-all {
   margin-left: auto;
-}
-
-/* ---------- 第一步：说的话 → SpeakMore → 文字 ---------- */
-
-.flow {
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.flow-card {
-  max-width: 18rem;
-  padding: 0.75rem 1rem;
-  background: var(--surface-solid);
-  border-radius: var(--radius-block);
-  box-shadow: 0 0 0 1px var(--line);
-}
-
-.flow-card.app {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.4rem 1rem;
-  font-weight: var(--weight-semibold);
-  color: var(--on-primary);
-  background: var(--gradient);
-  border-radius: var(--radius-full);
-  box-shadow: 0 4px 14px -6px var(--primary);
-}
-
-.flow-card.result {
-  font-weight: var(--weight-semibold);
-}
-
-.flow-arrow {
-  color: var(--ink-2);
 }
 
 /* ---------- 权限 ---------- */
@@ -167,31 +651,40 @@ body {
 .grants {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
   margin: 0.5rem 0 0;
   padding: 0;
   list-style: none;
-}
-
-.grants li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.8rem 1rem;
   background: var(--surface);
   border-radius: var(--radius-card);
   box-shadow: var(--edge);
+}
+
+.grants li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.5rem;
+  padding: 0.5rem 1rem;
+}
+
+.grants li + li {
+  border-top: 1px solid var(--line);
 }
 
 .grant-primary {
   font-weight: var(--weight-semibold);
 }
 
+.grants .button {
+  min-width: 6rem;
+}
+
 /* 给了以后按钮换成一个勾，不再能点 */
 .grants [data-granted="true"] > .button {
   color: var(--ok);
-  background: transparent;
+  background: color-mix(in oklch, var(--ok) 12%, transparent);
+  box-shadow: none;
 }
 
 .privacy {
@@ -199,13 +692,15 @@ body {
 }
 
 .privacy-name {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   font-weight: var(--weight-semibold);
 }
 
-.privacy-name::before {
-  content: "✓";
-  margin-right: 0.6rem;
-  color: var(--ok);
+/* 和左边权限那几行一样的小方砖 */
+.privacy-name .logo-tile {
+  color: var(--primary);
 }
 
 /* ---------- 测麦克风、测快捷键 ---------- */
@@ -290,6 +785,30 @@ body {
   box-shadow: var(--edge);
 }
 
+/* 还没接上模型、模型还在下：说一句 */
+.readiness {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: var(--text-small);
+  border-radius: var(--radius-control);
+  background: var(--fill-hover);
+}
+
+.readiness .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.readiness[data-tone="problem"] {
+  background: color-mix(in oklch, var(--problem) 9%, transparent);
+}
+
+.readiness[data-tone="problem"] .icon {
+  color: var(--problem);
+}
+
 .notes {
   justify-content: flex-start;
   padding: 1.5rem;
@@ -297,6 +816,7 @@ body {
 
 .notes-text {
   flex: 1;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
   min-height: 14rem;
   padding: 1rem;
   font: inherit;
@@ -313,8 +833,10 @@ body {
 }
 
 .notes-text:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--primary) 70%, transparent),
+    0 0 0 4px color-mix(in oklch, var(--primary) 16%, transparent);
 }
 
 /* ---------- 完成 ---------- */
@@ -328,11 +850,58 @@ body {
 }
 
 .done .step-title {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+/* 三样现在怎样：识别方式、快捷键、麦克风 */
+.summary {
+  width: min(100%, 28rem);
+  margin: 0 0 2rem;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--edge);
+}
+
+.summary-item {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.25rem;
+  padding: 0.5rem 1rem;
+}
+
+.summary-item + .summary-item {
+  border-top: 1px solid var(--line);
+}
+
+.summary-label {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.summary-value {
+  justify-self: end;
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  text-align: right;
+}
+
+.summary [data-tone="problem"] .summary-value {
+  color: var(--problem);
+}
+
+.summary [data-tone="progress"] .summary-value {
+  color: var(--ink-2);
 }
 
 .button.big {
-  padding: 0.6rem 1.75rem;
+  min-width: 10rem;
+  height: var(--control-lg);
+  padding: 0 1.75rem;
   font-size: var(--text-body);
 }
 
@@ -341,8 +910,11 @@ body {
     animation: none;
   }
 
-  .step-groups li,
-  .step-groups li::after,
+  .step-groups button,
+  .step-groups button::after,
+  .choice,
+  .choice-icon,
+  .key-field,
   .meter span,
   .big-keycap {
     transition: none;

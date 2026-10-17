@@ -2,10 +2,14 @@
    颜色不在这里：那是主题的事（src/themes），由预加载脚本赶在页面画出来之前注入。 */
 
 :root {
-  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --font:
+    -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI",
+    system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas, monospace;
   /* 大号的数字用系统的圆体（SF Pro Rounded），和正文的直角字拉开一点 */
-  --font-rounded: ui-rounded, -apple-system, "PingFang SC", system-ui, sans-serif;
+  --font-rounded:
+    ui-rounded, -apple-system, "PingFang SC", "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", system-ui,
+    sans-serif;
 
   /* 字的层级：一种字体，靠字号、字重、颜色三样一起拉开。各处只用这七档字号、四档字重，样式里不写别的数：
      12、14 这种夹在两档中间的字号会让名字、说明、标签看起来一样大，层级就糊了。

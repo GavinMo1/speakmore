@@ -44,11 +44,13 @@ export function viewOf(state, previousPhase) {
 /**
  * 条上方的那行提示。
  * @param {string} view
- * @param {{ keycap: string, cancellable: boolean }} options keycap：热键的短名字；cancellable：esc 截不截得住
+ * @param {{ keycap: string, cancellable: boolean, shown?: boolean }} options keycap：热键的短名字；
+ *   cancellable：esc 截不截得住；shown：设置里开着操作提示（barHint），关了哪个样子都不写
  * @param {Function} t 界面语言的翻译函数（src/i18n）。键在句子里的位置由各语言自己定
  * @returns {Array<string | { key: string }>} 一段一段的：文字，或者一个要标成键名的键
  */
-export function hintFor(view, { keycap, cancellable }, t) {
+export function hintFor(view, { keycap, cancellable, shown = true }, t) {
+  if (!shown) return [];
   switch (view) {
     case View.STARTING:
       return [t("bar.opening")];
