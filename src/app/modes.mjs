@@ -1,9 +1,10 @@
 import { msg, problemOf } from "../i18n/index.mjs";
-import { downloadSize, findModel } from "../models/catalog.mjs";
+import { DEFAULT_TRANSCRIBER, downloadSize, findModel } from "../models/catalog.mjs";
 import { sizeText } from "../models/describe.mjs";
+import { cloudTranscriberOf } from "../server/asr/cloud/vendors.mjs";
 import { speechSample } from "../server/asr/probe.mjs";
 import { findChatVendor } from "../server/chat/vendors.mjs";
-import { describeRoute } from "../server/modes.mjs";
+import { describeRoute, usesLocalModel } from "../server/modes.mjs";
 import { findProvider } from "../server/providers/index.mjs";
 import {
   MODE_SETTINGS,
@@ -16,10 +17,13 @@ import {
 
 // 识别模式的状态机。状态是"正在用哪种模式"（service.route.mode），和那种模式里选的模型：
 //
-//   native ──switchMode("local", 第二跳等)──▶ local
-//     │  ◀──switchMode("native", 模型等)──     │
-//     └ setModel        换收音频的模型         ├ setTranscriber  第一跳：本机转写模型，不用 key，要下载好了的
-//                                              └ setPolish       第二跳：润色的厂商和模型（自定义服务连同地址）
+//   native ◀──switchMode──▶ local ◀──switchMode──▶ private ◀──switchMode──▶ native（三种两两可切，切时可连带那种模式的设置）
+//     └ setModel        换收音频的模型
+//   local
+//     ├ setTranscriber  第一跳：本机模型（不用 key，要下载好了的）或云端模型（验它那家的 key）
+//     └ setPolish       第二跳：润色的厂商和模型（自定义服务连同地址）
+//   private（数据隐私）
+//     └ setTranscriber  唯一的一跳：只能是本机模型（不用 key，要下载好了的），存在它自己的 privateTranscriber
 //
 // 两种模式要换的东西不一样，各走各的路：模型只能在它那种模式里换，不在那种模式时换是错的（没法选），
 // 直接说出来，不悄悄存下。第一次进 local 时还没法换第二跳，所以切模式时可以连带那种模式自己的设置
@@ -98,9 +102,16 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
   /** 换成这条路线，要的那家的 key 验证过才换 */
   const useRoute = (route) => keys.use({ route });
 
-  /** local 的路线要的本机模型下载好了没有：没有就说先下载哪个、多大 */
+  /**
+   * 只验润色那一家时用的第一跳：设置里是本机模型就用它，是云端模型就换成默认的本机模型。
+   * 第一跳交给另一家云端时，不换的话会把那一家拉进来：它没 key 或 key 不对，都会算到正在验的这家头上
+   */
+  const localFirstHop = (settings) =>
+    usesLocalModel(routeOf(settings, "local")) ? settings.transcriber.value : DEFAULT_TRANSCRIBER;
+
+  /** local 的路线要的本机模型下载好了没有：没有就说先下载哪个、多大。第一跳交给云端时没有要下载的 */
   function notDownloaded(route) {
-    if (route.mode !== "local" || models.isInstalled(route.transcriber)) return null;
+    if (!usesLocalModel(route) || models.isInstalled(route.transcriber)) return null;
     const model = findModel(route.transcriber);
     return {
       ok: false,
@@ -153,22 +164,33 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
       return within("native", "model", { model }, useRoute);
     },
 
-    /** local 第一跳：本机的转写模型，要下载好了的。不用 key：润色那一跳照旧，服务只换模型（没装好的话重新装） */
+    /**
+     * 换转写模型，在 local 和 private 里都能换，换的是正在用的那种模式自己的那一项。
+     * local 第一跳：本机模型要下载好了的，不用 key：润色那一跳照旧，服务只换模型（没装好的话重新装）。
+     * 换到云端模型、或从云端换回本机，前后不是同一种转写器：整条路线重新装、验 key（云端那家的也要有）。
+     * private：只认本机模型，云端的直接说不行
+     */
     setTranscriber(transcriber) {
-      return within("local", "transcriber", { transcriber }, async (route) => {
+      const apply = async (route) => {
         const missing = notDownloaded(route);
         if (missing) return missing;
+        if (!usesLocalModel(route) || !usesLocalModel(service.route)) return useRoute(route);
         service.switchTranscriber(route.transcriber);
         return { ok: true };
-      });
+      };
+      if (service.route.mode !== "private") return within("local", "transcriber", { transcriber }, apply);
+      if (cloudTranscriberOf(transcriber)) {
+        return Promise.resolve({ ok: false, problem: msg("modes.privateOnlyLocal", { model: transcriber }) });
+      }
+      return within("private", "privateTranscriber", { privateTranscriber: transcriber }, apply);
     },
 
-    /** 删一个本机模型：正在用的（local 模式的第一跳）不让删，说先换一个或切回 native */
+    /** 删一个本机模型：正在用的（local 的第一跳、private 的那一个）不让删，说先换一个或换一种模式 */
     removeModel(id) {
       return serial(async () => {
         const model = findModel(id);
         if (!model) return { ok: false, problem: msg("localModels.unknown", { id }) };
-        if (service.route.mode === "local" && service.route.transcriber === id) {
+        if (usesLocalModel(service.route) && service.route.transcriber === id) {
           return { ok: false, problem: msg("localModels.inUse", { model: model.name }) };
         }
         return models.remove(id);
@@ -230,7 +252,13 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
     async check(mode, changes) {
       let route;
       try {
-        route = routeOf(patchSettings(read(), changes), mode);
+        const settings = read();
+        // 查的是一个润色模型（或一家润色厂商的 key）：只验它，第一跳不拉上别家
+        const isolated =
+          mode === "local" && "polish" in changes && !("transcriber" in changes)
+            ? { transcriber: localFirstHop(settings) }
+            : {};
+        route = routeOf(patchSettings(settings, { ...changes, ...isolated }), mode);
       } catch (error) {
         return { ok: false, cause: "other", problem: problemOf(error) };
       }
@@ -240,6 +268,7 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
     /**
      * 给某一家存 key 前拿哪条路线验证：收音频的那家走 native、润色的那家走 local（key-manager 的 routeFor）。
      * 设置里已经选了这家就用设置里的模型，否则用它的默认模型；changes 是要一起换成的（还没存的）设置。
+     * 润色那家只验它自己：第一跳用本机模型（见 localFirstHop）。
      * 自定义服务没有默认模型：没选过它、changes 里也没给时抛错，说要写成 custom/模型名
      */
     routeForVendor(id, changes = {}) {
@@ -250,7 +279,8 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
       }
       if (!findChatVendor(id)) throw new Error(`不认识的厂商：${id}`);
       const chosen = routeOf(settings, "local").polish.vendor === id;
-      return routeOf(patchSettings(settings, { polish: chosen ? settings.polish.value : id, ...changes }), "local");
+      const polish = chosen ? settings.polish.value : id;
+      return routeOf(patchSettings(settings, { polish, transcriber: localFirstHop(settings), ...changes }), "local");
     },
   };
 }

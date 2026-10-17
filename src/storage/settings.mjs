@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
 import { DEFAULT_SOURCE, DEFAULT_TRANSCRIBER, MODELS, SOURCES } from "../models/catalog.mjs";
+import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../server/asr/cloud/vendors.mjs";
 import { formatChatChoice, normalizeBaseUrl, parseChatChoice } from "../server/chat/vendors.mjs";
 import { DEFAULT_MODE, DEFAULT_POLISH, MODES, parseMode } from "../server/modes.mjs";
 import {
@@ -30,6 +31,13 @@ export const hotkeyKeycap = (id) => msg(`hotkeys.${id}.keycap`);
 const THEME_IDS = THEMES.map((theme) => theme.id);
 const MODE_IDS = MODES.map((mode) => mode.id);
 const TRANSCRIBER_IDS = MODELS.map((model) => model.id);
+/** 第一跳能填的：本机模型的 id，和云端清单里的 厂商/模型（清单外的云端模型名也认，见 transcriber.parse） */
+const TRANSCRIBER_CHOICES = [
+  ...TRANSCRIBER_IDS,
+  ...CLOUD_TRANSCRIBERS.flatMap((vendor) => vendor.models.map((model) => `${vendor.id}/${model.id}`)),
+];
+/** 云端模型名里只出现这些字符（qwen3-asr-flash、fun-asr-flash-2026-06-15） */
+const CLOUD_MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 const SOURCE_IDS = SOURCES.map((source) => source.id);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
@@ -43,7 +51,8 @@ const oneOf = (choices) => new LocalizedError(msg("settings.oneOf", { choices: c
  * legacyEnv 可有可无：改名之前的环境变量，env 没设时照样认（README 里写过，用的人可能还在用）。
  * store 可有可无：规整后的值写进文件时换成什么样子（默认原样）。
  * ofMode 可有可无：这一项属于哪种识别模式（server/modes.mjs），只在那种模式里能换（app/modes.mjs）。
- *   local 的两跳各有各的：transcriber 是第一跳，polish 和 customUrl 是第二跳。
+ *   local 的两跳各有各的：transcriber 是第一跳（本机模型或云端模型），polish 和 customUrl 是第二跳。
+ *   private（数据隐私）只有一跳：privateTranscriber，只能是本机模型；和 local 的第一跳分开存，各换各的。
  */
 export const SETTINGS = {
   hotkey: {
@@ -97,6 +106,25 @@ export const SETTINGS = {
     ofMode: "local",
     env: "SPEAKMORE_TRANSCRIBER",
     default: DEFAULT_TRANSCRIBER,
+    choices: TRANSCRIBER_CHOICES,
+    // 本机模型写 id；云端模型写 厂商/模型（只写厂商用它的默认模型），存下来的统一是 厂商/模型
+    parse(value) {
+      const id = value.trim();
+      const cloud = cloudTranscriberOf(id);
+      if (cloud) {
+        if (!CLOUD_MODEL_NAME.test(cloud.model))
+          throw new LocalizedError(msg("chat.badModelName", { model: JSON.stringify(cloud.model) }));
+        return `${cloud.vendor}/${cloud.model}`;
+      }
+      if (!TRANSCRIBER_IDS.includes(id)) throw oneOf(TRANSCRIBER_CHOICES);
+      return id;
+    },
+  },
+  privateTranscriber: {
+    ofMode: "private",
+    env: "SPEAKMORE_PRIVATE_TRANSCRIBER",
+    default: DEFAULT_TRANSCRIBER,
+    // 数据隐私模式什么都不上传：只认本机模型
     choices: TRANSCRIBER_IDS,
     parse(value) {
       const id = value.trim();
@@ -290,6 +318,7 @@ const ROUTES = {
     polish: parseChatChoice(settings.polish.value),
     customUrl: settings.customUrl.value || null,
   }),
+  private: (settings) => ({ mode: "private", transcriber: settings.privateTranscriber.value }),
 };
 
 /**

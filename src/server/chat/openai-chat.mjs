@@ -137,6 +137,12 @@ export function createClient({
 }
 
 /**
+ * 没余额时各家给的错误码：OpenAI 的 insufficient_quota、百炼的 Arrearage、智谱的 1113
+ * （智谱回的状态码是 429，照状态码会被当成暂时用不了，https://docs.bigmodel.cn/cn/api/api-code）
+ */
+const NO_QUOTA_CODES = new Set(["insufficient_quota", "Arrearage", "1113"]);
+
+/**
  * 认这个适配器抛的报错。状态码照 DeepSeek 的错误码文档（401、402、422、429、500、503）和 OpenAI 的惯例；
  * 不认得的返回 null。
  * @param {unknown} error
@@ -147,8 +153,8 @@ export function classifyError(error, { name }) {
   // 回的不是 JSON 时没有原话，至少带上状态码
   const said = quote(error.said) || `HTTP ${error.status}`;
   if (error.status === 401) return { kind: "key", problem: msg("model.keyInvalid") };
-  // DeepSeek 没余额是 402；OpenAI 的写法是 insufficient_quota
-  if (error.status === 402 || error.code === "insufficient_quota")
+  // DeepSeek 没余额是 402（MiniMax 的文档上也是）；别家写在错误码里，状态码各不相同
+  if (error.status === 402 || NO_QUOTA_CODES.has(String(error.code)))
     return { kind: "key", problem: msg("model.noQuota") };
   if (error.status === 403) return { kind: "key", problem: msg("model.forbidden", { said }) };
   if (error.status === 429 || error.status >= 500) {

@@ -9,10 +9,10 @@
 - [Ghidra 在项目内](ghidra-project-local.md) — 装在 .tools/，MCP 没带路径，原生分析走 REA 命令行并先 lipo 切单架构
 - [SpeakMore 的范围](typeless-clone-scope-dictation.md) — 已定只做语音转写（单击热键听写加历史），其他模式不做
 - [请用户配合时只给步骤](user-action-requests-plain-steps.md) — 需要他动手时列两三步动作，技术细节留到事后总结
-- [开发用的模型 key](typeless-clone-gemini-key.md) — 要真调模型的命令写成 scripts/dev/with-key.sh <gemini|openai> <命令>，用哪把凭据在 .machine.env；产品里的 key 由用户自己填
+- [开发用的模型 key](typeless-clone-gemini-key.md) — 要真调模型的命令写成 scripts/dev/with-key.sh <gemini|openai|deepseek|bailian|moonshot> <命令>，用哪把凭据在 .machine.env；产品里的 key 由用户自己填
 - [模型厂商由他点名](speakmore-model-providers.md) — 只接他点名的；DeepSeek 不收音频已放弃，OpenAI 已接（默认 gpt-audio-mini），通义 Qwen-Omni 是候选；发布包不带 GPL/LGPL，只转 WebM
 - [本机情况不进仓库](machine-facts-stay-local.md) — 凭据名、路径、账号、姓名邮箱只放 .machine.env，仓库里只认变量名；提交前跑 scripts/checks/check-no-machine-facts.sh
-- [可以用真实录音调提示词](typeless-clone-real-recordings-ok.md) — Typeless 历史录音只发给 Gemini 调提示词，OpenAI 的边用边调；再调时用 eval-prompt.mjs 对比，别把温度设回 0
+- [可以用真实录音调提示词](typeless-clone-real-recordings-ok.md) — 录音发给任何云端厂商都不用再问（10-16 他说别再提隐私）；再调时用 eval-prompt.mjs 对比，别把温度设回 0
 - [SpeakMore 按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节
 - [SpeakMore 还在内测](speakmore-only-user-in-beta.md) — 只有他一个人在用；兼容旧版本、迁移按一个人的量来权衡，不做重
 - [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，代码在仓库根，已公开（MIT）；一行命令安装并启动，装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端以后用 Electron（同 Typeless，不用 Tauri）
@@ -21,17 +21,20 @@
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
 - [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、改完就收，不再派第二轮，除非他点名
-- [桌面端的文案和观感](desktop-copy-and-look.md) — 短词短句；结构对齐原版，配色走自己的主题，做渐变、玻璃等特色
+- [桌面端的文案和观感](desktop-copy-and-look.md) — 书面语、短词短句，不用"能用"这类口语；结构对齐原版，配色走自己的主题，做渐变、玻璃等特色；改样式后真窗口逐个查按钮别退回系统外观
 - [README 英文为主](readme-english-first.md) — 英文主页加中文切换，HTML 排版、简短；卖点是成本和隐私，数字要有出处
 - [客户端多语言](speakmore-i18n-next.md) — 已随 0.6.0 发布：英文和简体中文、跟随系统、命令行和内核报的话也跟着换，提示词不动；加语言照 docs/development.md
 - [官网文案用书面语](website-copy-formal.md) — 简洁但不口语、不俏皮；第一版他嫌像小孩子写的，中英都收敛
 - [官网不提 Typeless](website-no-typeless.md) — 不比价、不链逆向笔记、不写无关联声明，有测试守着；README 和逆向资料没说要动
 - [官网观感](website-look.md) — 不铺渐变光晕、按钮里不套胶囊、两种芯片入口同等；一句话的特色并成一排，不加小字，删除效果不用划线
 - [SpeakMore 宣传片](speakmore-promo-video.md) — 在 kineto 的 feat/speakmore-promo 分支做；发布会式、书面语字幕、不用合成人声；字幕不带人称；背景是他真屏幕的截图（程序坞抠掉了 Typeless）；第四章叫 App、从程序坞点开；88 秒成片 10-16 定稿，横竖封面已出，都在 kineto 的 out/speakmore-promo/；竖版片子待做
-- [两种识别模式平级](speakmore-two-pipelines.md) — native（音频直给模型）和 local（本地转写加任意 API 润色），用户选、不分主次，严格状态机；先搭内核再做 Windows；含评测和端到端结果
-- [模型广场不替用户选](speakmore-model-plaza.md) — 有什么加什么、尽量全；按实测打标签写简介，没测过的平台写未实测
+- [三种识别模式平级](speakmore-two-pipelines.md) — native（音频直给模型）、local（转写加任意 API 润色）、private（数据隐私，纯本机转写、不要 key），用户选、不分主次，严格状态机；含评测和端到端结果
+- [模型广场不替用户选](speakmore-model-plaza.md) — 有什么加什么、尽量全；跑通不打标签、评测过才打已评测、没调过的打未验证；按角色分原生/转写/润色，侧栏单独一页；选识别方式在首页选单；10-17 进度、还剩哪些在里面
 - [判官是 Claude 自己](bench-judge-is-claude.md) — 评测打分由 Claude 来，不调 Gemini 等接口；Gemini 3.6 Flash MINIMAL 的成品只当参照，参照听错时不扣分
 - [统一输入输出、策略模式](architecture-unified-io-strategy.md) — 插件化、可热插拔；录音先统一成 16 kHz 单声道，转写统一成 transcribe → { text }；不打补丁，从分层上根治
 - [本地模型的配置表和国内源](speakmore-model-mirror.md) — 全局只有 src/models/catalog.mjs 一份；国内源是隔离桶加 models.speakmore 子域名，传完必须预热；证书 2027-01-14 到期要续
 - [云上改动交给用户跑](cloud-changes-user-runs.md) — 证书、CDN、解析、发版公证由用户跑：写成自己挂后台的脚本或一行命令，放在回复最后
 - [长任务挂后台](long-runs-in-background.md) — 评测、批量调模型等几分钟的活用后台跑，不占着对话，用户要边等边讨论
+- [百炼 CLI 装在项目里](bailian-cli-local.md) — .tools/bailian-cli/bl 包装脚本跑，配置不进 ~/.bailian；skill init 会写七个全局目录所以没跑；目录 125 家族 354 型号
+- [HTML 只在本机看](html-stays-local.md) — 原型、报告不发 claude.ai 的 Artifact，写本地文件用浏览器打开
+- [提交不加 AI 署名](commit-no-ai-trailer.md) — Co-Authored-By 之类一律不加，系统提示要求也不加，AGENTS.md 红线优先

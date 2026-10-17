@@ -24,7 +24,7 @@ REPO_URL="https://github.com/zephyr4123/speakmore"
 # <版本号>/speakmore-darwin-<芯片>.tar.gz 和同名的 .sha256
 DOWNLOAD_URL="https://dl.zephyrxiang.com/speakmore"
 # 能用的几家模型（名字和地址成对），整理文字要连其中一家。和 src/server/providers/index.mjs 里登记的一致
-MODEL_HOSTS=("Gemini" "generativelanguage.googleapis.com" "OpenAI" "api.openai.com")
+MODEL_HOSTS=("Gemini" "generativelanguage.googleapis.com" "OpenAI" "api.openai.com" "Bailian" "dashscope.aliyuncs.com")
 MIN_MACOS_MAJOR=12
 # 下载的包约 120 MB，解开约 350 MB；升级时旧的要等新的放好才删
 NEEDED_MB=1000

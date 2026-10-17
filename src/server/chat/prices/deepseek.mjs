@@ -32,6 +32,15 @@ export function isPeak(at) {
 }
 
 /**
+ * 模型广场上标的价：高峰的输入（未命中缓存）和输出价，美元每百万 token。价目表里没有是 null
+ * @returns {{ currency: "USD", input: number, output: number } | null}
+ */
+export function listPrice(model) {
+  const price = PRICES[model];
+  return price ? { currency: "USD", input: price.input, output: price.output } : null;
+}
+
+/**
  * 一次调用花了多少美元。价目表里没有这个型号时是 null。
  * @param {{ input: number, cached: number, output: number }} tokens input 是没命中缓存的那部分
  * @param {Date} at 什么时候调的

@@ -97,7 +97,7 @@ export async function submitKey(io, value, provider, changes) {
   return result.ok;
 }
 
-/** 设置里那种模式要用谁家的 key：native 是收音频的那家，local 是润色的那家 */
+/** 设置里那种模式要用谁家的 key：native 是收音频的那家，local 是润色的那家；private 不用 key，是 undefined */
 export const currentProvider = (io) => keyVendorOf(routeOf(currentSettings(io)));
 
 /**
@@ -133,9 +133,11 @@ export function keySourceFor(io, provider, status) {
   return keySource(io, provider);
 }
 
-/** 启动之前就看得出有 key 可用：存过、环境变量给了，或者 key 归单独启动的服务端管 */
-export const hasKeyAlready = (io) =>
-  keySource(io, currentProvider(io)) !== null || Boolean(io.env.SPEAKMORE_SERVER_URL);
+/** 启动之前就看得出有 key 可用：存过、环境变量给了，或者 key 归单独启动的服务端管；不用 key 的模式也算 */
+export function hasKeyAlready(io) {
+  const provider = currentProvider(io);
+  return provider === undefined || keySource(io, provider) !== null || Boolean(io.env.SPEAKMORE_SERVER_URL);
+}
 
 /**
  * 这种状态是不是填一把新的 key 就能解决。有两种不是：Gemini 拒绝了请求（多半是模型名或档位写错），
@@ -154,6 +156,10 @@ export async function key(args, io) {
     throw new UsageError(msg("cli.key.notInline", { providers: VENDORS.map(({ id }) => id).join(" / ") }));
   }
   const provider = named ?? currentProvider(io);
+  // 数据隐私模式不用 key，没有"正在用的那家"：要写明是哪一家
+  if (provider === undefined) {
+    throw new UsageError(msg("cli.key.whichVendor", { providers: VENDORS.map(({ id }) => id).join(" / ") }));
+  }
   // 在问 key 之前拦：不让人粘贴了一把 key 才听说存不了
   await refuseLegacyDaemon(io, provider);
 
@@ -168,7 +174,7 @@ export async function key(args, io) {
   }
 
   // 自定义服务没有默认模型，单给一把 key 验证不了：跟着模型名和地址一起填
-  if (provider.id === "custom" && provider.id !== currentProvider(io).id) {
+  if (provider.id === "custom" && provider.id !== currentProvider(io)?.id) {
     io.err(io.t("cli.key.customWithModel"));
     return 1;
   }
@@ -191,7 +197,7 @@ export async function key(args, io) {
   }
   await ensureRunning(io);
   if (!(await submitKey(io, value, provider))) return 1;
-  if (provider.id !== currentProvider(io).id) {
+  if (provider.id !== currentProvider(io)?.id) {
     // 在运行就以它报的模式为准（0.6 及以前的不报，那时只有 native）
     const status = await io.daemon.status();
     const current = status ? (status.mode ?? "native") : currentSettings(io).mode.value;

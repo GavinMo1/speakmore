@@ -34,13 +34,14 @@ export async function start(args, io) {
   if (firstRun && settings.mode.source === "default" && settings.model.source === "default") {
     const chosen = await chooseProvider(io);
     if (chosen === null) declined = true;
-    else provider = chosen;
+    else provider = chosen.vendor;
   }
-  const nextKey = keyPrompter(io, provider);
+  // 数据隐私模式不用 key（provider 是 undefined 或 null）：下面一把都不问
+  const nextKey = provider ? keyPrompter(io, provider) : async () => null;
   /** 问到的第一把 key。undefined：还没问过；null：问了，没填 */
   let firstKey;
   if (started === null) {
-    if (firstRun && !declined && keySource(io, provider) === null) firstKey = await nextKey();
+    if (firstRun && !declined && provider && keySource(io, provider) === null) firstKey = await nextKey();
     io.out(io.t("cli.starting"));
     started = await io.daemon.start({ onProgress: progressOf(io) });
   }
@@ -49,7 +50,7 @@ export async function start(args, io) {
   for (let value = firstKey ?? null; value !== null; value = await nextKey()) {
     if (await submitKey(io, value, provider)) break;
   }
-  // local 模式要的本机模型还没下载（第一次就选了 local、或者删掉了）：问一句要不要现在下，不下也照常启动
+  // local、private 模式要的本机模型还没下载（第一次就选了它、或者删掉了）：问一句要不要现在下，不下也照常启动
   const local = (await io.daemon.status())?.localModel;
   if (io.interactive && !declined && local?.state === "missing" && !local.total) await offerDownload(io, local.model);
   // 重新查一遍系统权限：用户可能刚去系统设置里改过

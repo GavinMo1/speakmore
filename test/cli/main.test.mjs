@@ -17,6 +17,7 @@ import { run } from "../../src/cli/main.mjs";
 import { NotRunningError, TimeoutError } from "../../src/control.mjs";
 import { createTranslator, LocalizedError, msg } from "../../src/i18n/index.mjs";
 import { downloadSize, findModel } from "../../src/models/catalog.mjs";
+import { CHAT_VENDORS } from "../../src/server/chat/vendors.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
 import { keyFile, oldAppKeyFile, resolvePaths } from "../../src/storage/paths.mjs";
 import { resolveSettings } from "../../src/storage/settings.mjs";
@@ -129,6 +130,7 @@ function fakeDaemon({
       if (daemon.current === null) throw new NotRunningError();
       if (cmd === "check-model") return checkModel(params.model);
       if (cmd === "check-polish") return checkModel(params.polish);
+      if (cmd === "check-mode") return checkModel(params.changes?.transcriber ?? params.mode);
       if (["set-mode", "set-model", "set-transcriber", "set-polish"].includes(cmd)) return changeRoute(cmd, params);
       if (cmd === "set-key") {
         const result = saveKey(params.key, params.provider);
@@ -353,10 +355,13 @@ test("第一次用：先问 key，再启动；存好了直接能用；key 不出
 
 test("第一次用：按模式分组问用哪一家，选 DeepSeek 就进 local 模式、问 DeepSeek 的 key", async () => {
   const daemon = fakeDaemon({ afterStart: { ...NO_KEY, provider: "deepseek", mode: "local" } });
-  const { speakmore, questions, asked, output } = harness({ daemon, answers: ["3"], secrets: ["sk-ds"] });
+  const { speakmore, questions, asked, output } = harness({ daemon, answers: ["4"], secrets: ["sk-ds"] });
   const code = await speakmore();
   assert.equal(code, 0, output.out + output.err);
-  assert.match(questions[0], /native 模式[\s\S]*1.*Gemini[\s\S]*2.*OpenAI[\s\S]*local 模式.*850 MB[\s\S]*3.*DeepSeek/);
+  assert.match(
+    questions[0],
+    /native 模式[\s\S]*1.*Gemini[\s\S]*2.*OpenAI[\s\S]*3.*Bailian[\s\S]*local 模式.*850 MB[\s\S]*4.*DeepSeek[\s\S]*5.*Bailian/,
+  );
   assert.match(questions[0], /custom\/<模型名> --url/);
   assert.deepEqual([saved("mode"), saved("polish")], ["local", "deepseek/deepseek-flash"]);
   assert.match(asked[0], /DeepSeek API key/);
@@ -1961,6 +1966,86 @@ const LOCAL_READY = {
   localModel: { state: "ready", model: "qwen3-asr-0.6b-q8", backend: "MTL0" },
 };
 
+/** 数据隐私模式：不用 key，只有一个本机模型 */
+const PRIVATE_READY = {
+  ...LOCAL_READY,
+  provider: null,
+  mode: "private",
+  polish: null,
+  key: { state: "ready", source: "none", problem: null },
+};
+
+test("speakmore mode private：不问 key，本机模型下好了就切；状态面板写不用 key、只用本机模型", async () => {
+  haveModel();
+  const { speakmore, output, daemon, asked } = harness({ daemon: fakeDaemon({ running: READY }) });
+  assert.equal(await speakmore("mode", "private"), 0);
+  assert.deepEqual(asked, []);
+  assert.deepEqual(daemon.requests.find(({ cmd }) => cmd === "set-mode").params, { mode: "private", changes: {} });
+  assert.match(output.out, /本机的 qwen3-asr-0\.6b-q8，不润色、不上传/);
+
+  const panel = harness({ daemon: fakeDaemon({ running: PRIVATE_READY }) });
+  assert.equal(await panel.speakmore("status"), 0);
+  assert.match(panel.output.out, /不用 key（数据隐私模式）/);
+  assert.match(panel.output.out, /数据隐私：只用本机模型转写，什么都不上传/);
+});
+
+test("数据隐私模式里 speakmore transcriber 换的是它自己的那一项，local 的第一跳不动；云端的不收；key 要写明哪一家", async () => {
+  writeFileSync(paths.settingsFile, JSON.stringify({ mode: "private" }));
+  haveModel("sensevoice-small-q8");
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("transcriber", "sensevoice-small-q8"), 0);
+  const settings = resolveSettings({ file: paths.settingsFile, env: {} });
+  assert.equal(settings.privateTranscriber.value, "sensevoice-small-q8");
+  assert.equal(settings.transcriber.value, "qwen3-asr-0.6b-q8");
+
+  assert.equal(await speakmore("transcriber", "bailian/qwen3-asr-flash"), 1);
+  assert.match(output.err, /数据隐私模式只用本机模型/);
+  assert.equal(await speakmore("key"), 2);
+  assert.match(output.err, /数据隐私模式不用 key/);
+});
+
+test("第一跳交给云端（审查 4 号）：换成云端、检查、下载、切进 local、第一次启动，都照常说话，不崩", async () => {
+  const cloud = harness({ daemon: fakeDaemon({ running: LOCAL_READY }), secrets: ["sk-ws-bailian"] });
+  assert.equal(await cloud.speakmore("transcriber", "bailian/qwen3-asr-flash"), 0);
+  assert.deepEqual(cloud.daemon.requests.find(({ cmd }) => cmd === "set-key").params, {
+    key: "sk-ws-bailian",
+    provider: "bailian",
+    changes: { transcriber: "bailian/qwen3-asr-flash" },
+  });
+  assert.ok(cloud.daemon.calls.includes("set-transcriber"));
+
+  assert.equal(await cloud.speakmore("transcriber", "check", "bailian/qwen3-asr-flash"), 0);
+  assert.deepEqual(cloud.daemon.requests.find(({ cmd }) => cmd === "check-mode").params, {
+    mode: "local",
+    changes: { transcriber: "bailian/qwen3-asr-flash" },
+  });
+  assert.equal(await cloud.speakmore("transcriber", "download", "bailian/qwen3-asr-flash"), 2);
+  assert.match(cloud.output.err, /云端模型，不用下载/);
+
+  // 设置里第一跳已经是云端的：切进 local 时两家的 key 都问
+  writeFileSync(paths.settingsFile, JSON.stringify({ transcriber: "bailian/qwen3-asr-flash" }));
+  const switching = harness({ daemon: fakeDaemon({ running: READY }), secrets: ["sk-ws-bailian", "sk-deepseek"] });
+  assert.equal(await switching.speakmore("mode", "local"), 0);
+  assert.deepEqual(
+    switching.daemon.requests.filter(({ cmd }) => cmd === "set-key").map(({ params }) => params.provider),
+    ["bailian", "deepseek"],
+  );
+
+  const first = harness({ daemon: fakeDaemon({ afterStart: NO_KEY }), answers: ["1"], secrets: ["k"] });
+  assert.equal(await first.speakmore(), 0);
+});
+
+test("第一次启动的选项里有数据隐私模式：选它不问 key，设置里记成 private", async () => {
+  const { speakmore, questions, asked } = harness({
+    daemon: fakeDaemon({ afterStart: PRIVATE_READY }),
+    answers: ["private"],
+  });
+  assert.equal(await speakmore(), 0);
+  assert.match(questions.join("\n"), /private 模式：只用本机模型转写/);
+  assert.deepEqual(asked, []);
+  assert.equal(resolveSettings({ file: paths.settingsFile, env: {} }).mode.value, "private");
+});
+
 test("mode：列出两种模式、各自用的模型，现在用的打一个点，说怎么切、两种模式里各自怎么换模型", async () => {
   const { speakmore, output } = harness();
   assert.equal(await speakmore("mode"), 0);
@@ -2119,7 +2204,7 @@ test("transcriber：列出本机转写模型（第一跳），大小、下载过
   haveModel("sensevoice-small-q8");
   const { speakmore, output } = harness();
   assert.equal(await speakmore("transcriber"), 0);
-  assert.match(output.out, /local 模式的第一跳/);
+  assert.match(output.out, /local 的第一跳、private 的模型/);
   assert.match(output.out, /● qwen3-asr-0\.6b-q8\s+Qwen3-ASR 0\.6B \(Q8_0\)\s+850 MB\s+还没下载/);
   assert.match(output.out, /sensevoice-small-q8\s+SenseVoice Small \(Q8_0\)\s+253 MB\s+已下载/);
   assert.match(output.out, /本机已下载 1 \/ 4 个，共 253 MB · 磁盘剩余 /);
@@ -2428,7 +2513,8 @@ test("polish：自定义服务没给地址、写的是收音频的那家，以 2
   assert.equal(await speakmore("polish", "custom/m"), 2);
   assert.match(output.err, /--url/);
   assert.equal(await speakmore("polish", "openai"), 2);
-  assert.match(output.err, /deepseek \/ custom/);
+  // 说出能用的每一家
+  assert.ok(output.err.includes(CHAT_VENDORS.map(({ id }) => id).join(" / ")), output.err);
 });
 
 test("polish check：查第二跳现在用的那个能不能用", async () => {

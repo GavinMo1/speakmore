@@ -15,6 +15,15 @@ export const PRICES = Object.freeze({
 const SNAPSHOT = /-\d{4}-\d{2}-\d{2}$/;
 
 /**
+ * 模型广场上标的价：音频输入和文字输出，美元每百万 token（听写收的是音频、出的是文字）。价目表里没有是 null
+ * @returns {{ currency: "USD", input: number, output: number } | null}
+ */
+export function listPrice(model) {
+  const price = PRICES[model] ?? PRICES[model.replace(SNAPSHOT, "")];
+  return price ? { currency: "USD", input: price.audio.input, output: price.text.output } : null;
+}
+
+/**
  * 一次调用花了多少美元。价目表里没有这个型号时是 null。
  * @param {string} model 实际回话的型号（响应里的 model）
  * @param {{ text: number, audio: number, textOutput: number, audioOutput: number }} tokens

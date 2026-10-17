@@ -3,6 +3,7 @@ import { chipOf, downloadSize, findModel, MODELS, measuredOn, SOURCES } from "..
 import { sizeText } from "../../models/describe.mjs";
 import { freeBytesAt } from "../../models/library.mjs";
 import { createModelStore } from "../../models/store.mjs";
+import { cloudTranscriberOf, findCloudTranscriber } from "../../server/asr/cloud/vendors.mjs";
 import { CHAT_VENDORS, findChatVendor, parseChatChoice } from "../../server/chat/vendors.mjs";
 import { formatSeconds } from "../../usage/format.mjs";
 import { currentSettings, ensureRunning, parse, renderOptions, UsageError } from "../common.mjs";
@@ -13,10 +14,11 @@ import { needUrl } from "./mode.mjs";
 import { applyChange, checked, ensureKey, inMode, modeNow, routeWith } from "./route.mjs";
 
 // local 模式的两跳，各一个命令，只在 local 模式里能换（不在就说先 speakmore mode local）：
-//   speakmore transcriber   第一跳：本机转写模型。不用 key；要先下载好（download / cancel / delete 管下载和删除，
-//                           check 念一句交给它转，看能不能正常出字）
+//   speakmore transcriber   第一跳：本机转写模型（不用 key；要先下载好），或云端的 厂商/模型（要那家的 key）。
+//                           download / cancel / delete 管本机模型的下载和删除，check 看能不能正常出字
 //   speakmore polish        第二跳：润色的厂商和模型；自定义服务（兼容 OpenAI 接口）连同地址
-// 列出来看在哪种模式里都行，不在 local 时开头说一句现在用不上。下载、删除在哪种模式里都能做。
+// private（数据隐私）模式也用 speakmore transcriber 换它的本机模型（存在它自己的 privateTranscriber），只认本机模型。
+// 列出来看在哪种模式里都行，不在 local、private 时开头说一句现在用不上。下载、删除在哪种模式里都能做。
 
 /** 检查要等后台应用问一次那一家，那边的超时是 30 秒 */
 const CHECK_TIMEOUT_MS = 45_000;
@@ -26,18 +28,24 @@ const TRANSCRIBER_CHECK_TIMEOUT_MS = 90_000;
 /** 管下载和删除的几个动作：speakmore transcriber <动作> <模型> */
 const MODEL_ACTIONS = { download, cancel, delete: remove };
 
+/** 现在这种模式的转写模型存在哪一项：private 是它自己的 privateTranscriber，别的模式是 local 的第一跳 */
+const firstHopSetting = (mode) => (mode === "private" ? "privateTranscriber" : "transcriber");
+
 export async function transcriber(args, io) {
   const { values, positionals } = parse(args, { yes: { type: "boolean", short: "y", default: false } });
   const [first, second, ...extra] = positionals;
   if (first === "check") {
     if (extra.length > 0 || values.yes) throw new UsageError(msg("cli.syntax.transcriber"));
+    const setting = firstHopSetting(modeNow(io, await io.daemon.status()));
     const id =
-      second === undefined ? currentSettings(io).transcriber.value : checked(io, { transcriber: second }).transcriber;
-    return checkTranscriber(io, id);
+      second === undefined ? currentSettings(io)[setting].value : checked(io, { transcriber: second }).transcriber;
+    return cloudTranscriberOf(id) ? checkCloudTranscriber(io, id) : checkTranscriber(io, id);
   }
   if (Object.hasOwn(MODEL_ACTIONS, first ?? "")) {
     if (second === undefined || extra.length > 0) throw new UsageError(msg("cli.syntax.transcriber"));
     const { transcriber: id } = checked(io, { transcriber: second });
+    // 云端的模型不用下载，也没有可删的
+    if (cloudTranscriberOf(id)) throw new UsageError(msg("cli.local.cloudNoDownload", { model: id }));
     return MODEL_ACTIONS[first](io, id, values);
   }
   if (second !== undefined || values.yes) throw new UsageError(msg("cli.syntax.transcriber"));
@@ -45,13 +53,25 @@ export async function transcriber(args, io) {
   if (first === undefined) return listTranscribers(io, status);
 
   const { transcriber: id } = checked(io, { transcriber: first });
-  if (!inMode(io, status, "local", "transcriber")) return 1;
-  // 要用的没下载：先问要不要下，下好了再换
-  if (!modelStatus(io, status, id).installed && !(await offerDownload(io, id))) return 1;
+  const mode = modeNow(io, status);
+  if (mode === "private") {
+    if (cloudTranscriberOf(id)) {
+      io.err(io.t("common.sentence", { text: msg("modes.privateOnlyLocal", { model: id }) }));
+      return 1;
+    }
+  } else if (!inMode(io, status, "local", "transcriber")) return 1;
+  const cloud = cloudTranscriberOf(id);
+  if (cloud) {
+    // 第一跳交给云端：要那一家的 key，拿换上它之后的路线验证
+    if (!(await ensureKey(io, findCloudTranscriber(cloud.vendor), { transcriber: id }))) return 1;
+  } else if (!modelStatus(io, status, id).installed && !(await offerDownload(io, id))) {
+    // 要用的没下载：先问要不要下，下好了再换
+    return 1;
+  }
   return applyChange(io, {
     command: "set-transcriber",
     params: { transcriber: id },
-    changes: { transcriber: id },
+    changes: { [firstHopSetting(mode)]: id },
     done: msg("cli.local.transcriberSwitched", { model: id }),
   });
 }
@@ -77,7 +97,7 @@ function listTranscribers(io, status) {
     models,
     chip,
     freeBytes,
-    setting: settings.transcriber.value,
+    setting: settings[firstHopSetting(modeNow(io, status))].value,
     source: settings.modelSource.value,
     sources: SOURCES.map(({ id }) => id),
     current: modeNow(io, status),
@@ -121,6 +141,23 @@ async function checkTranscriber(io, id) {
   return 0;
 }
 
+/** 检查一个云端转写模型：拿 local 模式按它换上之后的路线问一次（两跳都验，润色那家的 key 也要有） */
+async function checkCloudTranscriber(io, id) {
+  await ensureRunning(io);
+  io.out(io.t("cli.local.checking", { model: id }));
+  const result = await io.daemon.request(
+    "check-mode",
+    { mode: "local", changes: { transcriber: id } },
+    { timeoutMs: CHECK_TIMEOUT_MS },
+  );
+  if (!result.ok) {
+    io.err(io.t("common.sentence", { text: result.problem }));
+    return 1;
+  }
+  io.out(io.t("cli.local.cloudCheckOk", { model: id, seconds: formatSeconds(result.ms, io.t) }));
+  return 0;
+}
+
 async function download(io, id) {
   return (await downloadAndWait(io, id)) ? 0 : 1;
 }
@@ -153,7 +190,10 @@ async function remove(io, id, { yes }) {
     return 0;
   }
   const settings = currentSettings(io);
-  if (status === null && settings.mode.value === "local" && settings.transcriber.value === id) {
+  const inUse =
+    (settings.mode.value === "local" && settings.transcriber.value === id) ||
+    (settings.mode.value === "private" && settings.privateTranscriber.value === id);
+  if (status === null && inUse) {
     io.err(io.t("common.sentence", { text: msg("localModels.inUse", { model: model.name }) }));
     return 1;
   }

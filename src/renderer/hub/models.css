@@ -1,0 +1,439 @@
+/* 侧栏"模型"一页（models.mjs）：标题与搜索、模型库的分类与筛选、按厂商分组的列表、密钥。
+   控件全部来自 shared/window.css（界面规范 v1，见 docs/desktop-ui-spec.md），这里只排版。
+   主窗口默认 1080×750、最小 988×685：两档宽度下列表的状态、操作两列各行对齐。 */
+
+.page[data-route="models"] {
+  container: page / inline-size;
+}
+
+/* ---------- 标题行右侧的搜索 ---------- */
+
+.search {
+  position: relative;
+  display: flex;
+  flex: 0 1 18rem;
+  align-items: center;
+}
+
+.search .icon {
+  position: absolute;
+  left: 0.875rem;
+  color: var(--ink-2);
+  pointer-events: none;
+}
+
+.search .input {
+  width: 100%;
+  height: var(--control-lg);
+  padding: 0 1rem 0 2.5rem;
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-full);
+  box-shadow: var(--edge);
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.search .input:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px var(--primary),
+    0 0 0 4px color-mix(in oklch, var(--primary) 18%, transparent);
+}
+
+/* ---------- 模型库：分类、工具条 ---------- */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  min-height: var(--control-md);
+  margin: 1.25rem 0 1.5rem;
+}
+
+.makers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.toolbar-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.toolbar-lead .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-left: auto;
+}
+
+.unit {
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+}
+
+/* 这一类不在正在用的识别方式里：一行淡底说明，右边是回首页换方式的按钮 */
+.standby {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: -0.5rem 0 1.25rem;
+  padding: 0.375rem 0.375rem 0.375rem 0.75rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  background: var(--fill-hover);
+  border-radius: var(--radius-control);
+}
+
+.standby > .icon {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.standby > span {
+  flex: 1;
+  text-wrap: pretty;
+}
+
+/* ---------- 分组：标题（图标底座、名字、数量、说明）+ 渠道，下面一张表 ---------- */
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 2.25rem;
+}
+
+.group {
+  container: group / inline-size;
+}
+
+.group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.875rem;
+}
+
+.group-titles {
+  min-width: 0;
+}
+
+.group-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.group-name {
+  margin: 0;
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+  line-height: 1.3;
+}
+
+.group-count {
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.group-meta {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.channel {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-left: auto;
+}
+
+.channel-label {
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+}
+
+/* ---------- 表 ---------- */
+
+/* 行的左右内边距由首尾两列吃掉（subgrid 的规矩），所以最后一列加回 1rem，操作按钮才是整 6rem */
+.table {
+  /* 数据列的宽度由 models.mjs 按这一组的列写进来；没有数据列的表（自定义服务）不写，下面的 var() 落空 */
+  --metric-cols: initial;
+  grid-template-columns: minmax(0, 1fr) var(--metric-cols,) var(--col-status) calc(var(--col-action) + 1rem);
+}
+
+.metrics {
+  display: contents;
+}
+
+.cell-name {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.name-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.name-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+
+.name-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.name {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  line-height: 1.35;
+}
+
+/* 密集表（本机模型）：标签固定在名字下一行，名字不折行，各行一样高 */
+.table[data-dense] .name-line {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.table[data-dense] .name {
+  white-space: nowrap;
+}
+
+.table[data-dense] {
+  column-gap: 0.625rem;
+}
+
+/* 状态列的表头居中，对着下面撑满列宽的胶囊 */
+.head-status {
+  text-align: center;
+}
+
+.row-notice {
+  min-height: 3.25rem;
+  background: color-mix(in oklch, var(--ink) 2.5%, transparent);
+}
+
+.notice-text {
+  display: inline-flex;
+  grid-column: 1 / -2;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.notice-text .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.notice-text b {
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+}
+
+.desc {
+  font-size: var(--text-small);
+  line-height: 1.45;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.desc b {
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+}
+
+/* 失败说明和名字的字对齐，不跑到图标那一列 */
+.row:has(> .cell-name > .provider-icon) > :is(.callout, .key-form) {
+  margin-left: 1.75rem;
+}
+
+.row:has(> .cell-name > .logo-tile) > :is(.callout, .key-form) {
+  margin-left: 2.625rem;
+}
+
+/* ---------- 密钥 ---------- */
+
+.key-value {
+  font-size: var(--text-small);
+  color: var(--ink);
+}
+
+.key-value[data-empty] {
+  color: var(--ink-2);
+}
+
+.row[data-open] {
+  background: color-mix(in oklch, var(--ink) 2.5%, transparent);
+}
+
+.key-form {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 0.5rem 0.625rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.key-form .input {
+  flex: 1 1 16rem;
+  height: var(--control-md);
+  font-family: var(--font-mono);
+}
+
+.key-form .input::placeholder {
+  font-family: var(--font);
+}
+
+.key-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.25rem;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.key-link:hover {
+  color: var(--ink);
+}
+
+.key-link .icon {
+  width: 0.8125rem;
+  height: 0.8125rem;
+}
+
+/* ---------- 空状态、底注、提示 ---------- */
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.375rem;
+  padding: 3rem 1rem;
+  text-align: center;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--edge);
+}
+
+.empty-title {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.empty-meta {
+  margin-bottom: 0.75rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.empty-meta:empty {
+  display: none;
+}
+
+.plaza-note {
+  margin: 2.5rem 0 1rem;
+  font-size: var(--text-micro);
+  color: var(--ink-2);
+}
+
+/* ---------- 列宽不够时：先把密集表的状态列收成图标，再把数据列挪到第二行 ---------- */
+
+@container group (max-width: 46rem) {
+  .table[data-dense] {
+    --col-status: var(--control-sm);
+  }
+
+  .table[data-dense] .cell-status .label {
+    display: none;
+  }
+
+  .table[data-dense] .cell-status > * {
+    padding: 0;
+  }
+
+  .table[data-dense] .head-status {
+    visibility: hidden;
+  }
+}
+
+@container group (max-width: 36rem) {
+  .table {
+    grid-template-columns: minmax(0, 1fr) var(--col-status) calc(var(--col-action) + 1rem);
+  }
+
+  .row-head {
+    display: none;
+  }
+
+  .row > .metrics {
+    display: flex;
+    flex-wrap: wrap;
+    grid-row: 2;
+    grid-column: 1 / -1;
+    gap: 0.5rem 1.25rem;
+    margin-top: 0.625rem;
+    padding-left: 1.75rem;
+  }
+
+  .row > .metrics:empty {
+    display: none;
+  }
+
+  .metrics > .metric {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .metrics > :is(.metric, .metric-none)::before {
+    content: attr(data-label);
+    order: -1;
+    font-size: var(--text-micro);
+    font-weight: var(--weight-medium);
+    color: var(--ink-2);
+  }
+
+  .channel {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search .input {
+    transition: none;
+  }
+}

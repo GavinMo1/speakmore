@@ -49,14 +49,14 @@
 - 🧹 **边说边整理**：口头禅、改口、重复删掉，长的话分段、分点，像你自己打出来的。
 - ⚡ **快**：边说边上传，说完一般 2 秒出字。
 - 🔒 **数据在你手里**：没有账号，没有中间服务器，没有统计上报。key 加密存在钥匙串里，说过的话只存在本机。
-- 🔀 **两种模式自己选**：*原生*是录音直接交给 Gemini（默认）或 OpenAI；*本地转写*是本机的小模型先转成文字，再交给任意大模型润色，可以是 DeepSeek，也可以是你自己的兼容 OpenAI 接口的服务。本地转写时录音不出本机。
+- 🔀 **两种模式自己选**：*原生*是录音直接交给 Gemini（默认）、OpenAI 或阿里云百炼上的 Qwen-Omni；*本地转写*是本机的小模型（或百炼、智谱、MiniMax 的云端语音识别）先转成文字，再交给任意大模型润色，可以是 DeepSeek、百炼、Kimi、智谱、MiniMax，也可以是你自己的兼容 OpenAI 接口的服务。用本机模型转写时录音不出本机。
 - 📊 **花多少钱一清二楚**：每次调用都记账；首页看字数、省下的时间、连续天数。
 - 🎨 **三套主题**：墨、朱砂、靛青，跟随系统深浅色。
 - 🌐 **简体中文和英文**：菜单栏、窗口、`speakmore` 命令都跟着系统的语言走，设置里随时能换，当场生效。
 
 ## 📦 安装
 
-需要 macOS 12 以上，和一把 [Gemini key](https://aistudio.google.com/apikey)（有免费额度）或 [OpenAI key](https://platform.openai.com/api-keys)。用本地转写的话，换成一把 [DeepSeek key](https://platform.deepseek.com/api_keys) 或任意兼容 OpenAI 接口的服务，本机模型约 850 MB。
+需要 macOS 12 以上，和一把 [Gemini key](https://aistudio.google.com/apikey)（有免费额度）或 [OpenAI key](https://platform.openai.com/api-keys)。用本地转写的话，换成任一家润色厂商的 key（比如 [DeepSeek](https://platform.deepseek.com/api_keys)）或任意兼容 OpenAI 接口的服务，本机模型约 850 MB。
 
 ### 方式一：下载安装包（推荐）
 
@@ -163,7 +163,7 @@ flowchart LR
 | `theme` | `ink` | `ink` 墨 / `cinnabar` 朱砂 / `indigo` 靛青 |
 | `language` | `system` | `system` 跟随系统 / `en` / `zh-CN`。跟随系统时，应用看 macOS 的语言，`speakmore` 命令看终端的 `LANG`；我们没有的语言用英文 |
 
-设置存在 `~/.speakmore/settings.json`。`speakmore mode`、`model`、`transcriber`、`polish` 先检查再当场换，主题、语言、下载源改了也当场生效。`config set` 是手动改设置的后门：不做这些检查，另一种模式的设置也照写；别的改动会重启后台。临时换一次可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_TRANSCRIBER`、`SPEAKMORE_POLISH`、`SPEAKMORE_CUSTOM_URL`、`SPEAKMORE_MODEL_SOURCE`、`SPEAKMORE_THEME`、`SPEAKMORE_LANGUAGE`，写在启动它的那条命令上；`GEMINI_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`SPEAKMORE_CUSTOM_API_KEY` 设着时优先于存着的 key。
+设置存在 `~/.speakmore/settings.json`。`speakmore mode`、`model`、`transcriber`、`polish` 先检查再当场换，主题、语言、下载源改了也当场生效。`config set` 是手动改设置的后门：不做这些检查，另一种模式的设置也照写；别的改动会重启后台。临时换一次可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_TRANSCRIBER`、`SPEAKMORE_POLISH`、`SPEAKMORE_CUSTOM_URL`、`SPEAKMORE_MODEL_SOURCE`、`SPEAKMORE_THEME`、`SPEAKMORE_LANGUAGE`，写在启动它的那条命令上；`GEMINI_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`BAILIAN_API_KEY`、`MOONSHOT_API_KEY`（Kimi）、`ZHIPU_API_KEY`、`MINIMAX_API_KEY`、`SPEAKMORE_CUSTOM_API_KEY` 设着时优先于存着的 key。
 
 | 厂商 | 默认模型 | 说明 |
 | --- | --- | --- |

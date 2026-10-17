@@ -14,18 +14,23 @@ const zh = createTranslator("zh-CN");
 /** 报错里给人看的那句，按中文翻出来对得上 */
 const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
-test("在册的厂商：Gemini 和 OpenAI，各自说清 key 从哪个环境变量来、去哪申请、默认用哪个模型", () => {
+test("在册的厂商：Gemini、OpenAI、百炼，各自说清 key 从哪个环境变量来、去哪申请、默认用哪个模型", () => {
   assert.deepEqual(
     PROVIDERS.map(({ id, name, keyEnv }) => ({ id, name, keyEnv })),
     [
       { id: "gemini", name: "Gemini", keyEnv: "GEMINI_API_KEY" },
       { id: "openai", name: "OpenAI", keyEnv: "OPENAI_API_KEY" },
+      { id: "bailian", name: "Bailian", keyEnv: "BAILIAN_API_KEY" },
     ],
   );
   for (const provider of PROVIDERS) {
     assert.match(provider.keyPage, /^https:\/\//);
     assert.equal(typeof provider.defaultModel, "string");
     assert.equal(typeof provider.load, "function");
+    // 清单一项一个模型，默认的在里面
+    const ids = provider.models.map(({ id }) => id);
+    assert.ok(ids.includes(provider.defaultModel), `${provider.id} 的默认模型不在清单里`);
+    for (const model of provider.models) assert.ok(model.name && model.maker, `${provider.id}/${model.id}`);
   }
   // 思考档位只有 Gemini 有
   assert.deepEqual(findProvider("gemini").thinkingLevels, ["MINIMAL", "LOW", "MEDIUM", "HIGH"]);

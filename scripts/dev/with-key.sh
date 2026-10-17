@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 带着某一家模型的 key 跑一条命令。key 只进这一条命令的进程，不留在当前 shell 里，也不出现在命令行参数里。
 #
-#   scripts/dev/with-key.sh <厂商> <命令…>       厂商：gemini / openai / deepseek
+#   scripts/dev/with-key.sh <厂商> <命令…>       厂商：gemini / openai / deepseek / bailian（阿里云百炼）/ moonshot（Kimi）/ zhipu（智谱）/ minimax
 #
 # 以 openai 为例，key 按这个顺序找：
 #   1. 环境里已经有 OPENAI_API_KEY，直接用
@@ -10,9 +10,9 @@
 # 凭据叫什么、加载器在哪，每台机器不一样，所以只写在不进 git 的 .machine.env 里。
 set -eo pipefail
 
-usage() { echo "用法：$0 <gemini|openai|deepseek> <命令…>" >&2; exit 2; }
+usage() { echo "用法：$0 <gemini|openai|deepseek|bailian|moonshot|zhipu|minimax> <命令…>" >&2; exit 2; }
 [ $# -gt 1 ] || usage
-case "$1" in gemini | openai | deepseek) ;; *) usage ;; esac
+case "$1" in gemini | openai | deepseek | bailian | moonshot | zhipu | minimax) ;; *) usage ;; esac
 provider="$(printf %s "$1" | tr '[:lower:]' '[:upper:]')"
 shift
 key_var="${provider}_API_KEY"

@@ -67,9 +67,14 @@ export default {
   },
 
   providers: {
-    gemini: { getKey: "Get one at Google AI Studio" },
-    openai: { getKey: "Get one at OpenAI Platform" },
-    deepseek: { getKey: "Get one at DeepSeek Platform" },
+    gemini: { name: "Google Gemini", getKey: "Get one at Google AI Studio" },
+    openai: { name: "OpenAI", getKey: "Get one at OpenAI Platform" },
+    deepseek: { name: "DeepSeek", getKey: "Get one at DeepSeek Platform" },
+    custom: { name: "Custom service" },
+    bailian: { name: "Alibaba Cloud Bailian", getKey: "Get one at the Bailian console" },
+    moonshot: { name: "Kimi", getKey: "Get one at Kimi API Platform" },
+    zhipu: { name: "Zhipu GLM", getKey: "Get one at Zhipu BigModel Platform" },
+    minimax: { name: "MiniMax", getKey: "Get one at MiniMax Platform" },
   },
 
   language: {
@@ -79,12 +84,14 @@ export default {
   settings: {
     describe: {
       hotkey: "Which key starts and stops dictation",
-      mode: "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this Mac first, then has any LLM polish the text",
+      mode: "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this Mac first, then has any LLM polish the text; private only transcribes on this Mac and uploads nothing",
       model:
         "Which provider and model refines your words, as provider/model; a provider alone uses its default. Switch with speakmore model",
       thinking: "Gemini's thinking level; higher is slower. Other providers don't use it",
       transcriber:
         "On the local path, which on-device model transcribes; download it first (speakmore transcriber download)",
+      privateTranscriber:
+        "On the private path, which on-device model transcribes; on-device models only, download it first",
       polish:
         "On the local path, which provider and model polishes the text, as provider/model; for a custom service write custom/<model>",
       customUrl: "Address of your custom polishing service (OpenAI-compatible), e.g. https://api.example.com/v1",
@@ -108,10 +115,13 @@ export default {
     empty: "is empty",
     unknownProvider: "unknown provider {name}; available: {providers}",
     badName: "model name {model} is invalid: only letters, digits, and . _ : - are allowed",
+    issues: { jsonWrapped: "Occasionally wraps the text in JSON or returns HTTP 500" },
   },
   modes: {
     native: "Native: the recording goes straight to the model",
     local: "Local: transcribed on this Mac, then polished by a model",
+    private: "Private: transcribed on this Mac only, nothing uploaded",
+    privateOnlyLocal: "Private mode only uses on-device models; {model} is a cloud model",
     notIn: "You're in {current} mode; {what} can only be changed in {mode} mode",
     notOfMode: "{name} isn't a {mode} setting; switching to {mode} can also set {names}",
     notDownloaded: "{model} isn't downloaded yet ({size}): download it first",
@@ -119,6 +129,7 @@ export default {
       model: "the audio model",
       transcriber: "the on-device transcription model (step 1)",
       polish: "the polishing model (step 2)",
+      privateTranscriber: "the private mode's on-device model",
     },
   },
   local: {
@@ -206,11 +217,15 @@ export default {
     keychainUnavailable: "The system keychain isn't available, so the key can't be stored safely",
     external: "Connected to a separately started server (SPEAKMORE_SERVER_URL); set the key there",
     externalModel: "Connected to a separately started server (SPEAKMORE_SERVER_URL); the model is chosen there",
-    noKeyFor: "No {provider} key yet. Add one first",
+    noKeyFor: "No {provider} key",
     noKeyForCli: "No {provider} key yet: run speakmore key {id}",
     unknownProvider: "Unknown model provider: {id}",
     noKeyService:
       "No {provider} API key yet: run speakmore key in a terminal, or open Settings from the SpeakMore menu bar icon",
+    noKeyServiceFor:
+      "No {provider} API key yet: run speakmore key {id} in a terminal, or open Settings from the SpeakMore menu bar icon",
+    failedFor: "{provider} key failed: {reason}",
+    whichVendor: "Private mode doesn't use a key; to save one, say which provider it's for",
   },
 
   model: {
@@ -225,6 +240,7 @@ export default {
     forbidden: "This key lacks permission: {said}",
     notFound: "{provider} doesn't have this model, or this key can't use it: {said}",
     blocked: "{provider} didn't process this recording: {reason}",
+    notActivated: "This model isn't activated on {provider}. Activate it in the console, then try again",
     unfinished: "{provider} didn't finish normally: {reason}",
   },
 
@@ -282,11 +298,161 @@ export default {
   hub: {
     pages: "Pages",
     home: "Home",
+    models: "Models",
     history: "History",
     settings: "Settings",
     about: "About",
     missing: "Missing: {items}",
     fix: "Settings",
+  },
+
+  plaza: {
+    title: "Models",
+    search: "Search models or makers",
+    modes: { native: "Native", local: "Transcribe + Polish", private: "Data Privacy" },
+    facts: { upload: "Audio sent to {platform}" },
+    // This role isn't part of the recognition mode in use (the line under the models toolbar)
+    standby: {
+      elsewhere: "Mode in use: {current} · Enabling a model here switches to {mode}",
+      privateCloud: "Data Privacy uses on-device models only · Enabling a cloud model switches to {mode}",
+      pick: "Change mode",
+    },
+    via: { local: "This Mac" },
+    inUse: "In use",
+    chosen: "Selected",
+    chosenTip: "Used in {mode}",
+    actionFailed: "Not completed",
+    check: {
+      run: "Check",
+      running: "Checking",
+      ok: "Passed",
+      fail: "Failed",
+      again: "Check again",
+      okAgain: "Passed, check again",
+      failAgain: "Failed, check again",
+      modelTip: "Send a sample request",
+      localTip: "Transcribe a spoken sample",
+      keyTip: "Send a minimal request with this key",
+    },
+    tabs: { label: "Model categories", native: "Native", transcribe: "Transcribe", polish: "Polish", keys: "Keys" },
+    toolbar: {
+      all: "All",
+      makers: "Filter by maker",
+      best: "Best in column",
+      keysLocal: "Keys stay on this Mac",
+      onlyUsable: "Available only",
+      perMillion: "Price · per million tokens",
+    },
+    cols: {
+      model: "Model",
+      platform: "Platform",
+      status: "Status",
+      action: "Action",
+      key: "Key",
+      input: "Input",
+      inputTip: "Input price · per million tokens",
+      output: "Output",
+      outputTip: "Output price · per million tokens",
+      hour: "Per hour",
+      hourTip: "Cost to transcribe one hour of audio",
+      hourApprox: "Cost to transcribe one hour of audio · Billed by token, estimated from a measured run",
+      noPrice: "See the platform's pricing",
+      zh: "Chinese",
+      zhTip: "Chinese accuracy · 47 real recordings, out of 5",
+      mix: "Mixed",
+      mixTip: "Chinese–English accuracy · 45 real recordings, out of 5",
+      minute: "1-min time",
+      minuteTip: "Time to transcribe one minute of audio · From the measured real-time factor",
+      memory: "Memory",
+      memoryTip: "Peak memory while transcribing",
+      size: "Size",
+      sizeTip: "Download size",
+    },
+    units: { seconds: "s" },
+    tags: {
+      default: "Default",
+      defaultTip: "Enabled after install",
+      tested: "Evaluated",
+      testedTip: "Evaluated on a batch of real recordings",
+      issue: "Known issue",
+      unverified: "Unverified",
+      unverifiedTip: "Added from the official docs; not yet called",
+    },
+    build: "{backend}",
+    buildTip: "Quantization {variant}",
+    makers: {
+      qwen: "Qwen",
+      deepseek: "DeepSeek",
+      kimi: "Kimi",
+      zhipu: "Zhipu GLM",
+      minimax: "MiniMax",
+      gemini: "Gemini",
+      openai: "OpenAI",
+    },
+    groups: {
+      local: "On this Mac",
+      custom: "Custom",
+      localMeta: "Audio stays on this Mac · {done}/{total} downloaded",
+      localMetaFree: "Audio stays on this Mac · {done}/{total} downloaded · {free} free",
+    },
+    channel: {
+      label: "Channel",
+      official: "Official",
+      officialOf: "{platform} official",
+      keyed: "Key configured",
+      noKey: "No key",
+    },
+    notice: { noKey: "No key configured", custom: "Not configured" },
+    actions: {
+      use: "Enable",
+      download: "Download",
+      cancel: "Cancel",
+      configure: "Configure",
+      configureKey: "Add key",
+      needKey: "Add a key first",
+      remove: "Remove",
+      removeModel: "Remove {model}",
+    },
+    custom: {
+      name: "Custom service",
+      desc: "OpenAI-compatible API · Your own address, model, and key",
+      meta: "OpenRouter, SiliconFlow, Ollama, and others",
+      url: "API address",
+      urlPlaceholder: "API address, e.g. https://api.example.com/v1",
+      model: "Model name",
+      modelPlaceholder: "Model name",
+    },
+    empty: { title: "No matching models", search: "Search “{query}”", clear: "Clear filters" },
+    keys: {
+      coverage: "Covers",
+      env: "Environment",
+      envTip: "From the environment variable {variable}; takes precedence over a saved key",
+      stored: "Configured",
+      none: "Not configured",
+      widest: "Widest range",
+      placeholder: "Paste your {platform} API key",
+      label: "{platform} API key",
+      save: "Save",
+      cancel: "Cancel",
+      remove: "Remove",
+      collapse: "Collapse",
+      replace: "Replace",
+      get: "Get a key",
+    },
+    toast: {
+      switchedWith: "Switched to {mode} · {model}",
+      enabled: "{model} enabled",
+      keySaved: { one: "Key saved · {count} model now available", other: "Key saved · {count} models now available" },
+      keySavedOnly: "Key saved",
+      keyRemoved: "{platform} key removed",
+      canceled: "Download canceled",
+      removed: "{model} removed",
+    },
+    notes: {
+      keys: "Stored in {home}",
+      transcribe: "On-device scores · 97 real recordings, Apple silicon, 2026-10-16 · Hover a column for details",
+      prices: "Tags · Default, Evaluated, Known issue, Unverified · Prices as listed by each platform, ¥ CNY, $ USD",
+    },
   },
 
   home: {
@@ -329,6 +495,27 @@ export default {
     estimate: "Estimated at list prices",
     unpriced: "{models} unpriced; {count} not counted",
     dictate: "Press to talk",
+    // The recognition mode menu next to the title (renderer/hub/mode-picker.mjs); mode names live in plaza.modes
+    mode: {
+      label: "Recognition",
+      meta: "Choose one of three · Each keeps its own models",
+      desc: {
+        native: "Audio straight to the model · One request",
+        local: "Speech transcription · Text polishing",
+        private: "On-device transcription · Nothing uploaded",
+      },
+      needs: {
+        key: "No {platform} key",
+        download: "{model} not downloaded",
+        url: "No custom service URL",
+      },
+      fix: "Set up",
+      switching: "Switching",
+      failed: "Not switched",
+      switched: "Switched to {mode}",
+      configure: "Change the models {mode} uses",
+      locked: "The mode is set by the separately started server and can't be changed here",
+    },
   },
 
   history: {
@@ -353,61 +540,22 @@ export default {
     title: "Settings",
     sections: "Settings sections",
     general: "General",
-    model: "Model",
     permissions: "Permissions",
     about: "About",
     hotkey: "Shortcut",
     theme: "Theme",
     language: "Language",
+    modelSource: "Model download source",
     openAtLogin: "Launch at login",
     hotkeyFailed: "Not changed: {reason}",
     themeFailed: "Theme not changed: {reason}",
     languageFailed: "Language not changed: {reason}",
     loginFailed: "Couldn't set launch at login: {reason}",
+    sourceFailed: "Download source not changed: {reason}",
     recheck: "Check again",
     version: "Version",
     dataFolder: "Data folder",
     source: "Source code",
-    modes: {
-      label: "Recognition mode",
-      native: "Native",
-      local: "Local",
-      nativeHint: "Your recording goes straight to a model that takes audio, finished in one step.",
-      localHint: "This Mac transcribes first, then an LLM polishes the text. Audio stays on your Mac.",
-      inUse: "In use",
-      use: "Use {mode}",
-    },
-    local: {
-      step1: "Step 1 · On-device transcription",
-      step2: "Step 2 · Polishing",
-      source: "Download from",
-      downloaded: "Downloaded",
-      downloading: "Downloading {percent}% ({size})",
-      notDownloaded: "Not downloaded · {size}",
-      partial: "{percent}% downloaded",
-      downloadFailed: "Download failed",
-      download: "Download · {size}",
-      resume: "Resume · {size} left",
-      cancel: "Cancel",
-      delete: "Delete",
-      confirmDelete: "Confirm delete",
-      check: "Check",
-      checking: "Checking: reading it a sentence…",
-      checkOk: "Works",
-      downloadFirst: "Download it first to choose it",
-      summary: "{count} of {all} downloaded on this Mac, {size} in total",
-      freeSpace: "{size} free on disk",
-      loading: "Loading",
-      ready: "Ready · {backend}",
-      failed: "Not set up",
-      retry: "Retry",
-      polishModel: "Model",
-      customModel: "Model name",
-      customModelPlaceholder: "e.g. qwen3:8b",
-      customUrl: "Address",
-      customUrlPlaceholder: "https://api.example.com/v1",
-      apply: "Apply",
-    },
   },
 
   keyPanel: {
@@ -536,8 +684,8 @@ export default {
   speakmore history [-n count] [--json]
                                 What you said, grouped by day, newest first (latest {limit} by default)
   speakmore usage [--json]      What it cost: spend and tokens today, this month, and in total, model reply times, per model
-  speakmore mode                The two recognition modes and what each uses: native sends the recording to the model; local transcribes on this Mac, then a model polishes it
-  speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]
+  speakmore mode                The three recognition modes and what each uses: native sends the recording to the model; local transcribes, then a model polishes it; private transcribes with an on-device model and uploads nothing
+  speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url …]
                                 Switch mode, live. Can bring that mode's own settings, e.g. a custom service on first entering local
   speakmore model               Native mode: available providers ({providers}), whether each has a key, which one is in use
   speakmore model <provider>[/<model>]
@@ -598,7 +746,7 @@ export default {
       theme: "Usage: speakmore theme | speakmore theme <name>",
       model:
         "Usage: speakmore model | speakmore model <provider>[/<model>] | speakmore model check [<provider>[/<model>]]",
-      mode: "Usage: speakmore mode | speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]",
+      mode: "Usage: speakmore mode | speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url …]",
       transcriber:
         "Usage: speakmore transcriber | speakmore transcriber <model> | speakmore transcriber download|cancel|delete <model> [--yes] | speakmore transcriber check [<model>]",
       polish:
@@ -649,6 +797,7 @@ export default {
       notInline:
         "Don't put the key after the command: it would stay in your shell history. Run speakmore key and paste it, or pipe it in: pbpaste | speakmore key. To set one for a specific provider, add its name: {providers}",
       forgotten: "Deleted the saved {provider} key.",
+      whichVendor: "Private mode doesn't use a key. To set one for a provider, add its name: {providers}",
       cancelled: "Cancelled; the key is unchanged.",
       nothingRead: "No key read; the old one is unchanged.",
       badShapeUnchanged: "{problem}. The old one is unchanged.",
@@ -729,10 +878,14 @@ export default {
       already: "Already in {mode} mode: {route}.",
       switched: "Switched to {mode} mode: {route}.",
       localRoute: "{transcriber} → {polish}",
+      privateRoute: "{transcriber} on this Mac; no polishing, nothing uploaded",
+      privateModel: "The on-device model in private: speakmore transcriber (on-device models only)",
     },
     local: {
-      notInLocal: "You're in {current} mode, so these aren't in use: switch first (speakmore mode local)",
-      transcribersTitle: "On-device transcription models (local mode, step 1)",
+      notInLocal: "You're in {current} mode, so these aren't in use: switch first (speakmore mode local or private)",
+      cloudNoDownload: "{model} is a cloud model; there's nothing to download",
+      cloudCheckOk: "{model} works; the request took {seconds}.",
+      transcribersTitle: "On-device transcription models (step 1 of local, the model of private)",
       installed: "downloaded",
       notInstalled: "not downloaded",
       downloading: "downloading {percent}%",
@@ -791,6 +944,9 @@ export default {
       native: "native mode: the recording goes straight to the model",
       local:
         "local mode: transcribed on this Mac, only the text goes to a model for polishing (first use downloads a {size} local model)",
+      private:
+        "private mode: transcribed on this Mac only; no polishing, nothing uploaded (first use downloads a {size} local model)",
+      privateOption: "Private    no key needed",
       custom:
         "  To use another service (OpenAI-compatible): after setup, run speakmore mode local --polish custom/<model> --url <url>",
     },
@@ -861,6 +1017,7 @@ export default {
       keyEnvUnverified:
         "Using the one in the {variable} env var this run, not saved; couldn't reach {provider} at launch, so it isn't verified yet",
       keyExternal: "Connected to a separately started server; the key is set there",
+      keyNone: "Not needed (private mode)",
       keySaved: "Saved and verified",
       keySavedUnverified: "Saved; couldn't reach {provider} at launch, so it isn't verified yet",
       keyChecking: "Verifying…",
@@ -872,6 +1029,7 @@ export default {
       keyRejected: "Not working: {problem}. Run speakmore key to replace it",
       keyUnreadable: "{problem}: run speakmore key",
       keyMissing: "Not set: run speakmore key",
+      keyMissingFor: "{provider} key not set: run speakmore key {id}",
       dictations: { one: "{count} dictation", other: "{count} dictations" },
       characters: { one: "{count} character", other: "{count} characters" },
       pace: "{count} characters/min",

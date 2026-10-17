@@ -37,6 +37,7 @@ import { createDelivery } from "./delivery.mjs";
 import { startHelper } from "./helper.mjs";
 import { createKeyManager } from "./keys/key-manager.mjs";
 import { createKeyStore } from "./keys/key-store.mjs";
+import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
 import { createModeSwitch } from "./modes.mjs";
 import { startService } from "./service.mjs";
 import { summarizeSetup, summaryAsText } from "./setup-state.mjs";
@@ -66,10 +67,13 @@ try {
 }
 /** 现在用哪个键。设置里可以当场换（setup:set-hotkey），换的时候重启小帮手 */
 let hotkey = SETTINGS.hotkey.value;
-/** 启动时用谁家的 key：原生链路是收音频的那家，本地转写链路是润色的那家。正在用的以 keys.provider 为准 */
-const PROVIDER = keyVendorOf(ROUTE);
+/**
+ * 启动时用谁家的 key：原生链路是收音频的那家，本地转写链路是润色的那家；数据隐私模式不用 key，是 null。
+ * 正在用的以 keys.provider 为准
+ */
+const PROVIDER = keyVendorOf(ROUTE) ?? null;
 /** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
-const thinkingFor = (provider) => (provider.thinkingLevels ? SETTINGS.thinking.value : null);
+const thinkingFor = (provider) => (provider?.thinkingLevels ? SETTINGS.thinking.value : null);
 /** 菜单栏图标：印章上的五道声波。文件名带 Template，系统按菜单栏的深浅反色；@2x 那张由系统自己挑（scripts/build/make-icon.sh） */
 const TRAY_ICON = join(import.meta.dirname, "../../assets/trayTemplate.png");
 /** 关于里"在 GitHub 上看"打开的地方 */
@@ -145,6 +149,8 @@ async function main() {
 
   const startedAt = new Date().toISOString();
   const history = openHistory(PATHS.historyDb);
+  // 模型广场上的标价：各家的价目模块启动时加载一次
+  const priceOf = await loadPriceBook();
   // 每家一把 key，各存一个文件。正在用的那家之外的也要在：speakmore key openai、model check 要用
   const keyStores = Object.fromEntries(
     VENDORS.map(({ id }) => [
@@ -238,11 +244,15 @@ async function main() {
 
   // ---------- 能不能用、还差什么 ----------
 
+  /** 一家的名字，按界面语言写（文案 providers.<id>.name）；没有那一家（数据隐私模式）是 null */
+  const vendorTitle = (vendor) => (vendor ? msg(`providers.${vendor.id}.name`) : null);
+
   /** 正在用的那一家：连着单独启动的服务端时是设置里那家（用哪个由那边定，这里只是个名字） */
   const provider = () => (service ? keys.provider : PROVIDER);
 
   const currentSetup = () => ({
-    providerName: provider().name,
+    // 缺的是路线里另一家的 key（第一跳交给云端）时点名那一家。按界面语言写它的名字（阿里云百炼，不是日志里的 Bailian）
+    providerName: vendorTitle(keys.current.vendor ?? provider()),
     key: keys.current,
     localModel: service?.localModel ?? null,
     helper: helperState,
@@ -267,7 +277,9 @@ async function main() {
     if (summary.missing.length === 0 && summary.degraded === null) return;
     offeredSettings = true;
     log.info("settings_offered", { missing: summary.missing, degraded: summary.degraded !== null });
-    showOnboarding();
+    // 缺的是路线里另一家（第一跳交给的云端）的 key：首次引导只认正在用的那一家，在那里填会填错。去模型页的密钥表
+    if (setup.key.vendor) showHub({ pane: "auto" });
+    else showOnboarding();
   }
 
   /** 上面任何一样变了都调一次：菜单栏和主窗口跟着更新 */
@@ -518,13 +530,51 @@ async function main() {
       openAtLogin: { supported: app.isPackaged, enabled: app.getLoginItemSettings().openAtLogin },
       home: PATHS.home,
       version: app.getVersion(),
-      // 正在用 key 的那一家
-      provider: describeVendor(provider()),
+      // 正在用 key 的那一家；数据隐私模式不用 key，是 null
+      provider: provider() ? describeVendor(provider()) : null,
       ...describeModes(),
+      // 侧栏"模型"一页：三排货架和密钥表（model-plaza.mjs）
+      plaza: describePlazaNow(),
       // 连着单独启动的服务端时用哪种模式、哪家由那边定，这里换不了
       switchable: Boolean(service),
     };
   });
+
+  /** 模型广场按现在的设置、key、本机模型的状态拼出来 */
+  function describePlazaNow() {
+    const settings = resolveSettings({ file: PATHS.settingsFile, env: process.env });
+    let freeBytes = null;
+    try {
+      freeBytes = freeBytesAt(PATHS.modelsDir);
+    } catch (error) {
+      log.warn("disk_space_unknown", { error: String(error) });
+    }
+    return describePlaza({
+      mode: service?.route.mode ?? ROUTE.mode,
+      chosen: {
+        native: settings.model.value,
+        transcriber: settings.transcriber.value,
+        privateTranscriber: settings.privateTranscriber.value,
+        polish: settings.polish.value,
+        customUrl: settings.customUrl.value,
+      },
+      keys: service ? keys.sources() : {},
+      status: Object.fromEntries(MODELS.map(({ id }) => [id, localModels.status(id)])),
+      chip: CHIP,
+      freeBytes,
+      priceOf,
+      routes: Object.fromEntries(MODES.map(({ id }) => [id, routeOrProblem(settings, id)])),
+    });
+  }
+
+  /** 某种方式按设置走的路线；设置拼不出路线时（比如自定义服务没写模型名）交出原因，首页的选单照实说 */
+  function routeOrProblem(settings, mode) {
+    try {
+      return routeOf(settings, mode);
+    } catch (error) {
+      return { problem: problemOf(error) };
+    }
+  }
 
   /** 设置里要的一家的说明，带着它的 key 在哪（env / stored / null，不解密） */
   function describeVendor(found) {
@@ -536,13 +586,13 @@ async function main() {
       key: sources[found.id] ?? null,
       hasKeyPage: Boolean(found.keyPage),
       defaultModel: found.defaultModel ?? null,
-      // 润色的那几家给出能挑的模型；收音频的那几家只有默认模型
+      // 能挑的模型：{ id, name, maker }
       models: found.models ?? [],
     };
   }
 
   /**
-   * 两种模式各自的设置：正在用的是哪种，native 选了哪个模型，local 两跳各选了什么。
+   * 三种模式各自的设置：正在用的是哪种，native 选了哪个模型，local 两跳各选了什么，private 选了哪个本机模型。
    * 没在用的那种模式也要列：设置里可以先改好它，切过去时就用上
    */
   function describeModes() {
@@ -556,6 +606,7 @@ async function main() {
     return {
       mode: { value: service?.route.mode ?? ROUTE.mode, choices: MODES.map(({ id }) => id) },
       native: { model: settings.model.value, providers: PROVIDERS.map(describeVendor) },
+      private: { transcriber: settings.privateTranscriber.value },
       local: {
         transcriber: settings.transcriber.value,
         transcribers: MODELS.map((model) => ({
@@ -590,11 +641,11 @@ async function main() {
   // 给别家存 key 时可以带上要一起换成的设置（changes），拿它们验证：自定义服务没有默认模型，要连模型名一起给
   handle("setup:save-key", (_event, value, id, changes) =>
     keys.save(value, {
-      provider: id ?? keys.provider.id,
+      provider: id ?? keys.provider?.id,
       ...(id && changes && modes ? { route: modes.routeForVendor(id, changes) } : {}),
     }),
   );
-  handle("setup:forget-key", (_event, id) => keys.forget({ provider: id ?? keys.provider.id }));
+  handle("setup:forget-key", (_event, id) => keys.forget({ provider: id ?? keys.provider?.id }));
   // 设置里的"检查"：哪种模式里都能查，按页面上选的（还没换过去的）设置查
   handle("setup:check-model", (_event, mode, changes) => viaModes((m) => m.check(mode, changes ?? {})));
   // 模式这一层，和各模式里的模型：分开的几件事
@@ -617,7 +668,7 @@ async function main() {
   handle("setup:read-clipboard", () => clipboard.readText());
   handle("setup:open-key-page", (_event, id) => {
     // 自定义服务没有申请 key 的页面
-    const { keyPage } = findVendor(id) ?? provider();
+    const { keyPage } = findVendor(id) ?? provider() ?? {};
     if (!keyPage) throw new TypeError(`${id} 没有申请 key 的页面`);
     return shell.openExternal(keyPage);
   });
@@ -912,14 +963,15 @@ async function main() {
       // 0.5 及以前的命令行靠它说热键叫什么
       hotkeyLabel: say(`hotkeys.${hotkey}.name`),
       // 连着单独启动的服务端时，用哪个模型由那边定
-      provider: service ? keys.provider.id : null,
+      provider: service ? (keys.provider?.id ?? null) : null,
       // 每家的 key 在哪。装成应用的那个各存各的，命令行要靠这一项才知道
       keys: service ? keys.sources() : null,
       // 哪种模式、各用什么。model、thinking 只说 native 的：0.6 及以前的命令行把 model 当收音频的那家来读
       mode: route?.mode ?? null,
       model: native ? formatModelChoice(route.model) : null,
       thinking: native ? thinkingFor(keys.provider) : null,
-      transcriber: route?.mode === "local" ? route.transcriber : null,
+      // local 的第一跳、private 的那一个本机模型
+      transcriber: route?.mode === "local" || route?.mode === "private" ? route.transcriber : null,
       polish: route?.mode === "local" ? formatChatChoice(route.polish) : null,
       theme: theme.id,
       // 设置里的语言（system 是跟随系统）和实际用的那种
@@ -981,6 +1033,9 @@ async function main() {
           // native 的模型、local 第二跳的润色，各查各的
           "check-model": async ({ model, locale: wanted }) =>
             withProblemText(await viaModes((m) => m.check("native", { model })), translatorFor(wanted)),
+          // 某种模式按改后的设置能不能用（云端的第一跳、数据隐私模式）
+          "check-mode": async ({ mode, changes, locale: wanted }) =>
+            withProblemText(await viaModes((m) => m.check(mode, changes ?? {})), translatorFor(wanted)),
           "check-polish": async ({ polish, customUrl, locale: wanted }) =>
             withProblemText(
               await viaModes((m) => m.check("local", customUrl === undefined ? { polish } : { polish, customUrl })),

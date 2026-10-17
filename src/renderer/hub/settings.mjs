@@ -1,20 +1,24 @@
 import { LOCALES, SYSTEM_LOCALE } from "../../i18n/index.mjs";
 import { t } from "../shared/i18n.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
-import { createModelPane } from "./model-pane.mjs";
 
-// 设置对话框：原版的"设置中心"，左边一列菜单。我们的四页：通用（热键、主题、语言、开机启动）、
-// 模型（识别模式和各模式里的模型、key，对应原版"账户"的位置，见 model-pane.mjs）、权限、关于。
+// 设置对话框：原版的"设置中心"，左边一列菜单。我们的三页：通用（热键、主题、语言、本机模型的下载源、开机启动）、
+// 权限、关于。
+// 识别方式、模型和 key 不在这里：在侧栏的"模型"一页（models.mjs）。
 // 状态都在主进程，这里只负责画出来和转达用户的操作。
 
 const $ = (id) => document.getElementById(id);
 
-const PANES = ["general", "model", "permissions", "about"];
+const PANES = ["general", "permissions", "about"];
 
-/** 还差的东西在哪一页补：key 在"模型"，其余是权限（小帮手停了也是，重新检查在那页）；两样都差时先补 key */
-export function paneFor(setup) {
-  if (keyMissing(setup)) return "model";
-  return permissionDenied(setup) || setup.helper === "stopped" ? "permissions" : "general";
+/**
+ * 还差的东西在哪补：key 在侧栏"模型"一页的密钥表，其余是设置的权限页（小帮手停了也是，重新检查在那页）；
+ * 两样都差时先补 key
+ * @returns {{ route: "models", tab: "keys" } | { pane: string }}
+ */
+export function fixTarget(setup) {
+  if (keyMissing(setup)) return { route: "models", tab: "keys" };
+  return { pane: permissionDenied(setup) || setup.helper === "stopped" ? "permissions" : "general" };
 }
 
 /**
@@ -22,9 +26,6 @@ export function paneFor(setup) {
  */
 export function createSettings({ refresh }) {
   const dialog = $("settings");
-  const modelPane = createModelPane({ refresh });
-  /** 最近一次拿到的状态 */
-  let latest = null;
 
   function showPane(pane) {
     const name = PANES.includes(pane) ? pane : "general";
@@ -59,6 +60,12 @@ export function createSettings({ refresh }) {
       ...options(
         [[SYSTEM_LOCALE, t("language.system")], ...LOCALES.map(({ id, name }) => [id, name])],
         setup.language.value,
+      ),
+    );
+    $("model-source").replaceChildren(
+      ...options(
+        setup.local.source.choices.map((id) => [id, t(`modelSources.${id}`)]),
+        setup.local.source.value,
       ),
     );
     $("open-at-login").checked = setup.openAtLogin.enabled;
@@ -103,6 +110,18 @@ export function createSettings({ refresh }) {
       showNote("language-note", result.note ?? null);
     } catch (error) {
       showNote("general-problem", t("preferences.languageFailed", { reason: describeError(error) }), "problem");
+    }
+    await refresh();
+  });
+
+  $("model-source").addEventListener("change", async (event) => {
+    showNote("general-problem", null);
+    showNote("source-note", null);
+    try {
+      const result = await window.speakmore.setModelSource(event.target.value);
+      showNote("source-note", result.note ?? null);
+    } catch (error) {
+      showNote("general-problem", t("preferences.sourceFailed", { reason: describeError(error) }), "problem");
     }
     await refresh();
   });
@@ -160,25 +179,19 @@ export function createSettings({ refresh }) {
   });
 
   return {
-    /** @param {string} [pane] 打开哪一页；"auto" 是还差东西的那一页 */
+    /** @param {string} [pane] 打开哪一页 */
     open(pane = "general") {
-      showPane(pane === "auto" && latest ? paneFor(latest) : pane);
-      if (!dialog.open) {
-        modelPane.reset();
-        if (latest) modelPane.render(latest);
-        dialog.showModal();
-      }
+      showPane(pane);
+      if (!dialog.open) dialog.showModal();
     },
 
     render(setup) {
-      latest = setup;
       renderGeneral(setup);
-      modelPane.render(setup);
       renderPermissions(setup);
       $("about-version").textContent = `v${setup.version}`;
       $("about-home").textContent = setup.home;
       // 菜单上标个红点：这一页里有东西要补
-      const flagged = { model: keyMissing(setup), permissions: permissionDenied(setup) };
+      const flagged = { permissions: permissionDenied(setup) };
       for (const dot of dialog.querySelectorAll(".menu-dot")) dot.hidden = !flagged[dot.dataset.for];
     },
   };

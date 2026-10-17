@@ -1,6 +1,6 @@
 ---
 name: speakmore-two-pipelines
-description: 识别分两种平级的模式让用户选：native（音频直接给能收音频的模型）和 local（本机小模型转写再交任意 API 润色），严格状态机；先搭内核，Windows 之后再做；本地模型不替用户选
+description: 识别分三种平级的模式让用户选：native（音频直接给能收音频的模型）、local（本机或云端转写再交任意 API 润色）、private（数据隐私，只用本机模型转写、什么都不上传、不要 key），严格状态机；本地模型不替用户选
 metadata:
   node_type: memory
   type: project
@@ -35,3 +35,5 @@ metadata:
 - 待办，用户说先不做：截断检查。原生是 Gemini 返回 STOP 却只出了半句；润色那一跳 DeepSeek 也出过一次。local 可以用"成品比原文短太多"来判断，原生用"字数和有声时长对不上"来判断，查出来就重发一次。
 
 相关：[[speakmore-model-providers]]、[[typeless-clone-open-source-panel]]、[[typeless-clone-scope-dictation]]。
+- 2026-10-17 加第三种模式 private（界面叫"数据隐私"）：有人反馈要纯本地、没有任何上传的。只用本机模型转写，原文直接交出，不润色、不要 key。设置 `privateTranscriber`（SPEAKMORE_PRIVATE_TRANSCRIBER），只认本机模型，和 local 的第一跳分开存；`speakmore mode private`，`speakmore transcriber` 在 private 里换它的那一项；key 状态是 ready、source none，存 key 要写明哪一家。他说之后再往外扩：把更多小模型放到 COS 上给用户下。
+

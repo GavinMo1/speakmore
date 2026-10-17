@@ -8,6 +8,7 @@
 // 录音时长默认 7.5 秒（跨过两个 3 秒的分块边界），可用 SPEAKMORE_E2E_RECORD_MS 改。
 // 本地转写那条（local 模式）：数据目录是新的，本地模型会真从下载源下一遍（SPEAKMORE_MODEL_SOURCE 可以换），装好才开始录：
 //   SPEAKMORE_MODE=local scripts/dev/with-key.sh deepseek node scripts/dev/e2e.mjs <WAV>
+// 数据隐私那条（private 模式）不要 key，同样先下模型：SPEAKMORE_MODE=private node scripts/dev/e2e.mjs <WAV>
 // 想用打包时摆出来的那一份跑（只带运行时依赖，看漏没漏包）：SPEAKMORE_E2E_APP=<摆好的目录>
 // 想用打好的应用跑（签了名、开着 hardened runtime，看本地转写的原生库加载不加载得了）：
 //   SPEAKMORE_E2E_ELECTRON=<SpeakMore.app>/Contents/MacOS/SpeakMore
@@ -50,9 +51,9 @@ const child = spawn(
 );
 
 // Electron 万一卡住（比如启动就出错），到时间强制结束，测试算失败而不是一直挂着。
-// local 模式另给下载和装载模型的时间
+// 要本机模型的（local、private 模式）另给下载和装载模型的时间
 const recordMs = Number(process.env.SPEAKMORE_E2E_RECORD_MS ?? 7_500);
-const setupMs = process.env.SPEAKMORE_MODE === "local" ? 20 * 60_000 : 0;
+const setupMs = ["local", "private"].includes(process.env.SPEAKMORE_MODE) ? 20 * 60_000 : 0;
 const watchdog = setTimeout(() => child.kill("SIGKILL"), setupMs + recordMs + 60_000);
 
 child.on("exit", (code) => {
@@ -74,9 +75,11 @@ child.on("exit", (code) => {
     } else {
       console.log(`录音 ${row.duration.toFixed(1)} 秒，文件 ${statSync(row.audioLocalPath).size} 字节`);
     }
-    // 记账：这一次听写调模型的账对得上这条历史
+    // 记账：这一次听写调模型的账对得上这条历史。数据隐私模式只有本机转写那一笔：没有 token、不花钱
     const { usage } = row ?? {};
-    if (!usage || usage.calls < 1 || !(usage.inputTokens > 0) || !(usage.latencyMs > 0)) {
+    const local = process.env.SPEAKMORE_MODE === "private";
+    const counted = local ? usage?.calls === 1 && usage.costUsd === 0 : usage?.inputTokens > 0;
+    if (!usage || usage.calls < 1 || !counted || !(usage.latencyMs > 0)) {
       problems.push(`这条历史没有对上账：${JSON.stringify(usage)}`);
     } else {
       const cost = usage.costUsd === null ? "价格不明" : `$${usage.costUsd.toPrecision(2)}`;

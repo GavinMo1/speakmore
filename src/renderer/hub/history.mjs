@@ -59,7 +59,7 @@ export function createHistory() {
     time.dateTime = row.createdAt;
     time.textContent = clock.format(new Date(row.createdAt));
 
-    const text = node.querySelector(".row-text");
+    const text = node.querySelector(".entry-text");
     const copy = node.querySelector(".copy");
     if (row.status === "failed") {
       node.dataset.kind = "failed";
@@ -117,7 +117,7 @@ export function createHistory() {
         ...groups.map(({ day, rows: dayRows }) => {
           const node = dayTemplate.content.firstElementChild.cloneNode(true);
           node.querySelector(".day-title").textContent = dayTitle(day, now);
-          node.querySelector(".rows").replaceChildren(...dayRows.map(renderRow));
+          node.querySelector(".entries").replaceChildren(...dayRows.map(renderRow));
           return node;
         }),
       );

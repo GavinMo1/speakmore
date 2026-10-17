@@ -1,6 +1,6 @@
 ---
 name: typeless-clone-gemini-key
-description: 开发和评估时调模型的 key 经 scripts/dev/with-key.sh <gemini|openai> 加载，各家用哪把凭据写在本机配置 .machine.env；产品里的 key 由用户自己填
+description: 开发和评估时调模型的 key 经 scripts/dev/with-key.sh <gemini|openai|deepseek|bailian|moonshot> 加载，各家用哪把凭据写在本机配置 .machine.env；产品里的 key 由用户自己填
 metadata:
   type: project
 ---
@@ -16,3 +16,7 @@ metadata:
 - 用户自己用产品时的 key 是他亲手填进去的，那是另一份副本，由他决定。我不替他把 key 从凭据存放处搬进产品。
 
 相关：[[typeless-clone-real-recordings-ok]]、[[skill-routing-general]]。
+
+2026-10-16 加了阿里云百炼：`scripts/dev/with-key.sh bailian <命令>`，凭据里是 `BAILIAN_API_KEY`（另有 `DASHSCOPE_API_KEY` 引用同一个值，给百炼 CLI 和 DashScope SDK）。这把是他为开发新建、让我帮忙加的：他复制到剪贴板，我用 `pbpaste` 管道直接写进凭据目录、只按计数核对格式、写完清空剪贴板，并登记在凭据目录的登记册里。以后再加 key 照这个做法，值不经过对话和终端。
+
+2026-10-16 同一天又加了 Kimi 官方开放平台（国内站 api.moonshot.cn）：`scripts/dev/with-key.sh moonshot <命令>`，凭据里是 `MOONSHOT_API_KEY`，做法同上。加上后 `GET /v1/models` 返回 200，有 kimi-k3、kimi-k2.6、kimi-k2.7-code、kimi-k2.7-code-highspeed。

@@ -1,7 +1,8 @@
 import { LocalizedError } from "../i18n/index.mjs";
 import { DEFAULT_SOURCE, DEFAULT_TRANSCRIBER, findModel, findSource, MODELS, SOURCES } from "../models/catalog.mjs";
+import { cloudTranscriberOf } from "./asr/cloud/vendors.mjs";
 import { normalizeBaseUrl, parseChatChoice } from "./chat/vendors.mjs";
-import { DEFAULT_MODE, DEFAULT_POLISH, keyVendorOf, parseMode } from "./modes.mjs";
+import { DEFAULT_MODE, DEFAULT_POLISH, keyVendorOf, keyVendorsOf, parseMode } from "./modes.mjs";
 import {
   apiKeyProblem,
   DEFAULT_MODEL_CHOICE,
@@ -44,10 +45,12 @@ function thinkingFrom(env) {
   return thinkingLevel;
 }
 
-/** 本地转写链路：用哪个本地模型、润色交给谁、自定义服务的地址 */
+/** 本地转写链路：第一跳用哪个本地模型（或云端的 厂商/模型）、润色交给谁、自定义服务的地址 */
 function localRouteFrom(env) {
-  const transcriber = given(env, "SPEAKMORE_TRANSCRIBER") ?? DEFAULT_TRANSCRIBER;
-  if (!findModel(transcriber)) {
+  const written = given(env, "SPEAKMORE_TRANSCRIBER") ?? DEFAULT_TRANSCRIBER;
+  const cloud = cloudTranscriberOf(written);
+  const transcriber = cloud ? `${cloud.vendor}/${cloud.model}` : written;
+  if (!cloud && !findModel(transcriber)) {
     throw new Error(
       `SPEAKMORE_TRANSCRIBER 写的是 ${JSON.stringify(transcriber)}，能填的有 ${MODELS.map(({ id }) => id).join(" / ")}`,
     );
@@ -80,12 +83,17 @@ export function loadConfig(env) {
   const route = mode === "local" ? localRouteFrom(env) : { mode: "native", model: modelFrom(env), thinkingLevel };
   const modelSource = modelSourceFrom(env);
 
-  const { keyEnv } = keyVendorOf(route);
-  const apiKey = env[keyEnv]?.trim();
-  if (!apiKey) throw new Error(`缺少环境变量 ${keyEnv}`);
-  const keyProblem = apiKeyProblem(apiKey);
-  // 单独启动服务端是调试用的，报错照日志的习惯用英文
-  if (keyProblem) throw new Error(`${keyEnv}: ${new LocalizedError(keyProblem).message}`);
+  // 路线要的每一家都要有 key（第一跳交给云端、润色交给另一家时是两家）
+  const keys = {};
+  for (const { id, keyEnv } of keyVendorsOf(route)) {
+    const key = env[keyEnv]?.trim();
+    if (!key) throw new Error(`缺少环境变量 ${keyEnv}`);
+    const keyProblem = apiKeyProblem(key);
+    // 单独启动服务端是调试用的，报错照日志的习惯用英文
+    if (keyProblem) throw new Error(`${keyEnv}: ${new LocalizedError(keyProblem).message}`);
+    keys[id] = key;
+  }
+  const apiKey = keys[keyVendorOf(route).id];
 
   const port = env.PORT === undefined ? 8790 : Number(env.PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -93,5 +101,5 @@ export function loadConfig(env) {
   }
 
   // 只监听本机：这个服务没有登录，不该被局域网里的其他机器连到
-  return { host: "127.0.0.1", port, route, apiKey, modelSource };
+  return { host: "127.0.0.1", port, route, apiKey, keys, modelSource };
 }

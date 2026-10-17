@@ -13,11 +13,12 @@ export function polishTitle({ vendor, model }, customUrl) {
   return msg("cli.model.describe", { provider: name, model });
 }
 
-/** 一条路线用的模型，写成一句话（msg）：native 是那一家的模型，local 是 第一跳 → 第二跳 */
+/** 一条路线用的模型，写成一句话（msg）：native 是那一家的模型，local 是 第一跳 → 第二跳，private 是那个本机模型 */
 export function routeTitle(route) {
   if (route.mode === "native") {
     return msg("cli.model.describe", { provider: findProvider(route.model.provider).name, model: route.model.model });
   }
+  if (route.mode === "private") return msg("cli.modes.privateRoute", { transcriber: route.transcriber });
   return msg("cli.modes.localRoute", {
     transcriber: route.transcriber,
     polish: polishTitle(route.polish, route.customUrl),
@@ -42,21 +43,22 @@ export function renderModes({ routes, current }, { color, t }) {
       `${INDENT}${mark} ${c.bold(padEnd(id, idWidth))}${padEnd(t(`modes.${id}`), labelWidth)}${t.text(routeTitle(routes[id]))}`,
     );
   }
-  const other = ids.find((id) => id !== current);
+  const others = ids.filter((id) => id !== current);
   lines.push(
     "",
-    `${INDENT}${t("cli.modes.switch", { mode: other })}`,
+    `${INDENT}${t("cli.modes.switch", { mode: others.join(" / ") })}`,
     `${INDENT}${t("cli.modes.nativeModels")}`,
     `${INDENT}${t("cli.modes.localHops")}`,
+    `${INDENT}${t("cli.modes.privateModel")}`,
     `${INDENT}${t("cli.modes.withSettings")}`,
     "",
   );
   return lines.join("\n");
 }
 
-/** 不在 local 模式时：列出来看可以，开头说一句现在用不上 */
+/** 不在用本机模型的模式（local、private）时：列出来看可以，开头说一句现在用不上 */
 const notInLocal = (t, current) =>
-  current === "local" ? [] : [`${INDENT}${t("cli.local.notInLocal", { current })}`, ""];
+  current === "local" || current === "private" ? [] : [`${INDENT}${t("cli.local.notInLocal", { current })}`, ""];
 
 /**
  * 第一跳：本机转写模型。每个模型下好了没有、正在下到哪、下过一半的、上次没下下来的；最后说本机下了几个、磁盘剩多少，
@@ -137,7 +139,7 @@ const keyText = (t, vendor, where) => {
 /**
  * 第二跳：润色的那几家
  * @param {object} view
- * @param {ReadonlyArray<{ id: string, name: string, keyEnv: string, defaultModel: string | null, models: readonly string[] }>} view.vendors
+ * @param {ReadonlyArray<{ id: string, name: string, keyEnv: string, defaultModel: string | null, models: ReadonlyArray<{ id: string }> }>} view.vendors
  * @param {{ vendor: string, model: string }} view.polish 设置里选的那个
  * @param {string} view.customUrl 设置里的自定义地址（没填是空的）
  * @param {Record<string, "stored" | "env" | null>} view.keys
@@ -162,8 +164,9 @@ export function renderPolish({ vendors, polish, customUrl, keys, current }, { co
       `${INDENT}${mark} ${c.bold(padEnd(vendor.id, idWidth))}${padEnd(nameOf(vendor), nameWidth)}${padEnd(modelOf(vendor), modelWidth)}${keys[vendor.id] ? key : c.dim(key)}`,
     );
     // 能挑的别的模型列在下面一行
-    const others = vendor.models.filter((model) => model !== modelOf(vendor) && model !== vendor.defaultModel);
-    const listed = vendor.id === polish.vendor ? vendor.models.filter((model) => model !== polish.model) : others;
+    const ids = vendor.models.map(({ id }) => id);
+    const others = ids.filter((model) => model !== modelOf(vendor) && model !== vendor.defaultModel);
+    const listed = vendor.id === polish.vendor ? ids.filter((model) => model !== polish.model) : others;
     if (listed.length > 0) {
       lines.push(
         c.dim(

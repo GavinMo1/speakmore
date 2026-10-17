@@ -49,14 +49,14 @@
 - 🧹 **Cleans up as it writes** — drops filler words, false starts and repeats; breaks long speech into paragraphs and lists. Reads like you typed it.
 - ⚡ **Fast** — audio streams while you talk; text is usually back about 2 seconds after you stop.
 - 🔒 **Your data stays yours** — no account, no middleman server, no analytics. Your key is encrypted with the macOS Keychain; your history never leaves your Mac.
-- 🔀 **Two modes, your pick** — *Native*: the audio goes straight to Gemini (default) or OpenAI. *Local*: a small model on your Mac transcribes, then any text LLM polishes it — DeepSeek, or your own OpenAI-compatible service. In local mode the audio never leaves your Mac.
+- 🔀 **Two modes, your pick** — *Native*: the audio goes straight to Gemini (default), OpenAI or Qwen-Omni on Alibaba Cloud Bailian. *Local*: a small model on your Mac (or a cloud speech model on Bailian, Zhipu or MiniMax) transcribes, then any text LLM polishes it — DeepSeek, Bailian, Kimi, Zhipu, MiniMax, or your own OpenAI-compatible service. With the on-device model the audio never leaves your Mac.
 - 📊 **See what it costs** — every call is metered; the home window shows words, time saved and streaks.
 - 🎨 **Three themes** — Ink, Cinnabar, Indigo. Follows light and dark mode.
 - 🌐 **English and 简体中文** — menus, windows and the `speakmore` command follow your Mac's language. Switch any time in Settings; it applies right away.
 
 ## 📦 Install
 
-You need macOS 12 or later and a [Gemini key](https://aistudio.google.com/apikey) (has a free tier) or an [OpenAI key](https://platform.openai.com/api-keys). Local mode instead needs a [DeepSeek key](https://platform.deepseek.com/api_keys) or any OpenAI-compatible service, plus about 850 MB for the on-device model.
+You need macOS 12 or later and a [Gemini key](https://aistudio.google.com/apikey) (has a free tier) or an [OpenAI key](https://platform.openai.com/api-keys). Local mode instead needs a key for one of the polish vendors (such as [DeepSeek](https://platform.deepseek.com/api_keys)) or any OpenAI-compatible service, plus about 850 MB for the on-device model.
 
 ### Option 1: Download the app (recommended)
 
@@ -163,7 +163,7 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 | `theme` | `ink` | `ink` / `cinnabar` / `indigo` |
 | `language` | `system` | `system` / `en` / `zh-CN`. `system` follows macOS; the `speakmore` command follows your terminal's `LANG`. Languages we don't have fall back to English |
 
-Settings live in `~/.speakmore/settings.json`. `speakmore mode`, `model`, `transcriber` and `polish` check first and switch on the fly; theme, language and download source also apply on the fly. `config set` is the manual back door: it writes any setting without those checks, even one for the other mode, and other changes restart the background app. For a one-off, put `SPEAKMORE_HOTKEY`, `SPEAKMORE_MODE`, `SPEAKMORE_MODEL`, `GEMINI_THINKING_LEVEL`, `SPEAKMORE_TRANSCRIBER`, `SPEAKMORE_POLISH`, `SPEAKMORE_CUSTOM_URL`, `SPEAKMORE_MODEL_SOURCE`, `SPEAKMORE_THEME` or `SPEAKMORE_LANGUAGE` on the command that starts it; `GEMINI_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY` and `SPEAKMORE_CUSTOM_API_KEY` override stored keys.
+Settings live in `~/.speakmore/settings.json`. `speakmore mode`, `model`, `transcriber` and `polish` check first and switch on the fly; theme, language and download source also apply on the fly. `config set` is the manual back door: it writes any setting without those checks, even one for the other mode, and other changes restart the background app. For a one-off, put `SPEAKMORE_HOTKEY`, `SPEAKMORE_MODE`, `SPEAKMORE_MODEL`, `GEMINI_THINKING_LEVEL`, `SPEAKMORE_TRANSCRIBER`, `SPEAKMORE_POLISH`, `SPEAKMORE_CUSTOM_URL`, `SPEAKMORE_MODEL_SOURCE`, `SPEAKMORE_THEME` or `SPEAKMORE_LANGUAGE` on the command that starts it; `GEMINI_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `BAILIAN_API_KEY`, `MOONSHOT_API_KEY` (Kimi), `ZHIPU_API_KEY`, `MINIMAX_API_KEY` and `SPEAKMORE_CUSTOM_API_KEY` override stored keys.
 
 | Provider | Default model | Notes |
 | --- | --- | --- |

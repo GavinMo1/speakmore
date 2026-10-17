@@ -8,8 +8,18 @@ test("只给 Gemini 的密钥时，其余用默认值，只监听本机", () => 
     port: 8790,
     route: { mode: "native", model: { provider: "gemini", model: "gemini-3.6-flash" }, thinkingLevel: "MINIMAL" },
     apiKey: "k",
+    keys: { gemini: "k" },
     modelSource: "cn",
   });
+});
+
+test("第一跳交给云端、润色交给另一家：两家的 key 都要有，缺哪个说哪个", () => {
+  const env = { SPEAKMORE_MODE: "local", SPEAKMORE_TRANSCRIBER: "bailian/qwen3-asr-flash", DEEPSEEK_API_KEY: "sk-d" };
+  assert.throws(() => loadConfig(env), /BAILIAN_API_KEY/);
+  const config = loadConfig({ ...env, BAILIAN_API_KEY: "sk-ws-b" });
+  assert.equal(config.route.transcriber, "bailian/qwen3-asr-flash");
+  assert.deepEqual(config.keys, { bailian: "sk-ws-b", deepseek: "sk-d" });
+  assert.equal(config.apiKey, "sk-d");
 });
 
 test("SPEAKMORE_MODEL 选厂商和模型，key 从那一家的环境变量来", () => {
@@ -73,6 +83,7 @@ test("SPEAKMORE_MODE=local：本地模型和润色那家用默认的，key 从�
       customUrl: null,
     },
     apiKey: "sk-d",
+    keys: { deepseek: "sk-d" },
     modelSource: "cn",
   });
   assert.throws(() => loadConfig({ SPEAKMORE_MODE: "local", GEMINI_API_KEY: "k" }), /DEEPSEEK_API_KEY/);

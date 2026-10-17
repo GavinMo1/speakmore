@@ -2,6 +2,8 @@ import { formatCount, formatSeconds, formatSpan, formatTokens, formatUsd } from 
 import { activityGrid } from "../../usage/insights.mjs";
 import { keycapOf, t } from "../shared/i18n.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
+import { platformName } from "./dom.mjs";
+import { slidingIndicators } from "./indicators.mjs";
 
 // 首页：原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费；右边一列是口述卡和版本。
 // 数是主进程从全部历史里算好的（src/usage/insights.mjs、src/usage/report.mjs），这里只管画。
@@ -116,6 +118,8 @@ export function createHome() {
     $("heatmap-back").disabled = latest.firstDay === null || first <= latest.firstDay;
   }
 
+  /** 花费那张卡选时段的分段控件，底块跟着选中的那一段滑 */
+  const indicators = slidingIndicators(document.querySelector('.page[data-route="home"]'));
   /** 花费那张卡看的是哪一段：today / month / total。默认本月 */
   let spendPeriod = "month";
   /** 最近一次的用量报表，切换时段时重画用 */
@@ -142,11 +146,16 @@ export function createHome() {
     label.className = "spend-model";
     const icon = row.icon ? providerIcon(row.icon) : null;
     const name = document.createElement("span");
-    name.textContent = row.name;
+    // 云上的那一行 icon 就是厂商 id：名字按界面语言写（阿里云百炼 / Alibaba Cloud Bailian）
+    name.textContent = row.local ? row.name : platformName({ id: row.icon, name: row.name });
     const detail = document.createElement("span");
     detail.className = row.local ? "tag" : "spend-model-id";
     detail.textContent = row.local ? t("home.local") : row.model;
-    label.append(...(icon ? [icon] : []), name, detail);
+    // 名字和型号放在一段字里：窗口窄时型号折到名字下面，和名字左对齐，不把表撑出卡片
+    const text = document.createElement("span");
+    text.className = "spend-model-text";
+    text.append(name, " ", detail);
+    label.append(...(icon ? [icon] : []), text);
     return label;
   }
 
@@ -159,9 +168,10 @@ export function createHome() {
     card.hidden = usage === null || usage.total.calls === 0;
     if (card.hidden) return;
     const period = usage[spendPeriod];
-    for (const tab of document.querySelectorAll(".period-tab")) {
-      tab.setAttribute("aria-selected", String(tab.dataset.period === spendPeriod));
+    for (const segment of $("spend-periods").querySelectorAll(".segment")) {
+      segment.setAttribute("aria-checked", String(segment.dataset.period === spendPeriod));
     }
+    indicators.place();
     $("spend-total").textContent = formatUsd(period.costUsd);
     $("spend-label").textContent = t(`home.spend.${spendPeriod}`);
     const rows = period.models.map((row) =>
@@ -206,9 +216,9 @@ export function createHome() {
     $("spend-note").textContent = notes.join(" · ");
   }
 
-  for (const tab of document.querySelectorAll(".period-tab")) {
-    tab.addEventListener("click", () => {
-      spendPeriod = tab.dataset.period;
+  for (const segment of $("spend-periods").querySelectorAll(".segment")) {
+    segment.addEventListener("click", () => {
+      spendPeriod = segment.dataset.period;
       renderSpend();
     });
   }
@@ -236,6 +246,12 @@ export function createHome() {
       renderSpend();
       $("home-keycap").textContent = keycapOf(app.hotkey);
       $("home-version").textContent = `v${app.version}`;
+    },
+
+    /** 页面切到前台时，分段控件的底块要按真实宽度重新放（藏着时量不出来） */
+    shown() {
+      indicators.reset();
+      indicators.place();
     },
   };
 }
