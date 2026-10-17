@@ -46,6 +46,7 @@ export const CLOUD_TRANSCRIBERS = Object.freeze([
       Object.freeze({ id: "glm-asr-2512", name: "GLM-ASR-2512", maker: "zhipu", maxSeconds: 29, unverified: true }),
     ]),
     load: () => import("./zhipu.mjs"),
+    prices: () => import("./prices/zhipu.mjs"),
   }),
   Object.freeze({
     id: "minimax",
@@ -58,6 +59,7 @@ export const CLOUD_TRANSCRIBERS = Object.freeze([
       Object.freeze({ id: "asr-1.0", name: "MiniMax ASR 1.0", maker: "minimax", maxSeconds: 500, unverified: true }),
     ]),
     load: () => import("./minimax.mjs"),
+    prices: () => import("./prices/minimax.mjs"),
   }),
 ]);
 

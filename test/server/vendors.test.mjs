@@ -29,3 +29,23 @@ test("按 id 找，大小写不论；不认识的是 null", () => {
   assert.equal(findVendor("custom").keyPage, null);
   assert.equal(findVendor("nobody"), null);
 });
+
+/** 价目接口没给价的型号：模型广场上这一格空着（见 chat/prices/bailian.mjs 开头） */
+const UNPRICED = ["polish bailian/qwen3.7-plus"];
+
+test("每一家都有价目模块，清单里的每个型号都标得出价；标不出的写明在 UNPRICED", async () => {
+  const roles = { native: PROVIDERS, polish: CHAT_VENDORS, transcribe: CLOUD_TRANSCRIBERS };
+  for (const [role, registry] of Object.entries(roles)) {
+    // 自定义服务没有清单，价也不知道
+    for (const vendor of registry.filter(({ models }) => models.length > 0)) {
+      assert.equal(typeof vendor.prices, "function", `${role} ${vendor.id} 没有价目模块`);
+      const { listPrice } = await vendor.prices();
+      assert.equal(typeof listPrice, "function", `${role} ${vendor.id} 的价目模块没有 listPrice`);
+      for (const model of vendor.models) {
+        const id = `${role} ${vendor.id}/${model.id}`;
+        if (UNPRICED.includes(id)) assert.equal(listPrice(model.id), null, id);
+        else assert.ok(listPrice(model.id), `${id} 标不出价`);
+      }
+    }
+  }
+});

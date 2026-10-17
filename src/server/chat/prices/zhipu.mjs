@@ -20,6 +20,15 @@ export const PRICES = Object.freeze({
 });
 
 /**
+ * 模型广场上标的价：输入（未命中缓存）和输出，人民币每百万 token；分档的输出标短的那档（润色的成品多半不到 200 token）。价目表里没有是 null
+ * @returns {{ currency: "CNY", input: number, output: number } | null}
+ */
+export function listPrice(model) {
+  const price = PRICES[model];
+  return price ? { currency: "CNY", input: price.input, output: price.output } : null;
+}
+
+/**
  * 一次调用花了多少美元。价目表里没有这个型号时是 null。
  * @param {{ input: number, cached: number, output: number }} tokens input 是没命中缓存的那部分
  */
