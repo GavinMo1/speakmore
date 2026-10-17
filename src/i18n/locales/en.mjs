@@ -1148,6 +1148,9 @@ speakmore help     all commands`,
         "Building the key-listening helper needs the Xcode Command Line Tools. Run this first: xcode-select --install",
       buildFailed:
         "The key-listening helper didn't build (if the Xcode Command Line Tools aren't installed, run xcode-select --install first):\n{detail}",
+      needGo:
+        "Running from source on Windows, building the key-listening helper needs Go 1.27 or newer (https://go.dev/dl/). Install it, then start again.",
+      buildFailedGo: "The Windows key-listening helper didn't build:\n{detail}",
     },
   },
 };

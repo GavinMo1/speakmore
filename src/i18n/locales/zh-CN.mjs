@@ -1102,6 +1102,9 @@ speakmore help     全部命令`,
       cantStop: "SpeakMore 停不掉（进程号 {pid}）。在“活动监视器”里结束它。",
       needXcode: "编译按键监听的小程序需要 Xcode 命令行工具。先运行：xcode-select --install",
       buildFailed: "按键监听的小程序没有编译成功（没装 Xcode 命令行工具的话先运行 xcode-select --install）：\n{detail}",
+      needGo:
+        "从源码运行时，编译 Windows 上按键监听的小程序需要 Go 1.27 或更新的版本（https://go.dev/dl/），装好后再启动",
+      buildFailedGo: "Windows 上按键监听的小程序没有编译成功：\n{detail}",
     },
   },
 };
