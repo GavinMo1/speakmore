@@ -1,82 +1,27 @@
-import { localize, t } from "./i18n.mjs";
-import { providerIcon } from "./provider-icons.mjs";
-import { describeError } from "./setup-text.mjs";
+import { h, svg } from "../shared/dom.mjs";
+import { t } from "../shared/i18n.mjs";
+import { providerIcon } from "../shared/provider-icons.mjs";
+import { describeError } from "../shared/setup-text.mjs";
 
-// 选用哪家的模型、填 key：主窗口设置里的"模型"一页和首次引导的第一步用的是这同一块。
-// 一块面板只管一层的厂商（layer）：native 模式收音频的那几家，或者 local 模式第二跳润色的那几家。
-// 列哪几家、选的是哪家、"改用"要换哪几项设置都由那一层说，两层互不相干（见下面的 KEY_LAYERS）。
-// "改用"时正在用的就是这一层的模式：当场换这一层的模型；不是的话连同这家一起切到那种模式（内核只许这么换，app/modes.mjs）。
-// 状态都在主进程，这里只负责画出来和转达用户的操作。key 只从这里往主进程走一趟，不会从主进程回到页面上。
-// 一家有了 key 就不再摆输入框：点"换 key"才出来。能随时点"检查"拿这家的 key 发一个最小的请求，
-// 看现在能不能用（欠费、没网、key 失效都在这时说出来）；点选一家、换了模型时也自动查一次。
+// 首次引导"准备"那一步里选哪家、填密钥的一块。一块只管一种方式的几家（原生收音频的，或者转写 + 润色里润色的）。
+// 一家一行（几家都排得齐，不按列数换行）；选中的那一行就地展开，填密钥、检测都在那一行里，样子同主窗口的密钥表。
+// 选哪家是引导的打算（plan.mjs），这里只画出来、转达点了哪家；换不换过去由引导看还差什么再定，这里不换。
+// 状态都在主进程，密钥只从这里往主进程走一趟，不会从主进程回到页面上。
+// 下载模型时状态一秒变好几次：各行和输入框只建一次，之后只改字和属性，正在输入的字和焦点不会丢。
 
 /**
- * 改用某一层的某家：有新 key 先拿要换成的设置验证过存好，再换。
- * 正在用的就是这一层的模式时当场换这一层的模型（apply），不是的话连同这些设置一起切到那种模式
- * @param {(typeof KEY_LAYERS)["native"]} layer
- * @param {object} setup 最近一次的状态
- * @param {string} id
- * @param {string | undefined} key 顺带填的一把新的；不填就用那一家现有的
+ * 服务没拿着它的 key：只有来自环境变量时要多说一句（主进程只报来源，不解密）。
+ * 配没配行头已经写着，展开的那一行不再重复，是 null
  */
-export async function useVendor(layer, setup, id, key) {
-  const changes = layer.changes(id);
-  if (key !== undefined) {
-    const saved = await window.speakmore.saveKey(key, id, changes);
-    if (!saved.ok) return saved;
-  }
-  return setup.mode.value === layer.mode ? layer.apply(changes) : window.speakmore.setMode(layer.mode, changes);
+function otherKeyText(vendor) {
+  return vendor.key === "env" ? [t("keyPanel.other.env", { variable: vendor.keyEnv }), "ok"] : null;
 }
 
-/** 两层的厂商：属于哪种模式、列哪几家、这一层选的是哪家、改用某家时换哪几项设置、在那种模式里怎么当场换 */
-export const KEY_LAYERS = {
-  /** native 模式：收音频的模型，改用一家就是换成它的默认模型 */
-  native: {
-    mode: "native",
-    vendors: (setup) => setup.native.providers,
-    chosen: (setup) => setup.native.model.split("/")[0],
-    changes: (id) => ({ model: id }),
-    /** 检查时照什么查：选的就是它时照设置里现在的型号和思考档位，别家查它的默认模型 */
-    checkChanges: (setup, id) => (id === setup.native.model.split("/")[0] ? {} : { model: id }),
-    apply: (changes) => window.speakmore.setModel(changes.model),
-  },
-  /**
-   * local 模式第二跳：润色的模型。polish(id) 给出改用这家时的写法（厂商/模型），
-   * customUrl() 是自定义服务的地址；不给时用它的默认模型、地址不变
-   */
-  polish: ({ polish = (id) => id, customUrl = () => undefined } = {}) => {
-    function changes(id) {
-      const url = customUrl();
-      return url === undefined ? { polish: polish(id) } : { polish: polish(id), customUrl: url };
-    }
-    return {
-      mode: "local",
-      vendors: (setup) => setup.local.vendors,
-      chosen: (setup) => setup.local.polish.split("/")[0],
-      changes,
-      /** 检查时照页面上选的模型（和自定义服务填的地址）查：选了模型就是要看它能不能用 */
-      checkChanges: (_setup, id) => changes(id),
-      apply: (changes) => window.speakmore.setPolish(changes.polish, changes.customUrl),
-    };
-  },
-};
-
-/** 厂商在界面上叫什么，按界面语言写（阿里云百炼，不是日志里的 Bailian）；自定义服务没有牌子 */
-const named = (provider) =>
-  provider.id === "custom"
-    ? { ...provider, name: t("keyPanel.customName") }
-    : { ...provider, name: t(`providers.${provider.id}.name`) };
-
-/** 不是正在用的那家：只说它有没有 key、在哪（主进程只报来源，不解密） */
-function otherKeyText(provider) {
-  if (provider.key === "env") return [t("keyPanel.other.env", { variable: provider.keyEnv }), ""];
-  if (provider.key === "stored") return [t("keyPanel.other.stored"), ""];
-  return [t("keyPanel.other.none", { provider: provider.name }), ""];
-}
-
-function keyText(key, provider) {
+/** 服务正拿着它的 key：说那把 key 的状态。还没配的行头已经写着，是 null */
+function keyText(key, vendor) {
   // 启动时够不着的话先用着，如实说还没验证
   const unverified = key.verified === false;
-  const named = { variable: provider.keyEnv, provider: provider.name, problem: key.problem };
+  const named = { variable: vendor.keyEnv, provider: vendor.name, problem: key.problem };
   switch (key.state) {
     case "ready":
       if (key.source === "env")
@@ -93,125 +38,160 @@ function keyText(key, provider) {
     case "unreadable":
       return [t.text(key.problem), "problem"];
     default:
-      return [t("keyPanel.state.missing"), "problem"];
+      return null;
   }
 }
-
-const MARKUP = `
-  <div class="providers" role="radiogroup" data-i18n-aria-label="keyPanel.models"></div>
-  <div class="vendor-extra"></div>
-  <div class="key-state-row">
-    <p class="state"></p>
-    <button type="button" class="button check-key" data-i18n="keyPanel.check.button" hidden></button>
-    <button type="button" class="button primary use-provider" hidden></button>
-  </div>
-  <p class="check-result" role="status" hidden></p>
-  <form class="key-form">
-    <input type="password" class="input key-input" autocomplete="off" spellcheck="false"
-      data-i18n-placeholder="keyPanel.placeholder" aria-label="API key" />
-    <button type="button" class="button paste-key" data-i18n="keyPanel.paste"></button>
-    <button type="submit" class="button primary save-key"></button>
-  </form>
-  <p class="problem key-problem" role="alert" hidden></p>
-  <p class="hint key-note" hidden></p>
-  <p class="links">
-    <button type="button" class="link open-key-page"></button>
-    <button type="button" class="link replace-key" hidden></button>
-    <button type="button" class="link forget-key" hidden data-i18n="keyPanel.forget"></button>
-  </p>`;
 
 /**
  * 把这一块放进 container。
  * @param {HTMLElement} container
- * @param {{ refresh: () => Promise<unknown>, layer: (typeof KEY_LAYERS)["native"], onSelect?: (id: string) => void }} options
- *   refresh：存完、换完以后让整个窗口重新问一遍状态；layer：管哪一层的厂商（KEY_LAYERS）；
- *   onSelect：每次画完说一声现在看着的是哪家（设置页按它画那一家的模型、地址）
- * @returns {{ render: (setup: object) => void, check: () => void, slot: HTMLElement }}
- *   check：查一次现在看着的那家（换了模型时用）；slot：选哪家下面的一格，用的人往里放那一家要另填的（模型、地址），
- *   放在 key 和检查的上面：检查查的就是这里选的模型
+ * @param {object} options
+ * @param {"native" | "local"} options.mode 哪种方式的几家；检测时按这种方式查
+ * @param {string} options.label 读屏软件念的这一组叫什么
+ * @param {(setup: object) => object[]} options.vendors 列哪几家（plan.mjs 的 vendorsFor）
+ * @param {(setup: object, id: string) => boolean} options.hasKey 这家有没有能用的 key（plan.mjs 的 hasKey）
+ * @param {() => string} options.picked 引导打算用哪家
+ * @param {(id: string) => void} options.pick 点了一家
+ * @param {(id: string) => object} options.checkChanges 检测这家时连带的设置（还没换过去的）
+ * @param {() => Promise<unknown>} options.refresh 存完、删完以后让整个窗口重新问一遍状态
+ * @param {() => void} options.onSaved 存好了一把 key（引导看齐了没有，齐了就换过去）
+ * @returns {{ render: (setup: object) => void }}
  */
-export function createKeyPanel(container, { refresh, layer, onSelect }) {
-  container.innerHTML = MARKUP;
-  localize(container);
-  const find = (selector) => container.querySelector(selector);
-  const keyInput = find(".key-input");
-  const saveButton = find(".save-key");
-  const useButton = find(".use-provider");
-  const keyProblem = find(".key-problem");
-  const keyNote = find(".key-note");
-  const checkButton = find(".check-key");
-  const checkResult = find(".check-result");
-  /** 正在保存或者正在改用时不让重复提交，也不让别处的刷新把按钮重新点亮 */
+export function createKeyPanel(
+  container,
+  { mode, label, vendors, hasKey, picked, pick, checkChanges, refresh, onSaved },
+) {
+  /** 正在保存时不让重复提交，也不让别处的刷新把按钮重新点亮 */
   let saving = false;
-  /** 现在看着的是哪一家（id）。打开时是这一层选的那家；点了别家就看别家的 key，可以改用它 */
-  let selected = null;
   /** 最近一次拿到的状态 */
   let latest = null;
-  /** 有 key 的那家点了"换 key"：摆出输入框。换一家看、换好了就收起 */
+  /** 有 key 的那家点了"更换"：摆出输入框。换一家看、换好了就收起 */
   let replacing = false;
-  /** 每家最近一次检查：{ tone, text, ticket }。ticket 认是哪一次，查到一半又查了一次的，先回来的旧结果不要 */
+  /** 每家最近一次检测：{ tone, text, ticket }。ticket 认是哪一次，查到一半又查了一次的，先回来的旧结果不要 */
   const checks = new Map();
+  /** 每家一行：{ row, head, state }，按 id；几家变了才重建 */
+  const rows = new Map();
+
+  // ---------- 展开的那一块：只建一次，选了哪家就挪到那一行底下 ----------
+
+  const input = h("input", {
+    type: "password",
+    class: "key-input",
+    autocomplete: "off",
+    spellcheck: "false",
+  });
+  const pasteButton = h(
+    "button",
+    {
+      type: "button",
+      class: "icon-button paste-key",
+      title: t("keyPanel.paste"),
+      "aria-label": t("keyPanel.paste"),
+      onclick: paste,
+    },
+    svg("i-clipboard-paste"),
+  );
+  const saveButton = h("button", { type: "submit", class: "button primary save-key", text: t("plaza.keys.save") });
+  const form = h(
+    "form",
+    { class: "key-form", novalidate: true, onsubmit: save },
+    h("label", { class: "key-field" }, svg("i-key-round"), input, pasteButton),
+    saveButton,
+  );
+  const state = h("p", { class: "state" });
+  const checkButton = h("button", {
+    type: "button",
+    class: "button small",
+    text: t("keyPanel.check.button"),
+    onclick: () => check(),
+  });
+  const checkResult = h("p", { class: "check-result", role: "status" });
+  const keyProblem = h("p", { class: "callout key-problem", role: "alert" });
+  const keyNote = h("p", { class: "hint key-note" });
+  const keyPage = h(
+    "button",
+    { type: "button", class: "key-link", onclick: () => window.speakmore.openKeyPage(picked()) },
+    h("span", { text: t("plaza.keys.get") }),
+    svg("i-external-link"),
+  );
+  const replaceButton = h("button", { type: "button", class: "key-link", onclick: toggleReplace });
+  const forgetButton = h("button", {
+    type: "button",
+    class: "key-link",
+    text: t("plaza.keys.remove"),
+    onclick: forget,
+  });
+  const stateRow = h("div", { class: "key-state-row" }, state, checkButton);
+  const body = h(
+    "div",
+    { class: "vendor-body" },
+    stateRow,
+    checkResult,
+    form,
+    keyProblem,
+    keyNote,
+    h("p", { class: "links" }, keyPage, replaceButton, forgetButton),
+  );
+  const list = h("div", { class: "vendor-list", role: "radiogroup", "aria-label": label });
+  container.replaceChildren(list);
 
   /** 显示一句话：msg 按界面语言翻，现成的字照写；空的就藏起来 */
   const show = (node, message) => {
     node.textContent = t.text(message);
     node.hidden = !message;
   };
+  show(keyProblem, null);
+  show(keyNote, null);
 
-  /** 每家一个按钮：图标和名字，这一层选的那家后面打个勾。有没有 key 在下面那行说 */
-  function renderProviders(providers, currentId) {
-    find(".providers").replaceChildren(
-      ...providers.map((provider) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "provider";
-        button.setAttribute("role", "radio");
-        button.setAttribute("aria-checked", String(provider.id === selected));
-        const name = document.createElement("span");
-        name.className = "provider-name";
-        name.textContent = provider.name;
-        const icon = providerIcon(provider.id);
-        button.append(...(icon ? [icon, name] : [name]));
-        if (provider.id === currentId) {
-          const mark = document.createElement("span");
-          mark.className = "provider-in-use";
-          mark.title = t("keyPanel.inUse");
-          mark.textContent = "✓";
-          mark.setAttribute("aria-label", t("keyPanel.inUse"));
-          button.append(mark);
-        }
-        button.addEventListener("click", () => {
-          if (selected === provider.id) return;
-          selected = provider.id;
-          replacing = false;
-          keyInput.value = "";
-          show(keyProblem, null);
-          show(keyNote, null);
-          render(latest);
-          // 点选了一家：有 key 就当场查一次它现在能不能用
-          if (hasKey(latest, provider)) check();
-        });
-        return button;
+  const nameOf = (id) => t(`providers.${id}.name`);
+
+  /** 几家变了（换了方式）才重建各行 */
+  function buildRows(ids) {
+    if (ids.join() === [...rows.keys()].join()) return;
+    rows.clear();
+    list.replaceChildren(
+      ...ids.map((id) => {
+        const keyState = h("span", { class: "vendor-key" });
+        const head = h(
+          "button",
+          {
+            type: "button",
+            class: "vendor-head",
+            role: "radio",
+            onclick: () => choose(id),
+          },
+          h("span", { class: "logo-tile" }, providerIcon(id) ?? svg("i-cloud")),
+          h("span", { class: "vendor-name", text: nameOf(id) }),
+          keyState,
+          h("span", { class: "radio-mark" }, svg("i-check")),
+        );
+        const row = h("div", { class: "vendor" }, head);
+        rows.set(id, { row, head, keyState });
+        return row;
       }),
     );
   }
 
-  /** 这家有没有能拿来用的 key。服务正拿着它的 key 时看那把的状态：不能用的、没有的都算没有 */
-  function hasKey(setup, provider) {
-    // 数据隐私模式不用 key，服务手里没有哪一家的（setup.provider 是 null）
-    if (provider.id === setup.provider?.id) return setup.key.state === "ready" || setup.key.state === "checking";
-    return provider.key !== null;
+  function choose(id) {
+    if (id === picked()) return;
+    replacing = false;
+    input.value = "";
+    show(keyProblem, null);
+    show(keyNote, null);
+    pick(id);
+    // 点选了一家：有 key 就当场查一次它现在能不能用
+    if (hasKey(latest, id)) check();
   }
 
-  /** 查一次现在看着的那家：拿它的 key 发一个最小的请求，不换掉正在用的 */
+  /** 查一次选中的那家：拿它的 key 发一个最小的请求，不换掉正在用的 */
   async function check() {
-    const id = selected;
+    const id = picked();
     const ticket = {};
     checks.set(id, { tone: "pending", text: t("keyPanel.check.running"), ticket });
     render(latest);
     let result;
     try {
-      result = await window.speakmore.checkModel(layer.mode, layer.checkChanges(latest, id));
+      result = await window.speakmore.checkModel(mode, checkChanges(id));
     } catch (error) {
       result = { ok: false, problem: t("keyPanel.failed", { reason: describeError(error) }) };
     }
@@ -227,134 +207,113 @@ export function createKeyPanel(container, { refresh, layer, onSelect }) {
 
   function render(setup) {
     latest = setup;
-    // 这一块说的是选中的那一家：它的 key 在不在、去哪申请；不是这一层选的那家时可以改用它
-    const providers = layer.vendors(setup).map(named);
-    const chosen = layer.chosen(setup);
-    if (!providers.some(({ id }) => id === selected)) selected = chosen;
-    const provider = providers.find(({ id }) => id === selected);
-    const isCurrent = provider.id === chosen;
-    // 服务手里正拿着它的 key（正在用的模式选的就是它）：说那把 key 的状态；别的只说有没有
-    const holding = provider.id === setup.provider?.id;
-    // 连着单独启动的服务端时用哪家由那边定，不给选
-    find(".providers").hidden = !setup.switchable;
-    if (setup.switchable) renderProviders(providers, chosen);
-    keyInput.setAttribute("aria-label", `${provider.name} API key`);
-    // 自定义服务没有申请 key 的页面
-    find(".open-key-page").hidden = !provider.hasKeyPage;
-    if (provider.hasKeyPage) find(".open-key-page").textContent = t(`providers.${provider.id}.getKey`);
-    const [text, tone] = holding ? keyText(setup.key, provider) : otherKeyText(provider);
-    find(".state").textContent = text;
-    find(".state").dataset.tone = tone;
-    // 别家已经有 key：一点就改用它；没有的话在下面填一把，保存时一起改用
-    useButton.hidden = isCurrent || provider.key === null;
-    if (!saving) useButton.textContent = t("keyPanel.use", { provider: provider.name });
-    useButton.disabled = saving;
-    if (!saving) {
-      saveButton.textContent = isCurrent ? t("keyPanel.save") : t("keyPanel.saveAndUse", { provider: provider.name });
+    const all = vendors(setup);
+    buildRows(all.map(({ id }) => id));
+    const vendor = all.find(({ id }) => id === picked()) ?? all[0];
+    const name = nameOf(vendor.id);
+    // 服务手里正拿着它的 key（正在用的方式要的就是它）：说那把 key 的状态；别的只说有没有
+    const holding = vendor.id === setup.provider?.id;
+    for (const [id, { row, head, keyState }] of rows) {
+      const selected = id === vendor.id;
+      head.setAttribute("aria-checked", String(selected));
+      row.toggleAttribute("data-open", selected);
+      const keyed = hasKey(setup, id);
+      keyState.textContent = t(keyed ? "plaza.keys.stored" : "plaza.keys.none");
+      keyState.dataset.tone = keyed ? "ok" : "";
     }
-    // 一次只有一个主按钮：别家已经有 key 时主要是"改用"，填一把新的退到次要
-    saveButton.classList.toggle("primary", useButton.hidden);
+    // 只在换了一家时挪：挪动会让输入框丢掉焦点
+    const { row } = rows.get(vendor.id);
+    if (body.parentNode !== row) row.append(body);
+
+    input.setAttribute("aria-label", t("plaza.keys.label", { platform: name }));
+    input.placeholder = t("plaza.keys.placeholder", { platform: name });
+    keyPage.hidden = !vendor.hasKeyPage;
+    // 行头已经写着配没配：展开的这一行只在多说了点什么时出来（被拒了、在验证、来自环境变量）
+    const said = holding ? keyText(setup.key, { ...vendor, name }) : otherKeyText(vendor);
+    state.hidden = said === null;
+    state.textContent = said?.[0] ?? "";
+    state.dataset.tone = said?.[1] ?? "";
     // 环境变量和外部服务端的 key 不归这里管，不提供"删除"
-    find(".forget-key").hidden = (holding ? setup.key.source : provider.key) !== "stored";
+    forgetButton.hidden = (holding ? setup.key.source : vendor.key) !== "stored";
     const editable = setup.key.source !== "external";
-    // 有 key 的不摆输入框，点"换 key"才出来；没有或者不能用的直接摆出来
-    const keyed = hasKey(setup, provider);
-    find(".key-form").hidden = !editable || (keyed && !replacing);
-    find(".replace-key").hidden = !editable || !keyed;
-    find(".replace-key").textContent = t(replacing ? "keyPanel.keepKey" : "keyPanel.replace");
-    keyInput.disabled = !editable;
-    find(".paste-key").disabled = !editable;
+    // 有 key 的不摆输入框，点"更换"才出来；没有或者不能用的直接摆出来
+    const keyed = hasKey(setup, vendor.id);
+    form.hidden = !editable || (keyed && !replacing);
+    replaceButton.hidden = !editable || !keyed;
+    replaceButton.textContent = t(replacing ? "plaza.keys.cancel" : "plaza.keys.replace");
+    input.disabled = !editable || saving;
+    pasteButton.disabled = !editable || saving;
     saveButton.disabled = saving || !editable;
-    // 检查：有 key 才能查；服务启动时正在验的那把等它验完
-    const checked = checks.get(provider.id);
-    checkButton.hidden = !setup.switchable || !editable || !keyed;
+    // 检测：有 key 才能查；服务启动时正在验的那把等它验完
+    const checked = checks.get(vendor.id);
+    checkButton.hidden = !editable || !keyed;
     checkButton.disabled = saving || checked?.tone === "pending" || (holding && setup.key.state === "checking");
     checkResult.hidden = checkButton.hidden || !checked;
+    stateRow.hidden = state.hidden && checkButton.hidden;
     checkResult.textContent = checked?.text ?? "";
     checkResult.dataset.tone = checked?.tone ?? "";
-    onSelect?.(selected);
   }
 
-  /**
-   * 存 key、改用别家都走这里：一次只做一件，做的时候按钮上写着"验证中…"，做完刷新。
-   * @param {HTMLButtonElement} button
-   * @param {() => Promise<{ ok: boolean, problem?: object | string, note?: object }>} action
-   */
-  async function submit(button, action) {
+  async function save(event) {
+    event.preventDefault();
     if (saving) return;
+    const id = picked();
+    const value = input.value;
+    // 服务正拿着这家的 key：当场换上；别家的只存下（拿它自己的默认模型验过）
+    const holding = id === latest.provider?.id;
     saving = true;
-    const label = button.textContent;
-    saveButton.disabled = true;
-    useButton.disabled = true;
-    button.textContent = t("keyPanel.verifying");
+    saveButton.replaceChildren(svg("i-loader-circle", "icon spin"), t("keyPanel.verifying"));
     show(keyProblem, null);
     show(keyNote, null);
+    render(latest);
     try {
-      const result = await action();
+      const result = await (holding ? window.speakmore.saveKey(value) : window.speakmore.saveKey(value, id, {}));
       if (result.ok) {
-        keyInput.value = "";
+        input.value = "";
         replacing = false;
         // 换了 key：之前查的那次说的是旧的那把
-        checks.delete(selected);
+        checks.delete(id);
         show(keyNote, result.note ?? null);
+        onSaved();
       } else show(keyProblem, result.problem);
     } catch (error) {
       show(keyProblem, t("keyPanel.failed", { reason: describeError(error) }));
     } finally {
       saving = false;
-      button.textContent = label;
+      saveButton.replaceChildren(t("plaza.keys.save"));
       await refresh();
     }
   }
 
-  find(".key-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const value = keyInput.value;
-    // 选中的就是这一层选的那家：只存 key（服务正拿着它的 key 就当场换上）；
-    // 不是的话存这把 key 的同时改用它，验证过才换
-    const isCurrent = selected === layer.chosen(latest);
-    const holding = selected === latest.provider?.id;
-    submit(saveButton, () => {
-      if (!isCurrent) return useVendor(layer, latest, selected, value);
-      return holding ? window.speakmore.saveKey(value) : window.speakmore.saveKey(value, selected, {});
-    });
-  });
-
-  useButton.addEventListener("click", () => submit(useButton, () => useVendor(layer, latest, selected)));
-
-  find(".paste-key").addEventListener("click", async () => {
+  async function paste() {
     const text = (await window.speakmore.readClipboard()).trim();
     if (text === "") {
       show(keyProblem, t("keyPanel.clipboardEmpty"));
       return;
     }
     show(keyProblem, null);
-    keyInput.value = text;
-    keyInput.focus();
-  });
+    input.value = text;
+    input.focus();
+  }
 
-  find(".forget-key").addEventListener("click", async () => {
-    const provider = named(layer.vendors(latest).find(({ id }) => id === selected) ?? latest.provider);
-    const inUse = provider.id === latest.provider?.id;
-    const question = t(inUse ? "keyPanel.confirmForgetInUse" : "keyPanel.confirmForget", { provider: provider.name });
+  async function forget() {
+    const id = picked();
+    const inUse = id === latest.provider?.id;
+    const question = t(inUse ? "keyPanel.confirmForgetInUse" : "keyPanel.confirmForget", { provider: nameOf(id) });
     if (!window.confirm(question)) return;
-    await window.speakmore.forgetKey(selected);
-    checks.delete(selected);
+    await window.speakmore.forgetKey(id);
+    checks.delete(id);
     replacing = false;
     await refresh();
-  });
+  }
 
-  checkButton.addEventListener("click", () => check());
-
-  find(".replace-key").addEventListener("click", () => {
+  function toggleReplace() {
     replacing = !replacing;
-    keyInput.value = "";
+    input.value = "";
     show(keyProblem, null);
     render(latest);
-    if (replacing) keyInput.focus();
-  });
+    if (replacing) input.focus();
+  }
 
-  find(".open-key-page").addEventListener("click", () => window.speakmore.openKeyPage(selected));
-
-  return { render, check, slot: find(".vendor-extra") };
+  return { render };
 }

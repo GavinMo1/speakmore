@@ -1,46 +1,71 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { canContinue, groupStates, STEPS, startStep } from "../../../src/renderer/onboarding/steps.mjs";
+import {
+  firstStepOf,
+  GROUPS,
+  groupStates,
+  STEPS,
+  startStep,
+  stepDone,
+} from "../../../src/renderer/onboarding/steps.mjs";
 
-const setup = (key, permissions = {}) => ({
+const QWEN = "qwen3-asr-0.6b-q8";
+
+const setup = ({ mode = "native", key = "missing", installed = false, switchable = true, permissions = {} } = {}) => ({
+  mode: { value: mode },
+  native: { model: "gemini/gemini-3.6-flash", providers: [{ id: "gemini", key: null }] },
+  local: {
+    transcriber: QWEN,
+    polish: "deepseek/deepseek-flash",
+    transcribers: [{ id: QWEN, installed, download: null }],
+    vendors: [{ id: "deepseek", key: null }],
+  },
+  private: { transcriber: QWEN },
+  plaza: { presets: [] },
+  provider: mode === "private" ? null : { id: "gemini" },
   key: { state: key },
+  switchable,
   permissions: { microphone: "granted", listen: true, trusted: true, ...permissions },
 });
+const plan = (mode = "native") => ({ mode, native: "gemini", polish: "deepseek" });
 
-test("引导的顺序：模型、权限、测麦克风、测快捷键、体验一下、完成", () => {
-  assert.deepEqual(STEPS, ["key", "permissions", "microphone", "hotkey", "try", "done"]);
+test("引导的顺序：选用法、准备模型、权限、测麦克风、测快捷键、体验一下、完成", () => {
+  assert.deepEqual(STEPS, ["way", "prepare", "permissions", "microphone", "hotkey", "try", "done"]);
 });
 
-test("从哪一步开始：缺 key 从模型开始；key 已经能用就直接到权限", () => {
-  assert.equal(startStep(setup("missing")), "key");
-  assert.equal(startStep(setup("rejected")), "key");
-  assert.equal(startStep(setup("ready", { listen: false })), "permissions");
+test("从哪一步开始：现在用的那套还不能用就从选用法开始；能用了从权限开始", () => {
+  assert.equal(startStep(setup(), plan()), "way");
+  assert.equal(startStep(setup({ key: "rejected" }), plan()), "way");
+  assert.equal(startStep(setup({ key: "ready" }), plan()), "permissions");
   // 正在验证的不让人再填一遍
-  assert.equal(startStep(setup("checking")), "permissions");
+  assert.equal(startStep(setup({ key: "checking" }), plan()), "permissions");
+  assert.equal(startStep(setup({ mode: "private" }), plan("private")), "way");
+  assert.equal(startStep(setup({ mode: "private", installed: true }), plan("private")), "permissions");
+  // 连着单独启动的服务端：用哪种由那边定
+  assert.equal(startStep(setup({ switchable: false }), plan()), "permissions");
 });
 
-test("key 验证通过才能继续；正在验证的也要等", () => {
-  assert.equal(canContinue("key", setup("missing")), false);
-  assert.equal(canContinue("key", setup("checking")), false);
-  assert.equal(canContinue("key", setup("ready")), true);
+test("每一步做完了没有：没做完的写跳过，照样能往下走", () => {
+  const state = (extra = {}) => ({ setup: setup(), plan: plan(), said: false, ...extra });
+  assert.equal(stepDone("way", state()), true);
+  assert.equal(stepDone("prepare", state()), false);
+  assert.equal(stepDone("prepare", state({ setup: setup({ key: "ready" }) })), true);
+  assert.equal(stepDone("permissions", state()), true);
+  assert.equal(stepDone("permissions", state({ setup: setup({ permissions: { listen: false } }) })), false);
+  assert.equal(stepDone("permissions", state({ setup: setup({ permissions: { microphone: "denied" } }) })), false);
+  // 辅助功能可以以后再给
+  assert.equal(stepDone("permissions", state({ setup: setup({ permissions: { trusted: false } }) })), true);
+  // 测麦克风、测快捷键靠那一步自己的"是的，继续"
+  assert.equal(stepDone("microphone", state()), false);
+  assert.equal(stepDone("hotkey", state()), false);
+  assert.equal(stepDone("try", state()), false);
+  assert.equal(stepDone("try", state({ said: true })), true);
 });
 
-test("权限：麦克风和输入监控给了就能继续，辅助功能可以以后再给", () => {
-  assert.equal(canContinue("permissions", setup("ready", { microphone: "not-determined" })), false);
-  assert.equal(canContinue("permissions", setup("ready", { listen: false })), false);
-  assert.equal(canContinue("permissions", setup("ready", { listen: null })), false);
-  assert.equal(canContinue("permissions", setup("ready", { trusted: false })), true);
-});
-
-test('测麦克风、测快捷键靠那一步自己的"是的，继续"；体验一下随时可以跳过', () => {
-  assert.equal(canContinue("microphone", setup("ready")), false);
-  assert.equal(canContinue("hotkey", setup("ready")), false);
-  assert.equal(canContinue("try", setup("ready")), true);
-  assert.equal(canContinue("done", setup("ready")), false);
-});
-
-test("顶上三段的进度：做完的、正在做的、还没到的", () => {
-  assert.deepEqual(groupStates("key"), { key: "current", setup: "todo", try: "todo" });
-  assert.deepEqual(groupStates("hotkey"), { key: "done", setup: "current", try: "todo" });
-  assert.deepEqual(groupStates("done"), { key: "done", setup: "done", try: "current" });
+test("顶上三段：点哪段去哪段的第一步；做完的、正在做的、还没到的", () => {
+  assert.deepEqual(GROUPS, ["model", "setup", "try"]);
+  assert.deepEqual(GROUPS.map(firstStepOf), ["way", "permissions", "try"]);
+  assert.deepEqual(groupStates("prepare"), { model: "current", setup: "todo", try: "todo" });
+  assert.deepEqual(groupStates("hotkey"), { model: "done", setup: "current", try: "todo" });
+  assert.deepEqual(groupStates("done"), { model: "done", setup: "done", try: "current" });
 });

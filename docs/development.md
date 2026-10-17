@@ -51,7 +51,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `install.sh`、`install.ps1` | 安装脚本（macOS、Windows）：预检查、下载、校验、装进 `~/.speakmore`（Windows 是 `%USERPROFILE%\.speakmore`）、启动。输出只有英文，不跟界面语言 |
 | `bin/`、`src/cli/` | `speakmore` 命令 |
 | `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、主窗口、首次引导；`keys/` 是 key 的保存和启用 |
-| `src/renderer/`、`src/preload/` | 各个窗口的页面，一个窗口一个目录：`bar/`（悬浮条：状态机、录音、听写协议的客户端、画面）、`hub/`（主窗口：首页、历史记录、设置对话框）、`onboarding/`（首次引导），共用的样式和填 key 那一块在 `shared/` |
+| `src/renderer/`、`src/preload/` | 各个窗口的页面，一个窗口一个目录：`bar/`（悬浮条：状态机、录音、听写协议的客户端、画面）、`hub/`（主窗口：首页、历史记录、设置对话框）、`onboarding/`（首次引导：选识别方式、准备模型和密钥，判断在 `plan.mjs`、`steps.mjs`），共用的样式、拼节点的小工具在 `shared/` |
 | `src/themes/` | 主题：界面要哪些颜色（一组 token）、每套主题给的值、合不合格怎么查。加一套主题是加一个文件、登记一行（名字和介绍写进各语言的文案） |
 | `src/i18n/` | 界面语言：每种语言一个文案文件（`locales/`），跟随系统时怎么挑、翻译函数。内核和主进程不写死哪种语言的话，交出一句"还没定语言的话"（名字加参数），由显示它的那一端（窗口、命令行）按自己的语言翻。回给命令行的，后台按命令行带来的语言翻成字：旧版本的命令行和 `status --json` 的读者只认字 |
 | `src/server/` | 听写服务：`protocol/` 收分块音频，`refine/` 交给模型整理（各家共用的流程，每次调用记一笔账），`providers/` 每家模型一个适配器（`prices/` 是各家的价目表），`audio/` 把录音解成识别用的统一格式（16 kHz 单声道）、转成别家收的格式，`asr/` 是本地转写（每个运行库一个适配器、长录音分段、装着模型的转写进程），`modes.mjs` 是三种识别模式。平时跑在后台应用的进程里 |

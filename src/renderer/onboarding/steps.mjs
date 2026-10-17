@@ -1,32 +1,55 @@
-import { keyMissing, permissionGranted } from "../shared/setup-text.mjs";
+import { permissionGranted } from "../shared/setup-text.mjs";
+import { inEffect, needsOf } from "./plan.mjs";
 
-// 首次引导有哪几步、从哪一步开始、什么时候能往下走。纯函数，不碰页面。
-// 原版分"注册 · 设置 · 体验一下"三段（onboarding__steps__*）；我们没有账号，第一段换成接上一家模型。
+// 首次引导有哪几步、从哪一步开始、每一步算不算做完了。纯函数，不碰页面。
+// 原版分"注册 · 设置 · 体验一下"三段（onboarding__steps__*）；我们没有账号，第一段换成选用法、接上模型。
+// 哪一步都能往回退、往前跳：没做完的也能跳过，进去再配（数据隐私不要 key，什么都不配也能先进去看看）。
 
-export const STEPS = ["key", "permissions", "microphone", "hotkey", "try", "done"];
+export const STEPS = ["way", "prepare", "permissions", "microphone", "hotkey", "try", "done"];
 
 /** 每一步属于顶上三段里的哪一段 */
-const GROUP_OF = { key: "key", permissions: "setup", microphone: "setup", hotkey: "setup", try: "try", done: "try" };
-const GROUPS = ["key", "setup", "try"];
+const GROUP_OF = {
+  way: "model",
+  prepare: "model",
+  permissions: "setup",
+  microphone: "setup",
+  hotkey: "setup",
+  try: "try",
+  done: "try",
+};
+export const GROUPS = ["model", "setup", "try"];
 
-/** 打开引导时从哪一步开始：key 已经能用（或者正在验证）就不用再填一遍 */
-export const startStep = (setup) => (keyMissing(setup) && setup.key.state !== "checking" ? "key" : "permissions");
+/** 点顶上某一段时去它的第一步 */
+export const firstStepOf = (group) => STEPS.find((step) => GROUP_OF[step] === group);
 
 /**
- * 底下的"继续"能不能点。测麦克风、测快捷键这两步不走它，靠那一步自己的"是的，继续"；完成那一步有自己的按钮
+ * 打开引导时从哪一步开始：现在用的那一套已经能用就从设置开始（模型那几步退回去还能改）；
+ * 连着单独启动的服务端时用哪种方式由那边定，也从设置开始
  */
-export function canContinue(step, setup) {
+export function startStep(setup, plan) {
+  if (!setup.switchable) return "permissions";
+  return needsOf(plan, setup).length === 0 && inEffect(plan, setup) ? "permissions" : "way";
+}
+
+/**
+ * 这一步做完了没有：做完了底下的按钮写"继续"，没做完写"跳过"（照样能往下走）。
+ * 测麦克风、测快捷键靠那一步自己的"是的，继续"，底下那颗总是"跳过"
+ * @param {{ setup: object, plan: object, said: boolean }} state said：体验一下那一步已经说出了字
+ */
+export function stepDone(step, { setup, plan, said }) {
   switch (step) {
-    case "key":
-      return setup.key.state === "ready";
+    case "way":
+      return true;
+    case "prepare":
+      return needsOf(plan, setup).length === 0;
     case "permissions":
-      // 辅助功能没有也能用（文字放进剪贴板），不拦着
+      // 辅助功能没有也能用（文字放进剪贴板），不算没做完
       return (
         permissionGranted("microphone", setup.permissions.microphone) &&
         permissionGranted("listen", setup.permissions.listen) === true
       );
     case "try":
-      return true;
+      return said;
     default:
       return false;
   }

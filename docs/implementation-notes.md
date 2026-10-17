@@ -226,7 +226,7 @@ src/usage/report.mjs                    今天、本月、累计、按型号分�
 
 样式和主题之间的约定有测试把关（`test/themes/css-tokens.test.mjs`）：主题给的变量样式文件里不重复定义、用到的变量都有出处、主题的每个变量都有地方用、样式里不写死颜色。
 
-**窗口：结构照原版，观感是自己的。** 主窗口（`renderer/hub/`）照原版：左边侧栏切首页和历史记录，设置是盖在上面的对话框，红绿灯藏进侧栏左上角；首次引导（`renderer/onboarding/`）照原版的"注册 · 设置 · 体验一下"三段，没有账号，第一段换成接上模型。观感不照抄原版的灰白：
+**窗口：结构照原版，观感是自己的。** 主窗口（`renderer/hub/`）照原版：左边侧栏切首页和历史记录，设置是盖在上面的对话框，红绿灯藏进侧栏左上角；首次引导（`renderer/onboarding/`）照原版的"注册 · 设置 · 体验一下"三段，没有账号，第一段换成选识别方式、接上模型；哪一步都能退回、能跳过，进去再配。观感不照抄原版的灰白：
 
 - 窗口背后铺两团主题色的光（`aura`、`aura2`），一直不动。卡片和列表是半透明的面，透出一点光的颜色，上沿一道亮边。
 - 玻璃（`backdrop-filter`）只用在后面真有东西的地方：侧栏（透出光，颜色被提一点）、设置对话框（后面的首页先整体模糊一层）、内容区往下滚时顶上那条拖窗口的地方（滚上去的字在它底下变模糊）。卡片后面只是平滑的光，加模糊看不出区别，就不加。
@@ -283,8 +283,8 @@ src/usage/report.mjs                    今天、本月、累计、按型号分�
 | `src/renderer/bar/machine.mjs` | 状态机 | 悬浮条的状态机（[10](../targets/typeless/docs/10-interaction-state-machine.md)） |
 | `src/renderer/bar/bar-view.mjs`、`bar-ui.mjs`、`bar.mjs` | 悬浮条：该是什么样子、把它画出来、控制 | 原版的悬浮条页面 |
 | `src/renderer/hub/` | 主窗口：首页、历史记录、设置对话框 | 原版的 hub 页面 |
-| `src/renderer/onboarding/` | 首次引导：接上模型 → 授权 → 测麦克风 → 测快捷键 → 说一句 → 完成 | 原版的 onboarding 页面 |
-| `src/renderer/shared/` | 三个页面共用：`tokens.css`（不随主题变的字号、字重、间距、圆角、动效；字号七档、字重四档，样式里只能用它们，`test/renderer/shared/type-scale.test.mjs` 守着）、`window.css`（窗口的光晕、玻璃、按钮）、填 key 那一块和权限的说法（设置和引导都用） | |
+| `src/renderer/onboarding/` | 首次引导：选识别方式 → 准备（下本机模型、填密钥）→ 授权 → 测麦克风 → 测快捷键 → 说一句 → 完成。每步可退回、可跳过；缺的补齐了当场启用，只差模型在下时关了引导由主进程等它下完再启用（`app/pending-switch.mjs`） | 原版的 onboarding 页面 |
+| `src/renderer/shared/` | 三个页面共用：`tokens.css`（不随主题变的字号、字重、间距、圆角、动效；字号七档、字重四档，样式里只能用它们，`test/renderer/shared/type-scale.test.mjs` 守着）、`window.css`（窗口的光晕、玻璃、按钮）、`dom.mjs`（用代码画的几块拼节点、取图标）、权限的说法（设置和引导都用） | |
 | `src/renderer/bar/recorder.mjs` | 录音，每 3 秒一块 | 录音与编码（[11](../targets/typeless/docs/11-audio-recorder.md)） |
 | `src/renderer/bar/voice-socket.mjs` | 听写协议的客户端一侧 | 网络协议（[05](../targets/typeless/docs/05-network-protocol.md)） |
 | `src/server/` | 听写服务：收分块音频（`protocol/`），交给选的那一家模型整理成文字（`refine/`、`providers/`、`audio/`），见上面“不止一家模型” | 原版的服务端（内部看不到，只照着协议做） |

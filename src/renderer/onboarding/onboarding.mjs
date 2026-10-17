@@ -1,29 +1,101 @@
+import { h, progressBadge, svg } from "../shared/dom.mjs";
 import { keycapOf, localize, t } from "../shared/i18n.mjs";
-import { createKeyPanel, KEY_LAYERS } from "../shared/key-panel.mjs";
 import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
+import { providerIcon } from "../shared/provider-icons.mjs";
 import { describeError, permissionGranted } from "../shared/setup-text.mjs";
-import { canContinue, groupStates, STEPS, startStep } from "./steps.mjs";
+import { createKeyPanel } from "./key-panel.mjs";
+import {
+  changesOf,
+  hasKey,
+  inEffect,
+  initialPlan,
+  localModelOf,
+  needsOf,
+  vendorsFor,
+  WAYS,
+  waitingDownload,
+} from "./plan.mjs";
+import { firstStepOf, groupStates, STEPS, startStep, stepDone } from "./steps.mjs";
 
-// 首次引导：接上模型 → 授权 → 测麦克风 → 测快捷键 → 真说一句 → 完成。
+// 首次引导：选识别方式 → 准备（下本机模型、填密钥）→ 授权 → 测麦克风 → 测快捷键 → 真说一句 → 完成。
+// 哪一步都能退回去、往前跳，没做完的也能跳过，进去再配：数据隐私不要密钥，什么都不配也能先进去看看。
+// 选好的那一套（plan.mjs）缺的补齐了就当场换过去；只差本机模型还在下时，引导关了由主进程接着等（app/pending-switch.mjs）。
 // 状态都在主进程；这里管走到哪一步、每一步怎么画。走完了主进程关掉这个窗口、打开主窗口。
 
 const $ = (id) => document.getElementById(id);
 /** 测麦克风时画几根条，中间的高、两边的矮 */
 const METER_BARS = [0.45, 0.7, 0.9, 1, 0.9, 0.7, 0.45];
+const ICONS = { native: "i-sparkles", local: "i-wand-sparkles", private: "i-shield-check" };
 
 // 页面上写死的字先按界面语言填上
 localize();
 
 let setup = null;
 let step = null;
-// 第一步接上的是现在这种模式要的那家：native 是收音频的模型，local 是润色的模型。换模式在主窗口的设置里
-let keyPanel = null;
-let keyLayer = null;
+/** 打算怎么用：{ mode, native, polish }（plan.mjs） */
+let plan = null;
+/** 用户在这次引导里动过打算（选了方式、选了哪家、存了密钥、点了下载）：动过才自动换过去，打开时照现在的不动 */
+let touched = false;
+/** 正在换过去 */
+let applying = false;
+/** 上一次没换成：{ signature, problem }。同一套不自己再试，等用户点"重试"、存了新密钥、改了打算 */
+let failure = null;
+/** 交给主进程等下载的那一套（写成字的），变了才再说一遍 */
+let waitingSent = "null";
+/** 准备那一步的密钥那一块：{ mode, section, panel }，换了方式就换一块 */
+let keySlot = null;
+/** 下载没发起成（磁盘不够这类）：{ model, problem }。下载中途失败的由主进程记在模型的状态里 */
+let downloadProblem = null;
+/** 选识别方式那三行：只建一次，之后只改状态 */
+const wayRows = new Map();
 
 async function refresh() {
   setup = await window.speakmore.getSetup();
+  plan ??= initialPlan(setup);
   render();
+  syncWaiting();
+  maybeApply();
   return setup;
+}
+
+// ---------- 打算：换过去、等下载 ----------
+
+const signatureOf = () => JSON.stringify({ mode: plan.mode, changes: changesOf(plan, setup) });
+
+/** 缺的都补齐了、还没换上：换过去。没换成的同一套不自己再试 */
+async function maybeApply() {
+  if (!touched || !setup.switchable || applying || inEffect(plan, setup) || needsOf(plan, setup).length > 0) return;
+  const signature = signatureOf();
+  if (failure?.signature === signature) return;
+  applying = true;
+  render();
+  let result;
+  try {
+    result = await window.speakmore.setMode(plan.mode, changesOf(plan, setup));
+  } catch (error) {
+    result = { ok: false, problem: describeError(error) };
+  }
+  applying = false;
+  failure = result.ok ? null : { signature, problem: result.problem };
+  await refresh();
+}
+
+/** 只差本机模型还在下：告诉主进程，引导关了也照样等它下完再换过去 */
+function syncWaiting() {
+  if (!touched || !setup.switchable) return;
+  const way = waitingDownload(plan, setup);
+  const text = JSON.stringify(way);
+  if (text === waitingSent) return;
+  waitingSent = text;
+  window.speakmore.waitForDownload(way).catch((error) => console.error("waitForDownload", error));
+}
+
+function changePlan(next) {
+  touched = true;
+  plan = { ...plan, ...next };
+  render();
+  syncWaiting();
+  maybeApply();
 }
 
 // ---------- 走到哪一步 ----------
@@ -46,30 +118,356 @@ function go(next) {
   leave[step]?.();
   step = next;
   for (const section of document.querySelectorAll(".step")) section.hidden = section.dataset.step !== step;
+  $("stage").scrollTop = 0;
   enter[step]?.();
   render();
 }
 
 const goBy = (offset) => go(STEPS[Math.min(STEPS.length - 1, Math.max(0, STEPS.indexOf(step) + offset))]);
 
+// ---------- 画 ----------
+
+const modeName = (mode) => t(`plaza.modes.${mode}`);
+const transcriber = (id) => setup.local.transcribers.find((model) => model.id === id);
+
+/** 体积：1 GB 以上写一位小数的 GB，以下写整数 MB */
+const sizeText = (bytes) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`);
+
+/** "Qwen3-ASR 0.6B (Q8_0)" 拆成型号和量化档 */
+function nameParts(name) {
+  const match = /^(.*?) \((.+)\)$/.exec(name);
+  return match ? [match[1], match[2]] : [name, null];
+}
+
+/** 品牌图标的底座：认识的家用它的图标，本机模型用笔记本，不认识的用一朵云 */
+const tile = (id, className = "logo-tile") =>
+  h("span", { class: className }, (id && providerIcon(id)) ?? svg(id === "local" ? "i-laptop" : "i-cloud"));
+
+/** 一行里要什么：带图标的短语 */
+const need = (icon, text) => h("span", { class: "need" }, svg(icon), h("span", { text }));
+
+function renderWays() {
+  if (wayRows.size === 0) {
+    for (const mode of WAYS) {
+      const needs = h("span", { class: "needs" });
+      const button = h(
+        "button",
+        { type: "button", class: "choice", role: "radio", onclick: () => changePlan({ mode }) },
+        h("span", { class: "choice-icon" }, svg(ICONS[mode])),
+        h(
+          "span",
+          { class: "choice-body" },
+          h("span", { class: "choice-name", text: modeName(mode) }),
+          h("span", { class: "choice-desc", text: t(`home.mode.desc.${mode}`) }),
+          needs,
+        ),
+        h(
+          "span",
+          {
+            class: "brands",
+            title: vendorsFor(setup, mode)
+              .map(({ id }) => t(`providers.${id}.name`))
+              .join(" · "),
+          },
+          ...(mode === "private"
+            ? [tile("local", "mini-tile")]
+            : vendorsFor(setup, mode).map(({ id }) => tile(id, "mini-tile"))),
+        ),
+        h("span", { class: "radio-mark" }, svg("i-check")),
+      );
+      wayRows.set(mode, { button, needs });
+    }
+    $("ways").replaceChildren(...[...wayRows.values()].map(({ button }) => button));
+  }
+  for (const [mode, { button, needs }] of wayRows) {
+    button.setAttribute("aria-checked", String(plan.mode === mode));
+    button.disabled = !setup.switchable;
+    const local = mode === "native" ? null : transcriber(localModelOf(setup, mode));
+    const size = local && (local.installed ? t("onboarding.prepare.model.ready") : sizeText(local.bytes));
+    needs.replaceChildren(
+      ...(local ? [need("i-laptop", t("onboarding.way.local", { size }))] : []),
+      mode === "private" ? need("i-lock", t("onboarding.way.offline")) : need("i-key-round", t("onboarding.way.key")),
+    );
+  }
+  $("way-note").replaceChildren(
+    svg("i-circle-alert"),
+    t(setup.switchable ? "onboarding.way.note" : "home.mode.locked"),
+  );
+}
+
+/** 一路经过谁：录音 → 各个模型 → 文字 */
+function renderRoute() {
+  const arrow = () => h("li", { class: "route-arrow", "aria-hidden": "true" }, svg("i-chevron-right"));
+  const end = (icon, text) => h("li", { class: "route-end" }, svg(icon), h("span", { text }));
+  const hop = (id, text, local) =>
+    h(
+      "li",
+      { class: "route-hop" },
+      tile(id, "mini-tile"),
+      h("span", { text }),
+      local && h("span", { class: "tag", "data-tone": "accent", text: t("onboarding.prepare.route.local") }),
+    );
+  const hops = [];
+  if (plan.mode !== "native") {
+    const model = transcriber(localModelOf(setup, plan.mode));
+    hops.push(hop(model.maker ?? "local", nameParts(model.name)[0], true));
+  }
+  if (plan.mode === "native") hops.push(hop(plan.native, t(`providers.${plan.native}.name`), false));
+  if (plan.mode === "local") hops.push(hop(plan.polish, t(`providers.${plan.polish}.name`), false));
+  $("route").replaceChildren(
+    end("i-mic", t("onboarding.prepare.route.audio")),
+    ...hops.flatMap((item) => [arrow(), item]),
+    arrow(),
+    end("i-letter-text", t("onboarding.prepare.route.text")),
+  );
+}
+
+/** 这一套现在怎样：已启用、启用中、等下载、没换成（带重试）；还差东西时不说，下面各块自己写着 */
+function renderStatus() {
+  const box = $("plan-status");
+  const badge = (tone, icon, text) =>
+    h(
+      "span",
+      { class: "badge", "data-tone": tone },
+      svg(icon, icon === "i-loader-circle" ? "icon spin" : "icon"),
+      h("span", { text }),
+    );
+  const needs = needsOf(plan, setup);
+  let content = null;
+  if (applying) content = badge("progress", "i-loader-circle", t("onboarding.prepare.status.enabling"));
+  else if (needs.length === 0 && inEffect(plan, setup))
+    content = badge("ok", "i-check", t("onboarding.prepare.status.enabled", { mode: modeName(plan.mode) }));
+  else if (failure?.signature === signatureOf()) {
+    content = h(
+      "div",
+      { class: "callout", role: "alert" },
+      svg("i-circle-alert"),
+      h("span", {}, h("b", { text: t("onboarding.prepare.status.failed") }), ` · ${t.text(failure.problem)}`),
+      h("button", {
+        type: "button",
+        class: "button small retry",
+        text: t("onboarding.prepare.status.retry"),
+        onclick: () => {
+          touched = true;
+          failure = null;
+          maybeApply();
+        },
+      }),
+    );
+  } else if (waitingDownload(plan, setup))
+    content = badge("", "i-download", t("onboarding.prepare.status.waiting", { mode: modeName(plan.mode) }));
+  box.replaceChildren(...(content ? [content] : []));
+  box.hidden = content === null;
+}
+
+/** 本机模型那一行：名字、量化档、多大、从哪下；右边是下载、进度或已下载 */
+function modelSection() {
+  const model = transcriber(localModelOf(setup, plan.mode));
+  const [base, variant] = nameParts(model.name);
+  let action;
+  if (model.installed) {
+    action = h(
+      "span",
+      { class: "state-box", "data-tone": "accent" },
+      svg("i-check"),
+      t("onboarding.prepare.model.ready"),
+    );
+  } else if (model.download) {
+    action = progressBadge(model.download);
+  } else {
+    action = h(
+      "button",
+      {
+        type: "button",
+        class: "button",
+        disabled: !setup.switchable,
+        onclick: async (event) => {
+          touched = true;
+          event.currentTarget.disabled = true;
+          const result = await window.speakmore.downloadModel(model.id).catch((error) => ({
+            ok: false,
+            problem: describeError(error),
+          }));
+          if (!result.ok) downloadProblem = { model: model.id, problem: result.problem };
+          await refresh();
+        },
+      },
+      svg("i-download"),
+      t(
+        model.problem || downloadProblem?.model === model.id
+          ? "onboarding.prepare.model.retry"
+          : "onboarding.prepare.model.download",
+      ),
+    );
+  }
+  const problem = model.download ? null : downloadProblem?.model === model.id ? downloadProblem.problem : model.problem;
+  const source = t(`onboarding.prepare.model.sources.${setup.local.source.value}`);
+  return h(
+    "section",
+    { class: "prepare-section model-section" },
+    h("h2", { class: "section-label", text: t("onboarding.prepare.sections.model") }),
+    h(
+      "div",
+      { class: "model-row" },
+      tile(model.maker ?? "local"),
+      h(
+        "span",
+        { class: "model-text" },
+        h(
+          "span",
+          { class: "model-name" },
+          h("span", { text: base }),
+          variant && h("span", { class: "tag", "data-tone": "outline", text: variant }),
+        ),
+        h("span", { class: "model-meta", text: `${sizeText(model.bytes)} · ${source}` }),
+      ),
+      h("span", { class: "model-action" }, action),
+    ),
+    problem &&
+      h(
+        "p",
+        { class: "callout", role: "alert" },
+        svg("i-circle-alert"),
+        h("span", {}, h("b", { text: t("plaza.actionFailed") }), ` · ${t.text(problem)}`),
+      ),
+    !model.installed && h("p", { class: "section-hint", text: t("onboarding.prepare.model.background") }),
+  );
+}
+
+/** 选哪家、填密钥那一块：同一种方式里一直是同一个节点（挪动会让输入框丢焦点），换了方式才换一块 */
+function keySection() {
+  const mode = plan.mode;
+  if (keySlot?.mode !== mode) {
+    const host = h("div", { class: "key-panel" });
+    keySlot = {
+      mode,
+      section: h(
+        "section",
+        { class: "prepare-section key-section" },
+        h("h2", { class: "section-label", text: t(`onboarding.prepare.sections.${mode}`) }),
+        host,
+        mode === "native" && h("p", { class: "section-hint", text: t("onboarding.prepare.nativeOnly") }),
+      ),
+      panel: createKeyPanel(host, {
+        mode,
+        label: t(`onboarding.prepare.sections.${mode}`),
+        vendors: (current) => vendorsFor(current, mode),
+        hasKey: (current, id) => hasKey(current, mode, id),
+        picked: () => (mode === "native" ? plan.native : plan.polish),
+        pick: (id) => changePlan(mode === "native" ? { native: id } : { polish: id }),
+        // 检测时只看这一家：原生换成它的默认模型，润色只验它（第一跳用本机模型，见 app/modes.mjs 的 check）
+        checkChanges: (id) => (mode === "native" ? changesOf({ ...plan, native: id }, setup) : { polish: id }),
+        refresh,
+        onSaved: () => {
+          touched = true;
+          failure = null;
+        },
+      }),
+    };
+  }
+  keySlot.panel.render(setup);
+  return keySlot.section;
+}
+
+function renderPrepare() {
+  $("prepare-title").replaceChildren(
+    h("span", { class: "soft", text: t(`onboarding.prepare.${plan.mode}.soft`) }),
+    h("span", { text: t(`onboarding.prepare.${plan.mode}.title`) }),
+  );
+  renderRoute();
+  renderStatus();
+  const model = plan.mode === "native" ? null : modelSection();
+  const key = plan.mode === "private" ? null : keySection();
+  const host = $("prepare-sections");
+  // 密钥那一块已经在页面上就不挪（挪了输入框丢焦点），只换本机模型那一块
+  if (key && key.parentNode === host) {
+    const old = host.querySelector(":scope > .model-section");
+    if (model && old) old.replaceWith(model);
+    else if (model) host.prepend(model);
+    else old?.remove();
+  } else host.replaceChildren(...[model, key].filter(Boolean));
+  // 都齐了就不用再说"可跳过"
+  $("prepare-note").hidden = needsOf(plan, setup).length === 0;
+  $("prepare-note").replaceChildren(
+    svg("i-circle-alert"),
+    t(plan.mode === "private" ? "onboarding.prepare.laterModel" : "onboarding.prepare.later"),
+    plan.mode === "local" ? ` · ${t("onboarding.prepare.more")}` : "",
+  );
+}
+
+/** 体验一下、完成两步说一句现在的样子：能用、在下、还没接上 */
+function readiness() {
+  const needs = needsOf(plan, setup);
+  if (needs.length === 0 && inEffect(plan, setup)) return null;
+  const download = needs.find(({ kind }) => kind === "download");
+  const model = download && transcriber(download.model);
+  if (model?.download) {
+    const percent = Math.round((model.download.received / (model.download.total || 1)) * 100);
+    return {
+      tone: "progress",
+      icon: "i-download",
+      text: t("onboarding.try.downloading", { model: nameParts(model.name)[0], percent }),
+    };
+  }
+  return { tone: "problem", icon: "i-circle-alert", text: t("onboarding.try.notReady") };
+}
+
+function renderTry() {
+  const state = readiness();
+  const box = $("try-readiness");
+  box.hidden = state === null;
+  if (state) {
+    box.dataset.tone = state.tone;
+    box.replaceChildren(svg(state.icon), h("span", { text: state.text }));
+  }
+}
+
+/** 完成：三样各是什么样，带图标 */
+function renderSummary() {
+  const item = (icon, label, value, tone) =>
+    h(
+      "li",
+      { class: "summary-item", "data-tone": tone },
+      h("span", { class: "logo-tile" }, svg(icon)),
+      h("span", { class: "summary-label", text: label }),
+      h("span", { class: "summary-value", text: value }),
+    );
+  const state = readiness();
+  const mode = state ? state.text : t("onboarding.prepare.status.enabled", { mode: modeName(plan.mode) });
+  const mic = permissionGranted("microphone", setup.permissions.microphone);
+  $("summary").replaceChildren(
+    item(ICONS[plan.mode], t("onboarding.done.mode"), mode, state ? state.tone : "ok"),
+    item("i-keyboard", t("onboarding.done.hotkey"), keycapOf(setup.hotkey.value), "ok"),
+    item(
+      "i-mic",
+      t("permissions.microphone"),
+      t(mic ? "permissions.granted" : "permissions.denied"),
+      mic ? "ok" : "problem",
+    ),
+  );
+}
+
 function render() {
   if (setup === null || step === null) return;
   const states = groupStates(step);
-  for (const item of document.querySelectorAll("[data-group]")) item.dataset.state = states[item.dataset.group];
-
-  const wanted = setup.mode.value === "local" ? "polish" : "native";
-  if (keyLayer !== wanted) {
-    keyLayer = wanted;
-    const layer = wanted === "polish" ? KEY_LAYERS.polish() : KEY_LAYERS.native;
-    keyPanel = createKeyPanel($("key-panel"), { refresh, layer });
+  for (const button of document.querySelectorAll("[data-group]")) {
+    button.dataset.state = states[button.dataset.group];
+    button.setAttribute("aria-current", states[button.dataset.group] === "current" ? "step" : "false");
   }
-  keyPanel.render(setup);
+
+  if (step === "way") renderWays();
+  if (step === "prepare") renderPrepare();
+  if (step === "try") renderTry();
+  if (step === "done") renderSummary();
 
   for (const row of document.querySelectorAll("[data-permission]")) {
     const granted = permissionGranted(row.dataset.permission, setup.permissions[row.dataset.permission]);
     row.dataset.granted = String(granted === true);
     const button = row.querySelector("button");
-    button.textContent = t(granted ? "onboarding.permissions.on" : "onboarding.permissions.allow");
+    button.replaceChildren(
+      ...(granted ? [svg("i-check"), t("onboarding.permissions.on")] : [t("onboarding.permissions.allow")]),
+    );
+    button.classList.toggle("primary", granted !== true);
     button.disabled = granted === true;
   }
 
@@ -80,13 +478,13 @@ function render() {
   );
   $("try-text").placeholder = t("onboarding.try.placeholder", { keycap });
 
-  // 底下的两个按钮
-  const first = step === STEPS[0] || (step === "permissions" && startStep(setup) === "permissions");
-  $("back").hidden = first || step === "done";
+  // 底下：返回（第一步没有）、跳过引导、继续。这一步做完了"继续"是主按钮，没做完是次要的（照样能往下走）
+  $("back").hidden = step === STEPS[0];
+  $("skip-all").hidden = step === "done";
   const next = $("next");
-  next.hidden = step === "microphone" || step === "hotkey" || step === "done";
-  next.disabled = !canContinue(step, setup);
-  next.textContent = t(step === "try" && $("try-text").value.trim() === "" ? "onboarding.skip" : "onboarding.next");
+  next.hidden = step === "done";
+  const done = stepDone(step, { setup, plan, said: $("try-text").value.trim() !== "" });
+  next.classList.toggle("primary", done);
 }
 
 // ---------- 测麦克风 ----------
@@ -135,8 +533,12 @@ function stopMeter() {
 
 // ---------- 用户的操作 ----------
 
+for (const button of document.querySelectorAll("[data-group]")) {
+  button.addEventListener("click", () => go(firstStepOf(button.dataset.group)));
+}
 $("back").addEventListener("click", () => goBy(-1));
 $("next").addEventListener("click", () => goBy(1));
+$("skip-all").addEventListener("click", () => window.speakmore.finishOnboarding());
 $("finish").addEventListener("click", () => window.speakmore.finishOnboarding());
 
 for (const row of document.querySelectorAll("[data-permission]")) {
@@ -168,7 +570,7 @@ $("hotkey-select").addEventListener("change", async (event) => {
   await refresh();
 });
 
-// 说完的话贴进笔记里了："跳过"变成"继续"
+// 说完的话贴进笔记里了："继续"变成主按钮
 $("try-text").addEventListener("input", render);
 
 // ---------- 主进程来的 ----------
@@ -180,4 +582,4 @@ window.speakmore.onOnboardingHotkey(({ down }) => {
 });
 
 await refresh();
-go(startStep(setup));
+go(startStep(setup, plan));
