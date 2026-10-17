@@ -101,6 +101,7 @@ export default {
         "Where on-device models download from: cn is SpeakMore's mirror in China, original is Hugging Face. If the chosen one stalls, the other is tried",
       acceleration:
         "Whether on-device models use the GPU: auto uses it when there is one and falls back to the CPU if it fails; cpu uses only the CPU (for GPU driver trouble, or to leave the GPU to other programs)",
+      barHint: "Whether the hint line above the voice bar (press … to finish · esc to cancel) shows: on or off",
       theme: "Which theme the windows use",
       language: "Interface language; system follows your Mac",
     },
@@ -152,6 +153,10 @@ export default {
   accelerations: {
     auto: "Automatic (GPU if available)",
     cpu: "CPU only",
+  },
+  barHints: {
+    on: "Shown",
+    off: "Hidden",
   },
   localModels: {
     tags: {
@@ -583,6 +588,7 @@ export default {
     language: "Language",
     modelSource: "Model download source",
     acceleration: "On-device model acceleration",
+    barHint: "Hints above the voice bar",
     openAtLogin: "Launch at login",
     hotkeyFailed: "Not changed: {reason}",
     themeFailed: "Theme not changed: {reason}",
@@ -590,6 +596,7 @@ export default {
     loginFailed: "Couldn't set launch at login: {reason}",
     sourceFailed: "Download source not changed: {reason}",
     accelerationFailed: "Acceleration not changed: {reason}",
+    barHintFailed: "Hint setting not changed: {reason}",
     recheck: "Check again",
     version: "Version",
     dataFolder: "Data folder",

@@ -171,6 +171,7 @@ More detail in the [implementation notes](docs/implementation-notes.md) (Chinese
 | `customUrl` | empty | Address of your OpenAI-compatible service, e.g. `http://127.0.0.1:11434/v1` |
 | `modelSource` | `cn` | Where on-device models download from: `cn` (SpeakMore's CDN, fast in China) / `original` (Hugging Face). If one stalls, the other is tried |
 | `acceleration` | `auto` | On-device models: `auto` uses the graphics card when there is one and falls back to the CPU if that fails; `cpu` uses only the CPU. Changing it in the app reloads the model on the spot |
+| `barHint` | `on` | The hint line above the voice bar ("press … to finish · esc to cancel"). `off` hides it; error messages still show. Also a switch in Settings › General, applied on the spot |
 | `theme` | `ink` | `ink` / `cinnabar` / `indigo` |
 | `language` | `system` | `system` / `en` / `zh-CN`. `system` follows the system; the `speakmore` command follows your terminal's `LANG`. Languages we don't have fall back to English |
 

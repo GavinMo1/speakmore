@@ -171,6 +171,7 @@ flowchart LR
 | `customUrl` | 空 | 自定义服务（兼容 OpenAI 接口）的地址，比如 `http://127.0.0.1:11434/v1` |
 | `modelSource` | `cn` | 本机模型从哪下：`cn` 是 SpeakMore 的国内源（CDN），`original` 是 Hugging Face。选的那个下不动会自动换另一个 |
 | `acceleration` | `auto` | 本机模型：`auto` 有显卡就用，显卡上出问题自动退回 CPU；`cpu` 只用 CPU。在 App 里换了当场重新装载模型 |
+| `barHint` | `on` | 悬浮条上方那行操作提示（"再按一下 … 完成 · esc 取消"）。`off` 不显示，报错照样显示。设置 › 通用里也有开关，当场生效 |
 | `theme` | `ink` | `ink` 墨 / `cinnabar` 朱砂 / `indigo` 靛青 |
 | `language` | `system` | `system` 跟随系统 / `en` / `zh-CN`。跟随系统时，应用看系统的语言，`speakmore` 命令看终端的 `LANG`；我们没有的语言用英文 |
 

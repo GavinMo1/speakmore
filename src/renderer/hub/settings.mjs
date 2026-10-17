@@ -74,6 +74,7 @@ export function createSettings({ refresh }) {
         setup.local.acceleration.value,
       ),
     );
+    $("bar-hint").checked = setup.barHint === "on";
     $("open-at-login").checked = setup.openAtLogin.enabled;
     $("open-at-login-row").hidden = !setup.openAtLogin.supported;
   }
@@ -140,6 +141,18 @@ export function createSettings({ refresh }) {
       showNote("acceleration-note", result.note ?? null);
     } catch (error) {
       showNote("general-problem", t("preferences.accelerationFailed", { reason: describeError(error) }), "problem");
+    }
+    await refresh();
+  });
+
+  $("bar-hint").addEventListener("change", async (event) => {
+    showNote("general-problem", null);
+    showNote("bar-hint-note", null);
+    try {
+      const result = await window.speakmore.setBarHint(event.target.checked ? "on" : "off");
+      showNote("bar-hint-note", result.note ?? null);
+    } catch (error) {
+      showNote("general-problem", t("preferences.barHintFailed", { reason: describeError(error) }), "problem");
     }
     await refresh();
   });

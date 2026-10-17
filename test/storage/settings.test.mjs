@@ -46,6 +46,7 @@ test("没有文件也没有环境变量时全用默认值", () => {
     customUrl: { value: "", source: "default" },
     modelSource: { value: "cn", source: "default" },
     acceleration: { value: "auto", source: "default" },
+    barHint: { value: "on", source: "default" },
     theme: { value: "ink", source: "default" },
     language: { value: "system", source: "default" },
   });
@@ -81,6 +82,16 @@ test("本机模型的加速：auto（有显卡就用，出问题退回 CPU）或
     source: "env",
   });
   assert.throws(() => saveSetting(file, "acceleration", "gpu"), /auto \/ cpu/);
+});
+
+test("悬浮条上方的操作提示能关掉（GitHub issue #3）：on 或 off，大小写都认，别的不收", () => {
+  saveSetting(file, "barHint", "OFF");
+  assert.deepEqual(resolveSettings({ file, env: {} }).barHint, { value: "off", source: "file" });
+  assert.deepEqual(resolveSettings({ file, env: { SPEAKMORE_BAR_HINT: "on" } }).barHint, {
+    value: "on",
+    source: "env",
+  });
+  assert.throws(() => saveSetting(file, "barHint", "hide"), /on \/ off/);
 });
 
 test("模型：写成 厂商/模型，只写厂商就用它的默认模型；存下来的都是 厂商/模型", () => {

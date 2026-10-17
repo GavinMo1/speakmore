@@ -340,6 +340,12 @@
             <select class="select" id="acceleration"></select>
           </div>
           <p class="setting-note" id="acceleration-note" role="status" hidden></p>
+          <!-- 悬浮条上方那行"再按一下 … 完成 · esc 取消"：熟练了可以关掉（GitHub issue #3） -->
+          <div class="setting">
+            <label class="setting-title" for="bar-hint" data-i18n="preferences.barHint">Hints above the voice bar</label>
+            <input type="checkbox" class="switch" id="bar-hint" />
+          </div>
+          <p class="setting-note" id="bar-hint-note" role="status" hidden></p>
           <!-- 从终端启动时登记不了开机启动，整行不显示 -->
           <div class="setting" id="open-at-login-row">
             <label class="setting-title" for="open-at-login" data-i18n="preferences.openAtLogin">Launch at login</label>

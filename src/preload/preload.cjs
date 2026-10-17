@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld("speakmore", {
   reportFailure: (payload) => ipcRenderer.invoke("dictation:failed", payload),
 
   onHotkeyChanged: (callback) => ipcRenderer.on("bar:hotkey", (_event, hotkey) => callback(hotkey)),
+  onBarHint: (callback) => ipcRenderer.on("bar:hint", (_event, value) => callback(value)),
 
   // 主窗口：首页、历史记录
   appInfo: () => ipcRenderer.invoke("app:info"),
@@ -71,6 +72,7 @@ contextBridge.exposeInMainWorld("speakmore", {
   recheckPermissions: () => ipcRenderer.invoke("setup:recheck"),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke("setup:set-open-at-login", enabled),
   setHotkey: (hotkey) => ipcRenderer.invoke("setup:set-hotkey", hotkey),
+  setBarHint: (value) => ipcRenderer.invoke("setup:set-bar-hint", value),
 
   // 首次引导
   captureHotkey: (capturing) => ipcRenderer.send("onboarding:capture-hotkey", capturing),

@@ -49,6 +49,8 @@ export function createBarUi({ document, host, keycap: initialKeycap, t: initialT
   let view = View.HIDDEN;
   /** 两个按钮点不点得动 */
   let controls = false;
+  /** 条上方的操作提示显示不显示（设置里的 barHint） */
+  let hintShown = true;
   const wave = createWave({ bars: WAVE_BARS });
   /** 正在听时每帧画一次声波；不在听是 null */
   let waveFrame = null;
@@ -88,7 +90,7 @@ export function createBarUi({ document, host, keycap: initialKeycap, t: initialT
   }
 
   function drawHint() {
-    const parts = hintFor(view, { keycap, cancellable: controls }, t);
+    const parts = hintFor(view, { keycap, cancellable: controls, shown: hintShown }, t);
     hint.replaceChildren(
       ...parts.map((part) =>
         typeof part === "string" ? part : Object.assign(document.createElement("kbd"), { textContent: part.key }),
@@ -170,6 +172,12 @@ export function createBarUi({ document, host, keycap: initialKeycap, t: initialT
       body.dataset.controls = String(enabled);
       if (view !== View.HIDDEN) drawHint();
       syncCapture();
+    },
+
+    /** 设置里开关了操作提示：正显示着的那句当场跟着变 */
+    setHintShown(shown) {
+      hintShown = shown;
+      if (view !== View.HIDDEN) drawHint();
     },
 
     /** 热键换了：提示里写新的那个 */

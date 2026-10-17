@@ -96,6 +96,7 @@ export default {
         "本机模型从哪下载：cn 是 SpeakMore 的国内源，original 是 Hugging Face 原始地址。选的那个下不动会自动换另一个",
       acceleration:
         "本机模型用不用显卡：auto 有显卡就用，出问题自动退回 CPU；cpu 只用 CPU（显卡驱动有问题、或者想把显卡让给别的程序时）",
+      barHint: "悬浮条上方那行操作提示（再按一下 … 完成 · esc 取消）显示不显示：on 显示，off 不显示",
       theme: "界面用哪套主题",
       language: "界面用哪种语言；system 是跟随系统",
     },
@@ -146,6 +147,10 @@ export default {
   accelerations: {
     auto: "自动（有显卡就用）",
     cpu: "只用 CPU",
+  },
+  barHints: {
+    on: "显示",
+    off: "不显示",
   },
   localModels: {
     tags: {
@@ -576,6 +581,7 @@ export default {
     language: "语言",
     modelSource: "本地模型下载源",
     acceleration: "本机模型加速",
+    barHint: "悬浮条操作提示",
     openAtLogin: "开机启动",
     hotkeyFailed: "没改成：{reason}",
     themeFailed: "主题没换成：{reason}",
@@ -583,6 +589,7 @@ export default {
     loginFailed: "开机启动没设上：{reason}",
     sourceFailed: "下载源未能更换：{reason}",
     accelerationFailed: "加速方式未能更换：{reason}",
+    barHintFailed: "操作提示未能更改：{reason}",
     recheck: "重新检查",
     version: "版本",
     dataFolder: "数据目录",

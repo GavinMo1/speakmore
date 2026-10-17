@@ -14,7 +14,7 @@ const MAX_DURATION_MS = 540_000;
 
 // 页面的 lang 跟着界面语言：提示是 aria-live 的，读屏软件按它挑用哪种语言念
 localize();
-const { serverUrl, hotkey: initialHotkey, barControls } = await window.speakmore.config();
+const { serverUrl, hotkey: initialHotkey, barControls, barHint } = await window.speakmore.config();
 /** 现在的热键（id）。提示里写它的短名字，按界面语言写 */
 let hotkey = initialHotkey;
 const voice = new VoiceSocket(serverUrl);
@@ -25,6 +25,8 @@ const ui = createBarUi({
   t,
 });
 ui.setControls(barControls);
+ui.setHintShown(barHint === "on");
+window.speakmore.onBarHint((value) => ui.setHintShown(value === "on"));
 window.speakmore.onHotkeyChanged((next) => {
   hotkey = next;
   ui.setKeycap(keycapOf(hotkey));

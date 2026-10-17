@@ -53,6 +53,8 @@ const CLOUD_MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 const SOURCE_IDS = SOURCES.map((source) => source.id);
 /** 本机模型用不用显卡：auto 有显卡就用、在显卡上没装起来就退回 CPU（asr/start.mjs）；cpu 只用 CPU */
 export const ACCELERATIONS = Object.freeze(["auto", "cpu"]);
+/** 悬浮条上方的操作提示（"再按一下 右⌥ 完成 · esc 取消"）显示不显示：熟练了的人嫌它一直挂着（GitHub issue #3） */
+export const BAR_HINTS = Object.freeze(["on", "off"]);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
 
@@ -185,6 +187,17 @@ export const SETTINGS = {
       return id;
     },
     label: (value) => msg(`accelerations.${value}`),
+  },
+  barHint: {
+    env: "SPEAKMORE_BAR_HINT",
+    default: "on",
+    choices: BAR_HINTS,
+    parse(value) {
+      const id = value.trim().toLowerCase();
+      if (!BAR_HINTS.includes(id)) throw oneOf(BAR_HINTS);
+      return id;
+    },
+    label: (value) => msg(`barHints.${value}`),
   },
   theme: {
     env: "SPEAKMORE_THEME",

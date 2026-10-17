@@ -432,6 +432,8 @@ async function main() {
     if (!bar.isDestroyed()) bar.webContents.send(channel, payload);
   };
   const notify = (message) => tellBar("notice", message);
+  /** 悬浮条上方的操作提示开不开（设置里的 barHint，on / off）。每次现读：被环境变量盖着时是环境变量里的 */
+  const currentBarHint = () => resolveSettings({ file: PATHS.settingsFile, env: process.env }).barHint.value;
   ipcMain.on("bar:set-visible", (_event, visible) => {
     if (visible) {
       bar.showInactive();
@@ -578,7 +580,7 @@ async function main() {
     });
   }
 
-  handle("config:get", () => ({ serverUrl, hotkey, barControls }));
+  handle("config:get", () => ({ serverUrl, hotkey, barControls, barHint: currentBarHint() }));
   handle("dictation:deliver", async (_event, payload) => {
     const result = await delivery.completed(payload);
     // 只记长度：成品是用户说的话，不进日志
@@ -613,6 +615,7 @@ async function main() {
       // 叫什么由页面按界面语言写，这里只给 id
       hotkey: { value: hotkey, choices: HOTKEY_IDS },
       theme: { value: theme.id, choices: THEMES.map(({ id }) => id) },
+      barHint: currentBarHint(),
       language: { value: languageSetting, locale },
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
       openAtLogin: {
@@ -838,6 +841,16 @@ async function main() {
     service?.setAcceleration(acceleration);
     setupChanged();
     const variable = overridingEnv("acceleration", process.env);
+    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
+  });
+  // 悬浮条上方的操作提示开不开：存下来，开着的悬浮条当场跟着变
+  handle("setup:set-bar-hint", (_event, wanted) => {
+    saveSetting(PATHS.settingsFile, "barHint", wanted);
+    const barHint = currentBarHint();
+    log.info("bar_hint_changed", { barHint });
+    tellBar("bar:hint", barHint);
+    setupChanged();
+    const variable = overridingEnv("barHint", process.env);
     return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
   });
   handle("setup:set-language", (_event, wanted) => {
