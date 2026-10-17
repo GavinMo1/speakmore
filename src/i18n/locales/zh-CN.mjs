@@ -72,6 +72,7 @@ export default {
     bailian: { name: "阿里云百炼", getKey: "去阿里云百炼控制台申请" },
     moonshot: { name: "Kimi", getKey: "去 Kimi API 开放平台申请" },
     zhipu: { name: "智谱", getKey: "去智谱开放平台申请" },
+    minimax: { name: "MiniMax", getKey: "去 MiniMax 开放平台申请" },
   },
 
   language: {

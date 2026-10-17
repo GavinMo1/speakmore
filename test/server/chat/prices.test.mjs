@@ -53,3 +53,10 @@ test("智谱：免费的型号花费是 0；GLM-4.5-Air 按这一次输出的长
   close(zhipuCost("glm-4.5-air", { input: 1_000_000, cached: 0, output: 200 }), (0.8 + (200 * 6) / 1e6) / CNY_PER_USD);
   assert.equal(zhipuCost("glm-5.3", TOKENS), null);
 });
+
+test("MiniMax：按折后的标准价算；清单外的型号是空", async () => {
+  const { costOf: minimaxCost } = await import("../../../src/server/chat/prices/minimax.mjs");
+  const { CNY_PER_USD } = await import("../../../src/server/currency.mjs");
+  close(minimaxCost("MiniMax-M3", TOKENS), (2.1 + 0.42 + 8.4) / CNY_PER_USD);
+  assert.equal(minimaxCost("MiniMax-M2.7", TOKENS), null);
+});

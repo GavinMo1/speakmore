@@ -174,3 +174,43 @@ test("智谱：请求照官方文档发到 /chat/completions、带上关思考�
   assert.equal(result.usage.cachedTokens, 1000);
   assert.ok(result.usage.costUsd > 0);
 });
+
+test("MiniMax：国内站地址，只收能关思考的 M3，请求带上关思考、思考另放一处；没拿真 key 验过", () => {
+  const minimax = findChatVendor("minimax");
+  assert.equal(minimax.baseUrl, "https://api.minimax.cn/v1");
+  assert.deepEqual(
+    minimax.models.map(({ id }) => id),
+    ["MiniMax-M3"],
+  );
+  assert.deepEqual(requestFor(minimax, "MiniMax-M3"), { thinking: { type: "disabled" }, reasoning_split: true });
+  assert.equal(minimax.models[0].unverified, true);
+});
+
+test("MiniMax：请求照官方文档发到 /chat/completions；万一带回了思考，也不当成品", async () => {
+  // 回话照 MiniMax Chat Completions 的接口文档写（https://platform.minimax.cn/docs/api-reference/text-chat-openai）
+  const { request, result } = await polishOnce("minimax", "MiniMax-M3", {
+    id: "066a2a568140d42ba2020cec72d592c0",
+    model: "MiniMax-M3",
+    object: "chat.completion",
+    choices: [
+      {
+        index: 0,
+        finish_reason: "stop",
+        message: { role: "assistant", name: "MiniMax AI", content: "周一上午十点开会", reasoning_content: "想了想" },
+      },
+    ],
+    usage: {
+      total_tokens: 473,
+      prompt_tokens: 170,
+      completion_tokens: 303,
+      prompt_tokens_details: { cached_tokens: 157 },
+    },
+    base_resp: { status_code: 0, status_msg: "" },
+  });
+  assert.equal(request.url, "https://api.minimax.cn/v1/chat/completions");
+  assert.deepEqual(request.body.thinking, { type: "disabled" });
+  assert.equal(request.body.reasoning_split, true);
+  assert.equal(result.text, "周一上午十点开会");
+  assert.equal(result.usage.cachedTokens, 157);
+  assert.ok(result.usage.costUsd > 0);
+});
