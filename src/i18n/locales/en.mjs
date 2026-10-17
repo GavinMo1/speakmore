@@ -1026,6 +1026,7 @@ export default {
       keyRejected: "Not working: {problem}. Run speakmore key to replace it",
       keyUnreadable: "{problem}: run speakmore key",
       keyMissing: "Not set: run speakmore key",
+      keyMissingFor: "{provider} key not set: run speakmore key {id}",
       dictations: { one: "{count} dictation", other: "{count} dictations" },
       characters: { one: "{count} character", other: "{count} characters" },
       pace: "{count} characters/min",

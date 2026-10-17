@@ -989,6 +989,7 @@ export default {
       keyRejected: "不能用：{problem}。运行 speakmore key 换一把",
       keyUnreadable: "{problem}：运行 speakmore key",
       keyMissing: "还没有填：运行 speakmore key",
+      keyMissingFor: "还没有填 {provider} 的：运行 speakmore key {id}",
       dictations: { other: "{count} 次" },
       characters: { other: "{count} 字" },
       pace: "每分钟 {count} 字",

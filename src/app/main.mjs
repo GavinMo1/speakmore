@@ -244,12 +244,15 @@ async function main() {
 
   // ---------- 能不能用、还差什么 ----------
 
+  /** 一家的名字，按界面语言写（文案 providers.<id>.name）；没有那一家（数据隐私模式）是 null */
+  const vendorTitle = (vendor) => (vendor ? msg(`providers.${vendor.id}.name`) : null);
+
   /** 正在用的那一家：连着单独启动的服务端时是设置里那家（用哪个由那边定，这里只是个名字） */
   const provider = () => (service ? keys.provider : PROVIDER);
 
   const currentSetup = () => ({
-    // 缺的是路线里另一家的 key（第一跳交给云端）时点名那一家
-    providerName: keys.current.vendor?.name ?? provider()?.name ?? null,
+    // 缺的是路线里另一家的 key（第一跳交给云端）时点名那一家。按界面语言写它的名字（阿里云百炼，不是日志里的 Bailian）
+    providerName: vendorTitle(keys.current.vendor ?? provider()),
     key: keys.current,
     localModel: service?.localModel ?? null,
     helper: helperState,
@@ -274,7 +277,9 @@ async function main() {
     if (summary.missing.length === 0 && summary.degraded === null) return;
     offeredSettings = true;
     log.info("settings_offered", { missing: summary.missing, degraded: summary.degraded !== null });
-    showOnboarding();
+    // 缺的是路线里另一家（第一跳交给的云端）的 key：首次引导只认正在用的那一家，在那里填会填错。去模型页的密钥表
+    if (setup.key.vendor) showHub({ pane: "auto" });
+    else showOnboarding();
   }
 
   /** 上面任何一样变了都调一次：菜单栏和主窗口跟着更新 */

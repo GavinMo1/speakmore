@@ -60,8 +60,11 @@ export const KEY_LAYERS = {
   },
 };
 
-/** 厂商在界面上叫什么：自定义服务没有牌子，按界面语言写 */
-const named = (provider) => (provider.id === "custom" ? { ...provider, name: t("keyPanel.customName") } : provider);
+/** 厂商在界面上叫什么，按界面语言写（阿里云百炼，不是日志里的 Bailian）；自定义服务没有牌子 */
+const named = (provider) =>
+  provider.id === "custom"
+    ? { ...provider, name: t("keyPanel.customName") }
+    : { ...provider, name: t(`providers.${provider.id}.name`) };
 
 /** 不是正在用的那家：只说它有没有 key、在哪（主进程只报来源，不解密） */
 function otherKeyText(provider) {

@@ -45,7 +45,10 @@ function keyLine(key, provider, t) {
     case "unreadable":
       return t("cli.status.keyUnreadable", named);
     default:
-      return t("cli.status.keyMissing");
+      // 缺的是路线里另一家的（第一跳交给云端）：点名它，给它的命令
+      return key.vendor
+        ? t("cli.status.keyMissingFor", { provider: t(`providers.${key.vendor.id}.name`), id: key.vendor.id })
+        : t("cli.status.keyMissing");
   }
 }
 

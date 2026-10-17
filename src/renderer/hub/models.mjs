@@ -114,6 +114,8 @@ export function createModels({ refresh }) {
     custom: { url: "", model: "" },
     /** 正在等主进程回话的那一次操作，按钮不重复点 */
     busy: null,
+    /** 从某一排货架点"配置密钥"跳到密钥表时，那一排是哪个分类：存好 key 就回去，接着启用那一行的模型 */
+    returnTo: null,
   };
 
   const platformOf = (id) => setup.plaza.platforms.find((platform) => platform.id === id) ?? null;
@@ -625,6 +627,7 @@ export function createModels({ refresh }) {
 
   function go(tab) {
     state.tab = TABS.includes(tab) ? tab : "native";
+    state.returnTo = null;
     state.maker = "all";
     draw();
     const content = document.querySelector(".content");
@@ -959,7 +962,9 @@ export function createModels({ refresh }) {
           text: t(custom ? "plaza.actions.configure" : "plaza.actions.configureKey"),
           onclick: () => {
             state.openKey = via;
+            const from = state.tab;
             go("keys");
+            state.returnTo = from;
           },
         }),
       ),
@@ -1212,6 +1217,7 @@ export function createModels({ refresh }) {
               state.openKey = null;
               delete state.checks[key];
               toast(t("plaza.toast.keySaved", { count: newlyUsable(platform) }));
+              if (state.returnTo) go(state.returnTo);
             },
           });
         },
