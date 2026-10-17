@@ -6,7 +6,8 @@ import { loadTranscriber } from "./engines/index.mjs";
 //   父 → 子  { type: "load", model, dir, options }      装模型，只发一次
 //            { type: "transcribe", id, samples }        samples：16 kHz 单声道的 Float32Array
 //            { type: "dispose" }                        卸掉模型、退出
-//   子 → 父  { type: "loaded", backend, loadMs } 或 { type: "failed", message }
+//   子 → 父  { type: "loaded", backend, loadMs, warmupMs } 或 { type: "failed", message }
+//            warmupMs：装上后在显卡上预热花了多久（含在 loadMs 里），不用预热的是 null
 //            { type: "result", id, text } 或 { type: "error", id, message }
 
 /**
@@ -25,6 +26,7 @@ export function serveTranscriber(channel, load = loadTranscriber) {
             type: "loaded",
             backend: transcriber.backend,
             loadMs: Math.round(performance.now() - startedAt),
+            warmupMs: transcriber.warmupMs ?? null,
           });
         } catch (error) {
           channel.send({ type: "failed", message: String(error?.stack ?? error) });
