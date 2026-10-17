@@ -196,7 +196,7 @@ const HOPS = {
 
 /**
  * 一种识别方式的样子。差什么只列看得见的：本机模型没下载好、要的那家没有 key、自定义服务没写地址；
- * key 对不对、服务够不够得着，要切过去的时候才验（app/modes.mjs）
+ * key 对不对、服务够不够得着，切过去以后由 key 管理去验，结果在 key 的状态里（app/modes.mjs）
  * @param {object | { problem: object }} route 那种方式按设置走的路线；拼不出来时是拼不出来的原因
  */
 function wayOf(route, { keys, status }) {

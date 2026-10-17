@@ -20,8 +20,8 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 const saved = (name) => resolveSettings({ file, env: {} })[name].value;
 
 /**
- * 假的服务和 key 管理：keys.use 照 verdict 判通不通过，通过了服务就换上那条路线。
- * calls 记下内核对它们做了什么
+ * 假的服务和 key 管理：keys.switchRoute 当场换上那条路线（和真的一样不验证）；verdict 只用来模拟换不了的时候
+ * （连着单独启动的服务端）。calls 记下内核对它们做了什么
  */
 function setup({
   verdict = () => ({ ok: true }),
@@ -52,8 +52,8 @@ function setup({
     return transcribe(model, samples);
   };
   const keys = {
-    async use({ route }) {
-      calls.push({ use: route });
+    async switchRoute(route) {
+      calls.push({ switchRoute: route });
       const result = verdict(route);
       if (result.ok) service.route = route;
       return result;
@@ -70,13 +70,13 @@ function setup({
 
 // ---------- 模式这一层 ----------
 
-test("切模式：按设置里那种模式自己的几项拼出路线，验证过了才换，换了才记进设置", async () => {
+test("切模式：按设置里那种模式自己的几项拼出路线，当场换上、记进设置", async () => {
   saveSetting(file, "polish", "deepseek/deepseek-v4-pro");
   const { modes, service, calls } = setup();
   assert.deepEqual(await modes.switchMode("local"), { ok: true });
   assert.deepEqual(calls, [
     {
-      use: {
+      switchRoute: {
         mode: "local",
         transcriber: "qwen3-asr-0.6b-q8",
         polish: { vendor: "deepseek", model: "deepseek-v4-pro" },
@@ -88,12 +88,12 @@ test("切模式：按设置里那种模式自己的几项拼出路线，验证�
   assert.equal(saved("mode"), "local");
 });
 
-test("切模式没通过（比如还没有那一家的 key）：什么都不变，原因照实带回", async () => {
-  const problem = msg("key.noKeyFor", { provider: "DeepSeek" });
+test("key 管理换不了（连着单独启动的服务端）：什么都不变，原因照实带回", async () => {
+  const problem = msg("key.externalModel");
   const { modes, service } = setup({ verdict: () => ({ ok: false, problem }) });
   const result = await modes.switchMode("local");
   assert.equal(result.ok, false);
-  assert.match(zh.text(result.problem), /DeepSeek/);
+  assert.match(zh.text(result.problem), /单独启动的服务端/);
   assert.equal(service.route.mode, "native");
   assert.equal(saved("mode"), "native");
 });
@@ -109,7 +109,7 @@ test("切到正在用的模式：不用再验证；写错的模式名说能填�
 
 // ---------- native 这一层 ----------
 
-test("native 换模型：在 native 模式时当场验证、换上；只写 model，不碰 local 的设置", async () => {
+test("native 换模型：在 native 模式时当场换上；只写 model，不碰 local 的设置", async () => {
   const { modes, service } = setup();
   assert.deepEqual(await modes.setModel("openai"), { ok: true });
   assert.deepEqual(service.route.model, { provider: "openai", model: "gpt-audio-mini" });
@@ -147,7 +147,7 @@ test("local 第一跳换本地模型：不验证 key，只让服务换模型（�
   assert.equal(saved("transcriber"), "sensevoice-small-q8");
 });
 
-test("local 第二跳换润色：验证那一家的 key；自定义服务连地址一起换，验证过才一起存", async () => {
+test("local 第二跳换润色：当场换上；自定义服务连地址一起换、一起存", async () => {
   saveSetting(file, "mode", "local");
   const { modes, service } = setup();
   const result = await modes.setPolish("custom/qwen3:8b", { customUrl: "http://127.0.0.1:11434/v1/chat/completions" });
@@ -158,9 +158,9 @@ test("local 第二跳换润色：验证那一家的 key；自定义服务连地�
   assert.equal(saved("customUrl"), "http://127.0.0.1:11434/v1");
 });
 
-test("local 第二跳没通过：润色和地址都不存", async () => {
+test("local 第二跳换不了（连着单独启动的服务端）：润色和地址都不存", async () => {
   saveSetting(file, "mode", "local");
-  const { modes } = setup({ verdict: () => ({ ok: false, problem: "连不上" }) });
+  const { modes } = setup({ verdict: () => ({ ok: false, problem: msg("key.externalModel") }) });
   const result = await modes.setPolish("custom/m", { customUrl: "http://x.example/v1" });
   assert.equal(result.ok, false);
   assert.equal(saved("polish"), "deepseek/deepseek-flash");
@@ -186,7 +186,7 @@ test("local 的两跳只认各自的东西：第一跳不收云端模型，第�
   assert.match(zh.text((await modes.setPolish("openai/gpt-audio-mini")).problem), /deepseek/);
 });
 
-test("切模式时可以连带那种模式自己的设置：一起验证、一起存（没有 DeepSeek 的 key、直接用自定义服务）", async () => {
+test("切模式时可以连带那种模式自己的设置：一起换上、一起存（没有 DeepSeek 的 key、直接用自定义服务）", async () => {
   const { modes, service } = setup();
   const result = await modes.switchMode("local", { polish: "custom/qwen3:8b", customUrl: "http://127.0.0.1:11434/v1" });
   assert.deepEqual(result, { ok: true });
@@ -205,15 +205,15 @@ test("切模式时带的设置不是那种模式的：不切，说清楚", async
   assert.deepEqual(calls, []);
 });
 
-test("连带的设置没通过验证：模式和那几项都不存", async () => {
-  const { modes, service } = setup({ verdict: () => ({ ok: false, problem: "连不上" }) });
+test("连带着设置却换不了（连着单独启动的服务端）：模式和那几项都不存", async () => {
+  const { modes, service } = setup({ verdict: () => ({ ok: false, problem: msg("key.externalModel") }) });
   const result = await modes.switchMode("local", { polish: "custom/m", customUrl: "http://x.example/v1" });
   assert.equal(result.ok, false);
   assert.equal(service.route.mode, "native");
   assert.deepEqual([saved("mode"), saved("polish")], ["native", "deepseek/deepseek-flash"]);
 });
 
-test("已经在 local 时再切 local 并带上第一跳：照样换上（同一条路线就不再验证）", async () => {
+test("已经在 local 时再切 local 并带上第一跳：照样换上（同一条路线就什么都不做）", async () => {
   saveSetting(file, "mode", "local");
   const { modes, service, calls } = setup();
   assert.deepEqual(await modes.switchMode("local"), { ok: true });
@@ -222,33 +222,22 @@ test("已经在 local 时再切 local 并带上第一跳：照样换上（同一
   assert.equal(service.route.transcriber, "sensevoice-small-q8");
 });
 
-// ---------- 本机模型下没下载 ----------
+// ---------- 本机模型下没下载：不拦着 ----------
 
-test("切到 local 时要用的本机模型还没下载：不切，不验证 key、不存设置，说先下载多大的哪个", async () => {
+test("切到 local 时要用的本机模型还没下载：照样切过去、存进设置，下载是用户的事（服务停在没下载，下好了自己装上）", async () => {
   const { modes, service, calls } = setup({ installed: [] });
-  const result = await modes.switchMode("local");
-  assert.equal(result.ok, false);
-  assert.match(zh.text(result.problem), /Qwen3-ASR 0\.6B \(Q8_0\) 还没下载（850 MB）/);
-  assert.deepEqual(calls, []);
-  assert.equal(service.route.mode, "native");
-  assert.equal(saved("mode"), "native");
-
-  // 连带着换成一个下载好了的就能切
-  const other = setup({ installed: ["sensevoice-small-q8"] });
-  assert.deepEqual(await other.modes.switchMode("local", { transcriber: "sensevoice-small-q8" }), { ok: true });
+  assert.deepEqual(await modes.switchMode("local"), { ok: true });
+  assert.equal(calls.length, 1);
+  assert.equal(service.route.mode, "local");
+  assert.equal(saved("mode"), "local");
 });
 
-test("在 local 里换成没下载的本机模型：不换，说先下载；已经在用的、同一条路线不用查", async () => {
+test("在 local 里换成没下载的本机模型：照样换、存进设置，只让服务换模型", async () => {
   saveSetting(file, "mode", "local");
   const { modes, calls } = setup({ installed: ["qwen3-asr-0.6b-q8"] });
-  const result = await modes.setTranscriber("sensevoice-small-q8");
-  assert.equal(result.ok, false);
-  assert.match(zh.text(result.problem), /SenseVoice Small \(Q8_0\) 还没下载（253 MB）/);
-  assert.deepEqual(calls, []);
-  assert.equal(saved("transcriber"), "qwen3-asr-0.6b-q8");
-  // 已经是 local、同一条路线：什么都不用做（启动时缺模型的也一样，不在这里拦）
-  const missing = setup({ installed: [] });
-  assert.deepEqual(await missing.modes.switchMode("local"), { ok: true });
+  assert.deepEqual(await modes.setTranscriber("sensevoice-small-q8"), { ok: true });
+  assert.deepEqual(calls, [{ switchTranscriber: "sensevoice-small-q8" }]);
+  assert.equal(saved("transcriber"), "sensevoice-small-q8");
 });
 
 test("删本机模型：正在用的不让删，说先换一个；没在用的照删（native 模式里设置记着的也算没在用）", async () => {

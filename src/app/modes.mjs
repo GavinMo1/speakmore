@@ -28,15 +28,18 @@ import {
 // 两种模式要换的东西不一样，各走各的路：模型只能在它那种模式里换，不在那种模式时换是错的（没法选），
 // 直接说出来，不悄悄存下。第一次进 local 时还没法换第二跳，所以切模式时可以连带那种模式自己的设置
 // （storage/settings.mjs 的 MODE_SETTINGS），比如没有 DeepSeek 的 key、要直接用自定义服务的人。
-// 每一步都先按改后的设置拼出路线（routeOf），要的那家的 key 验证过（keys/key-manager.mjs 的 use）才换、才写设置；
-// 没通过就什么都不变，还是原来能用的那个。local 要的本机模型也一样：没下载好就不换（下载由用户点，models/library.mjs），
-// 正在用的本机模型不能删。
+//
+// 选哪种、选哪个是用户的事，能不能用是状态，两件事分开：每一步先按改后的设置拼出路线（routeOf），拼得出就当场换上、
+// 写进设置（keys/key-manager.mjs 的 switchRoute），不先验 key、不等下载。还差什么（缺哪家的 key、key 没通过、
+// 本机模型没下载）记在 key 管理和服务的状态里，界面和听写时照实说，补齐了自己就能用（下载由用户点，models/library.mjs，
+// 下好了服务自己装上）。以前要先验过、先下好才让换：刚装好时哪种都不齐，人就困在默认的那一种里出不来。
+// 拦下的只有写错的（不认识的模式、模型、厂商，不是那种模式的设置）。正在用的本机模型不能删。
 
 /**
  * @param {object} options
  * @param {{ route: object, switchTranscriber(model: string): void, checkTranscriber: Function }} options.service
  *   内置的听写服务（service.mjs）
- * @param {{ use: Function, check: Function }} options.keys key 管理（keys/key-manager.mjs）
+ * @param {{ switchRoute: Function, check: Function }} options.keys key 管理（keys/key-manager.mjs）
  * @param {{ isInstalled(id: string): boolean, remove(id: string): object }} options.models 本机的模型库（models/library.mjs）
  * @param {string} options.settingsFile
  * @param {Record<string, string | undefined>} options.env
@@ -74,7 +77,7 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
   }
 
   /**
-   * 在某种模式里换它的模型：不在那种模式时不换，说要先切过去；在的话按改后的设置换路线（apply 去换）。
+   * 在某种模式里换它的模型：不在那种模式时不换，说要先切过去；在的话按改后的设置换路线（apply 去换），换上就存。
    * @param {string} mode
    * @param {string} what 换的是什么（modes.what.*），报错时说
    * @param {Record<string, string>} changes
@@ -99,8 +102,8 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
     });
   }
 
-  /** 换成这条路线，要的那家的 key 验证过才换 */
-  const useRoute = (route) => keys.use({ route });
+  /** 换成这条路线：当场换上，要的 key 由 key 管理去找 */
+  const useRoute = (route) => keys.switchRoute(route);
 
   /**
    * 只验润色那一家时用的第一跳：设置里是本机模型就用它，是云端模型就换成默认的本机模型。
@@ -109,19 +112,9 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
   const localFirstHop = (settings) =>
     usesLocalModel(routeOf(settings, "local")) ? settings.transcriber.value : DEFAULT_TRANSCRIBER;
 
-  /** local 的路线要的本机模型下载好了没有：没有就说先下载哪个、多大。第一跳交给云端时没有要下载的 */
-  function notDownloaded(route) {
-    if (!usesLocalModel(route) || models.isInstalled(route.transcriber)) return null;
-    const model = findModel(route.transcriber);
-    return {
-      ok: false,
-      problem: msg("modes.notDownloaded", { model: model.name, size: sizeText(downloadSize(model)) }),
-    };
-  }
-
   return {
     /**
-     * 换模式。可以连带那种模式自己的设置一起换（只能是 MODE_SETTINGS[mode] 里的几项），一起验证、一起存
+     * 换模式。可以连带那种模式自己的设置一起换（只能是 MODE_SETTINGS[mode] 里的几项），一起换上、一起存
      * @param {string} mode
      * @param {Record<string, string>} [changes]
      */
@@ -147,10 +140,8 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
           return { ok: false, problem: problemOf(error) };
         }
         const from = service.route.mode;
-        // 已经是这条路线（切到正在用的模式、没带别的）：不用再验证
+        // 已经是这条路线（切到正在用的模式、没带别的）：不用再换
         if (JSON.stringify(route) !== JSON.stringify(service.route)) {
-          const missing = notDownloaded(route);
-          if (missing) return missing;
           const result = await useRoute(route);
           if (!result.ok) return result;
         }
@@ -166,14 +157,12 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
 
     /**
      * 换转写模型，在 local 和 private 里都能换，换的是正在用的那种模式自己的那一项。
-     * local 第一跳：本机模型要下载好了的，不用 key：润色那一跳照旧，服务只换模型（没装好的话重新装）。
-     * 换到云端模型、或从云端换回本机，前后不是同一种转写器：整条路线重新装、验 key（云端那家的也要有）。
+     * local 第一跳：本机模型不用 key：润色那一跳照旧，服务只换模型（没下载的停在没下载，下好了自己装上）。
+     * 换到云端模型、或从云端换回本机，前后不是同一种转写器：整条路线重新换、重新找 key（云端那家的也要有）。
      * private：只认本机模型，云端的直接说不行
      */
     setTranscriber(transcriber) {
       const apply = async (route) => {
-        const missing = notDownloaded(route);
-        if (missing) return missing;
         if (!usesLocalModel(route) || !usesLocalModel(service.route)) return useRoute(route);
         service.switchTranscriber(route.transcriber);
         return { ok: true };

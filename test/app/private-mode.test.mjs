@@ -36,13 +36,13 @@ test("切进切出数据隐私模式：切进去不问 key、不发请求；切�
   assert.equal(app.keys.provider.id, "deepseek");
 });
 
-test("切进数据隐私模式时它的本机模型还没下载：不切，说先下载哪个", async (t) => {
+test("切进数据隐私模式时它的本机模型还没下载：照样切过去，key 不用配，本机模型停在没下载", async (t) => {
   const app = await boot(t, { settings: LOCAL, stored: { deepseek: "ds-good" }, installed: ["sensevoice-small-q8"] });
   await app.keys.loadAtStartup();
-  const result = await app.modes.switchMode("private");
-  assert.equal(result.ok, false);
-  assert.match(zh.text(result.problem), /下载/);
-  assert.equal(app.service.route.mode, "local");
+  assert.equal((await app.modes.switchMode("private")).ok, true);
+  assert.equal(app.service.route.mode, "private");
+  assert.equal(app.keys.current.source, "none");
+  assert.deepEqual(app.service.localModel, { state: "missing", model: "qwen3-asr-0.6b-q8" });
 });
 
 test("数据隐私模式里换本机模型：存进它自己的那一项，local 的第一跳不动；云端的模型不收", async (t) => {
