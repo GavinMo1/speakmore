@@ -14,6 +14,15 @@ test("要给 key 的每一家：原生、润色、云端转写的都在，同一
   }
 });
 
+test("同一家在几个角色里登记的环境变量、申请页一样：合并时只留先合进来的那项，key 也只存一把", () => {
+  for (const vendor of VENDORS) {
+    for (const entry of [...PROVIDERS, ...CHAT_VENDORS, ...CLOUD_TRANSCRIBERS].filter(({ id }) => id === vendor.id)) {
+      assert.equal(entry.keyEnv, vendor.keyEnv, vendor.id);
+      assert.equal(entry.keyPage, vendor.keyPage, vendor.id);
+    }
+  }
+});
+
 test("按 id 找，大小写不论；不认识的是 null", () => {
   assert.equal(findVendor("DeepSeek").keyEnv, "DEEPSEEK_API_KEY");
   assert.equal(findVendor("gemini").keyEnv, "GEMINI_API_KEY");

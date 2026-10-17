@@ -72,6 +72,82 @@ export const CHAT_VENDORS = Object.freeze([
     prices: () => import("./prices/bailian.mjs"),
   }),
   Object.freeze({
+    id: "moonshot",
+    name: "Kimi",
+    keyEnv: "MOONSHOT_API_KEY",
+    // 国内站 platform.moonshot.cn 已经整站跳到 platform.kimi.com（2026-10-16）
+    keyPage: "https://platform.kimi.com/console/api-keys",
+    protocol: "openai-chat",
+    // 官方文档的示例用的还是这个地址（https://platform.kimi.com/docs/guide/use-thinking-models）
+    baseUrl: "https://api.moonshot.cn/v1",
+    defaultModel: "kimi-k2.6",
+    // kimi-k2.6 默认开着思考，thinking: { type: "disabled" } 关掉（https://platform.kimi.com/docs/api/models-overview）。
+    // 2026-10-16 拿真 key 实测同一段原文：开着 9.6 秒、681 个推理 token；关掉 0.8–1.8 秒，推理内容是空的
+    request: Object.freeze({ thinking: Object.freeze({ type: "disabled" }) }),
+    // 官方 GET /models 列出四个（2026-10-16）。kimi-k2.7-code 和它的高速版不收：代码专用，而且只能开着思考
+    // （关掉回 400 "only type=enabled is allowed for this model"，实测）
+    models: models([
+      { id: "kimi-k2.6", name: "Kimi K2.6", maker: "kimi" },
+      // 文档说 K3 始终推理、不该传 thinking，只能拿 reasoning_effort 在 low/high/max 里调
+      // （https://platform.kimi.com/docs/guide/use-reasoning-effort）。可 2026-10-16 实测带上 thinking: disabled 照样回 200，
+      // 6 次回话里都没有推理内容和推理 token（百炼上的 kimi-k3 关了也是这样）；low 档反而还有 19 个推理 token。
+      // 这是文档外的行为：哪天它不认了（回 400 或照样思考），拿掉这一项
+      { id: "kimi-k3", name: "Kimi K3", maker: "kimi" },
+    ]),
+    prices: () => import("./prices/moonshot.mjs"),
+  }),
+  Object.freeze({
+    id: "zhipu",
+    // 界面上按语言写成"智谱"或"Zhipu GLM"（文案 providers.zhipu.name），这里的名字给日志和报错用
+    name: "Zhipu",
+    keyEnv: "ZHIPU_API_KEY",
+    keyPage: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
+    protocol: "openai-chat",
+    // 国内站开放平台的地址（https://docs.bigmodel.cn/cn/api/introduction）
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    defaultModel: "glm-4.7-flashx",
+    // GLM-5.x、4.7 系列默认开着思考，thinking: { type: "disabled" } 关掉（https://docs.bigmodel.cn/cn/guide/capabilities/thinking-mode）。
+    // GLM-5.3、GLM-5.3-Flash、GLM-5.3-FlashX 强制思考、传 disabled 报错（同一页和
+    // https://docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash），所以不收
+    request: Object.freeze({ thinking: Object.freeze({ type: "disabled" }) }),
+    // 照官方文档写，未拿真 key 验证。每个档位收能关思考的最新一个（模型概览 https://docs.bigmodel.cn/cn/guide/start/model-overview，
+    // 2026-10-16）。不收：GLM-5.1、GLM-5、GLM-4.7（旗舰这一档有更新的 5.2）、GLM-5-Turbo（专为龙虾类智能体任务调的）、
+    // GLM-4-Long（超长文本专用）、GLM-4.5-AirX（价目页上连历史价都没有它，拿不准国内站还卖不卖）、GLM-Z1 系列（只能推理）、
+    // 视觉理解模型（润色用不上看图）、GLM-4 那几个带日期的快照
+    models: models(
+      [
+        { id: "glm-5.2", name: "GLM-5.2" },
+        { id: "glm-4.7-flashx", name: "GLM-4.7-FlashX" },
+        // 免费的
+        { id: "glm-4.7-flash", name: "GLM-4.7-Flash" },
+        { id: "glm-4.5-air", name: "GLM-4.5-Air" },
+      ].map((model) => ({ ...model, maker: "zhipu", unverified: true })),
+    ),
+    prices: () => import("./prices/zhipu.mjs"),
+  }),
+  Object.freeze({
+    id: "minimax",
+    name: "MiniMax",
+    keyEnv: "MINIMAX_API_KEY",
+    // 国内站的文档和控制台已经从 platform.minimaxi.com 搬到 platform.minimax.cn（2026-10-16 旧地址跳过去）。
+    // 这是按量付费的 key；M Plan 套餐的订阅 key 在另一页（https://platform.minimax.cn/docs/guides/quickstart-preparation）
+    keyPage: "https://platform.minimax.cn/user-center/basic-information/interface-key",
+    protocol: "openai-chat",
+    // 国内站的 OpenAI 兼容地址（https://platform.minimax.cn/docs/guides/text-generation）
+    baseUrl: "https://api.minimax.cn/v1",
+    defaultModel: "MiniMax-M3",
+    // MiniMax-M3 默认开着思考，thinking: { type: "disabled" } 让它跳过思考直接回答
+    // （https://platform.minimax.cn/docs/api-reference/text-openai-api 的"Thinking 控制"）。
+    // reasoning_split: true 只管思考放哪：万一还有思考，单独放进 reasoning_content；不拆的话它带着 <think> 标签
+    // 写在 content 里，会被当成品贴出去
+    request: Object.freeze({ thinking: Object.freeze({ type: "disabled" }), reasoning_split: true }),
+    // 照官方文档写，未拿真 key 验证。只有 M3 能关思考：M2.x 传 disabled 不生效（同一页），而且 M2.5、M2.7 系列
+    // 2026-10-19 起不对新用户开放、11-18 下线（https://platform.minimax.cn/docs/guides/models-intro）；
+    // MiniMax-M3.1-Flash-Preview 是预览版、只给套餐用户，关思考回 400；M2-her 是角色扮演专用
+    models: models([{ id: "MiniMax-M3", name: "MiniMax M3", maker: "minimax", unverified: true }]),
+    prices: () => import("./prices/minimax.mjs"),
+  }),
+  Object.freeze({
     id: "custom",
     // 报错时说的是用户填的那个地址的主机名（chatEndpoint），这里的名字只在列清单时用
     name: "Custom",
