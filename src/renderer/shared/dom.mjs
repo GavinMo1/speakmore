@@ -1,13 +1,13 @@
-import { t } from "../shared/i18n.mjs";
-import { providerIcon } from "../shared/provider-icons.mjs";
+import { t } from "./i18n.mjs";
+import { providerIcon } from "./provider-icons.mjs";
 
-// 主窗口里用代码画的几块（模型页、首页的识别方式选单）共用的小工具：拼节点、取图标、按界面语言写厂商名。
+// 用代码画的几块（主窗口的模型页、识别方式选单，首次引导的选方式、准备）共用的小工具：拼节点、取图标、按界面语言写厂商名。
 
 const NS = "http://www.w3.org/2000/svg";
 
 export const $ = (id) => document.getElementById(id);
 
-/** 页面顶上那份图标表（hub.html 的 .sprite）里的一个 */
+/** 页面顶上那份图标表（各页面 html 里的 .sprite）里的一个 */
 export function svg(id, className = "icon") {
   const node = document.createElementNS(NS, "svg");
   node.setAttribute("class", className);

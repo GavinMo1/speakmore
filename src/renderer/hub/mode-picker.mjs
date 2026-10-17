@@ -1,6 +1,6 @@
+import { $, h, svg } from "../shared/dom.mjs";
 import { t } from "../shared/i18n.mjs";
 import { describeError } from "../shared/setup-text.mjs";
-import { $, h, svg } from "./dom.mjs";
 import { hopChain, needText } from "./route-view.mjs";
 import { toast } from "./toast.mjs";
 
