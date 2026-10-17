@@ -37,7 +37,14 @@ export async function startService({
 }) {
   /** 正在走的路线。换一条要带着它要的那家的 key 一起换（useKey 的 route），验证过了才换 */
   let route = initialRoute;
-  const noKey = () => new LocalizedError(msg("key.noKeyService", { provider: keyVendorOf(route).name }));
+  /** 路线里另一家（第一跳交给的云端）缺 key 时是那一家（forgetKey 的 missing）：听写时点名它，不点名主的那家 */
+  let missing = null;
+  const noKey = () =>
+    new LocalizedError(
+      missing
+        ? msg("key.noKeyServiceFor", { provider: missing.name, id: missing.id })
+        : msg("key.noKeyService", { provider: keyVendorOf(route).name }),
+    );
   /** 通过了验证、正在用的那一个；没有 key 时是 null */
   let refiner = null;
 
@@ -190,6 +197,7 @@ export async function startService({
         verified = false;
       }
       refiner = candidate;
+      missing = null;
       if (nextRoute !== route) log.info("route_switched", { from: describeRoute(route), to: describeRoute(nextRoute) });
       route = nextRoute;
       followRoute();
@@ -265,8 +273,13 @@ export async function startService({
       await (await build(tried, apiKey, keys)).warmUp();
     },
 
-    forgetKey() {
+    /**
+     * 不再用手里那把 key（删了、没通过）。缺的是路线里另一家的时写上 missing（{ id, name }），听写时点名它
+     * @param {{ missing?: { id: string, name: string } }} [options]
+     */
+    forgetKey({ missing: vendor = null } = {}) {
       refiner = null;
+      missing = vendor;
     },
 
     async close() {

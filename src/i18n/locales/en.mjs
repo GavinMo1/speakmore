@@ -217,6 +217,9 @@ export default {
     unknownProvider: "Unknown model provider: {id}",
     noKeyService:
       "No {provider} API key yet: run speakmore key in a terminal, or open Settings from the SpeakMore menu bar icon",
+    noKeyServiceFor:
+      "No {provider} API key yet: run speakmore key {id} in a terminal, or open Settings from the SpeakMore menu bar icon",
+    failedFor: "{provider} key failed: {reason}",
   },
 
   model: {

@@ -210,6 +210,9 @@ export default {
     noKeyForCli: "还没有 {provider} 的 key：运行 speakmore key {id}",
     unknownProvider: "不认识 {id} 这家模型厂商",
     noKeyService: "还没有填 {provider} API key：在终端运行 speakmore key，或者点菜单栏上 SpeakMore 的图标打开设置",
+    noKeyServiceFor:
+      "还没有填 {provider} API key：在终端运行 speakmore key {id}，或者点菜单栏上 SpeakMore 的图标打开设置",
+    failedFor: "{provider} 的 key 未通过：{reason}",
   },
 
   model: {

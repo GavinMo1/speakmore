@@ -1,5 +1,5 @@
 import { msg, problemOf } from "../i18n/index.mjs";
-import { downloadSize, findModel } from "../models/catalog.mjs";
+import { DEFAULT_TRANSCRIBER, downloadSize, findModel } from "../models/catalog.mjs";
 import { sizeText } from "../models/describe.mjs";
 import { speechSample } from "../server/asr/probe.mjs";
 import { findChatVendor } from "../server/chat/vendors.mjs";
@@ -97,6 +97,13 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
 
   /** 换成这条路线，要的那家的 key 验证过才换 */
   const useRoute = (route) => keys.use({ route });
+
+  /**
+   * 只验润色那一家时用的第一跳：设置里是本机模型就用它，是云端模型就换成默认的本机模型。
+   * 第一跳交给另一家云端时，不换的话会把那一家拉进来：它没 key 或 key 不对，都会算到正在验的这家头上
+   */
+  const localFirstHop = (settings) =>
+    usesLocalModel(routeOf(settings, "local")) ? settings.transcriber.value : DEFAULT_TRANSCRIBER;
 
   /** local 的路线要的本机模型下载好了没有：没有就说先下载哪个、多大。第一跳交给云端时没有要下载的 */
   function notDownloaded(route) {
@@ -234,7 +241,13 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
     async check(mode, changes) {
       let route;
       try {
-        route = routeOf(patchSettings(read(), changes), mode);
+        const settings = read();
+        // 查的是一个润色模型（或一家润色厂商的 key）：只验它，第一跳不拉上别家
+        const isolated =
+          mode === "local" && "polish" in changes && !("transcriber" in changes)
+            ? { transcriber: localFirstHop(settings) }
+            : {};
+        route = routeOf(patchSettings(settings, { ...changes, ...isolated }), mode);
       } catch (error) {
         return { ok: false, cause: "other", problem: problemOf(error) };
       }
@@ -244,6 +257,7 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
     /**
      * 给某一家存 key 前拿哪条路线验证：收音频的那家走 native、润色的那家走 local（key-manager 的 routeFor）。
      * 设置里已经选了这家就用设置里的模型，否则用它的默认模型；changes 是要一起换成的（还没存的）设置。
+     * 润色那家只验它自己：第一跳用本机模型（见 localFirstHop）。
      * 自定义服务没有默认模型：没选过它、changes 里也没给时抛错，说要写成 custom/模型名
      */
     routeForVendor(id, changes = {}) {
@@ -254,7 +268,8 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
       }
       if (!findChatVendor(id)) throw new Error(`不认识的厂商：${id}`);
       const chosen = routeOf(settings, "local").polish.vendor === id;
-      return routeOf(patchSettings(settings, { polish: chosen ? settings.polish.value : id, ...changes }), "local");
+      const polish = chosen ? settings.polish.value : id;
+      return routeOf(patchSettings(settings, { polish, transcriber: localFirstHop(settings), ...changes }), "local");
     },
   };
 }

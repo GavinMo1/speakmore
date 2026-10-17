@@ -11,16 +11,19 @@ const PROBLEM_MAX_LENGTH = 200;
 
 export class ModelError extends Error {
   /**
-   * @param {{ kind: "key" | "unavailable" | "other", problem: object | string, detail: string, origin?: string }} fields
-   *   origin：原始报错的调用栈（已抹掉 key），只进日志。适配器或解码自己出了 bug 时靠它找出处
+   * @param {{ kind: "key" | "unavailable" | "other", problem: object | string, detail: string, origin?: string,
+   *   provider?: string }} fields
+   *   origin：原始报错的调用栈（已抹掉 key），只进日志。适配器或解码自己出了 bug 时靠它找出处。
+   *   provider：哪一家报的（厂商 id）。一条路线要两家的 key 时，靠它说清是哪一家的 key 出了问题
    */
-  constructor({ kind, problem, detail, origin }) {
+  constructor({ kind, problem, detail, origin, provider }) {
     super(detail);
     this.name = "ModelError";
     this.kind = kind;
     this.problem = problem;
     this.detail = detail;
     this.origin = origin;
+    this.provider = provider ?? null;
   }
 }
 
@@ -45,7 +48,7 @@ export function toModelError(error, { provider, apiKey, classify }) {
   const scrub = (text) => (apiKey ? text.replaceAll(apiKey, "（key）") : text);
   const detail = scrub(String(error?.message ?? error));
   const origin = error?.stack ? scrub(String(error.stack)) : undefined;
-  const make = (fields) => new ModelError({ ...fields, detail, origin });
+  const make = (fields) => new ModelError({ ...fields, detail, origin, provider: provider.id });
   // 超时单独说：网是通的，是它太久没回话（长录音交给 OpenAI 时，上传加处理可能就这么久）
   if (error?.name === "TimeoutError") {
     return make({ kind: "unavailable", problem: msg("model.timeout", { provider: provider.name }) });
