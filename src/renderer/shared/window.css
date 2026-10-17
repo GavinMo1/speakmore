@@ -70,6 +70,17 @@
   display: none !important;
 }
 
+/* 按钮先去掉浏览器自带的外观（灰底、凸起的边框、系统字体）：哪个按钮的样式漏写了、或者样式被删了，
+   退回去的是一段平的字，不是一个灰色的系统按钮。:where 不占优先级，规范里的各种按钮照样盖得住 */
+:where(button) {
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
 body {
   margin: 0;
   color: var(--ink);
