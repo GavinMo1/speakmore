@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 01cb214e-9235-4c39-87a1-f99a7f88b66e
-  modified: 2026-10-16T16:45:44.639Z
+  modified: 2026-10-17T15:20:00.000Z
 ---
 
 SpeakMore 的发布包放在用户自己的腾讯云 COS，前面是 CDN 域名 `dl.zephyrxiang.com`，东西都在 `speakmore/` 前缀下。2026-10-13 他定的：不用 GitHub Release（太慢），新建专用的桶，下载地址用 zephyrxiang.com 的子域名，以后官网的下载链接也从这里取。
@@ -20,7 +20,7 @@ SpeakMore 的发布包放在用户自己的腾讯云 COS，前面是 CDN 域名 
 - 0.6.0 起命令行装的用 `speakmore update` 升级：它读下载地址根上的 `latest`，比自己新就下载根上的 `install.sh`、钉住那个版本号去装；`speakmore status` 一天最多查一次 `latest`，有新版本时提醒一句。所以根上的 `install.sh` 和 `latest` 要一直在、一直是最新的（ship 会传）。从 0.5.0 及更早的升上来，还得再跑一次安装那一行（那些版本里没有 update）。0.6.2 起 update 连 SpeakMore.app 一起换（下载对应芯片的 dmg、验校验值和签名的开发者；App 正在跑就先退出、换完重新打开），所以根上各版本目录里的 dmg 和 .sha256 也要一直在。从 0.6.1 及更早升上来的那一次还是旧逻辑：只换命令行那一份、停掉 App 改启命令行那一份，用 App 的人那一次要手动换 App。
 - 发布过的版本号不覆盖（`scripts/release/release-layout.mjs` 会拒绝）：CDN 和用户手里缓存的都是旧内容，要改就升版本号。要在本机试链路，用预发版本号（比如 `v0.2.1-rc.1`），或者 `SPEAKMORE_INSTALL_BASE=$PWD/dist/release` 装本机打的包。
 - 不发版就想先在自己电脑上用（2026-10-16 试 0.7.1 时这么做的）：临时把版本号改成 `0.7.1-dev.N`，`MAC_NOTARY_PROFILE=` 跳过公证打包，再用 `SPEAKMORE_INSTALL_BASE` 装上，装完把 package.json 改回去。跳过公证会被自动模式拦下，要写成脚本交给用户跑（[[cloud-changes-user-runs]]）。之后正式版用 `speakmore update` 就能盖过去，key、权限、历史都还在。
-- 发版记录：0.7.1 在 2026-10-16 发布（ship 一次跑通，10 个文件），官网同一天重新部署，用户电脑从 0.7.1-dev.2 用 update 升上来，App 是公证过的。0.8.0 在 2026-10-17 发布（模型广场、数据隐私模式、首页选识别方式、推荐组合；ship 一次跑通，10 个文件），官网同一天重新部署，线上包里的版本号是 0.8.0。0.9.0 在 2026-10-17 发布（Windows 版：安装程序 SpeakMore-Setup-x64.exe 和 zip，首次引导重做，悬浮条提示可关；ship 挂后台一次跑通，15 个文件），官网同一天部署（线上提交 c151704），Windows 的下载按钮放了正式版。0.9.1 在 2026-10-17 发布（修刚装好时切不出原生识别的死锁：识别方式选了就当场换上；ship 挂后台一次跑通，15 个文件），官网同一天部署（线上提交 691a833），两个下载地址都回 200。
+- 发版记录：0.7.1 在 2026-10-16 发布（ship 一次跑通，10 个文件），官网同一天重新部署，用户电脑从 0.7.1-dev.2 用 update 升上来，App 是公证过的。0.8.0 在 2026-10-17 发布（模型广场、数据隐私模式、首页选识别方式、推荐组合；ship 一次跑通，10 个文件），官网同一天重新部署，线上包里的版本号是 0.8.0。0.9.0 在 2026-10-17 发布（Windows 版：安装程序 SpeakMore-Setup-x64.exe 和 zip，首次引导重做，悬浮条提示可关；ship 挂后台一次跑通，15 个文件），官网同一天部署（线上提交 c151704），Windows 的下载按钮放了正式版。0.9.1 在 2026-10-17 发布（修刚装好时切不出原生识别的死锁：识别方式选了就当场换上；ship 挂后台一次跑通，15 个文件），官网同一天部署（线上提交 691a833），两个下载地址都回 200。0.9.2 在 2026-10-17 发布（修 0.9.0、0.9.1 的 Mac 版 App 一启动就报找不到模块，issue #4；第一次 ship 在 Electron 的 Node 上撞到 tail 测试的竞态没发出去，修好后重跑一次跑通，15 个文件），发完下载线上的 Apple 芯片 dmg、挂载后用隔离的 SPEAKMORE_HOME 真启动一次（started 0.9.2、helper_ready、零报错）再算发好（[[acceptance-end-to-end]]）。官网同一天部署（线上提交 3b53daa）；这次部署先撞上脚本的毛病：重做时传的路径加了 docs/、src/，服务器端换代码只删原来四样，第二次部署 mv 撞目录停在构建前，已改成按传来的顶层条目删。
 - 桶名、地域、凭据名、加载器都在不进 git 的 `.machine.env`（`COS_BUCKET`、`COS_REGION`、`COS_CREDENTIAL`、`COS_SECRETS_LOADER`），仓库里只认变量名（[[machine-facts-stay-local]]）。腾讯云这把凭据和 Gemini 那把不在同一个加载器下，所以有单独的 `COS_SECRETS_LOADER`；找不到时先看 `.machine.env`，不要满机器搜。
 - 以前 CI 用的子账号密钥（腾讯云子账号 `speakmore-ci`、策略 `speakmore-release-upload`，存在仓库 Actions secrets 里）已在 2026-10-14 照他的话全部删掉：四个 secrets、子账号连同密钥、策略都没了。以后要在 GitHub 上发布得重新签一把，但他定了只从本机发。
 - 云上的配置照他另一个产品域名的样子配的：桶私有、只让 CDN 读，CDN 全球加速、跟随源站的缓存头、每天 50 GB 流量封顶（超了返回 404）。运维走命令行，方法见 `zephyr-cloud-cli-ops`。
