@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 6b5e9ce5-00ff-48cc-99ba-a927306fc7c3
-  modified: 2026-10-16T11:39:17.107Z
+  modified: 2026-10-17T05:10:00.000Z
 ---
 
 2026-10-16 他定的。本地转写的模型广场不替用户做决定，能接的模型都接上，用评测结果给每个模型打标签、写简介（哪种芯片、哪个系统上跑得最好，中文、中英夹杂各什么水平），推荐可以给，选择留给用户。
@@ -44,9 +44,12 @@ metadata:
 - 百炼只接同步转写，异步（filetrans、fun-asr、paraformer-v2）和实时流式都丢掉；跑通时每次只换一端：原生单独跑，转写的后端固定 DeepSeek V4.1 Flash，润色的前端固定本地 Qwen3-ASR 0.6B Q8 转一次、同一段文字喂给每个润色模型。
 - 他已给 Kimi 官方 key（[[typeless-clone-gemini-key]]），Kimi 官方接口能真验；GLM、MiniMax 官方还没有 key。
 
-**2026-10-16 开发进度（feat/model-plaza 分支，未合 main）：**
-- 已提交：百炼三个角色的适配器（c86058f）、跑通脚本 smoke-models.mjs（c833fc1，百炼 15/15 通过、无思考 token、约 0.03 美元）、一条路线两家 key（43f5e65）、广场数据层 app/model-plaza.mjs（ff8b723）、侧栏"模型"一页加规范 v1 并进 window.css/tokens.css、两道门禁、docs/desktop-ui-spec.md（43054dd）。单测 833 全绿。
-- 官方接口的 agent 在 worktree 分支 worktree-agent-a92cb3de0ca770600（基于 c86058f，5 个提交 e23dad3…88c77d8）：Kimi k2.6、k3（k3 关思考是文档外行为，实测 6/6 无推理），智谱 glm-5.2、4.7-flashx、4.7-flash、4.5-air，MiniMax-M3；同步转写 GLM-ASR-2512（单段 30 秒，transcriber 按 maxSeconds 切段）、MiniMax asr-1.0。智谱、MiniMax 无 key，模型项标 unverified: true。还没合进 feat/model-plaza、还没审。
-- 他要求：写完、第一轮测完先停，压缩对话后再做端到端验证（"上下文干净一点，你验证也会更全"）。
-- 压缩后要做：合 agent 分支（会和 chat/vendors.mjs、providers/index.mjs、asr/cloud/transcriber.mjs 冲突）并审一轮；端到端用真窗口（调试协议）点一遍模型页：988/1080/1440 三档宽、深浅色、原生/转写/润色/密钥四类、切方式、启用、检测、下载、存 key、自定义服务；量各表状态列和操作列对齐、无截断；广场上 unverified 的模型怎么显示还没定。
-- 我在 3e2499a、c86058f 两个提交里误加了 Co-Authored-By（违反 AGENTS.md 红线 1），改写这两条提交信息要他点头。
+**2026-10-16/17 第二次压缩前的状态（feat/model-plaza，未合 main、未推送）：**
+- 他定的：kimi-k3 不收（官方文档说关不掉思考，以文档为准，Kimi 官方和百炼两处都删了）；没拿真 key 调过的型号在模型页打"未验证"标签（灰底，悬停"按官方文档收录，尚未实际调用"，跟着渠道走）；两条带 Co-Authored-By 的提交已经改写（filter-branch，refs/original 留着回滚，分支从没推过）。
+- 他给了 MiniMax、智谱的 key（with-key.sh 认 minimax、zhipu）。MiniMax 2/2、智谱 4/5 跑通，都摘了 unverified；免费的 GLM-4.7-Flash 当天连回 5 次 429/1305 访问量过大，先不上架、回头再试。现在清单里没有未验证的型号。
+- 他新要的第三种识别方式"数据隐私"（private）已做完：只用本机模型转写、不润色、不上传、不要 key；内核、key 管理、模式切换、命令行、模型页都扩了，见 [[speakmore-two-pipelines]]。
+- 审查一轮（agent）报 7 条，逐条复现属实，全修了：两家 key 的路线存 key/检测会把第一跳那家拉进来、出错算错到润色那家、缺另一家 key 时报错点名错；命令行遇云端第一跳崩；云端转写静音照发；自定义地址写错整页画不出；百炼回话格式不对时静默变空。
+- 端到端（真窗口、调试协议，临时家目录 /tmp/smpz 软链到 scratchpad 的 plaza-e2e）已走过：三张识别方式卡 988–1600 宽无截断、深浅色；切到数据隐私并检测；下载→取消→下载→启用（数据隐私里换它自己的模型）→删除；在用的模型不给删；存错 key 被拒；Kimi、百炼 key 从界面存并检测；第一跳换百炼云端（两家 key）并检测；删百炼 key → 横幅点名 → 重启直接开到密钥表 → 存好恢复。scripts/dev/e2e.mjs 用 SPEAKMORE_MODE=private 真听写一次通过（模型现下 95–117 秒）。
+- 他看了截图后要求：识别方式不能排成两张加落单一张，现在一种一张排成一列，宽时左名字右流程、三条流程上下对齐。
+- 还没在真窗口走的：原生方式没 key 时点卡片的报错、自定义服务（含地址漏写 https 的那条）、设置"通用"里换下载源、润色页启用别家（如 Kimi）、英文界面。单测 870 全绿，lint 干净。
+- 记一笔未复现：有一次重载后 DeepSeek 那组显示百炼渠道的人民币价、在用的那行没标使用中，之后两次重载都正常。
