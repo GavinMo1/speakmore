@@ -1,4 +1,4 @@
-# 官网的镜像：构建静态页，用 nginx 托管。从仓库根构建（要读根上 package.json 的版本号和 assets/icon.svg）：
+# 官网的镜像：构建静态页，用 nginx 托管。从仓库根构建（要读根上 package.json 的版本号、assets/icon.svg 和下面拷的两份）：
 #   docker build -f website/Dockerfile .
 # 平时用 website/compose.yaml 起。
 FROM node:22-alpine AS build
@@ -10,6 +10,9 @@ COPY website/package.json website/package-lock.json ./
 RUN npm ci --no-audit --no-fund --registry="$NPM_REGISTRY"
 COPY package.json /repo/package.json
 COPY assets/icon.svg /repo/assets/icon.svg
+# README 的图的清单（图在图片桶上）、各家模型的标志，都和仓库里 App、README 用的是同一份
+COPY docs/media.json /repo/docs/media.json
+COPY src/renderer/shared/provider-icons.mjs /repo/src/renderer/shared/provider-icons.mjs
 COPY website/ ./
 RUN npm run build
 

@@ -1,20 +1,50 @@
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
+import readmeMedia from "../../docs/media.json" with { type: "json" };
 import { LOCALES } from "../src/lib/locale.js";
 import media from "../src/media.json" with { type: "json" };
 
-// 页面会按"名字.语言"去 src/media.json 里找图（src/config.js 的 shot）
-const NAMES = [
-  ...["ink", "cinnabar", "indigo"].flatMap((theme) => [`home-light-${theme}`, `home-dark-${theme}`, `bar-${theme}`]),
-];
+const dir = new URL("../src/", import.meta.url).pathname;
+const sources = readdirSync(dir, { recursive: true })
+  .filter((file) => file.endsWith(".jsx"))
+  .map((file) => readFileSync(join(dir, file), "utf8"));
 
-test("每种语言、每套主题的截图都传过了，并且记着大小", () => {
+/**
+ * 页面用到的 README 那批图（src/config.js 的 readme，清单是仓库的 docs/media.json）：
+ * <Shot name="…" dark="…">、readme("…")，和首次引导那一段的 SHOTS 名单
+ */
+function readmeNames() {
+  const names = new Set();
+  for (const source of sources) {
+    for (const [, name] of source.matchAll(/<Shot\s+name="([\w-]+)"/g)) names.add(name);
+    for (const [, name] of source.matchAll(/\bdark="([\w-]+)"/g)) names.add(name);
+    for (const [, name] of source.matchAll(/\breadme\("([\w-]+)"/g)) names.add(name);
+    const list = /const SHOTS = \[([^\]]+)\]/.exec(source);
+    if (list) for (const [, name] of list[1].matchAll(/"([\w-]+)"/g)) names.add(name);
+  }
+  return names;
+}
+
+test("页面用到的 README 那批图，每种语言都传过了、记着大小，在图片桶的 readme/ 下", () => {
+  const names = readmeNames();
+  assert.ok(names.size >= 10, `只找到 ${names.size} 张`);
   for (const locale of LOCALES) {
-    for (const name of NAMES) {
-      const entry = media[`${name}.${locale}`];
-      assert.ok(entry, `缺 ${name}.${locale}`);
-      assert.match(entry.path, /^shots\/[\w.-]+\.[0-9a-f]{8}\.webp$/);
+    for (const name of names) {
+      const entry = readmeMedia[`${name}.${locale}`];
+      assert.ok(entry, `docs/media.json 里缺 ${name}.${locale}`);
+      assert.match(entry.path, /^readme\/[\w.-]+\.[0-9a-f]{8}\.webp$/);
       assert.ok(entry.width > 0 && entry.height > 0);
     }
+  }
+});
+
+test("首屏的悬浮条每种语言都传过了，并且记着大小", () => {
+  for (const locale of LOCALES) {
+    const entry = media[`bar-indigo.${locale}`];
+    assert.ok(entry, `缺 bar-indigo.${locale}`);
+    assert.match(entry.path, /^shots\/[\w.-]+\.[0-9a-f]{8}\.webp$/);
+    assert.ok(entry.width > 0 && entry.height > 0);
   }
 });

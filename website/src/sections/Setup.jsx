@@ -1,0 +1,79 @@
+import { useRef } from "react";
+import { Heading, Section } from "../components/Section.jsx";
+import { Shot } from "../components/Shot.jsx";
+import { useI18n } from "../i18n/index.jsx";
+import { Icon } from "../icons/Icon.jsx";
+import { fillText } from "../lib/text.js";
+
+/** 首次引导的七步截图（README 那批），和文案里 setup.steps 一一对应 */
+const SHOTS = [
+  "onboarding-way",
+  "onboarding-prepare-local",
+  "onboarding-permissions",
+  "onboarding-microphone",
+  "onboarding-hotkey",
+  "onboarding-try",
+  "onboarding-done",
+];
+
+/** 这一段内容的左边离屏幕边多远：内容最宽 72rem（max-w-6xl），两边留 1.25rem，宽屏 2rem */
+const GUTTER = "max(1.25rem, calc((100vw - 72rem) / 2 + 2rem))";
+
+/**
+ * 首次引导：七步截图横着排，左右滑（触控板、手指）或点箭头一张一张翻，每张停在左边对齐。
+ * 这里的序号是真的先后，所以标出来
+ */
+export function Setup() {
+  const { m } = useI18n();
+  const track = useRef(null);
+  const page = (direction) => {
+    const element = track.current;
+    const item = element?.querySelector("li");
+    if (!element || !item) return;
+    const gap = Number.parseFloat(getComputedStyle(element).columnGap) || 0;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    element.scrollBy({ left: direction * (item.offsetWidth + gap), behavior: reduced ? "auto" : "smooth" });
+  };
+  return (
+    <Section id="setup" tone="surface" labelledBy="setup-title">
+      <Heading id="setup-title" title={m.setup.title} lead={m.setup.lead} />
+
+      <div className="reveal mt-[clamp(3rem,7vw,5rem)]">
+        {/* 这一排撑满整个页面宽：左边和这一段的内容对齐，右边一直延伸到屏幕边上，看得出还能往右滑 */}
+        <ol
+          ref={track}
+          className="no-scrollbar mx-[calc(50%-50vw)] flex snap-x snap-mandatory gap-6 overflow-x-auto pb-4"
+          style={{ paddingInline: GUTTER, scrollPaddingInline: GUTTER }}
+        >
+          {SHOTS.map((name, index) => (
+            <li key={name} className="w-[min(82vw,34rem)] shrink-0 snap-start">
+              <Shot name={name} alt={fillText(m.setup.alt, { n: index + 1, step: m.setup.steps[index] })} />
+              <p className="mt-3 flex items-baseline gap-3">
+                <span className="font-rounded text-sm font-semibold text-ink-2 tabular-nums">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="font-medium text-ink">{m.setup.steps[index]}</span>
+              </p>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-6 flex justify-end gap-2">
+          {[
+            { direction: -1, icon: "arrowLeft", label: m.setup.previous },
+            { direction: 1, icon: "arrowRight", label: m.setup.next },
+          ].map(({ direction, icon, label }) => (
+            <button
+              key={icon}
+              type="button"
+              onClick={() => page(direction)}
+              aria-label={label}
+              className="grid size-11 cursor-pointer place-items-center rounded-full text-ink shadow-[inset_0_0_0_1px_var(--color-line)] transition-colors duration-150 hover:bg-surface"
+            >
+              <Icon name={icon} className="size-5" />
+            </button>
+          ))}
+        </div>
+      </div>
+    </Section>
+  );
+}

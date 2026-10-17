@@ -1,101 +1,51 @@
-import { useEffect, useRef, useState } from "react";
-import { Heading, Section } from "../components/Section.jsx";
+import { Rolling } from "../components/Rolling.jsx";
+import { costs } from "../config.js";
 import { useI18n } from "../i18n/index.jsx";
-import { useReducedMotion } from "../lib/usePageMotion.js";
+import { useEnterOnce } from "../lib/usePageMotion.js";
 
-// 每一位数字是一条 0–9 走两遍的竖条，最后停在第二遍的那个数上：0 也会滚一圈，几位一起转才像计数器
-const STRIP = [..."01234567890123456789"];
-
-/** 花多少钱：单次、每月、免费额度内三个数排一行，滚到这里时数字像计数器一样转到位。数字的出处在 README，页面上不写 */
-export function Cost() {
-  const { m } = useI18n();
-  const roll = useRollOnce();
-  const facts = [
-    { ...m.cost.once, id: "once" },
-    { ...m.cost.month, id: "month", highlight: true },
-    { ...m.cost.free, id: "free" },
-  ];
-  return (
-    <Section id="cost" tone="surface" labelledBy="cost-title">
-      <Heading id="cost-title" title={m.cost.title} lead={m.cost.lead} />
-
-      <dl
-        ref={roll.ref}
-        data-roll={roll.stage}
-        className="reveal mt-[clamp(3.5rem,8vw,6rem)] grid gap-12 lg:grid-cols-[1fr_1.45fr_1fr] lg:gap-6"
-      >
-        {facts.map((fact) => (
-          // 数在上、说明在下；dl 里 dt 得写在前面，所以倒过来排
-          <div key={fact.id} className="flex flex-col-reverse items-start gap-2">
-            <dt className={fact.highlight ? "font-medium text-ink" : "text-ink-2"}>{fact.label}</dt>
-            <dd
-              className={`font-rounded text-[clamp(2.5rem,5vw,3.75rem)] leading-[1.25] font-semibold tracking-tight whitespace-nowrap ${
-                fact.highlight ? "text-cinnabar" : "text-ink"
-              }`}
-            >
-              <Rolling value={fact.value} />
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </Section>
-  );
+/** 中文写人民币，英文写美元；到分，不花钱的写 0（和 App 模型页推荐组合的写法一样） */
+function price(plan, locale) {
+  const [symbol, value] = locale === "zh-CN" ? ["¥", plan.cny] : ["$", plan.usd];
+  return { symbol, value: value === 0 ? "0" : value.toFixed(2) };
 }
 
 /**
- * 数字什么时候转：一开始停在结果上（没有 IntersectionObserver、减弱动态效果、或一进来就已经在屏幕上时一直这样）；
- * 还在屏幕下面时先归零（ready），整行露出来时转到结果（roll），只转一次。
- * 不跟着滚动一格一格走：访客停在半路时，数字会卡在半截，像坏了
+ * 费用：模型一段末尾的一条，不单独成段。先说软件免费、没有订阅，钱直接付给模型厂商，免得看成在卖套餐；
+ * 右边两个数只是例子：转写加润色每天 100 次每月多少，数据隐私不花钱（模型下到本机，自己电脑上跑 AI）。
+ * 月成本和 App 同一套算法（src/costs.json），滚到时数字转到位。id 留着 cost，旧的 #cost 链接还能跳过来
  */
-function useRollOnce() {
-  const ref = useRef(null);
-  const reduced = useReducedMotion();
-  const [stage, setStage] = useState("rest");
-  useEffect(() => {
-    const element = ref.current;
-    if (reduced || !element || !("IntersectionObserver" in window)) return undefined;
-    if (element.getBoundingClientRect().top < window.innerHeight) return undefined;
-    setStage("ready");
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting) return;
-        setStage("roll");
-        observer.disconnect();
-      },
-      // 整行露出来、离底边还有一点时才转，访客正好看着它转
-      { threshold: 1, rootMargin: "0px 0px -12% 0px" },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [reduced]);
-  return { ref, stage };
-}
-
-/** 一个数：读屏读整串；画面上每位数字是一条会滚的竖条（styles.css 的 .roll），别的字符原样 */
-function Rolling({ value }) {
+export function Cost() {
+  const { m, locale } = useI18n();
+  const roll = useEnterOnce("-8%");
+  const plans = [
+    { id: "paid", text: m.cost.paid, cost: price(costs.paid, locale) },
+    { id: "free", text: m.cost.free, cost: price(costs.free, locale) },
+  ];
   return (
-    <>
-      <span className="sr-only">{value}</span>
-      <span aria-hidden="true" className="inline-flex">
-        {[...value].map((char, place) =>
-          /\d/.test(char) ? (
-            // biome-ignore lint/suspicious/noArrayIndexKey: 字符的位置是固定的
-            <span key={place} className="roll" style={{ "--d": 10 + Number(char), "--p": place }}>
-              {/* 撑出这一位最后那个数本来的宽度：1 窄、0 宽，不留空 */}
-              <span className="invisible">{char}</span>
-              <span className="roll-strip">
-                {STRIP.map((digit, row) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: 竖条是固定的两遍 0–9
-                  <span key={row}>{digit}</span>
-                ))}
-              </span>
-            </span>
-          ) : (
-            // biome-ignore lint/suspicious/noArrayIndexKey: 字符的位置是固定的
-            <span key={place}>{char}</span>
-          ),
-        )}
-      </span>
-    </>
+    <div
+      id="cost"
+      className="reveal mt-[clamp(4rem,9vw,7rem)] grid scroll-mt-24 gap-x-16 gap-y-10 border-t border-line pt-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]"
+    >
+      <div>
+        <h3 className="text-[clamp(1.5rem,2.6vw,2rem)] font-semibold tracking-[-0.02em] text-balance text-ink">
+          {m.cost.title}
+        </h3>
+        <p className="mt-2 text-[1.0625rem] text-ink-2">{m.cost.text}</p>
+      </div>
+      <dl ref={roll.ref} data-roll={roll.stage} className="grid grid-cols-2 gap-x-8 sm:gap-x-12">
+        {plans.map(({ id, text, cost }) => (
+          // 名字、数、一句话；dt 得写在前面，名字本来就在最上面
+          <div key={id}>
+            <dt className="font-semibold text-ink">{text.name}</dt>
+            <dd className="mt-2 font-rounded text-[clamp(2.5rem,5vw,3.5rem)] leading-[1.25] font-semibold tracking-[-0.025em] whitespace-nowrap text-ink">
+              <span className="mr-0.5 text-[0.55em] font-medium text-ink-2">{cost.symbol}</span>
+              <Rolling value={cost.value} />
+              <span className="ml-1.5 text-[0.36em] font-medium tracking-normal text-ink-2">{m.cost.per}</span>
+            </dd>
+            <dd className="mt-1 text-[0.9375rem] leading-snug text-balance break-keep text-ink-2">{text.note}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }

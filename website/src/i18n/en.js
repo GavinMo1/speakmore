@@ -1,30 +1,33 @@
 // 英文文案。和 zh-CN.js 的结构一一对应（test/i18n.test.mjs 会查），改一份就改两份。
-// 写法：书面语，简洁平实，不用口语和俏皮话；数字都要有出处（README 的成本一节、docs/development.md 的实测）。
+// 写法：书面语，短词短句，不用口语和俏皮话；数字都要有出处（README 的评测、成本两节，bench/results/ 的实测），页面上不写出处。
 // 标题里的 \n 是换行的位置；口述里 ~~ 括起来的是会被删掉的部分。
 
 export default {
   meta: {
     title: "SpeakMore — Voice dictation for Mac and Windows",
     description:
-      "Press a key, speak, and polished text appears where you type. Free and open source. About $1 a month with your own Gemini key.",
+      "Press a key, speak, and polished text appears where you type. Free and open source. Your model, your mode, your cost.",
   },
   nav: {
-    how: "How",
-    cost: "Cost",
+    ways: "Modes",
+    speed: "Speed",
+    models: "Models",
     privacy: "Privacy",
+    developers: "Developers",
     download: "Download",
     github: "SpeakMore on GitHub",
     home: "SpeakMore home",
   },
   hero: {
     title: "Speak more.\nType less.",
-    lead: "Voice dictation for Mac and Windows.\nOne key, any app, polished text.",
-    shotAlt: "SpeakMore's home window: words, time saved, pace, a daily heatmap and spend",
+    lead: "Voice dictation for Mac and Windows.\nYour model, your mode, your cost.",
+    shotAlt:
+      "SpeakMore's home window: words, time saved, pace, dictation time and a daily heatmap, with the mode picker at the top right",
     barAlt: "The floating bar during dictation: cancel, a live waveform, done",
   },
   demo: {
     title: "Speak naturally.\nRead polished text.",
-    lead: "Filler words, repetitions and self-corrections are removed. Enumerations become lists.",
+    lead: "Press a key to start and again to stop. Filler words, repetitions and self-corrections are removed. Enumerations become lists.",
     said: "Spoken",
     written: "Written",
     examples: [
@@ -41,58 +44,219 @@ export default {
       },
     ],
   },
-  how: {
-    title: "One key.\nEvery app.",
-    lead: "Text appears at your cursor, in any app that accepts paste.",
-    steps: [
-      { key: "Right ⌥", text: "Press" },
-      { key: null, text: "Speak" },
-      { key: "Right ⌥", text: "Press again" },
+  models: {
+    title: "Leading models.\nAny you like.",
+    lead: "Pick native, transcription and polish models separately. Any OpenAI-compatible service works too.",
+    loopLabel: "Supported model providers",
+    vendors: {
+      gemini: "Google Gemini",
+      openai: "OpenAI",
+      qwen: "Qwen",
+      bailian: "Alibaba Cloud Bailian",
+      deepseek: "DeepSeek",
+      kimi: "Kimi",
+      zhipu: "Zhipu",
+      minimax: "MiniMax",
+      funaudiollm: "SenseVoice",
+      custom: "Custom service",
+    },
+    points: [
+      { title: "Your own keys", text: "Encrypted on this computer. Change them anytime." },
+      { title: "Measured, not guessed", text: "Benchmarked models show their scores." },
+      { title: "Switch instantly", text: "No restart needed." },
     ],
-    speedValue: "≈2 s",
-    speedLabel: "from end of speech to text",
+    shotAlt:
+      "The Polish tab of the Models page: DeepSeek, Qwen, Kimi, Zhipu, MiniMax and more, with prices and benchmark scores",
   },
-  cost: {
-    title: "Monthly cost.\nAbout $1.",
-    lead: "The app is free. Use your own key and pay Google only for what you use.",
-    once: { value: "$0.0003", label: "Per dictation" },
-    month: { value: "$0.67–1.05", label: "430–870 dictations a month" },
-    free: { value: "$0", label: "On Gemini's free tier" },
+  ways: {
+    title: "Three modes.\nSwitch anytime.",
+    lead: "Switch from the home window. Each mode keeps its own models.",
+    lanes: { cloud: "Cloud", device: "Device", offline: "Offline" },
+    items: [
+      {
+        id: "native",
+        name: "Native",
+        text: "Audio goes straight to the model. One pass.",
+        facts: ["Uploads audio", "Needs an API key"],
+        steps: ["Audio", "Model", "Text"],
+        carry: "Audio",
+      },
+      {
+        id: "local",
+        name: "Transcribe + Polish",
+        text: "Transcribed on device, polished by any model.",
+        facts: ["Uploads text only", "Needs an API key"],
+        steps: ["Audio", "On device", "Polish", "Text"],
+        carry: "Text",
+      },
+      {
+        id: "private",
+        name: "Private",
+        text: "Fully on device. Offline.",
+        facts: ["Uploads nothing", "No API key"],
+        steps: ["Audio", "On device", "Text"],
+      },
+    ],
   },
-  look: {
-    title: "Three themes.\nLight and dark.",
-    lead: "Words, time saved, pace, streaks and spend, at a glance.",
-    themes: { ink: "Ink", cinnabar: "Cinnabar", indigo: "Indigo" },
-    schemes: { light: "Light", dark: "Dark" },
-    themeLabel: "Theme",
-    schemeLabel: "Appearance",
-    alt: "SpeakMore's home window, {theme} theme, {scheme}",
+  speed: {
+    title: "Fast.\nAnd light.",
+    lead: "Runs on processors and graphics cards. Uses the GPU automatically when there is one.",
+    headline: {
+      label: "Mainstream hardware",
+      value: "2",
+      prefix: "<",
+      unit: "s",
+      text: "From releasing the key to text",
+    },
+    stats: [
+      { value: "0.23", unit: "s", label: "On-device transcription", note: "Apple silicon" },
+      { value: "850", unit: "MB", label: "On-device model", note: "One-time download" },
+    ],
+    hardware: {
+      label: "Supported hardware",
+      groups: [
+        {
+          id: "cpu",
+          name: "Processors",
+          note: "Runs directly",
+          items: [
+            { icon: "apple", brand: "Apple", series: "M series" },
+            { icon: "intel", brand: "Intel", series: "Core" },
+            { icon: "amd", brand: "AMD", series: "Ryzen" },
+          ],
+        },
+        {
+          id: "gpu",
+          name: "Graphics",
+          note: "Accelerated",
+          items: [
+            { icon: "nvidia", brand: "NVIDIA", series: "GeForce" },
+            { icon: "amd", brand: "AMD", series: "Radeon" },
+            { icon: "intel", brand: "Intel", series: "Arc · Iris\u00a0Xe" },
+          ],
+        },
+      ],
+    },
+    long: {
+      title: "Steady on long takes",
+      text: "Nearly three minutes of speech, written in full, never cut off.",
+      start: "0:00",
+      end: "2:52",
+    },
   },
   privacy: {
-    title: "Private and open.",
-    direct: {
-      title: "Direct to the model",
-      text: "Audio goes straight from your computer to the model. No account; history stays local.",
+    title: "Your data.\nOn your computer.",
+    lead: "In Private mode, audio and text never leave this computer.",
+    items: [
+      { icon: "offline", title: "No uploads", text: "Transcribed on device" },
+      { icon: "account", title: "No account", text: "Open and start" },
+      { icon: "key", title: "Encrypted keys", text: "Protected by the system" },
+      { icon: "history", title: "Local history", text: "Stays on this computer" },
+    ],
+    mirror: {
+      title: "China mirror.\nOver 10× faster.",
+      text: "Download the on-device model from the China mirror: 850 MB in about a minute and a half.",
+      alt: "Download speed: China mirror about 9.7 MB/s, Hugging Face about 0.7 MB/s",
     },
-    models: { title: "Gemini or OpenAI", text: "Use your own key and switch at any time." },
-    open: { title: "Open source", text: "MIT licensed. The source code is on {github}." },
-    languages: {
-      title: "English and Chinese",
-      text: "The interface follows your system language, or set it in Settings.",
+  },
+  cost: {
+    title: "Free app. No subscription.",
+    text: "Pay model providers directly, only for what you use.",
+    per: "/ month",
+    paid: { name: "Transcribe + Polish", note: "100 dictations a day" },
+    free: { name: "Private", note: "Download the model and run AI on your own computer" },
+  },
+  setup: {
+    title: "Three minutes.\nAll set.",
+    lead: "Pick a mode, prepare a model, grant access, say a line. Every step can be skipped.",
+    steps: [
+      "Pick a mode",
+      "Prepare model and key",
+      "Grant access",
+      "Test the microphone",
+      "Test the shortcut",
+      "Say a line",
+      "Start",
+    ],
+    alt: "Setup step {n}: {step}",
+    previous: "Previous step",
+    next: "Next step",
+  },
+  features: {
+    label: "More features",
+    items: [
+      { icon: "translate", title: "English and Chinese", text: "Follows the system language" },
+      { icon: "palette", title: "Three themes", text: "Light and dark, automatic" },
+      { icon: "history", title: "History and spend", text: "Kept locally, always at hand" },
+      { icon: "erase", title: "Clean uninstall", text: "One folder, removed in one command" },
+    ],
+  },
+  developers: {
+    title: "Command line.\nOn par with the app.",
+    lead: "Open source under MIT. Develop the Windows version remotely from a Mac.",
+    points: [
+      {
+        title: "Full command line",
+        text: "Switch modes and models, manage keys, download models, check history and spend.",
+      },
+      { title: "JSON output", text: "status, history and usage print JSON for your scripts." },
+      {
+        title: "Cross-platform development",
+        text: "Sync to Windows over SSH, then test, restart and capture the screen remotely.",
+      },
+      { title: "Plugin architecture", text: "Every provider implements one interface. Over 900 unit tests." },
+    ],
+    source: "View source on GitHub",
+    terminal: { label: "Terminal demo", tabs: { cli: "Command line", windows: "Windows development" } },
+    sessions: {
+      cli: [
+        {
+          comment: "Switch modes, effective immediately",
+          command: "speakmore mode private",
+          output: [
+            "Switched to private mode: qwen3-asr-0.6b-q8 on this Mac; no polishing, nothing uploaded.",
+            "Switched, no restart needed.",
+          ],
+        },
+        { comment: "Change the theme", command: "speakmore theme indigo", output: ["Theme set to Indigo (indigo)."] },
+        {
+          comment: "Status as JSON",
+          command: "speakmore status --json",
+          output: ['{"running":true,"settings":{"mode":{"value":"private",…},…}}'],
+        },
+      ],
+      windows: [
+        {
+          comment: "Sync, then run every unit test on Windows",
+          command: "scripts/dev/win-test.sh",
+          output: ["ℹ tests 920 ℹ pass 904 ℹ fail 0 ℹ skipped 16"],
+        },
+        {
+          comment: "Restart the app from source, with a debug port",
+          command: "scripts/dev/win-app.sh",
+          output: ['{"t":"…","level":"info","event":"started","version":"{version}",…}'],
+        },
+        {
+          comment: "Capture the Windows desktop",
+          command: "scripts/dev/win-screenshot.sh desktop.png",
+          output: ["desktop.png"],
+        },
+      ],
     },
   },
   download: {
-    title: "Get started.",
-    lead: "Free. Requires macOS 12 or later, or 64-bit Windows 10 or later.",
-    buttons: { arm64: "Download for Apple silicon", x64: "Download for Intel", windows: "Download for Windows" },
+    title: "Get started",
+    lead: "Free download. macOS 12 or later; Windows 10 or later (64-bit).",
+    buttons: { arm64: "Download for Apple silicon", windows: "Download for Windows" },
+    intel: "Mac with Intel",
     terminal: { mac: "macOS · Terminal", windows: "Windows · PowerShell" },
     copy: "Copy",
     copied: "Copied",
   },
   footer: {
-    license: "MIT License",
+    license: "MIT license",
     source: "Source",
-    switchTo: "简体中文",
-    switchLabel: "切换到简体中文",
+    switchTo: "中文",
+    switchLabel: "切换到中文",
   },
 };

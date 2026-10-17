@@ -28,7 +28,7 @@ for value in "${host}" "${dir}" "${registry}"; do
 done
 case "${dir}" in /*) ;; *) fail "SITE_REMOTE_DIR 要写绝对路径：${dir}" ;; esac
 
-paths=".dockerignore package.json assets/icon.svg website"
+paths=".dockerignore package.json assets/icon.svg docs/media.json src/renderer/shared/provider-icons.mjs website"
 # 传的是提交过的版本：有没提交的改动时停下，免得以为改了的已经上线
 # shellcheck disable=SC2086
 [ -z "$(git status --porcelain -- ${paths})" ] || fail "website/ 等有没提交的改动，部署的是当前提交，先提交"

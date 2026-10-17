@@ -2,28 +2,43 @@ import { links } from "../config.js";
 import { useI18n } from "../i18n/index.jsx";
 import { Icon } from "../icons/Icon.jsx";
 
-// 每个安装包配它自己的标志，都是单色、跟着字的颜色。Intel 的标志是一行字，扁，要放大到和字一样高
-const TARGETS = [
+// 每个安装包配它自己的标志，都是单色、跟着字的颜色
+const MAIN = [
   { id: "arm64", icon: "apple", size: "size-5 -translate-y-px" },
-  { id: "x64", icon: "intel", size: "h-9 w-9 -my-2" },
   { id: "windows", icon: "windows", size: "size-[1.125rem]" },
 ];
 
-/** 三个安装包（两种芯片的 Mac、Windows）：同一个样式、同样宽，并排放，不分主次 */
+/**
+ * 下载：Apple 芯片的 Mac 和 Windows 两个主按钮，样式、大小一样，并排放；Intel 芯片的 Mac 是 Apple 芯片下面一行字。
+ * 窄屏上下排：两个主按钮在前，Intel 那行在最后，不夹在两个按钮中间
+ */
 export function DownloadButtons({ className = "", style }) {
   const { m } = useI18n();
   return (
-    <div className={`grid w-full max-w-md grid-cols-1 gap-3 sm:max-w-4xl sm:grid-cols-3 ${className}`} style={style}>
-      {TARGETS.map(({ id, icon, size }) => (
+    <div
+      className={`grid w-full max-w-sm gap-3 sm:w-auto sm:max-w-none sm:grid-cols-[repeat(2,minmax(14.5rem,auto))] sm:justify-center ${className}`}
+      style={style}
+    >
+      {MAIN.map(({ id, icon, size }) => (
         <a
           key={id}
           href={links.downloads[id]}
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-ink px-6 font-semibold whitespace-nowrap text-canvas transition-[opacity,transform] duration-150 hover:opacity-85 active:scale-[0.98]"
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-ink px-7 font-semibold whitespace-nowrap text-canvas transition-[opacity,transform] duration-150 hover:opacity-85 active:scale-[0.98] sm:row-start-1"
         >
           <Icon name={icon} className={`shrink-0 ${size}`} />
           {m.download.buttons[id]}
         </a>
       ))}
+      <a
+        href={links.downloads.x64}
+        className="group inline-flex items-center justify-self-center gap-1 pt-1 text-sm text-ink-2 transition-colors duration-150 hover:text-ink sm:col-start-1 sm:row-start-2"
+      >
+        {m.download.intel}
+        <Icon
+          name="arrowRight"
+          className="size-3.5 transition-transform duration-200 ease-out-quint group-hover:translate-x-0.5"
+        />
+      </a>
     </div>
   );
 }

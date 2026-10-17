@@ -13,7 +13,7 @@ test("图标里引用的 id 都在同一个图标里，并且带着图标自己�
   }
 });
 
-/** 页面里用到的图标名：<Icon name="…">、文案和组件里的 icon: "…"、How.jsx 的应用名单 */
+/** 页面里用到的图标名：<Icon name="…">、文案和组件里的 icon: "…" */
 function usedIcons() {
   const dir = new URL("../src/", import.meta.url).pathname;
   const files = readdirSync(dir, { recursive: true }).filter((file) => file.endsWith(".jsx") || file.endsWith(".js"));
@@ -26,9 +26,6 @@ function usedIcons() {
       for (const [, name] of expression.matchAll(/"(\w+)"/g)) used.add(name);
     for (const [, name] of source.matchAll(/icon: "(\w+)"/g)) used.add(name);
   }
-  // How.jsx 里的应用标志是一张名单
-  const how = readFileSync(join(dir, "sections/How.jsx"), "utf8");
-  for (const [, name] of /const APPS = \[([^\]]+)\]/.exec(how)[1].matchAll(/"(\w+)"/g)) used.add(name);
   return used;
 }
 
