@@ -41,6 +41,23 @@ test("缺东西时标题说还差几样，逐项标出，并说权限记在终�
   assert.match(text, /终端/);
 });
 
+test("Windows 上只有麦克风这一项权限：不列输入监控、辅助功能，也不说权限记在终端名下", () => {
+  const windows = { ...plain, platform: "win32" };
+  assert.match(
+    renderStatus({ status: ready, version: "0.1.0", settings, stats: noStats }, windows),
+    /权限\s+麦克风 ✓\n/,
+  );
+  const denied = {
+    ...ready,
+    permissions: { microphone: "denied", listen: true, trusted: true },
+    summary: { ready: false, missing: ["麦克风权限"], blocker: "缺麦克风权限", degraded: null },
+  };
+  const text = renderStatus({ status: denied, version: "0.1.0", settings, stats: noStats }, windows);
+  assert.match(text, /权限\s+麦克风 ✗\n/);
+  assert.match(text, /speakmore settings/);
+  assert.doesNotMatch(text, /输入监控|辅助功能|终端/);
+});
+
 test("key 的各种状态各有一句话", () => {
   const withKey = (key) =>
     renderStatus({ status: { ...ready, key }, version: "0.1.0", settings, stats: noStats }, plain);

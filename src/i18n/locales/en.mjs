@@ -706,8 +706,8 @@ export default {
   speakmore start               Same as above
   speakmore stop                Stop
   speakmore restart             Restart
-  speakmore status [--json]     Status: running or not, key, the three macOS permissions, how much you said today and in total
-  speakmore update              Update to the latest version: this Terminal install, and SpeakMore.app if you have it. Settings, keys, history, and recordings are kept
+  speakmore status [--json]     Status: running or not, key, system permissions, how much you said today and in total
+  speakmore update              Update to the latest version (on a Mac, SpeakMore.app too if you have it). Settings, keys, history, and recordings are kept
 
   speakmore history [-n count] [--json]
                                 What you said, grouped by day, newest first (latest {limit} by default)
@@ -1170,6 +1170,7 @@ speakmore help     all commands`,
           "SpeakMore is stuck and not answering, and its process can't be identified. In Task Manager's Details tab, find electron.exe and end it.",
         cantStop: "Can't stop SpeakMore (PID {pid}). End it in Task Manager.",
       },
+      key: { storage: "It's encrypted with Windows data protection and stays on this PC." },
     },
     permissions: { openSettings: "Settings" },
     settings: {

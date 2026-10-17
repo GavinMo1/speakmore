@@ -14,7 +14,7 @@ export const hotkeyZh = zh(`hotkeys.${hotkey}.name`);
 export const timeZone = "Asia/Shanghai";
 // 上海时间 2026-10-13 15:00
 export const now = new Date("2026-10-13T07:00:00.000Z");
-export const plain = { color: false, timeZone, now, t: zh };
+export const plain = { color: false, timeZone, now, t: zh, platform: "darwin" };
 export const english = { ...plain, t: en };
 
 export const ready = {

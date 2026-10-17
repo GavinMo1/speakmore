@@ -695,8 +695,8 @@ export default {
   speakmore start               同上
   speakmore stop                停掉
   speakmore restart             重启
-  speakmore status [--json]     看状态：在不在运行、key、三项系统权限、今天和累计说了多少
-  speakmore update              更新到最新版本：命令行装的这一份，装着 SpeakMore.app 的话连它一起。设置、key、历史和录音不动
+  speakmore status [--json]     看状态：在不在运行、key、系统权限、今天和累计说了多少
+  speakmore update              更新到最新版本（Mac 上装着 SpeakMore.app 的话连它一起）。设置、key、历史和录音不动
 
   speakmore history [-n 条数] [--json]
                                 看说过的话，按天分组，新的在前（默认最近 {limit} 条）
@@ -1124,6 +1124,7 @@ speakmore help     全部命令`,
           "SpeakMore 卡住了不答话，也认不出它的进程号。在“任务管理器”的“详细信息”里找到 electron.exe，结束它。",
         cantStop: "SpeakMore 停不掉（进程号 {pid}）。在“任务管理器”里结束它。",
       },
+      key: { storage: "它会用 Windows 的数据保护加密后存在这台电脑上，不会发到别处。" },
     },
     permissions: { openSettings: "设置" },
     setup: { openSettings: "任务栏通知区域的图标 › 设置" },
