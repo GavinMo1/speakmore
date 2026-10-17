@@ -94,6 +94,35 @@ export const CHAT_VENDORS = Object.freeze([
     prices: () => import("./prices/moonshot.mjs"),
   }),
   Object.freeze({
+    id: "zhipu",
+    // 界面上按语言写成"智谱"或"Zhipu GLM"（文案 providers.zhipu.name），这里的名字给日志和报错用
+    name: "Zhipu",
+    keyEnv: "ZHIPU_API_KEY",
+    keyPage: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
+    protocol: "openai-chat",
+    // 国内站开放平台的地址（https://docs.bigmodel.cn/cn/api/introduction）
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    defaultModel: "glm-4.7-flashx",
+    // GLM-5.x、4.7 系列默认开着思考，thinking: { type: "disabled" } 关掉（https://docs.bigmodel.cn/cn/guide/capabilities/thinking-mode）。
+    // GLM-5.3、GLM-5.3-Flash、GLM-5.3-FlashX 强制思考、传 disabled 报错（同一页和
+    // https://docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash），所以不收
+    request: Object.freeze({ thinking: Object.freeze({ type: "disabled" }) }),
+    // 照官方文档写，未拿真 key 验证。每个档位收能关思考的最新一个（模型概览 https://docs.bigmodel.cn/cn/guide/start/model-overview，
+    // 2026-10-16）。不收：GLM-5.1、GLM-5、GLM-4.7（旗舰这一档有更新的 5.2）、GLM-5-Turbo（专为龙虾类智能体任务调的）、
+    // GLM-4-Long（超长文本专用）、GLM-4.5-AirX（价目页上连历史价都没有它，拿不准国内站还卖不卖）、GLM-Z1 系列（只能推理）、
+    // 视觉理解模型（润色用不上看图）、GLM-4 那几个带日期的快照
+    models: models(
+      [
+        { id: "glm-5.2", name: "GLM-5.2" },
+        { id: "glm-4.7-flashx", name: "GLM-4.7-FlashX" },
+        // 免费的
+        { id: "glm-4.7-flash", name: "GLM-4.7-Flash" },
+        { id: "glm-4.5-air", name: "GLM-4.5-Air" },
+      ].map((model) => ({ ...model, maker: "zhipu", unverified: true })),
+    ),
+    prices: () => import("./prices/zhipu.mjs"),
+  }),
+  Object.freeze({
     id: "custom",
     // 报错时说的是用户填的那个地址的主机名（chatEndpoint），这里的名字只在列清单时用
     name: "Custom",

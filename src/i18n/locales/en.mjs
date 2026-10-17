@@ -72,6 +72,7 @@ export default {
     deepseek: { getKey: "Get one at DeepSeek Platform" },
     bailian: { name: "Alibaba Cloud Bailian", getKey: "Get one at the Bailian console" },
     moonshot: { name: "Kimi", getKey: "Get one at Kimi API Platform" },
+    zhipu: { name: "Zhipu GLM", getKey: "Get one at Zhipu BigModel Platform" },
   },
 
   language: {

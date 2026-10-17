@@ -115,3 +115,62 @@ test("Kimi 官方：国内站地址，每个模型都关思考；只能开着思
   assert.ok(!moonshot.models.some(({ id }) => id.startsWith("kimi-k2.7-code")));
   assert.deepEqual(parseChatChoice("moonshot"), { vendor: "moonshot", model: "kimi-k2.6" });
 });
+
+/**
+ * 按清单装出这一家的协议客户端（同 refine/polisher.mjs 的 createChatPolisher），交给假的 fetch 润色一次。
+ * 回发出去的请求和拆出来的结果：没拿真 key 的几家靠它对照官方文档查请求形状和回话怎么拆
+ */
+async function polishOnce(id, model, reply) {
+  const vendor = findChatVendor(id);
+  const { baseUrl, name } = chatEndpoint(vendor);
+  const protocol = await PROTOCOLS[vendor.protocol].load();
+  const requests = [];
+  const fetch = async (url, init) => {
+    requests.push({ url, body: JSON.parse(init.body) });
+    return new Response(JSON.stringify(reply), { status: 200 });
+  };
+  const client = protocol.createClient({
+    baseUrl,
+    apiKey: "k",
+    model,
+    name,
+    request: requestFor(vendor, model),
+    costOf: (await vendor.prices()).costOf,
+    fetch,
+  });
+  const result = await client.complete({ system: "s", user: "u" });
+  return { request: requests[0], result };
+}
+
+test("智谱：国内站地址，每个模型都关思考；强制思考的 GLM-5.3 系列不在清单里，没拿真 key 验过的都标出来", () => {
+  const zhipu = findChatVendor("zhipu");
+  assert.equal(zhipu.baseUrl, "https://open.bigmodel.cn/api/paas/v4");
+  for (const { id, unverified } of zhipu.models) {
+    assert.deepEqual(requestFor(zhipu, id), { thinking: { type: "disabled" } }, id);
+    assert.equal(unverified, true, id);
+  }
+  assert.ok(!zhipu.models.some(({ id }) => id.startsWith("glm-5.3")));
+  assert.deepEqual(parseChatChoice("zhipu"), { vendor: "zhipu", model: "glm-4.7-flashx" });
+});
+
+test("智谱：请求照官方文档发到 /chat/completions、带上关思考；成品在 message.content，用量照 OpenAI 的写法记", async () => {
+  // 回话照智谱对话补全的接口文档写（https://docs.bigmodel.cn/api-reference/模型-api/对话补全）
+  const { request, result } = await polishOnce("zhipu", "glm-4.7-flashx", {
+    id: "2025",
+    request_id: "r1",
+    model: "glm-4.7-flashx",
+    choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: "周一上午十点开会" } }],
+    usage: {
+      prompt_tokens: 1200,
+      completion_tokens: 12,
+      total_tokens: 1212,
+      prompt_tokens_details: { cached_tokens: 1000 },
+    },
+  });
+  assert.equal(request.url, "https://open.bigmodel.cn/api/paas/v4/chat/completions");
+  assert.equal(request.body.model, "glm-4.7-flashx");
+  assert.deepEqual(request.body.thinking, { type: "disabled" });
+  assert.equal(result.text, "周一上午十点开会");
+  assert.equal(result.usage.cachedTokens, 1000);
+  assert.ok(result.usage.costUsd > 0);
+});
