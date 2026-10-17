@@ -22,7 +22,7 @@
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
 - [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、改完就收，不再派第二轮，除非他点名
 - [桌面端的文案和观感](desktop-copy-and-look.md) — 书面语、短词短句，不用"能用"这类口语；结构对齐原版，配色走自己的主题，做渐变、玻璃等特色；改样式后真窗口逐个查按钮别退回系统外观
-- [README 英文为主](readme-english-first.md) — 英文主页加中文切换，HTML 排版、简短；卖点是成本和隐私，数字要有出处
+- [README 中文为主](readme-chinese-default.md) — 中文 README.md 默认、英文 README.en.md 切换；五个自由、讲好不讲坏、多配图，图放图片桶
 - [客户端多语言](speakmore-i18n-next.md) — 已随 0.6.0 发布：英文和简体中文、跟随系统、命令行和内核报的话也跟着换，提示词不动；加语言照 docs/development.md
 - [官网文案用书面语](website-copy-formal.md) — 简洁但不口语、不俏皮；第一版他嫌像小孩子写的，中英都收敛
 - [官网不提 Typeless](website-no-typeless.md) — 不比价、不链逆向笔记、不写无关联声明，有测试守着；README 和逆向资料没说要动

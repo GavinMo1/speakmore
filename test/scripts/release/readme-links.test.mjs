@@ -5,8 +5,8 @@ import { test } from "node:test";
 import { ARCHS, dmgName, WINDOWS_SETUP } from "../../../scripts/release/release-layout.mjs";
 
 const repoDir = resolve(import.meta.dirname, "../../..");
-/** 英文是主页，中文是切换过去的那一份：两份都写着安装包的下载链接 */
-const READMES = ["README.md", "README.zh-CN.md"];
+/** 中文是主页（README.md），英文是切换过去的那一份（README.en.md）：两份都写着安装包的下载链接 */
+const READMES = ["README.md", "README.en.md"];
 
 for (const name of READMES) {
   test(`${name} 里安装包的下载链接指向 package.json 的这个版本，两种芯片的 Mac 和 Windows 都有`, () => {
@@ -20,10 +20,10 @@ for (const name of READMES) {
 }
 
 test("两份 README 顶上能互相切换", () => {
-  const english = readFileSync(join(repoDir, "README.md"), "utf8");
-  const chinese = readFileSync(join(repoDir, "README.zh-CN.md"), "utf8");
-  assert.ok(english.includes('href="README.zh-CN.md"'), "README.md 顶上没有切到中文的链接");
-  assert.ok(chinese.includes('href="README.md"'), "README.zh-CN.md 顶上没有切回英文的链接");
+  const chinese = readFileSync(join(repoDir, "README.md"), "utf8");
+  const english = readFileSync(join(repoDir, "README.en.md"), "utf8");
+  assert.ok(chinese.includes('href="README.en.md"'), "README.md 顶上没有切到英文的链接");
+  assert.ok(english.includes('href="README.md"'), "README.en.md 顶上没有切回中文的链接");
 });
 
 /**
@@ -37,8 +37,8 @@ const uploaded = new Set(
 );
 
 for (const [name, locale] of [
-  ["README.md", "en"],
-  ["README.zh-CN.md", "zh-CN"],
+  ["README.md", "zh-CN"],
+  ["README.en.md", "en"],
 ]) {
   test(`${name} 里的截图都从图片桶上取、都传过，用的是这种语言的那一张`, () => {
     const readme = readFileSync(join(repoDir, name), "utf8");

@@ -1,6 +1,6 @@
 # 开发
 
-[README](../README.zh-CN.md) 讲的是怎么装、怎么用，这里是从源码跑、目录结构、打包发布，和每一版实际验证到了哪一步。和原版的对应关系、模型怎么选、提示词怎么调的，在[实现笔记](implementation-notes.md)里。
+[README](../README.md) 讲的是怎么装、怎么用，这里是从源码跑、目录结构、打包发布，和每一版实际验证到了哪一步。和原版的对应关系、模型怎么选、提示词怎么调的，在[实现笔记](implementation-notes.md)里。
 
 ## 从源码跑
 
@@ -15,7 +15,7 @@ npm run check                 # 代码检查 + 全部测试（不联网、不开
 npm run release               # 打发布包：dist/release/ 下两种芯片各一个压缩包和一个安装包（dmg），外加 install.sh，摆成下载地址上的样子
 ```
 
-**发布新版本**：改 `package.json` 里的版本号和两份 README（英文、中文）里安装包的下载链接（测试会核对它们对得上）并提交，打一个同名的标签推上去（比如 `git tag -a v0.4.1 -m "…" && git push origin main v0.4.1`），然后在本机运行 `npm run ship`。它先核对工作区干净、当前提交就是那个标签、标签已经推上去，再跑全部检查、打包（安装包要签名、公证，本机没配就不往下走，每个包等苹果公证几分钟），传到下载地址 `dl.zephyrxiang.com/speakmore/`（腾讯云 COS + CDN），最后从下载地址核对版本号和校验值。桶和密钥从哪来写在 `.machine.env` 里。发布包只放在 COS 这一处；发布过的版本号不会被覆盖，要改就升版本号。传到一半断了，不要重新打包，再运行一次 `scripts/release/with-cos-key.sh npm run publish-release`，传好的会跳过。发完再部署一次官网（`cd website && npm run deploy`，见[官网说明](../website/README.md#上线)），官网上的下载链接才指向新版本。
+**发布新版本**：改 `package.json` 里的版本号和两份 README（中文 README.md、英文 README.en.md）里安装包的下载链接（测试会核对它们对得上）并提交，打一个同名的标签推上去（比如 `git tag -a v0.4.1 -m "…" && git push origin main v0.4.1`），然后在本机运行 `npm run ship`。它先核对工作区干净、当前提交就是那个标签、标签已经推上去，再跑全部检查、打包（安装包要签名、公证，本机没配就不往下走，每个包等苹果公证几分钟），传到下载地址 `dl.zephyrxiang.com/speakmore/`（腾讯云 COS + CDN），最后从下载地址核对版本号和校验值。桶和密钥从哪来写在 `.machine.env` 里。发布包只放在 COS 这一处；发布过的版本号不会被覆盖，要改就升版本号。传到一半断了，不要重新打包，再运行一次 `scripts/release/with-cos-key.sh npm run publish-release`，传好的会跳过。发完再部署一次官网（`cd website && npm run deploy`，见[官网说明](../website/README.md#上线)），官网上的下载链接才指向新版本。
 
 从源码跑的和装好的用的是同一个 `~/.speakmore`，想分开就设 `SPEAKMORE_HOME`。
 
