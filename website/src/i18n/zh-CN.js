@@ -3,7 +3,7 @@
 
 export default {
   meta: {
-    title: "SpeakMore — Mac 语音输入",
+    title: "SpeakMore — Mac 与 Windows 语音输入",
     description: "按下快捷键口述，整理后的文字即刻写入当前输入框。开源免费，使用自有 Gemini 密钥，月均成本约 1 美元。",
   },
   nav: {
@@ -16,7 +16,7 @@ export default {
   },
   hero: {
     title: "开口即成文",
-    lead: "专为 Mac 打造的语音输入。\n一键唤起，适用于任意应用，自动整理成文。",
+    lead: "Mac 与 Windows 上的语音输入。\n一键唤起，适用于任意应用，自动整理成文。",
     shotAlt: "SpeakMore 主窗口首页：字数、节省时间、语速、每日热力图与花费",
     barAlt: "口述时的悬浮条：左侧取消，中间为随语音起伏的声波，右侧完成",
   },
@@ -74,9 +74,9 @@ export default {
   },
   download: {
     title: "立即开始",
-    lead: "免费下载，适用于 macOS 12 及以上版本。",
-    button: "下载 {chip}版",
-    chips: { arm64: "Apple 芯片", x64: "Intel 芯片" },
+    lead: "免费下载，适用于 macOS 12 及以上、Windows 10 及以上（64 位）。",
+    buttons: { arm64: "下载 Apple 芯片版", x64: "下载 Intel 芯片版", windows: "下载 Windows 版" },
+    terminal: { mac: "macOS · 终端", windows: "Windows · PowerShell" },
     copy: "复制",
     copied: "已复制",
   },

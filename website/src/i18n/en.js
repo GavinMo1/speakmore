@@ -4,7 +4,7 @@
 
 export default {
   meta: {
-    title: "SpeakMore — Voice dictation for Mac",
+    title: "SpeakMore — Voice dictation for Mac and Windows",
     description:
       "Press a key, speak, and polished text appears where you type. Free and open source. About $1 a month with your own Gemini key.",
   },
@@ -18,7 +18,7 @@ export default {
   },
   hero: {
     title: "Speak more.\nType less.",
-    lead: "Voice dictation for Mac.\nOne key, any app, polished text.",
+    lead: "Voice dictation for Mac and Windows.\nOne key, any app, polished text.",
     shotAlt: "SpeakMore's home window: words, time saved, pace, a daily heatmap and spend",
     barAlt: "The floating bar during dictation: cancel, a live waveform, done",
   },
@@ -72,7 +72,7 @@ export default {
     title: "Private and open.",
     direct: {
       title: "Direct to the model",
-      text: "Audio goes straight from your Mac to the model. No account; history stays local.",
+      text: "Audio goes straight from your computer to the model. No account; history stays local.",
     },
     models: { title: "Gemini or OpenAI", text: "Use your own key and switch at any time." },
     open: { title: "Open source", text: "MIT licensed. The source code is on {github}." },
@@ -83,9 +83,9 @@ export default {
   },
   download: {
     title: "Get started.",
-    lead: "Free. Requires macOS 12 or later.",
-    button: "Download for {chip}",
-    chips: { arm64: "Apple silicon", x64: "Intel" },
+    lead: "Free. Requires macOS 12 or later, or 64-bit Windows 10 or later.",
+    buttons: { arm64: "Download for Apple silicon", x64: "Download for Intel", windows: "Download for Windows" },
+    terminal: { mac: "macOS · Terminal", windows: "Windows · PowerShell" },
     copy: "Copy",
     copied: "Copied",
   },

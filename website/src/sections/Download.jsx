@@ -6,7 +6,7 @@ import { links } from "../config.js";
 import { useI18n } from "../i18n/index.jsx";
 import { Icon } from "../icons/Icon.jsx";
 
-/** 最后一屏：两种芯片的安装包，下面是终端里装的一行；页脚也在这里 */
+/** 最后一屏：三个安装包，下面是终端里装的一行（macOS、Windows 各一行）；页脚也在这里 */
 export function Download() {
   const { m, switchLocale } = useI18n();
   return (
@@ -19,8 +19,17 @@ export function Download() {
         <p className="reveal mt-4 text-[clamp(1.0625rem,1.8vw,1.375rem)] font-medium text-ink-2">{m.download.lead}</p>
 
         <DownloadButtons className="reveal mt-12" />
-        <div className="reveal mt-6 w-full max-w-2xl text-left">
-          <CopyCommand command={links.install} copyLabel={m.download.copy} copiedLabel={m.download.copied} />
+        <div className="reveal mt-6 grid w-full max-w-2xl gap-4 text-left">
+          {["mac", "windows"].map((system) => (
+            <div key={system}>
+              <p className="mb-2 pl-1 text-xs font-medium text-ink-2">{m.download.terminal[system]}</p>
+              <CopyCommand
+                command={links.install[system]}
+                copyLabel={m.download.copy}
+                copiedLabel={m.download.copied}
+              />
+            </div>
+          ))}
         </div>
       </div>
 

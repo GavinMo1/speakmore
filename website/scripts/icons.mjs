@@ -2,7 +2,7 @@
 // 取下来的 SVG 直接打进页面，不在访客打开时再去 Iconify 要：少一个外部依赖，也不往第三方报访客的来路。
 //
 // 界面图标只用 Remix Icon（ri，Apache-2.0）一套；各家应用的标志用 SVG Logos（logos，CC0）和 theSVG（thesvg-color，MIT），
-// Intel 的标志用 Simple Icons（simple-icons，CC0）。
+// Intel 的标志用 Simple Icons（simple-icons，CC0）；Windows 的标志也用 Remix Icon。
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,6 +19,7 @@ const ICONS = {
   // 品牌（单色，跟着字的颜色走）
   apple: "ri:apple-fill",
   intel: "simple-icons:intel",
+  windows: "ri:windows-fill",
   github: "ri:github-fill",
   openai: "ri:openai-fill",
   // 品牌（原色）

@@ -52,9 +52,11 @@ test("地址都从配置和版本号算出来，结尾多一道斜杠也不出�
     },
     "1.2.3",
   );
-  assert.equal(links.dmg.arm64, "https://dl.example/sm/v1.2.3/SpeakMore-arm64.dmg");
-  assert.equal(links.dmg.x64, "https://dl.example/sm/v1.2.3/SpeakMore-x64.dmg");
-  assert.equal(links.install, "curl -fsSL https://dl.example/sm/install.sh | bash");
+  assert.equal(links.downloads.arm64, "https://dl.example/sm/v1.2.3/SpeakMore-arm64.dmg");
+  assert.equal(links.downloads.x64, "https://dl.example/sm/v1.2.3/SpeakMore-x64.dmg");
+  assert.equal(links.downloads.windows, "https://dl.example/sm/v1.2.3/SpeakMore-Setup-x64.exe");
+  assert.equal(links.install.mac, "curl -fsSL https://dl.example/sm/install.sh | bash");
+  assert.equal(links.install.windows, "irm https://dl.example/sm/install.ps1 | iex");
   assert.equal(links.media("shots/a.webp"), "https://m.example/shots/a.webp");
   assert.equal(links.license, "https://github.com/o/r/blob/main/LICENSE");
 });
