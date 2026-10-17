@@ -11,7 +11,8 @@
 //
 // Windows 的包（speakmore-win32-x64.zip）也在这台 Mac 上打：一样是 app\ 和 runtime\（原版的 Electron），
 // install.ps1 把它解进 %USERPROFILE%\.speakmore。小帮手用项目自带的 Go 交叉编译（scripts/build/go.sh），
-// 运行库按 win32-x64 装（npm 的 --os、--cpu）。没签名：Windows 上暂时不签（见 docs/development.md）。
+// 运行库按 win32-x64 装（npm 的 --os、--cpu）。另外打一个直接下载的安装程序 SpeakMore-Setup-x64.exe
+// （scripts/build/windows-setup.mjs）：身上带着这个包和 install.ps1。都没签名：Windows 上暂时不签。
 //
 // 另外每种芯片打一个直接下载的安装包（SpeakMore-<芯片>.dmg）：签了名、过了公证的 SpeakMore.app，
 // 要本机配好签名和公证（.machine.env 的 MAC_SIGNING_IDENTITY、MAC_NOTARY_PROFILE），没配就不打，发布时会因为缺它传不上去。
@@ -26,7 +27,8 @@ import { makeDmg } from "../build/dmg.mjs";
 import { packageMacApp } from "../build/mac-app.mjs";
 import { signingConfig } from "../build/signing.mjs";
 import { APP_ENTRIES, stageApp } from "../build/stage-app.mjs";
-import { ARCHS, archiveName, dmgName, sha256, versionDir, WINDOWS_ARCHIVE } from "./release-layout.mjs";
+import { buildWindowsSetup } from "../build/windows-setup.mjs";
+import { ARCHS, archiveName, dmgName, sha256, versionDir, WINDOWS_ARCHIVE, WINDOWS_SETUP } from "./release-layout.mjs";
 
 const packageDir = resolve(import.meta.dirname, "../..");
 const outDir = join(packageDir, "dist", "release");
@@ -108,6 +110,12 @@ try {
     execFileSync("zip", ["-q", "-r", "-X", archive, "app", "runtime"], { cwd: staging });
     writeFileSync(`${archive}.sha256`, `${sha256(archive)}  ${basename(archive)}\n`);
     console.log(`打好了：${archive}（${megabytes(archive)}）`);
+
+    // 直接下载的安装程序：身上带着上面这个包和 install.ps1，双击就装、装完打开 App
+    const setup = join(outDir, versionDir(version), WINDOWS_SETUP);
+    buildWindowsSetup({ packageDir, version, versionDir: versionDir(version), archive, out: setup });
+    writeFileSync(`${setup}.sha256`, `${sha256(setup)}  ${basename(setup)}\n`);
+    console.log(`打好了：${setup}（${megabytes(setup)}）`);
   }
 } finally {
   rmSync(staging, { recursive: true, force: true });

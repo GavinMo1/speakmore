@@ -1,0 +1,110 @@
+// 打 Windows 直接下载的安装程序 SpeakMore-Setup-x64.exe：native/windows-setup 编出来的那段程序，后面接一个
+// 只存不压的 zip（这个版本的程序包和它的校验值、install.ps1、latest，摆成下载地址上的样子），最后 16 个字节是
+// 记号和 zip 的长度。格式和 native/windows-setup/payload.go 读的一致。
+// 双击后它把 zip 解到临时目录，当成下载地址跑 install.ps1：怎么装还是只有 install.ps1 一份。
+// 由 scripts/release/release.mjs 在打完 Windows 的包之后调用。
+import { execFileSync } from "node:child_process";
+import {
+  appendFileSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
+import { goCommand } from "../../src/cli/native-helper.mjs";
+
+export const SETUP_MAGIC = "SMSETUP1";
+/**
+ * 给 exe 加图标、版本信息和清单的工具，只在编译时用。钉住版本，下载的内容由 Go 的校验和数据库核对。
+ * 清单里写明不要管理员权限（asInvoker）：名字里带 Setup 又没有清单的 exe，Windows 会自动要求提权
+ */
+const GO_WINRES = "github.com/tc-hib/go-winres@v0.3.3";
+
+/** 尾巴：记号 8 字节，加 zip 的长度（8 字节，小端） */
+export function setupTrailer(payloadBytes) {
+  const trailer = Buffer.alloc(16);
+  trailer.write(SETUP_MAGIC, 0, "ascii");
+  trailer.writeBigUInt64LE(BigInt(payloadBytes), 8);
+  return trailer;
+}
+
+/** exe 的文件版本只认四段数字：0.9.0-rc.1 记成 0.9.0.0（完整的版本号写在产品版本里） */
+export const fileVersion = (version) => `${/^\d+\.\d+\.\d+/.exec(version)[0]}.0`;
+
+/**
+ * @param {object} options
+ * @param {string} options.packageDir 仓库根
+ * @param {string} options.version 版本号（package.json 的，不带 v）
+ * @param {string} options.versionDir 下载地址上这个版本的目录名（release-layout.mjs 的 versionDir）
+ * @param {string} options.archive 打好的 Windows 程序包（旁边要有它的 .sha256）
+ * @param {string} options.out 安装程序写到哪
+ */
+export function buildWindowsSetup({ packageDir, version, versionDir, archive, out, run = execFileSync }) {
+  const source = join(packageDir, "native", "windows-setup");
+  const go = goCommand(packageDir, process.platform);
+  const work = mkdtempSync(join(tmpdir(), "speakmore-setup-"));
+  try {
+    const program = join(work, "setup.exe");
+    try {
+      // 生成的资源文件放在源码目录里 go build 才认，编完就删
+      run(
+        go,
+        [
+          "run",
+          GO_WINRES,
+          "simply",
+          "--arch",
+          "amd64",
+          "--out",
+          join(source, "rsrc"),
+          "--manifest",
+          "cli",
+          "--icon",
+          join(packageDir, "assets", "icon.ico"),
+          "--product-name",
+          "SpeakMore",
+          "--product-version",
+          version,
+          "--file-version",
+          fileVersion(version),
+          "--file-description",
+          "SpeakMore Setup",
+          "--original-filename",
+          basename(out),
+          "--copyright",
+          "MIT License",
+        ],
+        { cwd: source, stdio: "inherit" },
+      );
+      // 控制台程序：安装的进度要显示出来
+      run(go, ["build", "-trimpath", "-ldflags", "-s -w", "-o", program, "."], {
+        cwd: source,
+        stdio: "inherit",
+        env: { ...process.env, GOOS: "windows", GOARCH: "amd64", CGO_ENABLED: "0" },
+      });
+    } finally {
+      rmSync(join(source, "rsrc_windows_amd64.syso"), { force: true });
+    }
+
+    const stage = join(work, "payload");
+    mkdirSync(join(stage, versionDir), { recursive: true });
+    copyFileSync(archive, join(stage, versionDir, basename(archive)));
+    copyFileSync(`${archive}.sha256`, join(stage, versionDir, `${basename(archive)}.sha256`));
+    copyFileSync(join(packageDir, "install.ps1"), join(stage, "install.ps1"));
+    writeFileSync(join(stage, "latest"), `${versionDir}\n`);
+    const payload = join(work, "payload.zip");
+    // 只存不压：程序包本来就压过了，再压一遍只是白费时间
+    run("zip", ["-0", "-q", "-r", "-X", payload, "."], { cwd: stage });
+
+    copyFileSync(program, out);
+    appendFileSync(out, readFileSync(payload));
+    appendFileSync(out, setupTrailer(statSync(payload).size));
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}

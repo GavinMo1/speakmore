@@ -48,7 +48,7 @@ done
 for sum in \
   "${tag}/speakmore-darwin-arm64.tar.gz.sha256" "${tag}/SpeakMore-arm64.dmg.sha256" \
   "${tag}/speakmore-darwin-x64.tar.gz.sha256" "${tag}/SpeakMore-x64.dmg.sha256" \
-  "${tag}/speakmore-win32-x64.zip.sha256"; do
+  "${tag}/speakmore-win32-x64.zip.sha256" "${tag}/SpeakMore-Setup-x64.exe.sha256"; do
   [ "$(curl -fsS "${DOWNLOAD_URL}/${sum}")" = "$(cat "dist/release/${sum}")" ] || fail "下载地址上 ${sum} 和本机的不一样"
 done
 for script in install.sh install.ps1; do

@@ -94,7 +94,8 @@ const GO = { missing: "cli.daemon.needGo", failed: "cli.daemon.buildFailedGo" };
  * Go 在哪：在 Windows 上就用装着的 go；在别的系统上（发布、交叉编译）用项目自带的那份（scripts/build/go.sh，
  * 第一次用时下载进 .tools/）
  */
-const goCommand = (packageDir, host) => (host === "win32" ? "go" : join(packageDir, "scripts", "build", "go.sh"));
+export const goCommand = (packageDir, host) =>
+  host === "win32" ? "go" : join(packageDir, "scripts", "build", "go.sh");
 
 /**
  * 编译小帮手，并记下它是从哪份源码来的。
