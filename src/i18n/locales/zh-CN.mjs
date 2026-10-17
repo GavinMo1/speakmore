@@ -210,7 +210,7 @@ export default {
     keychainUnavailable: "系统钥匙串不可用，没法安全地保存 key",
     external: "现在连的是单独启动的服务端（SPEAKMORE_SERVER_URL），key 在那边配",
     externalModel: "现在连的是单独启动的服务端（SPEAKMORE_SERVER_URL），用哪个模型由那边定",
-    noKeyFor: "还没有 {provider} 的 key，先填一把",
+    noKeyFor: "{provider} 密钥未配置",
     noKeyForCli: "还没有 {provider} 的 key：运行 speakmore key {id}",
     unknownProvider: "不认识 {id} 这家模型厂商",
     noKeyService: "还没有填 {provider} API key：在终端运行 speakmore key，或者点菜单栏上 SpeakMore 的图标打开设置",

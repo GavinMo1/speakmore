@@ -509,7 +509,7 @@ test("改用一家还没有 key 的：不换，说要先填它的 key", async ()
   await keys.loadAtStartup();
   const result = await keys.use({ route: OPENAI_DEFAULT });
   assert.equal(result.ok, false);
-  assert.match(zh.text(result.problem), /还没有 OpenAI 的 key/);
+  assert.match(zh.text(result.problem), /OpenAI 密钥未配置/);
   assert.equal(keys.provider.id, "gemini");
   assert.equal(service.using, "gemini-key");
 });
@@ -682,7 +682,7 @@ test("另一家（百炼）没有 key：不换，说缺的是哪一家，也不�
   const calls = service.calls.length;
   const result = await keys.use({ route: CLOUD_FIRST_HOP });
   assert.equal(result.ok, false);
-  assert.match(zh.text(result.problem), /Bailian/);
+  assert.match(zh.text(result.problem), /阿里云百炼 密钥未配置/, "厂商名按界面语言写");
   assert.equal(service.calls.length, calls);
   assert.equal(keys.provider.id, "gemini");
   assert.equal(keys.current.state, "ready");

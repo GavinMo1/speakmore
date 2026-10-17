@@ -217,7 +217,7 @@ export default {
     keychainUnavailable: "The system keychain isn't available, so the key can't be stored safely",
     external: "Connected to a separately started server (SPEAKMORE_SERVER_URL); set the key there",
     externalModel: "Connected to a separately started server (SPEAKMORE_SERVER_URL); the model is chosen there",
-    noKeyFor: "No {provider} key yet. Add one first",
+    noKeyFor: "No {provider} key",
     noKeyForCli: "No {provider} key yet: run speakmore key {id}",
     unknownProvider: "Unknown model provider: {id}",
     noKeyService:

@@ -126,7 +126,7 @@ export function createKeyManager({
         return { keys, failure: { vendor: who, state: "unreadable", cause: "unreadable", problem } };
       }
       if (!key) {
-        const problem = msg("key.noKeyFor", { provider: found.name });
+        const problem = msg("key.noKeyFor", { provider: msg(`providers.${found.id}.name`) });
         return { keys, failure: { vendor: who, state: "missing", cause: "missing", problem } };
       }
       const shape = apiKeyProblem(key.apiKey);
@@ -384,7 +384,7 @@ export function createKeyManager({
         log.error("key_unreadable", { provider: found.id, error: String(error?.message ?? error) });
         return { ok: false, problem: msg("key.unreadableFor", { provider: found.name }) };
       }
-      if (!key) return { ok: false, problem: msg("key.noKeyFor", { provider: found.name }) };
+      if (!key) return { ok: false, problem: msg("key.noKeyFor", { provider: msg(`providers.${found.id}.name`) }) };
       const shape = apiKeyProblem(key.apiKey);
       if (shape) return { ok: false, problem: shape };
       const failure = await adopt(key.apiKey, key.source, {
@@ -417,7 +417,7 @@ export function createKeyManager({
         become({
           state: "missing",
           source: null,
-          problem: msg("key.noKeyFor", { provider: found.name }),
+          problem: msg("key.noKeyFor", { provider: msg(`providers.${found.id}.name`) }),
           vendor: { id: found.id, name: found.name },
         });
       });
