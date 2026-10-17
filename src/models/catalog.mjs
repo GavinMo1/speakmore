@@ -85,7 +85,10 @@ export const TAGS = Object.freeze({
   small: "strength",
 });
 
-/** 第一轮评测（bench/results/asr-round1-2026-10-16.md）：97 条真实口述，Apple 芯片的 Mac */
+/**
+ * 第一轮评测（bench/results/asr-round1-2026-10-16.md）：97 条真实口述，Apple 芯片的 Mac。
+ * measured 里 score 是总均分，zh、mix 是按语言分的均分（中文 47 条、中英夹杂 45 条），满分 5
+ */
 const ROUND1 = "asr-round1-2026-10-16";
 
 // ---------- 模型 ----------
@@ -146,8 +149,26 @@ export const MODELS = Object.freeze(
       // 第一轮里最准，中英夹杂时领先最多
       tags: ["apple-silicon", "metal", "cpu", "zh-en"],
       measured: [
-        { chip: "apple-silicon", backend: "metal", score: 4.14, p50Ms: 231, realtime: 67.5, peakMB: 1964 },
-        { chip: "apple-silicon", backend: "cpu", score: 4.14, p50Ms: 1061, realtime: 16, peakMB: 4499 },
+        {
+          chip: "apple-silicon",
+          backend: "metal",
+          score: 4.14,
+          zh: 4.32,
+          mix: 4.02,
+          p50Ms: 231,
+          realtime: 67.5,
+          peakMB: 1964,
+        },
+        {
+          chip: "apple-silicon",
+          backend: "cpu",
+          score: 4.14,
+          zh: 4.34,
+          mix: 4.0,
+          p50Ms: 1061,
+          realtime: 16,
+          peakMB: 4499,
+        },
       ],
     },
     {
@@ -171,7 +192,18 @@ export const MODELS = Object.freeze(
       },
       // 速度约是 Qwen3 Q8 的 3 倍、体积约 1/3；纯中文和它差不多，弱在英文词
       tags: ["apple-silicon", "metal", "fast", "small"],
-      measured: [{ chip: "apple-silicon", backend: "metal", score: 3.94, p50Ms: 73, realtime: 226, peakMB: 1214 }],
+      measured: [
+        {
+          chip: "apple-silicon",
+          backend: "metal",
+          score: 3.94,
+          zh: 4.38,
+          mix: 3.51,
+          p50Ms: 73,
+          realtime: 226,
+          peakMB: 1214,
+        },
+      ],
     },
     {
       id: "qwen3-asr-0.6b-int8",
@@ -220,7 +252,18 @@ export const MODELS = Object.freeze(
         },
       },
       tags: ["cpu"],
-      measured: [{ chip: "apple-silicon", backend: "cpu", score: 4.02, p50Ms: 1081, realtime: 15.2, peakMB: 3526 }],
+      measured: [
+        {
+          chip: "apple-silicon",
+          backend: "cpu",
+          score: 4.02,
+          zh: 4.32,
+          mix: 3.8,
+          p50Ms: 1081,
+          realtime: 15.2,
+          peakMB: 3526,
+        },
+      ],
     },
     {
       id: "sensevoice-small-int8",
@@ -246,7 +289,18 @@ export const MODELS = Object.freeze(
         },
       },
       tags: ["cpu", "small"],
-      measured: [{ chip: "apple-silicon", backend: "cpu", score: 3.78, p50Ms: 145, realtime: 107, peakMB: 1916 }],
+      measured: [
+        {
+          chip: "apple-silicon",
+          backend: "cpu",
+          score: 3.78,
+          zh: 4.13,
+          mix: 3.51,
+          p50Ms: 145,
+          realtime: 107,
+          peakMB: 1916,
+        },
+      ],
     },
   ].map(freeze),
 );

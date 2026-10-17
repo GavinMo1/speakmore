@@ -9,6 +9,8 @@ import { LocalizedError, msg } from "../../i18n/index.mjs";
 // 每一家的 models 是给人挑的清单，一项一个模型：id 是发请求用的名字，name 是给人看的，maker 是谁做的（界面按它配图标，
 // 同一个平台上可能有好几家的模型，比如百炼上有通义、DeepSeek、Kimi），request 是这个模型在 vendor.request 之外
 // 还要多带、或者要改掉的参数（同一家的模型关思考的写法不一定一样）。清单外的模型名照样发，只带 vendor.request。
+// tested 是跑过成批真实录音的评测，issue 是已知的问题（文案在 models.issues.<issue>）：模型广场按它们打标签。
+// 不同平台上的同一个模型 name 写成一样的，模型广场按 maker 加 name 把它们并成一行、各平台是这一行的渠道。
 // 清单里没有的服务不用等我们登记：选 custom，自己填地址、模型和 key（GitHub issue #2 要的就是这个）。
 //
 // key 按厂商存，和原生链路共用一套存放处（storage/paths.mjs 的 keyFile）。以后这里加上 openai、gemini，
@@ -34,8 +36,9 @@ export const CHAT_VENDORS = Object.freeze([
     defaultModel: "deepseek-flash",
     /** 官方 GET /models 列出的（2026-10-16） */
     models: models([
-      { id: "deepseek-flash", name: "DeepSeek V4.1 Flash", maker: "deepseek" },
-      { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", maker: "deepseek" },
+      // 两个都跑过润色提示词的评测（scripts/dev/eval-prompt.mjs，60 条真实录音，docs/implementation-notes.md）
+      { id: "deepseek-flash", name: "DeepSeek V4.1 Flash", maker: "deepseek", tested: true },
+      { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", maker: "deepseek", tested: true },
     ]),
     // 它默认开着思考（档位 high）。2026-10-16 实测同一句话：开着要 1.5 秒、多出 185 个 token，关掉 0.7 秒，
     // 成品一样。润色用不着思考，所以关掉

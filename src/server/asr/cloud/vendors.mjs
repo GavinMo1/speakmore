@@ -29,6 +29,8 @@ export const CLOUD_TRANSCRIBERS = Object.freeze([
       ].map((model) => Object.freeze({ ...model, maker: "qwen" })),
     ),
     load: () => import("./bailian.mjs"),
+    // costOf 记账（适配器用），listPrice 给模型广场标每小时的价
+    prices: () => import("./prices/bailian.mjs"),
   }),
 ]);
 

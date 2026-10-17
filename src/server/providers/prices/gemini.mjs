@@ -46,6 +46,15 @@ export const PRICES = Object.freeze({
   "gemini-2.5-flash-lite": [{ input: 0.1, audio: 0.3, output: 0.4, cached: 0.01, cachedAudio: 0.03, storage: 1 }],
 });
 
+/**
+ * 模型广场上标的价：这一天的音频输入和输出价，美元每百万 token（原生链路收的是音频）。价目表里没有是 null
+ * @returns {{ currency: "USD", input: number, output: number } | null}
+ */
+export function listPrice(model, at = new Date()) {
+  const price = priceOn(model, at);
+  return price ? { currency: "USD", input: price.audio ?? price.input, output: price.output } : null;
+}
+
 /** 这个型号在这一天的价；价目表里没有是 undefined */
 function priceOn(model, at) {
   const day = at.toISOString().slice(0, 10);

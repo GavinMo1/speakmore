@@ -37,6 +37,7 @@ import { createDelivery } from "./delivery.mjs";
 import { startHelper } from "./helper.mjs";
 import { createKeyManager } from "./keys/key-manager.mjs";
 import { createKeyStore } from "./keys/key-store.mjs";
+import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
 import { createModeSwitch } from "./modes.mjs";
 import { startService } from "./service.mjs";
 import { summarizeSetup, summaryAsText } from "./setup-state.mjs";
@@ -145,6 +146,8 @@ async function main() {
 
   const startedAt = new Date().toISOString();
   const history = openHistory(PATHS.historyDb);
+  // 模型广场上的标价：各家的价目模块启动时加载一次
+  const priceOf = await loadPriceBook();
   // 每家一把 key，各存一个文件。正在用的那家之外的也要在：speakmore key openai、model check 要用
   const keyStores = Object.fromEntries(
     VENDORS.map(({ id }) => [
@@ -522,10 +525,37 @@ async function main() {
       // 正在用 key 的那一家
       provider: describeVendor(provider()),
       ...describeModes(),
+      // 侧栏"模型"一页：三排货架和密钥表（model-plaza.mjs）
+      plaza: describePlazaNow(),
       // 连着单独启动的服务端时用哪种模式、哪家由那边定，这里换不了
       switchable: Boolean(service),
     };
   });
+
+  /** 模型广场按现在的设置、key、本机模型的状态拼出来 */
+  function describePlazaNow() {
+    const settings = resolveSettings({ file: PATHS.settingsFile, env: process.env });
+    let freeBytes = null;
+    try {
+      freeBytes = freeBytesAt(PATHS.modelsDir);
+    } catch (error) {
+      log.warn("disk_space_unknown", { error: String(error) });
+    }
+    return describePlaza({
+      mode: service?.route.mode ?? ROUTE.mode,
+      chosen: {
+        native: settings.model.value,
+        transcriber: settings.transcriber.value,
+        polish: settings.polish.value,
+        customUrl: settings.customUrl.value,
+      },
+      keys: service ? keys.sources() : {},
+      status: Object.fromEntries(MODELS.map(({ id }) => [id, localModels.status(id)])),
+      chip: CHIP,
+      freeBytes,
+      priceOf,
+    });
+  }
 
   /** 设置里要的一家的说明，带着它的 key 在哪（env / stored / null，不解密） */
   function describeVendor(found) {

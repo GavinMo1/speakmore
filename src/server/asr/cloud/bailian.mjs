@@ -1,6 +1,6 @@
 import { encodeWav } from "../../audio/pcm.mjs";
-import { cnyToUsd } from "../../currency.mjs";
 import { COMPATIBLE_URL, classifyError as classifyDashScope, DASHSCOPE_URL, post } from "../../providers/dashscope.mjs";
+import { costOf } from "./prices/bailian.mjs";
 import { cloudModelOf, findCloudTranscriber } from "./vendors.mjs";
 
 // 阿里云百炼的云端转写适配器。两套接口（见 vendors.mjs 的 wire），2026-10-16 拿真的 key 实测过：
@@ -9,33 +9,14 @@ import { cloudModelOf, findCloudTranscriber } from "./vendors.mjs";
 //   dashscope  qwen-audio、fun-asr：/services/aigc/multimodal-generation/generation，要写明 format 和 sample_rate，
 //              关掉流式（X-DashScope-SSE: disable）。整段原文在 output.text（output.output.sentence 是带时间戳的分词，用不上），
 //              用量是 usage.duration（秒），qwen-audio-3.1 另报 input_tokens、output_tokens
-// 价目照百炼模型广场抄的（2026-10-16）：按时长的是每秒 0.00022 元；qwen-audio-3.1-asr-flash 按 token，输入 0.8、输出 2.7 元每百万。
-// 记账统一记美元，按 ../../currency.mjs 换算。
+// 价目和记账在 prices/bailian.mjs。
 
 const NAME = "Bailian";
-const PER_SECOND = 0.00022;
-const PER_MILLION = 1_000_000;
-const PRICES = Object.freeze({
-  "qwen3-asr-flash": { second: PER_SECOND },
-  "qwen-audio-3.0-asr-flash": { second: PER_SECOND },
-  "fun-asr-flash-2026-06-15": { second: PER_SECOND },
-  "qwen-audio-3.1-asr-flash": { input: 0.8, output: 2.7 },
-});
 
 /** 验证 key 用的 0.1 秒静音。转出来是空的，key、模型名、开没开通都会在这里暴露 */
 const SILENCE = encodeWav(new Float32Array(1_600), 16_000);
 
 const dataUri = (wav) => `data:audio/wav;base64,${wav.toString("base64")}`;
-
-/** 一次花了多少美元；不知道价的型号是 null */
-function costOf(model, { seconds, inputTokens, outputTokens }) {
-  const price = PRICES[model];
-  if (!price) return null;
-  const cny = price.second
-    ? seconds * price.second
-    : (inputTokens * price.input + outputTokens * price.output) / PER_MILLION;
-  return cnyToUsd(cny);
-}
 
 const usage = (model, { seconds, inputTokens = 0, audioTokens = 0, outputTokens = 0 }) => ({
   model,
