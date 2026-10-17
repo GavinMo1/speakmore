@@ -1,5 +1,5 @@
 import { msg } from "../../i18n/index.mjs";
-import { chipOf, downloadSize, findModel, MODELS, measuredOn, SOURCES } from "../../models/catalog.mjs";
+import { chipOf, downloadSize, findModel, MODELS, measuredOn, SOURCES, tagsOn } from "../../models/catalog.mjs";
 import { sizeText } from "../../models/describe.mjs";
 import { freeBytesAt } from "../../models/library.mjs";
 import { createModelStore } from "../../models/store.mjs";
@@ -83,7 +83,7 @@ function listTranscribers(io, status) {
     name: model.name,
     bytes: downloadSize(model),
     ...modelStatus(io, status, model.id),
-    tags: model.tags,
+    tags: tagsOn(model, chip),
     measured: measuredOn(model, chip),
   }));
   let freeBytes = null;

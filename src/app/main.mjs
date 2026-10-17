@@ -18,7 +18,7 @@ import { helperPaths } from "../cli/native-helper.mjs";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale } from "../i18n/index.mjs";
 import { alsoLogTo, log } from "../log.mjs";
-import { chipOf, downloadSize, MODELS, makerOf, measuredOn, SOURCES } from "../models/catalog.mjs";
+import { chipOf, downloadSize, MODELS, makerOf, measuredOn, SOURCES, tagsOn } from "../models/catalog.mjs";
 import { createLocalModels, freeBytesAt } from "../models/library.mjs";
 import { presetsFor } from "../models/presets.mjs";
 import { CHAT_VENDORS, formatChatChoice } from "../server/chat/vendors.mjs";
@@ -702,7 +702,7 @@ async function main() {
           bytes: downloadSize(model),
           // 下好了没有、正在下到哪、下过一半的有多少、上次为什么没下下来
           ...localModels.status(model.id),
-          tags: model.tags,
+          tags: tagsOn(model, CHIP),
           // 在这类芯片上的实测，跑得快的在前；没测过是空的
           measured: measuredOn(model, CHIP),
         })),

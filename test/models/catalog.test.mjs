@@ -18,6 +18,7 @@ import {
   mirrorKey,
   SOURCES,
   TAGS,
+  tagsOn,
 } from "../../src/models/catalog.mjs";
 import { measuredFacts, measuredText, nameParts, tagTexts } from "../../src/models/describe.mjs";
 import { findEngine } from "../../src/server/asr/engines/index.mjs";
@@ -104,6 +105,20 @@ test("标签按实测打：适合哪类芯片、能用什么跑，measured 里�
       assert.ok(existsSync(join(ROOT, "bench/results", `${entry.run}.md`)), `${model.id} 的 ${entry.run} 没有报告`);
     }
   }
+});
+
+test("给人看的标签按这台机器的芯片挑：在别类芯片上测出来的芯片、加速标签不拿过来说，强项不分芯片", () => {
+  const model = {
+    tags: ["apple-silicon", "metal", "cpu", "zh-en"],
+    measured: [
+      { chip: "apple-silicon", backend: "metal" },
+      { chip: "apple-silicon", backend: "cpu" },
+      { chip: "windows-x64", backend: "cpu" },
+    ],
+  };
+  assert.deepEqual(tagsOn(model, "apple-silicon"), ["apple-silicon", "metal", "cpu", "zh-en"]);
+  assert.deepEqual(tagsOn(model, "windows-x64"), ["cpu", "zh-en"]);
+  assert.deepEqual(tagsOn(model, null), ["zh-en"]);
 });
 
 test("每个标签、芯片、加速后端在两种界面语言里都有说法", () => {

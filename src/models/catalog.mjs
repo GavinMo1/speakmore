@@ -325,3 +325,16 @@ export function downloadSize(model) {
 export function measuredOn(model, chip) {
   return model.measured.filter((entry) => entry.chip === chip).sort((a, b) => b.realtime - a.realtime);
 }
+
+/**
+ * 在某类芯片上给人看的标签。适合哪类芯片、能用什么跑，只认这类芯片上的实测：在 Mac 上测出来的
+ * "适合 Apple 芯片""Metal 加速"不拿到 Windows 上说。比同类强在哪（strength）不分芯片
+ * @param {string | null} chip chipOf 认出来的；认不出来时只剩强项
+ */
+export function tagsOn(model, chip) {
+  return model.tags.filter((tag) => {
+    if (TAGS[tag] === "chip") return tag === chip;
+    if (TAGS[tag] === "backend") return model.measured.some((entry) => entry.chip === chip && entry.backend === tag);
+    return true;
+  });
+}
