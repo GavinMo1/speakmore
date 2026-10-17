@@ -1,17 +1,18 @@
 import seal from "../../../assets/icon.svg";
 import { DownloadButtons } from "../components/DownloadButtons.jsx";
 import { Lines } from "../components/Section.jsx";
-import { WindowFrame } from "../components/WindowFrame.jsx";
+import { Shot } from "../components/Shot.jsx";
 import { shot } from "../config.js";
 import { useI18n } from "../i18n/index.jsx";
 
-/** 首屏：图标、一句话、两个下载、一张主窗口的图（跟着系统深浅换），悬浮条在窗口正下方 */
+/** 首屏：图标、一句话、下载，一张主窗口的图（跟着系统深浅换），说话时的悬浮条浮在窗口正下方 */
 export function Hero() {
   const { m, locale } = useI18n();
-  const bar = shot("bar-ink", locale);
+  // 主窗口的图是靛青主题（README 那批），悬浮条也用靛青的
+  const bar = shot("bar-indigo", locale);
 
   return (
-    <section id="top" className="overflow-hidden bg-canvas text-ink" aria-labelledby="hero-title">
+    <section id="top" className="overflow-clip bg-canvas text-ink" aria-labelledby="hero-title">
       <div className="mx-auto flex max-w-6xl flex-col items-center px-5 pt-[clamp(7rem,13vw,9.5rem)] text-center sm:px-8">
         <img src={seal} alt="" width="80" height="80" className="rise size-[clamp(4rem,7vw,5rem)]" />
         <h1 id="hero-title" className="display rise mt-8 text-[clamp(3rem,9vw,5.75rem)]" style={{ "--d": "80ms" }}>
@@ -31,20 +32,14 @@ export function Hero() {
         style={{ "--d": "420ms" }}
       >
         <div className="relative">
-          <WindowFrame
-            {...shot("home-light-ink", locale)}
-            dark={shot("home-dark-ink", locale)}
-            alt={m.hero.shotAlt}
-            loading="eager"
-            fetchPriority="high"
-          />
+          <Shot name="home" dark="home-dark" alt={m.hero.shotAlt} loading="eager" fetchPriority="high" />
           {/* 说话时那条悬浮条：在窗口正下方，像说话时它浮在桌面上 */}
           <img
             src={bar.src}
             width={bar.width}
             height={bar.height}
             alt={m.hero.barAlt}
-            className="absolute bottom-0 left-1/2 w-[clamp(10rem,24vw,14.5rem)] -translate-x-1/2 translate-y-[calc(100%+1.5rem)] drop-shadow-[0_14px_24px_oklch(0_0_0/0.28)]"
+            className="absolute bottom-0 left-1/2 w-[clamp(10rem,24vw,14.5rem)] -translate-x-1/2 translate-y-[calc(100%-0.5rem)] drop-shadow-[0_14px_24px_oklch(0_0_0/0.28)]"
           />
         </div>
       </div>

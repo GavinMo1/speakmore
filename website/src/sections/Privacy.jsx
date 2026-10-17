@@ -1,58 +1,54 @@
-import { Heading, Section } from "../components/Section.jsx";
-import { links } from "../config.js";
+import { Heading, Lines, Section } from "../components/Section.jsx";
+import { readme } from "../config.js";
 import { useI18n } from "../i18n/index.jsx";
 import { Icon } from "../icons/Icon.jsx";
-import { fill } from "../lib/text.js";
 
-/** 一句话就讲得完的几样放在一排：直连模型、两家模型、开源、两种界面语言。每样配自己的图，不套卡片 */
+/**
+ * 隐私：数据隐私方式的四样（不上传、无需账号、密钥加密、记录本机）排一行，不套卡片、之间一道细线；
+ * 下面是国内源：一句话加下载速度对比图（README 的那张，跟着系统深浅换）
+ */
 export function Privacy() {
-  const { m } = useI18n();
+  const { m, locale } = useI18n();
   const text = m.privacy;
-  const github = (
-    <a
-      key="github"
-      href={links.repository}
-      className="text-ink underline decoration-ink-2/50 underline-offset-4 transition-colors duration-150 hover:decoration-ink"
-    >
-      GitHub
-    </a>
-  );
-  const items = [
-    { id: "direct", ...text.direct, visual: <Icon name="lock" className="size-10 text-ink" /> },
-    {
-      id: "models",
-      ...text.models,
-      visual: (
-        <span className="flex items-center gap-4">
-          <Icon name="geminiColor" className="size-10" />
-          <Icon name="openai" className="size-10 text-ink" />
-        </span>
-      ),
-    },
-    {
-      id: "open",
-      ...text.open,
-      text: fill(text.open.text, { github }),
-      visual: <Icon name="github" className="size-10 text-ink" />,
-    },
-    { id: "languages", ...text.languages, visual: <Icon name="translate" className="size-10 text-ink" /> },
-  ];
-
+  const light = readme("download-speed-light", locale);
+  const dark = readme("download-speed-dark", locale);
   return (
-    <Section id="privacy" tone="ink" labelledBy="privacy-title">
-      <Heading id="privacy-title" title={text.title} align="center" />
-      <ul className="reveal mt-[clamp(3.5rem,8vw,6rem)] grid gap-y-14 sm:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-line">
-        {items.map((item) => (
-          <li key={item.id} className="flex flex-col items-center px-6 text-center">
-            <div className="flex h-12 items-center">{item.visual}</div>
-            <h3 className="mt-7 text-lg font-semibold text-ink">{item.title}</h3>
-            {/* 中文只在标点处换行，不把一个词拆到两行；一句话比一行还长时才随处断 */}
-            <p className="mt-2 max-w-[17rem] text-[0.9375rem] leading-relaxed text-balance break-keep wrap-anywhere text-ink-2">
-              {item.text}
-            </p>
+    <Section id="privacy" tone="surface" labelledBy="privacy-title">
+      <Heading id="privacy-title" title={text.title} lead={text.lead} />
+
+      <ul className="reveal mt-[clamp(3.5rem,8vw,6rem)] grid grid-cols-2 gap-y-12 lg:grid-cols-4 lg:divide-x lg:divide-line">
+        {text.items.map((item) => (
+          <li key={item.title} className="flex flex-col gap-4 pr-6 lg:px-8 lg:first:pl-0">
+            <Icon name={item.icon} className="size-8 text-seal" />
+            <div>
+              <h3 className="text-lg font-semibold text-ink">{item.title}</h3>
+              <p className="mt-1 text-[0.9375rem] text-ink-2">{item.text}</p>
+            </div>
           </li>
         ))}
       </ul>
+
+      {/* 速度对比图自己带着白底和细边，外面不再套一层 */}
+      <div className="reveal mt-[clamp(4.5rem,10vw,7.5rem)] grid items-center gap-10 border-t border-line pt-[clamp(3rem,7vw,5rem)] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
+        <div>
+          <h3 className="display text-[clamp(2rem,4vw,3rem)]">
+            <Lines text={text.mirror.title} muted />
+          </h3>
+          <p className="mt-5 max-w-sm text-ink-2">{text.mirror.text}</p>
+        </div>
+        <picture className="block">
+          <source media="(prefers-color-scheme: dark)" srcSet={dark.src} />
+          <img
+            src={light.src}
+            width={light.width}
+            height={light.height}
+            alt={text.mirror.alt}
+            loading="lazy"
+            decoding="async"
+            className="block h-auto w-full"
+          />
+        </picture>
+      </div>
     </Section>
   );
 }

@@ -6,7 +6,7 @@ import { links } from "../config.js";
 import { useI18n } from "../i18n/index.jsx";
 import { Icon } from "../icons/Icon.jsx";
 
-/** 最后一屏：三个安装包，下面是终端里装的一行（macOS、Windows 各一行）；页脚也在这里 */
+/** 最后一屏：下载（Apple 芯片、Windows，Intel 在下面一行），下面是终端里装的一行（macOS、Windows 各一行）；页脚也在这里 */
 export function Download() {
   const { m, switchLocale } = useI18n();
   return (
@@ -21,7 +21,8 @@ export function Download() {
         <DownloadButtons className="reveal mt-12" />
         <div className="reveal mt-6 grid w-full max-w-2xl gap-4 text-left">
           {["mac", "windows"].map((system) => (
-            <div key={system}>
+            // 网格里的一格默认不比内容窄：不放开的话，长命令会把整页撑宽（窄屏上命令自己横着滑）
+            <div key={system} className="min-w-0">
               <p className="mb-2 pl-1 text-xs font-medium text-ink-2">{m.download.terminal[system]}</p>
               <CopyCommand
                 command={links.install[system]}

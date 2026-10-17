@@ -1,101 +1,78 @@
-import { useEffect, useRef, useState } from "react";
+import { Rolling } from "../components/Rolling.jsx";
 import { Heading, Section } from "../components/Section.jsx";
+import { costs } from "../config.js";
 import { useI18n } from "../i18n/index.jsx";
-import { useReducedMotion } from "../lib/usePageMotion.js";
+import { Icon } from "../icons/Icon.jsx";
+import { useEnterOnce } from "../lib/usePageMotion.js";
 
-// 每一位数字是一条 0–9 走两遍的竖条，最后停在第二遍的那个数上：0 也会滚一圈，几位一起转才像计数器
-const STRIP = [..."01234567890123456789"];
-
-/** 花多少钱：单次、每月、免费额度内三个数排一行，滚到这里时数字像计数器一样转到位。数字的出处在 README，页面上不写 */
-export function Cost() {
-  const { m } = useI18n();
-  const roll = useRollOnce();
-  const facts = [
-    { ...m.cost.once, id: "once" },
-    { ...m.cost.month, id: "month", highlight: true },
-    { ...m.cost.free, id: "free" },
-  ];
-  return (
-    <Section id="cost" tone="surface" labelledBy="cost-title">
-      <Heading id="cost-title" title={m.cost.title} lead={m.cost.lead} />
-
-      <dl
-        ref={roll.ref}
-        data-roll={roll.stage}
-        className="reveal mt-[clamp(3.5rem,8vw,6rem)] grid gap-12 lg:grid-cols-[1fr_1.45fr_1fr] lg:gap-6"
-      >
-        {facts.map((fact) => (
-          // 数在上、说明在下；dl 里 dt 得写在前面，所以倒过来排
-          <div key={fact.id} className="flex flex-col-reverse items-start gap-2">
-            <dt className={fact.highlight ? "font-medium text-ink" : "text-ink-2"}>{fact.label}</dt>
-            <dd
-              className={`font-rounded text-[clamp(2.5rem,5vw,3.75rem)] leading-[1.25] font-semibold tracking-tight whitespace-nowrap ${
-                fact.highlight ? "text-cinnabar" : "text-ink"
-              }`}
-            >
-              <Rolling value={fact.value} />
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </Section>
-  );
+/** 中文写人民币，英文写美元；到分，不花钱的写 0（和 App 模型页推荐组合的写法一样） */
+function price(plan, locale) {
+  const [symbol, value] = locale === "zh-CN" ? ["¥", plan.cny] : ["$", plan.usd];
+  return { symbol, value: value === 0 ? "0" : value.toFixed(2) };
 }
 
 /**
- * 数字什么时候转：一开始停在结果上（没有 IntersectionObserver、减弱动态效果、或一进来就已经在屏幕上时一直这样）；
- * 还在屏幕下面时先归零（ready），整行露出来时转到结果（roll），只转一次。
- * 不跟着滚动一格一格走：访客停在半路时，数字会卡在半截，像坏了
+ * 费用：只列两个方案。左边是推荐的付费方案（本机转写加润色，每天 100 次每月几块钱），白底、数字用朱砂；
+ * 右边是免费的数据隐私方案，只有一道细边。月成本和 App 同一套算法（src/costs.json），滚到时数字转到位
  */
-function useRollOnce() {
-  const ref = useRef(null);
-  const reduced = useReducedMotion();
-  const [stage, setStage] = useState("rest");
-  useEffect(() => {
-    const element = ref.current;
-    if (reduced || !element || !("IntersectionObserver" in window)) return undefined;
-    if (element.getBoundingClientRect().top < window.innerHeight) return undefined;
-    setStage("ready");
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting) return;
-        setStage("roll");
-        observer.disconnect();
-      },
-      // 整行露出来、离底边还有一点时才转，访客正好看着它转
-      { threshold: 1, rootMargin: "0px 0px -12% 0px" },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [reduced]);
-  return { ref, stage };
-}
-
-/** 一个数：读屏读整串；画面上每位数字是一条会滚的竖条（styles.css 的 .roll），别的字符原样 */
-function Rolling({ value }) {
+export function Cost() {
+  const { m, locale } = useI18n();
+  const roll = useEnterOnce();
+  const plans = [
+    { id: "paid", text: m.cost.paid, cost: price(costs.paid, locale) },
+    { id: "free", text: m.cost.free, cost: price(costs.free, locale) },
+  ];
   return (
-    <>
-      <span className="sr-only">{value}</span>
-      <span aria-hidden="true" className="inline-flex">
-        {[...value].map((char, place) =>
-          /\d/.test(char) ? (
-            // biome-ignore lint/suspicious/noArrayIndexKey: 字符的位置是固定的
-            <span key={place} className="roll" style={{ "--d": 10 + Number(char), "--p": place }}>
-              {/* 撑出这一位最后那个数本来的宽度：1 窄、0 宽，不留空 */}
-              <span className="invisible">{char}</span>
-              <span className="roll-strip">
-                {STRIP.map((digit, row) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: 竖条是固定的两遍 0–9
-                  <span key={row}>{digit}</span>
+    <Section id="cost" labelledBy="cost-title">
+      <Heading id="cost-title" title={m.cost.title} lead={m.cost.lead} />
+
+      <div
+        ref={roll.ref}
+        data-roll={roll.stage}
+        className="reveal mt-[clamp(3.5rem,8vw,6rem)] grid gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]"
+      >
+        {plans.map(({ id, text, cost }) => {
+          const paid = id === "paid";
+          return (
+            <article
+              key={id}
+              aria-labelledby={`plan-${id}`}
+              className={`flex flex-col rounded-[2rem] p-[clamp(2rem,4.5vw,3rem)] ${
+                paid
+                  ? "bg-raised shadow-[0_0_0_1px_var(--color-line),0_30px_70px_-34px_oklch(0_0_0/0.35)]"
+                  : "shadow-[inset_0_0_0_1px_var(--color-line)]"
+              }`}
+            >
+              <header className="flex items-baseline justify-between gap-4">
+                <h3 id={`plan-${id}`} className="text-xl font-semibold tracking-[-0.01em] text-ink">
+                  {text.name}
+                </h3>
+                {text.badge ? <p className="text-sm font-semibold text-cinnabar">{text.badge}</p> : null}
+              </header>
+              <p
+                className={`mt-8 font-rounded leading-[1.15] font-semibold tracking-[-0.025em] whitespace-nowrap ${
+                  paid ? "text-[clamp(4rem,9vw,6rem)] text-cinnabar" : "text-[clamp(3.25rem,7vw,4.5rem)] text-ink"
+                }`}
+              >
+                <span className="mr-1 text-[0.5em]">{cost.symbol}</span>
+                <Rolling value={cost.value} />
+                <span className="ml-2 text-[0.26em] font-medium tracking-normal text-ink-2">{m.cost.per}</span>
+              </p>
+              <p className="mt-2 text-ink-2">{text.note}</p>
+              {/* 要点贴着底边：两个方案的要点那一行对齐 */}
+              <div className="min-h-10 flex-1" />
+              <ul className="grid gap-3 border-t border-line pt-7">
+                {text.points.map((point) => (
+                  <li key={point} className="flex items-center gap-3 text-ink">
+                    <Icon name="check" className={`size-5 shrink-0 ${paid ? "text-cinnabar" : "text-seal"}`} />
+                    {point}
+                  </li>
                 ))}
-              </span>
-            </span>
-          ) : (
-            // biome-ignore lint/suspicious/noArrayIndexKey: 字符的位置是固定的
-            <span key={place}>{char}</span>
-          ),
-        )}
-      </span>
-    </>
+              </ul>
+            </article>
+          );
+        })}
+      </div>
+    </Section>
   );
 }

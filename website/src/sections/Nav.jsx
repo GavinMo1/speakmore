@@ -10,7 +10,7 @@ import { Icon } from "../icons/Icon.jsx";
  */
 export function Nav() {
   const { m } = useI18n();
-  // 三种样子：停在页面顶上是透明的；滚到深色的段落（隐私）上是深色毛玻璃；别处是跟着系统的毛玻璃
+  // 三种样子：停在页面顶上是透明的；滚到深色的段落（性能）上是深色毛玻璃；别处是跟着系统的毛玻璃
   const [look, setLook] = useState("clear");
 
   useEffect(() => {
@@ -35,10 +35,13 @@ export function Nav() {
     };
   }, []);
 
+  // 和页面上的先后一样。识别方式和模型隔开放：英文的 Modes、Models 长得像，挨着容易看错
   const items = [
-    ["how", m.nav.how],
-    ["cost", m.nav.cost],
+    ["ways", m.nav.ways],
+    ["speed", m.nav.speed],
+    ["models", m.nav.models],
     ["privacy", m.nav.privacy],
+    ["cost", m.nav.cost],
   ];
 
   return (

@@ -1,7 +1,9 @@
-# docker build 只用得到 package.json、assets/icon.svg 和 website/（见 website/Dockerfile），别的都不送进去
+# docker build 只用得到 package.json、assets/icon.svg、README 的图的清单、各家模型的标志和 website/（见 website/Dockerfile），别的都不送进去
 *
 !package.json
 !assets/icon.svg
+!docs/media.json
+!src/renderer/shared/provider-icons.mjs
 !website
 website/node_modules
 website/dist
