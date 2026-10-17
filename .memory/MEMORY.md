@@ -28,7 +28,7 @@
 - [官网不提 Typeless](website-no-typeless.md) — 不比价、不链逆向笔记、不写无关联声明，有测试守着；README 和逆向资料没说要动
 - [官网观感](website-look.md) — 不铺渐变光晕、按钮里不套胶囊、两种芯片入口同等；一句话的特色并成一排，不加小字，删除效果不用划线
 - [SpeakMore 宣传片](speakmore-promo-video.md) — 在 kineto 的 feat/speakmore-promo 分支做；发布会式、书面语字幕、不用合成人声；字幕不带人称；背景是他真屏幕的截图（程序坞抠掉了 Typeless）；第四章叫 App、从程序坞点开；88 秒成片 10-16 定稿，横竖封面已出，都在 kineto 的 out/speakmore-promo/；竖版片子待做
-- [三种识别模式平级](speakmore-two-pipelines.md) — native（音频直给模型）、local（转写加任意 API 润色）、private（数据隐私，纯本机转写、不要 key），用户选、不分主次，严格状态机；含评测和端到端结果
+- [三种识别模式平级](speakmore-two-pipelines.md) — native（音频直给模型）、local（转写加任意 API 润色）、private（数据隐私，纯本机转写、不要 key），用户选、不分主次；选了当场换上、不验 key 不等下载，还差的记成状态；含评测和端到端结果
 - [模型广场不替用户选](speakmore-model-plaza.md) — 有什么加什么、尽量全；跑通不打标签、评测过才打已评测、没调过的打未验证；按角色分原生/转写/润色，侧栏单独一页；选识别方式在首页选单；10-17 进度、还剩哪些在里面
 - [判官是 Claude 自己](bench-judge-is-claude.md) — 评测打分由 Claude 来，不调 Gemini 等接口；Gemini 3.6 Flash MINIMAL 的成品只当参照，参照听错时不扣分
 - [统一输入输出、策略模式](architecture-unified-io-strategy.md) — 插件化、可热插拔；录音先统一成 16 kHz 单声道，转写统一成 transcribe → { text }；不打补丁，从分层上根治
