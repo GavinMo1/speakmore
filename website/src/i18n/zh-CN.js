@@ -11,7 +11,7 @@ export default {
     speed: "性能",
     models: "模型",
     privacy: "隐私",
-    cost: "费用",
+    developers: "开发者",
     download: "下载",
     github: "SpeakMore 的 GitHub 仓库",
     home: "SpeakMore 首页",
@@ -144,20 +144,11 @@ export default {
     },
   },
   cost: {
-    title: "每月几块钱\n或者一分不花",
-    lead: "软件免费。只为所用模型付费，或完全在本机运行。",
+    title: "软件免费，没有订阅",
+    text: "模型费用按用量，直接付给厂商。",
     per: "/ 月",
-    paid: {
-      badge: "推荐",
-      name: "转写 + 润色",
-      note: "每天 100 次识别",
-      points: ["出字最快", "成稿最稳", "按量付费，无订阅"],
-    },
-    free: {
-      name: "数据隐私",
-      note: "下载模型即可使用",
-      points: ["完全免费", "数据不出本机", "本机运行 AI 模型"],
-    },
+    paid: { name: "转写 + 润色", note: "每天 100 次识别" },
+    free: { name: "数据隐私", note: "模型下载到本机，在自己的电脑上运行 AI" },
   },
   setup: {
     title: "三分钟\n完成设置",
@@ -173,9 +164,49 @@ export default {
       { icon: "translate", title: "中英双语", text: "界面跟随系统语言" },
       { icon: "palette", title: "三套主题", text: "深浅色自动切换" },
       { icon: "history", title: "历史与花费", text: "本机记录，随时查看" },
-      { icon: "terminal", title: "命令行", text: "一行命令安装" },
-      { icon: "github", title: "开源", text: "MIT 许可" },
+      { icon: "erase", title: "干净卸载", text: "数据集中一处，一条命令删除" },
     ],
+  },
+  developers: {
+    title: "命令行\n与 App 对等",
+    lead: "代码开源，MIT 许可；在 Mac 上远程开发 Windows 版。",
+    points: [
+      { title: "命令行全覆盖", text: "切换方式与模型、管理密钥、下载模型、查看历史与花费。" },
+      { title: "JSON 输出", text: "status、history、usage 均可输出 JSON，便于接入脚本。" },
+      { title: "跨平台开发", text: "经 SSH 同步到 Windows，远程测试、重启、截屏。" },
+      { title: "插件化架构", text: "各厂商实现同一接口，900 多个单元测试把关。" },
+    ],
+    source: "在 GitHub 查看源码",
+    terminal: { label: "终端演示", tabs: { cli: "命令行", windows: "Windows 开发" } },
+    // 命令和输出照实写（输出取自真实运行，长的 JSON 用 … 截短）；命令行的输出跟着系统语言，Windows 开发那几个脚本的输出不分语言
+    sessions: {
+      cli: [
+        {
+          comment: "切换识别方式，当场生效",
+          command: "speakmore mode private",
+          output: ["切到了 private 模式：本机的 qwen3-asr-0.6b-q8，不润色、不上传。", "已经换上，不用重启。"],
+        },
+        { comment: "换一套主题", command: "speakmore theme indigo", output: ["主题换成了靛青（indigo）。"] },
+        {
+          comment: "状态，输出 JSON",
+          command: "speakmore status --json",
+          output: ['{"running":true,"settings":{"mode":{"value":"private",…},…}}'],
+        },
+      ],
+      windows: [
+        {
+          comment: "同步代码，在 Windows 上跑全部单测",
+          command: "scripts/dev/win-test.sh",
+          output: ["ℹ tests 920 ℹ pass 904 ℹ fail 0 ℹ skipped 16"],
+        },
+        {
+          comment: "从源码重启 App，带调试端口",
+          command: "scripts/dev/win-app.sh",
+          output: ['{"t":"…","level":"info","event":"started","version":"{version}",…}'],
+        },
+        { comment: "截取 Windows 桌面", command: "scripts/dev/win-screenshot.sh desktop.png", output: ["desktop.png"] },
+      ],
+    },
   },
   download: {
     title: "立即开始",

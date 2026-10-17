@@ -13,7 +13,7 @@ export default {
     speed: "Speed",
     models: "Models",
     privacy: "Privacy",
-    cost: "Cost",
+    developers: "Developers",
     download: "Download",
     github: "SpeakMore on GitHub",
     home: "SpeakMore home",
@@ -160,20 +160,11 @@ export default {
     },
   },
   cost: {
-    title: "Under $1 a month.\nOr nothing at all.",
-    lead: "The app is free. Pay only for the model you use, or run everything on device.",
+    title: "Free app. No subscription.",
+    text: "Pay model providers directly, only for what you use.",
     per: "/ month",
-    paid: {
-      badge: "Recommended",
-      name: "Transcribe + Polish",
-      note: "100 dictations a day",
-      points: ["Fastest text", "Most reliable", "Pay as you go, no subscription"],
-    },
-    free: {
-      name: "Private",
-      note: "Just download the model",
-      points: ["Completely free", "Data stays on device", "Run AI on your own computer"],
-    },
+    paid: { name: "Transcribe + Polish", note: "100 dictations a day" },
+    free: { name: "Private", note: "Download the model and run AI on your own computer" },
   },
   setup: {
     title: "Three minutes.\nAll set.",
@@ -197,9 +188,61 @@ export default {
       { icon: "translate", title: "English and Chinese", text: "Follows the system language" },
       { icon: "palette", title: "Three themes", text: "Light and dark, automatic" },
       { icon: "history", title: "History and spend", text: "Kept locally, always at hand" },
-      { icon: "terminal", title: "Command line", text: "Install with one line" },
-      { icon: "github", title: "Open source", text: "MIT license" },
+      { icon: "erase", title: "Clean uninstall", text: "One folder, removed in one command" },
     ],
+  },
+  developers: {
+    title: "Command line.\nOn par with the app.",
+    lead: "Open source under MIT. Develop the Windows version remotely from a Mac.",
+    points: [
+      {
+        title: "Full command line",
+        text: "Switch modes and models, manage keys, download models, check history and spend.",
+      },
+      { title: "JSON output", text: "status, history and usage print JSON for your scripts." },
+      {
+        title: "Cross-platform development",
+        text: "Sync to Windows over SSH, then test, restart and capture the screen remotely.",
+      },
+      { title: "Plugin architecture", text: "Every provider implements one interface. Over 900 unit tests." },
+    ],
+    source: "View source on GitHub",
+    terminal: { label: "Terminal demo", tabs: { cli: "Command line", windows: "Windows development" } },
+    sessions: {
+      cli: [
+        {
+          comment: "Switch modes, effective immediately",
+          command: "speakmore mode private",
+          output: [
+            "Switched to private mode: qwen3-asr-0.6b-q8 on this Mac; no polishing, nothing uploaded.",
+            "Switched, no restart needed.",
+          ],
+        },
+        { comment: "Change the theme", command: "speakmore theme indigo", output: ["Theme set to Indigo (indigo)."] },
+        {
+          comment: "Status as JSON",
+          command: "speakmore status --json",
+          output: ['{"running":true,"settings":{"mode":{"value":"private",…},…}}'],
+        },
+      ],
+      windows: [
+        {
+          comment: "Sync, then run every unit test on Windows",
+          command: "scripts/dev/win-test.sh",
+          output: ["ℹ tests 920 ℹ pass 904 ℹ fail 0 ℹ skipped 16"],
+        },
+        {
+          comment: "Restart the app from source, with a debug port",
+          command: "scripts/dev/win-app.sh",
+          output: ['{"t":"…","level":"info","event":"started","version":"{version}",…}'],
+        },
+        {
+          comment: "Capture the Windows desktop",
+          command: "scripts/dev/win-screenshot.sh desktop.png",
+          output: ["desktop.png"],
+        },
+      ],
+    },
   },
   download: {
     title: "Get started",

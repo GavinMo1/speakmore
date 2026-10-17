@@ -34,6 +34,7 @@ const ICONS = {
   history: "ri:history-line",
   translate: "ri:translate-2",
   palette: "ri:palette-line",
+  erase: "ri:delete-bin-line",
   // 品牌（单色，跟着字的颜色走）
   apple: "ri:apple-fill",
   windows: "ri:windows-fill",

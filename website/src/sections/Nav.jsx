@@ -41,7 +41,7 @@ export function Nav() {
     ["speed", m.nav.speed],
     ["models", m.nav.models],
     ["privacy", m.nav.privacy],
-    ["cost", m.nav.cost],
+    ["developers", m.nav.developers],
   ];
 
   return (

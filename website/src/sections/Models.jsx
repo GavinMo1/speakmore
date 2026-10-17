@@ -2,6 +2,7 @@ import { LogoLoop } from "../components/LogoLoop.jsx";
 import { Heading, Section } from "../components/Section.jsx";
 import { Shot } from "../components/Shot.jsx";
 import { useI18n } from "../i18n/index.jsx";
+import { Cost } from "./Cost.jsx";
 
 /** 轮播里的各家，按这个顺序走；名字在文案里（models.vendors） */
 const VENDORS = [
@@ -17,7 +18,7 @@ const VENDORS = [
   "custom",
 ];
 
-/** 模型自由：一排各家的标志从页面一头走到另一头；下面是模型页的截图，旁边三句要点 */
+/** 模型自由：一排各家的标志从页面一头走到另一头；下面是模型页的截图，旁边三句要点；最后一条是费用（钱直接付给模型厂商） */
 export function Models() {
   const { m } = useI18n();
   const items = VENDORS.map((id) => ({ id, name: m.models.vendors[id] }));
@@ -41,6 +42,8 @@ export function Models() {
           ))}
         </ul>
       </div>
+
+      <Cost />
     </Section>
   );
 }

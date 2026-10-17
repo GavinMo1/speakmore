@@ -341,6 +341,25 @@
   }
 }
 
+/* ---------- 开发者：会自己敲命令的终端 ---------- */
+
+/* 光标一闪一闪：亮一半、灭一半，不渐变 */
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.terminal-caret {
+  animation: caret-blink 1.05s step-end infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-caret {
+    animation: none;
+  }
+}
+
 /* 横着滑的一排（首次引导）：不露滚动条，靠箭头、触控板和手指 */
 @utility no-scrollbar {
   scrollbar-width: none;
