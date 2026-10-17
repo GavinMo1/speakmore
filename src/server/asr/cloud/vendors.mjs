@@ -1,7 +1,9 @@
 // 云端转写的清单：本地转写链路（local 模式）的第一跳除了本机模型，也可以交给云端的语音识别模型。
 // 和本机的运行库（../engines）是同一个位置上的两种策略，上面的人只认 transcribe(samples) → { text }。
-// 每家一个适配器（同目录下的 bailian.mjs），各自管请求怎么拼、回话怎么拆、报错怎么认；
+// 每家一个适配器（同目录下的 bailian.mjs、zhipu.mjs），各自管请求怎么拼、回话怎么拆、报错怎么认；
 // 录音统一成 16 kHz 单声道（transcriber.mjs 编成 wav 再交给适配器），适配器不用管格式。
+// 一次吃不下的长录音：模型项写上 maxSeconds（一段最多几秒），transcriber.mjs 照本机模型的规矩切开（../segment.mjs），
+// 适配器只管一段。
 //
 // 只收同步的接口：一次请求交一整段录音、回一整段原文。要先上传文件再轮询的（百炼的 filetrans、fun-asr、
 // paraformer-v2）和走 WebSocket 的实时识别都不收：听写说完就要出字，等不起轮询，也不必为一整段录音开流。
@@ -29,6 +31,19 @@ export const CLOUD_TRANSCRIBERS = Object.freeze([
       ].map((model) => Object.freeze({ ...model, maker: "qwen" })),
     ),
     load: () => import("./bailian.mjs"),
+  }),
+  Object.freeze({
+    id: "zhipu",
+    // 界面上按语言写成"智谱"或"Zhipu GLM"（文案 providers.zhipu.name），这里的名字给日志和报错用
+    name: "Zhipu",
+    keyEnv: "ZHIPU_API_KEY",
+    keyPage: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
+    defaultModel: "glm-asr-2512",
+    // 照官方文档写，未拿真 key 验证（zhipu.mjs）。文档写的是一段不超过 30 秒，切的时候留一秒余量，免得卡在边上被拒
+    models: Object.freeze([
+      Object.freeze({ id: "glm-asr-2512", name: "GLM-ASR-2512", maker: "zhipu", maxSeconds: 29, unverified: true }),
+    ]),
+    load: () => import("./zhipu.mjs"),
   }),
 ]);
 
