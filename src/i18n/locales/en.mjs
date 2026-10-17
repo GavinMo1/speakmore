@@ -224,6 +224,7 @@ export default {
 
   key: {
     empty: "No key entered",
+    routeChanged: "The recognition mode just changed, so this key wasn't saved. Save it again",
     tooLong: "This key is too long ({length} characters). Looks like a copy mistake",
     whitespace: "This key has spaces or line breaks. Looks like extra text got copied",
     badCharacters: "This key has characters that don't belong. Looks like a copy mistake",
@@ -933,6 +934,7 @@ export default {
       notIn: "You're in {current} mode; {what} can only be changed in {mode} mode: run speakmore mode {mode} first",
       notSwitched: "Not switched: {problem}",
       applied: "Switched, no restart needed.",
+      notUsable: "But it doesn't work yet: {problem}",
       downloading:
         "The local model is downloading in the background ({percent}%); it'll work once it's done. Progress: speakmore status",
       loading: "The local model is loading; a few seconds.",

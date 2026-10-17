@@ -81,7 +81,8 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
    * @param {string} mode
    * @param {string} what 换的是什么（modes.what.*），报错时说
    * @param {Record<string, string>} changes
-   * @param {(route: object) => Promise<{ ok: boolean, problem?: object }>} apply
+   * @param {(route: object) => { ok: boolean, problem?: object, settled?: Promise<unknown> }} apply
+   *   当场换上；settled 是还要等的（找 key、验 key）
    */
   function within(mode, what, changes, apply) {
     return serial(async () => {
@@ -95,14 +96,17 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
       } catch (error) {
         return { ok: false, problem: problemOf(error) };
       }
-      const result = await apply(route);
+      const result = apply(route);
       if (!result.ok) return result;
       log.info("route_changed", { route: describeRoute(route), settings: Object.keys(changes) });
-      return { ok: true, ...save(changes) };
+      // 换上了就先存：等 key 的结论时界面来问状态，路线和设置是一致的
+      const note = save(changes);
+      await result.settled;
+      return { ok: true, ...note };
     });
   }
 
-  /** 换成这条路线：当场换上，要的 key 由 key 管理去找 */
+  /** 换成这条路线：当场换上，要的 key 由 key 管理去找（settled 是找完、验完） */
   const useRoute = (route) => keys.switchRoute(route);
 
   /**
@@ -140,13 +144,18 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
           return { ok: false, problem: problemOf(error) };
         }
         const from = service.route.mode;
+        let settled = null;
         // 已经是这条路线（切到正在用的模式、没带别的）：不用再换
         if (JSON.stringify(route) !== JSON.stringify(service.route)) {
-          const result = await useRoute(route);
+          const result = useRoute(route);
           if (!result.ok) return result;
+          settled = result.settled;
         }
         if (from !== wanted) log.info("mode_switched", { from, to: wanted, route: describeRoute(route) });
-        return { ok: true, ...save({ mode: wanted, ...changes }) };
+        // 换上了就先存：等 key 的结论时界面来问状态，模式和设置是一致的
+        const note = save({ mode: wanted, ...changes });
+        await settled;
+        return { ok: true, ...note };
       });
     },
 
@@ -162,7 +171,7 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
      * private：只认本机模型，云端的直接说不行
      */
     setTranscriber(transcriber) {
-      const apply = async (route) => {
+      const apply = (route) => {
         if (!usesLocalModel(route) || !usesLocalModel(service.route)) return useRoute(route);
         service.switchTranscriber(route.transcriber);
         return { ok: true };

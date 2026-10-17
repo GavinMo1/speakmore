@@ -49,6 +49,8 @@ export async function startService({
     );
   /** 通过了验证、正在用的那一个；没有 key 时是 null */
   let refiner = null;
+  /** 换过几次路线（setRoute）：验 key 的途中换过，那一把是按旧路线验的，不装 */
+  let switches = 0;
 
   // ---------- 本地模型 ----------
 
@@ -190,16 +192,17 @@ export async function startService({
      * 给正在走的路线换一把 key。先拿它发一个最小的请求：key 无效、模型名写错、连不上都会在这里抛出来（都是分好类的
      * ModelError），这时原来能用的那把继续用。这个请求同时是预热，之后的第一次听写不会慢。
      * 本地转写链路验的是润色那一家：本地模型在后台另外准备，不等它。
-     * 换路线（setRoute）和换 key 都由 key 管理排着队调（keys/key-manager.mjs），验证途中路线不会被换掉
+     * 验证途中路线被换掉了（setRoute，当场换、不排队）：这一个是按旧路线装的，不装，回 stale，由 key 管理作废
      *
      * @param {string | null} apiKey 路线主的那家的 key（server/modes.mjs 的 keyVendorOf）；路线不用 key（数据隐私模式）时是 null
      * @param {{ allowUnverified?: boolean, keys?: Record<string, string> }} [options]
      *   allowUnverified：只是暂时够不着那一家的话照样启用。启动时、换路线后用存着的那把时用：它当初是验证过才存的，
      *   不该因为开机时没网、或者对方一时回了 503 就被判成不能用。
      *   keys：路线要两家时另一家的 key（第一跳交给云端、润色交给别家），按厂商 id
-     * @returns {Promise<{ verified: boolean }>} verified 为 false 表示先用着、还没验证
+     * @returns {Promise<{ verified: boolean, stale?: true }>} verified 为 false 表示先用着、还没验证
      */
     async useKey(apiKey, { allowUnverified = false, keys } = {}) {
+      const at = switches;
       const candidate = await build(route, apiKey, keys);
       let verified = true;
       try {
@@ -208,6 +211,7 @@ export async function startService({
         if (!allowUnverified || error.kind !== "unavailable") throw error;
         verified = false;
       }
+      if (switches !== at) return { verified, stale: true };
       refiner = candidate;
       missing = null;
       return { verified };
@@ -220,6 +224,7 @@ export async function startService({
      * @param {object} nextRoute
      */
     setRoute(nextRoute) {
+      switches += 1;
       refiner = null;
       missing = null;
       log.info("route_switched", { from: describeRoute(route), to: describeRoute(nextRoute) });

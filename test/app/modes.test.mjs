@@ -52,12 +52,15 @@ function setup({
     return transcribe(model, samples);
   };
   const keys = {
-    async switchRoute(route) {
+    switchRoute(route) {
       calls.push({ switchRoute: route });
       const result = verdict(route);
-      if (result.ok) service.route = route;
-      return result;
+      if (!result.ok) return result;
+      service.route = route;
+      return { ok: true, settled: keys.settled };
     },
+    /** 找 key、验 key 的结论什么时候有：默认马上有 */
+    settled: Promise.resolve(),
     async check(route) {
       calls.push({ check: route });
       return { ok: true, source: "stored", ms: 5 };
@@ -65,7 +68,7 @@ function setup({
   };
   const log = { info() {}, warn() {} };
   const modes = createModeSwitch({ service, keys, models, settingsFile: file, env, log, speech });
-  return { modes, service, calls, models };
+  return { modes, service, calls, models, keys };
 }
 
 // ---------- 模式这一层 ----------
@@ -86,6 +89,26 @@ test("切模式：按设置里那种模式自己的几项拼出路线，当场�
   ]);
   assert.equal(service.route.mode, "local");
   assert.equal(saved("mode"), "local");
+});
+
+test("换上了就先存设置，不等找 key、验 key 的结论：这期间界面来问，模式和设置是一致的", async () => {
+  const { modes, service, keys } = setup();
+  let release;
+  keys.settled = new Promise((resolve) => {
+    release = resolve;
+  });
+  const switching = modes.switchMode("private");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(service.route.mode, "private");
+  assert.equal(saved("mode"), "private");
+  let done = false;
+  switching.then(() => {
+    done = true;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(done, false, "等到 key 有了结论才回话");
+  release();
+  assert.deepEqual(await switching, { ok: true });
 });
 
 test("key 管理换不了（连着单独启动的服务端）：什么都不变，原因照实带回", async () => {

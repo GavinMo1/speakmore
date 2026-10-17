@@ -6,8 +6,9 @@ import { keyPrompter, keySourceFor, refuseLegacyDaemon, submitKey } from "./key.
 
 // 切模式、换各模式里的模型，几个命令（mode、model、transcriber、polish）共用的几步：
 // 现在是哪种模式、不在那种模式时拦下、缺 key 时先问、交给正在运行的那个当场换。
-// 换的规矩（哪种模式里能换什么、验证过才换）在内核里（src/app/modes.mjs），这里先按同样的规矩拦一遍，
-// 免得问了 key、发了请求才被拒；没在运行时没有内核可问，就按设置文件里的模式算。
+// 换的规矩（哪种模式里能换什么）在内核里（src/app/modes.mjs），这里先按同样的规矩拦一遍，
+// 免得问了 key 才被拒；没在运行时没有内核可问，就按设置文件里的模式算。
+// 内核选了就换上、不先验证：换上以后那家的 key 没通过（模型名写错、key 失效），照实说、退出码是 1。
 
 /** 切模式、换模型要等后台应用问一次那一家，那边的超时是 30 秒 */
 const SWITCH_TIMEOUT_MS = 45_000;
@@ -108,7 +109,13 @@ export async function applyChange(io, { command, params, changes, done }) {
   io.out(io.t.text(done));
   io.out(io.t("cli.modes.applied"));
   if (result.note) io.out(io.t("common.sentence", { text: result.note }));
-  reportLocalModel(io, (await io.daemon.status())?.localModel);
+  const status = await io.daemon.status();
+  reportLocalModel(io, status?.localModel);
+  // 内核等找 key、验 key 有了结论才回话：没通过就是还不能用
+  if (status?.key?.state === "rejected" || status?.key?.state === "unreadable") {
+    io.err(io.t("cli.modes.notUsable", { problem: status.key.problem }));
+    return 1;
+  }
   return 0;
 }
 

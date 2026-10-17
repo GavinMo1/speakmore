@@ -57,6 +57,12 @@ export function createKeyManager({
   /** 排在最后的那件事做完的时候。只用来排队，不带结果也不带错误 */
   let queue = Promise.resolve();
   let reverifying = false;
+  /**
+   * 换过几次路线。换路线是当场的、不排队（switchRoute）：排在它前面、或者正在验的那一把是按旧路线找的，
+   * 轮到它、验完了都先对一下，路线换过了就作废，不碰状态、不装进服务（stale）
+   */
+  let routeVersion = 0;
+  const stale = () => ({ cause: "stale", problem: msg("key.routeChanged") });
 
   /**
    * 换 key、删 key 一件一件来。验证一把 key 要等那一家回话，这期间又来一件的话排在后面：
@@ -144,8 +150,10 @@ export function createKeyManager({
    * @returns {Promise<null | { cause: string, problem: object | string }>} 通过了是 null，没通过是原因
    */
   function adopt(apiKey, source, { atStartup }) {
+    const version = routeVersion;
     return enqueue(async () => {
-      // 排到自己了再记"原来的状态"：排队期间前一把可能刚验完、或者路线已经换过
+      if (version !== routeVersion) return stale();
+      // 排到自己了再记"原来的状态"：排队期间前一把可能刚验完
       const previous = current;
       // 路线里另一家的 key 先找齐：缺了就不必拿主的这把去验
       const others = othersFor(service.route, provider.id);
@@ -161,15 +169,17 @@ export function createKeyManager({
       }
       become({ state: "checking", source, problem: null });
       try {
-        const { verified } = await service.useKey(apiKey, {
+        const { verified, stale: outdated } = await service.useKey(apiKey, {
           allowUnverified: atStartup,
           ...(Object.keys(others.keys).length > 0 ? { keys: others.keys } : {}),
         });
+        if (outdated || version !== routeVersion) return stale();
         inUse = { apiKey, source };
         log.info("key_ready", { provider: provider.id, source, verified });
         become({ state: "ready", source, problem: null, verified });
         return null;
       } catch (error) {
+        if (version !== routeVersion) return stale();
         const { cause, problem, detail, vendor } = described(error, apiKey);
         if (atStartup) reject(source, cause, problem, detail, vendor);
         else {
@@ -188,10 +198,13 @@ export function createKeyManager({
 
   /** 正在走的路线不用 key（数据隐私模式）：装上就能用，没有要验的 key。本机模型没下载由服务记着（localModel），不算 key 的事 */
   function adoptKeyless() {
+    const version = routeVersion;
     return enqueue(async () => {
+      if (version !== routeVersion) return;
       try {
-        await service.useKey(null);
+        if ((await service.useKey(null)).stale || version !== routeVersion) return;
       } catch (error) {
+        if (version !== routeVersion) return;
         // 不用 key 的路线装不上，多半是 bug：照实说
         const { cause, problem, detail } = described(error, null, { id: null, name: "SpeakMore" });
         log.error("route_failed", { route: service.route.mode, cause, error: detail.slice(0, 300) });
@@ -348,27 +361,28 @@ export function createKeyManager({
     },
 
     /**
-     * 换一条路线（切模式、换模型都是它）：当场换上，不验证、不拦着。新路线要的那家成了正在用的，
-     * 它的 key 照启动时那样去找、去装（resolveKey），有没有、通没通过都记在状态里，听写时照实说。
+     * 换一条路线（切模式、换模型都是它）：当场换上，不验证、不拦着，也不排在正在验的 key 后面。
+     * 新路线要的那家成了正在用的，它的 key 照启动时那样去找、去装（resolveKey），有没有、通没通过都记在状态里，
+     * 听写时照实说；按旧路线排着的、正在验的那几把作废（routeVersion）。
      * 路线由调用方按各自那一层拼好（app/modes.mjs），设置也由调用方去改：这里只管这次运行走哪条、用哪把
      * @param {object} route
-     * @returns {Promise<{ ok: true } | { ok: false, problem: object }>} 只有连着单独启动的服务端时换不了
+     * @returns {{ ok: true, settled: Promise<object> } | { ok: false, problem: object }}
+     *   返回时已经换上了；settled 是找 key、验 key 有了结论（状态）。只有连着单独启动的服务端时换不了
      */
-    async switchRoute(route) {
+    switchRoute(route) {
       if (!service) return { ok: false, problem: msg("key.externalModel") };
-      await enqueue(() => {
-        const next = keyVendorOf(route) ?? null;
-        if (next?.id !== provider?.id)
-          log.info("provider_switched", { from: provider?.id ?? null, to: next?.id ?? null });
-        service.setRoute(route);
+      const next = keyVendorOf(route) ?? null;
+      if (next?.id !== provider?.id) {
+        log.info("provider_switched", { from: provider?.id ?? null, to: next?.id ?? null });
         // 还是同一家（换的是它的模型）：接着用这次运行手里那把，中途存过新的就是新的，不换回环境变量里的
-        if (next?.id !== provider?.id) inUse = null;
-        provider = next;
-        // 先不通知：下面找 key 的每一条路都会落到一个状态上再通知，免得界面先闪一下"缺 key"
-        current = { state: "checking", source: null, problem: null };
-      });
-      await resolveKey();
-      return { ok: true };
+        inUse = null;
+      }
+      routeVersion += 1;
+      service.setRoute(route);
+      provider = next;
+      // 先不通知：下面找 key 的每一条路都会落到一个状态上再通知，免得界面先闪一下"缺 key"
+      current = { state: "checking", source: null, problem: null };
+      return { ok: true, settled: resolveKey() };
     },
 
     /** @param {{ provider?: string }} [options] 删哪一家的，默认是正在用的那一家（路线不用 key 时要写明） */

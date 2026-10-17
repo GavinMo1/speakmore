@@ -233,6 +233,25 @@ test("setRoute 当场换路线、不验证：手里那把作废，没 key 时的
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 openai");
 });
 
+test("验 key 的途中路线换了：那一把是按旧路线验的，不装，回 stale；听写照新路线说缺 key", async (t) => {
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const service = await startService({
+    log: quietLog,
+    route: GEMINI,
+    createRefiner: async (options) => fakeRefiner(`用的是 ${options.route.model.provider}`, () => gate),
+  });
+  t.after(() => service.close());
+  const verifying = service.useKey("gemini-key");
+  service.setRoute(OPENAI);
+  release();
+  assert.deepEqual(await verifying, { verified: true, stale: true });
+  assert.equal(service.ready, false);
+  assert.match(zh.text((await dictateOnce(service.url)).V.problem), /还没有填 OpenAI API key/);
+});
+
 test("开口时的准备交给正在用的那一个；还没有 key 时什么都不做", async (t) => {
   let prepared = 0;
   const service = await startService({

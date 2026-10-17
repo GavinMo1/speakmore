@@ -217,6 +217,7 @@ export default {
 
   key: {
     empty: "还没有填 key",
+    routeChanged: "识别方式刚换过，这把 key 没有存：再存一次",
     tooLong: "这把 key 太长了（{length} 个字符），像是复制错了东西",
     whitespace: "这把 key 里有空格或换行，像是多复制了别的内容",
     badCharacters: "这把 key 里有不该出现的字符，像是复制错了东西",
@@ -908,6 +909,7 @@ export default {
       notIn: "现在是 {current} 模式，{what}要在 {mode} 模式里才能换：先运行 speakmore mode {mode}",
       notSwitched: "没有换：{problem}",
       applied: "已经换上，不用重启。",
+      notUsable: "但还不能用：{problem}",
       downloading: "本地模型在后台下载（{percent}%），下好就能用：进度看 speakmore status",
       loading: "本地模型正在装载，几秒就好。",
       switch: "切换：speakmore mode {mode}（当场生效）",

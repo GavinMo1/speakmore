@@ -8,6 +8,13 @@ import { findVendor } from "../../../src/server/vendors.mjs";
 
 const zh = createTranslator("zh-CN");
 
+/** 换路线并等到找 key、验 key 有了结论，交回换没换上 */
+async function switched(keys, route) {
+  const result = keys.switchRoute(route);
+  await result.settled;
+  return result.ok;
+}
+
 const nativeRoute = (provider, model) => ({ mode: "native", model: { provider, model }, thinkingLevel: null });
 const LOCAL_DEEPSEEK = {
   mode: "local",
@@ -52,8 +59,11 @@ function fakeService(verdicts = {}) {
     using: null,
     /** 正在走的路线；没换过时是 null（启动时设置里的那条） */
     route: null,
+    /** 给了就让验证卡在这里，等它放行（模拟那一家回话慢） */
+    gate: null,
     async useKey(apiKey, { allowUnverified = false, keys } = {}) {
       service.calls.push({ useKey: apiKey, allowUnverified, ...(keys ? { keys } : {}) });
+      if (service.gate) await service.gate;
       const error = verdicts[apiKey]?.();
       if (error && !(allowUnverified && error.kind === "unavailable")) throw error;
       service.using = apiKey;
@@ -473,7 +483,7 @@ test("不认识的厂商：不验证、不存、不删", async () => {
 test("换路线：当场换上，新路线那一家存着的 key 照启动时那样装上；之后存、删、检查不写厂商时说的都是新的那家", async () => {
   const { keys, service, keyStore, otherStore } = setup({ stored: "gemini-key", storedOther: "openai-key" });
   await keys.loadAtStartup();
-  assert.deepEqual(await keys.switchRoute(OPENAI_DEFAULT), { ok: true });
+  assert.equal(await switched(keys, OPENAI_DEFAULT), true);
   assert.equal(keys.provider.id, "openai");
   assert.deepEqual(service.calls.slice(-2), [
     { setRoute: OPENAI_DEFAULT },
@@ -491,7 +501,7 @@ test("换路线：当场换上，新路线那一家存着的 key 照启动时那
 test("换到一家还没有 key 的：照样换上，状态是缺 key、说的是新的那家；填上就能用", async () => {
   const { keys, service } = setup({ stored: "gemini-key" });
   await keys.loadAtStartup();
-  assert.deepEqual(await keys.switchRoute(OPENAI_DEFAULT), { ok: true });
+  assert.equal(await switched(keys, OPENAI_DEFAULT), true);
   assert.equal(keys.provider.id, "openai");
   assert.equal(service.using, null, "手里 Gemini 那把不能拿去走 OpenAI 的路线");
   assert.deepEqual(keys.current, { state: "missing", source: null, problem: null });
@@ -503,7 +513,7 @@ test("换到一家还没有 key 的：照样换上，状态是缺 key、说的�
 test("换过去时那家 key 不对：照样换上，状态是没通过", async () => {
   const { keys } = setup({ stored: "gemini-key", storedOther: "openai-bad", verdicts: { "openai-bad": INVALID } });
   await keys.loadAtStartup();
-  assert.deepEqual(await keys.switchRoute(OPENAI_DEFAULT), { ok: true });
+  assert.equal(await switched(keys, OPENAI_DEFAULT), true);
   assert.deepEqual([keys.current.state, keys.current.cause], ["rejected", "key"]);
   assert.match(zh.text(keys.current.problem), /无效/);
 });
@@ -511,21 +521,21 @@ test("换过去时那家 key 不对：照样换上，状态是没通过", async 
 test("换过去时那一家暂时连不上：存着的那把当初验证过，照样先用着，如实标成还没验证", async () => {
   const { keys } = setup({ stored: "gemini-key", storedOther: "openai-key", verdicts: { "openai-key": OFFLINE } });
   await keys.loadAtStartup();
-  assert.deepEqual(await keys.switchRoute(OPENAI_DEFAULT), { ok: true });
+  assert.equal(await switched(keys, OPENAI_DEFAULT), true);
   assert.deepEqual([keys.current.state, keys.current.verified], ["ready", false]);
 });
 
 test("换过去时那一家的环境变量里有 key：用它，标明来自环境变量", async () => {
   const { keys, service } = setup({ stored: "gemini-key", env: { OPENAI_API_KEY: "openai-env" } });
   await keys.loadAtStartup();
-  assert.deepEqual(await keys.switchRoute(OPENAI_DEFAULT), { ok: true });
+  assert.equal(await switched(keys, OPENAI_DEFAULT), true);
   assert.equal(service.using, "openai-env");
   assert.equal(keys.current.source, "env");
 });
 
 test("换路线：连的是单独启动的服务端时不换并说清楚", async () => {
   const external = setup({ external: true });
-  assert.match(zh.text((await external.keys.switchRoute(OPENAI_DEFAULT)).problem), /单独启动的服务端/);
+  assert.match(zh.text(external.keys.switchRoute(OPENAI_DEFAULT).problem), /单独启动的服务端/);
 });
 
 test("同一家换条路线（换模型）：接着用这次运行手里的那把（中途存过新的就是新的），不换回环境变量里的", async () => {
@@ -533,7 +543,7 @@ test("同一家换条路线（换模型）：接着用这次运行手里的那�
   await keys.loadAtStartup();
   await keys.save("new-key");
   const route = nativeRoute("gemini", "gemini-3.8-flash");
-  assert.deepEqual(await keys.switchRoute(route), { ok: true });
+  assert.equal(await switched(keys, route), true);
   assert.deepEqual(service.calls.slice(-2), [{ setRoute: route }, { useKey: "new-key", allowUnverified: true }]);
   assert.equal(keys.provider.id, "gemini");
   assert.equal(keys.current.source, "stored");
@@ -605,7 +615,7 @@ test("sources：每家的 key 在哪（环境变量、存着的、没有），�
 test("切到 local 模式：正在用的换成润色那一家（DeepSeek），用它的 key", async () => {
   const { keys, service } = setup({ stored: "gemini-key", storedDeepseek: "ds-key" });
   await keys.loadAtStartup();
-  assert.deepEqual(await keys.switchRoute(LOCAL_DEEPSEEK), { ok: true });
+  assert.equal(await switched(keys, LOCAL_DEEPSEEK), true);
   assert.equal(keys.provider.id, "deepseek");
   assert.equal(service.using, "ds-key");
   assert.deepEqual(service.route, LOCAL_DEEPSEEK);
@@ -655,7 +665,7 @@ const CLOUD_FIRST_HOP = { ...LOCAL_DEEPSEEK, transcriber: "bailian/qwen3-asr-fla
 test("第一跳交给百炼、润色交给 DeepSeek：两把都找齐，一起交给服务", async () => {
   const { keys, service } = setup({ stored: "gemini-key", storedDeepseek: "ds-key", storedBailian: "bl-key" });
   await keys.loadAtStartup();
-  assert.deepEqual(await keys.switchRoute(CLOUD_FIRST_HOP), { ok: true });
+  assert.equal(await switched(keys, CLOUD_FIRST_HOP), true);
   assert.equal(keys.provider.id, "deepseek");
   assert.deepEqual(service.calls.at(-1), { useKey: "ds-key", allowUnverified: true, keys: { bailian: "bl-key" } });
 });
@@ -663,7 +673,7 @@ test("第一跳交给百炼、润色交给 DeepSeek：两把都找齐，一起�
 test("另一家（百炼）没有 key：照样换上，状态说缺的是哪一家，也不拿 DeepSeek 的去验", async () => {
   const { keys, service } = setup({ stored: "gemini-key", storedDeepseek: "ds-key" });
   await keys.loadAtStartup();
-  assert.deepEqual(await keys.switchRoute(CLOUD_FIRST_HOP), { ok: true });
+  assert.equal(await switched(keys, CLOUD_FIRST_HOP), true);
   assert.ok(!service.calls.some((call) => call.useKey === "ds-key"));
   assert.equal(keys.provider.id, "deepseek");
   assert.equal(keys.current.state, "missing");
@@ -691,6 +701,36 @@ test("检查两家的路线：缺另一家时说去填哪一家；都有时两�
   const both = setup({ storedDeepseek: "ds-key", storedBailian: "bl-key" });
   assert.equal((await both.keys.check(CLOUD_FIRST_HOP)).ok, true);
   assert.deepEqual(both.service.calls, [{ probe: "ds-key", route: CLOUD_FIRST_HOP, keys: { bailian: "bl-key" } }]);
+});
+
+test("按旧路线排着、正在验的那一把在换路线后作废：不改状态，也不把那家的 key 带到新的那家", async () => {
+  const { keys, service } = setup({ provider: "deepseek", stored: "ds-key" });
+  service.route = CLOUD_FIRST_HOP;
+  await keys.loadAtStartup();
+  assert.equal(keys.current.vendor.id, "bailian");
+  let release;
+  service.gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  // 存上百炼的 key：整条路线拿 DeepSeek 那把重新验（settle），验到一半换成 Gemini（还没有 key）
+  const saving = keys.save("bl-key", { provider: "bailian", route: CLOUD_FIRST_HOP });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(
+    service.calls.some((call) => call.useKey === "ds-key"),
+    "已经在验 DeepSeek 那把",
+  );
+  const result = keys.switchRoute(nativeRoute("gemini", "gemini-3.6-flash"));
+  service.gate = null;
+  release();
+  await saving;
+  await result.settled;
+  assert.equal(keys.provider.id, "gemini");
+  assert.deepEqual(keys.current, { state: "missing", source: null, problem: null });
+  // 同一家再换个模型：手里没有 DeepSeek 那把可用
+  const before = service.calls.length;
+  assert.equal(await switched(keys, nativeRoute("gemini", "gemini-3.8-flash")), true);
+  assert.ok(!service.calls.slice(before).some((call) => call.useKey === "ds-key"));
+  assert.equal(keys.current.state, "missing");
 });
 
 test("删掉正在走的路线里另一家的 key：整条路线停下，状态说缺哪一家", async () => {
