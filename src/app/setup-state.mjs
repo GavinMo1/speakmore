@@ -45,7 +45,13 @@ export function summarizeSetup({ key, permissions, helper, providerName = "Gemin
     missing.push(msg("setup.missing.localModel"));
     blocker ??= localModel.problem;
   } else if (localModel?.state === "missing") {
-    missing.push(msg("setup.missing.localModel"));
+    missing.push(
+      localModel.total
+        ? msg("setup.missing.localModelDownloading", {
+            percent: Math.floor((localModel.received / localModel.total) * 100),
+          })
+        : msg("setup.missing.localModel"),
+    );
     blocker ??= localModel.total
       ? msg("local.modelDownloading", { percent: Math.floor((localModel.received / localModel.total) * 100) })
       : msg("local.modelMissing", {

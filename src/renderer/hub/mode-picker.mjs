@@ -5,9 +5,10 @@ import { hopChain, needText } from "./route-view.mjs";
 import { toast } from "./toast.mjs";
 
 // 首页的识别方式选单：标题右边一个按钮写着正在用哪种方式，点开是一张浮层，三种方式三选一。
-// 每种方式写着一路经过哪几个模型；切过去之前还差什么（缺 key、没下载、自定义服务没写地址）先写出来，
-// 带一个去模型页配置的按钮。切换交给主进程（app/modes.mjs 的 switchMode），验证过才换：没通过就在那一项下面
-// 照实说为什么，同样给去配置的按钮。各种方式里用哪个模型在模型页换，这里不换。
+// 每种方式写着一路经过哪几个模型；还差什么（缺 key、没下载、自定义服务没写地址）写在那一项下面，
+// 带一个去模型页配置的按钮。切换交给主进程（app/modes.mjs 的 switchMode）：点了就当场换上，不等补齐，
+// 换过去还差的照实说（提示里一句，顶上的横幅也会写）；换不了（写错了）就在那一项下面说为什么。
+// 各种方式里用哪个模型在模型页换，这里不换。
 // 数据随 getSetup 来（app/model-plaza.mjs 的 ways）。
 
 const MODES = ["native", "local", "private"];
@@ -36,6 +37,8 @@ export function createModePicker({ refresh, configure }) {
   const current = () => setup.plaza.mode;
   const wayOf = (mode) => setup.plaza.ways[mode];
   const platformOf = (id) => setup.plaza.platforms.find((platform) => platform.id === id) ?? { id, name: id };
+  /** 本机模型正在下的话下到哪了（getSetup 的 local.transcribers） */
+  const downloadOf = (id) => setup.local.transcribers.find((model) => model.id === id)?.download ?? null;
   const isOpen = () => panel.matches(":popover-open");
 
   /**
@@ -74,7 +77,9 @@ export function createModePicker({ refresh, configure }) {
         fix,
       );
     }
-    const gaps = way.problem ? [t.text(way.problem)] : way.needs.map((need) => needText(need, { ...way, platformOf }));
+    const gaps = way.problem
+      ? [t.text(way.problem)]
+      : way.needs.map((need) => needText(need, { ...way, platformOf, downloadOf }));
     if (gaps.length === 0) return null;
     return h(
       "div",
@@ -167,8 +172,10 @@ export function createModePicker({ refresh, configure }) {
       return;
     }
     panel.hidePopover();
-    toast(t("home.mode.switched", { mode: modeName(mode) }));
     await refresh();
+    const way = wayOf(mode);
+    const gaps = way.problem ? [] : way.needs.map((need) => needText(need, { ...way, platformOf, downloadOf }));
+    toast([t("home.mode.switched", { mode: modeName(mode) }), ...gaps].join(" · "));
     if (result?.note) toast(t.text(result.note));
   }
 
