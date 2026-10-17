@@ -35,3 +35,11 @@ test("百炼：人民币价按汇率换成美元记；价目里没有的型号�
   close(bailianCost("qwen3.8-flash", TOKENS), (0.8 + 0.1 + 2.7) / CNY_PER_USD);
   assert.equal(bailianCost("qwen3.7-plus", TOKENS), null);
 });
+
+test("Kimi：人民币价按汇率换成美元记；清单外的型号是空", async () => {
+  const { costOf: kimiCost } = await import("../../../src/server/chat/prices/moonshot.mjs");
+  const { CNY_PER_USD } = await import("../../../src/server/currency.mjs");
+  close(kimiCost("kimi-k2.6", TOKENS), (6.5 + 1.1 + 27) / CNY_PER_USD);
+  close(kimiCost("kimi-k3", TOKENS), (20 + 2 + 100) / CNY_PER_USD);
+  assert.equal(kimiCost("kimi-k2.7-code", TOKENS), null);
+});

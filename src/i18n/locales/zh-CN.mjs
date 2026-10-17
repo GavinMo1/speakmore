@@ -70,6 +70,7 @@ export default {
     openai: { getKey: "去 OpenAI 开发者平台申请" },
     deepseek: { getKey: "去 DeepSeek 开放平台申请" },
     bailian: { name: "阿里云百炼", getKey: "去阿里云百炼控制台申请" },
+    moonshot: { name: "Kimi", getKey: "去 Kimi API 开放平台申请" },
   },
 
   language: {

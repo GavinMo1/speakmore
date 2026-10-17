@@ -17,6 +17,7 @@ import { run } from "../../src/cli/main.mjs";
 import { NotRunningError, TimeoutError } from "../../src/control.mjs";
 import { createTranslator, LocalizedError, msg } from "../../src/i18n/index.mjs";
 import { downloadSize, findModel } from "../../src/models/catalog.mjs";
+import { CHAT_VENDORS } from "../../src/server/chat/vendors.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
 import { keyFile, oldAppKeyFile, resolvePaths } from "../../src/storage/paths.mjs";
 import { resolveSettings } from "../../src/storage/settings.mjs";
@@ -2431,7 +2432,8 @@ test("polish：自定义服务没给地址、写的是收音频的那家，以 2
   assert.equal(await speakmore("polish", "custom/m"), 2);
   assert.match(output.err, /--url/);
   assert.equal(await speakmore("polish", "openai"), 2);
-  assert.match(output.err, /deepseek \/ bailian \/ custom/);
+  // 说出能用的每一家
+  assert.ok(output.err.includes(CHAT_VENDORS.map(({ id }) => id).join(" / ")), output.err);
 });
 
 test("polish check：查第二跳现在用的那个能不能用", async () => {

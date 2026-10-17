@@ -105,3 +105,13 @@ test("百炼润色的模型都关思考，用的是国内站的兼容地址", ()
   for (const { id } of bailian.models) assert.equal(requestFor(bailian, id).enable_thinking, false, id);
   assert.deepEqual(parseChatChoice("bailian"), { vendor: "bailian", model: "qwen3.8-flash" });
 });
+
+test("Kimi 官方：国内站地址，每个模型都关思考；只能开着思考的代码模型不在清单里", () => {
+  const moonshot = findChatVendor("moonshot");
+  assert.equal(moonshot.baseUrl, "https://api.moonshot.cn/v1");
+  for (const { id } of moonshot.models) {
+    assert.deepEqual(requestFor(moonshot, id), { thinking: { type: "disabled" } }, id);
+  }
+  assert.ok(!moonshot.models.some(({ id }) => id.startsWith("kimi-k2.7-code")));
+  assert.deepEqual(parseChatChoice("moonshot"), { vendor: "moonshot", model: "kimi-k2.6" });
+});

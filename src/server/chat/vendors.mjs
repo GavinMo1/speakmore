@@ -69,6 +69,31 @@ export const CHAT_VENDORS = Object.freeze([
     prices: () => import("./prices/bailian.mjs"),
   }),
   Object.freeze({
+    id: "moonshot",
+    name: "Kimi",
+    keyEnv: "MOONSHOT_API_KEY",
+    // 国内站 platform.moonshot.cn 已经整站跳到 platform.kimi.com（2026-10-16）
+    keyPage: "https://platform.kimi.com/console/api-keys",
+    protocol: "openai-chat",
+    // 官方文档的示例用的还是这个地址（https://platform.kimi.com/docs/guide/use-thinking-models）
+    baseUrl: "https://api.moonshot.cn/v1",
+    defaultModel: "kimi-k2.6",
+    // kimi-k2.6 默认开着思考，thinking: { type: "disabled" } 关掉（https://platform.kimi.com/docs/api/models-overview）。
+    // 2026-10-16 拿真 key 实测同一段原文：开着 9.6 秒、681 个推理 token；关掉 0.8–1.8 秒，推理内容是空的
+    request: Object.freeze({ thinking: Object.freeze({ type: "disabled" }) }),
+    // 官方 GET /models 列出四个（2026-10-16）。kimi-k2.7-code 和它的高速版不收：代码专用，而且只能开着思考
+    // （关掉回 400 "only type=enabled is allowed for this model"，实测）
+    models: models([
+      { id: "kimi-k2.6", name: "Kimi K2.6", maker: "kimi" },
+      // 文档说 K3 始终推理、不该传 thinking，只能拿 reasoning_effort 在 low/high/max 里调
+      // （https://platform.kimi.com/docs/guide/use-reasoning-effort）。可 2026-10-16 实测带上 thinking: disabled 照样回 200，
+      // 6 次回话里都没有推理内容和推理 token（百炼上的 kimi-k3 关了也是这样）；low 档反而还有 19 个推理 token。
+      // 这是文档外的行为：哪天它不认了（回 400 或照样思考），拿掉这一项
+      { id: "kimi-k3", name: "Kimi K3", maker: "kimi" },
+    ]),
+    prices: () => import("./prices/moonshot.mjs"),
+  }),
+  Object.freeze({
     id: "custom",
     // 报错时说的是用户填的那个地址的主机名（chatEndpoint），这里的名字只在列清单时用
     name: "Custom",
