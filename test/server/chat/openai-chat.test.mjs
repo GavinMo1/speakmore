@@ -183,6 +183,22 @@ test("报错按 DeepSeek 文档的状态码分类：401 key 不对、402 没余�
   }
 });
 
+test("别家没余额的错误码也认：智谱欠费回 429 加 1113（照状态码会被当成暂时用不了），百炼回 400 加 Arrearage", async () => {
+  // 智谱的写法照 https://docs.bigmodel.cn/cn/api/api-code，code 是字符串
+  const zhipu = await failure(429, { error: { code: "1113", message: "余额不足或无可用资源包,请充值。" } }, "Zhipu");
+  assert.equal(zhipu.kind, "key");
+  assert.match(zhipu.problem, /额度/);
+  const bailian = await failure(
+    400,
+    said("Access denied, please make sure your account is in good standing.", "Arrearage"),
+    "Bailian",
+  );
+  assert.equal(bailian.kind, "key");
+  assert.match(bailian.problem, /额度/);
+  // 智谱真正的限流（1302）还是暂时用不了
+  assert.equal((await failure(429, { error: { code: "1302", message: "并发数过高" } }, "Zhipu")).kind, "unavailable");
+});
+
 test("模型名写错（实测 DeepSeek 回 400 并列出能用的名字）：原话照给", async () => {
   const { kind, problem } = await failure(
     400,
