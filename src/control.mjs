@@ -3,6 +3,9 @@ import { connect, createServer } from "node:net";
 import { LocalizedError, msg } from "./i18n/index.mjs";
 
 // 命令行和后台应用之间的控制通道：数据目录里的一个 Unix 套接字，只有这台机器上的同一个用户连得上。
+// Windows 上是一个 named pipe（名字见 storage/paths.mjs）：Node 的 net 两种都认，下面只有"清掉旧文件、收紧权限"
+// 两步是套接字文件才有的。pipe 不在磁盘上，进程一退就没了；它的默认权限给创建者、SYSTEM 和管理员完全控制，
+// 别的账户最多只能读，发不了命令。
 // 一次连接一问一答，各是一行 JSON：
 //   {"cmd": "status", "params": {…}}  →  {"ok": true, "result": …}  或  {"ok": false, "error": "…", "problem": …}
 // 出错时 error 是一句话（英文，0.5 以前是中文），problem 是给人看的那句（msg），由命令行按它的语言翻。
@@ -82,6 +85,9 @@ export function requestControl(socketPath, cmd, params = {}, { timeoutMs = DEFAU
   });
 }
 
+/** 是 Windows 的 named pipe，不是磁盘上的套接字文件 */
+const isNamedPipe = (socketPath) => socketPath.startsWith("\\\\.\\pipe\\");
+
 /** 这个套接字上现在有没有人在听 */
 async function isAlive(socketPath) {
   try {
@@ -104,7 +110,7 @@ async function isAlive(socketPath) {
 export async function startControlServer({ socketPath, handlers, log }) {
   if (await isAlive(socketPath)) throw new Error("已经有一个在运行了");
   // 走到这里说明文件即使在也没人听：是上次没能正常退出留下的
-  rmSync(socketPath, { force: true });
+  if (!isNamedPipe(socketPath)) rmSync(socketPath, { force: true });
 
   const server = createServer((socket) => {
     let received = "";
@@ -164,13 +170,13 @@ export async function startControlServer({ socketPath, handlers, log }) {
       resolve();
     });
   });
-  chmodSync(socketPath, 0o600);
+  if (!isNamedPipe(socketPath)) chmodSync(socketPath, 0o600);
 
   return {
     close: () =>
       new Promise((resolve) => {
         server.close(() => {
-          rmSync(socketPath, { force: true });
+          if (!isNamedPipe(socketPath)) rmSync(socketPath, { force: true });
           resolve();
         });
       }),

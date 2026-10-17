@@ -56,9 +56,8 @@ export async function uninstall(args, io) {
   }
 
   if (keepData) {
-    const runDir = dirname(paths.controlSocket);
     const logsDir = dirname(paths.logFile);
-    for (const dir of [paths.binDir, paths.appDir, paths.runtimeDir, runDir, logsDir, paths.cacheDir]) {
+    for (const dir of [paths.binDir, paths.appDir, paths.runtimeDir, paths.runDir, logsDir, paths.cacheDir]) {
       rmSync(dir, { recursive: true, force: true });
     }
     removed.push(t("cli.uninstall.removedKeep", named));
