@@ -176,7 +176,7 @@ test("智谱：请求照官方文档发到 /chat/completions、带上关思考�
   assert.ok(result.usage.costUsd > 0);
 });
 
-test("MiniMax：国内站地址，只收能关思考的 M3，请求带上关思考、思考另放一处；没拿真 key 验过", () => {
+test("MiniMax：国内站地址，只收能关思考的 M3，请求带上关思考、思考另放一处；拿真 key 验过", () => {
   const minimax = findChatVendor("minimax");
   assert.equal(minimax.baseUrl, "https://api.minimax.cn/v1");
   assert.deepEqual(
@@ -184,7 +184,7 @@ test("MiniMax：国内站地址，只收能关思考的 M3，请求带上关思�
     ["MiniMax-M3"],
   );
   assert.deepEqual(requestFor(minimax, "MiniMax-M3"), { thinking: { type: "disabled" }, reasoning_split: true });
-  assert.equal(minimax.models[0].unverified, true);
+  assert.equal(minimax.models[0].unverified, undefined);
 });
 
 test("MiniMax：请求照官方文档发到 /chat/completions；万一带回了思考，也不当成品", async () => {

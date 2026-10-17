@@ -54,9 +54,9 @@ export const CLOUD_TRANSCRIBERS = Object.freeze([
     keyEnv: "MINIMAX_API_KEY",
     keyPage: "https://platform.minimax.cn/user-center/basic-information/interface-key",
     defaultModel: "asr-1.0",
-    // 照官方文档写，未拿真 key 验证（minimax.mjs）。文档写的是一段不超过 500 秒、超了回 400 不截断
+    // 2026-10-16 拿真 key 实测过（minimax.mjs）。文档写的是一段不超过 500 秒、超了回 400 不截断
     models: Object.freeze([
-      Object.freeze({ id: "asr-1.0", name: "MiniMax ASR 1.0", maker: "minimax", maxSeconds: 500, unverified: true }),
+      Object.freeze({ id: "asr-1.0", name: "MiniMax ASR 1.0", maker: "minimax", maxSeconds: 500 }),
     ]),
     load: () => import("./minimax.mjs"),
     prices: () => import("./prices/minimax.mjs"),

@@ -2,7 +2,8 @@ import { encodeWav } from "../../audio/pcm.mjs";
 import { classifyError as classifyUpload, postAudio, textIn } from "./multipart.mjs";
 import { costOf } from "./prices/minimax.mjs";
 
-// MiniMax 的云端转写适配器：asr-1.0 的同步接口。照官方文档写，未拿真 key 验证
+// MiniMax 的云端转写适配器：asr-1.0 的同步接口。照官方文档写，2026-10-16 拿真 key 实测过：23 秒的录音 2.3 秒回整段，
+// 0.1 秒静音验 key 回 200，错的 key 回 401（login fail，1004）
 // （https://platform.minimax.cn/docs/guides/speech-to-text、https://platform.minimax.cn/docs/api-reference/speech-to-text）：
 //   - POST https://api.minimax.cn/v1/speech_to_text，multipart 交 model 和 file。不开 stream 时一次回整段：{ text, duration, trace_id }
 //   - 不带 language 请求头时自动认语种，中英混说也认；一段最长 500 秒、最大 50 MB，更长的由 transcriber.mjs 切开

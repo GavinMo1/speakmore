@@ -140,10 +140,11 @@ export const CHAT_VENDORS = Object.freeze([
     // reasoning_split: true 只管思考放哪：万一还有思考，单独放进 reasoning_content；不拆的话它带着 <think> 标签
     // 写在 content 里，会被当成品贴出去
     request: Object.freeze({ thinking: Object.freeze({ type: "disabled" }), reasoning_split: true }),
-    // 照官方文档写，未拿真 key 验证。只有 M3 能关思考：M2.x 传 disabled 不生效（同一页），而且 M2.5、M2.7 系列
+    // 2026-10-16 拿真 key 实测：关思考回话里没有推理 token（不关时 usage 报 reasoning_tokens），错的 key 回 401。
+    // 只有 M3 能关思考：M2.x 传 disabled 不生效（同一页），而且 M2.5、M2.7 系列
     // 2026-10-19 起不对新用户开放、11-18 下线（https://platform.minimax.cn/docs/guides/models-intro）；
     // MiniMax-M3.1-Flash-Preview 是预览版、只给套餐用户，关思考回 400；M2-her 是角色扮演专用
-    models: models([{ id: "MiniMax-M3", name: "MiniMax M3", maker: "minimax", unverified: true }]),
+    models: models([{ id: "MiniMax-M3", name: "MiniMax M3", maker: "minimax" }]),
     prices: () => import("./prices/minimax.mjs"),
   }),
   Object.freeze({
