@@ -8,7 +8,7 @@ metadata:
   modified: 2026-10-17T17:17:34.667Z
 ---
 
-2026-10-15 定下的宣传片。视频在 kineto 仓库（他自己的开源项目，基于 Remotion）里做，分支 `feat/speakmore-promo`，视频 id `speakmore-promo`。照 kineto 的 AGENTS.md：素材只经 `./kineto asset add` 带授权登记，导出只用 `./kineto render`，收尾跑 `npm run verify`。
+2026-10-15 定下的宣传片。视频在 kineto 仓库（他自己的开源项目，基于 Remotion）里做，视频 id `speakmore-promo`（当初在 `feat/speakmore-promo` 分支做，已合进 main、分支已删）。照 kineto 的 AGENTS.md：素材只经 `./kineto asset add` 带授权登记，导出只用 `./kineto render`，收尾跑 `npm run verify`。
 
 ## 他的要求（原话）
 
@@ -68,7 +68,7 @@ metadata:
 
 ## 第二支（2026-10-17 开工）
 
-在 kineto 的 `feat/speakmore-promo-2` 分支，视频 id `speakmore-promo-2`（提交 5a66296）。他给的两样已登记：
+视频 id `speakmore-promo-2`（当初在 `feat/speakmore-promo-2` 分支做，已合进 main、分支已删；开工提交 5a66296）。他给的两样已登记：
 - `desktop`：他 10-17 的新桌面截图（海上日落），照第一支的规矩处理：程序坞去掉 Typeless 和四个最小化窗口，裁掉真菜单栏成 16:9、四周镜像 63 像素。这张壁纸玻璃透色左右差得多，整条切开拼会留缝，改成玻璃留原位、图标按 72×72 圆角方块抠出来挪过去。
 - `music`：SF阿睿《冬与你（纯音乐）》，他给的是原生 mp3（不用转），只取音频流、去掉封面和标签。183 秒；前 6 秒前奏较轻，之后一直很满，112–119 秒有一段明显收住、120 秒重新起；粗估约 68 拍/分（未精测）。版权同样没取得公开发布授权。
 - 他要和第一支是递进关系。内容就是官网那一套（多系统、模型广场、三种方式、国内源下载、开发者），开场钩子要立住"这是一次大更新"，
