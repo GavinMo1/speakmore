@@ -223,7 +223,7 @@ SpeakMore 在菜单栏里（Windows 在任务栏通知区域）。主窗口里�
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/download-speed-dark.zh-CN.170a9ced.webp" />
-  <img src="https://media.speakmore.zephyrxiang.com/readme/download-speed-light.zh-CN.c710e7f4.webp" width="720" alt="下载 850 MB 的本机模型：SpeakMore 国内源 9.3 MB/s，一分半钟；hf-mirror.com 15 分钟；Hugging Face 20 分钟" />
+  <img src="https://media.speakmore.zephyrxiang.com/readme/download-speed-light.zh-CN.c710e7f4.webp?v=3" width="720" alt="下载 850 MB 的本机模型：SpeakMore 国内源 9.3 MB/s，一分半钟；hf-mirror.com 15 分钟；Hugging Face 20 分钟" />
 </picture>
 
 ## 💸 花钱自由

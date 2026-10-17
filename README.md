@@ -112,7 +112,7 @@ The first launch walks you through it. Every step goes back and forward, and eve
 <table>
   <tr>
     <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-way.en.965b5caa.webp" alt="Onboarding step 1: pick one of three recognition modes" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-prepare-local.en.71619e6a.webp" alt="Onboarding step 2: pick a vendor and paste its key, one vendor per row" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-prepare-local.en.71619e6a.webp?v=3" alt="Onboarding step 2: pick a vendor and paste its key, one vendor per row" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>1</b> · Pick a recognition mode</sub></td>
@@ -159,7 +159,7 @@ Keys are per platform, so the key you already have is enough. One Alibaba Cloud 
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/polish.en.6aae6fba.webp" alt="Models page, Polish tab: Qwen, DeepSeek, Kimi, GLM and MiniMax models with prices, and the channel each is sold through" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/polish.en.6aae6fba.webp?v=2" alt="Models page, Polish tab: Qwen, DeepSeek, Kimi, GLM and MiniMax models with prices, and the channel each is sold through" /></td>
     <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/keys.en.338414f2.webp" alt="Models page, Keys tab: eight platforms, which are configured, and how many models each one unlocks" /></td>
   </tr>
   <tr>

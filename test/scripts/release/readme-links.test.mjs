@@ -49,7 +49,8 @@ for (const [name, locale] of [
     assert.ok(shots.length >= 20, `${name} 只找到 ${shots.length} 张图`);
     for (const src of shots) {
       assert.ok(src.startsWith(`${mediaBase}/`), `${name} 引用的 ${src} 不在图片桶上`);
-      const path = src.slice(mediaBase.length + 1);
+      // 地址后面可以带 ?v=…：GitHub 的图片代理第一次取图偶尔拿到空的，还会把空的缓存一年，换个查询串就会重取
+      const path = src.slice(mediaBase.length + 1).split("?")[0];
       assert.ok(uploaded.has(path), `${name} 引用的 ${path} 没有记在 docs/media.json：用 upload-media.mjs 传`);
       assert.ok(path.includes(`.${locale}.`), `${name} 引用了别的语言的图：${path}`);
     }
