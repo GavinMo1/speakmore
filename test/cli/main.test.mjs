@@ -1500,6 +1500,15 @@ test("uninstall --keep-data（Windows）：bin 也留到退出后再删，你的
   assert.deepEqual(windows.later, [paths.binDir]);
 });
 
+test("uninstall --keep-data（Windows）：缓存里的 Local State 留着，别的缓存照删（留着的 key 要靠它解开）", async () => {
+  mkdirSync(join(paths.cacheDir, "GPUCache"), { recursive: true });
+  writeFileSync(join(paths.cacheDir, "Local State"), "{}");
+  writeFileSync(join(paths.cacheDir, "Preferences"), "{}");
+  const { speakmore } = harness({ platform: "win32", keychain: () => assert.fail("不该动 key") });
+  assert.equal(await speakmore("uninstall", "--keep-data", "--yes"), 0);
+  assert.deepEqual(readdirSync(paths.cacheDir), ["Local State"]);
+});
+
 test("uninstall：运行环境在别处留的那个共用的偏好文件，有的话提一句，不删", async () => {
   seedInstalled();
   const { speakmore, output, io } = harness();

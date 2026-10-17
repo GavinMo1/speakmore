@@ -8,6 +8,9 @@ import { noPositionals, parse, UsageError } from "../common.mjs";
 // Windows 上是 "path <用户 Path 里的那一项>" 和 "shortcut <开始菜单的快捷方式>"（install.ps1 写的）。
 // Windows 上正在跑的程序删不掉，而这条命令自己就跑在装好的那份 Electron 上：删不掉的等它退出后再删（io.system）。
 
+/** Electron（Chromium）在缓存目录里记加密钥匙的那个文件 */
+const LOCAL_STATE = "Local State";
+
 /** 这个链接是不是指向我们自己的那条命令。清单里记的东西卸载前要再认一遍：那个位置上可能已经换成了别的 */
 function isOurLink(link, binDir) {
   try {
@@ -89,7 +92,12 @@ export async function uninstall(args, io) {
 
   if (keepData) {
     const logsDir = dirname(paths.logFile);
-    for (const dir of [paths.appDir, paths.runtimeDir, paths.runDir, logsDir, paths.cacheDir]) remove(dir);
+    for (const dir of [paths.appDir, paths.runtimeDir, paths.runDir, logsDir]) remove(dir);
+    // Windows 上留着的 key 是 Electron 的 safeStorage 加密的，解开它要的那把钥匙（DPAPI 加密过）记在
+    // 缓存目录的 Local State 里：留着 key 就得留着它，缓存别的都删。macOS 上那把钥匙在钥匙串里，缓存整个删
+    if (io.platform === "win32" && existsSync(paths.cacheDir)) {
+      for (const name of readdirSync(paths.cacheDir)) if (name !== LOCAL_STATE) remove(join(paths.cacheDir, name));
+    } else remove(paths.cacheDir);
     if (deferBin) later.push(paths.binDir);
     else remove(paths.binDir);
     removed.push(t("cli.uninstall.removedKeep", named));
