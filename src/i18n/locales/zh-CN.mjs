@@ -449,6 +449,29 @@ export default {
     },
   },
 
+  // 模型页标题行右边的推荐组合（src/models/presets.mjs、renderer/hub/preset-picker.mjs）。月成本统一按每天 100 次、一个月 30 天
+  presets: {
+    title: "推荐组合",
+    meta: "月成本以每天 {daily} 次计",
+    perMonth: "/ 月",
+    costTip: "每天 {daily} 次 · 每次约 {seconds} 秒 · 工作日高峰价",
+    costUnknown: "价格不明",
+    enable: "启用",
+    enabling: "启用中",
+    checkTip: "整套检测：本机模型转写一句样例，云端各家以这套设置发起一次最小请求",
+    enabled: "已启用 {name}",
+    download: "下载 {size}",
+    downloading: "{model} 下载中",
+    items: {
+      "local-deepseek": { name: "本机转写 + DeepSeek", desc: "效果最佳 · 快速稳定 · 成本极低" },
+      "native-gemini": { name: "Gemini 原生识别", desc: "一步成稿 · 一把密钥" },
+      "bailian-cloud": { name: "百炼全云端", desc: "一把密钥 · 不占本机算力" },
+      "private-qwen": { name: "纯本机", desc: "不上传任何数据 · 零成本" },
+      "local-deepseek-cpu": { name: "本机转写 + DeepSeek", desc: "CPU 版本机模型 · 成本极低" },
+      "private-sensevoice-cpu": { name: "纯本机", desc: "CPU 版本机模型 · 不上传任何数据" },
+    },
+  },
+
   home: {
     title: "说话，别打字",
     words: "字数",

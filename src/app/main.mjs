@@ -19,6 +19,7 @@ import { createTranslator, LocalizedError, msg, problemOf, resolveLocale } from 
 import { alsoLogTo, log } from "../log.mjs";
 import { chipOf, downloadSize, MODELS, makerOf, measuredOn, SOURCES } from "../models/catalog.mjs";
 import { createLocalModels, freeBytesAt } from "../models/library.mjs";
+import { presetsFor } from "../models/presets.mjs";
 import { CHAT_VENDORS, formatChatChoice } from "../server/chat/vendors.mjs";
 import { describeRoute, keyVendorOf, MODES } from "../server/modes.mjs";
 import { formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
@@ -27,10 +28,19 @@ import { adoptAppKeys } from "../storage/app-keys.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
 import { ensureHome, keyFile, oldAppKeyFile, resolvePaths } from "../storage/paths.mjs";
-import { HOTKEY_IDS, hotkeyName, overridingEnv, resolveSettings, routeOf, saveSetting } from "../storage/settings.mjs";
+import {
+  HOTKEY_IDS,
+  hotkeyName,
+  overridingEnv,
+  patchSettings,
+  resolveSettings,
+  routeOf,
+  saveSetting,
+} from "../storage/settings.mjs";
 import { toHex } from "../themes/color.mjs";
 import { themeCss } from "../themes/contract.mjs";
 import { findTheme, THEMES } from "../themes/index.mjs";
+import { estimateTime } from "../usage/estimate.mjs";
 import { insights } from "../usage/insights.mjs";
 import { usageReport } from "../usage/report.mjs";
 import { createDelivery } from "./delivery.mjs";
@@ -149,8 +159,8 @@ async function main() {
 
   const startedAt = new Date().toISOString();
   const history = openHistory(PATHS.historyDb);
-  // 模型广场上的标价：各家的价目模块启动时加载一次
-  const priceOf = await loadPriceBook();
+  // 模型广场上的标价、推荐组合的月成本：各家的价目模块启动时加载一次
+  const prices = await loadPriceBook();
   // 每家一把 key，各存一个文件。正在用的那家之外的也要在：speakmore key openai、model check 要用
   const keyStores = Object.fromEntries(
     VENDORS.map(({ id }) => [
@@ -562,15 +572,23 @@ async function main() {
       status: Object.fromEntries(MODELS.map(({ id }) => [id, localModels.status(id)])),
       chip: CHIP,
       freeBytes,
-      priceOf,
+      prices,
       routes: Object.fromEntries(MODES.map(({ id }) => [id, routeOrProblem(settings, id)])),
+      presets: presetsFor(CHIP).map((preset) => ({
+        preset,
+        route: routeOrProblem(settings, preset.mode, preset.settings),
+      })),
+      at: estimateTime(new Date()),
     });
   }
 
-  /** 某种方式按设置走的路线；设置拼不出路线时（比如自定义服务没写模型名）交出原因，首页的选单照实说 */
-  function routeOrProblem(settings, mode) {
+  /**
+   * 某种方式按设置（再换上 changes 那几项）走的路线；拼不出路线时（比如自定义服务没写模型名）交出原因，
+   * 首页的选单、模型页的推荐组合照实说
+   */
+  function routeOrProblem(settings, mode, changes = {}) {
     try {
-      return routeOf(settings, mode);
+      return routeOf(patchSettings(settings, changes), mode);
     } catch (error) {
       return { problem: problemOf(error) };
     }

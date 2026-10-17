@@ -6,12 +6,21 @@
   container: page / inline-size;
 }
 
-/* ---------- 标题行右侧的搜索 ---------- */
+/* ---------- 标题行右侧：搜索和推荐组合 ---------- */
 
+.page-tools {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* 窄到放不下时整组折到标题下面，搜索框不再往窄里挤（提示字会被截断） */
 .search {
   position: relative;
   display: flex;
   flex: 0 1 18rem;
+  min-width: 15rem;
   align-items: center;
 }
 

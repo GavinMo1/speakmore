@@ -2,9 +2,11 @@ import { DEFAULT_TRANSCRIBER, downloadSize, findModel, MODELS, makerOf, measured
 import { nameParts } from "../models/describe.mjs";
 import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../server/asr/cloud/vendors.mjs";
 import { CHAT_VENDORS, formatChatChoice, parseChatChoice } from "../server/chat/vendors.mjs";
+import { CNY_PER_USD } from "../server/currency.mjs";
 import { DEFAULT_POLISH, keyVendorsOf, usesLocalModel } from "../server/modes.mjs";
 import { DEFAULT_MODEL_CHOICE, formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
 import { VENDORS } from "../server/vendors.mjs";
+import { DAILY_DICTATIONS, monthlyCost, TYPICAL } from "../usage/estimate.mjs";
 
 // 模型广场（主窗口侧栏的"模型"一页）要的数据。按角色分三排货架，加一张密钥表：
 //   native      原生识别：收音频的模型（server/providers）
@@ -12,7 +14,8 @@ import { VENDORS } from "../server/vendors.mjs";
 //   polish      润色：纯文字模型（server/chat/vendors.mjs），最后是自定义服务
 // 云端的货架按"谁做的"（maker）分组，一组里的模型可能有好几个平台卖（DeepSeek 官方和百炼都有 V4.1 Flash）：
 // 平台是这一组的渠道，同一个模型在各渠道的写法和价格各自记在 offers 里。用户一个平台只配一把 key。
-// 另外给首页的识别方式选单（renderer/hub/mode-picker.mjs）一份三种方式各自的样子：一路经过哪几个模型、切过去还差什么。
+// 另外给首页的识别方式选单（renderer/hub/mode-picker.mjs）一份三种方式各自的样子：一路经过哪几个模型、切过去还差什么；
+// 模型页顶上的推荐组合（models/presets.mjs）也是同样的样子，再加上每月多少钱（usage/estimate.mjs）。
 // 模型信息只从各个登记处读，这里不另写；会变的（设置、key 在哪、本机模型的下载状态、价）由调用方给。
 
 /** 平台在密钥表里的先后：覆盖最广的在前，自定义服务总在最后，没列到的排在它们中间 */
@@ -43,22 +46,31 @@ export const DEFAULTS = Object.freeze({
 });
 
 /**
- * 把三个角色要标价的那几家的价目模块都加载好，交回一个查价的函数（主进程启动时调一次）
- * @returns {Promise<(role: string, vendor: string, model: string) => object | null>}
+ * 把三个角色要标价的那几家的价目模块都加载好（主进程启动时调一次），交回两个查价的函数：
+ *   priceOf  货架上标的价（各家的 listPrice）
+ *   costOf   用了这么多花多少美元（各家的 costOf，和记账同一套），推荐组合的月成本用
+ * 价目里没有的都是 null
+ * @returns {Promise<{
+ *   priceOf: (role: string, vendor: string, model: string) => object | null,
+ *   costOf: (role: string, vendor: string, model: string, usage: object, at: Date) => number | null,
+ * }>}
  */
 export async function loadPriceBook() {
   const book = {};
   for (const [role, registry] of Object.entries(REGISTRIES)) {
     book[role] = {};
     for (const vendor of registry) {
-      if (vendor.prices) book[role][vendor.id] = (await vendor.prices()).listPrice ?? null;
+      if (vendor.prices) book[role][vendor.id] = await vendor.prices();
     }
   }
-  return (role, vendor, model) => book[role]?.[vendor]?.(model) ?? null;
+  return {
+    priceOf: (role, vendor, model) => book[role]?.[vendor]?.listPrice?.(model) ?? null,
+    costOf: (role, vendor, model, usage, at) => book[role]?.[vendor]?.costOf?.(model, usage, at) ?? null,
+  };
 }
 
 /** 云端的一排货架：按 maker 分组，同名的模型并成一行，各平台是这一行的渠道 */
-function cloudShelf(role, priceOf) {
+function cloudShelf(role, { priceOf }) {
   const groups = new Map();
   for (const vendor of REGISTRIES[role]) {
     for (const model of vendor.models) {
@@ -198,6 +210,12 @@ function wayOf(route, { keys, status }) {
   return { hops: HOPS[route.mode](route), needs };
 }
 
+/** 每天 100 次的月成本，美元和折成的人民币（界面按语言挑一种）；算不出来是 null */
+function monthlyOf(route, { costOf }, at) {
+  const usd = route.problem ? null : monthlyCost(route, costOf, at);
+  return usd === null ? null : { usd, cny: usd * CNY_PER_USD };
+}
+
 /**
  * @param {object} options
  * @param {"native" | "local" | "private"} options.mode 正在用哪种识别方式
@@ -207,11 +225,14 @@ function wayOf(route, { keys, status }) {
  * @param {Record<string, object>} options.status 本机模型的状态，按 id（models/library.mjs 的 status）
  * @param {string | null} options.chip catalog.mjs 的 chipOf
  * @param {number | null} options.freeBytes 模型目录那块磁盘还剩多少；查不了是 null
- * @param {(role: string, vendor: string, model: string) => object | null} options.priceOf loadPriceBook 给的
+ * @param {Awaited<ReturnType<typeof loadPriceBook>>} options.prices 查价（loadPriceBook 给的）
  * @param {Record<"native" | "local" | "private", object>} options.routes 三种方式各按设置走哪条路线
  *   （storage/settings.mjs 的 routeOf）；拼不出来的写成 { problem }
+ * @param {Array<{ preset: object, route: object }>} options.presets 适合这台机器的推荐组合（models/presets.mjs 的 presetsFor），
+ *   各带着按设置换上它那几项之后的路线；拼不出来的写成 { problem }
+ * @param {Date} options.at 估月成本按哪一刻的价（usage/estimate.mjs 的 estimateTime）
  */
-export function describePlaza({ mode, chosen, keys, status, chip, freeBytes, priceOf, routes }) {
+export function describePlaza({ mode, chosen, keys, status, chip, freeBytes, prices, routes, presets, at }) {
   const platforms = VENDORS.map(({ id, name, keyEnv, keyPage }) => ({
     id,
     name,
@@ -227,13 +248,24 @@ export function describePlaza({ mode, chosen, keys, status, chip, freeBytes, pri
     mode,
     chosen,
     ways: Object.fromEntries(Object.entries(routes).map(([id, route]) => [id, wayOf(route, { keys, status })])),
+    presets: presets.map(({ preset, route }) => ({
+      id: preset.id,
+      mode: preset.mode,
+      settings: preset.settings,
+      ...wayOf(route, { keys, status }),
+      // 正在用：方式就是它，按设置走的路线也和它的一样
+      active: mode === preset.mode && JSON.stringify(route) === JSON.stringify(routes[preset.mode]),
+      monthly: monthlyOf(route, prices, at),
+    })),
+    // 月成本的口径，界面上写出来
+    typical: { daily: DAILY_DICTATIONS, seconds: Math.round(TYPICAL.seconds) },
     defaults: DEFAULTS,
     platforms,
     shelves: {
-      native: cloudShelf("native", priceOf),
-      transcribe: [localGroup({ status, chip, freeBytes }), ...cloudShelf("transcribe", priceOf)],
+      native: cloudShelf("native", prices),
+      transcribe: [localGroup({ status, chip, freeBytes }), ...cloudShelf("transcribe", prices)],
       polish: [
-        ...cloudShelf("polish", priceOf),
+        ...cloudShelf("polish", prices),
         { id: "custom", kind: "custom", channels: ["custom"], items: [{ name: null, tags: [], offers: {} }] },
       ],
     },

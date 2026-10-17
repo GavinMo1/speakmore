@@ -56,3 +56,22 @@ export function named(key, fallback) {
 
 /** 平台（卖模型、收 key 的那一家）按界面语言叫什么 */
 export const platformName = (platform) => named(`providers.${platform.id}.name`, platform.name);
+
+/** 下载进度：底色铺到下了多少，写百分比（模型库那一行、推荐组合里都用） */
+export function progressBadge(download) {
+  const p = download.total ? download.received / download.total : 0;
+  return h(
+    "span",
+    {
+      class: "badge block",
+      "data-tone": "progress",
+      style: `--p: ${p}`,
+      role: "progressbar",
+      "aria-valuemin": "0",
+      "aria-valuemax": "100",
+      "aria-valuenow": String(Math.round(p * 100)),
+    },
+    svg("i-download"),
+    h("span", { class: "label", text: `${Math.round(p * 100)}%` }),
+  );
+}
