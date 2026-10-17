@@ -183,8 +183,20 @@
     }
   }
 
-  # 把程序和运行环境换成刚下到的。正在跑的 exe 删不掉、但所在的目录改得了名：旧的先改名挪开，新的放进来，
-  # 旧的删得掉就删，删不掉（比如正在跑的 speakmore update 自己）留着，下次安装时再删。中途出错就把原来的放回去
+  # 把目录里的每一项挪进另一个目录（没有就建），挪一项记一笔，出错时照着倒回去。同一块盘上挪就是改名，一瞬间的事
+  function Move-Entries($from, $to) {
+    New-Item -ItemType Directory -Force -Path $to | Out-Null
+    Get-ChildItem -LiteralPath $from -Force | ForEach-Object {
+      $target = Join-Path $to $_.Name
+      Move-Item -LiteralPath $_.FullName -Destination $target
+      [void]$script:Moves.Add(@($_.FullName, $target))
+    }
+  }
+
+  # 把程序和运行环境换成刚下到的：旧的挪进 <名字>.old.<编号>，新的挪进来。挪的是目录里的东西、不是目录本身：
+  # 跑着的 Electron（比如正在跑 speakmore update 的这一份）一直占着它所在的那个目录，目录改不了名，
+  # 里面的文件和子目录却挪得动（真机上逐个试过）。旧的删得掉就删，删不掉的（还在用着）留着，
+  # 下次安装时再删（speakmore update 会在自己退出后删）。中途出错就倒着一项项挪回原处
   function Install-Files {
     $result = Invoke-NewCopy @('stop')
     if ($result.Code -ne 0) { Fail "Couldn't stop the running SpeakMore" $result.Output "Quit it first, then install again." }
@@ -192,36 +204,34 @@
 
     $names = @('app', 'runtime')
     foreach ($name in $names) {
-      $current = Join-Path $script:HomeDir $name
       Get-ChildItem -LiteralPath $script:HomeDir -Directory -Filter "$name.old*" -ErrorAction SilentlyContinue | ForEach-Object {
         Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
       }
-      if (Test-Path $current) {
-        try { Rename-Item -LiteralPath $current -NewName "$name.old.$([guid]::NewGuid().ToString('N').Substring(0, 8))" } catch {
-          Fail "Can't move $(Pretty $current)" "Close any window that has a file in it open, then run again." "($($_.Exception.Message))"
-        }
-      }
     }
+    $id = [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $script:Moves = New-Object System.Collections.ArrayList
     try {
-      foreach ($name in $names) { Move-Item -LiteralPath (Join-Path $script:TmpDir $name) -Destination (Join-Path $script:HomeDir $name) }
-    } catch {
       foreach ($name in $names) {
-        $old = Get-ChildItem -LiteralPath $script:HomeDir -Directory -Filter "$name.old.*" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        if ($old) {
-          Remove-Item -LiteralPath (Join-Path $script:HomeDir $name) -Recurse -Force -ErrorAction SilentlyContinue
-          Rename-Item -LiteralPath $old.FullName -NewName $name
-        }
+        $current = Join-Path $script:HomeDir $name
+        if (Test-Path $current) { Move-Entries $current (Join-Path $script:HomeDir "$name.old.$id") }
       }
-      Fail "Couldn't put the new version into $(Pretty $script:HomeDir)" "Check the folder's permissions. SpeakMore was stopped; run speakmore to start it again." "($($_.Exception.Message))"
+      foreach ($name in $names) { Move-Entries (Join-Path $script:TmpDir $name) (Join-Path $script:HomeDir $name) }
+    } catch {
+      $reason = $_.Exception.Message
+      # 倒回去时出错就不再接着倒，直接报出来（不说"原样没动"）：旧的还在 <名字>.old.<编号> 里
+      for ($i = $script:Moves.Count - 1; $i -ge 0; $i--) { Move-Item -LiteralPath $script:Moves[$i][1] -Destination $script:Moves[$i][0] }
+      foreach ($name in $names) { Remove-Item -LiteralPath (Join-Path $script:HomeDir "$name.old.$id") -Recurse -Force -ErrorAction SilentlyContinue }
+      Fail "Couldn't put the new version into $(Pretty $script:HomeDir)" "Close any window that has a file in it open, then run again. SpeakMore was stopped; run speakmore to start it again." "($reason)"
     }
     $left = $false
     foreach ($name in $names) {
-      Get-ChildItem -LiteralPath $script:HomeDir -Directory -Filter "$name.old.*" | ForEach-Object {
-        Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-        if (Test-Path $_.FullName) { $left = $true }
+      $old = Join-Path $script:HomeDir "$name.old.$id"
+      if (Test-Path $old) {
+        Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction SilentlyContinue
+        if (Test-Path $old) { $left = $true }
       }
     }
-    if ($left) { Note "The previous version is still in use; it will be removed the next time you install or update." }
+    if ($left) { Note "Part of the previous version is still in use; it will be removed later." }
 
     $binDir = Join-Path $script:HomeDir 'bin'
     New-Item -ItemType Directory -Force -Path $binDir | Out-Null
