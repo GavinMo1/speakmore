@@ -9,7 +9,7 @@ export function Icon({ name, label, className = "size-5", ...rest }) {
   if (!icon) throw new Error(`没有这个图标：${name}（在 scripts/icons.mjs 里登记再跑 npm run icons）`);
   return (
     <svg
-      viewBox={`0 0 ${icon.width} ${icon.height}`}
+      viewBox={`${icon.left ?? 0} ${icon.top ?? 0} ${icon.width} ${icon.height}`}
       className={className}
       role={label ? "img" : undefined}
       aria-label={label}

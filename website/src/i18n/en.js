@@ -100,14 +100,43 @@ export default {
   },
   speed: {
     title: "Fast.\nAnd light.",
-    lead: "On-device transcription runs on the GPU. Accurate, too.",
-    headline: { value: "2", prefix: "<", unit: "s", label: "from releasing the key to text" },
+    lead: "Runs on processors and graphics cards. Uses the GPU automatically when there is one.",
+    headline: {
+      label: "Mainstream hardware",
+      value: "2",
+      prefix: "<",
+      unit: "s",
+      text: "From releasing the key to text",
+    },
     stats: [
-      { value: "0.23", unit: "s", label: "On-device transcription · Apple silicon" },
-      { value: "0.24", unit: "s", label: "On-device transcription · Windows GPU" },
-      { value: "850", unit: "MB", label: "On-device model" },
-      { value: "0.5", unit: "GB", label: "Memory in use · Windows GPU" },
+      { value: "0.23", unit: "s", label: "On-device transcription", note: "Apple silicon" },
+      { value: "850", unit: "MB", label: "On-device model", note: "One-time download" },
     ],
+    hardware: {
+      label: "Supported hardware",
+      groups: [
+        {
+          id: "cpu",
+          name: "Processors",
+          note: "Runs directly",
+          items: [
+            { icon: "apple", brand: "Apple", series: "M series" },
+            { icon: "intel", brand: "Intel", series: "Core" },
+            { icon: "amd", brand: "AMD", series: "Ryzen" },
+          ],
+        },
+        {
+          id: "gpu",
+          name: "Graphics",
+          note: "Accelerated",
+          items: [
+            { icon: "nvidia", brand: "NVIDIA", series: "GeForce" },
+            { icon: "amd", brand: "AMD", series: "Radeon" },
+            { icon: "intel", brand: "Intel", series: "Arc · Iris\u00a0Xe" },
+          ],
+        },
+      ],
+    },
     long: {
       title: "Steady on long takes",
       text: "Nearly three minutes of speech, written in full, never cut off.",

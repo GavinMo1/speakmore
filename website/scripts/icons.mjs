@@ -2,7 +2,8 @@
 // 取下来的 SVG 直接打进页面，不在访客打开时再去 Iconify 要：少一个外部依赖，也不往第三方报访客的来路。
 //
 // 界面图标只用 Remix Icon（ri，Apache-2.0）一套；Apple、Windows、GitHub 的标志
-// 也用它。各家模型的标志不在这里：直接用 App 里那一份（src/renderer/shared/provider-icons.mjs）。
+// 也用它。Remix 没有的硬件厂商标志（NVIDIA、AMD、Intel）用 Simple Icons（CC0；标志本身归各家所有）。
+// 各家模型的标志不在这里：直接用 App 里那一份（src/renderer/shared/provider-icons.mjs）。
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,6 +38,20 @@ const ICONS = {
   apple: "ri:apple-fill",
   windows: "ri:windows-fill",
   github: "ri:github-fill",
+  // 性能一段的硬件厂商（单色，跟着字的颜色走）
+  nvidia: "simple-icons:nvidia",
+  amd: "simple-icons:amd",
+  intel: "simple-icons:intel",
+};
+
+/**
+ * 字标在 24×24 的方框里只占中间一条：裁到画出来的那一块（浏览器里 getBBox 量的，[左, 上, 宽, 高]），
+ * 页面上按高度排，几家标志看起来一样重
+ */
+const CROP = {
+  nvidia: [0, 4.063, 24, 15.874],
+  amd: [0, 9.137, 24, 5.726],
+  intel: [0, 7.345, 24, 9.311],
 };
 
 const API = "https://api.iconify.design";
@@ -64,9 +79,16 @@ for (const [prefix, entries] of byPrefix) {
   );
   for (const { local, name } of entries) {
     const icon = data.icons[name];
+    const [left, top, width, height] = CROP[local] ?? [
+      0,
+      0,
+      icon.width ?? data.width ?? 24,
+      icon.height ?? data.height ?? 24,
+    ];
     out[local] = {
-      width: icon.width ?? data.width ?? 24,
-      height: icon.height ?? data.height ?? 24,
+      ...(left || top ? { left, top } : {}),
+      width,
+      height,
       // 同一页里画两次时 id 会撞：给 mask、filter 这些 id 加上本地名字做前缀，引用它们的 url(#…)、href="#…" 跟着改
       body: icon.body
         .replace(/id="([^"]+)"/g, `id="${local}-$1"`)

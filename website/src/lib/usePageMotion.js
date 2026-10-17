@@ -32,10 +32,11 @@ export function useOnScreen(ref) {
  * 一块东西进场的动画什么时候放：一开始就是放完的样子（rest：没有 IntersectionObserver、减弱动态效果、
  * 或一进来就已经在屏幕上时一直这样，内容不靠动画才看得见）；还在屏幕下面时先退回起点（ready），
  * 滚到时放一次（play）。成本、性能的数字（Rolling 和 styles.css 的 .roll）、识别方式的路线图都用它。
- * 不跟着滚动一格一格走：访客停在半路时，会卡在半截，像坏了
+ * 不跟着滚动一格一格走：访客停在半路时，会卡在半截，像坏了。
+ * bottom：顶边进到离屏幕下沿多远才放（rootMargin 的下边），默认四分之一屏
  * @returns {{ ref: import("react").RefObject<HTMLElement>, stage: "rest" | "ready" | "play" }}
  */
-export function useEnterOnce() {
+export function useEnterOnce(bottom = "-25%") {
   const ref = useRef(null);
   const reduced = useReducedMotion();
   const [stage, setStage] = useState("rest");
@@ -52,10 +53,10 @@ export function useEnterOnce() {
       },
       // 这一块的顶边进到屏幕下四分之一以内才转：数字在块的上面，访客正好看着它转。
       // 不等整块露出来：块比屏幕还高时永远等不到
-      { threshold: 0, rootMargin: "0px 0px -25% 0px" },
+      { threshold: 0, rootMargin: `0px 0px ${bottom} 0px` },
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, [reduced]);
+  }, [reduced, bottom]);
   return { ref, stage };
 }

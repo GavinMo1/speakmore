@@ -95,14 +95,37 @@ export default {
   },
   speed: {
     title: "速度快\n占用少",
-    lead: "本机转写由显卡加速，识别准确。",
-    headline: { value: "2", prefix: "<", unit: "秒", label: "松开快捷键到文字出现" },
+    lead: "处理器与显卡均可运行，有显卡时自动加速。",
+    headline: { label: "主流硬件", value: "2", prefix: "<", unit: "秒", text: "松开快捷键到文字出现" },
     stats: [
-      { value: "0.23", unit: "秒", label: "本机转写 · Apple 芯片" },
-      { value: "0.24", unit: "秒", label: "本机转写 · Windows 显卡" },
-      { value: "850", unit: "MB", label: "本机模型" },
-      { value: "0.5", unit: "GB", label: "运行内存 · Windows 显卡" },
+      { value: "0.23", unit: "秒", label: "本机转写", note: "Apple 芯片" },
+      { value: "850", unit: "MB", label: "本机模型", note: "下载一次即可" },
     ],
+    hardware: {
+      label: "支持的硬件",
+      groups: [
+        {
+          id: "cpu",
+          name: "处理器",
+          note: "直接运行",
+          items: [
+            { icon: "apple", brand: "Apple", series: "M 系列" },
+            { icon: "intel", brand: "Intel", series: "Core" },
+            { icon: "amd", brand: "AMD", series: "Ryzen" },
+          ],
+        },
+        {
+          id: "gpu",
+          name: "显卡",
+          note: "自动加速",
+          items: [
+            { icon: "nvidia", brand: "NVIDIA", series: "GeForce" },
+            { icon: "amd", brand: "AMD", series: "Radeon" },
+            { icon: "intel", brand: "Intel", series: "Arc · Iris\u00a0Xe" },
+          ],
+        },
+      ],
+    },
     long: { title: "长录音同样稳定", text: "近三分钟的口述，完整成文，不截断。", start: "0:00", end: "2:52" },
   },
   privacy: {
