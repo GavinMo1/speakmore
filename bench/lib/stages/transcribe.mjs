@@ -109,13 +109,13 @@ function runWorker(job, onMessage) {
   });
 }
 
-/** 下载进度：每过 10% 打一行 */
+/** 下载进度（按整个模型算）：每过 10% 打一行 */
 function downloadProgress(model) {
   let shown = -1;
-  return ({ file, received, total }) => {
+  return ({ received, total }) => {
     const tenth = Math.floor((received / total) * 10);
     if (tenth === shown) return;
     shown = tenth;
-    console.log(`  下载 ${model.id}/${file}：${Math.round((received / total) * 100)}%`);
+    console.log(`  下载 ${model.id}：${Math.round((received / total) * 100)}%`);
   };
 }
