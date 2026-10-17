@@ -52,6 +52,7 @@ const oneOf = (choices) => new LocalizedError(msg("settings.oneOf", { choices: c
  * store 可有可无：规整后的值写进文件时换成什么样子（默认原样）。
  * ofMode 可有可无：这一项属于哪种识别模式（server/modes.mjs），只在那种模式里能换（app/modes.mjs）。
  *   local 的两跳各有各的：transcriber 是第一跳（本机模型或云端模型），polish 和 customUrl 是第二跳。
+ *   private（数据隐私）只有一跳：privateTranscriber，只能是本机模型；和 local 的第一跳分开存，各换各的。
  */
 export const SETTINGS = {
   hotkey: {
@@ -116,6 +117,18 @@ export const SETTINGS = {
         return `${cloud.vendor}/${cloud.model}`;
       }
       if (!TRANSCRIBER_IDS.includes(id)) throw oneOf(TRANSCRIBER_CHOICES);
+      return id;
+    },
+  },
+  privateTranscriber: {
+    ofMode: "private",
+    env: "SPEAKMORE_PRIVATE_TRANSCRIBER",
+    default: DEFAULT_TRANSCRIBER,
+    // 数据隐私模式什么都不上传：只认本机模型
+    choices: TRANSCRIBER_IDS,
+    parse(value) {
+      const id = value.trim();
+      if (!TRANSCRIBER_IDS.includes(id)) throw oneOf(TRANSCRIBER_IDS);
       return id;
     },
   },
@@ -305,6 +318,7 @@ const ROUTES = {
     polish: parseChatChoice(settings.polish.value),
     customUrl: settings.customUrl.value || null,
   }),
+  private: (settings) => ({ mode: "private", transcriber: settings.privateTranscriber.value }),
 };
 
 /**

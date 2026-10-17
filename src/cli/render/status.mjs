@@ -22,6 +22,8 @@ function modelInUse(status, settings) {
 }
 
 function keyLine(key, provider, t) {
+  // 数据隐私模式不用 key
+  if (key.source === "none") return t("cli.status.keyNone");
   // 启动时够不着的话先用着，如实说还没验证
   const unverified = key.verified === false;
   const named = { variable: provider.keyEnv, provider: provider.name, problem: key.problem };
@@ -140,6 +142,19 @@ function localEntries(status, settings, t) {
   return entries;
 }
 
+/** private（数据隐私）模式：不用 key，只有一个本机模型和它下好了没有 */
+function privateEntries(status, settings, t) {
+  const route = { mode: "private", transcriber: status.transcriber ?? settings.privateTranscriber.value };
+  const entries = [
+    [t("cli.status.key"), keyLine(status.key, null, t)],
+    [t("cli.status.mode"), t("modes.private")],
+    [t("cli.status.model"), t.text(routeTitle(route))],
+  ];
+  const localModel = localModelLine(status.localModel, t);
+  if (localModel) entries.push([t("cli.status.localModel"), localModel]);
+  return entries;
+}
+
 function statsLine({ dictations, characters, seconds, costUsd, unpricedCalls }, { withPace, t }) {
   const parts = [
     t("cli.status.dictations", { count: dictations }),
@@ -199,8 +214,12 @@ export function renderStatus({ status, version, settings, stats }, { color, t })
   ];
   // 写后台应用正在用的，不是现在设置里的：设置改了还没重启、或者启动它的那条命令上带着环境变量时，两者不一样。
   // 0.6 及以前的不报模式，那时只有 native
-  const local = status.mode === "local";
-  const entries = local ? localEntries(status, settings, t) : nativeEntries(status, settings, t);
+  const entries =
+    status.mode === "local"
+      ? localEntries(status, settings, t)
+      : status.mode === "private"
+        ? privateEntries(status, settings, t)
+        : nativeEntries(status, settings, t);
   entries.splice(
     1,
     0,

@@ -179,7 +179,7 @@ export async function startService({
      * ModelError），这时原来能用的那把继续用。这个请求同时是预热，之后的第一次听写不会慢。
      * 本地转写链路验的是润色那一家：本地模型在后台另外准备，不等它。
      *
-     * @param {string} apiKey 路线主的那家的 key（server/modes.mjs 的 keyVendorOf）
+     * @param {string | null} apiKey 路线主的那家的 key（server/modes.mjs 的 keyVendorOf）；路线不用 key（数据隐私模式）时是 null
      * @param {{ allowUnverified?: boolean, route?: object, keys?: Record<string, string> }} [options]
      *   allowUnverified：只是暂时够不着那一家的话照样启用。启动时、换用存着的那把时用：它当初是验证过才存的，
      *   不该因为开机时没网、或者对方一时回了 503 就被判成不能用。
@@ -211,7 +211,9 @@ export async function startService({
      * @param {string} model 本地模型的 id（models/catalog.mjs），调用方校验过
      */
     switchTranscriber(model) {
-      if (route.mode !== "local") throw new Error(`现在不是 local 模式（${route.mode}），没有本地模型可换`);
+      if (route.mode !== "local" && route.mode !== "private") {
+        throw new Error(`现在是 ${route.mode} 模式，只有 local 和 private 模式有本地模型可换`);
+      }
       // 换到云端、或从云端换回本机，润色前面那一跳就不是同一个东西了，要重新装 refiner、验 key：走 useKey
       if (!usesLocalModel(route) || !usesLocalModel({ ...route, transcriber: model })) {
         throw new Error(`第一跳 ${route.transcriber} → ${model} 涉及云端模型，要走 useKey 换路线`);

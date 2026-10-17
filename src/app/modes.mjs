@@ -1,6 +1,7 @@
 import { msg, problemOf } from "../i18n/index.mjs";
 import { DEFAULT_TRANSCRIBER, downloadSize, findModel } from "../models/catalog.mjs";
 import { sizeText } from "../models/describe.mjs";
+import { cloudTranscriberOf } from "../server/asr/cloud/vendors.mjs";
 import { speechSample } from "../server/asr/probe.mjs";
 import { findChatVendor } from "../server/chat/vendors.mjs";
 import { describeRoute, usesLocalModel } from "../server/modes.mjs";
@@ -16,10 +17,13 @@ import {
 
 // 识别模式的状态机。状态是"正在用哪种模式"（service.route.mode），和那种模式里选的模型：
 //
-//   native ──switchMode("local", 第二跳等)──▶ local
-//     │  ◀──switchMode("native", 模型等)──     │
-//     └ setModel        换收音频的模型         ├ setTranscriber  第一跳：本机模型（不用 key，要下载好了的）或云端模型（验它那家的 key）
-//                                              └ setPolish       第二跳：润色的厂商和模型（自定义服务连同地址）
+//   native ◀──switchMode──▶ local ◀──switchMode──▶ private ◀──switchMode──▶ native（三种两两可切，切时可连带那种模式的设置）
+//     └ setModel        换收音频的模型
+//   local
+//     ├ setTranscriber  第一跳：本机模型（不用 key，要下载好了的）或云端模型（验它那家的 key）
+//     └ setPolish       第二跳：润色的厂商和模型（自定义服务连同地址）
+//   private（数据隐私）
+//     └ setTranscriber  唯一的一跳：只能是本机模型（不用 key，要下载好了的），存在它自己的 privateTranscriber
 //
 // 两种模式要换的东西不一样，各走各的路：模型只能在它那种模式里换，不在那种模式时换是错的（没法选），
 // 直接说出来，不悄悄存下。第一次进 local 时还没法换第二跳，所以切模式时可以连带那种模式自己的设置
@@ -161,25 +165,32 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
     },
 
     /**
-     * local 第一跳。本机模型要下载好了的，不用 key：润色那一跳照旧，服务只换模型（没装好的话重新装）。
-     * 换到云端模型、或从云端换回本机，前后不是同一种转写器：整条路线重新装、验 key（云端那家的也要有）
+     * 换转写模型，在 local 和 private 里都能换，换的是正在用的那种模式自己的那一项。
+     * local 第一跳：本机模型要下载好了的，不用 key：润色那一跳照旧，服务只换模型（没装好的话重新装）。
+     * 换到云端模型、或从云端换回本机，前后不是同一种转写器：整条路线重新装、验 key（云端那家的也要有）。
+     * private：只认本机模型，云端的直接说不行
      */
     setTranscriber(transcriber) {
-      return within("local", "transcriber", { transcriber }, async (route) => {
+      const apply = async (route) => {
         const missing = notDownloaded(route);
         if (missing) return missing;
         if (!usesLocalModel(route) || !usesLocalModel(service.route)) return useRoute(route);
         service.switchTranscriber(route.transcriber);
         return { ok: true };
-      });
+      };
+      if (service.route.mode !== "private") return within("local", "transcriber", { transcriber }, apply);
+      if (cloudTranscriberOf(transcriber)) {
+        return Promise.resolve({ ok: false, problem: msg("modes.privateOnlyLocal", { model: transcriber }) });
+      }
+      return within("private", "privateTranscriber", { privateTranscriber: transcriber }, apply);
     },
 
-    /** 删一个本机模型：正在用的（local 模式的第一跳）不让删，说先换一个或切回 native */
+    /** 删一个本机模型：正在用的（local 的第一跳、private 的那一个）不让删，说先换一个或换一种模式 */
     removeModel(id) {
       return serial(async () => {
         const model = findModel(id);
         if (!model) return { ok: false, problem: msg("localModels.unknown", { id }) };
-        if (service.route.mode === "local" && service.route.transcriber === id) {
+        if (usesLocalModel(service.route) && service.route.transcriber === id) {
           return { ok: false, problem: msg("localModels.inUse", { model: model.name }) };
         }
         return models.remove(id);

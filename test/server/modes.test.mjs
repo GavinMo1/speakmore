@@ -23,10 +23,10 @@ const LOCAL = {
   customUrl: null,
 };
 
-test("两条链路平级登记，默认的转写模型在清单里", () => {
+test("三种模式平级登记，默认的转写模型在清单里", () => {
   assert.deepEqual(
     MODES.map(({ id }) => id),
-    ["native", "local"],
+    ["native", "local", "private"],
   );
   assert.ok(findModel(DEFAULT_TRANSCRIBER));
   assert.equal(findMode("LOCAL").id, "local");
@@ -81,6 +81,37 @@ test("本地转写链路没有转写器时直接报错（调用方要先装好�
 });
 
 const CLOUD = { ...LOCAL, transcriber: "bailian/qwen3-asr-flash" };
+const PRIVATE = { mode: "private", transcriber: "qwen3-asr-0.6b-q8" };
+
+test("数据隐私模式：一跳，本机模型转写完直接交出原文；不要任何一家的 key，也不往外发请求", async () => {
+  const requests = [];
+  const fetch = async (url) => {
+    requests.push(url);
+    return Response.json({});
+  };
+  const refiner = await createModeRefiner({
+    route: PRIVATE,
+    transcriber: { transcribe: async () => ({ text: "  嗯，我现在有几个事要做  " }) },
+    log: quiet,
+    decode: async () => new Float32Array(16_000),
+    fetch,
+  });
+  await refiner.warmUp();
+  assert.equal(await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm" }), "嗯，我现在有几个事要做");
+  assert.deepEqual(requests, []);
+  assert.deepEqual(keyVendorsOf(PRIVATE), []);
+  assert.equal(keyVendorOf(PRIVATE), undefined);
+  assert.equal(usesLocalModel(PRIVATE), true);
+  assert.equal(describeRoute(PRIVATE), "private: qwen3-asr-0.6b-q8");
+});
+
+test("数据隐私模式只认本机模型：写成云端的、没交转写器的都直接报错", async () => {
+  await assert.rejects(
+    createModeRefiner({ route: { ...PRIVATE, transcriber: "bailian/qwen3-asr-flash" }, log: quiet }),
+    /本机模型/,
+  );
+  await assert.rejects(createModeRefiner({ route: PRIVATE, log: quiet }), /转写器/);
+});
 
 test("第一跳交给云端时要两家的 key，主的那家（润色）在最后；同一家只要一把", () => {
   assert.deepEqual(
@@ -119,7 +150,8 @@ test("第一跳交给云端：不用交转写器，按路线装；两家各用�
     route: CLOUD,
     keys: { bailian: "sk-ws-b", deepseek: "sk-d" },
     log: quiet,
-    decode: async () => new Float32Array(16_000),
+    // 有声音的一段：全是静音的段云端转写不发（asr/segment.mjs）
+    decode: async () => new Float32Array(16_000).fill(0.1),
     fetch,
   });
   assert.equal(await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm" }), "好的");

@@ -36,6 +36,7 @@ test("没有文件也没有环境变量时全用默认值", () => {
     model: { value: "gemini/gemini-3.6-flash", source: "default" },
     thinking: { value: "MINIMAL", source: "default" },
     transcriber: { value: "qwen3-asr-0.6b-q8", source: "default" },
+    privateTranscriber: { value: "qwen3-asr-0.6b-q8", source: "default" },
     polish: { value: "deepseek/deepseek-flash", source: "default" },
     customUrl: { value: "", source: "default" },
     modelSource: { value: "cn", source: "default" },
@@ -231,8 +232,26 @@ test("每种模式的路线只看它自己那几项：可以拼出不是正在�
   assert.deepEqual(routeOf(settings, "native").model, { provider: "openai", model: "gpt-audio-mini" });
 });
 
-test("每种模式自己的那几项：native 是模型和思考档位，local 是两跳的", () => {
-  assert.deepEqual(MODE_SETTINGS, { native: ["model", "thinking"], local: ["transcriber", "polish", "customUrl"] });
+test("每种模式自己的那几项：native 是模型和思考档位，local 是两跳的，private 是它自己的本机模型", () => {
+  assert.deepEqual(MODE_SETTINGS, {
+    native: ["model", "thinking"],
+    local: ["transcriber", "polish", "customUrl"],
+    private: ["privateTranscriber"],
+  });
+});
+
+test("数据隐私模式的本机模型：和 local 的第一跳分开存，只认本机模型的 id，云端的拒绝", () => {
+  const settings = resolveSettings({ file, env: {} });
+  assert.deepEqual(routeOf(settings, "private"), { mode: "private", transcriber: "qwen3-asr-0.6b-q8" });
+  saveSetting(file, "transcriber", "bailian/qwen3-asr-flash");
+  saveSetting(file, "privateTranscriber", "sensevoice-small-q8");
+  const saved = resolveSettings({ file, env: {} });
+  assert.equal(routeOf(saved, "private").transcriber, "sensevoice-small-q8");
+  assert.equal(routeOf(saved, "local").transcriber, "bailian/qwen3-asr-flash");
+  assert.throws(() => saveSetting(file, "privateTranscriber", "bailian/qwen3-asr-flash"), /qwen3-asr-0\.6b-q8/);
+  const fromEnv = resolveSettings({ file, env: { SPEAKMORE_PRIVATE_TRANSCRIBER: "qwen3-asr-0.6b-q8" } });
+  assert.equal(fromEnv.privateTranscriber.value, "qwen3-asr-0.6b-q8");
+  assert.equal(patchSettings(saved, { mode: "PRIVATE" }).mode.value, "private");
 });
 
 test("patchSettings：按要改的几项拼出改后的设置（不写文件），写错了照保存时的规矩报错", () => {

@@ -14,7 +14,8 @@ import { ModelError } from "../providers/errors.mjs";
  * @param {object} options
  * @param {{ transcribe(samples: Float32Array, o: { signal?: AbortSignal, audioId?: string }): Promise<{ text: string }> }} options.transcriber
  *   第一跳：本机模型（asr/host.mjs）或云端模型（asr/cloud/transcriber.mjs）
- * @param {{ warmUp(): Promise<void>, polish(text: string, o: object): Promise<string> }} options.polisher 第二跳（polisher.mjs）
+ * @param {{ warmUp(): Promise<void>, polish(text: string, o: object): Promise<string> } | null} options.polisher
+ *   第二跳（polisher.mjs）。数据隐私模式不接（null）：原文去掉首尾空白直接交出，什么都不往外发
  * @param {{ info: Function, error: Function }} options.log
  * @param {string | null} [options.model] 第一跳是哪个本机模型（models/catalog.mjs 的 id），记账用。
  *   第一跳是云端模型时不写：它自己记账（花钱、按时长或 token 算）
@@ -49,8 +50,10 @@ export function createLocalRefiner({ transcriber, polisher, log, model, onCall =
   }
 
   return {
-    /** 验证润色那一家的 key、地址和模型名，也让第一次润色不慢。转写器在装上的时候已经验过了 */
-    warmUp: () => polisher.warmUp(),
+    /** 验证润色那一家的 key、地址和模型名，也让第一次润色不慢。转写器在装上的时候已经验过了；不润色时没什么要验的 */
+    warmUp: async () => {
+      await polisher?.warmUp();
+    },
 
     /** 开口时没什么要先备的：模型一直装在转写进程里 */
     async prepare() {},
@@ -77,6 +80,17 @@ export function createLocalRefiner({ transcriber, polisher, log, model, onCall =
       }
       const transcribedAt = performance.now();
       if (model) record(audioId, Math.round(transcribedAt - decodedAt));
+      if (!polisher) {
+        // 只记长度和耗时：原文是用户说的话
+        log.info("local_transcribed", {
+          audio_id: audioId,
+          seconds: Math.round((samples.length / SPEECH_SAMPLE_RATE) * 10) / 10,
+          decode_ms: Math.round(decodedAt - startedAt),
+          transcribe_ms: Math.round(transcribedAt - decodedAt),
+          transcript_length: transcript.length,
+        });
+        return transcript.trim();
+      }
       // 转写的这段时间里用户已经断开了：润色要花钱，不必再发
       signal?.throwIfAborted();
       const refined = await polisher.polish(transcript, { signal, audioId });

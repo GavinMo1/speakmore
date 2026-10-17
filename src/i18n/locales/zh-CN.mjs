@@ -83,10 +83,11 @@ export default {
   settings: {
     describe: {
       hotkey: "按哪个键开始和结束说话",
-      mode: "识别走哪条路：native 是录音直接交给收音频的模型，local 是本机的小模型先转成文字、再交给任意大模型润色",
+      mode: "识别走哪条路：native 是录音直接交给收音频的模型，local 是本机的小模型先转成文字、再交给任意大模型润色，private 是只用本机模型转写、什么都不上传",
       model: "用哪一家的哪个模型整理，写成 厂商/模型；只写厂商就用它的默认模型。换模型用 speakmore model",
       thinking: "Gemini 的思考档位，越高越慢。别家的模型用不上",
       transcriber: "local 那条路上用哪个本机模型转文字，要先下载好（speakmore transcriber download）",
+      privateTranscriber: "private 那条路上用哪个本机模型转文字，只能是本机模型，要先下载好",
       polish: "local 那条路上把文字交给哪一家的哪个模型润色，写成 厂商/模型；自定义服务写 custom/模型名",
       customUrl: "自定义润色服务的地址（兼容 OpenAI 接口的那种），比如 https://api.example.com/v1",
       modelSource:
@@ -114,6 +115,8 @@ export default {
   modes: {
     native: "原生：录音直接交给模型",
     local: "本地转写，再交给模型润色",
+    private: "数据隐私：只用本机模型转写，什么都不上传",
+    privateOnlyLocal: "数据隐私模式只用本机模型，{model} 是云端模型",
     notIn: "现在是 {current} 模式，{what}要在 {mode} 模式里才能换",
     notOfMode: "{name} 不是 {mode} 模式的设置；切换至 {mode} 时可一并设置的是 {names}",
     notDownloaded: "{model} 还没下载（{size}）：先下载再用",
@@ -121,6 +124,7 @@ export default {
       model: "收音频的模型",
       transcriber: "本机转写模型（第一跳）",
       polish: "润色模型（第二跳）",
+      privateTranscriber: "数据隐私模式的本机模型",
     },
   },
   local: {
@@ -213,6 +217,7 @@ export default {
     noKeyServiceFor:
       "还没有填 {provider} API key：在终端运行 speakmore key {id}，或者点菜单栏上 SpeakMore 的图标打开设置",
     failedFor: "{provider} 的 key 未通过：{reason}",
+    whichVendor: "数据隐私模式不用 key；要给某一家存 key，写明是哪一家",
   },
 
   model: {
@@ -721,7 +726,7 @@ export default {
       config: "用法：speakmore config | speakmore config set <名字> <值> | speakmore config unset <名字>",
       theme: "用法：speakmore theme | speakmore theme <名字>",
       model: "用法：speakmore model | speakmore model <厂商>[/<模型>] | speakmore model check [<厂商>[/<模型>]]",
-      mode: "用法：speakmore mode | speakmore mode <native|local> [--model …] [--transcriber …] [--polish … --url …]",
+      mode: "用法：speakmore mode | speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url …]",
       transcriber:
         "用法：speakmore transcriber | speakmore transcriber <模型> | speakmore transcriber download|cancel|delete <模型> [--yes] | speakmore transcriber check [<模型>]",
       polish:
@@ -768,6 +773,7 @@ export default {
       notInline:
         "key 不要写在命令后面：那样它会留在 shell 的历史记录里。运行 speakmore key 再粘贴，或者从管道喂：pbpaste | speakmore key。要给某一家填，后面写它的名字：{providers}",
       forgotten: "存着的 {provider} 的 key 已经删掉。",
+      whichVendor: "数据隐私模式不用 key。要给某一家填，后面写它的名字：{providers}",
       cancelled: "已取消，key 没有改动。",
       nothingRead: "没有读到 key，原来的没有改动。",
       badShapeUnchanged: "{problem}。原来的没有改动。",
@@ -838,10 +844,14 @@ export default {
       already: "已经是 {mode} 模式：{route}。",
       switched: "切到了 {mode} 模式：{route}。",
       localRoute: "{transcriber} → {polish}",
+      privateRoute: "本机的 {transcriber}，不润色、不上传",
+      privateModel: "private 的本机模型：speakmore transcriber（只认本机模型）",
     },
     local: {
-      notInLocal: "现在是 {current} 模式，用不上这些：要用先切过去（speakmore mode local）",
-      transcribersTitle: "本机转写模型（local 模式的第一跳）",
+      notInLocal: "现在是 {current} 模式，用不上这些：要用先切过去（speakmore mode local 或 private）",
+      cloudNoDownload: "{model} 是云端模型，不用下载",
+      cloudCheckOk: "{model} 能用，问一次用了 {seconds}。",
+      transcribersTitle: "本机转写模型（local 的第一跳、private 的模型）",
       installed: "已下载",
       notInstalled: "还没下载",
       downloading: "下载中 {percent}%",
@@ -894,6 +904,8 @@ export default {
       question: "先选怎么把录音变成文字（以后可以用 speakmore mode、speakmore model 换）：",
       native: "native 模式：录音直接交给模型",
       local: "local 模式：本机先转写，只把文字交给模型润色（第一次要下载约 {size} 的本地模型）",
+      private: "private 模式：只用本机模型转写，不润色、什么都不上传（第一次要下载约 {size} 的本地模型）",
+      privateOption: "数据隐私    不用 key",
       custom:
         "  想用别的服务（兼容 OpenAI 接口）：装好后运行 speakmore mode local --polish custom/<模型名> --url <地址>",
     },
@@ -962,6 +974,7 @@ export default {
       keyEnvUnverified:
         "这次运行用的是环境变量 {variable} 里的，没有保存；启动时没连上 {provider}，还没验证这把能不能用",
       keyExternal: "连的是单独启动的服务端，key 在那边配",
+      keyNone: "不用 key（数据隐私模式）",
       keySaved: "已保存，验证通过",
       keySavedUnverified: "已保存；启动时没连上 {provider}，还没验证这把能不能用",
       keyChecking: "正在验证…",

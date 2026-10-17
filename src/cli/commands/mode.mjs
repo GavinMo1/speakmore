@@ -1,7 +1,7 @@
 import { msg } from "../../i18n/index.mjs";
-import { downloadSize, findModel } from "../../models/catalog.mjs";
+import { DEFAULT_TRANSCRIBER, downloadSize, findModel } from "../../models/catalog.mjs";
 import { CHAT_VENDORS } from "../../server/chat/vendors.mjs";
-import { keyVendorOf, MODES } from "../../server/modes.mjs";
+import { keyVendorsOf, MODES, usesLocalModel } from "../../server/modes.mjs";
 import { PROVIDERS } from "../../server/providers/index.mjs";
 import { routeOf } from "../../storage/settings.mjs";
 import { Cancelled } from "../ask-secret.mjs";
@@ -12,14 +12,16 @@ import { currentProvider, keySource } from "./key.mjs";
 import { modelStatus, offerDownload } from "./local-models.mjs";
 import { applyChange, checked, ensureKey, modeNow, routeWith } from "./route.mjs";
 
-// speakmore mode：识别模式这一层。看两种模式各用什么、切到另一种。
+// speakmore mode：识别模式这一层。看三种模式各用什么、切到另一种。
 // 模式里的模型各有各的命令：native 是 speakmore model，local 的两跳是 speakmore transcriber 和 speakmore polish，
+// private（数据隐私）的本机模型也是 speakmore transcriber（在 private 里换的是它自己的那一项）。
 // 它们只在自己的模式里能用。第一次进 local 时第二跳还没法换，所以切过去时可以连带那种模式自己的设置。
 
 /** 切到某种模式时能连带的设置，写成命令行参数：参数名 → 设置名（只能是那种模式自己的，storage/settings.mjs 的 MODE_SETTINGS） */
 const MODE_FLAGS = {
   native: { model: "model" },
   local: { transcriber: "transcriber", polish: "polish", url: "customUrl" },
+  private: { transcriber: "privateTranscriber" },
 };
 const FLAG_OPTIONS = {
   model: { type: "string" },
@@ -57,11 +59,14 @@ export async function mode(args, io) {
     io.out(io.t("cli.modes.already", { mode: target, route: io.t.text(routeTitle(route)) }));
     return 0;
   }
-  // local 要用的本机模型还没下载：先问要不要下（下几百兆要用户点头），下好了再问 key、再切
-  if (route.mode === "local" && !modelStatus(io, status, route.transcriber).installed) {
+  // 要用的本机模型（local 的第一跳、private 的那一个）还没下载：先问要不要下（下几百兆要用户点头），下好了再问 key、再切
+  if (usesLocalModel(route) && !modelStatus(io, status, route.transcriber).installed) {
     if (!(await offerDownload(io, route.transcriber))) return 1;
   }
-  if (!(await ensureKey(io, keyVendorOf(route), { mode: target, ...changes }))) return 1;
+  // 路线要几家的 key 就问几家（第一跳交给云端时是两家；private 一家都不要）
+  for (const vendor of keyVendorsOf(route)) {
+    if (!(await ensureKey(io, vendor, { mode: target, ...changes }))) return 1;
+  }
   return applyChange(io, {
     command: "set-mode",
     params: { mode: target, changes },
@@ -77,25 +82,33 @@ export function needUrl(route) {
 
 const MAX_CHOICE_ATTEMPTS = 3;
 
+/** 本机模型多大，选模式时说（第一跳是云端的话按默认的本机模型算） */
+const localSize = (id) => `${Math.round(downloadSize(findModel(id) ?? findModel(DEFAULT_TRANSCRIBER)) / 1_000_000)} MB`;
+
 /**
  * 第一次启动、还没有 key 时先问用哪种模式的哪一家：手里有哪家的 key，因人而异。
  * 按模式分组列出来，选的不是现在设置里那家就记进设置；已经有 key 的标出来，选它就不用再填。
+ * 最后一项是数据隐私模式：只用本机模型转写，不要 key。
  * 自定义服务要地址和模型名，不在这里问：说一句以后怎么切过去。
- * @returns {Promise<object | null>} 选定的那一家；按了 Ctrl-C、或者问够了次数还没选上时是 null（不纠缠）
+ * @returns {Promise<{ mode: string, vendor: object | null } | null>} 选定的模式和那一家（数据隐私模式没有那一家，是 null）；
+ *   按了 Ctrl-C、或者问够了次数还没选上时是 null（不纠缠）
  */
 export async function chooseProvider(io) {
   const { t } = io;
   const current = currentProvider(io);
-  const local = findModel(currentSettings(io).transcriber.value);
+  const settings = currentSettings(io);
   const groups = [
     { mode: "native", vendors: PROVIDERS, title: t("cli.choose.native") },
     {
       mode: "local",
       vendors: CHAT_VENDORS.filter(({ defaultModel }) => defaultModel !== null),
-      title: t("cli.choose.local", { size: `${Math.round(downloadSize(local) / 1_000_000)} MB` }),
+      title: t("cli.choose.local", { size: localSize(settings.transcriber.value) }),
     },
   ];
-  const options = groups.flatMap(({ mode, vendors }) => vendors.map((vendor) => ({ mode, vendor })));
+  const options = [
+    ...groups.flatMap(({ mode, vendors }) => vendors.map((vendor) => ({ mode, vendor }))),
+    { mode: "private", vendor: null },
+  ];
   const lines = ["", t("cli.choose.question")];
   for (const group of groups) {
     lines.push(`  ${group.title}`);
@@ -107,7 +120,11 @@ export async function chooseProvider(io) {
       lines.push(`    ${number}  ${vendor.name.padEnd(9)}${note}`);
     }
   }
-  const fallback = options.findIndex(({ vendor }) => vendor.id === current.id) + 1;
+  lines.push(
+    `  ${t("cli.choose.private", { size: localSize(settings.privateTranscriber.value) })}`,
+    `    ${options.length}  ${t("cli.choose.privateOption")}`,
+  );
+  const fallback = options.findIndex(({ vendor }) => vendor !== null && vendor.id === current?.id) + 1 || 1;
   lines.push(t("cli.choose.custom"), t("cli.model.choosePrompt", { fallback }));
   const question = lines.join("\n");
   for (let attempt = 0; attempt < MAX_CHOICE_ATTEMPTS; attempt++) {
@@ -121,17 +138,19 @@ export async function chooseProvider(io) {
     const chosen =
       answer === ""
         ? options[fallback - 1]
-        : (options[Number(answer) - 1] ?? options.find(({ vendor }) => vendor.id === answer.toLowerCase()));
+        : (options[Number(answer) - 1] ??
+          options.find(({ mode, vendor }) => (vendor?.id ?? mode) === answer.toLowerCase()));
     if (chosen) {
-      if (chosen.vendor.id !== current.id) {
+      if (chosen.mode === "private") storeSetting(io, "mode", "private");
+      else if (chosen.vendor.id !== current?.id) {
         if (chosen.mode === "native") storeSetting(io, "model", chosen.vendor.id);
         else storeSetting(io, "polish", chosen.vendor.id);
         storeSetting(io, "mode", chosen.mode);
       }
-      return chosen.vendor;
+      return chosen;
     }
     const choices = options.map(({ vendor }, index) =>
-      t("cli.model.choiceItem", { number: index + 1, name: vendor.name }),
+      t("cli.model.choiceItem", { number: index + 1, name: vendor?.name ?? t("modes.private") }),
     );
     io.err(t("cli.model.noSuchChoice", { answer, choices: t.either(choices) }));
   }

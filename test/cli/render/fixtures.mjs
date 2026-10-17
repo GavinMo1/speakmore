@@ -33,6 +33,7 @@ export const settings = {
   model: { value: "gemini/gemini-3.6-flash", source: "default" },
   thinking: { value: "MINIMAL", source: "default" },
   transcriber: { value: "qwen3-asr-0.6b-q8", source: "default" },
+  privateTranscriber: { value: "qwen3-asr-0.6b-q8", source: "default" },
   polish: { value: "deepseek/deepseek-flash", source: "default" },
   customUrl: { value: "", source: "default" },
   modelSource: { value: "cn", source: "default" },
