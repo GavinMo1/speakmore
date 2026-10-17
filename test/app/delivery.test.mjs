@@ -87,6 +87,22 @@ test("Windows 上目标窗口是管理员身份的：小帮手没按 Ctrl+V，�
   assert.deepEqual(clipboard, []);
 });
 
+test("Windows 上小帮手没能把文字写进剪贴板（clipboard）：这里再放一次，提示自己粘贴，不提辅助功能", async () => {
+  const win = createTranslator("zh-CN", "win32");
+  const { delivery, clipboard } = setup(async () => ({ ok: false, reason: "clipboard" }));
+  const { notice } = await delivery.completed(payload());
+  assert.equal(win.text(notice), "没能自动粘贴：文字已复制，按 Ctrl+V 粘贴");
+  assert.deepEqual(clipboard, ["我们后天开会。"]);
+});
+
+test("Windows 上模拟按键没成（send_input）：文字已在剪贴板里，提示自己粘贴，不提辅助功能", async () => {
+  const win = createTranslator("zh-CN", "win32");
+  const { delivery, clipboard } = setup(async () => ({ ok: false, reason: "send_input" }));
+  const { notice } = await delivery.completed(payload());
+  assert.equal(win.text(notice), "没能自动粘贴：文字已复制，按 Ctrl+V 粘贴");
+  assert.deepEqual(clipboard, []);
+});
+
 test("粘贴出错：文字放进剪贴板，历史照样记上", async () => {
   const { delivery, rows, clipboard } = setup(async () => {
     throw new Error("原生小帮手退出了");

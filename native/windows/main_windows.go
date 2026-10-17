@@ -149,10 +149,13 @@ func paste(id int, text string) {
 		return
 	}
 	saved, err := board.snapshot()
-	if err != nil {
-		emit(event{"event": "error", "message": "存不下剪贴板：" + err.Error()})
+	restorable := err == nil
+	if !restorable {
+		// 存不下原来的内容就还原不了：这次的字不标成临时的，留在剪贴板和剪贴板历史（Win+V）里，
+		// 用户原来复制的那份在剪贴板历史里也还找得到
+		emit(event{"event": "error", "message": "存不下剪贴板，贴完不还原：" + err.Error()})
 	}
-	if err := board.writeText(text, true); err != nil {
+	if err := board.writeText(text, restorable); err != nil {
 		emit(event{"event": "error", "message": err.Error()})
 		emit(event{"event": "pasted", "id": id, "ok": false, "reason": "clipboard"})
 		return
@@ -164,7 +167,7 @@ func paste(id int, text string) {
 	}
 	time.AfterFunc(restoreDelay, func() {
 		onUIThread(func() {
-			if saved != nil {
+			if restorable {
 				if err := board.restore(saved); err != nil {
 					emit(event{"event": "error", "message": "还原不了剪贴板：" + err.Error()})
 				}

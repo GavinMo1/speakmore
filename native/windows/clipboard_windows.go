@@ -6,6 +6,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"syscall"
 	"time"
@@ -132,8 +133,14 @@ func (c *clipboard) restore(entries []clipboardEntry) error {
 	}
 	defer c.close()
 	procEmptyClipboard.Call()
+	restored := 0
 	for _, entry := range entries {
-		c.put(entry.format, entry.data)
+		if c.put(entry.format, entry.data) {
+			restored++
+		}
+	}
+	if restored < len(entries) {
+		return fmt.Errorf("只还原了 %d 种格式里的 %d 种", len(entries), restored)
 	}
 	return nil
 }

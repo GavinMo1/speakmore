@@ -54,10 +54,16 @@ export function createDelivery({ recordingsDir, history, paste, writeClipboard, 
       try {
         const result = await paste(payload.text);
         if (result.ok) return { notice: null };
-        // 小帮手贴不进去时已经把文字留在剪贴板里了：macOS 上是没有辅助功能权限，
-        // Windows 上是目标窗口以管理员身份运行（elevated），系统不让模拟的按键进去
         log.warn("paste_not_permitted", { audio_id: payload.audioId, reason: result.reason });
-        return { notice: msg(result.reason === "elevated" ? "delivery.elevated" : "delivery.noAccessibility") };
+        // 小帮手贴不进去的几种原因（native/main.swift、native/windows/main_windows.go）：
+        //   not_trusted  macOS 没有辅助功能权限，文字已经留在剪贴板里
+        //   elevated     Windows 上目标窗口以管理员身份运行，系统不让模拟的按键进去，文字已经留在剪贴板里
+        //   clipboard    Windows 上文字没写进剪贴板（被别的程序占着）：这里再放一次，用户才有东西可贴
+        //   send_input   Windows 上模拟按键没成，文字已经在剪贴板里
+        if (result.reason === "not_trusted") return { notice: msg("delivery.noAccessibility") };
+        if (result.reason === "elevated") return { notice: msg("delivery.elevated") };
+        if (result.reason === "clipboard") writeClipboard(payload.text);
+        return { notice: msg("delivery.pasteFailed") };
       } catch (error) {
         log.error("paste_failed", { audio_id: payload.audioId, error: String(error?.message ?? error) });
         writeClipboard(payload.text);
