@@ -162,6 +162,9 @@ function harness({
   app = null,
   appInstall = () => {},
   modelDownload = "finish",
+  // 卸载时按哪个系统的样子做；Windows 那几处（windows-system.mjs）换成记下来、照 system 给的回答
+  platform = "darwin",
+  system = {},
 } = {}) {
   const output = { out: "", err: "" };
   const asked = [];
@@ -176,6 +179,8 @@ function harness({
   const updates = { checks: [], installs: [], starts: [], lookedFor: [], apps: [], opened: [] };
   /** 后台没在运行时命令行自己下载、删除的本机模型（假的模型库：下载一报进度就下完，或者没下下来） */
   const local = { downloads: [], removed: [], sources: [] };
+  /** Windows 上卸载时删过的 Path 项、认过的快捷方式、要等退出后再删的目录 */
+  const windows = { pathEntries: [], shortcuts: [], later: [] };
   const io = {
     out: (text) => {
       output.out += `${text}\n`;
@@ -250,6 +255,19 @@ function harness({
       return confirms.shift() ?? false;
     },
     removeKeychainKey: keychain,
+    platform,
+    system: {
+      removePathEntry: (entry) => {
+        windows.pathEntries.push(entry);
+        return true;
+      },
+      isOurShortcut: (file) => {
+        windows.shortcuts.push(file);
+        return system.ourShortcut?.(file) ?? true;
+      },
+      removeLoginItem: () => system.loginItem ?? false,
+      removeAfterExit: (dirs) => windows.later.push(...dirs),
+    },
     sharedPreferencesFile: join(dir, "com.github.Electron.plist"),
     packageDir,
     updater: {
@@ -289,6 +307,7 @@ function harness({
     daemon,
     updates,
     local,
+    windows,
     speakmore: (...argv) => run(argv, io),
   };
 }
@@ -1430,6 +1449,32 @@ test("uninstall --yes：停掉后台，整个目录、家目录以外的命令�
   assert.doesNotMatch(output.out, /com\.github\.Electron/);
 });
 
+test("uninstall（Windows）：用户 Path 里的那一项、开始菜单的快捷方式、开机启动一起删；不是我们的快捷方式不碰；不提终端的权限", async () => {
+  mkdirSync(paths.binDir, { recursive: true });
+  // 家目录以外的东西放在另一个临时目录（afterEach 会删）
+  outside = mkdtempSync(join(tmpdir(), "sm-link-"));
+  const ours = join(outside, "SpeakMore.lnk");
+  const theirs = join(outside, "Other.lnk");
+  writeFileSync(ours, "快捷方式");
+  writeFileSync(theirs, "别人的快捷方式");
+  writeFileSync(paths.linksFile, `path %USERPROFILE%\\.speakmore\\bin\nshortcut ${ours}\nshortcut ${theirs}\n`);
+  const { speakmore, output, windows } = harness({
+    platform: "win32",
+    keychain: () => false,
+    system: { ourShortcut: (file) => file === ours, loginItem: true },
+  });
+  assert.equal(await speakmore("uninstall", "--yes"), 0);
+  assert.deepEqual(windows.pathEntries, ["%USERPROFILE%\\.speakmore\\bin"]);
+  assert.equal(existsSync(ours), false);
+  assert.equal(readFileSync(theirs, "utf8"), "别人的快捷方式");
+  assert.match(output.out, /用户 Path 里的 %USERPROFILE%/);
+  assert.match(output.out, /开机启动/);
+  assert.doesNotMatch(output.out, /权限/);
+  // 这里没有正在跑的程序，删得掉，不用等退出
+  assert.deepEqual(windows.later, []);
+  assert.equal(existsSync(paths.home), false);
+});
+
 test("uninstall：运行环境在别处留的那个共用的偏好文件，有的话提一句，不删", async () => {
   seedInstalled();
   const { speakmore, output, io } = harness();
@@ -1520,8 +1565,8 @@ test("logs：把日志文件的最后几行打出来，-f 一直跟着；还没�
   await speakmore("logs");
   await speakmore("logs", "-n", "5", "-f");
   assert.deepEqual(tails, [
-    ["-n", "40", paths.logFile],
-    ["-n", "5", "-f", paths.logFile],
+    { file: paths.logFile, lines: 40, follow: false },
+    { file: paths.logFile, lines: 5, follow: true },
   ]);
 });
 

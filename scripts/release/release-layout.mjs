@@ -6,6 +6,9 @@
 //   v0.2.0/speakmore-darwin-arm64.tar.gz.sha256   和 shasum -a 256 的输出同一种格式
 //   v0.2.0/SpeakMore-arm64.dmg                    直接下载的安装包：签了名、过了公证的 SpeakMore.app，两种芯片各一个
 //   v0.2.0/SpeakMore-arm64.dmg.sha256             同上
+//   v0.2.0/speakmore-win32-x64.zip                Windows 的包（0.9 起）：解开同样是 app\ 和 runtime\，install.ps1 照着装
+//   v0.2.0/speakmore-win32-x64.zip.sha256         同上
+//   install.ps1                                   Windows 的安装脚本：irm …/install.ps1 | iex
 
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -14,6 +17,8 @@ import { join } from "node:path";
 export const ARCHS = ["arm64", "x64"];
 export const archiveName = (arch) => `speakmore-darwin-${arch}.tar.gz`;
 export const dmgName = (arch) => `SpeakMore-${arch}.dmg`;
+/** Windows 只出 x64 的一个（Windows on ARM 靠系统自带的转译跑它） */
+export const WINDOWS_ARCHIVE = "speakmore-win32-x64.zip";
 export const versionDir = (version) => `v${version}`;
 
 /** 下载地址上，这个产品的东西都在这个前缀下面 */
@@ -37,7 +42,7 @@ export function planUpload(releaseDir) {
     const path = join(releaseDir, name);
     if (!existsSync(path))
       throw new Error(
-        `发布目录里少了 ${name}。先运行 npm run release（两种芯片都要打；安装包要先在 .machine.env 配好签名和公证）。`,
+        `发布目录里少了 ${name}。先运行 npm run release（两种芯片和 Windows 都要打；安装包要先在 .machine.env 配好签名和公证）。`,
       );
     const immutable = cacheControl === IMMUTABLE;
     return {
@@ -73,7 +78,13 @@ export function planUpload(releaseDir) {
       ...withChecksum(dmgName(arch), "application/x-apple-diskimage"),
     );
   }
-  items.push(item("install.sh", MUTABLE, "text/x-shellscript; charset=utf-8"), latest);
+  items.push(...withChecksum(WINDOWS_ARCHIVE, "application/zip"));
+  // install.ps1 要按 UTF-8 读：irm 照 charset 解码，里面有中文注释
+  items.push(
+    item("install.sh", MUTABLE, "text/x-shellscript; charset=utf-8"),
+    item("install.ps1", MUTABLE, "text/plain; charset=utf-8"),
+    latest,
+  );
   return items;
 }
 

@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
-import { ensureHome, keyFile, legacyDataDir, oldAppKeyFile, resolvePaths } from "../../src/storage/paths.mjs";
+import {
+  ensureHome,
+  installedHomeOf,
+  keyFile,
+  legacyDataDir,
+  oldAppKeyFile,
+  resolvePaths,
+} from "../../src/storage/paths.mjs";
 import { assertOwnerOnlyDir } from "../helpers/owner-only.mjs";
 
 const zh = createTranslator("zh-CN");
@@ -114,4 +121,15 @@ test("Windows 上同样是用户目录下的 .speakmore 一个目录；控制通
 test("0.1 版放数据的地方：家目录的 Application Support/SpeakMore；0.1 只有 macOS 版，别的系统上没有", () => {
   assert.equal(legacyDataDir("/Users/someone", "darwin"), "/Users/someone/Library/Application Support/SpeakMore");
   assert.equal(legacyDataDir("C:\\Users\\someone", "win32"), null);
+});
+
+test("Windows 上装好的那一份：从程序的位置（<家目录>\\runtime\\electron.exe、旁边有 app）找回家目录；别的摆法是 null", () => {
+  const exists = (path) => path === "D:\\SpeakMore\\app\\package.json";
+  assert.equal(installedHomeOf("D:\\SpeakMore\\runtime\\electron.exe", exists), "D:\\SpeakMore");
+  assert.equal(installedHomeOf("D:\\SpeakMore\\runtime\\Electron.EXE", exists), "D:\\SpeakMore");
+  // 从源码跑的：node_modules 里的 electron.exe
+  assert.equal(installedHomeOf("C:\\dev\\speakmore\\node_modules\\electron\\dist\\electron.exe", exists), null);
+  // 旁边没有 app
+  assert.equal(installedHomeOf("E:\\other\\runtime\\electron.exe", exists), null);
+  assert.equal(installedHomeOf("/Users/someone/.speakmore/runtime/Electron.app/Contents/MacOS/Electron", exists), null);
 });

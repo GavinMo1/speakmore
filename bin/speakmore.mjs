@@ -9,10 +9,10 @@ if (versionProblem) {
   process.exit(1);
 }
 
-// 这句说在读设置之前，按终端的语言说
-const { createTranslator, localesFromEnv, matchLocale } = await import("../src/i18n/index.mjs");
-if (process.platform !== "darwin") {
-  console.error(createTranslator(matchLocale(localesFromEnv(process.env)))("cli.macOnly"));
+// 这句说在读设置之前，按终端的语言说。听热键、贴字靠各系统自己的原生小帮手，目前有 macOS 和 Windows 的
+const { createTranslator, terminalLocales, matchLocale } = await import("../src/i18n/index.mjs");
+if (process.platform !== "darwin" && process.platform !== "win32") {
+  console.error(createTranslator(matchLocale(terminalLocales(process.env)))("cli.macOnly"));
   process.exit(1);
 }
 
@@ -41,8 +41,8 @@ process.exitCode = await main(process.argv.slice(2));
  */
 async function inTerminalLanguage(problem) {
   try {
-    const { createTranslator, localesFromEnv, matchLocale } = await import("../src/i18n/index.mjs");
-    return createTranslator(matchLocale(localesFromEnv(process.env))).text(problem);
+    const { createTranslator, terminalLocales, matchLocale } = await import("../src/i18n/index.mjs");
+    return createTranslator(matchLocale(terminalLocales(process.env))).text(problem);
   } catch {
     return problem.english;
   }

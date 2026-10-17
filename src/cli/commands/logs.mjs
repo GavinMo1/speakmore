@@ -16,5 +16,5 @@ export async function logs(args, io) {
     io.out(io.t("cli.logs.none", { file: io.paths.logFile }));
     return 0;
   }
-  return io.tail(["-n", String(lines), ...(values.follow ? ["-f"] : []), io.paths.logFile]);
+  return io.tail({ file: io.paths.logFile, lines, follow: values.follow });
 }

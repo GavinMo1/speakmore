@@ -748,7 +748,8 @@ export default {
   speakmore help                This help
   speakmore --version           Version
 `,
-    macOnly: "SpeakMore only supports macOS for now: listening for the hotkey and pasting rely on macOS system APIs.",
+    macOnly:
+      "SpeakMore only supports macOS and Windows for now: listening for the hotkey and pasting rely on each system's own APIs.",
     nodeVersion: "SpeakMore needs Node 22.13 or newer (23.4 or newer on the 23 line); this is {version}.",
     unknownCommand: "There's no command called {name}.",
     seeHelp: "Run speakmore help to see all commands.",
@@ -1121,6 +1122,9 @@ speakmore help     all commands`,
       keychainItem: "the keychain item used to encrypt keys",
       keychainFailed:
         "The keychain item used to encrypt keys wasn't deleted ({reason}): search for SpeakMore in Keychain Access and delete it by hand",
+      pathEntry: "{entry} in your user Path",
+      loginItem: "Open at login",
+      afterExit: "The program files are in use by this command; they're removed a few seconds after it exits",
       removedAll: "{home} (the program, runtime, and your {yours})",
       done: "SpeakMore uninstalled.",
       removed: "Deleted: {item}",
@@ -1160,6 +1164,13 @@ speakmore help     all commands`,
 
   // Windows 上说法不同的那几句，名字照抄通用的（见 src/i18n/index.mjs 开头）
   windows: {
+    cli: {
+      daemon: {
+        stuckNoPid:
+          "SpeakMore is stuck and not answering, and its process can't be identified. In Task Manager's Details tab, find electron.exe and end it.",
+        cantStop: "Can't stop SpeakMore (PID {pid}). End it in Task Manager.",
+      },
+    },
     permissions: { openSettings: "Settings" },
     settings: {
       describe: {

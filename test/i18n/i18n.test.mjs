@@ -12,6 +12,7 @@ import {
   problemOf,
   resolveLocale,
   SYSTEM_LOCALE,
+  terminalLocales,
 } from "../../src/i18n/index.mjs";
 
 const en = createTranslator("en");
@@ -164,4 +165,12 @@ test("按系统说法不同的话：Windows 上先找 windows 那一节，没有
   assert.equal(winZh("plaza.via.local"), "本机");
   // 不分系统的照常
   assert.equal(winZh("hotkeys.right_alt.name"), "右 Alt 键");
+});
+
+test("命令行的语言：先看 LC_ALL、LC_MESSAGES、LANG；Windows 的终端一般都不设，这时用系统的显示语言", () => {
+  const systemLocale = () => "zh-CN";
+  assert.deepEqual(terminalLocales({ LANG: "en_US.UTF-8" }, { platform: "win32", systemLocale }), ["en-US"]);
+  assert.deepEqual(terminalLocales({}, { platform: "win32", systemLocale }), ["zh-CN"]);
+  // macOS 的终端都会设，没设就是没说，不去猜
+  assert.deepEqual(terminalLocales({}, { platform: "darwin", systemLocale }), []);
 });

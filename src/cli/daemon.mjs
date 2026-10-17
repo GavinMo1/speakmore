@@ -46,15 +46,29 @@ function logTail(file, lines = 8) {
   }
 }
 
-/** 这个进程号现在跑的是什么命令；没有这个进程（或者查不了）时是 null */
+/**
+ * 这个进程号现在跑的是什么命令；没有这个进程（或者查不了）时是 null。
+ * Windows 没有 ps：问 PowerShell 它的可执行文件在哪（一次几百毫秒，只在它卡住不答话、要强行结束时才用得上）
+ */
 function commandOfProcess(pid) {
   try {
+    if (process.platform === "win32") {
+      const script = `(Get-Process -Id ${Number(pid)} -ErrorAction Stop).Path`;
+      const path = execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], {
+        encoding: "utf8",
+        windowsHide: true,
+      });
+      return path.trim() || null;
+    }
     return execFileSync("ps", ["-o", "command=", "-p", String(pid)], { encoding: "utf8" }).trim() || null;
   } catch {
     // 没有这个进程时 ps 以 1 退出。查不了就当不认识：宁可让用户自己去结束，也不结束一个说不清是谁的进程
     return null;
   }
 }
+
+/** 后台应用的主进程跑的是哪个可执行文件（见 recordedPid） */
+const OUR_EXECUTABLE = /\/MacOS\/(Electron|SpeakMore)( |$)|\\electron\.exe$/i;
 
 /** 启动途中在等什么（文案里的名字）。只说用户看得见、需要他动手或等一下的那两种 */
 function startingHint(status) {
@@ -140,8 +154,8 @@ export function createDaemon({
     const pid = Number(text.trim());
     if (!Number.isInteger(pid) || pid <= 1) return null;
     // 进程号会被系统分给别的程序，所以还要看它跑的是不是我们：命令启动的主进程是 …/MacOS/Electron，
-    // 装成应用的是 …/MacOS/SpeakMore。只看有没有 "Electron" 字样不够，别的应用的辅助进程路径里也有
-    return /\/MacOS\/(Electron|SpeakMore)( |$)/.test(commandOf(pid) ?? "") ? pid : null;
+    // 装成应用的是 …/MacOS/SpeakMore，Windows 上是 …\\electron.exe。只看有没有 "Electron" 字样不够，别的应用的辅助进程路径里也有
+    return OUR_EXECUTABLE.test(commandOf(pid) ?? "") ? pid : null;
   }
 
   return {
@@ -167,6 +181,7 @@ export function createDaemon({
       let ended = null;
       const child = spawn(electron, [packageDir], {
         detached: true,
+        windowsHide: true,
         stdio: ["ignore", logFd, logFd],
         env: { ...childEnv, SPEAKMORE_CLI: "1" },
       });

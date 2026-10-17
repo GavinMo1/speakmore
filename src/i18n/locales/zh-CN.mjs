@@ -736,7 +736,7 @@ export default {
   speakmore help                这段说明
   speakmore --version           版本号
 `,
-    macOnly: "SpeakMore 目前只支持 macOS：听热键和贴字靠的是 macOS 的系统接口。",
+    macOnly: "SpeakMore 目前只支持 macOS 和 Windows：听热键和贴字靠的是这两个系统各自的接口。",
     nodeVersion: "SpeakMore 需要 Node 22.13 或更新的版本（23 系列要 23.4 以上），现在是 {version}。",
     unknownCommand: "没有 {name} 这个命令。",
     seeHelp: "运行 speakmore help 看全部命令。",
@@ -1079,6 +1079,10 @@ speakmore help     全部命令`,
       keychainItem: "钥匙串里用来加密 key 的那一条",
       keychainFailed: "钥匙串里用来加密 key 的那一条没删掉（{reason}）：可以在“钥匙串访问”里搜 SpeakMore 手动删",
       removedAll: "{home}（程序、运行环境，以及你的{yours}）",
+      // Windows：install.ps1 在用户 Path 里加的那一项、App 设置里开过的开机启动
+      pathEntry: "用户 Path 里的 {entry}",
+      loginItem: "开机启动",
+      afterExit: "程序文件正被这条命令用着，等它退出后几秒内删掉",
       done: "SpeakMore 已经卸载。",
       removed: "删掉了：{item}",
       kept: "留着：{home} 里的{yours}。重新安装之后接着用；不要了就把这个目录删掉",
@@ -1114,6 +1118,13 @@ speakmore help     全部命令`,
 
   // Windows 上说法不同的那几句，名字照抄通用的（见 src/i18n/index.mjs 开头）。"本机"这类不分系统的不写
   windows: {
+    cli: {
+      daemon: {
+        stuckNoPid:
+          "SpeakMore 卡住了不答话，也认不出它的进程号。在“任务管理器”的“详细信息”里找到 electron.exe，结束它。",
+        cantStop: "SpeakMore 停不掉（进程号 {pid}）。在“任务管理器”里结束它。",
+      },
+    },
     permissions: { openSettings: "设置" },
     setup: { openSettings: "任务栏通知区域的图标 › 设置" },
     key: {

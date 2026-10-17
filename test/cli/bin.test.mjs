@@ -9,7 +9,10 @@ import { resolvePaths } from "../../src/storage/paths.mjs";
 
 const BIN = resolve(import.meta.dirname, "..", "..", "bin", "speakmore.mjs");
 
-test("输出接到 head 这类只读开头就关掉的程序上：安静地结束，不甩一屏报错", (t) => {
+// 管道那头关掉时 Windows 报的不是 EPIPE 那一套，而且没有 head 和 bash 可用：只在 macOS 上查
+const posixPipes = { skip: process.platform === "win32" && "Windows 上没有 bash 和 head" };
+
+test("输出接到 head 这类只读开头就关掉的程序上：安静地结束，不甩一屏报错", posixPipes, (t) => {
   const dir = mkdtempSync(join(tmpdir(), "sm-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   // 历史要多到一次写不完：管道那头关掉时这边还在写
@@ -51,7 +54,8 @@ test("说什么语言：设置里写了就用它；跟随系统时看终端的 L
   assert.match(helpIn({ LANG: "zh_CN.UTF-8", LC_ALL: "en_GB.UTF-8" }), /^SpeakMore: press a hotkey/);
   // 繁体、日文、C：我们没有，用英文
   for (const LANG of ["zh_TW.UTF-8", "ja_JP.UTF-8", "C"]) assert.match(helpIn({ LANG }), /^SpeakMore: press/, LANG);
-  assert.match(helpIn({}), /^SpeakMore: press/);
+  // 什么都没设：macOS 上按英文；Windows 的终端一般不设这几个，按系统的显示语言（i18n 的测试查）
+  if (process.platform !== "win32") assert.match(helpIn({}), /^SpeakMore: press/);
 
   // 设置里定了的话盖过终端的语言；环境变量 SPEAKMORE_LANGUAGE 又盖过设置
   writeFileSync(resolvePaths({ SPEAKMORE_HOME: dir }).settingsFile, JSON.stringify({ language: "zh-CN" }));

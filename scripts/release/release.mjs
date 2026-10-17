@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 // 打发布包：一个自带一切的压缩包，安装脚本（install.sh）把它解进 ~/.speakmore 就能用。
-// 用法：npm run release              两种芯片各打一个
-//       npm run release -- arm64     只打一种（arm64 或 x64）
+// 用法：npm run release              两种芯片的 Mac 各打一个，再打一个 Windows 的
+//       npm run release -- arm64     只打一种（arm64、x64，或者 windows）
 //
 // 产物在 dist/release/，摆成下载地址上的样子（见 release-layout.mjs），所以它本身就能当下载地址用，
 // 发新版本用 npm run ship，它会调这里打包、再传上去。包里有两个目录，解开后直接就是家目录里的样子：
 //   app/      程序：代码、运行时依赖、编好的小帮手（两种芯片合一）
 //   runtime/  运行环境：原版的 Electron.app。命令行和后台应用都用它跑，所以用的人不需要装 Node
 // 装的人不需要 npm、Node、Xcode：这些活都在这里做完了。
+//
+// Windows 的包（speakmore-win32-x64.zip）也在这台 Mac 上打：一样是 app\ 和 runtime\（原版的 Electron），
+// install.ps1 把它解进 %USERPROFILE%\.speakmore。小帮手用项目自带的 Go 交叉编译（scripts/build/go.sh），
+// 运行库按 win32-x64 装（npm 的 --os、--cpu）。没签名：Windows 上暂时不签（见 docs/development.md）。
 //
 // 另外每种芯片打一个直接下载的安装包（SpeakMore-<芯片>.dmg）：签了名、过了公证的 SpeakMore.app，
 // 要本机配好签名和公证（.machine.env 的 MAC_SIGNING_IDENTITY、MAC_NOTARY_PROFILE），没配就不打，发布时会因为缺它传不上去。
@@ -22,20 +26,22 @@ import { makeDmg } from "../build/dmg.mjs";
 import { packageMacApp } from "../build/mac-app.mjs";
 import { signingConfig } from "../build/signing.mjs";
 import { APP_ENTRIES, stageApp } from "../build/stage-app.mjs";
-import { ARCHS, archiveName, dmgName, sha256, versionDir } from "./release-layout.mjs";
+import { ARCHS, archiveName, dmgName, sha256, versionDir, WINDOWS_ARCHIVE } from "./release-layout.mjs";
 
 const packageDir = resolve(import.meta.dirname, "../..");
 const outDir = join(packageDir, "dist", "release");
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const megabytes = (file) => `${(statSync(file).size / 1024 / 1024).toFixed(0)} MB`;
 
+const WINDOWS = "windows";
 const wanted = process.argv.slice(2);
-const unknown = wanted.filter((arch) => !ARCHS.includes(arch));
+const unknown = wanted.filter((arch) => !ARCHS.includes(arch) && arch !== WINDOWS);
 if (unknown.length > 0) {
-  console.error(`不认识的芯片：${unknown.join("、")}。能填：${ARCHS.join(" / ")}`);
+  console.error(`不认识的芯片：${unknown.join("、")}。能填：${[...ARCHS, WINDOWS].join(" / ")}`);
   process.exit(2);
 }
-const archs = wanted.length > 0 ? wanted : ARCHS;
+const archs = wanted.length > 0 ? wanted.filter((arch) => arch !== WINDOWS) : ARCHS;
+const windows = wanted.length === 0 || wanted.includes(WINDOWS);
 // 先读：配错了在编译、打包之前就说
 const signing = signingConfig(packageDir);
 
@@ -45,10 +51,10 @@ const electronVersion = readJson(join(electronDir, "package.json")).version;
 /** electron 这个包里带着每个下载件应有的 SHA-256，而它自己的完整性由我们的锁文件管着 */
 const electronChecksums = readJson(join(electronDir, "checksums.json"));
 
-/** 下载（有缓存就用缓存）这种芯片的 Electron，核对过校验值之后解到 dest 里 */
-async function addRuntime(arch, dest) {
-  const zip = await downloadArtifact({ version: electronVersion, platform: "darwin", arch, artifactName: "electron" });
-  const name = `electron-v${electronVersion}-darwin-${arch}.zip`;
+/** 下载（有缓存就用缓存）这个系统、这种芯片的 Electron，核对过校验值之后解到 dest 里 */
+async function addRuntime(platform, arch, dest) {
+  const zip = await downloadArtifact({ version: electronVersion, platform, arch, artifactName: "electron" });
+  const name = `electron-v${electronVersion}-${platform}-${arch}.zip`;
   const expected = electronChecksums[name];
   const actual = sha256(zip);
   if (!expected || actual !== expected) {
@@ -59,7 +65,8 @@ async function addRuntime(arch, dest) {
   execFileSync("ditto", ["-x", "-k", zip, dest]);
 }
 
-buildHelper(packageDir, { universal: true });
+if (archs.length > 0) buildHelper(packageDir, { universal: true });
+if (windows) buildHelper(packageDir, { platform: "win32" });
 
 const staging = mkdtempSync(join(tmpdir(), "speakmore-release-"));
 try {
@@ -77,7 +84,7 @@ try {
 
     const runtimeDir = join(staging, "runtime");
     rmSync(runtimeDir, { recursive: true, force: true });
-    await addRuntime(arch, runtimeDir);
+    await addRuntime("darwin", arch, runtimeDir);
 
     const archive = join(outDir, versionDir(version), archiveName(arch));
     execFileSync("tar", ["-czf", archive, "-C", staging, "app", "runtime"], {
@@ -85,6 +92,20 @@ try {
       env: { ...process.env, COPYFILE_DISABLE: "1" },
     });
     // 和 shasum -a 256 的输出同一种格式，安装脚本直接拿来核对
+    writeFileSync(`${archive}.sha256`, `${sha256(archive)}  ${basename(archive)}\n`);
+    console.log(`打好了：${archive}（${megabytes(archive)}）`);
+  }
+
+  if (windows) {
+    for (const name of ["app", "runtime"]) rmSync(join(staging, name), { recursive: true, force: true });
+    const appDir = join(staging, "app");
+    mkdirSync(appDir);
+    stageApp(packageDir, appDir, ["bin", ...APP_ENTRIES, "LICENSE"], "x64", "win32");
+    rmSync(join(appDir, "package-lock.json"));
+    await addRuntime("win32", "x64", join(staging, "runtime"));
+    const archive = join(outDir, versionDir(version), WINDOWS_ARCHIVE);
+    // zip 而不是 tar.gz：Windows 自带的 PowerShell 5.1 用 .NET 就解得开。-X 不存 Unix 的属主这些
+    execFileSync("zip", ["-q", "-r", "-X", archive, "app", "runtime"], { cwd: staging });
     writeFileSync(`${archive}.sha256`, `${sha256(archive)}  ${basename(archive)}\n`);
     console.log(`打好了：${archive}（${megabytes(archive)}）`);
   }
@@ -114,5 +135,6 @@ if (signing?.notaryProfile) {
 
 // 安装脚本和发布包放在一起：下载地址上的和仓库里的是同一份
 cpSync(join(packageDir, "install.sh"), join(outDir, "install.sh"));
+cpSync(join(packageDir, "install.ps1"), join(outDir, "install.ps1"));
 writeFileSync(join(outDir, "latest"), `${versionDir(version)}\n`);
 console.log(`\nSpeakMore ${version}（Electron ${electronVersion}）的发布包在 ${outDir}`);

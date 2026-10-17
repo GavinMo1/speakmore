@@ -79,6 +79,22 @@ export function localesFromEnv(env) {
 }
 
 /**
+ * 命令行的"系统语言"。先照惯例看 LC_ALL、LC_MESSAGES、LANG；Windows 的终端一般不设这几个，
+ * 都没设时用系统的显示语言（Node 从系统取的那个，中文系统是 zh-CN）
+ * @param {Record<string, string | undefined>} env
+ * @param {{ platform?: NodeJS.Platform, systemLocale?: () => string }} [options] 测试时换掉
+ * @returns {string[]}
+ */
+export function terminalLocales(
+  env,
+  { platform = process.platform, systemLocale = () => Intl.DateTimeFormat().resolvedOptions().locale } = {},
+) {
+  const fromEnv = localesFromEnv(env);
+  if (fromEnv.length > 0 || platform !== "win32") return fromEnv;
+  return [systemLocale()];
+}
+
+/**
  * 设置里写的语言 → 这一次用哪种。
  * @param {string} setting SYSTEM_LOCALE 或者某种语言的 id
  * @param {readonly string[]} systemPreferred 系统偏好的语言，跟随系统时用

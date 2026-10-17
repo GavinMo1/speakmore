@@ -45,9 +45,14 @@ for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
   sleep 10
 done
 [ "$(curl -fsS "${DOWNLOAD_URL}/latest")" = "${tag}" ] || fail "传上去了，但下载地址上的 latest 两分钟后还不是 ${tag}"
-for arch in arm64 x64; do
-  for sum in "${tag}/speakmore-darwin-${arch}.tar.gz.sha256" "${tag}/SpeakMore-${arch}.dmg.sha256"; do
-    [ "$(curl -fsS "${DOWNLOAD_URL}/${sum}")" = "$(cat "dist/release/${sum}")" ] || fail "下载地址上 ${sum} 和本机的不一样"
-  done
+for sum in \
+  "${tag}/speakmore-darwin-arm64.tar.gz.sha256" "${tag}/SpeakMore-arm64.dmg.sha256" \
+  "${tag}/speakmore-darwin-x64.tar.gz.sha256" "${tag}/SpeakMore-x64.dmg.sha256" \
+  "${tag}/speakmore-win32-x64.zip.sha256"; do
+  [ "$(curl -fsS "${DOWNLOAD_URL}/${sum}")" = "$(cat "dist/release/${sum}")" ] || fail "下载地址上 ${sum} 和本机的不一样"
 done
-echo "发好了：${tag}。下载地址上的最新版本、两个包和两个安装包的校验值都对得上。"
+for script in install.sh install.ps1; do
+  [ "$(curl -fsS "${DOWNLOAD_URL}/${script}" | shasum -a 256)" = "$(shasum -a 256 <"${script}")" ] ||
+    fail "下载地址上的 ${script} 和仓库里的不一样（CDN 缓存一分钟，等一下再查）"
+done
+echo "发好了：${tag}。下载地址上的最新版本、Mac 两个包、两个安装包、Windows 的包和两个安装脚本都对得上。"

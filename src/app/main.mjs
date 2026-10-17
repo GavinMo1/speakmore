@@ -1,4 +1,4 @@
-import { rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   app,
@@ -28,7 +28,7 @@ import { findVendor, VENDORS } from "../server/vendors.mjs";
 import { adoptAppKeys } from "../storage/app-keys.mjs";
 import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
-import { ensureHome, keyFile, oldAppKeyFile, resolvePaths } from "../storage/paths.mjs";
+import { ensureHome, installedHomeOf, keyFile, oldAppKeyFile, resolvePaths } from "../storage/paths.mjs";
 import {
   HOTKEY_IDS,
   hotkeyName,
@@ -67,6 +67,12 @@ let PATHS;
 let SETTINGS;
 /** 启动时走哪条路线（server/modes.mjs）。之后可以在设置里改用别家（keys.use），正在走的以 service.route 为准 */
 let ROUTE;
+// Windows 上从开始菜单、开机启动起的没有 SPEAKMORE_HOME：家目录照程序装在哪找回来（装在默认位置时两者一样）
+if (process.platform === "win32" && !process.env.SPEAKMORE_HOME) {
+  const home = installedHomeOf(process.execPath, existsSync);
+  if (home) process.env.SPEAKMORE_HOME = home;
+}
+
 try {
   PATHS = resolvePaths(process.env);
   SETTINGS = resolveSettings({ file: PATHS.settingsFile, env: process.env });
@@ -134,8 +140,18 @@ if (WINDOWS) app.setAppUserModelId("com.zephyrxiang.speakmore");
 // ~/Library/Application Support 下另开一个目录放 Chromium 的缓存和状态，把它也收进来，和我们的数据分开放
 app.setPath("userData", PATHS.cacheDir);
 
-// 打成应用后没有终端，日志自己写文件。由命令启动时标准输出已经被接到同一个文件里了
-if (app.isPackaged) alsoLogTo(PATHS.logFile);
+/**
+ * Windows 上装好的那一份：程序就在家目录的 runtime 里。没有单独的"应用"：命令行起的、开始菜单起的都是它，
+ * 用的是同一套 key 和设置（不像 macOS 的 SpeakMore.app 有自己的一套权限）
+ */
+const INSTALLED_ON_WINDOWS =
+  WINDOWS && process.execPath.toLowerCase().startsWith(`${PATHS.runtimeDir.toLowerCase()}\\`);
+/** 开机启动登记的是这个可执行文件加上程序目录（Windows 上没有应用包，要把参数也记下来） */
+const LOGIN_ITEM = WINDOWS ? { path: process.execPath, args: [app.getAppPath()], name: "SpeakMore" } : {};
+
+// 打成应用后没有终端，日志自己写文件。由命令启动时标准输出已经被接到同一个文件里了。
+// Windows 上从开始菜单起的（不是命令行起的）也没有终端
+if (app.isPackaged || (INSTALLED_ON_WINDOWS && !LAUNCHED_BY_CLI)) alsoLogTo(PATHS.logFile);
 
 // 同一个家目录只跑一个。这里给的数据会随 second-instance 事件送到已经在运行的那一个手里
 const isOnlyInstance = app.requestSingleInstanceLock({ byCli: LAUNCHED_BY_CLI });
@@ -584,7 +600,10 @@ async function main() {
       theme: { value: theme.id, choices: THEMES.map(({ id }) => id) },
       language: { value: languageSetting, locale },
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
-      openAtLogin: { supported: app.isPackaged, enabled: app.getLoginItemSettings().openAtLogin },
+      openAtLogin: {
+        supported: app.isPackaged || INSTALLED_ON_WINDOWS,
+        enabled: app.getLoginItemSettings(LOGIN_ITEM).openAtLogin,
+      },
       home: PATHS.home,
       version: app.getVersion(),
       // 正在用 key 的那一家；数据隐私模式不用 key，是 null
@@ -769,8 +788,8 @@ async function main() {
     reverifyKeyInBackground();
   });
   handle("setup:set-open-at-login", (_event, enabled) => {
-    if (!app.isPackaged) throw new Error("从终端启动时不能设置开机启动");
-    app.setLoginItemSettings({ openAtLogin: Boolean(enabled) });
+    if (!app.isPackaged && !INSTALLED_ON_WINDOWS) throw new Error("从终端启动时不能设置开机启动");
+    app.setLoginItemSettings({ ...LOGIN_ITEM, openAtLogin: Boolean(enabled) });
     log.info("open_at_login", { enabled: Boolean(enabled) });
     setupChanged();
   });

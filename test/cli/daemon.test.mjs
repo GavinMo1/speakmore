@@ -246,6 +246,9 @@ test("卡住不答话时也停得掉：照它启动时记下的进程号结束�
   for (const command of [
     "/pkg/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron /pkg",
     "/Applications/SpeakMore.app/Contents/MacOS/SpeakMore",
+    // Windows：装好的那份和从源码跑的都是 electron.exe
+    "C:\\Users\\someone\\.speakmore\\runtime\\electron.exe",
+    "C:\\dev\\speakmore\\node_modules\\electron\\dist\\electron.exe",
   ]) {
     processes = fakeProcesses();
     processes.alive.add(4321);
@@ -270,6 +273,8 @@ test("卡住不答话，进程号又对不上（没记下来，或者那个号�
   const otherApp =
     "/Applications/Other.app/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler";
   await assert.rejects(stuck({ commandOf: () => otherApp }), said(/活动监视器/));
+  // Windows 上别的 Electron 应用（名字不叫 electron.exe）也不认
+  await assert.rejects(stuck({ commandOf: () => "C:\\Program Files\\Slack\\slack.exe" }), said(/活动监视器/));
   await assert.rejects(stuck({ commandOf: () => null }), said(/活动监视器/));
   writeFileSync(paths.pidFile, "不是数字");
   await assert.rejects(stuck(), said(/活动监视器/));

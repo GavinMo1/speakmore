@@ -7,11 +7,11 @@ import { ControlError, TimeoutError } from "../control.mjs";
 import {
   createTranslator,
   LocalizedError,
-  localesFromEnv,
   msg,
   problemOf,
   resolveLocale,
   SYSTEM_LOCALE,
+  terminalLocales,
 } from "../i18n/index.mjs";
 import { log } from "../log.mjs";
 import { createLocalModels } from "../models/library.mjs";
@@ -37,7 +37,9 @@ import { update } from "./commands/update.mjs";
 import { usage } from "./commands/usage.mjs";
 import { ConfigError, UsageError } from "./common.mjs";
 import { createDaemon } from "./daemon.mjs";
+import { tailFile } from "./tail.mjs";
 import { createUpdater } from "./updater.mjs";
+import { isOurShortcut, removeAfterExit, removeLoginItem, removePathEntry } from "./windows-system.mjs";
 
 // speakmore 命令：把"装好依赖、编小帮手、起后台应用、填 key、看历史、改设置"收成几个子命令。
 // 真正干活的是后台应用（src/app），这里通过控制通道指挥它；历史和设置文件则直接读写。
@@ -115,8 +117,12 @@ export async function run(argv, io) {
   }
 }
 
-/** 删掉钥匙串里加密 key 用的那一条。@returns {boolean} 本来有没有 */
+/**
+ * 删掉钥匙串里加密 key 用的那一条。@returns {boolean} 本来有没有。
+ * Windows 上加密 key 的那把钥匙由系统按用户保管（DPAPI），加密后的那份放在运行环境的缓存里，随家目录一起删掉，这里没有要删的
+ */
 function removeKeychainKey(productName) {
+  if (process.platform === "win32") return false;
   try {
     execFileSync("security", ["delete-generic-password", "-s", `${productName} Safe Storage`], { stdio: "pipe" });
     return true;
@@ -164,7 +170,7 @@ function cliLocale(paths, env) {
   } catch {
     setting = SYSTEM_LOCALE;
   }
-  return resolveLocale(setting, localesFromEnv(env));
+  return resolveLocale(setting, terminalLocales(env));
 }
 
 /** 真实运行时的 io：标准输入输出、真的后台应用、真的历史库 */
@@ -203,16 +209,23 @@ export function createIo({ packageDir, env = process.env }) {
     askSecret,
     ask,
     confirm,
+    platform: process.platform,
+    // Windows 上卸载时要动的几处（windows-system.mjs）
+    system: { removePathEntry, isOurShortcut, removeLoginItem, removeAfterExit },
     // 钥匙串里那一条的名字是 Electron 按应用名起的
     removeKeychainKey: () => removeKeychainKey(manifest.productName),
-    // 自带的是原版 Electron，系统按它的应用标识在这里记了一份偏好。卸载时只提一句，不删：别的程序也在用
-    sharedPreferencesFile: join(homedir(), "Library", "Preferences", "com.github.Electron.plist"),
-    tail: (args) =>
-      new Promise((resolveExit, reject) => {
-        const child = spawn("tail", args, { stdio: "inherit" });
-        child.on("error", reject);
-        child.on("exit", (code) => resolveExit(code ?? 0));
-      }),
+    // 自带的是原版 Electron，macOS 按它的应用标识在这里记了一份偏好。卸载时只提一句，不删：别的程序也在用。Windows 上没有
+    sharedPreferencesFile:
+      process.platform === "darwin" ? join(homedir(), "Library", "Preferences", "com.github.Electron.plist") : null,
+    // Windows 没有 tail，用自己写的（tail.mjs）
+    tail: ({ file, lines, follow }) =>
+      process.platform === "win32"
+        ? tailFile(file, { lines, follow, write: (text) => process.stdout.write(text) })
+        : new Promise((resolveExit, reject) => {
+            const child = spawn("tail", ["-n", String(lines), ...(follow ? ["-f"] : []), file], { stdio: "inherit" });
+            child.on("error", reject);
+            child.on("exit", (code) => resolveExit(code ?? 0));
+          }),
   };
 }
 
@@ -223,7 +236,7 @@ export async function main(argv) {
     io = createIo({ packageDir: resolve(import.meta.dirname, "../..") });
   } catch (error) {
     // 数据目录的路径不合用：还没有 io 可用，按终端的语言直接说
-    const t = createTranslator(resolveLocale(SYSTEM_LOCALE, localesFromEnv(process.env)));
+    const t = createTranslator(resolveLocale(SYSTEM_LOCALE, terminalLocales(process.env)));
     console.error(t.text(problemOf(error)));
     return 2;
   }

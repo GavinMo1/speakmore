@@ -82,6 +82,22 @@ export function resolvePaths(env = process.env, userHome = homedir(), platform =
 }
 
 /**
+ * Windows 上装好的那一份在哪个家目录里：程序是 <家目录>\runtime\electron.exe，旁边有 app。
+ * 从开始菜单、开机启动起的没有 SPEAKMORE_HOME（只有 speakmore 命令会设），装在别处时靠这个找回家目录。
+ * 不是这种摆法（从源码跑的、macOS）是 null
+ * @param {string} execPath 正在跑的可执行文件
+ * @param {(path: string) => boolean} exists
+ */
+export function installedHomeOf(execPath, exists) {
+  const path = win32;
+  if (path.basename(execPath).toLowerCase() !== "electron.exe") return null;
+  const runtime = path.dirname(execPath);
+  if (path.basename(runtime).toLowerCase() !== "runtime") return null;
+  const home = path.dirname(runtime);
+  return exists(path.join(home, "app", "package.json")) ? home : null;
+}
+
+/**
  * 某一家模型的 key 加密后存在哪。0.3 以前只有 Gemini，文件就叫 gemini-key.bin，所以这个命名不用迁移。
  * App 和命令行启动的后台共用这一个文件：加密用的密钥在钥匙串里只有一条（"SpeakMore Safe Storage"），两边都在它的
  * 访问名单上，解得开对方存的密文（2026-10-16 实测）。0.7.0 及以前以为两边互相解不开，App 另存一份（oldAppKeyFile）。
