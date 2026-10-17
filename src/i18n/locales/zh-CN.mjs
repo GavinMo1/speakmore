@@ -302,29 +302,13 @@ export default {
   plaza: {
     title: "模型",
     search: "搜索模型或厂商",
-    ways: {
-      title: "识别方式",
-      meta: "三选一 · 模型配置分别保存",
-      nativeDesc: "音频直达模型 · 单次成稿",
-      localDesc: "语音转写 · 文本润色",
-      privateDesc: "本机转写 · 数据不出本机",
-    },
     modes: { native: "原生识别", local: "转写 + 润色", private: "数据隐私" },
-    flow: {
-      audio: "音频",
-      text: "成稿",
-      raw: "原文",
-      recognize: "识别 · {via}",
-      transcribe: "转写 · {via}",
-      polish: "润色 · {via}",
-      change: "{model} · 在模型库中更换",
-    },
-    facts: {
-      upload: "音频上传至 {platform}",
-      single: "单次请求",
-      local: "音频留存本机",
-      textOnly: "仅文本上传至 {platform}",
-      noUpload: "不上传任何数据",
+    facts: { upload: "音频上传至 {platform}" },
+    // 这一类不在正在用的识别方式里（模型页 toolbar 下面那一行）
+    standby: {
+      elsewhere: "当前识别方式为{current} · 启用此处的模型将一并切换至{mode}",
+      privateCloud: "数据隐私方式仅使用本机模型 · 启用云端模型将一并切换至{mode}",
+      pick: "更换识别方式",
     },
     via: { local: "本机" },
     inUse: "使用中",
@@ -339,12 +323,10 @@ export default {
       again: "重新检测",
       okAgain: "检测通过，重新检测",
       failAgain: "检测失败，重新检测",
-      wayTip: "整条链路检测",
       modelTip: "发送样例请求验证",
       localTip: "以系统朗读的样句转写验证",
       keyTip: "以该密钥发起一次最小请求",
     },
-    library: { title: "模型库" },
     tabs: { label: "模型分类", native: "原生", transcribe: "转写", polish: "润色", keys: "密钥" },
     toolbar: {
       all: "全部",
@@ -451,10 +433,11 @@ export default {
       get: "获取密钥",
     },
     toast: {
-      switched: "已切换至{mode}",
       switchedWith: "已切换至{mode} · {model}",
       enabled: "已启用 {model}",
-      keySaved: "密钥已保存 · 新增 {count} 个可用模型",
+      keySaved: { other: "密钥已保存 · 新增 {count} 个可用模型" },
+      // 自定义服务没有清单，存好 key 不会多出列着的模型
+      keySavedOnly: "密钥已保存",
       keyRemoved: "{platform} 密钥已删除",
       canceled: "已取消下载",
       removed: "{model} 已删除",
@@ -462,7 +445,7 @@ export default {
     notes: {
       keys: "存储位置 · {home}",
       transcribe: "本机评分 · 97 条真实录音，Apple 芯片实测，2026-10-16 · 悬停列名查看口径",
-      prices: "标签 · 默认、已评测、已知问题 · 价格为各平台标价，¥ 人民币，$ 美元",
+      prices: "标签 · 默认、已评测、已知问题、未验证 · 价格为各平台标价，¥ 人民币，$ 美元",
     },
   },
 
@@ -506,6 +489,27 @@ export default {
     estimate: "按各家官方标准价估算",
     unpriced: "{models} 无标价，{count} 次未计入",
     dictate: "按一下说话",
+    // 标题右边的识别方式选单（renderer/hub/mode-picker.mjs）；三种方式的名字在 plaza.modes
+    mode: {
+      label: "识别方式",
+      meta: "三选一 · 模型配置分别保存",
+      desc: {
+        native: "音频直达模型 · 单次成稿",
+        local: "语音转写 · 文本润色",
+        private: "本机转写 · 不上传任何数据",
+      },
+      needs: {
+        key: "{platform} 密钥未配置",
+        download: "{model} 未下载",
+        url: "自定义服务地址未配置",
+      },
+      fix: "前往配置",
+      switching: "切换中",
+      failed: "未切换",
+      switched: "已切换至{mode}",
+      configure: "在模型页更换{mode}所用模型",
+      locked: "识别方式由单独启动的服务端决定，此处不可更换",
+    },
   },
 
   history: {

@@ -157,6 +157,20 @@
   text-wrap: balance;
 }
 
+/* 标题行：大标题，右侧是这一页的一个控件（首页的识别方式、模型页的搜索） */
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  margin-bottom: 1.75rem;
+}
+
+.page-head .page-title {
+  margin: 0;
+}
+
 /* 还差什么才能用：原版断网时顶上也是这样一条 */
 .banner {
   display: flex;
@@ -493,6 +507,15 @@
   gap: 0.45rem;
 }
 
+/* 模型那一列可以折行（别的列是数，不折）：型号接在名字后面，放不下就整个折到下一行 */
+.spend-table tbody th {
+  white-space: normal;
+}
+
+.spend-model-text > * {
+  white-space: nowrap;
+}
+
 .spend-model-id {
   font-weight: var(--weight-regular);
   color: var(--ink-2);
@@ -508,12 +531,10 @@
   color: var(--ink-2);
 }
 
-/* 顶边和左边第一张卡对齐：让过"洞察"那一行（字号 × 行高 + 间距） */
 .home-side {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding-top: calc(var(--text-heading) * 1.6 + 0.875rem);
 }
 
 /* 口述卡：和别的卡一样的面，主题渐变只铺在键帽上 */
@@ -644,6 +665,33 @@
 
 .details {
   cursor: help;
+}
+
+/* ---------- 操作结果的提示：窗口底部一闪而过（toast.mjs） ---------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  z-index: 3;
+  padding: 0.55rem 1rem;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--ink);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-filter);
+  border-radius: var(--radius-full);
+  box-shadow: var(--edge), var(--lift);
+  translate: -50% 0;
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    translate var(--dur-base) var(--ease-out);
+}
+
+.toast[data-hidden] {
+  opacity: 0;
+  translate: -50% 0.5rem;
+  pointer-events: none;
 }
 
 /* ---------- 设置对话框 ---------- */
@@ -788,7 +836,7 @@ code.setting-value {
     animation: none;
   }
 
-  .period-tab {
+  .toast {
     transition: none;
   }
 }

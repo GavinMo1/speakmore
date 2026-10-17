@@ -1,0 +1,58 @@
+import { t } from "../shared/i18n.mjs";
+import { providerIcon } from "../shared/provider-icons.mjs";
+
+// 主窗口里用代码画的几块（模型页、首页的识别方式选单）共用的小工具：拼节点、取图标、按界面语言写厂商名。
+
+const NS = "http://www.w3.org/2000/svg";
+
+export const $ = (id) => document.getElementById(id);
+
+/** 页面顶上那份图标表（hub.html 的 .sprite）里的一个 */
+export function svg(id, className = "icon") {
+  const node = document.createElementNS(NS, "svg");
+  node.setAttribute("class", className);
+  node.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS(NS, "use");
+  use.setAttribute("href", `#${id}`);
+  node.append(use);
+  return node;
+}
+
+/** 刚通过检测的对勾要画出来：路径得在文档里（<use> 里的路径样式够不着） */
+export function drawnCheck() {
+  const node = document.createElementNS(NS, "svg");
+  node.setAttribute("class", "icon");
+  node.setAttribute("viewBox", "0 0 24 24");
+  node.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(NS, "path");
+  path.setAttribute("d", "M20 6L9 17l-5-5");
+  node.append(path);
+  return node;
+}
+
+/** 品牌图标：认识的家用它的图标，不认识的用一朵云 */
+export const brand = (id) => providerIcon(id) ?? svg("i-cloud");
+
+/** 拼一个节点：值是 false、null、undefined 的属性和子节点不写 */
+export function h(tag, props = {}, ...kids) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (value === false || value === null || value === undefined) continue;
+    if (key === "class") node.className = value;
+    else if (key === "text") node.textContent = value;
+    else if (key === "style") node.style.cssText = value;
+    else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+    else node.setAttribute(key, value === true ? "" : value);
+  }
+  for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) node.append(kid);
+  return node;
+}
+
+/** 文案里有就用文案，没有就用给的名字（新接的平台、做模型的家还没写进文案时） */
+export function named(key, fallback) {
+  const text = t(key);
+  return text === key ? fallback : text;
+}
+
+/** 平台（卖模型、收 key 的那一家）按界面语言叫什么 */
+export const platformName = (platform) => named(`providers.${platform.id}.name`, platform.name);

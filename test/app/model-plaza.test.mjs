@@ -4,6 +4,7 @@ import { DEFAULTS, describePlaza, loadPriceBook } from "../../src/app/model-plaz
 import { CLOUD_TRANSCRIBERS } from "../../src/server/asr/cloud/vendors.mjs";
 import { CHAT_VENDORS } from "../../src/server/chat/vendors.mjs";
 import { PROVIDERS } from "../../src/server/providers/index.mjs";
+import { patchSettings, resolveSettings, routeOf } from "../../src/storage/settings.mjs";
 
 const view = async (overrides = {}) =>
   describePlaza({
@@ -14,8 +15,15 @@ const view = async (overrides = {}) =>
     chip: "apple-silicon",
     freeBytes: 446e9,
     priceOf: await loadPriceBook(),
+    routes: routesWith({}),
     ...overrides,
   });
+
+/** 三种方式按出厂设置加上 changes 走哪条路线（同主进程：storage/settings.mjs 的 routeOf） */
+function routesWith(changes) {
+  const settings = patchSettings(resolveSettings({ file: "/nonexistent/settings.json", env: {} }), changes);
+  return Object.fromEntries(["native", "local", "private"].map((mode) => [mode, routeOf(settings, mode)]));
+}
 
 const group = (shelf, id) => shelf.find((found) => found.id === id);
 
@@ -104,4 +112,59 @@ test("没拿真 key 调过的型号：那个渠道的一项照清单记着未验
     }
   }
   assert.ok(offers > 20);
+});
+
+test("三种识别方式：一路经过哪几个模型（名字取清单里的），切过去之前还差什么（缺的 key、没下载的本机模型）", async () => {
+  const { ways } = await view({
+    routes: routesWith({
+      model: "openai",
+      transcriber: "bailian/qwen3-asr-flash",
+      privateTranscriber: "sensevoice-small-q8",
+    }),
+    keys: { deepseek: "stored" },
+  });
+  const openai = PROVIDERS.find(({ id }) => id === "openai");
+  assert.deepEqual(ways.native.hops, [
+    {
+      role: "native",
+      platform: "openai",
+      maker: "openai",
+      name: openai.models.find(({ id }) => id === openai.defaultModel).name,
+    },
+  ]);
+  assert.deepEqual(ways.native.needs, [{ kind: "key", platform: "openai" }]);
+
+  // 第一跳交给百炼、润色交给 DeepSeek：要两家的 key，只差百炼的
+  assert.deepEqual(
+    ways.local.hops.map(({ role, platform }) => [role, platform]),
+    [
+      ["transcribe", "bailian"],
+      ["polish", "deepseek"],
+    ],
+  );
+  assert.equal(ways.local.hops[0].maker, "qwen");
+  assert.deepEqual(ways.local.needs, [{ kind: "key", platform: "bailian" }]);
+
+  // 数据隐私：不要 key，只看本机模型下载好了没有
+  assert.deepEqual(
+    ways.private.hops.map(({ role, platform }) => [role, platform]),
+    [["transcribe", "local"]],
+  );
+  assert.deepEqual(ways.private.needs, [{ kind: "download", model: "sensevoice-small-q8" }]);
+});
+
+test("识别方式什么都不差时 needs 是空的；自定义服务没写地址也算差的", async () => {
+  const ready = await view({ keys: { deepseek: "stored", gemini: "env" } });
+  assert.deepEqual(ready.ways.local.needs, []);
+  assert.deepEqual(ready.ways.private.needs, []);
+  assert.deepEqual(ready.ways.native.needs, []);
+
+  const custom = await view({ routes: routesWith({ polish: "custom/my-model" }), keys: { custom: "stored" } });
+  assert.deepEqual(custom.ways.local.needs, [{ kind: "url" }]);
+  assert.deepEqual(custom.ways.local.hops[1], { role: "polish", platform: "custom", maker: null, name: "my-model" });
+});
+
+test("某种方式的设置拼不出路线：照实交出原因，不编", async () => {
+  const { ways } = await view({ routes: { ...routesWith({}), local: { problem: { key: "chat.modelRequired" } } } });
+  assert.deepEqual(ways.local, { problem: { key: "chat.modelRequired" }, hops: [], needs: [] });
 });

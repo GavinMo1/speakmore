@@ -1,8 +1,8 @@
-import { DEFAULT_TRANSCRIBER, downloadSize, MODELS, makerOf, measuredOn } from "../models/catalog.mjs";
+import { DEFAULT_TRANSCRIBER, downloadSize, findModel, MODELS, makerOf, measuredOn } from "../models/catalog.mjs";
 import { nameParts } from "../models/describe.mjs";
-import { CLOUD_TRANSCRIBERS } from "../server/asr/cloud/vendors.mjs";
+import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../server/asr/cloud/vendors.mjs";
 import { CHAT_VENDORS, formatChatChoice, parseChatChoice } from "../server/chat/vendors.mjs";
-import { DEFAULT_POLISH } from "../server/modes.mjs";
+import { DEFAULT_POLISH, keyVendorsOf, usesLocalModel } from "../server/modes.mjs";
 import { DEFAULT_MODEL_CHOICE, formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
 import { VENDORS } from "../server/vendors.mjs";
 
@@ -12,6 +12,7 @@ import { VENDORS } from "../server/vendors.mjs";
 //   polish      润色：纯文字模型（server/chat/vendors.mjs），最后是自定义服务
 // 云端的货架按"谁做的"（maker）分组，一组里的模型可能有好几个平台卖（DeepSeek 官方和百炼都有 V4.1 Flash）：
 // 平台是这一组的渠道，同一个模型在各渠道的写法和价格各自记在 offers 里。用户一个平台只配一把 key。
+// 另外给首页的识别方式选单（renderer/hub/mode-picker.mjs）一份三种方式各自的样子：一路经过哪几个模型、切过去还差什么。
 // 模型信息只从各个登记处读，这里不另写；会变的（设置、key 在哪、本机模型的下载状态、价）由调用方给。
 
 /** 平台在密钥表里的先后：覆盖最广的在前，自定义服务总在最后，没列到的排在它们中间 */
@@ -150,6 +151,53 @@ function coverageOf(id) {
   );
 }
 
+/** 一路上的一个云端模型：名字取清单里的，清单外的照写进设置的型号 */
+function cloudHop(role, registry, vendor, model) {
+  const listed = registry.find(({ id }) => id === vendor)?.models.find(({ id }) => id === model);
+  return { role, platform: vendor, maker: listed?.maker ?? vendor, name: listed?.name ?? model };
+}
+
+/** 一路上的转写：云端的按厂商/模型，否则是本机模型 */
+function transcribeHop(transcriber) {
+  const cloud = cloudTranscriberOf(transcriber);
+  if (cloud) return cloudHop("transcribe", CLOUD_TRANSCRIBERS, cloud.vendor, cloud.model);
+  const model = findModel(transcriber);
+  return {
+    role: "transcribe",
+    platform: "local",
+    maker: model ? makerOf(model) : null,
+    name: model?.name ?? transcriber,
+  };
+}
+
+/** 每种方式一路经过哪几个模型，按先后 */
+const HOPS = {
+  native: (route) => [cloudHop("native", PROVIDERS, route.model.provider, route.model.model)],
+  local: (route) => [
+    transcribeHop(route.transcriber),
+    route.polish.vendor === "custom"
+      ? { role: "polish", platform: "custom", maker: null, name: route.polish.model }
+      : cloudHop("polish", CHAT_VENDORS, route.polish.vendor, route.polish.model),
+  ],
+  private: (route) => [transcribeHop(route.transcriber)],
+};
+
+/**
+ * 一种识别方式的样子。差什么只列看得见的：本机模型没下载好、要的那家没有 key、自定义服务没写地址；
+ * key 对不对、服务够不够得着，要切过去的时候才验（app/modes.mjs）
+ * @param {object | { problem: object }} route 那种方式按设置走的路线；拼不出来时是拼不出来的原因
+ */
+function wayOf(route, { keys, status }) {
+  if (route.problem) return { problem: route.problem, hops: [], needs: [] };
+  const needs = [];
+  if (usesLocalModel(route) && !status[route.transcriber]?.installed) {
+    needs.push({ kind: "download", model: route.transcriber });
+  }
+  if (route.mode === "local" && route.polish.vendor === "custom" && !route.customUrl) needs.push({ kind: "url" });
+  for (const { id } of keyVendorsOf(route)) if (!keys[id]) needs.push({ kind: "key", platform: id });
+  return { hops: HOPS[route.mode](route), needs };
+}
+
 /**
  * @param {object} options
  * @param {"native" | "local" | "private"} options.mode 正在用哪种识别方式
@@ -160,8 +208,10 @@ function coverageOf(id) {
  * @param {string | null} options.chip catalog.mjs 的 chipOf
  * @param {number | null} options.freeBytes 模型目录那块磁盘还剩多少；查不了是 null
  * @param {(role: string, vendor: string, model: string) => object | null} options.priceOf loadPriceBook 给的
+ * @param {Record<"native" | "local" | "private", object>} options.routes 三种方式各按设置走哪条路线
+ *   （storage/settings.mjs 的 routeOf）；拼不出来的写成 { problem }
  */
-export function describePlaza({ mode, chosen, keys, status, chip, freeBytes, priceOf }) {
+export function describePlaza({ mode, chosen, keys, status, chip, freeBytes, priceOf, routes }) {
   const platforms = VENDORS.map(({ id, name, keyEnv, keyPage }) => ({
     id,
     name,
@@ -176,6 +226,7 @@ export function describePlaza({ mode, chosen, keys, status, chip, freeBytes, pri
   return {
     mode,
     chosen,
+    ways: Object.fromEntries(Object.entries(routes).map(([id, route]) => [id, wayOf(route, { keys, status })])),
     defaults: DEFAULTS,
     platforms,
     shelves: {

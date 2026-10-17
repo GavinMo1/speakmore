@@ -309,29 +309,13 @@ export default {
   plaza: {
     title: "Models",
     search: "Search models or makers",
-    ways: {
-      title: "Recognition",
-      meta: "Choose one of three · Each keeps its own models",
-      nativeDesc: "Audio straight to the model · One request",
-      localDesc: "Speech transcription · Text polishing",
-      privateDesc: "On-device transcription · Data stays on this Mac",
-    },
     modes: { native: "Native", local: "Transcribe + Polish", private: "Data Privacy" },
-    flow: {
-      audio: "Audio",
-      text: "Text",
-      raw: "Transcript",
-      recognize: "Recognize · {via}",
-      transcribe: "Transcribe · {via}",
-      polish: "Polish · {via}",
-      change: "{model} · Change in the library",
-    },
-    facts: {
-      upload: "Audio sent to {platform}",
-      single: "Single request",
-      local: "Audio stays on this Mac",
-      textOnly: "Only text sent to {platform}",
-      noUpload: "Nothing uploaded",
+    facts: { upload: "Audio sent to {platform}" },
+    // This role isn't part of the recognition mode in use (the line under the models toolbar)
+    standby: {
+      elsewhere: "Mode in use: {current} · Enabling a model here switches to {mode}",
+      privateCloud: "Data Privacy uses on-device models only · Enabling a cloud model switches to {mode}",
+      pick: "Change mode",
     },
     via: { local: "This Mac" },
     inUse: "In use",
@@ -346,12 +330,10 @@ export default {
       again: "Check again",
       okAgain: "Passed, check again",
       failAgain: "Failed, check again",
-      wayTip: "Check the whole chain",
       modelTip: "Send a sample request",
       localTip: "Transcribe a spoken sample",
       keyTip: "Send a minimal request with this key",
     },
-    library: { title: "Library" },
     tabs: { label: "Model categories", native: "Native", transcribe: "Transcribe", polish: "Polish", keys: "Keys" },
     toolbar: {
       all: "All",
@@ -458,10 +440,10 @@ export default {
       get: "Get a key",
     },
     toast: {
-      switched: "Switched to {mode}",
       switchedWith: "Switched to {mode} · {model}",
       enabled: "{model} enabled",
-      keySaved: "Key saved · {count} models now available",
+      keySaved: { one: "Key saved · {count} model now available", other: "Key saved · {count} models now available" },
+      keySavedOnly: "Key saved",
       keyRemoved: "{platform} key removed",
       canceled: "Download canceled",
       removed: "{model} removed",
@@ -469,7 +451,7 @@ export default {
     notes: {
       keys: "Stored in {home}",
       transcribe: "On-device scores · 97 real recordings, Apple silicon, 2026-10-16 · Hover a column for details",
-      prices: "Tags · Default, Evaluated, Known issue · Prices as listed by each platform, ¥ CNY, $ USD",
+      prices: "Tags · Default, Evaluated, Known issue, Unverified · Prices as listed by each platform, ¥ CNY, $ USD",
     },
   },
 
@@ -513,6 +495,27 @@ export default {
     estimate: "Estimated at list prices",
     unpriced: "{models} unpriced; {count} not counted",
     dictate: "Press to talk",
+    // The recognition mode menu next to the title (renderer/hub/mode-picker.mjs); mode names live in plaza.modes
+    mode: {
+      label: "Recognition",
+      meta: "Choose one of three · Each keeps its own models",
+      desc: {
+        native: "Audio straight to the model · One request",
+        local: "Speech transcription · Text polishing",
+        private: "On-device transcription · Nothing uploaded",
+      },
+      needs: {
+        key: "No {platform} key",
+        download: "{model} not downloaded",
+        url: "No custom service URL",
+      },
+      fix: "Set up",
+      switching: "Switching",
+      failed: "Not switched",
+      switched: "Switched to {mode}",
+      configure: "Change the models {mode} uses",
+      locked: "The mode is set by the separately started server and can't be changed here",
+    },
   },
 
   history: {

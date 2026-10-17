@@ -563,7 +563,17 @@ async function main() {
       chip: CHIP,
       freeBytes,
       priceOf,
+      routes: Object.fromEntries(MODES.map(({ id }) => [id, routeOrProblem(settings, id)])),
     });
+  }
+
+  /** 某种方式按设置走的路线；设置拼不出路线时（比如自定义服务没写模型名）交出原因，首页的选单照实说 */
+  function routeOrProblem(settings, mode) {
+    try {
+      return routeOf(settings, mode);
+    } catch (error) {
+      return { problem: problemOf(error) };
+    }
   }
 
   /** 设置里要的一家的说明，带着它的 key 在哪（env / stored / null，不解密） */

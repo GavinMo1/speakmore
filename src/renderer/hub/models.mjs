@@ -1,14 +1,14 @@
 import { t } from "../shared/i18n.mjs";
-import { providerIcon } from "../shared/provider-icons.mjs";
 import { describeError } from "../shared/setup-text.mjs";
+import { $, brand, drawnCheck, h, named, platformName, svg } from "./dom.mjs";
+import { slidingIndicators } from "./indicators.mjs";
+import { toast } from "./toast.mjs";
 
-// 侧栏"模型"一页：上面是识别方式的两张单选卡片（原生识别、转写 + 润色），下面是模型库：
-// 按角色分三排货架（原生、转写、润色）加一张密钥表。货架按谁做的分组，一组可能有好几个平台卖，平台是这一组的渠道。
-// 数据由主进程拼好（app/model-plaza.mjs，随 getSetup 来），这里只画、只转达操作；切模式、换模型、存 key 都走主进程，
+// 侧栏"模型"一页：模型库，按角色分三排货架（原生、转写、润色）加一张密钥表。货架按谁做的分组，
+// 一组可能有好几个平台卖，平台是这一组的渠道。选哪种识别方式不在这里，在首页（mode-picker.mjs）：
+// 这里换的是各种方式里用的模型，启用另一种方式里的模型时连方式一起换（toolbar 上方那行说明会先讲清楚）。
+// 数据由主进程拼好（app/model-plaza.mjs，随 getSetup 来），这里只画、只转达操作；换模型、存 key 都走主进程，
 // 验证过才换。控件和尺寸都照界面规范（docs/desktop-ui-spec.md），文案照规范里的词表。
-
-const $ = (id) => document.getElementById(id);
-const NS = "http://www.w3.org/2000/svg";
 
 /**
  * 货架的三个角色 → 设置里那一项、属于哪种识别方式。转写在两种方式里都有：数据隐私方式（private）用它自己的那一项
@@ -33,59 +33,9 @@ const OFFICIAL = {
 
 // ---------- 小工具 ----------
 
-function svg(id, className = "icon") {
-  const node = document.createElementNS(NS, "svg");
-  node.setAttribute("class", className);
-  node.setAttribute("aria-hidden", "true");
-  const use = document.createElementNS(NS, "use");
-  use.setAttribute("href", `#${id}`);
-  node.append(use);
-  return node;
-}
-
-/** 刚通过检测的对勾要画出来：路径得在文档里（<use> 里的路径样式够不着） */
-function drawnCheck() {
-  const node = document.createElementNS(NS, "svg");
-  node.setAttribute("class", "icon");
-  node.setAttribute("viewBox", "0 0 24 24");
-  node.setAttribute("aria-hidden", "true");
-  const path = document.createElementNS(NS, "path");
-  path.setAttribute("d", "M20 6L9 17l-5-5");
-  node.append(path);
-  return node;
-}
-
-/** 品牌图标：认识的家用它的图标，不认识的用一朵云 */
-const brand = (id) => providerIcon(id) ?? svg("i-cloud");
-
-function h(tag, props = {}, ...kids) {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(props)) {
-    if (value === false || value === null || value === undefined) continue;
-    if (key === "class") node.className = value;
-    else if (key === "text") node.textContent = value;
-    else if (key === "style") node.style.cssText = value;
-    else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
-    else node.setAttribute(key, value === true ? "" : value);
-  }
-  for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) node.append(kid);
-  return node;
-}
-
 const label = (text) => h("span", { class: "label", text });
 const logoTile = (node) => h("span", { class: "logo-tile" }, node);
-const stop = (handler) => (event) => {
-  event.stopPropagation();
-  handler(event);
-};
 
-/** 文案里有就用文案，没有就用给的名字（新接的平台、做模型的家还没写进文案时） */
-function named(key, fallback) {
-  const text = t(key);
-  return text === key ? fallback : text;
-}
-
-const platformName = (platform) => named(`providers.${platform.id}.name`, platform.name);
 const makerName = (maker) => named(`plaza.makers.${maker}`, maker);
 
 /** 一个价：¥0.8、$0.3；数小于 1 的保留到小数点后两位以内 */
@@ -94,9 +44,11 @@ const money = (currency) => (currency === "CNY" ? "¥" : "$");
 const amount = (value) => Math.round(value * 100) / 100;
 
 /**
- * @param {{ refresh: () => Promise<object> }} options refresh：重新问主进程要一份状态，并让整个窗口跟着更新
+ * @param {object} options
+ * @param {() => Promise<object>} options.refresh 重新问主进程要一份状态，并让整个窗口跟着更新
+ * @param {() => void} options.pickMode 回首页打开识别方式的选单
  */
-export function createModels({ refresh }) {
+export function createModels({ refresh, pickMode }) {
   /** 最近一次拿到的状态 */
   let setup = null;
   const state = {
@@ -128,17 +80,6 @@ export function createModels({ refresh }) {
     role === "transcribe" && privateNow() && group.kind === "local" ? "private" : ROLES[role].mode;
   const hasKey = (id) => Boolean(platformOf(id)?.key);
   const modeName = (mode) => t(`plaza.modes.${mode}`);
-
-  // ---------- 提示 ----------
-
-  let toastTimer;
-  function toast(text) {
-    const node = $("plaza-toast");
-    node.textContent = text;
-    node.removeAttribute("data-hidden");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => node.setAttribute("data-hidden", ""), 2400);
-  }
 
   // ---------- 渠道、能不能用 ----------
 
@@ -207,7 +148,7 @@ export function createModels({ refresh }) {
   /** 状态列里的那一个控件：未检测是描边按钮，检测中转圈，结果是可再点的徽标（悬停换成"重新检测"） */
   function statusControl(key, tip, call) {
     const result = state.checks[key];
-    const again = stop(() => runCheck(key, call));
+    const again = () => runCheck(key, call);
     if (!result) {
       return h(
         "button",
@@ -314,12 +255,6 @@ export function createModels({ refresh }) {
     );
   }
 
-  function switchMode(mode) {
-    act(`way:${mode}`, () => window.speakmore.setMode(mode), {
-      done: () => toast(t("plaza.toast.switched", { mode: modeName(mode) })),
-    });
-  }
-
   /** 检测一行：本机模型念一句交给它转，云端的按那一行的设置发一个最小的请求 */
   function checkCall(role, group, item) {
     if (group.kind === "local") return () => window.speakmore.checkTranscriber(item.choice);
@@ -341,193 +276,13 @@ export function createModels({ refresh }) {
     return () => window.speakmore.checkModel("local", { transcriber: platform.id });
   }
 
-  // ---------- 识别方式：两张单选卡片，各画一条从音频到成稿的路 ----------
-
-  /** 某个角色选的那一行：[组, 行]，找不到（清单里没有的模型）是 null。chosen 不写就是现在选的 */
-  function chosenRow(role, chosen = chosenOf(role)) {
-    for (const group of setup.plaza.shelves[role]) {
-      for (const item of group.items) {
-        if (
-          group.kind === "local"
-            ? item.choice === chosen
-            : Object.values(item.offers ?? {}).some(({ choice }) => choice === chosen)
-        ) {
-          return { group, item };
-        }
-        if (group.kind === "custom" && chosen.startsWith("custom/")) return { group, item };
-      }
-    }
-    return null;
-  }
-
-  /** 选的模型在哪个平台上：设置里写的厂商，本机模型是 local */
-  function platformOfChoice(role, chosen = setup.plaza.chosen[ROLES[role].setting]) {
-    const slash = chosen.indexOf("/");
-    return slash === -1 ? "local" : chosen.slice(0, slash);
-  }
+  // ---------- 名字 ----------
 
   const viaText = (id) => (id === "local" ? t("plaza.via.local") : platformName(platformOf(id) ?? { id, name: id }));
 
   function itemName(group, item) {
     if (group.kind === "custom") return t("plaza.custom.name");
     return item.variant && group.kind === "local" ? `${item.name} · ${backendLabel(item)}` : item.name;
-  }
-
-  const flowEnd = (icon, caption) =>
-    h(
-      "div",
-      { class: "flow-stop" },
-      h("span", { class: "flow-end" }, svg(icon)),
-      h("span", { class: "flow-caption", text: caption }),
-    );
-
-  /** 识别方式卡片上的一个模型：chosen 是那种方式选的（转写在两种方式里各有各的） */
-  function flowModel(role, caption, chosen = setup.plaza.chosen[ROLES[role].setting]) {
-    const found = chosenRow(role, chosen);
-    const name = found ? itemName(found.group, found.item) : chosen;
-    const icon = found?.group.kind === "local" ? found.item.maker : (found?.group.id ?? platformOfChoice(role, chosen));
-    return h(
-      "div",
-      { class: "flow-stop flow-stop-model" },
-      h(
-        "button",
-        {
-          type: "button",
-          class: "flow-node",
-          title: t("plaza.flow.change", { model: name }),
-          onclick: stop(() => go(role)),
-        },
-        brand(icon),
-        h("span", { class: "flow-node-name", text: name }),
-      ),
-      h("span", { class: "flow-caption", text: caption }),
-    );
-  }
-
-  const wire = (index) => h("span", { class: "flow-wire", style: `--i: ${index}`, "aria-hidden": "true" });
-
-  function renderWays() {
-    const nativeVia = platformOfChoice("native");
-    const transcribeVia = platformOfChoice("transcribe");
-    const polishVia = platformOfChoice("polish");
-    const ways = [
-      {
-        mode: "native",
-        desc: t("plaza.ways.nativeDesc"),
-        stops: [
-          flowEnd("i-mic", t("plaza.flow.audio")),
-          flowModel("native", t("plaza.flow.recognize", { via: viaText(nativeVia) })),
-          flowEnd("i-letter-text", t("plaza.flow.text")),
-        ],
-        facts: [
-          ["i-cloud-upload", t("plaza.facts.upload", { platform: viaText(nativeVia) })],
-          ["i-zap", t("plaza.facts.single")],
-        ],
-      },
-      {
-        mode: "local",
-        desc: t("plaza.ways.localDesc"),
-        stops: [
-          flowEnd("i-mic", t("plaza.flow.audio")),
-          flowModel("transcribe", t("plaza.flow.transcribe", { via: viaText(transcribeVia) })),
-          flowModel("polish", t("plaza.flow.polish", { via: viaText(polishVia) })),
-          flowEnd("i-letter-text", t("plaza.flow.text")),
-        ],
-        facts: [
-          transcribeVia === "local"
-            ? ["i-shield-check", t("plaza.facts.local")]
-            : ["i-cloud-upload", t("plaza.facts.upload", { platform: viaText(transcribeVia) })],
-          ["i-cloud-upload", t("plaza.facts.textOnly", { platform: viaText(polishVia) })],
-        ],
-      },
-      {
-        mode: "private",
-        desc: t("plaza.ways.privateDesc"),
-        stops: [
-          flowEnd("i-mic", t("plaza.flow.audio")),
-          flowModel(
-            "transcribe",
-            t("plaza.flow.transcribe", { via: viaText("local") }),
-            setup.plaza.chosen.privateTranscriber,
-          ),
-          flowEnd("i-letter-text", t("plaza.flow.raw")),
-        ],
-        facts: [
-          ["i-shield-check", t("plaza.facts.local")],
-          ["i-lock", t("plaza.facts.noUpload")],
-        ],
-        // 不用 key、也不连网：检测就是拿本机模型转一句
-        check: () => window.speakmore.checkTranscriber(setup.plaza.chosen.privateTranscriber),
-      },
-    ];
-    $("plaza-ways").replaceChildren(
-      ...ways.map((way) => {
-        const live = setup.plaza.mode === way.mode;
-        const key = `way:${way.mode}`;
-        const flow = [];
-        way.stops.forEach((node, index) => {
-          if (index > 0) flow.push(wire(index - 1));
-          flow.push(node);
-        });
-        const pick = () => !live && setup.switchable && switchMode(way.mode);
-        return h(
-          "article",
-          { class: "way", "data-live": live, onclick: pick },
-          h(
-            "div",
-            { class: "way-body" },
-            h(
-              "header",
-              { class: "way-head" },
-              h(
-                "button",
-                {
-                  type: "button",
-                  class: "way-radio",
-                  role: "radio",
-                  "aria-checked": String(live),
-                  "aria-label": modeName(way.mode),
-                  disabled: !setup.switchable,
-                  onclick: stop(pick),
-                },
-                h("span", { class: "radio-mark" }, svg("i-check")),
-              ),
-              h(
-                "div",
-                { class: "way-titles" },
-                h(
-                  "div",
-                  { class: "way-title-line" },
-                  h("h3", { class: "way-name", text: modeName(way.mode) }),
-                  live && h("span", { class: "tag", "data-tone": "accent", text: t("plaza.inUse") }),
-                ),
-                h("p", { class: "way-desc", text: way.desc }),
-              ),
-            ),
-            h("div", { class: "flow" }, flow),
-            h(
-              "footer",
-              { class: "way-foot" },
-              h(
-                "ul",
-                { class: "facts" },
-                way.facts.map(([icon, text]) => h("li", {}, svg(icon), text)),
-              ),
-              h(
-                "div",
-                { class: "cell-fill way-status" },
-                statusControl(
-                  key,
-                  t("plaza.check.wayTip"),
-                  way.check ?? (() => window.speakmore.checkModel(way.mode, {})),
-                ),
-              ),
-            ),
-            failNote(key),
-          ),
-        );
-      }),
-    );
   }
 
   // ---------- 分类、筛选 ----------
@@ -625,13 +380,42 @@ export function createModels({ refresh }) {
           : t("plaza.notes.prices");
   }
 
-  function go(tab) {
+  /** 这一类不在正在用的识别方式里（数据隐私方式里的云端转写也算）：启用会连方式一起换，先说清楚 */
+  function renderStandby() {
+    const node = $("plaza-standby");
+    const role = ROLES[state.tab];
+    const cloudInPrivate = state.tab === "transcribe" && privateNow();
+    node.hidden = !role || (isLive(state.tab) && !cloudInPrivate);
+    if (node.hidden) return;
+    const current = modeName(setup.plaza.mode);
+    node.replaceChildren(
+      svg("i-info"),
+      h("span", {
+        text: cloudInPrivate
+          ? t("plaza.standby.privateCloud", { mode: modeName("local") })
+          : t("plaza.standby.elsewhere", { current, mode: modeName(role.mode) }),
+      }),
+      h("button", { type: "button", class: "button ghost small", text: t("plaza.standby.pick"), onclick: pickMode }),
+    );
+  }
+
+  /** 换到某一类，滚到分类标签那里；接着要滚到别处（展开的密钥表单）时不滚 */
+  function go(tab, { scroll = true } = {}) {
     state.tab = TABS.includes(tab) ? tab : "native";
     state.returnTo = null;
     state.maker = "all";
     draw();
+    if (!scroll) return;
     const content = document.querySelector(".content");
     content.scrollTo({ top: $("plaza-tabs").offsetTop - 72, behavior: "smooth" });
+  }
+
+  /** 刚展开的密钥表单：滚到眼前，光标放进第一个框（自定义服务是地址，别家是密钥） */
+  function focusKeyForm(id) {
+    const first = $(`plaza-key-${id}`)?.closest(".key-form")?.querySelector(".input");
+    if (!first) return;
+    first.scrollIntoView({ block: "center", behavior: "smooth" });
+    first.focus({ preventScroll: true });
   }
 
   // ---------- 模型库 ----------
@@ -963,8 +747,9 @@ export function createModels({ refresh }) {
           onclick: () => {
             state.openKey = via;
             const from = state.tab;
-            go("keys");
+            go("keys", { scroll: false });
             state.returnTo = from;
+            focusKeyForm(via);
           },
         }),
       ),
@@ -1202,6 +987,8 @@ export function createModels({ refresh }) {
       "form",
       {
         class: "key-form",
+        // 地址写得不对由主进程按界面语言说（挂在这一行下面），不用浏览器自带的气泡：它跟着系统语言、样子也不一样
+        novalidate: true,
         onsubmit: (event) => {
           event.preventDefault();
           const value = $(`plaza-key-${platform.id}`).value.trim();
@@ -1216,7 +1003,8 @@ export function createModels({ refresh }) {
             done: () => {
               state.openKey = null;
               delete state.checks[key];
-              toast(t("plaza.toast.keySaved", { count: newlyUsable(platform) }));
+              const count = newlyUsable(platform);
+              toast(count > 0 ? t("plaza.toast.keySaved", { count }) : t("plaza.toast.keySavedOnly"));
               if (state.returnTo) go(state.returnTo);
             },
           });
@@ -1327,7 +1115,7 @@ export function createModels({ refresh }) {
             onclick: () => {
               state.openKey = open ? null : platform.id;
               draw();
-              if (!open) $(`plaza-key-${platform.id}`)?.focus({ preventScroll: true });
+              if (!open) focusKeyForm(platform.id);
             },
           }),
         ),
@@ -1340,32 +1128,7 @@ export function createModels({ refresh }) {
     );
   }
 
-  // ---------- 滑块：分类的下划线、分段控件的底块，从上一个位置滑到新位置 ----------
-
-  const lastPlace = new Map();
-  function placeIndicators() {
-    for (const host of document.querySelectorAll('.page[data-route="models"] [data-indicator]')) {
-      const ink = host.querySelector(":scope > .indicator");
-      const on = host.querySelector(':scope > [aria-selected="true"], :scope > [aria-checked="true"]');
-      if (!ink) continue;
-      ink.hidden = !on;
-      if (!on || on.offsetWidth === 0) continue;
-      const next = { x: on.offsetLeft, w: on.offsetWidth };
-      const prev = lastPlace.get(host.dataset.indicator) ?? next;
-      ink.style.transition = "none";
-      ink.style.setProperty("--x", `${prev.x}px`);
-      ink.style.setProperty("--w", `${prev.w}px`);
-      ink.getBoundingClientRect();
-      ink.style.transition = "";
-      ink.style.setProperty("--x", `${next.x}px`);
-      ink.style.setProperty("--w", `${next.w}px`);
-      lastPlace.set(host.dataset.indicator, next);
-    }
-  }
-  addEventListener("resize", () => {
-    lastPlace.clear();
-    placeIndicators();
-  });
+  const indicators = slidingIndicators(document.querySelector('.page[data-route="models"]'));
 
   // ---------- 总的 ----------
 
@@ -1389,18 +1152,18 @@ export function createModels({ refresh }) {
   function draw() {
     if (!setup?.plaza) return;
     keepingInput(() => {
-      renderWays();
       renderTabs();
       renderToolbar();
+      renderStandby();
       renderGroups();
     });
-    placeIndicators();
+    indicators.place();
   }
 
   $("plaza-search").addEventListener("input", (event) => {
     state.query = event.target.value;
     renderGroups();
-    placeIndicators();
+    indicators.place();
   });
 
   return {
@@ -1415,12 +1178,14 @@ export function createModels({ refresh }) {
       if (tab) state.tab = TABS.includes(tab) ? tab : state.tab;
       if (platform) state.openKey = platform;
       draw();
+      // 从别处（首页的识别方式、横幅）来填某一家的 key
+      if (platform) focusKeyForm(platform);
     },
 
     /** 页面切到前台时，分类的下划线要按真实宽度重新放 */
     shown() {
-      lastPlace.clear();
-      placeIndicators();
+      indicators.reset();
+      indicators.place();
     },
   };
 }

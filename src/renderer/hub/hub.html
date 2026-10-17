@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="../shared/setup.css" />
     <link rel="stylesheet" href="hub.css" />
     <link rel="stylesheet" href="models.css" />
+    <link rel="stylesheet" href="mode-picker.css" />
   </head>
   <body>
     <!-- 图标：lucide（ISC 许可），线宽 2，跟着字的颜色走 -->
@@ -114,9 +115,23 @@
           <button type="button" class="button" id="banner-action" data-i18n="hub.fix">Settings</button>
         </div>
 
-        <!-- 首页：原版"洞察"那一列，加上我们的花费；右边一列是口述卡和版本 -->
+        <!-- 首页：标题右边是识别方式的选单（mode-picker.mjs）；下面是原版"洞察"那一列，加上我们的花费；右边一列是口述卡和版本 -->
         <section class="page" data-route="home" aria-labelledby="home-title">
-          <h1 class="page-title" id="home-title" data-i18n="home.title">Speak, don't type</h1>
+          <header class="page-head">
+            <h1 class="page-title" id="home-title" data-i18n="home.title">Speak, don't type</h1>
+            <button type="button" class="mode-trigger" id="mode-trigger" popovertarget="mode-picker" aria-haspopup="dialog" aria-expanded="false"></button>
+          </header>
+          <div class="mode-picker" id="mode-picker" popover role="dialog" aria-labelledby="mode-picker-title">
+            <header class="mode-picker-head">
+              <h2 class="mode-picker-title" id="mode-picker-title" data-i18n="home.mode.label">Recognition</h2>
+              <p class="mode-picker-meta" data-i18n="home.mode.meta">Choose one of three · Each keeps its own models</p>
+            </header>
+            <div class="mode-options" id="mode-options" role="radiogroup" aria-labelledby="mode-picker-title"></div>
+            <p class="mode-locked" id="mode-locked" data-i18n="home.mode.locked" hidden>The mode is set by the separately started server and can't be changed here</p>
+            <footer class="mode-picker-foot">
+              <button type="button" class="button ghost small" id="mode-configure"></button>
+            </footer>
+          </div>
           <div class="home">
             <div class="insights">
               <div class="card stats">
@@ -179,10 +194,14 @@
                     <p class="stat-value" id="spend-total"></p>
                     <p class="stat-label" id="spend-label"></p>
                   </div>
-                  <div class="period-tabs" role="tablist" data-i18n-aria-label="home.spendPeriods">
-                    <button type="button" class="period-tab" role="tab" data-period="today" data-i18n="periods.today">Today</button>
-                    <button type="button" class="period-tab" role="tab" data-period="month" data-i18n="periods.month">This month</button>
-                    <button type="button" class="period-tab" role="tab" data-period="total" data-i18n="periods.total">All time</button>
+                  <div class="segmented" id="spend-periods" role="radiogroup" data-indicator="spend-periods" data-i18n-aria-label="home.spendPeriods">
+                    <span class="indicator" aria-hidden="true"></span>
+                    <!-- biome-ignore lint/a11y/useSemanticElements: 规范的分段控件是按钮加 radio 角色（window.css 的 .segmented），和模型页的渠道切换同一套 -->
+                    <button type="button" class="segment" role="radio" aria-checked="false" data-period="today" data-i18n="periods.today">Today</button>
+                    <!-- biome-ignore lint/a11y/useSemanticElements: 规范的分段控件是按钮加 radio 角色（window.css 的 .segmented），和模型页的渠道切换同一套 -->
+                    <button type="button" class="segment" role="radio" aria-checked="false" data-period="month" data-i18n="periods.month">This month</button>
+                    <!-- biome-ignore lint/a11y/useSemanticElements: 规范的分段控件是按钮加 radio 角色（window.css 的 .segmented），和模型页的渠道切换同一套 -->
+                    <button type="button" class="segment" role="radio" aria-checked="false" data-period="total" data-i18n="periods.total">All time</button>
                   </div>
                 </div>
                 <table class="spend-table">
@@ -213,9 +232,9 @@
           </div>
         </section>
 
-        <!-- 模型：识别方式的两张卡片，下面是按角色分的模型库和密钥表（models.mjs 画） -->
+        <!-- 模型：按角色分的模型库和密钥表（models.mjs 画）。选哪种识别方式在首页 -->
         <section class="page" data-route="models" aria-labelledby="models-title" hidden>
-          <header class="plaza-head">
+          <header class="page-head">
             <h1 class="page-title" id="models-title" data-i18n="plaza.title">Models</h1>
             <search class="search">
               <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
@@ -223,23 +242,12 @@
             </search>
           </header>
 
-          <section class="block" aria-labelledby="ways-title">
-            <header class="block-head">
-              <h2 class="block-title" id="ways-title" data-i18n="plaza.ways.title">Recognition</h2>
-              <p class="block-meta" data-i18n="plaza.ways.meta">Choose one of three · Each keeps its own models</p>
-            </header>
-            <div class="ways" id="plaza-ways" role="radiogroup" aria-labelledby="ways-title"></div>
-          </section>
-
-          <section class="block" aria-labelledby="library-title">
-            <header class="block-head">
-              <h2 class="block-title" id="library-title" data-i18n="plaza.library.title">Library</h2>
-            </header>
-            <div class="tabs" id="plaza-tabs" role="tablist" data-indicator="tabs" data-i18n-aria-label="plaza.tabs.label"></div>
-            <div class="toolbar" id="plaza-toolbar"></div>
-            <div class="groups" id="plaza-groups" role="tabpanel" aria-labelledby="library-title"></div>
-            <p class="plaza-note" id="plaza-note"></p>
-          </section>
+          <div class="tabs" id="plaza-tabs" role="tablist" data-indicator="tabs" data-i18n-aria-label="plaza.tabs.label"></div>
+          <div class="toolbar" id="plaza-toolbar"></div>
+          <!-- 这一类不在正在用的识别方式里时：说一句启用会连方式一起换，给个回首页换方式的按钮 -->
+          <div class="standby" id="plaza-standby" hidden></div>
+          <div class="groups" id="plaza-groups" role="tabpanel" aria-labelledby="models-title"></div>
+          <p class="plaza-note" id="plaza-note"></p>
         </section>
 
         <!-- 历史记录：按天分组，一行一条 -->
@@ -363,7 +371,7 @@
       </div>
     </dialog>
 
-    <p class="toast" id="plaza-toast" role="status" data-hidden></p>
+    <p class="toast" id="toast" role="status" data-hidden></p>
 
     <script type="module" src="hub.mjs"></script>
   </body>
