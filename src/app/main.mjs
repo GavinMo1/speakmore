@@ -14,7 +14,6 @@ import {
   systemPreferences,
   Tray,
 } from "electron";
-import { helperPaths } from "../cli/native-helper.mjs";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale } from "../i18n/index.mjs";
 import { alsoLogTo, log } from "../log.mjs";
@@ -46,7 +45,7 @@ import { estimateTime } from "../usage/estimate.mjs";
 import { insights } from "../usage/insights.mjs";
 import { usageReport } from "../usage/report.mjs";
 import { createDelivery } from "./delivery.mjs";
-import { startHelper } from "./helper.mjs";
+import { helperPaths, startHelper } from "./helper.mjs";
 import { createKeyManager } from "./keys/key-manager.mjs";
 import { createKeyStore } from "./keys/key-store.mjs";
 import { describePlaza, loadPriceBook } from "./model-plaza.mjs";

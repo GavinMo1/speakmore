@@ -1,7 +1,27 @@
 import { spawn } from "node:child_process";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 
 const PASTE_TIMEOUT_MS = 3_000;
+
+/**
+ * 小帮手的源码、编好的可执行文件、指纹文件在哪。App 启动时要用，所以放在这一层：
+ * Mac 的 .app 里不带 src/cli（scripts/build/stage-app.mjs 的 MAC_APP_IGNORE），从那里引就打不开。
+ * 怎么编、什么时候要重编在 src/cli/native-helper.mjs
+ * @param {string} packageDir
+ * @param {NodeJS.Platform} [platform] 给哪个系统的
+ */
+export function helperPaths(packageDir, platform = process.platform) {
+  const windows = platform === "win32";
+  const binary = join(packageDir, "build", windows ? "key-helper.exe" : "key-helper");
+  return {
+    // Windows 的是一个目录（Go 的模块），macOS 的是一个文件
+    source: windows ? join(packageDir, "native", "windows") : join(packageDir, "native", "main.swift"),
+    binary,
+    /** 可执行文件是从哪份源码编出来的：那份源码的 SHA-256 */
+    stamp: `${binary}.source-sha256`,
+  };
+}
 
 /**
  * 启动原生小帮手（native/main.swift）并和它对话。两边用"一行一个 JSON"通信。

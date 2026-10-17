@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { packager } from "@electron/packager";
 import { osxSignOptions } from "./signing.mjs";
-import { APP_ENTRIES, stageApp } from "./stage-app.mjs";
+import { APP_ENTRIES, MAC_APP_IGNORE, stageApp } from "./stage-app.mjs";
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 
@@ -44,7 +44,7 @@ export async function packageMacApp({ packageDir, arch, out, signing }) {
       asar: false,
       // 依赖在上面已经只装了运行时的那部分
       prune: false,
-      ignore: [/^\/src\/cli($|\/)/, /^\/package-lock\.json$/],
+      ignore: MAC_APP_IGNORE,
       ...(existsSync(join(packageDir, "assets", "icon.icns")) ? { icon: join(packageDir, "assets", "icon.icns") } : {}),
       extendInfo: {
         // 只待在菜单栏，不占程序坞
