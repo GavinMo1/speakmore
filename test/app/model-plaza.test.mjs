@@ -75,7 +75,7 @@ test("密钥表：每个平台一行，key 在哪、三排货架上各有几个�
   assert.equal(platforms.at(-1).id, "custom");
   const bailian = platforms[0];
   assert.equal(bailian.key, "env");
-  assert.deepEqual(bailian.coverage, { native: 4, transcribe: 4, polish: 7 });
+  assert.deepEqual(bailian.coverage, { native: 4, transcribe: 4, polish: 6 });
   assert.equal(platforms.find(({ id }) => id === "gemini").key, null);
 });
 

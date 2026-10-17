@@ -40,7 +40,6 @@ test("Kimi：人民币价按汇率换成美元记；清单外的型号是空", a
   const { costOf: kimiCost } = await import("../../../src/server/chat/prices/moonshot.mjs");
   const { CNY_PER_USD } = await import("../../../src/server/currency.mjs");
   close(kimiCost("kimi-k2.6", TOKENS), (6.5 + 1.1 + 27) / CNY_PER_USD);
-  close(kimiCost("kimi-k3", TOKENS), (20 + 2 + 100) / CNY_PER_USD);
   assert.equal(kimiCost("kimi-k2.7-code", TOKENS), null);
 });
 

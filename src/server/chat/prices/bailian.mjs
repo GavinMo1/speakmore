@@ -17,7 +17,6 @@ export const PRICES = Object.freeze({
   "qwen3.8-27b": { input: 3, cached: 0.6, output: 12 },
   "deepseek-v4.1-flash": { input: 2, cached: 0.2, output: 8 },
   "deepseek-v4-pro": { input: 12, cached: 1, output: 24 },
-  "kimi-k3": { input: 20, cached: 2, output: 100 },
 });
 
 /**

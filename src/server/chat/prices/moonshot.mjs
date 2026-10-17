@@ -1,7 +1,6 @@
 // Kimi（月之暗面）官方开放平台国内站的价目表和算钱的规矩。照官方价目页 https://platform.kimi.com/docs/pricing/chat 抄的（2026-10-16）。
 // 规矩（都是价目页上写的）：
 //   - 价格的单位是人民币每百万 token，输入分命中缓存和未命中两个价，输出一个价；思考的 token 算在输出里
-//   - K3 另收缓存写入：不指定有效期时按 5 分钟那档收，每百万 20 元，和未命中的输入同价，所以不用单算
 //   - 记账统一记美元（usage 的 costUsd），按 CNY_PER_USD 换算，见 ../../currency.mjs
 // 改价时照官方页改这里，并更新上面的日期。
 
@@ -11,7 +10,6 @@ const PER_MILLION = 1_000_000;
 
 export const PRICES = Object.freeze({
   "kimi-k2.6": { input: 6.5, cached: 1.1, output: 27 },
-  "kimi-k3": { input: 20, cached: 2, output: 100 },
 });
 
 /**

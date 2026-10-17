@@ -67,7 +67,8 @@ export const CHAT_VENDORS = Object.freeze([
       { id: "qwen3.8-27b", name: "Qwen3.8 27B", maker: "qwen" },
       { id: "deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", maker: "deepseek" },
       { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", maker: "deepseek" },
-      { id: "kimi-k3", name: "Kimi K3", maker: "kimi" },
+      // kimi-k3 不收：传 enable_thinking: false 回话里没有推理内容，可 Kimi 官方文档说 K3 始终推理、关不掉，
+      // 可能只是不把思考吐出来，以文档为准（同 moonshot 那一家）
     ]),
     prices: () => import("./prices/bailian.mjs"),
   }),
@@ -88,11 +89,9 @@ export const CHAT_VENDORS = Object.freeze([
     // （关掉回 400 "only type=enabled is allowed for this model"，实测）
     models: models([
       { id: "kimi-k2.6", name: "Kimi K2.6", maker: "kimi" },
-      // 文档说 K3 始终推理、不该传 thinking，只能拿 reasoning_effort 在 low/high/max 里调
-      // （https://platform.kimi.com/docs/guide/use-reasoning-effort）。可 2026-10-16 实测带上 thinking: disabled 照样回 200，
-      // 6 次回话里都没有推理内容和推理 token（百炼上的 kimi-k3 关了也是这样）；low 档反而还有 19 个推理 token。
-      // 这是文档外的行为：哪天它不认了（回 400 或照样思考），拿掉这一项
-      { id: "kimi-k3", name: "Kimi K3", maker: "kimi" },
+      // kimi-k3 不收：文档说 K3 始终推理、不该传 thinking，只能拿 reasoning_effort 在 low/high/max 里调
+      // （https://platform.kimi.com/docs/guide/use-reasoning-effort）。2026-10-16 实测带上 thinking: disabled 回话里
+      // 没有推理内容，但那是文档外的行为，也可能只是不把思考吐出来，以文档为准
     ]),
     prices: () => import("./prices/moonshot.mjs"),
   }),
