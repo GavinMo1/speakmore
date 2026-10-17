@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createTranslator } from "../../../src/i18n/index.mjs";
 import { createClient } from "../../../src/server/asr/cloud/bailian.mjs";
+import * as minimax from "../../../src/server/asr/cloud/minimax.mjs";
 import { createCloudTranscriber } from "../../../src/server/asr/cloud/transcriber.mjs";
 import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../../../src/server/asr/cloud/vendors.mjs";
 import * as zhipu from "../../../src/server/asr/cloud/zhipu.mjs";
@@ -201,4 +202,39 @@ test("转写器：清单里写了一段最多几秒的，长录音切开、各�
   );
   assert.equal(calls.length, 3);
   assert.ok(calls.every(({ provider, audioId }) => provider === "zhipu" && audioId === "a1"));
+});
+
+test("MiniMax ASR：照官方文档 multipart 交 model 和 wav，一次回整段；按回话里的时长算钱", async () => {
+  const { fetch, requests } = fakeUpload(200, {
+    text: "实际上还是商家赚了",
+    duration: 26.325,
+    trace_id: "021785229015510a2c883cf675b9804d",
+  });
+  const reply = await minimax.createClient({ apiKey: "k", model: "asr-1.0", fetch }).transcribe({ wav: wavOf(1) });
+  assert.equal(reply.text, "实际上还是商家赚了");
+  const { CNY_PER_USD } = await import("../../../src/server/currency.mjs");
+  assert.ok(Math.abs(reply.usage.costUsd - (26.325 * 2.5) / 3_600 / CNY_PER_USD) < 1e-12);
+  const [{ url, headers, fields, file }] = requests;
+  assert.equal(url, "https://api.minimax.cn/v1/speech_to_text");
+  assert.equal(headers.Authorization, "Bearer k");
+  // 不开 stream、不指定语种：一次回整段，中英混说自动认
+  assert.deepEqual(fields, { model: "asr-1.0" });
+  assert.equal(file.type, "audio/wav");
+});
+
+test("MiniMax ASR：报错按状态码认（文档说状态码就是错误码），402 是余额不足", async () => {
+  const said = (type, message) => ({ type: "error", error: { type, message }, request_id: "r1" });
+  assert.equal((await uploadFailure(minimax, "asr-1.0", 401, said("authorized_error", "invalid api key"))).kind, "key");
+  const broke = await uploadFailure(
+    minimax,
+    "asr-1.0",
+    402,
+    said("insufficient_balance_error", "insufficient balance (1008)"),
+  );
+  assert.equal(broke.kind, "key");
+  assert.match(broke.problem, /额度/);
+  const limited = await uploadFailure(minimax, "asr-1.0", 429, said("rate_limit_error", "rate limit"));
+  assert.equal(limited.kind, "unavailable");
+  const sensitive = await uploadFailure(minimax, "asr-1.0", 422, said("unprocessable_entity_error", "sensitive"));
+  assert.match(sensitive.problem, /拒绝了请求：sensitive/);
 });

@@ -1,6 +1,6 @@
 // 云端转写的清单：本地转写链路（local 模式）的第一跳除了本机模型，也可以交给云端的语音识别模型。
 // 和本机的运行库（../engines）是同一个位置上的两种策略，上面的人只认 transcribe(samples) → { text }。
-// 每家一个适配器（同目录下的 bailian.mjs、zhipu.mjs），各自管请求怎么拼、回话怎么拆、报错怎么认；
+// 每家一个适配器（同目录下的 bailian.mjs、zhipu.mjs、minimax.mjs），各自管请求怎么拼、回话怎么拆、报错怎么认；
 // 录音统一成 16 kHz 单声道（transcriber.mjs 编成 wav 再交给适配器），适配器不用管格式。
 // 一次吃不下的长录音：模型项写上 maxSeconds（一段最多几秒），transcriber.mjs 照本机模型的规矩切开（../segment.mjs），
 // 适配器只管一段。
@@ -44,6 +44,18 @@ export const CLOUD_TRANSCRIBERS = Object.freeze([
       Object.freeze({ id: "glm-asr-2512", name: "GLM-ASR-2512", maker: "zhipu", maxSeconds: 29, unverified: true }),
     ]),
     load: () => import("./zhipu.mjs"),
+  }),
+  Object.freeze({
+    id: "minimax",
+    name: "MiniMax",
+    keyEnv: "MINIMAX_API_KEY",
+    keyPage: "https://platform.minimax.cn/user-center/basic-information/interface-key",
+    defaultModel: "asr-1.0",
+    // 照官方文档写，未拿真 key 验证（minimax.mjs）。文档写的是一段不超过 500 秒、超了回 400 不截断
+    models: Object.freeze([
+      Object.freeze({ id: "asr-1.0", name: "MiniMax ASR 1.0", maker: "minimax", maxSeconds: 500, unverified: true }),
+    ]),
+    load: () => import("./minimax.mjs"),
   }),
 ]);
 
