@@ -381,6 +381,8 @@ export default {
       tested: "Evaluated",
       testedTip: "Evaluated on a batch of real recordings",
       issue: "Known issue",
+      unverified: "Unverified",
+      unverifiedTip: "Added from the official docs; not yet called",
     },
     build: "{backend}",
     buildTip: "Quantization {variant}",

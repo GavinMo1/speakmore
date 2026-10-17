@@ -664,7 +664,8 @@ export function createModels({ refresh }) {
         text: t("plaza.tags.issue"),
       });
     }
-    const tone = tag.kind === "default" ? "accent" : "ok";
+    // 未验证不加语气：灰底，只是如实交代，不算问题
+    const tone = { default: "accent", tested: "ok", unverified: null }[tag.kind];
     return h("span", {
       class: "tag",
       "data-tone": tone,
@@ -672,6 +673,9 @@ export function createModels({ refresh }) {
       text: t(`plaza.tags.${tag.kind}`),
     });
   }
+
+  /** 当前渠道上这一项没拿真 key 调过时，补一个未验证的标签（换个渠道可能就没有） */
+  const unverifiedTag = (role, group, item) => (offerOf(role, group, item)?.unverified ? [{ kind: "unverified" }] : []);
 
   /** 名字那一格：图标、名字、标签；有说明时在下一行 */
   function nameCell({ icon, tile, name, build, tags = [], desc, extra }) {
@@ -981,7 +985,7 @@ export function createModels({ refresh }) {
         }
       : group.kind === "custom"
         ? { icon: brand("custom"), name: t("plaza.custom.name"), desc: customDesc() }
-        : { icon: brand(group.id), name: item.name, tags: item.tags };
+        : { icon: brand(group.id), name: item.name, tags: [...item.tags, ...unverifiedTag(role, group, item)] };
     return h(
       "div",
       { class: "row", role: "row", "data-current": isChosen(role, group, item) },

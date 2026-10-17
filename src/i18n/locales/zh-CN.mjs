@@ -375,6 +375,8 @@ export default {
       tested: "已评测",
       testedTip: "经成批真实录音评测",
       issue: "已知问题",
+      unverified: "未验证",
+      unverifiedTip: "按官方文档收录，尚未实际调用",
     },
     build: "{backend} 版",
     buildTip: "量化 {variant}",

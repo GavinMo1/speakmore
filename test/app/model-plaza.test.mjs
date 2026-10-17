@@ -84,3 +84,14 @@ test("拿不到的价是 null，不编一个", async () => {
   const plus = group(shelves.polish, "qwen").items.find(({ name }) => name === "Qwen3.7 Plus");
   assert.equal(plus.offers.bailian.price, null);
 });
+
+test("没拿真 key 调过的型号：那个渠道的一项记着未验证，验过的不记", async () => {
+  const { shelves } = await view();
+  const asr = group(shelves.transcribe, "zhipu").items.find(({ name }) => name === "GLM-ASR-2512");
+  assert.equal(asr.offers.zhipu.unverified, true);
+  const flash = group(shelves.polish, "deepseek").items.find(({ name }) => name === "DeepSeek V4.1 Flash");
+  assert.equal(flash.offers.deepseek.unverified, false);
+  assert.equal(flash.offers.bailian.unverified, false);
+  // 未验证跟着渠道走，不是这一行的标签：同一个模型换一家卖，可能就验过了
+  assert.ok(!asr.tags.some(({ kind }) => kind === "unverified"));
+});

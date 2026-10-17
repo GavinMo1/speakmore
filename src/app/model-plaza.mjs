@@ -70,7 +70,12 @@ function cloudShelf(role, priceOf) {
       const row = group.rows.get(model.name);
       row.tested ||= Boolean(model.tested);
       row.issue ??= model.issue ?? null;
-      row.offers[vendor.id] = { choice: `${vendor.id}/${model.id}`, price: priceOf(role, vendor.id, model.id) };
+      // 未验证（照文档接入、没拿真 key 调过）跟着渠道走：同一个模型换一家卖，可能就验过了
+      row.offers[vendor.id] = {
+        choice: `${vendor.id}/${model.id}`,
+        price: priceOf(role, vendor.id, model.id),
+        unverified: Boolean(model.unverified),
+      };
     }
   }
   return [...groups.values()]
