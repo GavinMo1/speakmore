@@ -154,6 +154,16 @@ const INSTALLED_ON_WINDOWS =
 /** 开机启动登记的是这个可执行文件加上程序目录（Windows 上没有应用包，要把参数也记下来） */
 const LOGIN_ITEM = WINDOWS ? { path: process.execPath, args: [app.getAppPath()], name: "SpeakMore" } : {};
 
+/**
+ * 开机启动开着没有。Windows 上 openAtLogin 只认以 AppUserModelId 为名的那一项，我们写的名字是 SpeakMore，
+ * 读回来永远是 false（真机上试过）：看 executableWillLaunchAtLogin，Run 里有指向这个程序、这些参数的一项，
+ * 并且没在任务管理器里被停用
+ */
+function loginItemEnabled() {
+  const settings = app.getLoginItemSettings(LOGIN_ITEM);
+  return WINDOWS ? settings.executableWillLaunchAtLogin : settings.openAtLogin;
+}
+
 // 打成应用后没有终端，日志自己写文件。由命令启动时标准输出已经被接到同一个文件里了。
 // Windows 上从开始菜单起的（不是命令行起的）也没有终端
 if (app.isPackaged || (INSTALLED_ON_WINDOWS && !LAUNCHED_BY_CLI)) alsoLogTo(PATHS.logFile);
@@ -620,7 +630,7 @@ async function main() {
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
       openAtLogin: {
         supported: app.isPackaged || INSTALLED_ON_WINDOWS,
-        enabled: app.getLoginItemSettings(LOGIN_ITEM).openAtLogin,
+        enabled: loginItemEnabled(),
       },
       home: PATHS.home,
       version: app.getVersion(),
