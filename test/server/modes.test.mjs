@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
 import { DEFAULT_TRANSCRIBER, findModel } from "../../src/models/catalog.mjs";
-import { createModeRefiner, describeRoute, findMode, keyVendorOf, MODES, parseMode } from "../../src/server/modes.mjs";
+import {
+  createModeRefiner,
+  describeRoute,
+  findMode,
+  keyVendorOf,
+  keyVendorsOf,
+  MODES,
+  parseMode,
+  usesLocalModel,
+} from "../../src/server/modes.mjs";
 
 const zh = createTranslator("zh-CN");
 const quiet = { info() {}, warn() {}, error() {} };
@@ -69,4 +78,62 @@ test("本地转写链路：拿交进来的转写器和按路线装的润色器�
 
 test("本地转写链路没有转写器时直接报错（调用方要先装好模型）", async () => {
   await assert.rejects(createModeRefiner({ route: LOCAL, apiKey: "k", log: quiet }), /转写器/);
+});
+
+const CLOUD = { ...LOCAL, transcriber: "bailian/qwen3-asr-flash" };
+
+test("第一跳交给云端时要两家的 key，主的那家（润色）在最后；同一家只要一把", () => {
+  assert.deepEqual(
+    keyVendorsOf(CLOUD).map(({ id }) => id),
+    ["bailian", "deepseek"],
+  );
+  assert.equal(keyVendorOf(CLOUD).id, "deepseek");
+  const allBailian = { ...CLOUD, polish: { vendor: "bailian", model: "qwen3.8-flash" } };
+  assert.deepEqual(
+    keyVendorsOf(allBailian).map(({ id }) => id),
+    ["bailian"],
+  );
+  assert.equal(usesLocalModel(CLOUD), false);
+  assert.equal(usesLocalModel(LOCAL), true);
+  assert.equal(usesLocalModel(NATIVE), false);
+});
+
+test("第一跳交给云端：不用交转写器，按路线装；两家各用各的 key，验证时两跳都验", async () => {
+  const requests = [];
+  const fetch = async (url, init) => {
+    requests.push({ url, auth: init.headers.Authorization });
+    if (url.includes("dashscope")) {
+      return Response.json({
+        model: "qwen3-asr-flash",
+        choices: [{ finish_reason: "stop", message: { content: "好的" } }],
+        usage: { prompt_tokens: 25, completion_tokens: 2, seconds: 1 },
+      });
+    }
+    return Response.json({
+      model: "deepseek-flash",
+      choices: [{ finish_reason: "stop", message: { content: "好的。" } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    });
+  };
+  const refiner = await createModeRefiner({
+    route: CLOUD,
+    keys: { bailian: "sk-ws-b", deepseek: "sk-d" },
+    log: quiet,
+    decode: async () => new Float32Array(16_000),
+    fetch,
+  });
+  assert.equal(await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm" }), "好的");
+  assert.deepEqual(
+    requests.map(({ url, auth }) => [new URL(url).host, auth]),
+    [
+      ["dashscope.aliyuncs.com", "Bearer sk-ws-b"],
+      ["api.deepseek.com", "Bearer sk-d"],
+    ],
+  );
+  requests.length = 0;
+  await refiner.warmUp();
+  assert.deepEqual(
+    new Set(requests.map(({ url }) => new URL(url).host)),
+    new Set(["dashscope.aliyuncs.com", "api.deepseek.com"]),
+  );
 });

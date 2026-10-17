@@ -3,7 +3,7 @@ import { downloadSize, findModel } from "../models/catalog.mjs";
 import { sizeText } from "../models/describe.mjs";
 import { speechSample } from "../server/asr/probe.mjs";
 import { findChatVendor } from "../server/chat/vendors.mjs";
-import { describeRoute } from "../server/modes.mjs";
+import { describeRoute, usesLocalModel } from "../server/modes.mjs";
 import { findProvider } from "../server/providers/index.mjs";
 import {
   MODE_SETTINGS,
@@ -18,7 +18,7 @@ import {
 //
 //   native ──switchMode("local", 第二跳等)──▶ local
 //     │  ◀──switchMode("native", 模型等)──     │
-//     └ setModel        换收音频的模型         ├ setTranscriber  第一跳：本机转写模型，不用 key，要下载好了的
+//     └ setModel        换收音频的模型         ├ setTranscriber  第一跳：本机模型（不用 key，要下载好了的）或云端模型（验它那家的 key）
 //                                              └ setPolish       第二跳：润色的厂商和模型（自定义服务连同地址）
 //
 // 两种模式要换的东西不一样，各走各的路：模型只能在它那种模式里换，不在那种模式时换是错的（没法选），
@@ -98,9 +98,9 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
   /** 换成这条路线，要的那家的 key 验证过才换 */
   const useRoute = (route) => keys.use({ route });
 
-  /** local 的路线要的本机模型下载好了没有：没有就说先下载哪个、多大 */
+  /** local 的路线要的本机模型下载好了没有：没有就说先下载哪个、多大。第一跳交给云端时没有要下载的 */
   function notDownloaded(route) {
-    if (route.mode !== "local" || models.isInstalled(route.transcriber)) return null;
+    if (!usesLocalModel(route) || models.isInstalled(route.transcriber)) return null;
     const model = findModel(route.transcriber);
     return {
       ok: false,
@@ -153,11 +153,15 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
       return within("native", "model", { model }, useRoute);
     },
 
-    /** local 第一跳：本机的转写模型，要下载好了的。不用 key：润色那一跳照旧，服务只换模型（没装好的话重新装） */
+    /**
+     * local 第一跳。本机模型要下载好了的，不用 key：润色那一跳照旧，服务只换模型（没装好的话重新装）。
+     * 换到云端模型、或从云端换回本机，前后不是同一种转写器：整条路线重新装、验 key（云端那家的也要有）
+     */
     setTranscriber(transcriber) {
       return within("local", "transcriber", { transcriber }, async (route) => {
         const missing = notDownloaded(route);
         if (missing) return missing;
+        if (!usesLocalModel(route) || !usesLocalModel(service.route)) return useRoute(route);
         service.switchTranscriber(route.transcriber);
         return { ok: true };
       });

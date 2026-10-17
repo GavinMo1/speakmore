@@ -1,4 +1,6 @@
 import { LocalizedError, msg } from "../i18n/index.mjs";
+import { createCloudTranscriber } from "./asr/cloud/transcriber.mjs";
+import { cloudTranscriberOf, findCloudTranscriber } from "./asr/cloud/vendors.mjs";
 import { findChatVendor, formatChatChoice } from "./chat/vendors.mjs";
 import { findProvider, formatModelChoice } from "./providers/index.mjs";
 import { createLocalRefiner } from "./refine/local.mjs";
@@ -7,16 +9,21 @@ import { createModelRefiner } from "./refine/refiner.mjs";
 
 // 识别的两种模式，用户在设置里选一种（mode）。两种平级，谁也不是谁的退路：
 //   native  原生，一跳：录音直接交给收音频的大模型，一次请求出成品（refine/refiner.mjs）
-//   local   本地转写，两跳：本机的小模型先把录音转成原文，再交给任意纯文字大模型润色（refine/local.mjs）
-// 两种模式要选的东西不一样：native 选一个收音频的模型；local 第一跳选本地模型、第二跳选润色的厂商和模型。
+//   local   转写加润色，两跳：先把录音转成原文（本机的小模型，或云端的语音识别模型），再交给任意纯文字大模型润色
+//           （refine/local.mjs）。id 沿用 0.6 起的 local：设置文件里存的就是它
+// 两种模式要选的东西不一样：native 选一个收音频的模型；local 第一跳选转写模型、第二跳选润色的厂商和模型。
 // 先定模式，再在模式里选模型，各管各的（app/modes.mjs）。
 // 装出来的都是同一个接口（warmUp、prepare、refine），服务端只认这个接口。
 //
 // "路线"（route）写清这一条要用哪些东西，由设置或环境变量拼出来：
 //   { mode: "native", model: { provider, model }, thinkingLevel }
-//   { mode: "local", transcriber: 本地模型的 id, polish: { vendor, model }, customUrl }
-// 本地转写链路的转写器（装着模型的子进程，asr/host.mjs）由调用方装好交进来：它的去留跟着模型走，
-// 换一把 key、换一家润色都不该把模型重装一遍。
+//   { mode: "local", transcriber: 本地模型的 id 或 云端的 厂商/模型, polish: { vendor, model }, customUrl }
+// 第一跳是本机模型时，转写器（装着模型的子进程，asr/host.mjs）由调用方装好交进来：它的去留跟着模型走，
+// 换一把 key、换一家润色都不该把模型重装一遍。第一跳是云端模型时，这里按路线装（asr/cloud/transcriber.mjs）。
+//
+// 一条路线可能要用两家的 key：第一跳交给云端（比如百炼）、润色交给另一家（比如 DeepSeek）。
+// keyVendorsOf 列出这条路线要的每一家，主的那家（keyVendorOf：原生是收音频的那家，local 是润色的那家）在最后；
+// 装 refiner 时 keys 按家给齐（{ 厂商 id: key }），apiKey 是主的那家的，只给一家时可以只写它。
 
 /** 设置里没写时润色交给谁 */
 export const DEFAULT_POLISH = "deepseek";
@@ -24,34 +31,52 @@ export const DEFAULT_POLISH = "deepseek";
 export const MODES = Object.freeze([
   Object.freeze({
     id: "native",
-    /** 要用谁家的 key */
-    keyVendor: (route) => findProvider(route.model.provider),
+    /** 要用谁家的 key，主的那家在最后 */
+    keyVendors: (route) => [findProvider(route.model.provider)],
     describe: (route) => formatModelChoice(route.model),
-    create: ({ route, apiKey, log, onCall }) =>
-      createModelRefiner({ choice: route.model, apiKey, thinkingLevel: route.thinkingLevel, log, onCall }),
+    create: ({ route, keys, log, onCall }) =>
+      createModelRefiner({
+        choice: route.model,
+        apiKey: keys[route.model.provider],
+        thinkingLevel: route.thinkingLevel,
+        log,
+        onCall,
+      }),
   }),
   Object.freeze({
     id: "local",
-    keyVendor: (route) => findChatVendor(route.polish.vendor),
+    keyVendors(route) {
+      const cloud = cloudTranscriberOf(route.transcriber);
+      const polish = findChatVendor(route.polish.vendor);
+      return cloud && cloud.vendor !== polish.id ? [findCloudTranscriber(cloud.vendor), polish] : [polish];
+    },
     describe: (route) => `${route.transcriber} → ${formatChatChoice(route.polish)}`,
-    async create({ route, apiKey, transcriber, log, onCall, decode, fetch }) {
-      if (!transcriber) throw new Error(`本地转写链路要先装好转写器（${route.transcriber}）`);
+    async create({ route, keys, transcriber, log, onCall, decode, fetch }) {
+      const cloud = cloudTranscriberOf(route.transcriber);
+      if (!cloud && !transcriber) throw new Error(`本地转写链路要先装好转写器（${route.transcriber}）`);
+      const firstHop = cloud
+        ? await createCloudTranscriber({ choice: cloud, apiKey: keys[cloud.vendor], log, onCall, fetch })
+        : transcriber;
       const polisher = await createChatPolisher({
         choice: route.polish,
         customUrl: route.customUrl,
-        apiKey,
+        apiKey: keys[route.polish.vendor],
         log,
         onCall,
         fetch,
       });
-      return createLocalRefiner({
-        transcriber,
+      const refiner = createLocalRefiner({
+        transcriber: firstHop,
         polisher,
         log,
-        model: route.transcriber,
+        // 云端转写自己记账，本机转写这一笔由 local.mjs 记
+        model: cloud ? null : route.transcriber,
         onCall,
         ...(decode ? { decode } : {}),
       });
+      if (!cloud) return refiner;
+      // 验证时两跳都要验：第一跳的 key、模型也可能不对
+      return { ...refiner, warmUp: () => Promise.all([firstHop.warmUp(), refiner.warmUp()]).then(() => {}) };
     },
   }),
 ]);
@@ -73,8 +98,14 @@ export function parseMode(value) {
   return mode.id;
 }
 
-/** 这条路线要用谁家的 key：{ id, name, keyEnv, keyPage } */
-export const keyVendorOf = (route) => findMode(route.mode).keyVendor(route);
+/** 这条路线要用的每一家：[{ id, name, keyEnv, keyPage }]，主的那家在最后，同一家只出现一次 */
+export const keyVendorsOf = (route) => findMode(route.mode).keyVendors(route);
+
+/** 这条路线主要用谁家的 key（原生是收音频的那家，local 是润色的那家） */
+export const keyVendorOf = (route) => keyVendorsOf(route).at(-1);
+
+/** 第一跳是不是本机模型：local 模式、写的不是云端的 厂商/模型 */
+export const usesLocalModel = (route) => route.mode === "local" && cloudTranscriberOf(route.transcriber) === null;
 
 /** 一句话说清这条路线，给日志和状态用 */
 export const describeRoute = (route) => `${route.mode}: ${findMode(route.mode).describe(route)}`;
@@ -83,9 +114,11 @@ export const describeRoute = (route) => `${route.mode}: ${findMode(route.mode).d
  * 按路线装出一个 refiner。
  * @param {object} options
  * @param {object} options.route
- * @param {string} options.apiKey 这条路线要的那家的 key（keyVendorOf）
- * @param {object} [options.transcriber] 本地转写链路要的转写器（asr/host.mjs 的 spawnTranscriber）
+ * @param {string} [options.apiKey] 主的那家的 key（keyVendorOf）。路线只要一家时写它就够了
+ * @param {Record<string, string>} [options.keys] 这条路线要的每一家的 key（keyVendorsOf），按厂商 id
+ * @param {object} [options.transcriber] 第一跳是本机模型时要的转写器（asr/host.mjs 的 spawnTranscriber）
  */
-export function createModeRefiner(options) {
-  return findMode(options.route.mode).create(options);
+export function createModeRefiner({ apiKey, keys, ...options }) {
+  const all = { ...keys, ...(apiKey === undefined ? {} : { [keyVendorOf(options.route).id]: apiKey }) };
+  return findMode(options.route.mode).create({ ...options, keys: all });
 }

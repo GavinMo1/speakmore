@@ -52,8 +52,13 @@ function fakeService(verdicts = {}) {
     using: null,
     /** 正在走的路线；没换过时是 null（启动时设置里的那条） */
     route: null,
-    async useKey(apiKey, { allowUnverified = false, route } = {}) {
-      service.calls.push(route ? { useKey: apiKey, allowUnverified, route } : { useKey: apiKey, allowUnverified });
+    async useKey(apiKey, { allowUnverified = false, route, keys } = {}) {
+      service.calls.push({
+        useKey: apiKey,
+        allowUnverified,
+        ...(route ? { route } : {}),
+        ...(keys ? { keys } : {}),
+      });
       const error = verdicts[apiKey]?.();
       if (error && !(allowUnverified && error.kind === "unavailable")) throw error;
       service.using = apiKey;
@@ -61,8 +66,8 @@ function fakeService(verdicts = {}) {
       return { verified: !error };
     },
     /** 拿一把 key 试另一条路线，不换掉正在用的 */
-    async probe({ route, apiKey }) {
-      service.calls.push({ probe: apiKey, route });
+    async probe({ route, apiKey, keys }) {
+      service.calls.push({ probe: apiKey, route, ...(keys ? { keys } : {}) });
       const error = verdicts[apiKey]?.();
       if (error) throw error;
     },
@@ -105,6 +110,7 @@ function fakeStore(initial = null) {
  * @param {string | Error | null} [options.stored] 正在用的那一家存着的 key
  * @param {string | Error | null} [options.storedOther] 另一家（Gemini 时是 OpenAI，反之亦然）存着的 key
  * @param {string | Error | null} [options.storedDeepseek] 润色那一家（DeepSeek）存着的 key
+ * @param {string | Error | null} [options.storedBailian] 第一跳交给云端时那一家（百炼）存着的 key
  * @param {(id: string) => object} [options.routeFor] 不写就用 key-manager 自带的（原生链路、默认模型）
  */
 function setup({
@@ -113,6 +119,7 @@ function setup({
   stored = null,
   storedOther = null,
   storedDeepseek = null,
+  storedBailian = null,
   env = {},
   external = false,
   routeFor,
@@ -121,6 +128,7 @@ function setup({
   const other = provider === "gemini" ? "openai" : "gemini";
   const keyStores = { [provider]: fakeStore(stored), [other]: fakeStore(storedOther) };
   if (provider !== "deepseek") keyStores.deepseek = fakeStore(storedDeepseek);
+  if (provider !== "bailian") keyStores.bailian = fakeStore(storedBailian);
   const logged = [];
   const record = (level) => (event, fields) => logged.push({ level, event, ...fields });
   let changes = 0;
@@ -139,6 +147,7 @@ function setup({
     keyStore: keyStores[provider],
     otherStore: keyStores[other],
     deepseekStore: keyStores.deepseek,
+    bailianStore: keyStores.bailian,
     logged,
     changes: () => changes,
   };
@@ -593,11 +602,12 @@ test("检查正在用的那家时，用的是这次运行实际在用的那把�
 test("sources：每家的 key 在哪（环境变量、存着的、没有），不用解密", () => {
   const { keys, keyStore } = setup({ storedOther: "openai-key", env: { GEMINI_API_KEY: "env-key" } });
   keyStore.load = () => assert.fail("不该解密");
-  assert.deepEqual(keys.sources(), { gemini: "env", openai: "stored", deepseek: null });
+  assert.deepEqual(keys.sources(), { gemini: "env", openai: "stored", deepseek: null, bailian: null });
   assert.deepEqual(setup({ storedDeepseek: "ds-key" }).keys.sources(), {
     gemini: null,
     openai: null,
     deepseek: "stored",
+    bailian: null,
   });
 });
 
@@ -647,4 +657,66 @@ test("检查本地转写链路：用润色那一家的 key", async () => {
   const result = await keys.check(LOCAL_DEEPSEEK);
   assert.equal(result.ok, true);
   assert.deepEqual(service.calls, [{ probe: "ds-key", route: LOCAL_DEEPSEEK }]);
+});
+
+// ---------- 一条路线要两家的 key（第一跳交给云端、润色交给另一家） ----------
+
+const CLOUD_FIRST_HOP = { ...LOCAL_DEEPSEEK, transcriber: "bailian/qwen3-asr-flash" };
+
+test("第一跳交给百炼、润色交给 DeepSeek：两把都找齐，一起交给服务", async () => {
+  const { keys, service } = setup({ stored: "gemini-key", storedDeepseek: "ds-key", storedBailian: "bl-key" });
+  await keys.loadAtStartup();
+  assert.deepEqual(await keys.use({ route: CLOUD_FIRST_HOP }), { ok: true });
+  assert.equal(keys.provider.id, "deepseek");
+  assert.deepEqual(service.calls.at(-1), {
+    useKey: "ds-key",
+    allowUnverified: true,
+    route: CLOUD_FIRST_HOP,
+    keys: { bailian: "bl-key" },
+  });
+});
+
+test("另一家（百炼）没有 key：不换，说缺的是哪一家，也不拿 DeepSeek 的去验", async () => {
+  const { keys, service } = setup({ stored: "gemini-key", storedDeepseek: "ds-key" });
+  await keys.loadAtStartup();
+  const calls = service.calls.length;
+  const result = await keys.use({ route: CLOUD_FIRST_HOP });
+  assert.equal(result.ok, false);
+  assert.match(zh.text(result.problem), /Bailian/);
+  assert.equal(service.calls.length, calls);
+  assert.equal(keys.provider.id, "gemini");
+  assert.equal(keys.current.state, "ready");
+});
+
+test("启动时缺另一家的 key：状态是缺 key，点名是哪一家；存上它之后接着用起来", async () => {
+  const { keys, service, bailianStore } = setup({ provider: "deepseek", stored: "ds-key" });
+  service.route = CLOUD_FIRST_HOP;
+  const state = await keys.loadAtStartup();
+  assert.equal(state.state, "missing");
+  assert.deepEqual(state.vendor, { id: "bailian", name: "Bailian" });
+  assert.deepEqual(await keys.save("bl-key", { provider: "bailian", route: CLOUD_FIRST_HOP }), { ok: true });
+  assert.equal(bailianStore.value, "bl-key");
+  assert.equal(keys.current.state, "ready");
+  assert.deepEqual(service.calls.at(-1).keys, { bailian: "bl-key" });
+});
+
+test("检查两家的路线：缺另一家时说去填哪一家；都有时两把一起试", async () => {
+  const missing = setup({ storedDeepseek: "ds-key" });
+  const result = await missing.keys.check(CLOUD_FIRST_HOP);
+  assert.equal(result.cause, "missing");
+  assert.match(zh.text(result.problem), /speakmore key bailian/);
+  const both = setup({ storedDeepseek: "ds-key", storedBailian: "bl-key" });
+  assert.equal((await both.keys.check(CLOUD_FIRST_HOP)).ok, true);
+  assert.deepEqual(both.service.calls, [{ probe: "ds-key", route: CLOUD_FIRST_HOP, keys: { bailian: "bl-key" } }]);
+});
+
+test("删掉正在走的路线里另一家的 key：整条路线停下，状态说缺哪一家", async () => {
+  const { keys, service } = setup({ provider: "deepseek", stored: "ds-key", storedBailian: "bl-key" });
+  service.route = CLOUD_FIRST_HOP;
+  await keys.loadAtStartup();
+  assert.equal(keys.current.state, "ready");
+  await keys.forget({ provider: "bailian" });
+  assert.equal(keys.current.state, "missing");
+  assert.equal(keys.current.vendor.id, "bailian");
+  assert.equal(service.using, null);
 });

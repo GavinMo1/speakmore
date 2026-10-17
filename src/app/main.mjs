@@ -242,7 +242,8 @@ async function main() {
   const provider = () => (service ? keys.provider : PROVIDER);
 
   const currentSetup = () => ({
-    providerName: provider().name,
+    // 缺的是路线里另一家的 key（第一跳交给云端）时点名那一家
+    providerName: keys.current.vendor?.name ?? provider().name,
     key: keys.current,
     localModel: service?.localModel ?? null,
     helper: helperState,

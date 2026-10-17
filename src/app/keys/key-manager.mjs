@@ -1,5 +1,5 @@
 import { LocalizedError, msg, problemOf } from "../../i18n/index.mjs";
-import { keyVendorOf } from "../../server/modes.mjs";
+import { keyVendorOf, keyVendorsOf } from "../../server/modes.mjs";
 import { toModelError } from "../../server/providers/errors.mjs";
 import { apiKeyProblem, DEFAULT_THINKING_LEVEL, findProvider } from "../../server/providers/index.mjs";
 import { findVendor } from "../../server/vendors.mjs";
@@ -11,6 +11,9 @@ const MISSING = { state: "missing", source: null, problem: null };
  * local 模式是润色的那家（server/modes.mjs 的 keyVendorOf）。它的那把 key 现在是什么状态、
  * 启动时去哪找、怎么换、怎么删，都走这里；别家的 key 也在这里存、删、拿去检查，但不影响正在用的。
  * 换路线（切模式、换模型）也走这里的 use：新路线要的那家的 key 验证过才换，这是唯一的一处。
+ * 一条路线可能要两家的 key（第一跳交给云端、润色交给另一家，server/modes.mjs 的 keyVendorsOf）：provider 是主的那家，
+ * 另一家的 key 每次换路线、验证时按"环境变量优先、其次存着的"找来一起交给服务；缺了它就和缺主的那把一样换不过去，
+ * 状态里的 vendor 写着缺的是哪一家。
  *
  * 状态（current，只说正在用的那一家）里的几项：
  *   state     missing（没有）/ unreadable（存着但解不开）/ checking / rejected / ready
@@ -18,6 +21,7 @@ const MISSING = { state: "missing", source: null, problem: null };
  *   problem   给用户看的一句原因：一句还没定语言的话（msg），模型回的原话是一段字，由显示它的那一端翻
  *   cause     只在 rejected 时有：key（这把 key 不对）/ other（那一家拒绝了请求，多半是模型名或思考档位）
  *   verified  只在 ready 时有：false 表示启动时够不着那一家（没网，或者它一时不可用），先用着，还没验证
+ *   vendor    只在缺的、读不出的是路线里另一家（不是 provider）的 key 时有：{ id, name }
  *
  * @param {object} options
  * @param {{ useKey: Function, verify: Function, forgetKey: Function, probe: Function } | null} options.service
@@ -87,6 +91,36 @@ export function createKeyManager({
   }
 
   /**
+   * 路线里除了 primary 以外那几家的 key（{ 厂商 id: key }）。缺了、读不出来、样子不对时 failure 说是哪家、为什么。
+   * 不连服务（连着单独启动的服务端）时没有路线，什么都不要
+   * @returns {{ keys: Record<string, string>, failure: null | { vendor: object, state: string, cause: string, problem: object } }}
+   */
+  function othersFor(route, primaryId) {
+    const keys = {};
+    for (const vendor of route ? keyVendorsOf(route) : []) {
+      if (vendor.id === primaryId) continue;
+      const { found, store } = lookup(vendor.id);
+      const who = { id: found.id, name: found.name };
+      let key;
+      try {
+        key = keyFor(found, store);
+      } catch (error) {
+        log.error("key_unreadable", { provider: found.id, error: String(error?.message ?? error) });
+        const problem = msg("key.unreadableFor", { provider: found.name });
+        return { keys, failure: { vendor: who, state: "unreadable", cause: "unreadable", problem } };
+      }
+      if (!key) {
+        const problem = msg("key.noKeyFor", { provider: found.name });
+        return { keys, failure: { vendor: who, state: "missing", cause: "missing", problem } };
+      }
+      const shape = apiKeyProblem(key.apiKey);
+      if (shape) return { keys, failure: { vendor: who, state: "rejected", cause: "key", problem: shape } };
+      keys[found.id] = key.apiKey;
+    }
+    return { keys, failure: null };
+  }
+
+  /**
    * 拿一把 key 去验证，通过了才开始用。不抛错。
    * @param {{ atStartup: boolean, allowUnverified?: boolean, target?: object, route?: object }} options
    *   atStartup：启动时只是够不着的话照样启用，没通过就是不能用；换一把时没通过的话服务里原来那把还在用，
@@ -100,9 +134,21 @@ export function createKeyManager({
       const previous = current;
       const switching = target !== null && target.id !== provider.id;
       const who = switching ? target : provider;
+      // 路线里另一家的 key 先找齐：缺了就不必拿主的这把去验
+      const others = othersFor(route ?? service.route, who.id);
+      if (others.failure) {
+        const { vendor, state, cause, problem } = others.failure;
+        log.error("key_rejected", { provider: vendor.id, source: null, cause, error: "路线要的另一家没有可用的 key" });
+        if (atStartup) become({ state, source: null, problem, vendor, ...(state === "rejected" ? { cause } : {}) });
+        return { cause, problem };
+      }
       become({ state: "checking", source, problem: null });
       try {
-        const { verified } = await service.useKey(apiKey, { allowUnverified, ...(route ? { route } : {}) });
+        const { verified } = await service.useKey(apiKey, {
+          allowUnverified,
+          ...(route ? { route } : {}),
+          ...(Object.keys(others.keys).length > 0 ? { keys: others.keys } : {}),
+        });
         if (switching) {
           log.info("provider_switched", { from: provider.id, to: target.id });
           provider = target;
@@ -164,7 +210,7 @@ export function createKeyManager({
     return shape ? { problem: shape } : { apiKey };
   }
 
-  return {
+  const manager = {
     get current() {
       return current;
     },
@@ -216,7 +262,12 @@ export function createKeyManager({
       const { apiKey, problem } = typed(value);
       if (problem) return { ok: false, problem };
 
-      if (target.found.id !== provider.id) return saveForOther(target.found, target.store, apiKey, route);
+      if (target.found.id !== provider.id) {
+        const saved = await saveForOther(target.found, target.store, apiKey, route);
+        // 正在走的路线缺的正是这一家的 key（第一跳交给它）：存好了就接着把路线用起来
+        if (saved.ok && current.vendor?.id === target.found.id) await manager.use({ route: service.route });
+        return saved;
+      }
       const failure = await adopt(apiKey, "stored", { atStartup: false });
       if (failure) return { ok: false, problem: failure.problem };
       return storeKey(target.store, apiKey);
@@ -270,10 +321,23 @@ export function createKeyManager({
         const { found, store } = lookup(id);
         store.clear();
         log.info("key_forgotten", { provider: found.id });
-        if (!service || found.id !== provider.id) return;
+        if (!service) return;
+        if (found.id === provider.id) {
+          service.forgetKey();
+          inUse = null;
+          become(MISSING);
+          return;
+        }
+        // 删的是正在走的路线里另一家的：那一跳没了 key，整条路线都用不了
+        const inRoute = service.route && keyVendorsOf(service.route).some(({ id }) => id === found.id);
+        if (!inRoute || keyFor(found, store)) return;
         service.forgetKey();
-        inUse = null;
-        become(MISSING);
+        become({
+          state: "missing",
+          source: null,
+          problem: msg("key.noKeyFor", { provider: found.name }),
+          vendor: { id: found.id, name: found.name },
+        });
       });
     },
 
@@ -305,9 +369,22 @@ export function createKeyManager({
       }
       const shape = apiKeyProblem(key.apiKey);
       if (shape) return { ok: false, cause: "key", problem: shape };
+      const others = othersFor(route, found.id);
+      if (others.failure) {
+        const { vendor, cause } = others.failure;
+        const problem =
+          cause === "missing"
+            ? msg("key.noKeyForCli", { provider: vendor.name, id: vendor.id })
+            : others.failure.problem;
+        return { ok: false, cause, problem };
+      }
       const startedAt = performance.now();
       try {
-        await service.probe({ route, apiKey: key.apiKey });
+        await service.probe({
+          route,
+          apiKey: key.apiKey,
+          ...(Object.keys(others.keys).length > 0 ? { keys: others.keys } : {}),
+        });
       } catch (error) {
         const { cause, problem, detail } = described(error, key.apiKey);
         log.warn("model_check_failed", { provider: found.id, cause, error: detail.slice(0, 300) });
@@ -354,6 +431,7 @@ export function createKeyManager({
       }
     },
   };
+  return manager;
 }
 
 /** 不说走哪条路线时：那家（收音频的）的默认模型走原生链路 */

@@ -4,7 +4,7 @@ import { createModelStore } from "../models/store.mjs";
 import { resolvePaths } from "../storage/paths.mjs";
 import { startTranscriber } from "./asr/start.mjs";
 import { loadConfig } from "./config.mjs";
-import { createModeRefiner, describeRoute } from "./modes.mjs";
+import { createModeRefiner, describeRoute, usesLocalModel } from "./modes.mjs";
 import { findProvider } from "./providers/index.mjs";
 import { startServer, WS_PATH } from "./server.mjs";
 
@@ -13,13 +13,13 @@ let config;
 let modelsDir = null;
 try {
   config = loadConfig(process.env);
-  if (config.route.mode === "local") modelsDir = resolvePaths(process.env).modelsDir;
+  if (usesLocalModel(config.route)) modelsDir = resolvePaths(process.env).modelsDir;
 } catch (error) {
   // 配置写错是使用上的问题，给一句人话就够了，不需要调用栈
   console.error(error.message);
   process.exit(2);
 }
-const { route, apiKey } = config;
+const { route, keys } = config;
 
 /** 下载进度每 10% 记一行，不刷屏 */
 function progressLogger(modelId) {
@@ -34,7 +34,7 @@ function progressLogger(modelId) {
 
 // 本地转写链路先把模型准备好，装进转写进程。单独启动服务端是开发时用的：用的人明说了要 local，没下载过就直接下
 // （App 里不这样，下不下由用户点）
-if (route.mode === "local") {
+if (usesLocalModel(route)) {
   const store = createModelStore({ dir: modelsDir, source: config.modelSource });
   const model = findModel(route.transcriber);
   if (!store.isInstalled(model)) {
@@ -42,9 +42,10 @@ if (route.mode === "local") {
     await store.install(model, { onProgress: progressLogger(model.id) });
   }
 }
-const transcriber =
-  route.mode === "local" ? await startTranscriber({ modelId: route.transcriber, modelsDir, log }) : null;
-const refiner = await createModeRefiner({ route, apiKey, transcriber, log });
+const transcriber = usesLocalModel(route)
+  ? await startTranscriber({ modelId: route.transcriber, modelsDir, log })
+  : null;
+const refiner = await createModeRefiner({ route, keys, transcriber, log });
 
 let server;
 try {

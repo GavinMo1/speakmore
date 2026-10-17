@@ -6,7 +6,7 @@
 import { LocalizedError, msg, problemOf } from "../i18n/index.mjs";
 import { findModel } from "../models/catalog.mjs";
 import { startTranscriber } from "../server/asr/start.mjs";
-import { createModeRefiner, describeRoute, keyVendorOf } from "../server/modes.mjs";
+import { createModeRefiner, describeRoute, keyVendorOf, usesLocalModel } from "../server/modes.mjs";
 import { startServer, WS_PATH } from "../server/server.mjs";
 
 /**
@@ -58,7 +58,8 @@ export async function startService({
 
   /** 让本地模型跟着路线走：要的是别的模型就换，不走本地转写就卸掉；没下载的停在 missing；上次没装上的再装一次 */
   function followRoute() {
-    const wanted = route.mode === "local" ? route.transcriber : null;
+    // 第一跳交给云端时没有本地模型要装
+    const wanted = usesLocalModel(route) ? route.transcriber : null;
     if (wanted && !models.isInstalled(wanted)) {
       releaseLocal();
       if (local.state !== "missing" || local.model !== wanted) setLocal({ state: "missing", model: wanted });
@@ -123,8 +124,8 @@ export async function startService({
     },
   };
 
-  const build = (nextRoute, apiKey) =>
-    createRefiner({ route: nextRoute, apiKey, transcriber, log, onCall: onModelCall });
+  const build = (nextRoute, apiKey, keys) =>
+    createRefiner({ route: nextRoute, apiKey, keys, transcriber, log, onCall: onModelCall });
 
   followRoute();
 
@@ -171,15 +172,16 @@ export async function startService({
      * ModelError），这时原来能用的那把继续用。这个请求同时是预热，之后的第一次听写不会慢。
      * 本地转写链路验的是润色那一家：本地模型在后台另外准备，不等它。
      *
-     * @param {string} apiKey
-     * @param {{ allowUnverified?: boolean, route?: object }} [options]
+     * @param {string} apiKey 路线主的那家的 key（server/modes.mjs 的 keyVendorOf）
+     * @param {{ allowUnverified?: boolean, route?: object, keys?: Record<string, string> }} [options]
      *   allowUnverified：只是暂时够不着那一家的话照样启用。启动时、换用存着的那把时用：它当初是验证过才存的，
      *   不该因为开机时没网、或者对方一时回了 503 就被判成不能用。
-     *   route：连路线一起换（设置里改用别家、换链路）；不写就是正在走的那条
+     *   route：连路线一起换（设置里改用别家、换链路）；不写就是正在走的那条。
+     *   keys：路线要两家时另一家的 key（第一跳交给云端、润色交给别家），按厂商 id
      * @returns {Promise<{ verified: boolean }>} verified 为 false 表示先用着、还没验证
      */
-    async useKey(apiKey, { allowUnverified = false, route: nextRoute = route } = {}) {
-      const candidate = await build(nextRoute, apiKey);
+    async useKey(apiKey, { allowUnverified = false, route: nextRoute = route, keys } = {}) {
+      const candidate = await build(nextRoute, apiKey, keys);
       let verified = true;
       try {
         await candidate.warmUp();
@@ -202,6 +204,10 @@ export async function startService({
      */
     switchTranscriber(model) {
       if (route.mode !== "local") throw new Error(`现在不是 local 模式（${route.mode}），没有本地模型可换`);
+      // 换到云端、或从云端换回本机，润色前面那一跳就不是同一个东西了，要重新装 refiner、验 key：走 useKey
+      if (!usesLocalModel(route) || !usesLocalModel({ ...route, transcriber: model })) {
+        throw new Error(`第一跳 ${route.transcriber} → ${model} 涉及云端模型，要走 useKey 换路线`);
+      }
       // 同一个、也好好的：不用动。上次没装上的话照样往下走，再装一次
       if (model === route.transcriber && local.state !== "failed") return;
       log.info("transcriber_switched", { from: route.transcriber, to: model, retry: model === route.transcriber });
@@ -253,10 +259,10 @@ export async function startService({
 
     /**
      * 拿一把 key 试某条路线，不换掉正在用的：给别家存 key 前验证、speakmore model check 都用它。
-     * @param {{ route: object, apiKey: string }} options
+     * @param {{ route: object, apiKey: string, keys?: Record<string, string> }} options keys 同 useKey
      */
-    async probe({ route: tried, apiKey }) {
-      await (await build(tried, apiKey)).warmUp();
+    async probe({ route: tried, apiKey, keys }) {
+      await (await build(tried, apiKey, keys)).warmUp();
     },
 
     forgetKey() {
