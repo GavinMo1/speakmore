@@ -268,10 +268,11 @@ const LOCAL = {
 
 /** 假的本地模型：手动控制装好的时机，记下卸掉了几次 */
 function fakeLocal() {
-  const control = { started: [], disposed: 0 };
+  const control = { started: [], accelerations: [], disposed: 0 };
   const startLocal = (options) =>
     new Promise((resolve, reject) => {
       control.started.push(options.modelId);
+      control.accelerations.push(options.acceleration);
       control.finish = () =>
         resolve({
           backend: "fake",
@@ -303,7 +304,10 @@ const throughTranscriber = async ({ transcriber }) => ({
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 /** 走本地转写链路的服务，本地模型和模型库都是假的 */
-async function localService(t, { models = fakeModels(), onLocalModel, createRefiner = throughTranscriber } = {}) {
+async function localService(
+  t,
+  { models = fakeModels(), onLocalModel, createRefiner = throughTranscriber, acceleration } = {},
+) {
   const { control, startLocal } = fakeLocal();
   const service = await startService({
     log: quietLog,
@@ -312,6 +316,7 @@ async function localService(t, { models = fakeModels(), onLocalModel, createRefi
     startLocal,
     createRefiner,
     onLocalModel,
+    acceleration,
   });
   t.after(() => service.close());
   return { service, control, models };
@@ -330,6 +335,25 @@ test("本地转写链路：下载好了的启动时就装上；装载中按下�
   assert.equal(service.localModel.state, "ready");
   assert.equal((await dictateOnce(service.url)).V.refined_text, "转写了 3");
   assert.ok(changes >= 2);
+});
+
+test("加速设置：装模型时交给它；换了就卸掉重装（正在装的那次作废），没换不动", async (t) => {
+  const { service, control } = await localService(t, { acceleration: "cpu" });
+  assert.deepEqual(control.accelerations, ["cpu"]);
+  control.finish();
+  await tick();
+  assert.equal(service.localModel.state, "ready");
+
+  service.setAcceleration("cpu");
+  assert.deepEqual(control.accelerations, ["cpu"]);
+
+  service.setAcceleration("auto");
+  assert.equal(control.disposed, 1);
+  assert.deepEqual(control.accelerations, ["cpu", "auto"]);
+  assert.equal(service.localModel.state, "loading");
+  control.finish();
+  await tick();
+  assert.equal(service.localModel.state, "ready");
 });
 
 test("要的模型还没下载：不自己去下，停在 missing；按下热键时说去哪下", async (t) => {

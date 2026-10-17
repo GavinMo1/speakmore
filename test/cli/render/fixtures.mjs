@@ -42,6 +42,7 @@ export const settings = {
   polish: { value: "deepseek/deepseek-flash", source: "default" },
   customUrl: { value: "", source: "default" },
   modelSource: { value: "cn", source: "default" },
+  acceleration: { value: "auto", source: "default" },
   theme: { value: "ink", source: "default" },
   language: { value: "system", source: "default" },
 };

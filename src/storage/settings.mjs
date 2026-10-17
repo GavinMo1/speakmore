@@ -51,6 +51,8 @@ const TRANSCRIBER_CHOICES = [
 /** 云端模型名里只出现这些字符（qwen3-asr-flash、fun-asr-flash-2026-06-15） */
 const CLOUD_MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 const SOURCE_IDS = SOURCES.map((source) => source.id);
+/** 本机模型用不用显卡：auto 有显卡就用、在显卡上没装起来就退回 CPU（asr/start.mjs）；cpu 只用 CPU */
+export const ACCELERATIONS = Object.freeze(["auto", "cpu"]);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
 
@@ -171,6 +173,18 @@ export const SETTINGS = {
       return id;
     },
     label: (value) => msg(`modelSources.${value}`),
+  },
+  acceleration: {
+    // 显卡驱动有问题、或者想把显卡让给游戏时选 cpu。换了要重新装一次模型，App 里当场换
+    env: "SPEAKMORE_ACCELERATION",
+    default: "auto",
+    choices: ACCELERATIONS,
+    parse(value) {
+      const id = value.trim().toLowerCase();
+      if (!ACCELERATIONS.includes(id)) throw oneOf(ACCELERATIONS);
+      return id;
+    },
+    label: (value) => msg(`accelerations.${value}`),
   },
   theme: {
     env: "SPEAKMORE_THEME",

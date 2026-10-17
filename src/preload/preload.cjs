@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld("speakmore", {
   setTranscriber: (id) => ipcRenderer.invoke("setup:set-transcriber", id),
   setPolish: (polish, customUrl) => ipcRenderer.invoke("setup:set-polish", polish, customUrl),
   setModelSource: (id) => ipcRenderer.invoke("setup:set-model-source", id),
+  setAcceleration: (id) => ipcRenderer.invoke("setup:set-acceleration", id),
   // 本机模型：用户点了才下载；取消、删除（正在用的删不了）
   downloadModel: (id) => ipcRenderer.invoke("setup:download-model", id),
   cancelDownload: (id) => ipcRenderer.invoke("setup:cancel-download", id),

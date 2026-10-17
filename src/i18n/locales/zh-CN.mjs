@@ -94,6 +94,8 @@ export default {
       customUrl: "自定义润色服务的地址（兼容 OpenAI 接口的那种），比如 https://api.example.com/v1",
       modelSource:
         "本机模型从哪下载：cn 是 SpeakMore 的国内源，original 是 Hugging Face 原始地址。选的那个下不动会自动换另一个",
+      acceleration:
+        "本机模型用不用显卡：auto 有显卡就用，出问题自动退回 CPU；cpu 只用 CPU（显卡驱动有问题、或者想把显卡让给别的程序时）",
       theme: "界面用哪套主题",
       language: "界面用哪种语言；system 是跟随系统",
     },
@@ -140,6 +142,10 @@ export default {
   modelSources: {
     cn: "国内源（SpeakMore 的 CDN）",
     original: "原始地址（Hugging Face）",
+  },
+  accelerations: {
+    auto: "自动（有显卡就用）",
+    cpu: "只用 CPU",
   },
   localModels: {
     tags: {
@@ -567,12 +573,14 @@ export default {
     theme: "主题",
     language: "语言",
     modelSource: "本地模型下载源",
+    acceleration: "本机模型加速",
     openAtLogin: "开机启动",
     hotkeyFailed: "没改成：{reason}",
     themeFailed: "主题没换成：{reason}",
     languageFailed: "语言没换成：{reason}",
     loginFailed: "开机启动没设上：{reason}",
     sourceFailed: "下载源未能更换：{reason}",
+    accelerationFailed: "加速方式未能更换：{reason}",
     recheck: "重新检查",
     version: "版本",
     dataFolder: "数据目录",

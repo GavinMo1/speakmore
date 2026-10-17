@@ -30,6 +30,7 @@ import { openHistory } from "../storage/history.mjs";
 import { migrateLegacyData } from "../storage/legacy.mjs";
 import { ensureHome, installedHomeOf, keyFile, oldAppKeyFile, resolvePaths } from "../storage/paths.mjs";
 import {
+  ACCELERATIONS,
   HOTKEY_IDS,
   hotkeyName,
   overridingEnv,
@@ -67,6 +68,8 @@ let PATHS;
 let SETTINGS;
 /** 启动时走哪条路线（server/modes.mjs）。之后可以在设置里改用别家（keys.use），正在走的以 service.route 为准 */
 let ROUTE;
+/** 本机模型用不用显卡（设置里的 acceleration）。在设置里换了当场生效（service.setAcceleration） */
+let acceleration;
 // Windows 上从开始菜单、开机启动起的没有 SPEAKMORE_HOME：家目录照程序装在哪找回来（装在默认位置时两者一样）
 if (process.platform === "win32" && !process.env.SPEAKMORE_HOME) {
   const home = installedHomeOf(process.execPath, existsSync);
@@ -77,6 +80,7 @@ try {
   PATHS = resolvePaths(process.env);
   SETTINGS = resolveSettings({ file: PATHS.settingsFile, env: process.env });
   ROUTE = routeOf(SETTINGS);
+  acceleration = SETTINGS.acceleration.value;
 } catch (error) {
   // 路径或设置写错是使用上的问题，说一句人话就退出，不留一个按了热键没反应的进程
   console.error(error.message);
@@ -239,6 +243,7 @@ async function main() {
           historyChanged();
         },
         onLocalModel: () => localModelChanged(),
+        acceleration,
       });
   const serverUrl = EXTERNAL_SERVER_URL ?? service.url;
   const e2e = process.env.SPEAKMORE_E2E_OUT ? await import("./e2e.mjs") : null;
@@ -287,6 +292,7 @@ async function main() {
     route: describeRoute(ROUTE),
     thinking: ROUTE.mode === "native" ? thinkingFor(PROVIDER) : null,
     theme: SETTINGS.theme.value,
+    acceleration,
     language: languageSetting,
     locale,
     system_languages: app.getPreferredSystemLanguages(),
@@ -711,6 +717,8 @@ async function main() {
         freeBytes,
         // 本地模型从哪下：哪种模式里都能换
         source: { value: settings.modelSource.value, choices: SOURCES.map(({ id }) => id) },
+        // 本机模型用不用显卡：正在用的那个（被环境变量盖着时是环境变量里的）
+        acceleration: { value: acceleration, choices: ACCELERATIONS },
         polish: settings.polish.value,
         customUrl: settings.customUrl.value,
         vendors: CHAT_VENDORS.map(describeVendor),
@@ -806,6 +814,16 @@ async function main() {
     saveSetting(PATHS.settingsFile, "modelSource", wanted);
     reloadModelSource();
     const variable = overridingEnv("modelSource", process.env);
+    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
+  });
+  handle("setup:set-acceleration", (_event, wanted) => {
+    saveSetting(PATHS.settingsFile, "acceleration", wanted);
+    acceleration = resolveSettings({ file: PATHS.settingsFile, env: process.env }).acceleration.value;
+    log.info("acceleration_changed", { acceleration });
+    // 装着本机模型的话按新的设置重装一遍
+    service?.setAcceleration(acceleration);
+    setupChanged();
+    const variable = overridingEnv("acceleration", process.env);
     return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
   });
   handle("setup:set-language", (_event, wanted) => {
@@ -1062,6 +1080,7 @@ async function main() {
       transcriber: route?.mode === "local" || route?.mode === "private" ? route.transcriber : null,
       polish: route?.mode === "local" ? formatChatChoice(route.polish) : null,
       theme: theme.id,
+      acceleration,
       // 设置里的语言（system 是跟随系统）和实际用的那种
       language: languageSetting,
       locale,

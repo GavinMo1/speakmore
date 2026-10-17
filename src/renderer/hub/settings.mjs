@@ -68,6 +68,12 @@ export function createSettings({ refresh }) {
         setup.local.source.value,
       ),
     );
+    $("acceleration").replaceChildren(
+      ...options(
+        setup.local.acceleration.choices.map((id) => [id, t(`accelerations.${id}`)]),
+        setup.local.acceleration.value,
+      ),
+    );
     $("open-at-login").checked = setup.openAtLogin.enabled;
     $("open-at-login-row").hidden = !setup.openAtLogin.supported;
   }
@@ -122,6 +128,18 @@ export function createSettings({ refresh }) {
       showNote("source-note", result.note ?? null);
     } catch (error) {
       showNote("general-problem", t("preferences.sourceFailed", { reason: describeError(error) }), "problem");
+    }
+    await refresh();
+  });
+
+  $("acceleration").addEventListener("change", async (event) => {
+    showNote("general-problem", null);
+    showNote("acceleration-note", null);
+    try {
+      const result = await window.speakmore.setAcceleration(event.target.value);
+      showNote("acceleration-note", result.note ?? null);
+    } catch (error) {
+      showNote("general-problem", t("preferences.accelerationFailed", { reason: describeError(error) }), "problem");
     }
     await refresh();
   });

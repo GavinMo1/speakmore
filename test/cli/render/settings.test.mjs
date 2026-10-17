@@ -34,6 +34,8 @@ test("设置逐项列出现在的值、从哪来、能填什么，后面是文�
   assert.match(text, /customUrl\s+默认/);
   assert.match(text, /modelSource\s+cn\s+国内源（SpeakMore 的 CDN） · 默认/);
   assert.match(text, /cn \/ original/);
+  assert.match(text, /acceleration\s+auto\s+自动（有显卡就用） · 默认/);
+  assert.match(text, /auto \/ cpu/);
   assert.match(text, /theme\s+ink\s+墨 · 默认/);
   assert.match(text, /ink \/ cinnabar \/ indigo/);
   assert.match(text, /speakmore config set hotkey fn/);

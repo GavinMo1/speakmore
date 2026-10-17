@@ -99,6 +99,8 @@ export default {
       customUrl: "Address of your custom polishing service (OpenAI-compatible), e.g. https://api.example.com/v1",
       modelSource:
         "Where on-device models download from: cn is SpeakMore's mirror in China, original is Hugging Face. If the chosen one stalls, the other is tried",
+      acceleration:
+        "Whether on-device models use the GPU: auto uses it when there is one and falls back to the CPU if it fails; cpu uses only the CPU (for GPU driver trouble, or to leave the GPU to other programs)",
       theme: "Which theme the windows use",
       language: "Interface language; system follows your Mac",
     },
@@ -146,6 +148,10 @@ export default {
   modelSources: {
     cn: "China mirror (SpeakMore CDN)",
     original: "Original (Hugging Face)",
+  },
+  accelerations: {
+    auto: "Automatic (GPU if available)",
+    cpu: "CPU only",
   },
   localModels: {
     tags: {
@@ -574,12 +580,14 @@ export default {
     theme: "Theme",
     language: "Language",
     modelSource: "Model download source",
+    acceleration: "On-device model acceleration",
     openAtLogin: "Launch at login",
     hotkeyFailed: "Not changed: {reason}",
     themeFailed: "Theme not changed: {reason}",
     languageFailed: "Language not changed: {reason}",
     loginFailed: "Couldn't set launch at login: {reason}",
     sourceFailed: "Download source not changed: {reason}",
+    accelerationFailed: "Acceleration not changed: {reason}",
     recheck: "Check again",
     version: "Version",
     dataFolder: "Data folder",

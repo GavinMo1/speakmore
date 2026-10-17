@@ -45,6 +45,7 @@ test("没有文件也没有环境变量时全用默认值", () => {
     polish: { value: "deepseek/deepseek-flash", source: "default" },
     customUrl: { value: "", source: "default" },
     modelSource: { value: "cn", source: "default" },
+    acceleration: { value: "auto", source: "default" },
     theme: { value: "ink", source: "default" },
     language: { value: "system", source: "default" },
   });
@@ -70,6 +71,16 @@ test("环境变量优先于文件", () => {
   assert.deepEqual(settings.hotkey, { value: DEFAULT_HOTKEY, source: "env" });
   assert.deepEqual(settings.model, { value: "openai/gpt-audio-mini", source: "env" });
   assert.deepEqual(settings.thinking, { value: "HIGH", source: "env" });
+});
+
+test("本机模型的加速：auto（有显卡就用，出问题退回 CPU）或 cpu，大小写都认，别的不收", () => {
+  saveSetting(file, "acceleration", "CPU");
+  assert.deepEqual(resolveSettings({ file, env: {} }).acceleration, { value: "cpu", source: "file" });
+  assert.deepEqual(resolveSettings({ file, env: { SPEAKMORE_ACCELERATION: "auto" } }).acceleration, {
+    value: "auto",
+    source: "env",
+  });
+  assert.throws(() => saveSetting(file, "acceleration", "gpu"), /auto \/ cpu/);
 });
 
 test("模型：写成 厂商/模型，只写厂商就用它的默认模型；存下来的都是 厂商/模型", () => {
