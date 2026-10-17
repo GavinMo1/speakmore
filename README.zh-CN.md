@@ -5,16 +5,16 @@
 <h1 align="center">SpeakMore</h1>
 
 <p align="center">
-  <b>按一下，说话，再按一下：整理好的文字就贴进你正在打字的地方。</b><br>
-  macOS 和 Windows 上的开源语音输入，用你自己的 Gemini 或 OpenAI key。<br>
+  <b>说话，别打字。</b><br>
+  免费开源的语音输入，Mac 和 Windows 都支持。<br>
+  模型任你接，也可以全部留在本机。<br>
   <a href="https://speakmore.zephyrxiang.com/?lang=zh-CN">speakmore.zephyrxiang.com</a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/macOS-12%2B-111?logo=apple&logoColor=white" alt="macOS 12+" />
-  <img src="https://img.shields.io/badge/Apple%20芯片%20%2B%20Intel-签名%20·%20公证-2f6feb" alt="Apple 芯片和 Intel，签名并公证" />
-  <img src="https://img.shields.io/badge/Windows-10%201809%2B%20·%20x64-0078d4" alt="Windows 10 1809 以上，x64" />
-  <img src="https://img.shields.io/badge/模型-Gemini%20·%20OpenAI-8e44ad" alt="Gemini 和 OpenAI" />
+  <img src="https://img.shields.io/badge/macOS-12%2B%20·%20Apple%20芯片%20%2B%20Intel-111?logo=apple&logoColor=white" alt="macOS 12 以上，Apple 芯片和 Intel" />
+  <img src="https://img.shields.io/badge/Windows-10%20%2F%2011%20·%20x64-0078d4" alt="Windows 10 和 11，x64" />
+  <img src="https://img.shields.io/badge/本机模型-Metal%20·%20Vulkan%20·%20CPU-5b5bd6" alt="本机模型跑在 Metal、Vulkan 或 CPU 上" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/许可-MIT-3fb950" alt="MIT 许可" /></a>
 </p>
 
@@ -23,264 +23,407 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/bar.zh-CN.png" width="368" alt="说话时屏幕下方的悬浮条：中间的声波跟着声音跳，左边取消，右边完成" />
+  <img src="https://media.speakmore.zephyrxiang.com/shots/bar-indigo.zh-CN.cc6ea5fc.webp" width="350" alt="说话时屏幕下方的悬浮条：中间的声波跟着声音跳，左边取消，右边完成" />
 </p>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/home-dark.zh-CN.png" />
-  <img src="docs/images/home-light.zh-CN.png" alt="主窗口首页：字数、省下的时间、语速、口述时长、每天说了多少的热力图和花费" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/home-dark.zh-CN.ded4c77a.webp" />
+  <img src="https://media.speakmore.zephyrxiang.com/readme/home.zh-CN.9f68edd4.webp" alt="SpeakMore 主窗口首页：字数、省时、语速、每天的热力图、花费，右上角是正在用的识别方式" />
 </picture>
 
-## 💸 Typeless 一年 $144，这里一个月几块钱
+按一下，说话，再按一下：文字直接贴进光标所在的地方。用原生识别或转写 + 润色时，口头禅、说错重来、重复都会去掉，补好标点，长段落自动分段、分条。
 
-|  | Typeless Pro | SpeakMore |
+## 五个自由
+
+<table>
+  <tr>
+    <td align="center">🧩</td>
+    <td><a href="#-模型自由"><b>模型自由</b></a></td>
+    <td>29 个模型：Gemini、OpenAI、通义千问、DeepSeek、Kimi、智谱 GLM、MiniMax，以及任何 OpenAI 兼容服务。手里有哪家的密钥，就用哪家。</td>
+  </tr>
+  <tr>
+    <td align="center">🔀</td>
+    <td><a href="#-方式自由"><b>方式自由</b></a></td>
+    <td>三种识别方式平级可选：原生识别、转写 + 润色、数据隐私。推荐组合一键切换。</td>
+  </tr>
+  <tr>
+    <td align="center">💻</td>
+    <td><a href="#-硬件自由"><b>硬件自由</b></a></td>
+    <td>Apple 芯片和 Intel 的 Mac，以及 Windows。本机模型走 Metal、Vulkan（NVIDIA、AMD、Intel 显卡），没有显卡就用 CPU。</td>
+  </tr>
+  <tr>
+    <td align="center">🔒</td>
+    <td><a href="#-隐私自由"><b>隐私自由</b></a></td>
+    <td>数据隐私方式只在本机转写，不上传任何数据。无需密钥，无需账号，模型一键下载。</td>
+  </tr>
+  <tr>
+    <td align="center">💸</td>
+    <td><a href="#-花钱自由"><b>花钱自由</b></a></td>
+    <td>软件免费，按用量直接付给模型厂商。每天 100 次，推荐组合每月 ¥0 到约 ¥35。</td>
+  </tr>
+</table>
+
+## 🚀 开始用
+
+<p align="center">
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Apple%20芯片-111?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版，Apple 芯片" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版，Intel" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/下载-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="下载 Windows 版" /></a>
+</p>
+
+| | 系统要求 | 安装 |
 | --- | --- | --- |
-| **软件** | $12/月，按年付（一年 $144）；按月付 $30/月 | 免费，开源 |
-| **模型** | 含在订阅里 | 你自己的 key，按量付给 Google：**每月约 $1（¥5–7）**¹ |
-| **准确度** | — | 作者天天在用，和 Typeless 几乎没差别² |
-| **录音发给谁** | Typeless 自己的服务器，连同当前应用、窗口标题、屏幕上的文字 | 直接发给 Gemini 或 OpenAI，中间没有别的服务器，不读屏幕 |
-| **账号** | 要 | 不要 |
+| **Mac** | macOS 12 及以上 | 打开 dmg，把 SpeakMore 拖进"应用程序"。已用 Developer ID 签名并经 Apple 公证。 |
+| **Windows** | Windows 10（1809 及以上）或 11，64 位 | 双击安装程序。若出现"Windows 已保护你的电脑"，点**更多信息 → 仍要运行**。只装在当前账户下，无需管理员权限，安装时无需联网。 |
 
-<sub>¹ 拿作者 2026 年 6–9 月在 Typeless 上的真实用量（每月 430–870 次、4.5–7 小时录音），按 Gemini 3.6 Flash 官方标准价、算上提示词缓存估算：每月 $0.67–1.05。Gemini 免费额度内用是 0 元。Google 已公布 3.6 Flash 从 2027 年 1 月 1 日起涨一倍，到时约 $1.3–2.1。Typeless 的价格来自 <a href="https://www.typeless.com/pricing">typeless.com/pricing</a>（2026-10-14 查）。<br>
-² 提示词拿 60 条真实录音、逐条对着 Typeless 的成品调过。专有名词和人名弱一些，见下面的“现在的不足”。</sub>
-
-## ✨ 特色
-
-- 🎙️ **一个键，哪都能用**：按一下右 Option（Windows 上是右 Alt）开始说，再按一下，文字贴进光标所在的地方。能粘贴的地方都行。
-- 🧹 **边说边整理**：口头禅、改口、重复删掉，长的话分段、分点，像你自己打出来的。
-- ⚡ **快**：边说边上传，说完一般 2 秒出字。
-- 🔒 **数据在你手里**：没有账号，没有中间服务器，没有统计上报。key 加密存在钥匙串里（Windows 上用系统的数据保护 DPAPI），说过的话只存在本机。
-- 🔀 **两种模式自己选**：*原生*是录音直接交给 Gemini（默认）、OpenAI 或阿里云百炼上的 Qwen-Omni；*本地转写*是本机的小模型（或百炼、智谱、MiniMax 的云端语音识别）先转成文字，再交给任意大模型润色，可以是 DeepSeek、百炼、Kimi、智谱、MiniMax，也可以是你自己的兼容 OpenAI 接口的服务。用本机模型转写时录音不出本机。
-- 📊 **花多少钱一清二楚**：每次调用都记账；首页看字数、省下的时间、连续天数。
-- 🎨 **三套主题**：墨、朱砂、靛青，跟随系统深浅色。
-- 🌐 **简体中文和英文**：菜单、窗口、`speakmore` 命令都跟着系统的语言走，设置里随时能换，当场生效。
-
-## 📦 安装
-
-需要 macOS 12 以上，或 64 位的 Windows 10（1809 及以后）、Windows 11，和一把 [Gemini key](https://aistudio.google.com/apikey)（有免费额度）或 [OpenAI key](https://platform.openai.com/api-keys)。用本地转写的话，换成任一家润色厂商的 key（比如 [DeepSeek](https://platform.deepseek.com/api_keys)）或任意兼容 OpenAI 接口的服务，本机模型约 850 MB。
-
-### macOS 方式一：下载安装包（推荐）
-
-| Apple 芯片（M1 及以后） | Intel 芯片 |
-| --- | --- |
-| ⬇️ [SpeakMore-arm64.dmg](https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-arm64.dmg) | ⬇️ [SpeakMore-x64.dmg](https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-x64.dmg) |
-
-打开 dmg，把 SpeakMore 拖进“应用程序”，再打开它。安装包有开发者签名、过了苹果公证，系统不会拦。第一次打开会带你走一遍：选识别方式 → 填 key 或下载本机模型 → 开权限 → 测麦克风和热键 → 真说一句。每一步都能退回、能跳过，进去再配。
-
-想核对下回来的包：在链接后面加上 `.sha256` 就是它的校验值。
-
-### macOS 方式二：命令行一行装好
+习惯用终端的话，一行装好，另带 `speakmore` 命令：
 
 ```bash
+# macOS
 curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 ```
 
-先检查系统、芯片、网络，然后装进 `~/.speakmore`（不需要 Node，也不需要 sudo），在终端里问你要 key，最后启动。多了一个 `speakmore` 命令：看状态、历史、花费，换 key、换模型。
-
-**选哪个？** 安装包是一个独立的应用：权限记在 SpeakMore 名下，能开机启动。命令行装的从终端启动，权限记在终端名下，适合想用命令的人。两种用的是同一份设置和历史，同一时间只开一个。
-
-### Windows 方式一：下载安装程序（推荐）
-
-⬇️ [SpeakMore-Setup-x64.exe](https://dl.zephyrxiang.com/speakmore/v0.9.0/SpeakMore-Setup-x64.exe)
-
-双击运行，装好自动打开 SpeakMore，接着走首次引导。安装程序里带着整个程序包，装的时候不用再联网。
-
-### Windows 方式二：PowerShell 里一行装好
-
 ```powershell
+# Windows（PowerShell）
 irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 ```
 
-两种装法装的是同一份：都装进 `%USERPROFILE%\.speakmore`（不需要 Node，也不需要管理员权限），把 `speakmore` 命令加进 Path、把 SpeakMore 放进开始菜单。之后从开始菜单打开，也能开机启动。
+校验下载：在链接后面加 `.sha256` 即可拿到校验值。
+
+<details>
+<summary><b>下载安装还是终端安装？</b></summary>
+
+下载的是独立的 App：macOS 的权限归 SpeakMore，可以开机自启。终端安装在 macOS 上从终端运行，权限归那个终端。Windows 上两种装的是同一份，都在 `%USERPROFILE%\.speakmore`，并加进开始菜单。两种共用设置、历史和 `speakmore` 命令，同一时间开一个即可。
+
+</details>
 
 ## 🎙️ 怎么用
 
-1. 点进任意输入框，按一下 **右 Option**（Windows 上是 **右 Alt**）。
-2. 说话。屏幕下方的悬浮条跟着你的声音跳。
-3. 再按一下（或者点 ✓），文字就贴进去了。不想要了按 `esc`。
+1. 点进任意输入框，按一下**右 Option**（Windows 是**右 Alt**）。
+2. 说话。屏幕下方的悬浮条跟着声音跳动。
+3. 再按一下，文字贴进光标处。按 `esc` 放弃这一段。
 
-它只待在菜单栏，不占程序坞（Windows 上在任务栏右边的通知区域）。点它的图标能打开主窗口：首页统计、历史记录、设置。
+SpeakMore 在菜单栏里（Windows 在任务栏通知区域）。主窗口里有统计、历史、模型和设置。
 
-## 🛠️ 怎么做的
+### 首次引导
+
+第一次打开时一步步带你配好。每一步都能前进、后退，也都能跳过，进去之后再配。数据隐私方式完全不需要密钥。
+
+<table>
+  <tr>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-way.zh-CN.5017d754.webp" alt="引导第一步：三种识别方式选一种" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-prepare-local.zh-CN.623b17ae.webp" alt="引导第二步：厂商一家一行，选中后就地粘贴密钥" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>1</b> · 选识别方式</sub></td>
+    <td align="center"><sub><b>2</b> · 填密钥，也可以先跳过</sub></td>
+  </tr>
+  <tr>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-prepare-private.zh-CN.4a564b9c.webp" alt="引导：本机模型在后台下载" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-permissions.zh-CN.6e365cdb.webp" alt="引导：麦克风、输入监控、辅助功能三项权限都已开启" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>3</b> · 或者下载本机模型，后台进行</sub></td>
+    <td align="center"><sub><b>4</b> · 开权限</sub></td>
+  </tr>
+  <tr>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-microphone.zh-CN.2fe10fdd.webp" alt="引导：音量条随声音跳动" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-hotkey.zh-CN.24cd3419.webp" alt="引导：按下右 Option，键帽亮起" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>5</b> · 测麦克风</sub></td>
+    <td align="center"><sub><b>6</b> · 测快捷键</sub></td>
+  </tr>
+  <tr>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-try.zh-CN.2c6bb356.webp" alt="引导：一句带口头禅、说错又改口的话，整理成一句干净的话" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-done.zh-CN.1ddd286f.webp" alt="引导完成：识别方式、快捷键、麦克风的汇总" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>7</b> · 真说一句试试</sub></td>
+    <td align="center"><sub><b>8</b> · 完成</sub></td>
+  </tr>
+</table>
+
+## 🧩 模型自由
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/vendors-dark.zh-CN.4bf2ba43.webp" />
+  <img src="https://media.speakmore.zephyrxiang.com/readme/vendors-light.zh-CN.89418227.webp" width="860" alt="支持的厂商：Gemini、OpenAI、通义千问、阿里云百炼、DeepSeek、Kimi、智谱 GLM、MiniMax、SenseVoice，以及任何 OpenAI 兼容服务" />
+</picture>
+
+<sub>以上名称和标志归各自所有者，仅用来说明 SpeakMore 能对接哪些服务。</sub>
+
+主窗口的**模型**页按角色列出所有模型：**原生 7 个**（音频进、文字出）、**转写 10 个**（本机 4 个、云端 6 个）、**润色 12 个**，标着官方价格和实测分数。同一个模型几家平台都在卖时只占一行，渠道自己选。
+
+密钥按平台存，手里已有的那把就够用。一把阿里云百炼的密钥覆盖 14 个模型；DeepSeek、Kimi、智谱、MiniMax、Gemini、OpenAI 的官方密钥都能直接填；任何 OpenAI 兼容的服务，填上地址和密钥即可接入。
+
+<table>
+  <tr>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/polish.zh-CN.8dfd259a.webp" alt="模型页的润色分类：通义千问、DeepSeek、Kimi、智谱、MiniMax 的模型，带价格和销售渠道" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/keys.zh-CN.9d3a7c4f.webp" alt="模型页的密钥分类：八个平台，哪些已配置，各自解锁多少模型" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>所有模型、所有渠道</sub></td>
+    <td align="center"><sub>一个平台一把密钥</sub></td>
+  </tr>
+</table>
+
+## 🔀 方式自由
+
+把声音变成文字有三种方式。每种方式各自记着自己的模型，来回切换不用重配。
+
+| 方式 | 怎么走 | 什么会离开你的电脑 | 密钥 |
+| --- | --- | --- | --- |
+| ✨ **原生识别** | 录音 → Gemini、OpenAI 或通义千问 Omni → 成稿，一次请求 | 录音，只发给你选的厂商 | 一把 |
+| 🪄 **转写 + 润色** | 录音 → 本机或云端转写 → 任意大模型润色 | 用本机转写时，只有文字 | 一把 |
+| 🛡️ **数据隐私** | 录音 → 本机模型 → 文字 | 什么都不上传 | 不需要 |
+
+<table>
+  <tr>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/mode-picker.zh-CN.99d72560.webp" alt="首页的识别方式选单：三种方式和各自用的模型" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/presets.zh-CN.ecd31b60.webp" alt="推荐组合：四套完整配置，各自的月成本、检测和一键启用" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>在首页切换识别方式</sub></td>
+    <td align="center"><sub>推荐组合，一键启用</sub></td>
+  </tr>
+</table>
+
+**推荐组合**把一整条路线打包好，可以先检测，再一键启用；缺的密钥、没下的模型就地补上。
+
+| 组合 | 路线 | 每月¹ |
+| --- | --- | --- |
+| 本机转写 + DeepSeek | 本机 Qwen3-ASR 0.6B → DeepSeek V4.1 Flash | **约 ¥2.63** |
+| Gemini 原生识别 | Gemini 3.6 Flash | 约 ¥35.49 |
+| 百炼全云端 | Qwen3 ASR Flash → DeepSeek V4.1 Flash，一把密钥 | 约 ¥20.24 |
+| 纯本机 | Qwen3-ASR 0.6B，不上传任何数据 | **¥0** |
+
+<sub>¹ 每天 100 次、一个月 30 天，每次按一段典型口述算（26 秒，97 条真实口述的平均），按各家官方价格，美元按 6.71 折人民币。App 里显示的就是按价目表现算的这个数。Intel Mac 上的组合换成在 CPU 上跑的 SenseVoice Small。</sub>
+
+## 💻 硬件自由
+
+同一份本机模型在所有支持的机器上都能跑。有显卡就用显卡，不行自动退回 CPU。
+
+| 机器 | 跑在 | Qwen3-ASR 0.6B，一段典型口述² |
+| --- | --- | --- |
+| Apple 芯片的 Mac | Metal | **231 毫秒**，68 倍实时 |
+| 带显卡的 Windows（NVIDIA、AMD、Intel） | Vulkan | **240 毫秒**，73 倍实时（RTX 4060 Ti） |
+| 任意 Mac 或 PC | CPU | SenseVoice Small：145 毫秒（Apple 芯片）· 463 毫秒（Core i5-13400F） |
+
+<sub>² 97 条真实口述里转写一条的中位耗时，见下面的评测。</sub>
+
+<img src="https://media.speakmore.zephyrxiang.com/readme/transcribe.zh-CN.643d66f5.webp" alt="模型页的转写分类：四个本机模型的中文、中英混合得分，转一分钟要几秒，内存和体积，每列最好的标绿；下面是云端转写模型" />
+
+## 🔒 隐私自由
+
+- **数据隐私方式什么都不上传。** 本机模型在你的电脑上把声音转成文字，无需密钥，无需账号。
+- **一键下载，国内也快。** 模型从 SpeakMore 自己的国内源下载，下不动时自动换 Hugging Face，下完按 SHA-256 校验。默认的 850 MB 模型一分半钟左右下完。
+- **哪种方式都没有中间商。** 没有 SpeakMore 的服务器，没有统计上报。录音或文字用你自己的密钥，直接发给你选的厂商。
+- **密钥加密保存**，macOS 用钥匙串，Windows 用 DPAPI。历史和录音只存在本机。
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/download-speed-dark.zh-CN.170a9ced.webp" />
+  <img src="https://media.speakmore.zephyrxiang.com/readme/download-speed-light.zh-CN.c710e7f4.webp?v=3" width="720" alt="下载 850 MB 的本机模型：SpeakMore 国内源 9.3 MB/s，一分半钟；hf-mirror.com 15 分钟；Hugging Face 20 分钟" />
+</picture>
+
+## 💸 花钱自由
+
+SpeakMore 免费。你按用量直接付给模型厂商，每一分钱首页都看得到。下面按重度使用（每天 100 次）和 Typeless 的每一档对比：
+
+| | 每月 | 每年 | 字数 | 声音发到哪 | 账号 |
+| --- | --- | --- | --- | --- | --- |
+| Typeless 免费版 | $0 | $0 | 每周有上限 | Typeless 的服务器³ | 必须注册 |
+| Typeless Pro，按年付 | $12（约 ¥81） | $144（约 ¥966） | 不限 | Typeless 的服务器³ | 必须注册 |
+| Typeless Pro，按月付 | $30（约 ¥201） | $360（约 ¥2,416） | 不限 | Typeless 的服务器³ | 必须注册 |
+| Typeless 企业版 | 联系销售 | | 不限 | Typeless 的服务器³ | 必须注册，走 SSO |
+| **SpeakMore · 纯本机** | **¥0** | **¥0** | 不限 | **留在你的电脑上** | **不需要** |
+| **SpeakMore · 本机转写 + DeepSeek** | **约 ¥2.63** | **约 ¥32** | 不限 | 只有文字，发给 DeepSeek | **不需要** |
+| **SpeakMore · 百炼全云端** | **约 ¥20.24** | **约 ¥243** | 不限 | 阿里云百炼 | **不需要** |
+| **SpeakMore · Gemini 原生识别** | **约 ¥35.49** | **约 ¥426** | 不限 | Google | **不需要** |
+
+<sub>Typeless 的价格取自 <a href="https://www.typeless.com/pricing">typeless.com/pricing</a>，2026-10-17 查。SpeakMore 的估算口径同上面的推荐组合，按 2026-10-17 的官方价格。Gemini 的免费密钥不花钱。<br>
+³ 连同当前应用、窗口标题和屏幕上的文字一起（见<a href="targets/typeless/docs/06-context-capture-and-privacy.md">逆向笔记</a>）。</sub>
+
+## 📊 评测
+
+默认提示词用 60 条真实录音调过，每条都和 Typeless 对同一段录音的成品逐条对比。本机模型在 97 条真实口述上实测（共 42.5 分钟，中文、中英夹杂、英文都有），以原生识别的成品为参照，按固定的标准打 0–5 分。
+
+<details>
+<summary><b>本机转写：Apple 芯片和 Windows</b></summary>
+
+| 模型 | Mac（Apple 芯片） | Windows（i5-13400F，RTX 4060 Ti） | 得分 | 体积 |
+| --- | --- | --- | --- | --- |
+| `qwen3-asr-0.6b-q8`（默认） | Metal · 231 毫秒 · 68 倍 | Vulkan · 240 毫秒 · 73 倍 | 4.14–4.16 | 850 MB |
+| `sensevoice-small-q8` | Metal · 73 毫秒 · 226 倍 | Vulkan · 107 毫秒 · 186 倍 | 3.94 | 253 MB |
+| `qwen3-asr-0.6b-int8` | CPU · 1081 毫秒 · 15 倍 | CPU · 3388 毫秒 · 5 倍 | 4.02–4.06 | 987 MB |
+| `sensevoice-small-int8` | CPU · 145 毫秒 · 107 倍 | CPU · 463 毫秒 · 37 倍 | 3.75–3.78 | 237 MB |
+
+耗时是每条口述的中位数，倍数是录音时长除以耗时。分语言看，Qwen3-ASR 中文 4.32、中英夹杂 4.02；SenseVoice 中文 4.38。完整数据：[Apple 芯片](bench/results/asr-round1-2026-10-16.md)、[Windows](bench/results/asr-windows-2026-10-17.md)。
+
+</details>
+
+<details>
+<summary><b>端到端：Apple 芯片上的转写 + 润色</b></summary>
+
+松开快捷键到文字上屏 **1.2–1.75 秒**，其中转写不到 0.7 秒，其余是润色那次请求。DeepSeek 润色一次约 $0.00004，提示词大半命中缓存。[实测记录](bench/results/e2e-local-2026-10-16.md)。
+
+</details>
+
+评测框架在 [`bench/`](bench/README.md)：加一个模型，只跑它那一列。
+
+## ✅ 可信
+
+- **开源**，MIT 许可。碰到你声音的每一行代码都看得到。
+- **不要账号。** 不用注册，不用登录。
+- **一个目录。** 数据、设置、密钥、模型、日志都在 `~/.speakmore`（Windows 是 `%USERPROFILE%\.speakmore`）。`speakmore uninstall` 一条命令全部删干净。
+- **Mac 版签名并公证**，每个下载都附 SHA-256 校验值。
+- **先逆向，再重写。** Typeless 的客户端拆解写成了 [18 篇笔记](targets/typeless/docs/00-overview.md)；SpeakMore 照它的交互从零写起，不含 Typeless 的任何代码和密钥。
+
+## 🧑‍💻 开发者
+
+- **App 能做的，命令行都能做。** 切方式、换模型、存密钥和检测、下载模型、看历史和花费。`status`、`history`、`usage` 加 `--json` 输出 JSON。
+- **插件化。** 每家厂商都是同一接口后面的一个策略：录音统一成 16 kHz 单声道，转写统一返回 `{ text }`。
+- **在 Mac 上开发 Windows 版。** [`scripts/dev/win-*.sh`](scripts/dev) 经 SSH 把工作区同步到 Windows 机器，在那边跑测试、从源码带调试端口重启 App、截整个桌面。
+- **测试齐全。** 939 个单元测试、19 个安装测试，Biome 检查，界面的尺寸、字号和文案都有门禁。`npm run check` 一次跑完。
+
+```bash
+git clone https://github.com/zephyr4123/speakmore.git && cd speakmore
+npm install
+npm start          # 等同 speakmore 命令
+npm run check      # lint 加全部测试
+```
 
 ```mermaid
 flowchart LR
-  A["⌨️ 热键"] --> B["🎙️ 录音<br/>边录边分块上传"]
-  B --> C["🖥️ 本机的听写服务"]
-  C -- 原生 --> D["🤖 Gemini / OpenAI<br/>一次调用：识别加整理"]
-  C -- 本地转写 --> L["💻 本机模型<br/>转成文字"]
+  A["⌨️ 快捷键"] --> B["🎙️ 录音<br/>边说边分块上传"]
+  B --> C["🖥️ 本机听写服务"]
+  C -- 原生识别 --> D["🤖 音频大模型<br/>识别加整理"]
+  C -- 转写 + 润色 --> L["💻 本机或云端<br/>转写"]
   L --> P["🤖 任意大模型<br/>整理"]
-  D --> E["📋 贴进输入框"]
+  C -- 数据隐私 --> Q["💻 本机模型"]
+  D --> E["📋 贴到光标处"]
   P --> E
+  Q --> E
 ```
 
-- **先逆向，再重写**：拆了 Typeless 的 macOS 客户端，读了安装包、还原出来的代码、本机数据和自己账号的流量，写成 [18 篇文档](targets/typeless/docs/00-overview.md)。然后照着它的协议和交互从头写了一个，只做语音转写，不含 Typeless 的任何代码和密钥。
-- **两种模式平级**：原生是录音和提示词一起交给模型，识别和整理一次调用完成。本地转写在本机跑 [Qwen3-ASR 0.6B](https://huggingface.co/Qwen/Qwen3-ASR-0.6B)（Apple 芯片上用 Metal，Windows 上有显卡就用 Vulkan，不行就退回 CPU），只把文字发给你选的模型。在作者的 Mac 上，本地转写说完 1.2–1.75 秒出字，其中转写本身不到 0.7 秒（[实测记录](bench/results/e2e-local-2026-10-16.md)）。
-- **提示词用真实录音调**：60 条真实录音逐条对照 Typeless 的成品。模型偶尔写出的繁体字、开头多出的外文词，在代码里兜底。
-- **提示词缓存**：用 Gemini 时，一开口就把提示词缓存起来，一句的花费从 $0.0012 降到 $0.0003。
-- **Electron 加一个原生小程序**（macOS 上是 Swift，Windows 上是 Go）：小程序负责听热键、贴字、截住 `esc`。桌面应用和命令行共用一套内核。
+目录结构、打包、发版、每个版本实测过什么：见[开发说明](docs/development.md)和[实现笔记](docs/implementation-notes.md)。
 
-细节在[实现笔记](docs/implementation-notes.md)里。
-
-## ⚠️ 现在的不足
-
-- **专有名词和人名会听错**：Typeless 会把屏幕上的文字一起传上去当参考，这里只有录音，也还没有个人词典。
-- **提示词是按中文调的**（夹着英文词也行）。纯英文听写没有调过，也没测过（界面有英文，提示词没有）。
-- **换成 OpenAI 时整理得比 Gemini 粗**：提示词是对着 Gemini 调的。
-- **话说到一半就按停，模型可能自己把后半句补上。**
-- **Intel Mac 上的本地转写没在真机上评测过**：Rosetta 下四个本机模型都跑通了。Apple 芯片和 Windows 上都跑过成批评测。
-- 只有听写，没有翻译和“问任何事”。悬浮条只在主屏幕上。Linux 还没有。
-
-## 📚 更多
+## 📚 参考
 
 <details>
-<summary><b>⌨️ 命令</b>（命令行安装的才有）</summary>
+<summary><b>⌨️ 命令</b></summary>
 
 | 命令 | 做什么 |
 | --- | --- |
-| `speakmore` | 启动。已经在运行就只显示状态；没有 key 时问你要 |
-| `speakmore stop` / `restart` | 停掉 / 重启，卡住了也停得掉 |
-| `speakmore status [--json]` | 在不在运行、key、系统权限、今天和累计说了多少 |
-| `speakmore update` | 更新到最新版本，装着 SpeakMore.app 的话连它一起。有新版本时 `status` 会提醒 |
-| `speakmore history [-n 条数] [--json]` | 看说过的话。失败的那条会写原因，录音还留着 |
-| `speakmore usage [--json]` | 今天、本月、累计的花费、token、次数、模型一般多久回话，按型号分开 |
-| `speakmore mode [native\|local]` | 看两种模式各用什么 / 切过去。当场生效，先验证要用的 key |
-| `speakmore model` | 原生模式：能用哪几家的模型、各家的 key 有没有、现在用的哪个 |
-| `speakmore model <厂商>[/<模型>]` | 换一家或换个模型。还没有那一家的 key 会先问 |
-| `speakmore model check [<厂商>[/<模型>]]` | 发一个最小的请求，看能不能用、来回多久 |
-| `speakmore transcriber [<模型>]` | 本地转写第一步：本机模型的大小、标签、实测速度、下没下载 / 换一个（要用的没下载时先问） |
-| `speakmore transcriber download\|cancel\|delete <模型>` | 下载、停下、删除本机模型。不点就不下；正在用的删不了 |
-| `speakmore transcriber check [<模型>]` | 系统朗读念一句交给本机模型转，看能不能正常出字 |
-| `speakmore polish [<厂商>[/<模型>]] [--url <地址>]` | 本地转写第二步：文字交给谁润色 / 换一个。自定义服务写 `custom/<模型名> --url <地址>`；`polish check` 看能不能用 |
-| `speakmore key [<厂商>]` | 换一把 key。也可以从管道喂：`pbpaste \| speakmore key`（Windows 上 `Get-Clipboard \| speakmore key`）。别把 key 写在命令后面，会进 shell 历史 |
-| `speakmore key --forget [<厂商>]` | 删掉存着的 key |
-| `speakmore config` / `config set <名字> <值>` / `config unset <名字>` | 看设置 / 直接改一项、不检查 / 回到默认 |
-| `speakmore theme [名字]` | 看有哪几套主题 / 换一套，当场生效 |
+| `speakmore` | 启动；已在运行就显示状态 |
+| `speakmore stop` / `restart` | 停止 / 重启 |
+| `speakmore status [--json]` | 是否在运行、密钥、权限、今天和累计的用量 |
+| `speakmore update` | 升级到最新版，SpeakMore.app 一起换。设置、密钥、历史、录音都保留 |
+| `speakmore history [-n 条数] [--json]` | 说过的话，最新的在前 |
+| `speakmore usage [--json]` | 今天、本月、累计的花费、token 和回复耗时，按模型分 |
+| `speakmore mode [native\|local\|private]` | 列出三种方式 / 当场切换。`local` 是转写 + 润色，`private` 是数据隐私 |
+| `speakmore model [<厂商>[/<模型>]]` | 原生识别：各家（`gemini` / `openai` / `bailian`）和哪家有密钥 / 切换 |
+| `speakmore transcriber [<模型>]` | 转写模型的体积、实测速度、下没下 / 切换 |
+| `speakmore transcriber download\|cancel\|delete <模型>` | 管理本机模型 |
+| `speakmore polish [<厂商>[/<模型>]] [--url <地址>]` | 润色模型：`deepseek` / `bailian` / `moonshot` / `zhipu` / `minimax` / `custom` |
+| `speakmore model check`、`transcriber check`、`polish check` | 发一个最小的请求（或让系统语音读一句），看通不通、多快 |
+| `speakmore key [<厂商>]` | 换密钥。可以从管道传：`pbpaste \| speakmore key`（Windows：`Get-Clipboard \| speakmore key`） |
+| `speakmore key --forget [<厂商>]` | 删掉存着的密钥 |
+| `speakmore config` / `config set <名> <值>` / `config unset <名>` | 看设置 / 直接改一项 / 恢复默认 |
+| `speakmore theme [名]` | 列出主题 / 当场切换 |
 | `speakmore settings` | 打开设置 |
 | `speakmore logs [-n 行数] [-f]` | 看日志 |
-| `speakmore uninstall [--keep-data]` | 卸载。先说清楚要删什么，问一句再动手 |
+| `speakmore uninstall [--keep-data]` | 卸载。先说要删什么，问过再删 |
 
 </details>
 
 <details>
-<summary><b>⚙️ 设置和模型</b></summary>
+<summary><b>⚙️ 设置项</b></summary>
 
-| 名字 | 默认值 | 能填什么 |
+| 名字 | 默认 | 可填 |
 | --- | --- | --- |
-| `hotkey` | `right_option`（macOS）、`right_alt`（Windows） | macOS：`right_option` / `right_command` / `right_control` / `fn`；Windows：`right_alt` / `right_ctrl`。都是单独按一下。Typeless 用 `fn`，默认避开它，两个可以同时开着 |
-| `mode` | `native` | `native` 原生 / `local` 本地转写。用 `speakmore mode` 切，会先验证 key |
-| `model` | `gemini/gemini-3.6-flash` | 原生模式用。`厂商/模型`，只写厂商就用它的默认模型 |
-| `thinking` | `MINIMAL` | `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`，越高越慢，只有 Gemini 用得上 |
-| `transcriber` | `qwen3-asr-0.6b-q8` | 本地转写第一步，能选的见 `speakmore transcriber` |
-| `polish` | `deepseek/deepseek-flash` | 本地转写第二步。`deepseek` / `deepseek/deepseek-v4-pro` / `custom/<模型名>` |
-| `customUrl` | 空 | 自定义服务（兼容 OpenAI 接口）的地址，比如 `http://127.0.0.1:11434/v1` |
-| `modelSource` | `cn` | 本机模型从哪下：`cn` 是 SpeakMore 的国内源（CDN），`original` 是 Hugging Face。选的那个下不动会自动换另一个 |
-| `acceleration` | `auto` | 本机模型：`auto` 有显卡就用，显卡上出问题自动退回 CPU；`cpu` 只用 CPU。在 App 里换了当场重新装载模型 |
-| `barHint` | `on` | 悬浮条上方那行操作提示（"再按一下 … 完成 · esc 取消"）。`off` 不显示，报错照样显示。设置 › 通用里也有开关，当场生效 |
-| `theme` | `ink` | `ink` 墨 / `cinnabar` 朱砂 / `indigo` 靛青 |
-| `language` | `system` | `system` 跟随系统 / `en` / `zh-CN`。跟随系统时，应用看系统的语言，`speakmore` 命令看终端的 `LANG`；我们没有的语言用英文 |
+| `hotkey` | `right_option`（macOS）、`right_alt`（Windows） | macOS：`right_option` / `right_command` / `right_control` / `fn`；Windows：`right_alt` / `right_ctrl` |
+| `mode` | `native` | `native` / `local` / `private` |
+| `model` | `gemini/gemini-3.6-flash` | 原生识别，`厂商/模型` |
+| `thinking` | `MINIMAL` | Gemini 的思考档位：`MINIMAL` / `LOW` / `MEDIUM` / `HIGH` |
+| `transcriber` | `qwen3-asr-0.6b-q8` | 转写 + 润色的第一步：本机模型，或云端的如 `bailian/qwen3-asr-flash` |
+| `privateTranscriber` | `qwen3-asr-0.6b-q8` | 数据隐私用哪个本机模型 |
+| `polish` | `deepseek/deepseek-flash` | 转写 + 润色的第二步，`厂商/模型`；自己的服务写 `custom/<模型>` |
+| `customUrl` | 空 | 你的 OpenAI 兼容服务地址，如 `http://127.0.0.1:11434/v1` |
+| `modelSource` | `cn` | 本机模型从哪下：`cn`（SpeakMore 国内源）/ `original`（Hugging Face） |
+| `acceleration` | `auto` | `auto` 有显卡就用；`cpu` 只用 CPU |
+| `barHint` | `on` | 悬浮条上方的操作提示：`on` / `off` |
+| `theme` | `ink` | `ink` / `cinnabar` / `indigo` |
+| `language` | `system` | `system` / `en` / `zh-CN` |
 
-设置存在 `~/.speakmore/settings.json`（Windows 上是 `%USERPROFILE%\.speakmore\settings.json`）。`speakmore mode`、`model`、`transcriber`、`polish` 先检查再当场换，主题、语言、下载源改了也当场生效。`config set` 是手动改设置的后门：不做这些检查，另一种模式的设置也照写；别的改动会重启后台。临时换一次可以用环境变量 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL`、`GEMINI_THINKING_LEVEL`、`SPEAKMORE_TRANSCRIBER`、`SPEAKMORE_POLISH`、`SPEAKMORE_CUSTOM_URL`、`SPEAKMORE_MODEL_SOURCE`、`SPEAKMORE_ACCELERATION`、`SPEAKMORE_THEME`、`SPEAKMORE_LANGUAGE`，写在启动它的那条命令上；`GEMINI_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`BAILIAN_API_KEY`、`MOONSHOT_API_KEY`（Kimi）、`ZHIPU_API_KEY`、`MINIMAX_API_KEY`、`SPEAKMORE_CUSTOM_API_KEY` 设着时优先于存着的 key。
-
-| 厂商 | 默认模型 | 说明 |
-| --- | --- | --- |
-| `gemini`（默认） | `gemini-3.6-flash` | 录音原样发过去。提示词是对着它调的，整理得最干净，一般 2 秒左右出字 |
-| `openai` | `gpt-audio-mini` | 只收 WAV 和 MP3，录音先在本机转成 WAV 再发。2–5 秒出字，口头禅删得没有 Gemini 干净；三分钟以上的长录音可能等不到成品（录音会留着） |
-
-每家的 key 各存一份，来回换不用重新填。设置里换的只换厂商；要指定模型用 `speakmore model openai/gpt-audio-1.5` 这样的命令。
-
-本地转写第一步的本机模型，在 Apple 芯片上用 97 条真实录音测过（[第一轮](bench/results/asr-round1-2026-10-16.md)；Intel 的 Mac 没测）：
-
-| 模型 | 下载 | 均分（0–5） | 每条录音转写的中位耗时 | 说明 |
-| --- | --- | --- | --- | --- |
-| `qwen3-asr-0.6b-q8`（默认） | 850 MB | 4.14 | 231 ms（Metal） | 最准，中英夹杂领先最多 |
-| `sensevoice-small-q8` | 253 MB | 3.94 | 73 ms（Metal） | 快约 3 倍、体积约三分之一，英文词弱一些 |
-| `qwen3-asr-0.6b-int8` | 987 MB | 4.02 | 1081 ms（CPU） | 只用 CPU |
-| `sensevoice-small-int8` | 237 MB | 3.78 | 145 ms（CPU） | 只用 CPU |
-
-第二步：`deepseek`（默认模型 `deepseek-flash`），或者 `custom`，任意兼容 OpenAI 接口的服务。
+设置存在 `~/.speakmore/settings.json`。App 里、`speakmore mode`、`model`、`transcriber`、`polish` 都先检查再切换，当场生效；`config set` 直接写，不做检查。临时用一次，启动时带上 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL`、`SPEAKMORE_TRANSCRIBER`、`SPEAKMORE_POLISH`、`SPEAKMORE_THEME`、`SPEAKMORE_LANGUAGE` 等；`GEMINI_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`BAILIAN_API_KEY`、`MOONSHOT_API_KEY`（Kimi）、`ZHIPU_API_KEY`、`MINIMAX_API_KEY`、`SPEAKMORE_CUSTOM_API_KEY` 优先于存着的密钥。
 
 </details>
 
 <details>
-<summary><b>💰 花了多少钱</b></summary>
+<summary><b>💰 花费怎么算</b></summary>
 
-每次调模型都记一笔账：多少 token（其中多少是音频、多少是思考）、哪个型号、多少钱、等了多久。主窗口首页按模型分开列今天、本月、累计的花费（本机转写那一步单列一行，不花钱），命令行用 `speakmore usage` 看得更细。
+每次调用模型都记一笔：token（含音频和思考）、模型、花费、耗时。首页按模型分今天、本月、累计；本机转写单独一行，不花钱。`speakmore usage` 更详细。
 
-- 钱是照两家官方价目页的标准价**估算**的美元。Gemini 在免费额度内其实不收钱，可接口不告诉我们 key 在哪一档，所以一律按付费价算。
-- 一句几秒钟的话，大头是每次都要带上的提示词（约 1350 个 token）。Gemini 的提示词缓存让这部分只收一成的价；缓存自己也要钱（建一次约 $0.001，存着每小时约 $0.0007），30 分钟没人说话就过期。OpenAI 的 `gpt-audio` 系列没有缓存。
-- 发出去了却没等到回话的（超时、断开）拿不到用量、记不上，对方可能照样收了钱。
-
-</details>
-
-<details>
-<summary><b>🔐 三项系统权限</b></summary>
-
-| 权限 | 用来做什么 | 没有时 |
-| --- | --- | --- |
-| 麦克风 | 录音 | 按热键时提示没有麦克风权限 |
-| 输入监控 | 听热键。只认你选的那一个键，别的按键不记录 | 热键没反应 |
-| 辅助功能 | 模拟 ⌘V 贴字；说话时截住 `esc` 和悬浮条上的点击 | 文字放进剪贴板，自己按 ⌘V；`esc` 取消不了 |
-
-安装包装的应用，权限记在 SpeakMore 名下。用 `speakmore` 命令启动的，**记在你运行命令的那个终端名下**（终端、iTerm、Ghostty 等），在系统设置里要找的是它。开好之后运行 `speakmore status` 重新检查一遍。
-
-Windows 上只有麦克风要授权（设置 › 隐私和安全性 › 麦克风，打开“允许桌面应用访问你的麦克风”），听热键和贴字都不用。以管理员身份运行的窗口，Windows 不让普通程序往里贴字：这时文字留在剪贴板里，悬浮条会说一声。
+- 花费是按各家官方价格算的美元估算；按人民币标价的平台按 6.71 折算。
+- Gemini 的提示词缓存让每次重复的那段提示词只收一成的钱；开口说话的那一刻 SpeakMore 就把缓存备好。
 
 </details>
 
 <details>
-<summary><b>🗂️ 东西都放在哪</b></summary>
+<summary><b>🔐 权限</b></summary>
 
-**发出去的只有录音**（原生模式）**或转好的文字**（本地转写），直接发给你选的那一家的接口，用你自己的 key。留在本机的全在 `~/.speakmore/`（Windows 上是 `%USERPROFILE%\.speakmore\`），只有你自己进得去：
+| macOS 权限 | 用来 |
+| --- | --- |
+| 麦克风 | 录音 |
+| 输入监控 | 听快捷键。只听那一个键，别的什么都不记 |
+| 辅助功能 | 模拟 ⌘V 贴字；说话时接住 `esc` |
 
-| 里面的东西 | 说明 |
+App 在首次引导里会请你开。终端安装时，权限归你运行它的那个终端。Windows 只需要麦克风权限（设置 › 隐私和安全性 › 麦克风）。
+
+</details>
+
+<details>
+<summary><b>🗂️ 东西放在哪</b></summary>
+
+全部在 `~/.speakmore/`（Windows 是 `%USERPROFILE%\.speakmore\`），只有你自己能读：
+
+| 文件 | 说明 |
 | --- | --- |
 | `settings.json` | 设置 |
-| `gemini-key.bin`、`openai-key.bin`、`deepseek-key.bin`… | 加密后的 key，每家一份，App 和命令行共用。解密的密钥在钥匙串的“SpeakMore Safe Storage”里（Windows 上由 DPAPI 绑在你的 Windows 账户上），文件被拷走也解不开。0.7.0 及以前 App 另存一份带 `.app` 的，原样留着，退回旧版时还能用 |
-| `data/history.db`、`data/Recordings/` | 说过的话、录音和账。失败的听写也留着录音，话不会白说 |
-| `logs/main.log` | 日志。只记长度、耗时和用量，不记说的话，也不记 key |
-| `models/` | 本地转写用的本机模型，你点了才下，下载后按 SHA-256 校验过 |
-| `bin/`、`app/`、`runtime/` | 命令行装的程序本身，升级时整个换掉 |
+| `<厂商>-key.bin` | 加密的密钥，一家一个。解密用的钥匙在钥匙串里（Windows 由 DPAPI 绑定账户），文件拷走了也打不开 |
+| `data/history.db`、`data/Recordings/` | 说过的话、录音和花费记录 |
+| `logs/main.log` | 只记长度、耗时和用量，不记你说的话，不记密钥 |
+| `models/` | 本机模型，你要了才下，下完按 SHA-256 校验 |
+| `bin/`、`app/`、`runtime/` | 终端安装的程序本身 |
 
-目录以外只有：`~/.local/bin/speakmore` 这个链接、钥匙串里的那一条、你给的系统权限，以及用安装包装的“应用程序”里的 SpeakMore。Windows 上是：用户 Path 里的一项、开始菜单的快捷方式，开了开机启动的话还有注册表里的一条。想装到别处，安装时设环境变量 `SPEAKMORE_HOME`。
+目录之外：钥匙串里的一项、你开过的权限、"应用程序"里的 SpeakMore；Windows 上还有开始菜单的快捷方式、Path 里的一项和开机自启的那一项。
 
 </details>
 
 <details>
-<summary><b>🩺 出了状况</b></summary>
+<summary><b>🩺 排查</b></summary>
 
-| 看到的 | 怎么办 |
+| 看到 | 这样做 |
 | --- | --- |
-| key 那一行写着“还没验证” | 启动时没连上 Gemini，存着的 key 先用着。连上网后再运行 `speakmore status` |
-| “还差：Gemini 验证”（或 OpenAI 验证） | 多半是模型名或思考档位不对，key 未必有问题。`speakmore model check` 看它怎么说，`speakmore config unset model` 回到默认 |
-| “还差：按键监听” | 听热键的小程序停了。`speakmore restart`，还不行就看 `speakmore logs` |
-| 命令说它“没有在 5 秒内回话” | 后台卡住了。`speakmore stop` 会强行结束它，再运行 `speakmore` |
-| 菜单栏上找不到图标 | 带刘海的 MacBook 上图标多了会被刘海挡住。按住 ⌘ 把不常用的图标拖出菜单栏；或者用 `speakmore settings`、`speakmore history` |
+| 密钥显示"还没验证" | 启动时没连上厂商，先用存着的密钥。联网后运行 `speakmore status` |
+| 检测不通过，但密钥没错 | 多半是模型名或思考档位。`speakmore model check` 能看到回话；`speakmore config unset model` 恢复默认 |
+| 按快捷键没反应 | `speakmore status` 会说缺什么；`speakmore restart` 重启听键的小帮手 |
+| 命令说"5 秒内没有回应" | `speakmore stop`，再运行 `speakmore` |
+| 菜单栏没有图标 | 刘海屏的 MacBook 上多出来的图标会藏到刘海后面。按住 ⌘ 把一些图标拖出菜单栏，或者用 `speakmore settings` |
 
 </details>
 
 <details>
 <summary><b>🔄 升级和卸载</b></summary>
 
-- **升级**：命令行装的和 Windows 上，运行 `speakmore update`，装着 SpeakMore.app 的话连它一起换，原来在跑的那个会重新打开；只装了 App 的，下载新的 dmg 再拖进去一次。设置、key、历史和录音都不动。
-- **卸载**：安装包装的，从菜单栏退出，把“应用程序”里的 SpeakMore 拖进废纸篓。命令行装的，运行 `speakmore uninstall`：停掉后台，删掉 `~/.speakmore`、命令链接和钥匙串里的那一条；只删程序、留下数据加 `--keep-data`。Windows 上运行 `speakmore uninstall`：删掉 `%USERPROFILE%\.speakmore`、Path 里的那一项、开始菜单的快捷方式和开机启动。
-- **装回 0.4.2 或更早**：新版本在历史库里加了一张账表，旧版本见到会启动不了。先运行 `sqlite3 ~/.speakmore/data/history.db "DROP TABLE model_calls; PRAGMA user_version = 1;"`，只丢账，说过的话都在。
+- **升级**：`speakmore update` 同时升级终端安装和 SpeakMore.app，并重新打开原来在运行的那个。只装了 App 的，下载新的 dmg 再拖一次。设置、密钥、历史、录音都保留。
+- **卸载**：`speakmore uninstall` 停掉 SpeakMore，删掉整个目录、命令和钥匙串里的那一项（Windows 上还有 Path、开始菜单和开机自启）。加 `--keep-data` 保留设置、密钥、历史和录音。只装了 App 的，从菜单栏退出，再把它拖进废纸篓。
 
 </details>
-
-## 🧑‍💻 开发
-
-```bash
-git clone https://github.com/zephyr4123/speakmore.git && cd speakmore
-npm install
-npm start          # 就是 speakmore 命令
-npm run check      # 代码检查加全部测试
-```
-
-目录结构、打包发布、每一版实际验证到了哪一步，在[开发说明](docs/development.md)里。
 
 ## 许可
 
 [MIT](LICENSE)。`.claude/skills/` 下的文件来自 [REA](https://github.com/morluto/rea)，按它自己的 MIT 许可。
 
-名字和 Typeless 反着来：这是照着对它的逆向分析写的独立实现，和 Typeless 官方没有关系。
+名字是向 Typeless 致意。SpeakMore 是依据逆向笔记独立实现的，与 Typeless 无关联。

@@ -1,0 +1,227 @@
+{
+  "onboarding-way.en": {
+    "path": "readme/onboarding-way.en.965b5caa.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-prepare-local.en": {
+    "path": "readme/onboarding-prepare-local.en.71619e6a.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-prepare-downloading.en": {
+    "path": "readme/onboarding-prepare-downloading.en.a888cbc0.webp",
+    "width": 1160,
+    "height": 980
+  },
+  "onboarding-prepare-private.en": {
+    "path": "readme/onboarding-prepare-private.en.7b03b9d0.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-permissions.en": {
+    "path": "readme/onboarding-permissions.en.9dd71f2b.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-microphone.en": {
+    "path": "readme/onboarding-microphone.en.3a101fd6.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-hotkey.en": {
+    "path": "readme/onboarding-hotkey.en.0c8fe2d1.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-try.en": {
+    "path": "readme/onboarding-try.en.63072883.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-done.en": {
+    "path": "readme/onboarding-done.en.09239274.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "home-dark.en": {
+    "path": "readme/home-dark.en.d337323a.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "home.en": {
+    "path": "readme/home.en.2f8dbf53.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "settings.en": {
+    "path": "readme/settings.en.ea52bc00.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "mode-picker.en": {
+    "path": "readme/mode-picker.en.1f78639c.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "transcribe.en": {
+    "path": "readme/transcribe.en.982f93e1.webp",
+    "width": 1160,
+    "height": 1080
+  },
+  "polish.en": {
+    "path": "readme/polish.en.6aae6fba.webp",
+    "width": 1160,
+    "height": 1080
+  },
+  "keys.en": {
+    "path": "readme/keys.en.338414f2.webp",
+    "width": 1160,
+    "height": 1080
+  },
+  "presets.en": {
+    "path": "readme/presets.en.6453ea2c.webp",
+    "width": 1160,
+    "height": 1080
+  },
+  "history.en": {
+    "path": "readme/history.en.c35ada33.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-way.zh-CN": {
+    "path": "readme/onboarding-way.zh-CN.5017d754.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-prepare-local.zh-CN": {
+    "path": "readme/onboarding-prepare-local.zh-CN.623b17ae.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-prepare-downloading.zh-CN": {
+    "path": "readme/onboarding-prepare-downloading.zh-CN.ae31462c.webp",
+    "width": 1160,
+    "height": 980
+  },
+  "onboarding-prepare-private.zh-CN": {
+    "path": "readme/onboarding-prepare-private.zh-CN.4a564b9c.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-permissions.zh-CN": {
+    "path": "readme/onboarding-permissions.zh-CN.6e365cdb.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-microphone.zh-CN": {
+    "path": "readme/onboarding-microphone.zh-CN.2fe10fdd.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-hotkey.zh-CN": {
+    "path": "readme/onboarding-hotkey.zh-CN.24cd3419.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-try.zh-CN": {
+    "path": "readme/onboarding-try.zh-CN.2c6bb356.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-done.zh-CN": {
+    "path": "readme/onboarding-done.zh-CN.1ddd286f.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "home-dark.zh-CN": {
+    "path": "readme/home-dark.zh-CN.ded4c77a.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "home.zh-CN": {
+    "path": "readme/home.zh-CN.9f68edd4.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "settings.zh-CN": {
+    "path": "readme/settings.zh-CN.9989f1d9.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "mode-picker.zh-CN": {
+    "path": "readme/mode-picker.zh-CN.99d72560.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "models.zh-CN": {
+    "path": "readme/models.zh-CN.d886a16e.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "transcribe.zh-CN": {
+    "path": "readme/transcribe.zh-CN.643d66f5.webp",
+    "width": 1160,
+    "height": 1080
+  },
+  "polish.zh-CN": {
+    "path": "readme/polish.zh-CN.8dfd259a.webp",
+    "width": 1160,
+    "height": 1080
+  },
+  "keys.zh-CN": {
+    "path": "readme/keys.zh-CN.9d3a7c4f.webp",
+    "width": 1160,
+    "height": 1080
+  },
+  "presets.zh-CN": {
+    "path": "readme/presets.zh-CN.ecd31b60.webp",
+    "width": 1160,
+    "height": 1080
+  },
+  "history.zh-CN": {
+    "path": "readme/history.zh-CN.77f0bb1b.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "download-speed-light.en": {
+    "path": "readme/download-speed-light.en.44f92b14.webp",
+    "width": 720,
+    "height": 247
+  },
+  "vendors-light.en": {
+    "path": "readme/vendors-light.en.f7b899f9.webp",
+    "width": 860,
+    "height": 221
+  },
+  "download-speed-dark.en": {
+    "path": "readme/download-speed-dark.en.8b4db543.webp",
+    "width": 720,
+    "height": 247
+  },
+  "vendors-dark.en": {
+    "path": "readme/vendors-dark.en.51093b18.webp",
+    "width": 860,
+    "height": 221
+  },
+  "download-speed-light.zh-CN": {
+    "path": "readme/download-speed-light.zh-CN.c710e7f4.webp",
+    "width": 720,
+    "height": 264
+  },
+  "vendors-light.zh-CN": {
+    "path": "readme/vendors-light.zh-CN.89418227.webp",
+    "width": 860,
+    "height": 228
+  },
+  "download-speed-dark.zh-CN": {
+    "path": "readme/download-speed-dark.zh-CN.170a9ced.webp",
+    "width": 720,
+    "height": 264
+  },
+  "vendors-dark.zh-CN": {
+    "path": "readme/vendors-dark.zh-CN.4bf2ba43.webp",
+    "width": 860,
+    "height": 228
+  }
+}

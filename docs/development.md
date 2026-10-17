@@ -64,7 +64,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `test/` | 自动测试，目录和 `src/` 对应 |
 | `scripts/` | 开发用的脚本，按用途分四组：`build/` 编译小程序、打 .app；`release/` 发新版本（`ship.sh`：把关、打包、上传、核对）、把本地模型传到国内源（`sync-models.mjs`）；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key、在 Windows 开发机上跑（`win-*.sh`，见上面的 Windows 一节）；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
 | `bench/` | 本地转写的评测（[说明](../bench/README.md)）：洗样本、跑参照和各个本地模型、判分、出报告 |
-| `docs/` | [实现笔记](implementation-notes.md)、这份开发说明、README 用的截图（`images/`） |
+| `docs/` | [实现笔记](implementation-notes.md)、这份开发说明、README 的图在图片桶上的清单（`media.json`，见下面的"README 的图"） |
 | `website/` | 官网（[说明](../website/README.md)）：React + Tailwind CSS v4 的单页静态站，中英双语，Docker 部署；截图从 App 的真页面离屏截、放在单独的 COS 桶 |
 | `targets/typeless/` | 对 Typeless 的[逆向分析](../targets/typeless/README.md)，18 篇文档。SpeakMore 是照着它做的 |
 | `AGENTS.md`、`.memory/` | 和 AI 编程助手协作时用的工作约定和项目记忆 |
@@ -115,6 +115,15 @@ node scripts/release/release.mjs windows      # 只打 Windows 的包（speakmor
 - **快捷方式（.lnk）里的目标路径不是连续的一段**：本地编码那份拆成几截，UTF-16 那份是相对路径。认是不是我们的，要请 WScript.Shell 读出目标。
 - **从 SSH 起的程序进不了桌面**，断开就被收掉：要碰热键、剪贴板、麦克风、窗口的，用计划任务（只在用户登录时、以交互方式运行）在桌面会话里起，`win-desktop.sh` 就是这么做的。同一个任务正跑着时再起会被忽略，长任务用 `JOB=` 另起一个。PowerShell 里直接 `& electron.exe` 不等它跑完（它是窗口程序），要等就经 `cmd /c` 或者把输出接住。
 - **显卡**：本机模型在显卡上（Vulkan）第一次转写要先编显卡程序，RTX 4060 Ti 上 6.8 秒，之后驱动按可执行文件缓存在磁盘上；所以装上模型就先预热一遍。显卡上没装起来（报错或者驱动把转写进程弄崩）会自动换 CPU 再装，设置里也能选只用 CPU（`acceleration`）。
+
+## README 的图
+
+README 里的图不进仓库，和官网的截图放在同一个 COS 图片桶里（官网、宣传片也用），在 `readme/` 下；传上去的记在 `docs/media.json`，测试会查 README 引用的都在这份清单里、中文版只用中文的图。
+
+1. 用隔离的家目录起 App，带调试端口：`SPEAKMORE_HOME=<短路径> SPEAKMORE_THEME=indigo SPEAKMORE_LANGUAGE=<en|zh-CN> node_modules/.bin/electron . --remote-debugging-port=9333`。家目录是新的就从首次引导开始；主窗口要有数据的话，先往 `data/history.db` 里造历史（照 `website/scripts/screenshots.mjs` 的 `seed`）。macOS 的套接字路径有长度上限，家目录用 `/tmp` 下的短路径（可以软链到别处）。
+2. 用调试协议点到要截的那一页，`Page.captureScreenshot` 存成两倍图的 PNG，文件名 `<en|zh>-<序号>-<名字>.png`（01–09 是首次引导）。窗口高度不够时用 `Emulation.setDeviceMetricsOverride` 把视口加高。
+3. 加窗口外框、画下载速度对比和厂商标志墙：在 `website/` 下 `../node_modules/.bin/electron scripts/readme-media.mjs -- <截图目录> <输出目录>`。
+4. 上传：`../scripts/release/with-cos-key.sh node scripts/upload-media.mjs <输出目录> --prefix readme --manifest ../docs/media.json`。对象名带内容指纹，图变了地址就变，README 里的地址照新的清单换。推上 GitHub 后把页面上每张图（经 camo 代理）取一遍：代理第一次从桶上取图偶尔拿到空的，还会缓存一年，遇到了就在那张图的地址后面加 `?v=2` 之类的查询串让它重取。
 
 ## 验证到哪一步
 
