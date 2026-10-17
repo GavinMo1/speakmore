@@ -1,6 +1,7 @@
 import { t } from "../shared/i18n.mjs";
 import { describeError } from "../shared/setup-text.mjs";
-import { $, brand, h, platformName, svg } from "./dom.mjs";
+import { $, h, svg } from "./dom.mjs";
+import { hopChain, needText } from "./route-view.mjs";
 import { toast } from "./toast.mjs";
 
 // 首页的识别方式选单：标题右边一个按钮写着正在用哪种方式，点开是一张浮层，三种方式三选一。
@@ -55,33 +56,6 @@ export function createModePicker({ refresh, configure }) {
     configure(target);
   }
 
-  function needText(mode, need) {
-    if (need.kind === "key") return t("home.mode.needs.key", { platform: platformName(platformOf(need.platform)) });
-    if (need.kind === "download") {
-      const hop = wayOf(mode).hops.find(({ platform }) => platform === "local");
-      return t("home.mode.needs.download", { model: hop?.name ?? need.model });
-    }
-    return t("home.mode.needs.url");
-  }
-
-  /** 一路上的一个模型：前面有箭头（第一个没有）、图标、名字，悬停说在哪个平台上 */
-  function hop({ platform, maker, name }, index) {
-    const where = platform === "local" ? t("plaza.via.local") : platformName(platformOf(platform));
-    const text = platform === "custom" ? `${t("plaza.custom.name")} · ${name}` : name;
-    return h(
-      "span",
-      { class: "hop", title: `${text} · ${where}` },
-      index > 0 && h("span", { class: "hop-arrow", "aria-hidden": "true", text: "→" }),
-      brand(maker ?? platform),
-      h("span", { class: "hop-name", text }),
-    );
-  }
-
-  function hops(mode) {
-    const list = wayOf(mode).hops.map(hop);
-    return list.length > 0 ? h("span", { class: "hops" }, list) : null;
-  }
-
   /** 一项下面的说明：没切成的原因，或者切过去之前还差的；都带去配置的按钮 */
   function note(mode) {
     const way = wayOf(mode);
@@ -94,17 +68,17 @@ export function createModePicker({ refresh, configure }) {
     if (failure?.mode === mode) {
       return h(
         "div",
-        { class: "mode-note callout", role: "alert" },
+        { class: "picker-note callout", role: "alert" },
         svg("i-circle-alert"),
         h("span", {}, h("b", { text: t("home.mode.failed") }), ` · ${t.text(failure.problem)}`),
         fix,
       );
     }
-    const gaps = way.problem ? [t.text(way.problem)] : way.needs.map((need) => needText(mode, need));
+    const gaps = way.problem ? [t.text(way.problem)] : way.needs.map((need) => needText(need, { ...way, platformOf }));
     if (gaps.length === 0) return null;
     return h(
       "div",
-      { class: "mode-note" },
+      { class: "picker-note" },
       svg("i-circle-alert"),
       h("span", { text: gaps.join(" · ") }),
       !way.problem && fix,
@@ -116,26 +90,26 @@ export function createModePicker({ refresh, configure }) {
     const switching = busy === mode;
     return h(
       "div",
-      { class: "mode-item" },
+      { class: "picker-item" },
       h(
         "button",
         {
           type: "button",
-          class: "mode-option",
+          class: "picker-option",
           role: "radio",
           "aria-checked": String(live),
           "aria-busy": switching ? "true" : null,
           disabled: !setup.switchable || (busy !== null && !switching),
           onclick: () => pick(mode),
         },
-        h("span", { class: "mode-glyph" }, svg(ICONS[mode])),
+        h("span", { class: "picker-glyph" }, svg(ICONS[mode])),
         h(
           "span",
-          { class: "mode-option-body" },
+          { class: "picker-option-body" },
           h(
             "span",
-            { class: "mode-option-title" },
-            h("span", { class: "mode-option-name", text: modeName(mode) }),
+            { class: "picker-option-title" },
+            h("span", { class: "picker-option-name", text: modeName(mode) }),
             live && h("span", { class: "tag", "data-tone": "accent", text: t("plaza.inUse") }),
             switching &&
               h(
@@ -145,8 +119,8 @@ export function createModePicker({ refresh, configure }) {
                 t("home.mode.switching"),
               ),
           ),
-          h("span", { class: "mode-option-desc", text: t(`home.mode.desc.${mode}`) }),
-          hops(mode),
+          h("span", { class: "picker-option-desc", text: t(`home.mode.desc.${mode}`) }),
+          hopChain(wayOf(mode).hops, platformOf),
         ),
         h("span", { class: "radio-mark" }, svg("i-check")),
       ),
@@ -158,9 +132,9 @@ export function createModePicker({ refresh, configure }) {
     if (!setup?.plaza?.ways) return;
     const mode = current();
     trigger.replaceChildren(
-      h("span", { class: "mode-glyph" }, svg(ICONS[mode])),
-      h("span", { class: "mode-trigger-label", text: t("home.mode.label") }),
-      h("span", { class: "mode-trigger-value", text: modeName(mode) }),
+      h("span", { class: "picker-glyph" }, svg(ICONS[mode])),
+      h("span", { class: "picker-trigger-label", text: t("home.mode.label") }),
+      h("span", { class: "picker-trigger-value", text: modeName(mode) }),
       svg("i-chevron", "icon chevron"),
     );
     trigger.setAttribute("aria-label", `${t("home.mode.label")} · ${modeName(mode)}`);

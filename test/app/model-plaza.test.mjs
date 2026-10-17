@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULTS, describePlaza, loadPriceBook } from "../../src/app/model-plaza.mjs";
+import { presetsFor } from "../../src/models/presets.mjs";
 import { CLOUD_TRANSCRIBERS } from "../../src/server/asr/cloud/vendors.mjs";
 import { CHAT_VENDORS } from "../../src/server/chat/vendors.mjs";
+import { CNY_PER_USD } from "../../src/server/currency.mjs";
 import { PROVIDERS } from "../../src/server/providers/index.mjs";
 import { patchSettings, resolveSettings, routeOf } from "../../src/storage/settings.mjs";
 
@@ -14,16 +16,28 @@ const view = async (overrides = {}) =>
     status: { "qwen3-asr-0.6b-q8": { installed: true, download: null, partial: 0, problem: null } },
     chip: "apple-silicon",
     freeBytes: 446e9,
-    priceOf: await loadPriceBook(),
+    prices: await loadPriceBook(),
     routes: routesWith({}),
+    presets: [],
+    at: new Date("2026-10-19T02:30:00Z"),
     ...overrides,
   });
 
+const settingsWith = (changes) =>
+  patchSettings(resolveSettings({ file: "/nonexistent/settings.json", env: {} }), changes);
+
 /** 三种方式按出厂设置加上 changes 走哪条路线（同主进程：storage/settings.mjs 的 routeOf） */
 function routesWith(changes) {
-  const settings = patchSettings(resolveSettings({ file: "/nonexistent/settings.json", env: {} }), changes);
+  const settings = settingsWith(changes);
   return Object.fromEntries(["native", "local", "private"].map((mode) => [mode, routeOf(settings, mode)]));
 }
+
+/** 适合这类芯片的推荐组合，各按设置换上它那几项之后的路线（同主进程） */
+const presetsWith = (changes, chip) =>
+  presetsFor(chip).map((preset) => ({
+    preset,
+    route: routeOf(settingsWith({ ...changes, ...preset.settings }), preset.mode),
+  }));
 
 const group = (shelf, id) => shelf.find((found) => found.id === id);
 
@@ -167,4 +181,47 @@ test("识别方式什么都不差时 needs 是空的；自定义服务没写地�
 test("某种方式的设置拼不出路线：照实交出原因，不编", async () => {
   const { ways } = await view({ routes: { ...routesWith({}), local: { problem: { key: "chat.modelRequired" } } } });
   assert.deepEqual(ways.local, { problem: { key: "chat.modelRequired" }, hops: [], needs: [] });
+});
+
+test("推荐组合：按推荐的先后列适合这台机器的，各写一路经过的模型、还差什么、每月多少钱；正在用的那个标出来", async () => {
+  const current = { transcriber: "qwen3-asr-0.6b-q8", polish: "deepseek/deepseek-flash" };
+  const { presets } = await view({
+    mode: "local",
+    routes: routesWith(current),
+    presets: presetsWith(current, "apple-silicon"),
+    keys: { deepseek: "stored" },
+  });
+  assert.deepEqual(
+    presets.map(({ id }) => id),
+    ["local-deepseek", "native-gemini", "bailian-cloud", "private-qwen"],
+  );
+  const [local, native, bailian, privately] = presets;
+
+  assert.equal(local.active, true);
+  assert.deepEqual(local.needs, []);
+  assert.deepEqual(
+    local.hops.map(({ role, platform }) => [role, platform]),
+    [
+      ["transcribe", "local"],
+      ["polish", "deepseek"],
+    ],
+  );
+  assert.ok(local.monthly.usd > 0);
+  assert.equal(local.monthly.cny, local.monthly.usd * CNY_PER_USD);
+
+  assert.equal(native.active, false);
+  assert.deepEqual(native.needs, [{ kind: "key", platform: "gemini" }]);
+  assert.deepEqual(native.settings, { model: "gemini/gemini-3.6-flash" });
+  assert.deepEqual(bailian.needs, [{ kind: "key", platform: "bailian" }], "一把百炼的 key 管两跳");
+
+  assert.equal(privately.monthly.usd, 0);
+  assert.equal(privately.active, false, "数据隐私没在用");
+});
+
+test("推荐组合按芯片挑：Intel 的 Mac 上换成 CPU 版的本机模型", async () => {
+  const { presets } = await view({ presets: presetsWith({}, "intel-mac") });
+  assert.deepEqual(
+    presets.map(({ id }) => id),
+    ["native-gemini", "bailian-cloud", "local-deepseek-cpu", "private-sensevoice-cpu"],
+  );
 });

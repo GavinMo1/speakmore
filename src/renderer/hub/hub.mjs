@@ -3,10 +3,12 @@ import { createHistory } from "./history.mjs";
 import { createHome } from "./home.mjs";
 import { createModePicker } from "./mode-picker.mjs";
 import { createModels } from "./models.mjs";
+import { createPresetPicker } from "./preset-picker.mjs";
 import { createSettings, fixTarget } from "./settings.mjs";
 
 // 主窗口：对应原版的 hub.html。左边侧栏切换首页、模型和历史记录，设置是盖在上面的对话框。
 // 选哪种识别方式在首页标题旁的选单里（mode-picker.mjs），各种方式里用的模型在模型页换：两边能互相跳。
+// 模型页标题旁是推荐组合（preset-picker.mjs）：方式和模型一起换成一套。
 // 数据都在主进程：有新记录、记了新的账时它通知这里重读；能不能用、还差什么变了时也一样。
 
 const $ = (id) => document.getElementById(id);
@@ -23,6 +25,13 @@ const models = createModels({
   pickMode: () => {
     navigate("home");
     $("mode-picker").showPopover();
+  },
+});
+const presetPicker = createPresetPicker({
+  refresh: refreshSetup,
+  configureKey: (platform) => {
+    navigate("models");
+    models.show({ tab: "keys", platform });
   },
 });
 const modePicker = createModePicker({
@@ -74,6 +83,7 @@ async function refreshSetup() {
   settings.render(setup);
   models.render(setup);
   modePicker.render(setup);
+  presetPicker.render(setup);
   return setup;
 }
 

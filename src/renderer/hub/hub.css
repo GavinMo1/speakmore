@@ -667,6 +667,41 @@
   cursor: help;
 }
 
+/* ---------- 一路经过的模型（route-view.mjs）：首页的识别方式选单、模型页的推荐组合共用 ---------- */
+
+/* 图标加名字，后一个带着前面的箭头一起折行（箭头不会落单在行尾）；不截断 */
+.hops {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  margin-top: 0.375rem;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+}
+
+.hop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.hop .provider-icon,
+.hop > .icon {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.hop-name {
+  overflow-wrap: anywhere;
+}
+
+.hop-arrow {
+  color: var(--ink-2);
+}
+
 /* ---------- 操作结果的提示：窗口底部一闪而过（toast.mjs） ---------- */
 
 .toast {

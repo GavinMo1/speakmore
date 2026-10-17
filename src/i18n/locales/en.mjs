@@ -455,6 +455,30 @@ export default {
     },
   },
 
+  // Recommended setups next to the models page title (src/models/presets.mjs, renderer/hub/preset-picker.mjs). Monthly cost at 100 a day, 30 days
+  presets: {
+    title: "Recommended setups",
+    meta: "Monthly cost at {daily} dictations a day",
+    perMonth: "/ mo",
+    costTip: "{daily} a day · about {seconds} s each · weekday peak prices",
+    costUnknown: "Price unknown",
+    enable: "Enable",
+    enabling: "Enabling",
+    checkTip:
+      "Checks the whole setup: the on-device model transcribes a sample, each cloud service gets a minimal request",
+    enabled: "Enabled {name}",
+    download: "Download {size}",
+    downloading: "Downloading {model}",
+    items: {
+      "local-deepseek": { name: "On-device + DeepSeek", desc: "Audio stays on this Mac · Very low cost" },
+      "native-gemini": { name: "Gemini Native", desc: "One step · One key" },
+      "bailian-cloud": { name: "Bailian Cloud", desc: "One key · No local compute" },
+      "private-qwen": { name: "Fully On-device", desc: "Nothing uploaded · Free" },
+      "local-deepseek-cpu": { name: "On-device + DeepSeek", desc: "CPU model · Very low cost" },
+      "private-sensevoice-cpu": { name: "Fully On-device", desc: "CPU model · Nothing uploaded" },
+    },
+  },
+
   home: {
     title: "Speak, don't type",
     words: "Words",

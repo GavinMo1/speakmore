@@ -42,6 +42,8 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 
 加一种界面语言：照着 `src/i18n/locales/en.mjs` 写一个文件，在 `src/i18n/index.mjs` 的 `LOCALES` 里登记一行（并列几样时不想用 `Intl` 的写法，比如中文全用顿号，登记时给 `separator`）。缺了哪句、参数对不上、单复数写法这种语言没有，`test/i18n/` 会指出来；设置、菜单栏、窗口、命令行都从这份清单里取，不用再改别处。只管界面：提示词和整理出来的文字不跟着变。
 
+加一个推荐组合（模型页标题行右边那个下拉）：在 `src/models/presets.mjs` 加一项（方式、带的设置、适合哪类芯片，排在哪按推荐的先后），文案加 `presets.items.<id>` 的名字和说明，中英各一份；删一个就删这两处。月成本不手写，按"每天 100 次、一个月 30 天"和一次典型口述的用量（`src/usage/estimate.mjs` 的 `TYPICAL`）现算，价目改了跟着变。用到还没量过用量的那一家时，`test/models/presets.test.mjs` 会说算不出月成本：用 `scripts/dev/measure-dictation.mjs` 在评测语料上量一下，把平均数填进 `TYPICAL`。那个测试还查引用的模型在不在清单里、设置属不属于那种方式、文案齐不齐。
+
 不发布也可以试安装脚本：`SPEAKMORE_INSTALL_BASE=$PWD/dist/release SPEAKMORE_HOME=/tmp/sm bash install.sh`，装进一个临时目录。
 
 | 目录 | 内容 |
@@ -53,8 +55,8 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `src/themes/` | 主题：界面要哪些颜色（一组 token）、每套主题给的值、合不合格怎么查。加一套主题是加一个文件、登记一行（名字和介绍写进各语言的文案） |
 | `src/i18n/` | 界面语言：每种语言一个文案文件（`locales/`），跟随系统时怎么挑、翻译函数。内核和主进程不写死哪种语言的话，交出一句"还没定语言的话"（名字加参数），由显示它的那一端（窗口、命令行）按自己的语言翻。回给命令行的，后台按命令行带来的语言翻成字：旧版本的命令行和 `status --json` 的读者只认字 |
 | `src/server/` | 听写服务：`protocol/` 收分块音频，`refine/` 交给模型整理（各家共用的流程，每次调用记一笔账），`providers/` 每家模型一个适配器（`prices/` 是各家的价目表），`audio/` 把录音解成识别用的统一格式（16 kHz 单声道）、转成别家收的格式，`asr/` 是本地转写（每个运行库一个适配器、长录音分段、装着模型的转写进程），`modes.mjs` 是三种识别模式。平时跑在后台应用的进程里 |
-| `src/models/` | 本地模型的配置表 `catalog.mjs`：全局只有这一份，下载源（国内源、原始地址）、每个模型的文件和校验值、许可、标签和实测数字都在这里，别处不另写；`store.mjs` 下载、校验、列出、删除模型；`describe.mjs` 把标签和实测写成话 |
-| `src/usage/` | 用量报表（今天、本月、累计、按型号）、首页的统计（字数、语速、连续天数、热力图）和数字的写法，命令和主窗口共用 |
+| `src/models/` | 本地模型的配置表 `catalog.mjs`：全局只有这一份，下载源（国内源、原始地址）、每个模型的文件和校验值、许可、标签和实测数字都在这里，别处不另写；`store.mjs` 下载、校验、列出、删除模型；`describe.mjs` 把标签和实测写成话；`presets.mjs` 是模型页的推荐组合 |
+| `src/usage/` | 用量报表（今天、本月、累计、按型号）、首页的统计（字数、语速、连续天数、热力图）和数字的写法，命令和主窗口共用；`estimate.mjs` 估推荐组合的月成本 |
 | `native/` | 听热键、贴字、说话时截住 `esc` 和悬浮条上点击的小程序（Swift） |
 | `assets/` | 图标：`icon.svg` 是那方印，`tray.svg` 是菜单栏上的五道；`.icns` 和 `trayTemplate*.png` 由 `scripts/build/make-icon.sh` 从它们生成 |
 | `src/storage/` | `~/.speakmore` 里的东西：放在哪、设置、历史库、旧数据的迁移。命令和后台应用共用 |

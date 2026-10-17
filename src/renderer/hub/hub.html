@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="../shared/setup.css" />
     <link rel="stylesheet" href="hub.css" />
     <link rel="stylesheet" href="models.css" />
-    <link rel="stylesheet" href="mode-picker.css" />
+    <link rel="stylesheet" href="picker.css" />
   </head>
   <body>
     <!-- 图标：lucide（ISC 许可），线宽 2，跟着字的颜色走 -->
@@ -119,16 +119,16 @@
         <section class="page" data-route="home" aria-labelledby="home-title">
           <header class="page-head">
             <h1 class="page-title" id="home-title" data-i18n="home.title">Speak, don't type</h1>
-            <button type="button" class="mode-trigger" id="mode-trigger" popovertarget="mode-picker" aria-haspopup="dialog" aria-expanded="false"></button>
+            <button type="button" class="picker-trigger" id="mode-trigger" popovertarget="mode-picker" aria-haspopup="dialog" aria-expanded="false"></button>
           </header>
-          <div class="mode-picker" id="mode-picker" popover role="dialog" aria-labelledby="mode-picker-title">
-            <header class="mode-picker-head">
-              <h2 class="mode-picker-title" id="mode-picker-title" data-i18n="home.mode.label">Recognition</h2>
-              <p class="mode-picker-meta" data-i18n="home.mode.meta">Choose one of three · Each keeps its own models</p>
+          <div class="picker" id="mode-picker" popover role="dialog" aria-labelledby="mode-picker-title">
+            <header class="picker-head">
+              <h2 class="picker-title" id="mode-picker-title" data-i18n="home.mode.label">Recognition</h2>
+              <p class="picker-meta" data-i18n="home.mode.meta">Choose one of three · Each keeps its own models</p>
             </header>
-            <div class="mode-options" id="mode-options" role="radiogroup" aria-labelledby="mode-picker-title"></div>
-            <p class="mode-locked" id="mode-locked" data-i18n="home.mode.locked" hidden>The mode is set by the separately started server and can't be changed here</p>
-            <footer class="mode-picker-foot">
+            <div class="picker-options" id="mode-options" role="radiogroup" aria-labelledby="mode-picker-title"></div>
+            <p class="picker-locked" id="mode-locked" data-i18n="home.mode.locked" hidden>The mode is set by the separately started server and can't be changed here</p>
+            <footer class="picker-foot">
               <button type="button" class="button ghost small" id="mode-configure"></button>
             </footer>
           </div>
@@ -236,11 +236,22 @@
         <section class="page" data-route="models" aria-labelledby="models-title" hidden>
           <header class="page-head">
             <h1 class="page-title" id="models-title" data-i18n="plaza.title">Models</h1>
-            <search class="search">
-              <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
-              <input class="input" id="plaza-search" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="plaza.search" data-i18n-aria-label="plaza.search" />
-            </search>
+            <div class="page-tools">
+              <search class="search">
+                <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
+                <input class="input" id="plaza-search" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="plaza.search" data-i18n-aria-label="plaza.search" />
+              </search>
+              <!-- 推荐组合：一列选项，点一个就启用，月成本按每天 100 次估（preset-picker.mjs、models/presets.mjs） -->
+              <button type="button" class="picker-trigger" id="preset-trigger" popovertarget="preset-picker" aria-haspopup="dialog" aria-expanded="false" hidden></button>
+            </div>
           </header>
+          <div class="picker wide" id="preset-picker" popover role="dialog" aria-labelledby="preset-picker-title">
+            <header class="picker-head">
+              <h2 class="picker-title" id="preset-picker-title" data-i18n="presets.title">Recommended setups</h2>
+              <p class="picker-meta" id="preset-meta"></p>
+            </header>
+            <div class="picker-options" id="preset-options"></div>
+          </div>
 
           <div class="tabs" id="plaza-tabs" role="tablist" data-indicator="tabs" data-i18n-aria-label="plaza.tabs.label"></div>
           <div class="toolbar" id="plaza-toolbar"></div>

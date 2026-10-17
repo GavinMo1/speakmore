@@ -1,10 +1,11 @@
 import { t } from "../shared/i18n.mjs";
 import { describeError } from "../shared/setup-text.mjs";
-import { $, brand, drawnCheck, h, named, platformName, svg } from "./dom.mjs";
+import { createChecks } from "./checks.mjs";
+import { $, brand, h, named, platformName, progressBadge, svg } from "./dom.mjs";
 import { slidingIndicators } from "./indicators.mjs";
 import { toast } from "./toast.mjs";
 
-// 侧栏"模型"一页：模型库，按角色分三排货架（原生、转写、润色）加一张密钥表。货架按谁做的分组，
+// 侧栏"模型"一页：模型库，按角色分三排货架（原生、转写、润色）加一张密钥表；标题行右边的推荐组合在 preset-picker.mjs。货架按谁做的分组，
 // 一组可能有好几个平台卖，平台是这一组的渠道。选哪种识别方式不在这里，在首页（mode-picker.mjs）：
 // 这里换的是各种方式里用的模型，启用另一种方式里的模型时连方式一起换（toolbar 上方那行说明会先讲清楚）。
 // 数据由主进程拼好（app/model-plaza.mjs，随 getSetup 来），这里只画、只转达操作；换模型、存 key 都走主进程，
@@ -33,7 +34,6 @@ const OFFICIAL = {
 
 // ---------- 小工具 ----------
 
-const label = (text) => h("span", { class: "label", text });
 const logoTile = (node) => h("span", { class: "logo-tile" }, node);
 
 const makerName = (maker) => named(`plaza.makers.${maker}`, maker);
@@ -60,8 +60,6 @@ export function createModels({ refresh, pickMode }) {
     via: {},
     /** 展开了密钥表单的平台 */
     openKey: null,
-    /** 检测结果：键 → { state: running | ok | fail, problem, fresh } */
-    checks: {},
     /** 自定义服务这次填的地址和模型名（存 key 时一起验，启用时一起交） */
     custom: { url: "", model: "" },
     /** 正在等主进程回话的那一次操作，按钮不重复点 */
@@ -129,78 +127,15 @@ export function createModels({ refresh, pickMode }) {
   /** 这个角色在正在用的识别方式里：转写在转写 + 润色、数据隐私两种里都算 */
   const isLive = (role) => ROLES[role].mode === setup.plaza.mode || (role === "transcribe" && privateNow());
 
-  // ---------- 检测：同一套状态（未检测、检测中、通过、失败），卡片、模型、密钥三处共用 ----------
+  // ---------- 检测：同一套状态（未检测、检测中、通过、失败），模型、密钥两处共用（checks.mjs） ----------
 
-  async function runCheck(key, call) {
-    state.checks[key] = { state: "running" };
-    draw();
-    let result;
-    try {
-      result = await call();
-    } catch (error) {
-      result = { ok: false, problem: describeError(error) };
-    }
-    state.checks[key] = result.ok ? { state: "ok", fresh: true } : { state: "fail", problem: result.problem };
-    draw();
-    if (state.checks[key]) state.checks[key].fresh = false;
-  }
-
-  /** 状态列里的那一个控件：未检测是描边按钮，检测中转圈，结果是可再点的徽标（悬停换成"重新检测"） */
-  function statusControl(key, tip, call) {
-    const result = state.checks[key];
-    const again = () => runCheck(key, call);
-    if (!result) {
-      return h(
-        "button",
-        { type: "button", class: "check block", title: tip, onclick: again },
-        svg("i-activity"),
-        label(t("plaza.check.run")),
-      );
-    }
-    if (result.state === "running") {
-      return h(
-        "span",
-        { class: "badge block", "data-tone": "progress", role: "status", title: tip },
-        svg("i-loader-circle", "icon spin"),
-        label(t("plaza.check.running")),
-      );
-    }
-    const ok = result.state === "ok";
-    return h(
-      "button",
-      {
-        type: "button",
-        class: "badge block",
-        "data-tone": ok ? "ok" : "problem",
-        "data-fresh": Boolean(result.fresh),
-        "aria-label": t(ok ? "plaza.check.okAgain" : "plaza.check.failAgain"),
-        onclick: again,
-      },
-      h(
-        "span",
-        { class: "badge-face" },
-        ok ? (result.fresh ? drawnCheck() : svg("i-check")) : svg("i-circle-alert"),
-        label(t(ok ? "plaza.check.ok" : "plaza.check.fail")),
-      ),
-      h("span", { class: "badge-hover" }, svg("i-rotate-cw"), label(t("plaza.check.again"))),
-    );
-  }
-
-  /** 失败说明：在出问题的那一行下面 */
-  function failNote(key) {
-    const result = state.checks[key];
-    if (result?.state !== "fail") return null;
-    return h(
-      "p",
-      { class: "callout", role: "alert" },
-      svg("i-circle-alert"),
-      h("span", {}, h("b", { text: t(result.title ?? "plaza.check.fail") }), ` · ${t.text(result.problem)}`),
-    );
-  }
+  const checks = createChecks(() => draw());
+  const statusControl = checks.control;
+  const failNote = checks.note;
 
   /** 操作没成：失败说明挂在那一行下面，原因照主进程说的 */
   function failed(key, problem, title = "plaza.actionFailed") {
-    state.checks[key] = { state: "fail", problem, title };
+    checks.results[key] = { state: "fail", problem, title };
   }
 
   // ---------- 主进程那边的操作 ----------
@@ -209,7 +144,7 @@ export function createModels({ refresh, pickMode }) {
   async function act(key, call, { done } = {}) {
     if (state.busy) return;
     state.busy = key;
-    delete state.checks[key];
+    delete checks.results[key];
     draw();
     let result;
     try {
@@ -585,23 +520,7 @@ export function createModels({ refresh, pickMode }) {
 
   function statusFor(role, group, item) {
     const key = rowKey(role, group, item);
-    if (group.kind === "local" && item.download) {
-      const p = item.download.total ? item.download.received / item.download.total : 0;
-      return h(
-        "span",
-        {
-          class: "badge block",
-          "data-tone": "progress",
-          style: `--p: ${p}`,
-          role: "progressbar",
-          "aria-valuemin": "0",
-          "aria-valuemax": "100",
-          "aria-valuenow": String(Math.round(p * 100)),
-        },
-        svg("i-download"),
-        label(`${Math.round(p * 100)}%`),
-      );
-    }
+    if (group.kind === "local" && item.download) return progressBadge(item.download);
     if (!usable(role, group, item)) return h("span", { "aria-hidden": "true" });
     const tip = group.kind === "local" ? t("plaza.check.localTip") : t("plaza.check.modelTip");
     return statusControl(key, tip, checkCall(role, group, item));
@@ -1002,7 +921,7 @@ export function createModels({ refresh, pickMode }) {
           act(key, () => window.speakmore.saveKey(value, platform.id, changes), {
             done: () => {
               state.openKey = null;
-              delete state.checks[key];
+              delete checks.results[key];
               const count = newlyUsable(platform);
               toast(count > 0 ? t("plaza.toast.keySaved", { count }) : t("plaza.toast.keySavedOnly"));
               if (state.returnTo) go(state.returnTo);
