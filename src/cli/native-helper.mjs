@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { helperPaths } from "../app/helper.mjs";
 import { LocalizedError, msg } from "../i18n/index.mjs";
 
 // 原生小帮手（听热键、贴字）的可执行文件从哪来。每个系统一份，和父进程说的话一样（src/app/helper.mjs）：
@@ -13,21 +14,9 @@ import { LocalizedError, msg } from "../i18n/index.mjs";
 const MIN_MACOS = "12.0";
 const UNIVERSAL_ARCHS = ["arm64", "x86_64"];
 
-/**
- * @param {string} packageDir
- * @param {NodeJS.Platform} [platform] 给哪个系统的
- */
-export function helperPaths(packageDir, platform = process.platform) {
-  const windows = platform === "win32";
-  const binary = join(packageDir, "build", windows ? "key-helper.exe" : "key-helper");
-  return {
-    // Windows 的是一个目录（Go 的模块），macOS 的是一个文件
-    source: windows ? join(packageDir, "native", "windows") : join(packageDir, "native", "main.swift"),
-    binary,
-    /** 可执行文件是从哪份源码编出来的：那份源码的 SHA-256 */
-    stamp: `${binary}.source-sha256`,
-  };
-}
+// 各文件在哪（helperPaths）在 App 那一层（src/app/helper.mjs）：App 启动时要用，而 Mac 的 .app 里不带 src/cli。
+// 打包脚本和测试照旧从这里拿
+export { helperPaths };
 
 function readOrNull(file) {
   try {

@@ -3,7 +3,13 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { test } from "node:test";
-import { APP_ENTRIES, findCopyleft, pruneUnused, UNUSED_PACKAGES } from "../../../scripts/build/stage-app.mjs";
+import {
+  APP_ENTRIES,
+  findCopyleft,
+  MAC_APP_IGNORE,
+  pruneUnused,
+  UNUSED_PACKAGES,
+} from "../../../scripts/build/stage-app.mjs";
 
 const repoDir = resolve(import.meta.dirname, "../../..");
 
@@ -86,4 +92,34 @@ test("程序按相对路径用到的仓库文件都存在，并且在打包会�
     outside.some(({ top }) => top === "assets"),
     "菜单栏和窗口的图标从 assets/ 读",
   );
+});
+
+/** 一个文件里按相对路径引用的模块：import / export … from、import "…"、import("…")、require("…")、new URL("…", import.meta.url) */
+function relativeSpecifiers(source) {
+  const patterns = [
+    /\b(?:from|import)\s*["'](\.{1,2}\/[^"']+)["']/g,
+    /\bimport\s*\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/g,
+    /\brequire\s*\(\s*["'](\.{1,2}\/[^"']+)["']\s*\)/g,
+    /\bnew URL\(\s*["'](\.{1,2}\/[^"']+)["']\s*,\s*import\.meta\.url/g,
+  ];
+  return patterns.flatMap((pattern) => [...source.matchAll(pattern)].map((match) => match[1]));
+}
+
+test("装进 Mac 应用的代码，引用的文件都在应用里：没被打包时剔掉（0.9.0、0.9.1 的主进程引用了 src/cli，App 一启动就报找不到模块）", () => {
+  const shipped = (path) => !MAC_APP_IGNORE.some((pattern) => pattern.test(`/${path}`));
+  const broken = [];
+  for (const entry of APP_ENTRIES) {
+    if (!existsSync(join(repoDir, entry))) continue;
+    for (const file of readdirSync(join(repoDir, entry), { recursive: true })) {
+      const path = join(entry, file).split(sep).join("/");
+      if (!/\.(mjs|cjs|js)$/.test(path) || !shipped(path)) continue;
+      for (const specifier of relativeSpecifiers(readFileSync(join(repoDir, path), "utf8"))) {
+        const target = relative(repoDir, resolve(repoDir, dirname(path), specifier))
+          .split(sep)
+          .join("/");
+        if (!shipped(target) || !existsSync(join(repoDir, target))) broken.push(`${path} → ${specifier}`);
+      }
+    }
+  }
+  assert.deepEqual(broken, []);
 });

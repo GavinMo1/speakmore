@@ -14,6 +14,12 @@ const NPM_FLAGS = ["--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"];
 export const APP_ENTRIES = ["src", "build", "assets"];
 
 /**
+ * 摆好之后、打成 .app 时不带的（按应用目录里的路径认，开头是 /）：命令行的代码 App 用不到，锁文件装完依赖就没用了。
+ * 装进去的代码不能引用这里剔掉的文件，不然 App 一启动就找不到模块（0.9.0、0.9.1 就是这样），test/scripts/build 会查
+ */
+export const MAC_APP_IGNORE = [/^\/src\/cli($|\/)/, /^\/package-lock\.json$/];
+
+/**
  * 装上了、但程序从来不加载的包，不随程序分发。@audio/decode-webm 声明依赖了另外几种解码器（AAC、AC-3、DTS、
  * E-AC-3、FLAC、MP3、Opus、Vorbis），其中 AAC、AC-3、DTS 是 GPL，E-AC-3 是 LGPL，和本项目的 MIT 不兼容；
  * 而它打包好的代码只用自带的 Opus 解码。codec-parser（LGPL）是拆 Ogg 用的，程序不转 Ogg（见 src/server/audio/transcode.mjs）。
