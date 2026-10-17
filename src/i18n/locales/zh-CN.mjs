@@ -463,7 +463,7 @@ export default {
     download: "下载 {size}",
     downloading: "{model} 下载中",
     items: {
-      "local-deepseek": { name: "本机转写 + DeepSeek", desc: "音频不出本机 · 成本极低" },
+      "local-deepseek": { name: "本机转写 + DeepSeek", desc: "效果最佳 · 快速稳定 · 成本极低" },
       "native-gemini": { name: "Gemini 原生识别", desc: "一步成稿 · 一把密钥" },
       "bailian-cloud": { name: "百炼全云端", desc: "一把密钥 · 不占本机算力" },
       "private-qwen": { name: "纯本机", desc: "不上传任何数据 · 零成本" },

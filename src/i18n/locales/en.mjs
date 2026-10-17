@@ -470,7 +470,7 @@ export default {
     download: "Download {size}",
     downloading: "Downloading {model}",
     items: {
-      "local-deepseek": { name: "On-device + DeepSeek", desc: "Audio stays on this Mac · Very low cost" },
+      "local-deepseek": { name: "On-device + DeepSeek", desc: "Best results · Fast and stable · Very low cost" },
       "native-gemini": { name: "Gemini Native", desc: "One step · One key" },
       "bailian-cloud": { name: "Bailian Cloud", desc: "One key · No local compute" },
       "private-qwen": { name: "Fully On-device", desc: "Nothing uploaded · Free" },
