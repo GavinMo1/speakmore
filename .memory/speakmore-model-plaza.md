@@ -43,3 +43,10 @@ metadata:
 - 文案门禁只管桌面端 App，命令行的文案这次不做（他说"有更重要的要做"）。
 - 百炼只接同步转写，异步（filetrans、fun-asr、paraformer-v2）和实时流式都丢掉；跑通时每次只换一端：原生单独跑，转写的后端固定 DeepSeek V4.1 Flash，润色的前端固定本地 Qwen3-ASR 0.6B Q8 转一次、同一段文字喂给每个润色模型。
 - 他已给 Kimi 官方 key（[[typeless-clone-gemini-key]]），Kimi 官方接口能真验；GLM、MiniMax 官方还没有 key。
+
+**2026-10-16 开发进度（feat/model-plaza 分支，未合 main）：**
+- 已提交：百炼三个角色的适配器（c86058f）、跑通脚本 smoke-models.mjs（c833fc1，百炼 15/15 通过、无思考 token、约 0.03 美元）、一条路线两家 key（43f5e65）、广场数据层 app/model-plaza.mjs（ff8b723）、侧栏"模型"一页加规范 v1 并进 window.css/tokens.css、两道门禁、docs/desktop-ui-spec.md（43054dd）。单测 833 全绿。
+- 官方接口的 agent 在 worktree 分支 worktree-agent-a92cb3de0ca770600（基于 c86058f，5 个提交 e23dad3…88c77d8）：Kimi k2.6、k3（k3 关思考是文档外行为，实测 6/6 无推理），智谱 glm-5.2、4.7-flashx、4.7-flash、4.5-air，MiniMax-M3；同步转写 GLM-ASR-2512（单段 30 秒，transcriber 按 maxSeconds 切段）、MiniMax asr-1.0。智谱、MiniMax 无 key，模型项标 unverified: true。还没合进 feat/model-plaza、还没审。
+- 他要求：写完、第一轮测完先停，压缩对话后再做端到端验证（"上下文干净一点，你验证也会更全"）。
+- 压缩后要做：合 agent 分支（会和 chat/vendors.mjs、providers/index.mjs、asr/cloud/transcriber.mjs 冲突）并审一轮；端到端用真窗口（调试协议）点一遍模型页：988/1080/1440 三档宽、深浅色、原生/转写/润色/密钥四类、切方式、启用、检测、下载、存 key、自定义服务；量各表状态列和操作列对齐、无截断；广场上 unverified 的模型怎么显示还没定。
+- 我在 3e2499a、c86058f 两个提交里误加了 Co-Authored-By（违反 AGENTS.md 红线 1），改写这两条提交信息要他点头。
