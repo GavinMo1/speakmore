@@ -24,7 +24,8 @@
     "speakmore": "bin/speakmore.mjs"
   },
   "os": [
-    "darwin"
+    "darwin",
+    "win32"
   ],
   "engines": {
     "node": "^22.13.0 || >=23.4.0"
