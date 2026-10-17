@@ -1,5 +1,5 @@
 import { permissionGranted } from "../shared/setup-text.mjs";
-import { inEffect, needsOf } from "./plan.mjs";
+import { needsOf, planOf } from "./plan.mjs";
 
 // 首次引导有哪几步、从哪一步开始、每一步算不算做完了。纯函数，不碰页面。
 // 原版分"注册 · 设置 · 体验一下"三段（onboarding__steps__*）；我们没有账号，第一段换成选用法、接上模型。
@@ -23,25 +23,25 @@ export const GROUPS = ["model", "setup", "try"];
 export const firstStepOf = (group) => STEPS.find((step) => GROUP_OF[step] === group);
 
 /**
- * 打开引导时从哪一步开始：现在用的那一套已经能用就从设置开始（模型那几步退回去还能改）；
+ * 打开引导时从哪一步开始：现在用的那一套什么都不差就从设置开始（模型那几步退回去还能改）；
  * 连着单独启动的服务端时用哪种方式由那边定，也从设置开始
  */
-export function startStep(setup, plan) {
+export function startStep(setup) {
   if (!setup.switchable) return "permissions";
-  return needsOf(plan, setup).length === 0 && inEffect(plan, setup) ? "permissions" : "way";
+  return needsOf(planOf(setup), setup).length === 0 ? "permissions" : "way";
 }
 
 /**
  * 这一步做完了没有：做完了底下的按钮写"继续"，没做完写"跳过"（照样能往下走）。
  * 测麦克风、测快捷键靠那一步自己的"是的，继续"，底下那颗总是"跳过"
- * @param {{ setup: object, plan: object, said: boolean }} state said：体验一下那一步已经说出了字
+ * @param {{ setup: object, said: boolean }} state said：体验一下那一步已经说出了字
  */
-export function stepDone(step, { setup, plan, said }) {
+export function stepDone(step, { setup, said }) {
   switch (step) {
     case "way":
       return true;
     case "prepare":
-      return needsOf(plan, setup).length === 0;
+      return needsOf(planOf(setup), setup).length === 0;
     case "permissions":
       // 辅助功能没有也能用（文字放进剪贴板），不算没做完
       return (

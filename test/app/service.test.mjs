@@ -209,7 +209,7 @@ test("按设置里的路线装配；probe 拿另一把 key 试别的路线，不
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 gemini");
 });
 
-test("useKey 带上别的路线：验证过才整个换过去，没 key 时的提示也跟着换；没通过就还是原来的", async (t) => {
+test("setRoute 当场换路线、不验证：手里那把作废，没 key 时的提示跟着换；给它一把验证过的才能用", async (t) => {
   const service = await startService({
     log: quietLog,
     route: GEMINI,
@@ -220,15 +220,35 @@ test("useKey 带上别的路线：验证过才整个换过去，没 key 时的�
   });
   t.after(() => service.close());
   await service.useKey("gemini-key");
-
-  await assert.rejects(service.useKey("bad", { route: OPENAI }), said(/无效/));
-  assert.deepEqual(service.route, GEMINI);
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 gemini");
 
-  await service.useKey("openai-key", { route: OPENAI });
+  service.setRoute(OPENAI);
   assert.deepEqual(service.route, OPENAI);
+  assert.equal(service.ready, false);
+  assert.match(zh.text((await dictateOnce(service.url)).V.problem), /还没有填 OpenAI API key/);
+
+  await assert.rejects(service.useKey("bad"), said(/无效/));
+  assert.equal(service.ready, false);
+  await service.useKey("openai-key");
   assert.equal((await dictateOnce(service.url)).V.refined_text, "用的是 openai");
-  service.forgetKey();
+});
+
+test("验 key 的途中路线换了：那一把是按旧路线验的，不装，回 stale；听写照新路线说缺 key", async (t) => {
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const service = await startService({
+    log: quietLog,
+    route: GEMINI,
+    createRefiner: async (options) => fakeRefiner(`用的是 ${options.route.model.provider}`, () => gate),
+  });
+  t.after(() => service.close());
+  const verifying = service.useKey("gemini-key");
+  service.setRoute(OPENAI);
+  release();
+  assert.deepEqual(await verifying, { verified: true, stale: true });
+  assert.equal(service.ready, false);
   assert.match(zh.text((await dictateOnce(service.url)).V.problem), /还没有填 OpenAI API key/);
 });
 
@@ -402,23 +422,22 @@ test("改走原生链路：本地模型卸掉，内存还回去；再换回来�
   await tick();
   assert.equal(service.localModel.state, "ready");
 
-  await service.useKey("gemini-key", { route: GEMINI });
+  service.setRoute(GEMINI);
   assert.equal(control.disposed, 1);
   assert.deepEqual(service.localModel, { state: "off" });
 
-  await service.useKey("deepseek-key", { route: LOCAL });
+  service.setRoute(LOCAL);
   assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8", "qwen3-asr-0.6b-q8"]);
 });
 
 test("换 key、换润色的那家不动本地模型；换本地模型才重装", async (t) => {
   const { service, control } = await localService(t);
   await service.useKey("key-1");
-  await service.useKey("key-2", {
-    route: { ...LOCAL, polish: { vendor: "custom", model: "m" }, customUrl: "http://x/v1" },
-  });
+  service.setRoute({ ...LOCAL, polish: { vendor: "custom", model: "m" }, customUrl: "http://x/v1" });
+  await service.useKey("key-2");
   assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8"]);
 
-  await service.useKey("key-2", { route: { ...LOCAL, transcriber: "sensevoice-small-q8" } });
+  service.setRoute({ ...LOCAL, transcriber: "sensevoice-small-q8" });
   assert.deepEqual(control.started, ["qwen3-asr-0.6b-q8", "sensevoice-small-q8"]);
   assert.equal(service.localModel.model, "sensevoice-small-q8");
 });

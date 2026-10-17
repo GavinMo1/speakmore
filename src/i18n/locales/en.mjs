@@ -210,6 +210,7 @@ export default {
       listen: "Input Monitoring access",
       helper: "key listener",
       localModel: "local model",
+      localModelDownloading: "local model (downloading, {percent}%)",
     },
     blocker: {
       noKey: "No {provider} API key: {where}",
@@ -223,6 +224,7 @@ export default {
 
   key: {
     empty: "No key entered",
+    routeChanged: "The recognition mode just changed, so this key wasn't saved. Save it again",
     tooLong: "This key is too long ({length} characters). Looks like a copy mistake",
     whitespace: "This key has spaces or line breaks. Looks like extra text got copied",
     badCharacters: "This key has characters that don't belong. Looks like a copy mistake",
@@ -321,6 +323,7 @@ export default {
     about: "About",
     missing: "Missing: {items}",
     fix: "Settings",
+    switchWay: "Switch mode",
   },
 
   plaza: {
@@ -548,6 +551,7 @@ export default {
       needs: {
         key: "No {platform} key",
         download: "{model} not downloaded",
+        downloading: "Downloading {model} · {percent}%",
         url: "No custom service URL",
       },
       fix: "Set up",
@@ -662,7 +666,7 @@ export default {
       status: {
         enabled: "{mode} enabled",
         enabling: "Enabling",
-        waiting: "{mode} turns on when the download finishes",
+        switched: "Switched to {mode} · ready once the items below are done",
         failed: "Not enabled",
         retry: "Retry",
       },
@@ -702,8 +706,11 @@ export default {
       sample: "Um, let's meet tomorrow at nine, no wait, nine thirty, and bring last week's numbers.",
       notes: "Notes",
       placeholder: "Click here, press {keycap}, read the line on the left, then press it again",
-      notReady: "No model connected yet · you can skip this step",
       downloading: "Downloading {model} · {percent}%",
+      needDownload: "{model} not downloaded ({size})",
+      needKey: "{vendor} API key missing",
+      preparing: "Preparing · ready shortly",
+      fix: "Set up",
     },
     done: { soft: "Speak, ", title: "don't type", start: "Get started", mode: "Recognition", hotkey: "Shortcut" },
     back: "Back",
@@ -927,6 +934,7 @@ export default {
       notIn: "You're in {current} mode; {what} can only be changed in {mode} mode: run speakmore mode {mode} first",
       notSwitched: "Not switched: {problem}",
       applied: "Switched, no restart needed.",
+      notUsable: "But it doesn't work yet: {problem}",
       downloading:
         "The local model is downloading in the background ({percent}%); it'll work once it's done. Progress: speakmore status",
       loading: "The local model is loading; a few seconds.",

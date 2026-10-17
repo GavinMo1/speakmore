@@ -8,7 +8,7 @@ import { toast } from "./toast.mjs";
 // 模型页标题行右边的推荐组合（models/presets.mjs，主进程拼好，随 getSetup 来）：一个按钮，点开一列，
 // 浮层的样子同首页的识别方式选单（picker.css）。每项上面写名字、说明、一路经过的模型、每月多少钱（每天 100 次），
 // 下面一行左边检测、右边启用：检测把这一套整条走一遍（用到本机模型的念一句交给它转，用到云端的拿这套设置发最小的请求），
-// 不换掉正在用的；启用交给主进程切（app/modes.mjs 的 switchMode，验过才换）。
+// 不换掉正在用的；启用交给主进程切（app/modes.mjs 的 switchMode，当场换上，还差的照实写着）。
 // 还差什么的，下面那一行写出来，右边是去补的按钮：缺 key 去密钥表展开那一家，没下载就在这里下（显示进度）。
 
 const ICONS = { native: "i-sparkles", local: "i-wand-sparkles", private: "i-shield-check" };

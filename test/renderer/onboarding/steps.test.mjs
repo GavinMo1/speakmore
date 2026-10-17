@@ -21,32 +21,39 @@ const setup = ({ mode = "native", key = "missing", installed = false, switchable
     vendors: [{ id: "deepseek", key: null }],
   },
   private: { transcriber: QWEN },
-  plaza: { presets: [] },
+  // 主进程按设置算好的每种方式差什么（app/model-plaza.mjs 的 ways）
+  plaza: {
+    presets: [],
+    ways: {
+      native: { hops: [], needs: key === "missing" ? [{ kind: "key", platform: "gemini" }] : [] },
+      local: { hops: [{ platform: "local" }], needs: [] },
+      private: { hops: [{ platform: "local" }], needs: installed ? [] : [{ kind: "download", model: QWEN }] },
+    },
+  },
   provider: mode === "private" ? null : { id: "gemini" },
   key: { state: key },
   switchable,
   permissions: { microphone: "granted", listen: true, trusted: true, ...permissions },
 });
-const plan = (mode = "native") => ({ mode, native: "gemini", polish: "deepseek" });
 
 test("引导的顺序：选用法、准备模型、权限、测麦克风、测快捷键、体验一下、完成", () => {
   assert.deepEqual(STEPS, ["way", "prepare", "permissions", "microphone", "hotkey", "try", "done"]);
 });
 
 test("从哪一步开始：现在用的那套还不能用就从选用法开始；能用了从权限开始", () => {
-  assert.equal(startStep(setup(), plan()), "way");
-  assert.equal(startStep(setup({ key: "rejected" }), plan()), "way");
-  assert.equal(startStep(setup({ key: "ready" }), plan()), "permissions");
+  assert.equal(startStep(setup()), "way");
+  assert.equal(startStep(setup({ key: "rejected" })), "way");
+  assert.equal(startStep(setup({ key: "ready" })), "permissions");
   // 正在验证的不让人再填一遍
-  assert.equal(startStep(setup({ key: "checking" }), plan()), "permissions");
-  assert.equal(startStep(setup({ mode: "private" }), plan("private")), "way");
-  assert.equal(startStep(setup({ mode: "private", installed: true }), plan("private")), "permissions");
+  assert.equal(startStep(setup({ key: "checking" })), "permissions");
+  assert.equal(startStep(setup({ mode: "private" })), "way");
+  assert.equal(startStep(setup({ mode: "private", installed: true })), "permissions");
   // 连着单独启动的服务端：用哪种由那边定
-  assert.equal(startStep(setup({ switchable: false }), plan()), "permissions");
+  assert.equal(startStep(setup({ switchable: false })), "permissions");
 });
 
 test("每一步做完了没有：没做完的写跳过，照样能往下走", () => {
-  const state = (extra = {}) => ({ setup: setup(), plan: plan(), said: false, ...extra });
+  const state = (extra = {}) => ({ setup: setup(), said: false, ...extra });
   assert.equal(stepDone("way", state()), true);
   assert.equal(stepDone("prepare", state()), false);
   assert.equal(stepDone("prepare", state({ setup: setup({ key: "ready" }) })), true);

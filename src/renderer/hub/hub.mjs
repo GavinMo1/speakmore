@@ -60,10 +60,17 @@ function navigate(route) {
   window.history.replaceState(null, "", `?route=${name}`);
 }
 
-/** 顶上那一条：还差什么才能用，或者能用但打了折扣。准备中、都齐了时不出现 */
+/**
+ * 顶上那一条：还差什么才能用，或者能用但打了折扣。准备中、都齐了时不出现。
+ * 差的是这种识别方式要的东西（key、本机模型）时，除了去补，也能直接换一种方式：哪种方式都随时能换
+ */
 function renderBanner(current) {
   const { summary } = current;
   const banner = $("banner");
+  const wayIncomplete =
+    ["missing", "unreadable", "rejected"].includes(current.key.state) ||
+    ["missing", "failed"].includes(current.localModel?.state);
+  $("banner-switch").hidden = !(summary.missing.length > 0 && wayIncomplete && current.switchable);
   if (summary.missing.length > 0) {
     banner.dataset.tone = "problem";
     $("banner-text").textContent = t("hub.missing", { items: t.list(summary.missing) });
@@ -119,6 +126,10 @@ function openFix() {
   } else settings.open(target.pane);
 }
 $("banner-action").addEventListener("click", openFix);
+$("banner-switch").addEventListener("click", () => {
+  navigate("home");
+  $("mode-picker").showPopover();
+});
 // 往下滚了，最上面那条拖窗口的地方变成玻璃
 const content = document.querySelector(".content");
 content.addEventListener("scroll", () => content.toggleAttribute("data-scrolled", content.scrollTop > 4), {

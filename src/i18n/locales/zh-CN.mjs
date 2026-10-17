@@ -203,6 +203,7 @@ export default {
       listen: "输入监控权限",
       helper: "按键监听",
       localModel: "本地模型",
+      localModelDownloading: "本地模型（下载中 {percent}%）",
     },
     blocker: {
       noKey: "缺 {provider} API key：{where}",
@@ -216,6 +217,7 @@ export default {
 
   key: {
     empty: "还没有填 key",
+    routeChanged: "识别方式刚换过，这把 key 没有存：再存一次",
     tooLong: "这把 key 太长了（{length} 个字符），像是复制错了东西",
     whitespace: "这把 key 里有空格或换行，像是多复制了别的内容",
     badCharacters: "这把 key 里有不该出现的字符，像是复制错了东西",
@@ -312,6 +314,7 @@ export default {
     about: "关于",
     missing: "还差：{items}",
     fix: "去设置",
+    switchWay: "换一种方式",
   },
 
   // 侧栏"模型"一页（renderer/hub/models.mjs）。用词照界面规范的词表（docs/desktop-ui-spec.md）：书面语、短词，
@@ -541,6 +544,7 @@ export default {
       needs: {
         key: "{platform} 密钥未配置",
         download: "{model} 未下载",
+        downloading: "{model} 下载中 {percent}%",
         url: "自定义服务地址未配置",
       },
       fix: "前往配置",
@@ -655,7 +659,7 @@ export default {
       status: {
         enabled: "已启用{mode}",
         enabling: "启用中",
-        waiting: "下载完成后自动启用{mode}",
+        switched: "已切换到{mode} · 补齐下列各项即可使用",
         failed: "未启用",
         retry: "重试",
       },
@@ -695,8 +699,11 @@ export default {
       sample: "嗯，我们明天上午九点开会，不对，九点半吧，记得把上周的数据带上。",
       notes: "笔记",
       placeholder: "点这里，按 {keycap} 读左边那句，再按一下结束",
-      notReady: "尚未接入模型 · 可跳过此步",
       downloading: "{model} 下载中 · {percent}%",
+      needDownload: "{model} 未下载（{size}）",
+      needKey: "缺 {vendor} 密钥",
+      preparing: "准备中 · 稍后即可使用",
+      fix: "去准备",
     },
     done: { soft: "说话，", title: "别打字", start: "开始使用", mode: "识别方式", hotkey: "快捷键" },
     back: "返回",
@@ -902,6 +909,7 @@ export default {
       notIn: "现在是 {current} 模式，{what}要在 {mode} 模式里才能换：先运行 speakmore mode {mode}",
       notSwitched: "没有换：{problem}",
       applied: "已经换上，不用重启。",
+      notUsable: "但还不能用：{problem}",
       downloading: "本地模型在后台下载（{percent}%），下好就能用：进度看 speakmore status",
       loading: "本地模型正在装载，几秒就好。",
       switch: "切换：speakmore mode {mode}（当场生效）",

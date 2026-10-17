@@ -4,22 +4,12 @@ import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
 import { describeError, permissionGranted } from "../shared/setup-text.mjs";
 import { createKeyPanel } from "./key-panel.mjs";
-import {
-  changesOf,
-  hasKey,
-  inEffect,
-  initialPlan,
-  localModelOf,
-  needsOf,
-  vendorsFor,
-  WAYS,
-  waitingDownload,
-} from "./plan.mjs";
+import { changesOf, hasKey, inEffect, localModelOf, needsOf, planOf, readinessOf, vendorsFor, WAYS } from "./plan.mjs";
 import { firstStepOf, groupStates, STEPS, startStep, stepDone } from "./steps.mjs";
 
 // 首次引导：选识别方式 → 准备（下本机模型、填密钥）→ 授权 → 测麦克风 → 测快捷键 → 真说一句 → 完成。
 // 哪一步都能退回去、往前跳，没做完的也能跳过，进去再配：数据隐私不要密钥，什么都不配也能先进去看看。
-// 选好的那一套（plan.mjs）缺的补齐了就当场换过去；只差本机模型还在下时，引导关了由主进程接着等（app/pending-switch.mjs）。
+// 点了哪种方式、哪一家就当场换上（app/modes.mjs 的 switchMode 不验 key、不等下载）；还差的照实写出来，补齐了自己就能用。
 // 状态都在主进程；这里管走到哪一步、每一步怎么画。走完了主进程关掉这个窗口、打开主窗口。
 
 const $ = (id) => document.getElementById(id);
@@ -32,16 +22,14 @@ localize();
 
 let setup = null;
 let step = null;
-/** 打算怎么用：{ mode, native, polish }（plan.mjs） */
+/** 现在用的这一套：{ mode, native, polish }（plan.mjs）。照设置；正在换的时候先画成点的那一套 */
 let plan = null;
-/** 用户在这次引导里动过打算（选了方式、选了哪家、存了密钥、点了下载）：动过才自动换过去，打开时照现在的不动 */
-let touched = false;
-/** 正在换过去 */
-let applying = false;
-/** 上一次没换成：{ signature, problem }。同一套不自己再试，等用户点"重试"、存了新密钥、改了打算 */
+/** 正在换的有几次（连着点了好几下时一次一次排着换） */
+let applying = 0;
+/** 点了第几次：只有最后点的那次说成没成 */
+let attempts = 0;
+/** 最后点的那次没换成：{ plan, problem }。点"重试"再换一次；换了别的、存了新密钥就不再说 */
 let failure = null;
-/** 交给主进程等下载的那一套（写成字的），变了才再说一遍 */
-let waitingSent = "null";
 /** 准备那一步的密钥那一块：{ mode, section, panel }，换了方式就换一块 */
 let keySlot = null;
 /** 下载没发起成（磁盘不够这类）：{ model, problem }。下载中途失败的由主进程记在模型的状态里 */
@@ -51,51 +39,37 @@ const wayRows = new Map();
 
 async function refresh() {
   setup = await window.speakmore.getSetup();
-  plan ??= initialPlan(setup);
+  if (applying === 0) plan = planOf(setup);
   render();
-  syncWaiting();
-  maybeApply();
   return setup;
 }
 
-// ---------- 打算：换过去、等下载 ----------
+// ---------- 换上点的那一套 ----------
 
-const signatureOf = () => JSON.stringify({ mode: plan.mode, changes: changesOf(plan, setup) });
-
-/** 缺的都补齐了、还没换上：换过去。没换成的同一套不自己再试 */
-async function maybeApply() {
-  if (!touched || !setup.switchable || applying || inEffect(plan, setup) || needsOf(plan, setup).length > 0) return;
-  const signature = signatureOf();
-  if (failure?.signature === signature) return;
-  applying = true;
+/**
+ * 点了一种方式或一家：当场换上，带着那种方式的设置（plan.mjs 的 changesOf）。已经是这一套就什么都不做；
+ * 前一下还在换时照样发：手里的状态还没跟上，看不出是不是已经是这一套
+ */
+async function changePlan(next) {
+  const wanted = { ...plan, ...next };
+  const ticket = ++attempts;
+  failure = null;
+  plan = wanted;
+  if (applying === 0 && inEffect(wanted, setup)) {
+    render();
+    return;
+  }
+  applying += 1;
   render();
   let result;
   try {
-    result = await window.speakmore.setMode(plan.mode, changesOf(plan, setup));
+    result = await window.speakmore.setMode(wanted.mode, changesOf(wanted, setup));
   } catch (error) {
     result = { ok: false, problem: describeError(error) };
   }
-  applying = false;
-  failure = result.ok ? null : { signature, problem: result.problem };
+  applying -= 1;
+  if (ticket === attempts) failure = result.ok ? null : { plan: wanted, problem: result.problem };
   await refresh();
-}
-
-/** 只差本机模型还在下：告诉主进程，引导关了也照样等它下完再换过去 */
-function syncWaiting() {
-  if (!touched || !setup.switchable) return;
-  const way = waitingDownload(plan, setup);
-  const text = JSON.stringify(way);
-  if (text === waitingSent) return;
-  waitingSent = text;
-  window.speakmore.waitForDownload(way).catch((error) => console.error("waitForDownload", error));
-}
-
-function changePlan(next) {
-  touched = true;
-  plan = { ...plan, ...next };
-  render();
-  syncWaiting();
-  maybeApply();
 }
 
 // ---------- 走到哪一步 ----------
@@ -195,6 +169,16 @@ function renderWays() {
   );
 }
 
+/**
+ * 正在用的这种方式第一跳交给云端（只能在模型页配）：那一跳 { maker, platform, name }（app/model-plaza.mjs 的 hops）；
+ * 否则是 null，第一跳是本机模型
+ */
+function cloudFirstHop() {
+  if (plan.mode === "native" || plan.mode !== setup.mode.value) return null;
+  const first = setup.plaza.ways[plan.mode]?.hops?.[0];
+  return first && first.platform !== "local" ? first : null;
+}
+
 /** 一路经过谁：录音 → 各个模型 → 文字 */
 function renderRoute() {
   const arrow = () => h("li", { class: "route-arrow", "aria-hidden": "true" }, svg("i-chevron-right"));
@@ -208,7 +192,9 @@ function renderRoute() {
       local && h("span", { class: "tag", "data-tone": "accent", text: t("onboarding.prepare.route.local") }),
     );
   const hops = [];
-  if (plan.mode !== "native") {
+  const cloud = cloudFirstHop();
+  if (cloud) hops.push(hop(cloud.maker ?? cloud.platform, cloud.name, false));
+  else if (plan.mode !== "native") {
     const model = transcriber(localModelOf(setup, plan.mode));
     hops.push(hop(model.maker ?? "local", nameParts(model.name)[0], true));
   }
@@ -222,7 +208,7 @@ function renderRoute() {
   );
 }
 
-/** 这一套现在怎样：已启用、启用中、等下载、没换成（带重试）；还差东西时不说，下面各块自己写着 */
+/** 这一套现在怎样：启用中、没换成（带重试）、已启用；已经换上但还差东西时说一句，差的下面各块自己写着 */
 function renderStatus() {
   const box = $("plan-status");
   const badge = (tone, icon, text) =>
@@ -232,12 +218,9 @@ function renderStatus() {
       svg(icon, icon === "i-loader-circle" ? "icon spin" : "icon"),
       h("span", { text }),
     );
-  const needs = needsOf(plan, setup);
   let content = null;
   if (applying) content = badge("progress", "i-loader-circle", t("onboarding.prepare.status.enabling"));
-  else if (needs.length === 0 && inEffect(plan, setup))
-    content = badge("ok", "i-check", t("onboarding.prepare.status.enabled", { mode: modeName(plan.mode) }));
-  else if (failure?.signature === signatureOf()) {
+  else if (failure) {
     content = h(
       "div",
       { class: "callout", role: "alert" },
@@ -247,15 +230,12 @@ function renderStatus() {
         type: "button",
         class: "button small retry",
         text: t("onboarding.prepare.status.retry"),
-        onclick: () => {
-          touched = true;
-          failure = null;
-          maybeApply();
-        },
+        onclick: () => changePlan(failure.plan),
       }),
     );
-  } else if (waitingDownload(plan, setup))
-    content = badge("", "i-download", t("onboarding.prepare.status.waiting", { mode: modeName(plan.mode) }));
+  } else if (needsOf(plan, setup).length === 0)
+    content = badge("ok", "i-check", t("onboarding.prepare.status.enabled", { mode: modeName(plan.mode) }));
+  else content = badge("", "i-circle-alert", t("onboarding.prepare.status.switched", { mode: modeName(plan.mode) }));
   box.replaceChildren(...(content ? [content] : []));
   box.hidden = content === null;
 }
@@ -282,7 +262,6 @@ function modelSection() {
         class: "button",
         disabled: !setup.switchable,
         onclick: async (event) => {
-          touched = true;
           event.currentTarget.disabled = true;
           const result = await window.speakmore.downloadModel(model.id).catch((error) => ({
             ok: false,
@@ -359,7 +338,6 @@ function keySection() {
         checkChanges: (id) => (mode === "native" ? changesOf({ ...plan, native: id }, setup) : { polish: id }),
         refresh,
         onSaved: () => {
-          touched = true;
           failure = null;
         },
       }),
@@ -376,7 +354,8 @@ function renderPrepare() {
   );
   renderRoute();
   renderStatus();
-  const model = plan.mode === "native" ? null : modelSection();
+  // 第一跳交给云端时没有要下的本机模型
+  const model = plan.mode === "native" || cloudFirstHop() ? null : modelSection();
   const key = plan.mode === "private" ? null : keySection();
   const host = $("prepare-sections");
   // 密钥那一块已经在页面上就不挪（挪了输入框丢焦点），只换本机模型那一块
@@ -395,21 +374,31 @@ function renderPrepare() {
   );
 }
 
-/** 体验一下、完成两步说一句现在的样子：能用、在下、还没接上 */
+/**
+ * 体验一下、完成两步说一句现在能不能说（plan.mjs 的 readinessOf）：能说是 null；
+ * 否则 { tone, icon, text }：还差什么一样一样写出来，在下的写到百分之几
+ */
 function readiness() {
-  const needs = needsOf(plan, setup);
-  if (needs.length === 0 && inEffect(plan, setup)) return null;
-  const download = needs.find(({ kind }) => kind === "download");
-  const model = download && transcriber(download.model);
-  if (model?.download) {
+  const state = readinessOf(setup);
+  if (state === null) return null;
+  const needText = (need) => {
+    if (need.kind === "url") return t("home.mode.needs.url");
+    if (need.kind === "key") return t("onboarding.try.needKey", { vendor: t(`providers.${need.vendor}.name`) });
+    const model = transcriber(need.model);
+    const name = nameParts(model.name)[0];
+    if (!model.download) return t("onboarding.try.needDownload", { model: name, size: sizeText(model.bytes) });
     const percent = Math.round((model.download.received / (model.download.total || 1)) * 100);
-    return {
-      tone: "progress",
-      icon: "i-download",
-      text: t("onboarding.try.downloading", { model: nameParts(model.name)[0], percent }),
-    };
-  }
-  return { tone: "problem", icon: "i-circle-alert", text: t("onboarding.try.notReady") };
+    return t("onboarding.try.downloading", { model: name, percent });
+  };
+  const text = state.problem
+    ? t.text(state.problem)
+    : state.needs.length > 0
+      ? state.needs.map(needText).join(" · ")
+      : t("onboarding.try.preparing");
+  const icon =
+    state.tone === "progress" ? (state.needs.length > 0 ? "i-download" : "i-loader-circle") : "i-circle-alert";
+  // 只是在等（下载、验证、装载）就没什么要去做的，不给按钮
+  return { tone: state.tone, icon, text, fixable: state.tone === "problem" };
 }
 
 function renderTry() {
@@ -418,7 +407,23 @@ function renderTry() {
   box.hidden = state === null;
   if (state) {
     box.dataset.tone = state.tone;
-    box.replaceChildren(svg(state.icon), h("span", { text: state.text }));
+    const fix =
+      state.fixable && setup.switchable
+        ? // 差的在准备那一步补：缺密钥填密钥，没下载点下载
+          [
+            h("button", {
+              type: "button",
+              class: "button small readiness-fix",
+              text: t("onboarding.try.fix"),
+              onclick: () => go("prepare"),
+            }),
+          ]
+        : [];
+    box.replaceChildren(
+      svg(state.icon, state.icon === "i-loader-circle" ? "icon spin" : "icon"),
+      h("span", { text: state.text }),
+      ...fix,
+    );
   }
 }
 
@@ -483,7 +488,7 @@ function render() {
   $("skip-all").hidden = step === "done";
   const next = $("next");
   next.hidden = step === "done";
-  const done = stepDone(step, { setup, plan, said: $("try-text").value.trim() !== "" });
+  const done = stepDone(step, { setup, said: $("try-text").value.trim() !== "" });
   next.classList.toggle("primary", done);
 }
 
@@ -582,4 +587,4 @@ window.speakmore.onOnboardingHotkey(({ down }) => {
 });
 
 await refresh();
-go(startStep(setup, plan));
+go(startStep(setup));

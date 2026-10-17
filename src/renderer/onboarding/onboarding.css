@@ -809,6 +809,10 @@ body {
   color: var(--problem);
 }
 
+.readiness-fix {
+  margin-left: auto;
+}
+
 .notes {
   justify-content: flex-start;
   padding: 1.5rem;

@@ -78,7 +78,6 @@ contextBridge.exposeInMainWorld("speakmore", {
   captureHotkey: (capturing) => ipcRenderer.send("onboarding:capture-hotkey", capturing),
   onOnboardingHotkey: (callback) => ipcRenderer.on("onboarding:hotkey", (_event, key) => callback(key)),
   finishOnboarding: () => ipcRenderer.invoke("onboarding:finish"),
-  waitForDownload: (way) => ipcRenderer.invoke("onboarding:wait-download", way),
   setTheme: (theme) => ipcRenderer.invoke("setup:set-theme", theme),
   setLanguage: (language) => ipcRenderer.invoke("setup:set-language", language),
 });

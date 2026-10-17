@@ -1677,6 +1677,22 @@ test("model <厂商>：有它的 key 就直接换；在运行的话让它当场�
   assert.match(notRunning.output.out, /下次启动生效/);
 });
 
+test("model <厂商/模型>：内核换上了，但那家没通过（比如模型名写错）：照实说还不能用，退出码是 1", async () => {
+  haveStoredKey();
+  const problem = "Gemini 拒绝了请求：models/gemini-typo is not found";
+  const daemon = fakeDaemon({
+    running: READY,
+    changeRoute: () => {
+      daemon.current = { ...daemon.current, key: { state: "rejected", cause: "other", problem } };
+      return { ok: true };
+    },
+  });
+  const { speakmore, output } = harness({ daemon });
+  assert.equal(await speakmore("model", "gemini/gemini-typo"), 1);
+  assert.match(output.out, /已经换上/);
+  assert.match(output.err, /还不能用：Gemini 拒绝了请求：models\/gemini-typo is not found/);
+});
+
 test("model <厂商>：还没有它的 key 时先问；问到的交给后台验证，存进它那一份，再换", async () => {
   const saved = [];
   const daemon = fakeDaemon({

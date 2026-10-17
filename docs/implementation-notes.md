@@ -275,15 +275,16 @@ src/usage/report.mjs                    今天、本月、累计、按型号分�
 | `src/usage/` | 用量报表（今天、本月、累计、按型号）、首页的统计（字数、语速、连续天数、热力图）和数字的写法，命令和主窗口共用。见上面“记账” | 用量原版包月没有；首页统计照原版的"洞察" |
 | `native/main.swift` | 听热键（只听不改，不报是哪个键）、贴字；说话时截住 `esc` 和悬浮条上的点击 | 键盘子进程和 Swift 库（[07](../targets/typeless/docs/07-native-helpers.md)） |
 | `src/app/main.mjs` | 后台应用的主进程：窗口、菜单栏、和小帮手对接，把下面几样接起来 | 主进程（[03](../targets/typeless/docs/03-process-architecture.md)） |
-| `src/app/service.mjs` | 把 `src/server` 跑在主进程里；换 key 先验证再生效 | 原版的服务端在云上 |
+| `src/app/service.mjs` | 把 `src/server` 跑在主进程里；换路线当场生效，换 key 先验证再生效 | 原版的服务端在云上 |
 | `src/app/keys/key-manager.mjs` | 每家一把 key：正在用的那家用哪把、是什么状态，启动时去哪找，怎么换、怎么删；给别家存 key、查某个模型能不能用。启动时只是够不着那一家的话先用着 | 原版用登录态，没有这一项 |
 | `src/app/keys/key-store.mjs` | key 用系统钥匙串加密后存成文件 | 原版用登录态，没有这一项 |
+| `src/app/modes.mjs` | 三种识别模式的切换和各模式里换模型：选了就当场换上、写进设置，不先验 key、不等下载；还差的记在状态里照实说，补齐了自己就能用。只拦写错的 | 原版只有一条链路 |
 | `src/app/setup-state.mjs` | “能不能用、还差什么”的统一结论 | |
 | `src/app/delivery.mjs` | 存录音、记历史、贴字，贴不进去时退到剪贴板 | 结果投递（[14](../targets/typeless/docs/14-result-delivery.md)） |
 | `src/renderer/bar/machine.mjs` | 状态机 | 悬浮条的状态机（[10](../targets/typeless/docs/10-interaction-state-machine.md)） |
 | `src/renderer/bar/bar-view.mjs`、`bar-ui.mjs`、`bar.mjs` | 悬浮条：该是什么样子、把它画出来、控制 | 原版的悬浮条页面 |
 | `src/renderer/hub/` | 主窗口：首页、历史记录、设置对话框 | 原版的 hub 页面 |
-| `src/renderer/onboarding/` | 首次引导：选识别方式 → 准备（下本机模型、填密钥）→ 授权 → 测麦克风 → 测快捷键 → 说一句 → 完成。每步可退回、可跳过；缺的补齐了当场启用，只差模型在下时关了引导由主进程等它下完再启用（`app/pending-switch.mjs`） | 原版的 onboarding 页面 |
+| `src/renderer/onboarding/` | 首次引导：选识别方式 → 准备（下本机模型、填密钥）→ 授权 → 测麦克风 → 测快捷键 → 说一句 → 完成。每步可退回、可跳过；点了哪种方式、哪一家就当场换上，还差的（密钥、下载）在准备和说一句两步照实写出来 | 原版的 onboarding 页面 |
 | `src/renderer/shared/` | 三个页面共用：`tokens.css`（不随主题变的字号、字重、间距、圆角、动效；字号七档、字重四档，样式里只能用它们，`test/renderer/shared/type-scale.test.mjs` 守着）、`window.css`（窗口的光晕、玻璃、按钮）、`dom.mjs`（用代码画的几块拼节点、取图标）、权限的说法（设置和引导都用） | |
 | `src/renderer/bar/recorder.mjs` | 录音，每 3 秒一块 | 录音与编码（[11](../targets/typeless/docs/11-audio-recorder.md)） |
 | `src/renderer/bar/voice-socket.mjs` | 听写协议的客户端一侧 | 网络协议（[05](../targets/typeless/docs/05-network-protocol.md)） |

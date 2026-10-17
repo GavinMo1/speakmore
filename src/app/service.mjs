@@ -37,7 +37,7 @@ export async function startService({
   createRefiner = createModeRefiner,
   startLocal = startTranscriber,
 }) {
-  /** 正在走的路线。换一条要带着它要的那家的 key 一起换（useKey 的 route），验证过了才换 */
+  /** 正在走的路线。换一条当场换上（setRoute），要的 key 之后由 key 管理装上（useKey） */
   let route = initialRoute;
   /** 路线里另一家（第一跳交给的云端）缺 key 时是那一家（forgetKey 的 missing）：听写时点名它，不点名主的那家 */
   let missing = null;
@@ -49,6 +49,8 @@ export async function startService({
     );
   /** 通过了验证、正在用的那一个；没有 key 时是 null */
   let refiner = null;
+  /** 换过几次路线（setRoute）：验 key 的途中换过，那一把是按旧路线验的，不装 */
+  let switches = 0;
 
   // ---------- 本地模型 ----------
 
@@ -187,20 +189,21 @@ export async function startService({
     },
 
     /**
-     * 换一把 key。先拿它发一个最小的请求：key 无效、模型名写错、连不上都会在这里抛出来（都是分好类的
+     * 给正在走的路线换一把 key。先拿它发一个最小的请求：key 无效、模型名写错、连不上都会在这里抛出来（都是分好类的
      * ModelError），这时原来能用的那把继续用。这个请求同时是预热，之后的第一次听写不会慢。
      * 本地转写链路验的是润色那一家：本地模型在后台另外准备，不等它。
+     * 验证途中路线被换掉了（setRoute，当场换、不排队）：这一个是按旧路线装的，不装，回 stale，由 key 管理作废
      *
      * @param {string | null} apiKey 路线主的那家的 key（server/modes.mjs 的 keyVendorOf）；路线不用 key（数据隐私模式）时是 null
-     * @param {{ allowUnverified?: boolean, route?: object, keys?: Record<string, string> }} [options]
-     *   allowUnverified：只是暂时够不着那一家的话照样启用。启动时、换用存着的那把时用：它当初是验证过才存的，
+     * @param {{ allowUnverified?: boolean, keys?: Record<string, string> }} [options]
+     *   allowUnverified：只是暂时够不着那一家的话照样启用。启动时、换路线后用存着的那把时用：它当初是验证过才存的，
      *   不该因为开机时没网、或者对方一时回了 503 就被判成不能用。
-     *   route：连路线一起换（设置里改用别家、换链路）；不写就是正在走的那条。
      *   keys：路线要两家时另一家的 key（第一跳交给云端、润色交给别家），按厂商 id
-     * @returns {Promise<{ verified: boolean }>} verified 为 false 表示先用着、还没验证
+     * @returns {Promise<{ verified: boolean, stale?: true }>} verified 为 false 表示先用着、还没验证
      */
-    async useKey(apiKey, { allowUnverified = false, route: nextRoute = route, keys } = {}) {
-      const candidate = await build(nextRoute, apiKey, keys);
+    async useKey(apiKey, { allowUnverified = false, keys } = {}) {
+      const at = switches;
+      const candidate = await build(route, apiKey, keys);
       let verified = true;
       try {
         await candidate.warmUp();
@@ -208,27 +211,39 @@ export async function startService({
         if (!allowUnverified || error.kind !== "unavailable") throw error;
         verified = false;
       }
+      if (switches !== at) return { verified, stale: true };
       refiner = candidate;
       missing = null;
-      if (nextRoute !== route) log.info("route_switched", { from: describeRoute(route), to: describeRoute(nextRoute) });
-      route = nextRoute;
-      followRoute();
       return { verified };
     },
 
     /**
+     * 换一条路线，不验证：切模式、换模型都先走这里，当场换上。手里的 refiner 是按旧路线装的，作废；
+     * 新路线要的 key 由 key 管理去找、去装（useKey），装上之前听写时说缺什么，和启动时一样。
+     * 本地模型跟着新路线走：没下载的停在 missing，下好了自己装上
+     * @param {object} nextRoute
+     */
+    setRoute(nextRoute) {
+      switches += 1;
+      refiner = null;
+      missing = null;
+      log.info("route_switched", { from: describeRoute(route), to: describeRoute(nextRoute) });
+      route = nextRoute;
+      followRoute();
+    },
+
+    /**
      * 只换 local 模式第一跳的本地模型（没装上的那个再选一次就是重试）。润色那一跳和 key 都不动，不用重新验证：
-     * 转写器是按名字取的（上面的 transcriber），装好的 refiner 照用，新模型在后台装载。
-     * 要下载好了的才换得过来，这条规矩在模式那一层（modes.mjs）
+     * 转写器是按名字取的（上面的 transcriber），装好的 refiner 照用，新模型在后台装载；还没下载的停在 missing
      * @param {string} model 本地模型的 id（models/catalog.mjs），调用方校验过
      */
     switchTranscriber(model) {
       if (route.mode !== "local" && route.mode !== "private") {
         throw new Error(`现在是 ${route.mode} 模式，只有 local 和 private 模式有本地模型可换`);
       }
-      // 换到云端、或从云端换回本机，润色前面那一跳就不是同一个东西了，要重新装 refiner、验 key：走 useKey
+      // 换到云端、或从云端换回本机，润色前面那一跳就不是同一个东西了，要重新装 refiner、找 key：整条路线重换（setRoute）
       if (!usesLocalModel(route) || !usesLocalModel({ ...route, transcriber: model })) {
-        throw new Error(`第一跳 ${route.transcriber} → ${model} 涉及云端模型，要走 useKey 换路线`);
+        throw new Error(`第一跳 ${route.transcriber} → ${model} 涉及云端模型，要整条路线重换（setRoute）`);
       }
       // 同一个、也好好的：不用动。上次没装上的话照样往下走，再装一次
       if (model === route.transcriber && local.state !== "failed") return;

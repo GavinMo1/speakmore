@@ -29,15 +29,19 @@ export function hopChain(hops, platformOf) {
 }
 
 /**
- * 还差的一样，写成一个短语："阿里云百炼 密钥未配置"、"Qwen3-ASR 0.6B (Q8_0) 未下载"
+ * 还差的一样，写成一个短语："阿里云百炼 密钥未配置"、"Qwen3-ASR 0.6B (Q8_0) 未下载"、"…下载中 40%"
  * @param {{ kind: "key" | "download" | "url", platform?: string, model?: string }} need
- * @param {{ hops: Array<object>, platformOf: (id: string) => object }} way 那条路线（下载时取本机模型的名字）
+ * @param {{ hops: Array<object>, platformOf: (id: string) => object, downloadOf?: (id: string) => object | null }} way
+ *   那条路线（下载时取本机模型的名字）；downloadOf 给了的话，正在下的写下到百分之几
  */
-export function needText(need, { hops, platformOf }) {
+export function needText(need, { hops, platformOf, downloadOf = () => null }) {
   if (need.kind === "key") return t("home.mode.needs.key", { platform: platformName(platformOf(need.platform)) });
   if (need.kind === "download") {
-    const hop = hops.find(({ platform }) => platform === "local");
-    return t("home.mode.needs.download", { model: hop?.name ?? need.model });
+    const model = hops.find(({ platform }) => platform === "local")?.name ?? need.model;
+    const download = downloadOf(need.model);
+    if (!download) return t("home.mode.needs.download", { model });
+    const percent = Math.floor((download.received / (download.total || 1)) * 100);
+    return t("home.mode.needs.downloading", { model, percent });
   }
   return t("home.mode.needs.url");
 }

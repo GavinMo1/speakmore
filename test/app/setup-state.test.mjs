@@ -108,7 +108,7 @@ test("本地模型还没下载：算缺东西，说去哪下；用户正在下�
     localModel: { state: "missing", model: "qwen3-asr-0.6b-q8", received: 425, total: 850 },
   });
   assert.equal(downloading.ready, false);
-  assert.deepEqual(downloading.missing, ["本地模型"]);
+  assert.deepEqual(downloading.missing, ["本地模型（下载中 50%）"]);
   assert.match(downloading.blocker, /下载.*50%/);
   const loading = summarize({ ...allGood, localModel: { state: "loading", model: "m" } });
   assert.match(loading.blocker, /装载/);
