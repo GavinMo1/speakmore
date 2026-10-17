@@ -47,8 +47,11 @@ dir="$1"
 commit="$2"
 registry="$3"
 cd "${dir}"
-# 换掉上一版的代码：上一版有、这一版删掉的文件不留在构建目录里
-rm -rf .dockerignore package.json assets website
+# 换掉上一版的代码：这次传来的每个顶层文件和目录先整个删掉再搬进来，上一版有、这一版删掉的文件不留在构建目录里。
+# 按传来的东西删，不另写一份名单：传的路径加了顶层目录，名单没跟上，mv 就会撞上已有的目录
+for entry in .incoming/.dockerignore .incoming/*; do
+  rm -rf "./${entry#.incoming/}"
+done
 mv .incoming/.dockerignore .incoming/* .
 rmdir .incoming
 
