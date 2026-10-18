@@ -1,6 +1,6 @@
 ---
 name: speakmore-windows-followups
-description: Windows 版 0.9.0 发布后还没做的：命名管道防抢占、对抗性审查剩下的低危项、开发机清理
+description: Windows 版还没做的：命名管道防抢占、审查剩下的低危项、测试在 Windows 留临时目录、开发机清理；0.9.3 做掉了按版本安装
 metadata:
   type: project
 ---
@@ -8,7 +8,9 @@ metadata:
 0.9.0（2026-10-17）发布时，Windows 版对抗性审查里还没处理的：
 
 - **命名管道可被别的账户抢占**（审查 #3，中危）：打算改成只有当前用户读得到的随机管道名。
-- 低危：install.ps1 按 Ctrl+C 中断会留下 `.install.*` 临时文件；install.ps1 没有自动测试；`SPEAKMORE_HOME` 的路径没做规范化；本机模型加载到显卡没有超时；没有显卡的 Windows 也推荐 Q8 版；命令行有几处说法还写着 Mac；开始菜单快捷方式没带 AppUserModelID，从管理员终端装的话命令行连不上管道（EPERM）；延迟删除失败时没有报出来。
+- 低危：本机模型加载到显卡没有超时；没有显卡的 Windows 也推荐 Q8 版；命令行有几处说法还写着 Mac；开始菜单快捷方式没带 AppUserModelID，从管理员终端装的话命令行连不上管道（EPERM）。
+- 0.9.3（issue #5）已经做掉的：程序按版本放进 versions\、current 记着用哪个，不挪不覆盖文件；`.install.*`、SPEAKMORE_HOME 规范化、删不掉的交给后台重试都随之解决。审查后又加了：不装 0.9.3 以前的版本、同一家目录同时只装一个、下载不走 Invoke-WebRequest（内存峰值 1952 → 262 MB）、升级时改指任务栏和桌面上的快捷方式副本。端到端脚本在会话临时目录（issue5/e2e3.ps1），十个场景。
+- 还剩：`test/models/store.test.mjs`、`test/storage/history.test.mjs` 在 Windows 上每跑一次在 %TEMP% 留一个 speakmore-models-*/speakmore-history-* 目录（各一个文件，10-18 清过一次）；开机启动在程序路径带空格时显示成关着（记在 docs/implementation-notes.md）；快捷方式目标每个版本都变，按 exe 路径记的设置（显卡偏好、着色器缓存）每次升级重来，根治要一个固定位置的小启动程序加 AppUserModelID。
 - **收尾清理**（等 Windows 开发告一段落）：删掉开发机上的 speakmore-dev 目录和所有 speakmore-dev 开头的计划任务，关掉本机到开发机的 SSH 隧道（端口 19333）。
 
 **Why:** 发版前他要先上线，这些留到之后做；开发机是他的真机，不能留垃圾。
