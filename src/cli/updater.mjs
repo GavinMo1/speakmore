@@ -4,6 +4,7 @@ import { createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, ren
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { LocalizedError, msg } from "../i18n/index.mjs";
+import { removeAfterExit } from "./windows-system.mjs";
 
 // 和下载地址打交道：问最新的是哪个版本，拿那边的安装脚本把它装上；装着 SpeakMore.app 的，下载新的安装包把它换掉。
 // 用 curl 而不是 Node 自己的 fetch：安装脚本也用它，终端里设的代理（https_proxy 这些）两边一样认。
@@ -33,6 +34,19 @@ export function downloadBase(env) {
  */
 const RUN_INSTALL_PS1 =
   "& ([scriptblock]::Create([IO.File]::ReadAllText($env:SPEAKMORE_INSTALL_SCRIPT, [Text.Encoding]::UTF8))); exit $LASTEXITCODE";
+
+/**
+ * 删掉放安装脚本的临时目录。Windows 上杀毒软件刚扫完的脚本可能还开着、一时删不掉：这时交给后台等这条命令退出后再删，
+ * 不把它当成失败（安装已经做完了，结果以安装脚本的退出码为准）
+ */
+function removeTempDir(dir) {
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch (error) {
+    if (!WINDOWS || !["EBUSY", "EPERM", "ENOTEMPTY"].includes(error.code)) throw error;
+    removeAfterExit([dir]);
+  }
+}
 
 /** 跑一条命令，交出标准输出。失败时连同它在标准错误里说的一起抛出 */
 function run(command, args, { env } = {}) {
@@ -171,7 +185,7 @@ export function createUpdater({ env, home, progress = false }) {
         // Windows 上这条命令自己就跑在换下来的那个版本上：install.ps1 看见它还在用着，等它退出后自己删
         return code;
       } finally {
-        rmSync(dir, { recursive: true, force: true });
+        removeTempDir(dir);
       }
     },
 
