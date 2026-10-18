@@ -41,6 +41,9 @@ native/windows-setup/*.syso
 # 官网构建出来的静态页
 website/dist/
 
+# 下载量观测的缓存（scripts/ops/stats.mjs）：CDN 访问日志里有真实用户的 IP，自己的出口只存哈希，都不进仓库
+/.stats/
+
 # Claude Code 给子任务临时建的工作副本
 .claude/worktrees/
 __pycache__/
