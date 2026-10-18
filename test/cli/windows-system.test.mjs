@@ -37,7 +37,7 @@ test("没有那一项时如实说没有，不报错：开机启动、Path 里都
 });
 
 test(
-  "快捷方式是不是我们的：照 Windows 读出来的目标认，指着这个家目录里的运行环境才算（路径里有中文也认得）",
+  "快捷方式是不是我们的：照 Windows 读出来的目标认，指着这个家目录里的程序才算（路径里有中文也认得）",
   windowsOnly,
   (t) => {
     const dir = mkdtempSync(join(tmpdir(), "sm-快捷方式-"));
@@ -58,8 +58,15 @@ test(
       );
       return file;
     };
-    assert.equal(isOurShortcut(make("ours.lnk", join(home, "runtime", "electron.exe")), home), true);
+    assert.equal(
+      isOurShortcut(make("ours.lnk", join(home, "versions", "0.9.3-1a2b3c4d", "runtime", "electron.exe")), home),
+      true,
+    );
+    // 0.9.2 及以前装的：程序直接在家目录的 runtime 里
+    assert.equal(isOurShortcut(make("legacy.lnk", join(home, "runtime", "electron.exe")), home), true);
     assert.equal(isOurShortcut(make("theirs.lnk", join(dir, "别的", "runtime", "electron.exe")), home), false);
+    // 名字只是前面一截一样的另一个目录
+    assert.equal(isOurShortcut(make("prefix.lnk", join(`${home}-old`, "runtime", "electron.exe")), home), false);
     assert.equal(isOurShortcut(join(dir, "missing.lnk"), home), false);
   },
 );

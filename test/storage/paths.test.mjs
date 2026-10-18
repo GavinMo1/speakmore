@@ -38,6 +38,9 @@ test("程序、你的东西、运行时产生的，各在各的位置", () => {
     linksFile: "bin/links",
     appDir: "app",
     runtimeDir: "runtime",
+    // Windows 上每个版本一个目录，current 记着现在用哪个
+    versionsDir: "versions",
+    currentFile: "current",
     // 你的东西
     settingsFile: "settings.json",
     historyDb: "data/history.db",
@@ -123,13 +126,25 @@ test("0.1 版放数据的地方：家目录的 Application Support/SpeakMore；0
   assert.equal(legacyDataDir("C:\\Users\\someone", "win32"), null);
 });
 
-test("Windows 上装好的那一份：从程序的位置（<家目录>\\runtime\\electron.exe、旁边有 app）找回家目录；别的摆法是 null", () => {
-  const exists = (path) => path === "D:\\SpeakMore\\app\\package.json";
-  assert.equal(installedHomeOf("D:\\SpeakMore\\runtime\\electron.exe", exists), "D:\\SpeakMore");
-  assert.equal(installedHomeOf("D:\\SpeakMore\\runtime\\Electron.EXE", exists), "D:\\SpeakMore");
+test("Windows 上装好的那一份：从程序的位置（<家目录>\\versions\\<版本>\\runtime\\electron.exe、旁边有 app）找回家目录；别的摆法是 null", () => {
+  // Windows 的路径不分大小写
+  const exists = (path) => path.toLowerCase() === "d:\\speakmore\\versions\\0.9.3-1a2b3c4d\\app\\package.json";
+  assert.equal(
+    installedHomeOf("D:\\SpeakMore\\versions\\0.9.3-1a2b3c4d\\runtime\\electron.exe", exists),
+    "D:\\SpeakMore",
+  );
+  assert.equal(
+    installedHomeOf("D:\\SpeakMore\\Versions\\0.9.3-1a2b3c4d\\Runtime\\Electron.EXE", exists),
+    "D:\\SpeakMore",
+  );
+  // 0.9.2 及以前的摆法（家目录里直接是 runtime、app）：新版本的程序不会从那里跑
+  assert.equal(
+    installedHomeOf("D:\\SpeakMore\\runtime\\electron.exe", () => true),
+    null,
+  );
   // 从源码跑的：node_modules 里的 electron.exe
   assert.equal(installedHomeOf("C:\\dev\\speakmore\\node_modules\\electron\\dist\\electron.exe", exists), null);
   // 旁边没有 app
-  assert.equal(installedHomeOf("E:\\other\\runtime\\electron.exe", exists), null);
+  assert.equal(installedHomeOf("E:\\other\\versions\\0.9.3-1a2b3c4d\\runtime\\electron.exe", exists), null);
   assert.equal(installedHomeOf("/Users/someone/.speakmore/runtime/Electron.app/Contents/MacOS/Electron", exists), null);
 });

@@ -1,19 +1,9 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  createReadStream,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-} from "node:fs";
+import { createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { LocalizedError, msg } from "../i18n/index.mjs";
-import { removeAfterExit } from "./windows-system.mjs";
 
 // 和下载地址打交道：问最新的是哪个版本，拿那边的安装脚本把它装上；装着 SpeakMore.app 的，下载新的安装包把它换掉。
 // 用 curl 而不是 Node 自己的 fetch：安装脚本也用它，终端里设的代理（https_proxy 这些）两边一样认。
@@ -43,18 +33,6 @@ export function downloadBase(env) {
  */
 const RUN_INSTALL_PS1 =
   "& ([scriptblock]::Create([IO.File]::ReadAllText($env:SPEAKMORE_INSTALL_SCRIPT, [Text.Encoding]::UTF8))); exit $LASTEXITCODE";
-
-/** 上一份换下来、当时还在用着没删掉的程序（install.ps1 改名挪开的 app.old.*、runtime.old.*） */
-function oldCopies(home) {
-  try {
-    return readdirSync(home)
-      .filter((name) => /^(app|runtime)\.old\./.test(name))
-      .map((name) => join(home, name));
-  } catch (error) {
-    if (error.code === "ENOENT") return [];
-    throw error;
-  }
-}
 
 /** 跑一条命令，交出标准输出。失败时连同它在标准错误里说的一起抛出 */
 function run(command, args, { env } = {}) {
@@ -190,11 +168,7 @@ export function createUpdater({ env, home, progress = false }) {
           // 被信号打断时没有退出码，算没装成
           child.on("exit", (exitCode) => resolve(exitCode ?? 1));
         });
-        // Windows 上这条命令自己就跑在换下来的那份程序上，install.ps1 删不掉它：等这条命令退出后再删
-        if (WINDOWS && code === 0) {
-          const old = oldCopies(home);
-          if (old.length > 0) removeAfterExit(old);
-        }
+        // Windows 上这条命令自己就跑在换下来的那个版本上：install.ps1 看见它还在用着，等它退出后自己删
         return code;
       } finally {
         rmSync(dir, { recursive: true, force: true });

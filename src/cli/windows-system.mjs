@@ -42,7 +42,8 @@ export function removePathEntry(entry) {
 }
 
 /**
- * 这个快捷方式是不是指着这个家目录里的程序。清单里记的东西卸载前要再认一遍：那个位置上可能已经换成了别的。
+ * 这个快捷方式是不是指着这个家目录里的程序（versions 下某个版本的，或者 0.9.2 及以前直接放在 runtime 里的）。
+ * 清单里记的东西卸载前要再认一遍：那个位置上可能已经换成了别的。
  * 目标路径请 Windows 自己读（WScript.Shell）：.lnk 文件里存的不是一整段连续的路径（本地编码那份拆成几截、
  * UTF-16 那份是相对路径），按字节找找不到。比较也在 PowerShell 里做，路径不经过控制台编码
  */
@@ -50,7 +51,7 @@ export function isOurShortcut(file, home) {
   if (!existsSync(file)) return false;
   const output = powershell(
     `$target = (New-Object -ComObject WScript.Shell).CreateShortcut($env:SPEAKMORE_SHORTCUT).TargetPath
-     if ($target.StartsWith("$env:SPEAKMORE_HOME_DIR\\runtime\\", [StringComparison]::OrdinalIgnoreCase)) { 'ours' }`,
+     if ($target.StartsWith("$env:SPEAKMORE_HOME_DIR\\", [StringComparison]::OrdinalIgnoreCase)) { 'ours' }`,
     { SPEAKMORE_SHORTCUT: file, SPEAKMORE_HOME_DIR: home },
   );
   return output.trim() === "ours";
@@ -69,7 +70,7 @@ export function removeLoginItem(home) {
   const output = powershell(
     `$run = Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'SpeakMore' -ErrorAction SilentlyContinue
      # 按字面找家目录（不用 -like：路径里的 [ ] 会被当成通配符）
-     if ($run -and $run.SpeakMore.IndexOf("$env:SPEAKMORE_HOME_DIR\\runtime\\", [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+     if ($run -and $run.SpeakMore.IndexOf("$env:SPEAKMORE_HOME_DIR\\", [StringComparison]::OrdinalIgnoreCase) -ge 0) {
        foreach ($key in $env:SPEAKMORE_RUN_KEYS.Split([char]10)) { Remove-ItemProperty -Path $key -Name 'SpeakMore' -ErrorAction SilentlyContinue }
        'removed'
      }`,

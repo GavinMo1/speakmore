@@ -144,12 +144,15 @@ if (WINDOWS) app.setAppUserModelId("com.zephyrxiang.speakmore");
 app.setPath("userData", PATHS.cacheDir);
 
 /**
- * Windows 上装好的那一份：程序就在家目录的 runtime 里。没有单独的"应用"：命令行起的、开始菜单起的都是它，
+ * Windows 上装好的那一份：程序在家目录 versions 下某一个版本里。没有单独的"应用"：命令行起的、开始菜单起的都是它，
  * 用的是同一套 key 和设置（不像 macOS 的 SpeakMore.app 有自己的一套权限）
  */
 const INSTALLED_ON_WINDOWS =
-  WINDOWS && process.execPath.toLowerCase().startsWith(`${PATHS.runtimeDir.toLowerCase()}\\`);
-/** 开机启动登记的是这个可执行文件加上程序目录（Windows 上没有应用包，要把参数也记下来） */
+  WINDOWS && process.execPath.toLowerCase().startsWith(`${PATHS.versionsDir.toLowerCase()}\\`);
+/**
+ * 开机启动登记的是这个可执行文件加上程序目录（Windows 上没有应用包，要把参数也记下来）。
+ * 装了新版本时 install.ps1 把这一项改指到新版本的程序上（Electron 认开没开只比程序路径）
+ */
 const LOGIN_ITEM = WINDOWS ? { path: process.execPath, args: [app.getAppPath()], name: "SpeakMore" } : {};
 
 /**

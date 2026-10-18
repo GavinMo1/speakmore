@@ -92,7 +92,9 @@ export async function uninstall(args, io) {
 
   if (keepData) {
     const logsDir = dirname(paths.logFile);
-    for (const dir of [paths.appDir, paths.runtimeDir, paths.runDir, logsDir]) remove(dir);
+    // Windows 上程序在 versions 下（每个版本一个目录）、current 记着用哪个；0.9.2 及以前在 app、runtime 里
+    const program = io.platform === "win32" ? [paths.versionsDir, paths.currentFile] : [];
+    for (const dir of [paths.appDir, paths.runtimeDir, ...program, paths.runDir, logsDir]) remove(dir);
     // Windows 上留着的 key 是 Electron 的 safeStorage 加密的，解开它要的那把钥匙（DPAPI 加密过）记在
     // 缓存目录的 Local State 里：留着 key 就得留着它，缓存别的都删。macOS 上那把钥匙在钥匙串里，缓存整个删
     if (io.platform === "win32" && existsSync(paths.cacheDir)) {
