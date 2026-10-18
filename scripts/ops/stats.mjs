@@ -21,8 +21,10 @@ import COS from "cos-nodejs-sdk-v5";
 import { cdn } from "tencentcloud-sdk-nodejs-cdn";
 import { CN_BASE } from "../../src/models/catalog.mjs";
 import {
+  at,
   earlyMisses,
   findSelf,
+  gb,
   hashIp,
   missAlerts,
   parseLogLine,
@@ -202,6 +204,7 @@ async function traffic(client) {
     const request = await both(cdnData, "request");
     const status = await both(cdnData, "statusCode");
     const origin = await both(originData, "flux");
+    const originRequest = await both(originData, "request");
     const originFail = await both(originData, "failRequest");
     const days = [];
     for (let i = DAYS - 1; i >= 0; i--) {
@@ -214,6 +217,7 @@ async function traffic(client) {
         request: sum(request),
         status: { "4xx": code("4xx"), "5xx": code("5xx") },
         origin: sum(origin),
+        originRequest: sum(originRequest),
         originFail: sum(originFail),
       });
     }
@@ -271,7 +275,8 @@ async function main() {
   report.misses = earlyMisses(rows, { files: new Set(sizes.keys()), self });
   report.alerts = [
     ...(report.traffic ? trafficAlerts(report.traffic) : []),
-    ...missAlerts(report.misses, download.host),
+    // 坏链接只在昨天以来还有人点到时报
+    ...missAlerts(report.misses, download.host, `${beijing(-1).replaceAll("-", "")}000000`),
   ];
 
   if (args.json) console.log(JSON.stringify(report, null, 2));
@@ -281,9 +286,6 @@ async function main() {
 // ---------- 报告 ----------
 
 const n = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
-const gb = (bytes) => (bytes / 1e9).toFixed(1);
-const at = (time) =>
-  time ? `${time.slice(4, 6)}-${time.slice(6, 8)} ${time.slice(8, 10)}:${time.slice(10, 12)}` : "-";
 const REASON = { ship: "ship 核对", prerelease: "预发版", "windows-acceptance": "Windows 验收", known: "本机出口" };
 const pad = (text, width) =>
   text + " ".repeat(Math.max(0, width - [...text].reduce((w, c) => w + (c.charCodeAt(0) > 0x2e80 ? 2 : 1), 0)));
@@ -311,7 +313,7 @@ function render(r) {
   if (early.length)
     line(`  文件传上去之前就点到、拿到 404 的真用户：${early.map((m) => `${m.version} ${m.ips} 个 IP`).join("、")}`);
   for (const m of r.misses.filter((x) => x.kind === "missing"))
-    line(`  点到不存在的文件：${m.path}（${m.ips} 个 IP，${m.requests} 次）`);
+    line(`  点到不存在的文件：${m.path}（${m.ips} 个 IP，${m.requests} 次，最近一次 ${at(m.last)}）`);
   line();
 
   if (r.traffic) {
@@ -327,9 +329,11 @@ function render(r) {
       line(
         `    ${pad("日期", 8)}${pad("境内GB", 9)}${pad("境外GB", 9)}${pad("请求", 9)}${pad("4xx", 7)}${pad("5xx", 6)}${pad("回源GB", 9)}回源失败`,
       );
-      for (const x of t.days) {
+      // 上线前全是 0 的那些天不列
+      const first = t.days.findIndex((x) => x.request > 0);
+      for (const x of first < 0 ? t.days.slice(-1) : t.days.slice(first)) {
         line(
-          `    ${pad(x.day.slice(5), 8)}${pad(gb(x.flux.mainland), 9)}${pad(gb(x.flux.overseas), 9)}${pad(String(x.request), 9)}${pad(String(x.status["4xx"]), 7)}${pad(String(x.status["5xx"]), 6)}${pad(gb(x.origin), 9)}${x.originFail}`,
+          `    ${pad(x.day.slice(5), 8)}${pad(gb(x.flux.mainland), 9)}${pad(gb(x.flux.overseas), 9)}${pad(String(x.request), 9)}${pad(String(x.status["4xx"]), 7)}${pad(String(x.status["5xx"]), 6)}${pad(gb(x.origin), 9)}${x.originFail} / ${x.originRequest}`,
         );
       }
     }

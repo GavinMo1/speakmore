@@ -152,8 +152,18 @@ test("真用户拿到的 404：桶里现在有的文件记成 early（当时还�
     { ip: "203.0.113.40", t: "20261017214941", path: SETUP_091, status: 404 },
     { ip: "203.0.113.40", t: "20261017214945", path: SETUP_091, status: 404 },
     // 回复里链接后面紧跟着中文括号，被当成了网址的一部分
-    { ip: "203.0.113.42", path: "/speakmore/v0.9.0/SpeakMore-Setup-x64.exe%EF%BC%88Windows", status: 404 },
-    { ip: "203.0.113.43", path: "/speakmore/v0.9.0/SpeakMore-Setup-x64.exe%EF%BC%88Windows", status: 404 },
+    {
+      ip: "203.0.113.42",
+      t: "20261017100000",
+      path: "/speakmore/v0.9.0/SpeakMore-Setup-x64.exe%EF%BC%88Windows",
+      status: 404,
+    },
+    {
+      ip: "203.0.113.43",
+      t: "20261018090000",
+      path: "/speakmore/v0.9.0/SpeakMore-Setup-x64.exe%EF%BC%88Windows",
+      status: 404,
+    },
     { ip: "203.0.113.44", path: "/api/v1/.env", status: 404 },
     { ip: "203.0.113.44", path: "/wp-json/wp/v2/docs/settings", status: 404 },
     { ip: "203.0.113.45", path: "/speakmore/v0.9.2", status: 404 },
@@ -162,27 +172,47 @@ test("真用户拿到的 404：桶里现在有的文件记成 early（当时还�
   const self = new Map([["198.51.100.6", new Set(["prerelease"])]]);
   const misses = earlyMisses(rows, { files: new Set([SETUP_091]), self });
   assert.deepEqual(misses, [
-    { kind: "early", version: "v0.9.1", requests: 2, ips: 1 },
-    { kind: "missing", path: "/speakmore/v0.9.0/SpeakMore-Setup-x64.exe（Windows", requests: 2, ips: 2 },
+    { kind: "early", version: "v0.9.1", requests: 2, ips: 1, last: "20261017214945" },
+    {
+      kind: "missing",
+      path: "/speakmore/v0.9.0/SpeakMore-Setup-x64.exe（Windows",
+      requests: 2,
+      ips: 2,
+      last: "20261018090000",
+    },
   ]);
-  // 只有一个人拿到的（多半是手敲错了）不报；两个人以上拿到同一个坏链接才报
-  assert.deepEqual(missAlerts(misses, "dl.zephyrxiang.com"), [
+  // 两个人以上拿到同一个坏链接、而且 since 之后还有人点到才报：一个人的多半是手敲错了，很久没人点的多半已经改好了
+  assert.deepEqual(missAlerts(misses, "dl.zephyrxiang.com", "20261018000000"), [
     {
       level: "warn",
       domain: "dl.zephyrxiang.com",
-      text: "没有这个文件：/speakmore/v0.9.0/SpeakMore-Setup-x64.exe（Windows，2 个真用户拿到 404，多半是哪里的链接写坏了",
+      text: "没有这个文件：/speakmore/v0.9.0/SpeakMore-Setup-x64.exe（Windows，2 个真用户拿到 404（最近一次 10-18 09:00），多半是哪里的链接写坏了",
     },
   ]);
-  assert.deepEqual(missAlerts(misses.slice(0, 1), "dl.zephyrxiang.com"), []);
+  assert.deepEqual(missAlerts(misses, "dl.zephyrxiang.com", "20261019000000"), []);
+  assert.deepEqual(missAlerts(misses.slice(0, 1), "dl.zephyrxiang.com", "20261018000000"), []);
 });
 
-const GB = 1e9;
+// 和腾讯云控制台一样按 1024 算：控制台里填的"50 GB"封顶是 50 × 1024³ 字节
+const GB = 2 ** 30;
 const domain = (over = {}) => ({
   name: "dl.zephyrxiang.com",
   today: "2026-10-18",
   days: [
-    { day: "2026-10-17", flux: { mainland: 10 * GB, overseas: 8 * GB }, status: { "5xx": 0 }, originFail: 0 },
-    { day: "2026-10-18", flux: { mainland: 20 * GB, overseas: 5 * GB }, status: { "5xx": 0 }, originFail: 0 },
+    {
+      day: "2026-10-17",
+      flux: { mainland: 10 * GB, overseas: 8 * GB },
+      status: { "5xx": 0 },
+      originRequest: 2000,
+      originFail: 9,
+    },
+    {
+      day: "2026-10-18",
+      flux: { mainland: 20 * GB, overseas: 5 * GB },
+      status: { "5xx": 0 },
+      originRequest: 300,
+      originFail: 14,
+    },
   ],
   cap: { on: true, metric: "flux", cycle: 1440, threshold: 50 * GB, lastTrigger: { mainland: null, overseas: null } },
   ...over,
@@ -203,7 +233,7 @@ test("流量告警：今天的流量按境内、境外分别对照每天的封�
   assert.match(trafficAlerts([full])[0].text, /境外.*已到封顶，超出部分返回 404/);
 });
 
-test("流量告警：没开封顶、窗口内触发过封顶、出现 5xx、回源失败，各报一条", () => {
+test("流量告警：没开封顶、窗口内触发过封顶、出现 5xx、某天回源失败率到 5%（至少 10 次），各报一条", () => {
   const off = domain({ cap: { on: false } });
   assert.deepEqual(trafficAlerts([off]), [
     { level: "warn", domain: "dl.zephyrxiang.com", text: "没开用量封顶：流量没有上限，被刷时费用也没有上限" },
@@ -212,13 +242,13 @@ test("流量告警：没开封顶、窗口内触发过封顶、出现 5xx、回�
   const bad = domain();
   bad.cap.lastTrigger.overseas = "2026-10-17 21:00:00";
   bad.days[0].status["5xx"] = 3;
-  bad.days[1].originFail = 2;
+  bad.days[1].originFail = 15;
   assert.deepEqual(
     trafficAlerts([bad]).map((a) => [a.level, a.text]),
     [
       ["alert", "境外上次触发封顶：2026-10-17 21:00:00"],
       ["warn", "5xx 共 3 次（2026-10-17）"],
-      ["warn", "回源失败共 2 次（2026-10-18）"],
+      ["warn", "回源失败率 5.0%（2026-10-18，300 次回源失败 15 次）"],
     ],
   );
 });
