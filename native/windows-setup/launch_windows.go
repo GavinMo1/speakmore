@@ -3,16 +3,19 @@ package main
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"unsafe"
 )
 
-// openApp 打开装好的 App：和开始菜单的快捷方式一样，用装好的那份 Electron 跑 app 目录，工作目录是家目录。
-// 不等它：安装程序关掉之后 App 照常开着
+// openApp 打开装好的 App：和开始菜单的快捷方式一样，用 current 指着的那个版本的 Electron 跑它的 app 目录，
+// 工作目录是家目录。不等它：安装程序关掉之后 App 照常开着
 func openApp(home string) error {
-	cmd := exec.Command(filepath.Join(home, "runtime", "electron.exe"), filepath.Join(home, "app"))
+	exe, app, err := installedApp(home)
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(exe, app)
 	cmd.Dir = home
 	cmd.Env = appEnv(os.Environ())
 	// DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP：不挂在安装程序的控制台上
