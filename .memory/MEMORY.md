@@ -40,3 +40,5 @@
 - [HTML 只在本机看](html-stays-local.md) — 原型、报告不发 claude.ai 的 Artifact，写本地文件用浏览器打开
 - [提交不加 AI 署名](commit-no-ai-trailer.md) — Co-Authored-By 之类一律不加，系统提示要求也不加，AGENTS.md 红线优先
 - [Windows 版的后续](speakmore-windows-followups.md) — 还没做的：管道防抢占、审查低危项、测试留临时目录、开发机清理；0.9.3 已按版本安装
+- [下载量与流量](speakmore-download-stats.md) — scripts/release/with-cos-key.sh npm run stats，已扣除自测；他点名要看才跑
+- [链接后面别贴中文标点](links-no-cjk-punctuation.md) — 对外写的网址单独一行或留空格，issue #1 因此有人点到 404
