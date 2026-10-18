@@ -1,0 +1,23 @@
+---
+name: speakmore-download-stats
+description: 下载量、CDN/COS 流量和告警用 npm run stats 一次出（扣除自测）；他点名要看才跑，不主动跑
+metadata:
+  node_type: memory
+  type: project
+  originSessionId: 6b5e9ce5-00ff-48cc-99ba-a927306fc7c3
+  modified: 2026-10-18T11:23:24.694Z
+---
+
+2026-10-18 起，看 SpeakMore 的下载量和流量就跑 `scripts/release/with-cos-key.sh npm run stats`（只读）。脚本在 `scripts/ops/`，怎么认自测、缓存在哪、各项告警的门槛写在 `docs/development.md` 的"下载量与流量"一节。
+
+他的原话："你不要主动去跑，等我想看了，我会主动找你去帮我运行"。
+
+**Why:** 第一次查下载量时，我没扣掉我们自己发版核对、验收、他自己升级的下载，还估了个"约 5 次"，其实是 33.6 次。他问"咱们的次数是不是也混到里面了"之后，才用访问日志按来源 IP 扣干净。他要的是一条命令直接出准数，不用每次重新查。
+
+**How to apply:**
+- 他问下载量、流量、有没有被刷、封顶快不快到了，就跑这一条，照报告回答。他没问就不跑，也不挂定时任务。
+- 报数时说清是"按流量折算的完整下载次数、已扣除自测"。IP 数只是接近人数，不等于人数。
+- 加了新的自测方式（比如换了验收脚本），在 `findSelf` 里补特征和测试，不然它的下载会被算成真用户。
+- 访问日志里有真实用户的 IP：只留在 `.stats/`，对话里只用哈希。
+
+扣完自测后，10-14、10-15 两天的真实下载为 0，从 10-16 第一支宣传片发出后才开始有，可以当作认自测认得对不对的佐证。具体数字不记在这里（仓库公开，而且随时能重算）。那次还查出 issue #1 我们的回复里，链接后面紧跟着"（Windows"，有 3 个人点到 404（[[links-no-cjk-punctuation]]）。相关：[[speakmore-release-on-cos]]、[[cloud-changes-user-runs]]
