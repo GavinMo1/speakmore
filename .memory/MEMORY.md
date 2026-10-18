@@ -42,3 +42,4 @@
 - [Windows 版的后续](speakmore-windows-followups.md) — 还没做的：管道防抢占、审查低危项、测试留临时目录、开发机清理；0.9.3 已按版本安装
 - [下载量与流量](speakmore-download-stats.md) — scripts/release/with-cos-key.sh npm run stats，已扣除自测；他点名要看才跑
 - [链接后面别贴中文标点](links-no-cjk-punctuation.md) — 对外写的网址单独一行或留空格，issue #1 因此有人点到 404
+- [Linux 暂不做](speakmore-no-linux-yet.md) — #6 留着不关、用户多了再议；整理笔记关联 Obsidian 不在范围（#7 已关）
