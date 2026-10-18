@@ -830,6 +830,19 @@ test("update：从源码跑的这一份不归安装脚本管，说用 git pull�
   assert.ok(output.err.includes(outside));
 });
 
+test("update（Windows）：程序在家目录 versions 下某个版本里的才是装好的那份；0.9.2 那样直接放在 app 里的不算", async () => {
+  const version = join(paths.versionsDir, "0.1.0-1a2b3c4d", "app");
+  mkdirSync(version, { recursive: true });
+  const current = harness({ latest: "v0.2.0", platform: "win32", packageDir: version });
+  assert.equal(await current.speakmore("update"), 0);
+  assert.deepEqual(current.updates.installs, ["v0.2.0"]);
+
+  installed();
+  const legacy = harness({ latest: "v0.2.0", platform: "win32", packageDir: paths.appDir });
+  assert.equal(await legacy.speakmore("update"), 1);
+  assert.deepEqual(legacy.updates.installs, []);
+});
+
 test("update：问不到最新版本、问到的不像版本号，都照实说，不装", async () => {
   installed();
   const offline = harness({
@@ -1498,6 +1511,20 @@ test("uninstall --keep-data（Windows）：bin 也留到退出后再删，你的
   assert.equal(existsSync(join(paths.binDir, "speakmore.cmd")), true);
   assert.equal(existsSync(paths.settingsFile), true);
   assert.deepEqual(windows.later, [paths.binDir]);
+});
+
+test("uninstall --keep-data（Windows）：每个版本的程序和 current 都删掉，0.9.2 留在 app、runtime 里的也删", async () => {
+  mkdirSync(join(paths.versionsDir, "0.1.0-1a2b3c4d", "app"), { recursive: true });
+  writeFileSync(paths.currentFile, "0.1.0-1a2b3c4d");
+  mkdirSync(paths.appDir, { recursive: true });
+  mkdirSync(paths.runtimeDir, { recursive: true });
+  writeFileSync(paths.settingsFile, "{}");
+  const { speakmore } = harness({ platform: "win32", keychain: () => assert.fail("不该动 key") });
+  assert.equal(await speakmore("uninstall", "--keep-data", "--yes"), 0);
+  for (const gone of [paths.versionsDir, paths.currentFile, paths.appDir, paths.runtimeDir]) {
+    assert.equal(existsSync(gone), false, gone);
+  }
+  assert.equal(existsSync(paths.settingsFile), true);
 });
 
 test("uninstall --keep-data（Windows）：缓存里的 Local State 留着，别的缓存照删（留着的 key 要靠它解开）", async () => {

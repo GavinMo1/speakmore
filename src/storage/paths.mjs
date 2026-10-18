@@ -9,7 +9,8 @@ import { restrictToOwner } from "./owner-only.mjs";
 // 装的时候往里放，删的时候删掉它就干净了。命令行和后台应用是两个进程，靠这一份约定找到同一批文件。
 //
 //   ~/.speakmore/
-//     bin/ app/ runtime/           程序本身：安装时放进去，升级时整个换掉
+//     bin/ app/ runtime/           程序本身：安装时放进去，升级时整个换掉（macOS）
+//     bin\ versions\ current       Windows：每个版本装进 versions 下自己的目录，current 记着现在用哪个
 //     settings.json <厂商>-key.bin data/    你的东西（每家模型一把 key：gemini-key.bin、openai-key.bin）
 //     models/                      本地转写用的模型：用到时自动下载，删了下次用时再下
 //     logs/ run/ cache/            运行时产生的，删了会自己再建
@@ -56,10 +57,17 @@ export function resolvePaths(env = process.env, userHome = homedir(), platform =
     binDir: join(home, "bin"),
     /** 安装时在家目录以外建了哪些指向这条命令的链接，一行一个。卸载时照着删 */
     linksFile: join(home, "bin", "links"),
-    /** 程序的代码和依赖 */
+    /** 程序的代码和依赖（macOS；Windows 上 0.9.2 及以前也在这里，之后在 versionsDir 下） */
     appDir: join(home, "app"),
-    /** 运行环境：自带的 Electron，命令行和后台应用都用它跑 */
+    /** 运行环境：自带的 Electron，命令行和后台应用都用它跑（同上） */
     runtimeDir: join(home, "runtime"),
+    /**
+     * Windows：每个版本一个目录（<版本>-<编号>，里面是 app 和 runtime），install.ps1 装新版时解进一个新目录，
+     * 不挪、不覆盖已有的文件（刚解出来的文件杀毒软件正扫着，挪不动；正在跑的那份占着自己的目录）
+     */
+    versionsDir: join(home, "versions"),
+    /** Windows：现在用 versions 里的哪一个，一行目录名。bin\speakmore.cmd 照它找程序，装好新版时改它切过去 */
+    currentFile: join(home, "current"),
 
     settingsFile: join(home, "settings.json"),
     historyDb: join(home, "data", "history.db"),
@@ -82,7 +90,7 @@ export function resolvePaths(env = process.env, userHome = homedir(), platform =
 }
 
 /**
- * Windows 上装好的那一份在哪个家目录里：程序是 <家目录>\runtime\electron.exe，旁边有 app。
+ * Windows 上装好的那一份在哪个家目录里：程序是 <家目录>\versions\<版本>\runtime\electron.exe，旁边有 app。
  * 从开始菜单、开机启动起的没有 SPEAKMORE_HOME（只有 speakmore 命令会设），装在别处时靠这个找回家目录。
  * 不是这种摆法（从源码跑的、macOS）是 null
  * @param {string} execPath 正在跑的可执行文件
@@ -93,8 +101,10 @@ export function installedHomeOf(execPath, exists) {
   if (path.basename(execPath).toLowerCase() !== "electron.exe") return null;
   const runtime = path.dirname(execPath);
   if (path.basename(runtime).toLowerCase() !== "runtime") return null;
-  const home = path.dirname(runtime);
-  return exists(path.join(home, "app", "package.json")) ? home : null;
+  const version = path.dirname(runtime);
+  const versions = path.dirname(version);
+  if (path.basename(versions).toLowerCase() !== "versions") return null;
+  return exists(path.join(version, "app", "package.json")) ? path.dirname(versions) : null;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { basename, dirname } from "node:path";
 import { TimeoutError } from "../../control.mjs";
 import { LocalizedError, msg } from "../../i18n/index.mjs";
 import { noPositionals, parse } from "../common.mjs";
@@ -39,12 +39,15 @@ export function compareVersions(a, b) {
 }
 
 /**
- * 用安装脚本装的那一份：程序就在家目录的 app 里。比真实的路径：家目录可能经过符号链接
- * （/tmp 其实是 /private/tmp），而程序算出来的自己在哪是真实的路径
+ * 用安装脚本装的那一份：程序在家目录的 app 里（macOS），或者 versions 下某一个版本的 app 里（Windows，
+ * 不分大小写）。比真实的路径：家目录可能经过符号链接（/tmp 其实是 /private/tmp），而程序算出来的自己在哪是真实的路径
  */
 function installedCopy(io) {
   try {
-    return realpathSync(io.packageDir) === realpathSync(io.paths.appDir);
+    const program = realpathSync(io.packageDir);
+    if (io.platform !== "win32") return program === realpathSync(io.paths.appDir);
+    const versions = realpathSync(io.paths.versionsDir).toLowerCase();
+    return basename(program).toLowerCase() === "app" && dirname(dirname(program)).toLowerCase() === versions;
   } catch (error) {
     if (error.code === "ENOENT") return false;
     throw error;

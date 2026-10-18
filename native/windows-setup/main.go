@@ -34,7 +34,7 @@ func main() {
 func install() int {
 	dir, err := unpack()
 	if dir != "" {
-		defer os.RemoveAll(dir)
+		defer removeTemp(dir)
 	}
 	if err != nil {
 		fmt.Printf("\n  x %v\n", err)
@@ -74,6 +74,19 @@ func install() int {
 	// 留一会儿让人看见装好了，再关窗口
 	time.Sleep(3 * time.Second)
 	return 0
+}
+
+// removeTemp 删掉解包用的临时目录。里面刚写出来的程序包杀毒软件可能还在扫，扫完之前删不掉：
+// 隔一秒再试，试十次；还删不掉就照实说在哪，不悄悄留下约 200 MB
+func removeTemp(dir string) {
+	var err error
+	for range 10 {
+		if err = os.RemoveAll(dir); err == nil {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	fmt.Printf("  Couldn't remove the temporary folder %s (%v); it's safe to delete it yourself.\n", dir, err)
 }
 
 // unpack 把身上带的东西解到一个新的临时目录，交出那个目录（出错时也交出来，好让调用的人删掉）

@@ -1,15 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  createReadStream,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-} from "node:fs";
+import { createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { LocalizedError, msg } from "../i18n/index.mjs";
@@ -44,15 +35,16 @@ export function downloadBase(env) {
 const RUN_INSTALL_PS1 =
   "& ([scriptblock]::Create([IO.File]::ReadAllText($env:SPEAKMORE_INSTALL_SCRIPT, [Text.Encoding]::UTF8))); exit $LASTEXITCODE";
 
-/** 上一份换下来、当时还在用着没删掉的程序（install.ps1 改名挪开的 app.old.*、runtime.old.*） */
-function oldCopies(home) {
+/**
+ * 删掉放安装脚本的临时目录。Windows 上杀毒软件刚扫完的脚本可能还开着、一时删不掉：这时交给后台等这条命令退出后再删，
+ * 不把它当成失败（安装已经做完了，结果以安装脚本的退出码为准）
+ */
+function removeTempDir(dir) {
   try {
-    return readdirSync(home)
-      .filter((name) => /^(app|runtime)\.old\./.test(name))
-      .map((name) => join(home, name));
+    rmSync(dir, { recursive: true, force: true });
   } catch (error) {
-    if (error.code === "ENOENT") return [];
-    throw error;
+    if (!WINDOWS || !["EBUSY", "EPERM", "ENOTEMPTY"].includes(error.code)) throw error;
+    removeAfterExit([dir]);
   }
 }
 
@@ -190,14 +182,10 @@ export function createUpdater({ env, home, progress = false }) {
           // 被信号打断时没有退出码，算没装成
           child.on("exit", (exitCode) => resolve(exitCode ?? 1));
         });
-        // Windows 上这条命令自己就跑在换下来的那份程序上，install.ps1 删不掉它：等这条命令退出后再删
-        if (WINDOWS && code === 0) {
-          const old = oldCopies(home);
-          if (old.length > 0) removeAfterExit(old);
-        }
+        // Windows 上这条命令自己就跑在换下来的那个版本上：install.ps1 看见它还在用着，等它退出后自己删
         return code;
       } finally {
-        rmSync(dir, { recursive: true, force: true });
+        removeTempDir(dir);
       }
     },
 
