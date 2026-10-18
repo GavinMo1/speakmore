@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
 
-// install.ps1 写的启动脚本 bin\speakmore.cmd。它照 current 找 versions 下的程序；从 0.9.2 及以前升上来时，
+// install.ps1 写的启动脚本 bin\speakmore.cmd。它照 current 找 versions 下的程序；从旧版本升上来、启动脚本变了时，
 // 旧的那份可能正跑着（speakmore update 就是它起的）就被改写，cmd 等程序退出后从原来的字节位置接着读。
 // 后两条要在 Windows 上真的起 cmd，"程序"是改名成 electron.exe 的 node。
 
@@ -22,6 +22,19 @@ const LEGACY_LAUNCHER = `${[
   "set ELECTRON_RUN_AS_NODE=1",
   '"%~dp0..\\runtime\\electron.exe" "%~dp0..\\app\\bin\\speakmore.mjs" %*',
 ].join("\r\n")}\r\n`;
+
+/** 0.9.3 起的 install.ps1 写的启动脚本，原样。发出去了就不再改：以后的版本从它这里升级时，它也可能正跑着 */
+const LAUNCHER_0_9_3 = `${[
+  "@echo off",
+  "setlocal",
+  'if not defined SPEAKMORE_HOME for %%I in ("%~dp0..") do set "SPEAKMORE_HOME=%%~fI"',
+  'set /p SPEAKMORE_CURRENT=<"%~dp0..\\current"',
+  "set ELECTRON_RUN_AS_NODE=1",
+  '"%~dp0..\\versions\\%SPEAKMORE_CURRENT%\\runtime\\electron.exe" "%~dp0..\\versions\\%SPEAKMORE_CURRENT%\\app\\bin\\speakmore.mjs" %*',
+].join("\r\n")}\r\n`;
+
+/** 发出去过的每一版启动脚本。改了 install.ps1 里的启动脚本、发了版，就把新的那版加进来 */
+const SHIPPED_LAUNCHERS = { "0.9.0–0.9.2": LEGACY_LAUNCHER, "0.9.3": LAUNCHER_0_9_3 };
 
 /** 照 install.ps1 里 $LauncherText 那几行拼出它写进文件的内容：单引号字符串，'' 是一个 ' */
 function launcher() {
@@ -47,12 +60,14 @@ function runCmd(file, args = []) {
   return spawnSync("cmd", ["/d", "/c", file, ...args], { encoding: "utf8", windowsHide: true });
 }
 
-test("启动脚本不比 0.9.2 那份长：旧的正跑着时被改写，cmd 接着读到的是文件末尾", () => {
+test("启动脚本不比发出去过的任何一版长：旧的正跑着时被改写，cmd 接着读到的是文件末尾", () => {
   const text = launcher();
-  assert.ok(
-    Buffer.byteLength(text) <= Buffer.byteLength(LEGACY_LAUNCHER),
-    `新的 ${Buffer.byteLength(text)} 字节，旧的 ${Buffer.byteLength(LEGACY_LAUNCHER)} 字节`,
-  );
+  for (const [version, shipped] of Object.entries(SHIPPED_LAUNCHERS)) {
+    assert.ok(
+      Buffer.byteLength(text) <= Buffer.byteLength(shipped),
+      `新的 ${Buffer.byteLength(text)} 字节，${version} 的 ${Buffer.byteLength(shipped)} 字节`,
+    );
+  }
   assert.match(text, /set \/p SPEAKMORE_CURRENT=<"%~dp0\.\.\\current"/);
   assert.match(text, /"%~dp0\.\.\\versions\\%SPEAKMORE_CURRENT%\\runtime\\electron\.exe"/);
   assert.ok(text.endsWith("%*\r\n"), "调程序的那一行要是最后一行");

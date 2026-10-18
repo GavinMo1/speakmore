@@ -88,7 +88,7 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 
 Windows 版和 Mac 版是同一份代码，差别关在几处：听热键、贴字的小帮手是 `native/windows/`（Go，只用标准库，协议和 Swift 那个一字不差）；控制通道是 named pipe；家目录的权限用访问控制表只给本人和 SYSTEM；key 用 DPAPI 加密（Electron 的 safeStorage）；系统朗读用 System.Speech；安装、升级、卸载是 `install.ps1` 和 `src/cli/windows-system.mjs`。文案里按系统说的话写在各语言文案的 `windows` 一节，名字照抄通用的那句（`test/i18n/` 会查盖的那句存在、参数一样）。
 
-装好的样子和 Mac 一样全在 `%USERPROFILE%\.speakmore` 里，只是程序按版本放：`versions\<版本>-<编号>\` 里是 `app\` 和 `runtime\`（原版 Electron），`current` 一行字记着现在用哪个，`bin\speakmore.cmd` 照它找程序；数据、日志、模型和 Mac 一样。装新版本是解进一个新目录、试过能跑再改 `current`，不挪、不覆盖任何已有的文件，换下来的旧版本没人用了再删（0.9.2 及以前直接放在 `app\`、`runtime\`，升级时一并删掉）。家目录以外只动两处、都记在 `bin\links`：用户 Path 里的 `%USERPROFILE%\.speakmore\bin`，开始菜单的 SpeakMore 快捷方式；App 设置里开了开机启动的话还有注册表 Run 里的一条。`speakmore uninstall` 照着删。
+装好的样子和 Mac 一样全在 `%USERPROFILE%\.speakmore` 里，只是程序按版本放：`versions\<版本>-<编号>\` 里是 `app\` 和 `runtime\`（原版 Electron），`current` 一行字记着现在用哪个，`bin\speakmore.cmd` 照它找程序；数据、日志、模型和 Mac 一样。装新版本是解进一个新目录、试过能跑再改 `current`，不挪、不覆盖任何已有的文件，换下来的旧版本没人用了再删（0.9.2 及以前直接放在 `app\`、`runtime\`，升级时一并删掉），现在删不掉的交给一个隐藏的 PowerShell 隔几秒再试。同一个家目录同时只装一个（按家目录取名的系统互斥量）。0.9.3 以前的版本不认这种放法，install.ps1 不装它们。家目录以外只动两处、都记在 `bin\links`：用户 Path 里的 `%USERPROFILE%\.speakmore\bin`，开始菜单的 SpeakMore 快捷方式；App 设置里开了开机启动的话还有注册表 Run 里的一条。`speakmore uninstall` 照着删。升级时开机启动那一条、用户固定到任务栏或发送到桌面的快捷方式副本，凡是指着这个家目录里旧版本的，都改指到新版本。
 
 **在 Mac 上开发、在 Windows 上验**：Windows 开发机经 SSH 操作，连哪台、用哪把钥匙写在 `.machine.env` 的 `WIN_SSH_TARGET`、`WIN_SSH_KEY`。开发机上的东西全在 `%USERPROFILE%\speakmore-dev` 里，不用了整个删掉，再删掉计划任务 `speakmore-dev*`。
 
@@ -110,10 +110,11 @@ node scripts/release/release.mjs windows      # 只打 Windows 的包（speakmor
 - **Windows PowerShell 5.1**：没有 BOM 的 `.ps1` 按系统编码（中文系统是 GBK）读，所以下载来的脚本要按 UTF-8 读进来再当脚本块跑；`Add-Content -Encoding UTF8` 写的文件开头带 BOM、按 CRLF 换行，读的那一边要去掉 BOM、按 `\r?\n` 切（`bin\links` 就因为这个没删干净过）；`$ErrorActionPreference = 'Stop'` 时外部程序往标准错误写一行就会被当成异常，调外部程序前要放宽；输出被重定向时 `Write-Host` 会变成一大段 CLIXML。
 - **`powershell -Command` 的退出码看最后一条命令**：最后一条是 `-ErrorAction SilentlyContinue` 的"没找到"时退出码是 1。`windows-system.mjs` 的几段统一出错就停、正常跑完明确 `exit 0`。
 - **Node 起的子进程**：直接起的会被放进 libuv 的"父进程退出就全部结束"的作业对象，父进程一退出它就没了；加 `detached` 能躲开，可那样起的 PowerShell 没有控制台，一行都不跑就以 0 退出。要活过父进程就隔一层：同步跑一个 PowerShell，由它 `Start-Process` 干活的那个（孙进程不在那个作业对象里）。
-- **刚落地的文件挪不动、删不掉**：杀毒软件（还有索引、备份这类）会扫刚写出来、刚跑过的文件，扫的时候开着它又不许别人改名或删除，这时改名报"另一个进程正在使用此文件"（issue #5：0.9.2 的 install.ps1 解到临时目录再挪进 `app\`，在开着实时防护的机器上装不上；占住一个刚解出来的文件就能原样复现）。开发机的 Defender 实时防护是关着的，在它上面试不出来。所以安装不挪新文件：解进 `versions` 下的新目录，切换只改 `current`；下载的包也只放在内存里，不留要删的临时文件。
+- **刚落地的文件挪不动、删不掉**：杀毒软件（还有索引、备份这类）会扫刚写出来、刚跑过的文件，扫的时候开着它又不许别人改名或删除，这时改名报"另一个进程正在使用此文件"（issue #5：0.9.2 的 install.ps1 解到临时目录再挪进 `app\`，在开着实时防护的机器上装不上；占住一个刚解出来的文件就能原样复现）。开发机的 Defender 实时防护是关着的，在它上面试不出来。所以安装不挪新文件：解进 `versions` 下的新目录，切换只改 `current`；下载的包也只放在内存里，不留要删的临时文件。下载不用 `Invoke-WebRequest`：5.1 会把整个响应再拷成字节数组、再转成好几份字符串，约 200 MB 的包要占一两 GB 内存。
 - **跑着的 Electron（哪怕只当 Node 用）一直占着自己所在的目录**：目录改不了名，里面的文件和子目录却挪得动；正在跑的 exe 删不掉，但能挪走。按版本放之后升级不碰正在跑的那个版本的目录，它退出后再删（install.ps1 看哪些进程的程序在那个目录里，交给一个隐藏的 PowerShell 等它们退出）。普通的 exe 不占目录，拿它试会试错。
-- **正在跑的批处理文件被改写**：cmd 等它调的程序退出后，从原来读到的那个字节位置接着读这个文件。所以 `bin\speakmore.cmd` 内容不随版本变；从 0.9.2 升上来那一次要改写（那时它可能正在跑 `speakmore update`），新内容不比旧的长，cmd 接着读到的就是文件末尾（`test/install/install-ps1.test.mjs` 查长度，在 Windows 上真跑一遍）。
+- **正在跑的批处理文件被改写**：cmd 等它调的程序退出后，从原来读到的那个字节位置接着读这个文件。所以 `bin\speakmore.cmd` 内容不随版本变；从 0.9.2 升上来那一次要改写（那时它可能正在跑 `speakmore update`），新内容不比旧的长，cmd 接着读到的就是文件末尾。以后再改它，也不能比发出去过的任何一版长（现在最短的是 0.9.3 的 303 字节；`test/install/install-ps1.test.mjs` 查长度，在 Windows 上真跑一遍）。
 - **`bin\speakmore.cmd` 正在跑命令时不能删**：cmd 等 Electron 退出后还要回头读这个批处理文件，删了会报"找不到批处理文件"、退出码变成 1；同一行接 `exit /b` 也躲不开，`(goto)` 能压住报错但退出码丢了。卸载时 bin 留到退出后再删。
+- **固定到任务栏、发送到桌面的是快捷方式的副本**：任务栏的在 `%APPDATA%\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar`，记着当时的目标。按版本放之后程序的路径每个版本都变，旧版本删掉后这些副本就打不开了，所以升级时一并改指（Squirrel 那一类安装程序也这么做）。按程序路径记的东西（比如系统图形设置里给某个 exe 指定显卡、显卡驱动按程序缓存的着色器）每个版本要重来一次。
 - **快捷方式（.lnk）里的目标路径不是连续的一段**：本地编码那份拆成几截，UTF-16 那份是相对路径。认是不是我们的，要请 WScript.Shell 读出目标。
 - **从 SSH 起的程序进不了桌面**，断开就被收掉：要碰热键、剪贴板、麦克风、窗口的，用计划任务（只在用户登录时、以交互方式运行）在桌面会话里起，`win-desktop.sh` 就是这么做的。同一个任务正跑着时再起会被忽略，长任务用 `JOB=` 另起一个。PowerShell 里直接 `& electron.exe` 不等它跑完（它是窗口程序），要等就经 `cmd /c` 或者把输出接住。
 - **显卡**：本机模型在显卡上（Vulkan）第一次转写要先编显卡程序，RTX 4060 Ti 上 6.8 秒，之后驱动按可执行文件缓存在磁盘上；所以装上模型就先预热一遍。显卡上没装起来（报错或者驱动把转写进程弄崩）会自动换 CPU 再装，设置里也能选只用 CPU（`acceleration`）。

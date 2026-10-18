@@ -5,14 +5,15 @@
 # 和 install.sh 是同一件事：程序、运行环境，以及之后的设置、key、历史和录音全在 .speakmore 这一个目录里。
 # 程序按版本放：versions\<版本>-<编号>\ 里是 app\ 和 runtime\，current 记着现在用哪个，bin\speakmore.cmd 照它找程序。
 # 装新版本是解进一个新目录、试过能跑再把 current 指过去，不挪、不覆盖已有的任何文件（为什么见下面"安装"一节开头）。
-# 目录以外只动两处，都记在 bin\links 里，speakmore uninstall 照着删：
+# 目录以外只加两样，都记在 bin\links 里，speakmore uninstall 照着删：
 #   - 用户的 Path 里加上 .speakmore\bin（新开的终端里敲 speakmore 就找得到）
 #   - 开始菜单里一个"SpeakMore"快捷方式
+# 升级时另外把指着旧版本的改指到新版本：开机启动那一项，固定到任务栏、发送到桌面的快捷方式副本。
 # 不需要 Node、npm、管理员权限。已经装过的话再运行一次就是升级：程序换成新的，你的东西不动。
 #
 # 可以用环境变量调整（irm | iex 传不了参数，所以都走环境变量）：
 #   SPEAKMORE_HOME          装到哪（默认 %USERPROFILE%\.speakmore）
-#   SPEAKMORE_VERSION       装哪个版本，比如 v0.9.0（默认最新的）
+#   SPEAKMORE_VERSION       装哪个版本，比如 v0.9.3（默认最新的；0.9.3 以前的放法不同，这个脚本不装）
 #   SPEAKMORE_INSTALL_BASE  从哪下载：一个网址前缀，或者本机的一个目录（npm run release 打出来的 dist\release）
 #   SPEAKMORE_NO_START=1    只装不启动
 #
@@ -33,8 +34,13 @@
   $Archive = 'speakmore-win32-x64.zip'
   # Electron 44 要 Windows 10 1809（内部版本 17763）以上
   $MinBuild = 17763
-  # 解开约 450 MB（下载的包约 150 MB，只在内存里）；升级时旧版本要等新的装好才删
+  # 解开约 500 MB（下载的包约 200 MB，只在内存里）；升级时旧版本要等新的装好才删
   $NeededMB = 1200
+  # 从这个版本起程序按版本放（versions\、current）。更早的版本不认这种放法：从开始菜单打开时把版本目录当成家目录，
+  # 看不到 key 和历史，写下的东西下次升级时跟着版本目录一起删掉。所以不往这种放法里装更早的版本
+  $MinVersion = [version]'0.9.3'
+  # versions 下的目录名：<版本>-<8 位编号>。只认、只删长这样的（SPEAKMORE_HOME 指到了别处时，不碰那里本来的东西）
+  $VersionNamePattern = '^\d+\.\d+\.\d+([-+.][0-9A-Za-z.-]+)?-[0-9a-f]{8}$'
 
   function Ok($text) { Write-Host "  " -NoNewline; Write-Host ([char]0x2713) -ForegroundColor Green -NoNewline; Write-Host " $text" }
   function Warn($text) { Write-Host "  ! " -ForegroundColor Yellow -NoNewline; Write-Host $text }
@@ -90,7 +96,6 @@
   }
 
   function Test-Home {
-    if (-not [IO.Path]::IsPathRooted($script:HomeDir)) { Fail "SPEAKMORE_HOME must be an absolute path, not $($script:HomeDir)" }
     try { New-Item -ItemType Directory -Force -Path $script:HomeDir | Out-Null } catch {
       Fail "Can't create $(Pretty $script:HomeDir)" "Check its permissions, or pick another place with SPEAKMORE_HOME."
     }
@@ -100,30 +105,61 @@
     if ($freeMB -lt $NeededMB) { Fail "Not enough disk space: $freeMB MB free" "About $NeededMB MB is needed. Free up some space and run again." }
     Ok "Installing to $(Pretty $script:HomeDir) ($([int]($freeMB / 1024)) GB free)"
 
-    # 已经装着的是哪个版本：current 指着的那个；0.9.2 及以前没有 current，程序直接在 app 里
+    # 已经装着的是哪个版本：current 指着的那个；0.9.2 及以前没有 current，程序直接在 app 里。
+    # current 读不出来或者是坏的（比如写到一半断了电），就当作没装：这次装好会重写它，所以再装一次就修好了
     $script:InstalledVersion = ''
     $manifest = Join-Path $script:HomeDir 'app\package.json'
     if (Test-Path -LiteralPath $script:CurrentFile) {
-      $manifest = Join-Path $script:VersionsDir "$((Get-Content -Raw -LiteralPath $script:CurrentFile).Trim())\app\package.json"
+      $name = ''
+      try { $name = [IO.File]::ReadAllText($script:CurrentFile).Trim() } catch { $name = '' }
+      $manifest = if ($name -match $VersionNamePattern) { Join-Path $script:VersionsDir "$name\app\package.json" } else { $null }
     }
-    if (Test-Path -LiteralPath $manifest) {
-      $script:InstalledVersion = (Get-Content -Raw -Encoding UTF8 $manifest | ConvertFrom-Json).version
-      Ok "Found $($script:InstalledVersion): replacing it; settings, keys, history and recordings stay"
+    if ($manifest -and (Test-Path -LiteralPath $manifest)) {
+      try { $script:InstalledVersion = (Get-Content -Raw -Encoding UTF8 -LiteralPath $manifest | ConvertFrom-Json).version } catch { $script:InstalledVersion = '' }
     }
+    if ($script:InstalledVersion) { Ok "Found $($script:InstalledVersion): replacing it; settings, keys, history and recordings stay" }
+  }
+
+  # 同一个家目录同时只装一个：两个一起装（比如安装程序被双击了两次）会互相把对方的新版本当成旧的删掉。
+  # 用一个按家目录取名的系统互斥量，不在磁盘上留锁文件；进程没了系统自己收回
+  function Enter-Install {
+    $key = [Text.Encoding]::UTF8.GetBytes($script:HomeDir.TrimEnd('\').ToLowerInvariant())
+    $id = -join ([Security.Cryptography.SHA256]::Create().ComputeHash($key) | Select-Object -First 8 | ForEach-Object { $_.ToString('x2') })
+    $script:InstallLock = [Threading.Mutex]::new($false, "Local\speakmore-install-$id")
+    # 上一个安装没放开就没了（被强行结束），互斥量算"被丢下"，可以接着用
+    try { $script:LockHeld = $script:InstallLock.WaitOne(0) } catch [Threading.AbandonedMutexException] { $script:LockHeld = $true }
+    if (-not $script:LockHeld) { Fail "Another SpeakMore install is running" "Wait for it to finish. Run this again afterwards if you still need to." }
+  }
+  function Exit-Install {
+    if ($script:LockHeld) { $script:InstallLock.ReleaseMutex() }
+    if ($script:InstallLock) { $script:InstallLock.Dispose() }
+    $script:InstallLock = $null; $script:LockHeld = $false
   }
 
   # 取下载地址上的一个文件，整个读进内存（一个 MemoryStream）：不落到磁盘上，就没有临时文件要删。
-  # 下载地址可以是本机的一个目录（测试发布包、双击安装程序带着的那一份）
+  # 下载地址可以是本机的一个目录（测试发布包、双击安装程序带着的那一份）。
+  # 不用 Invoke-WebRequest：5.1 拿到响应后会把整个包再拷成字节数组、再按字符转成好几份字符串，约 200 MB 的包要占一两 GB 内存。
+  # 这里照响应说的长度开好一块内存，边下边写进去，只占包那么大
   $script:LocalBase = $false
-  function Get-Remote($name, $timeoutSec = 20) {
+  function Get-Remote($name) {
     if ($script:LocalBase) {
       $source = Join-Path $script:Base $name
       if (-not (Test-Path -LiteralPath $source)) { throw "No such file: $source" }
       return [IO.MemoryStream]::new([IO.File]::ReadAllBytes($source))
     }
-    $stream = (Invoke-WebRequest -UseBasicParsing -Uri "$($script:Base)/$name" -TimeoutSec $timeoutSec).RawContentStream
-    $stream.Position = 0
-    return $stream
+    $request = [Net.WebRequest]::Create("$($script:Base)/$name")
+    # 20 秒连不上、或者下着下着一分钟没再收到数据，算失败；慢但一直在下的不限总时长
+    $request.Timeout = 20000
+    $request.ReadWriteTimeout = 60000
+    $response = $request.GetResponse()
+    try {
+      $length = $response.ContentLength
+      $buffer = if ($length -gt 0 -and $length -lt [int]::MaxValue) { [IO.MemoryStream]::new([int]$length) } else { [IO.MemoryStream]::new() }
+      $body = $response.GetResponseStream()
+      try { $body.CopyTo($buffer) } finally { $body.Dispose() }
+    } finally { $response.Dispose() }
+    $buffer.Position = 0
+    return $buffer
   }
   function Get-RemoteText($name) { [Text.Encoding]::UTF8.GetString((Get-Remote $name).ToArray()) }
 
@@ -142,6 +178,9 @@
       if ($env:SPEAKMORE_VERSION) { Fail "SPEAKMORE_VERSION doesn't look like a version: $($env:SPEAKMORE_VERSION)" "Write it like v0.9.0." }
       Fail "The download server returned a bad version number" "URL: $($script:Base)/latest" "Try again in a bit. If it keeps happening, please open an issue at $RepoUrl/issues."
     }
+    if ([version]($version.Substring(1) -replace '[-+].*$', '') -lt $MinVersion) {
+      Fail "This installer can't install $version" "Versions before v$MinVersion are laid out differently." "To go back to one, first run: speakmore uninstall --keep-data" "then run that version's setup: $DownloadUrl/$version/SpeakMore-Setup-x64.exe"
+    }
     $script:Version = $version
     Ok "Version $version"
   }
@@ -158,7 +197,7 @@
   function Get-Package {
     # 包下载进内存，在内存里校验、解开：磁盘上不落临时文件。刚落地的文件杀毒软件要扫，扫的时候删不掉，会留下垃圾
     try {
-      $package = Get-Remote "$($script:Version)/$Archive" 1800
+      $package = Get-Remote "$($script:Version)/$Archive"
       $expected = ((Get-RemoteText "$($script:Version)/$Archive.sha256").Trim() -split '\s+')[0].ToLowerInvariant()
     } catch {
       Fail "Couldn't download the package" "URL: $($script:Base)/$($script:Version)/$Archive" "Check your network. If you set SPEAKMORE_VERSION, make sure that version exists." "($($_.Exception.Message))"
@@ -171,10 +210,13 @@
     }
     Ok "Checksum OK"
 
-    # 名字是版本号加这次的编号：重装同一个版本也是一个新目录，碰不到正在用的那一份
-    $script:VersionName = "$($script:Version.Substring(1))-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-    $script:VersionDir = Join-Path $script:VersionsDir $script:VersionName
-    New-Item -ItemType Directory -Force -Path $script:VersionDir | Out-Null
+    # 名字是版本号加这次的编号：重装同一个版本也是一个新目录，碰不到正在用的那一份。
+    # 建出来了才记下它（出错时要删的就是它）：万一撞上已有的目录，New-Item 报错，不会把那个删了
+    $name = "$($script:Version.Substring(1))-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    New-Item -ItemType Directory -Force -Path $script:VersionsDir | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $script:VersionsDir $name) | Out-Null
+    $script:VersionName = $name
+    $script:VersionDir = Join-Path $script:VersionsDir $name
     Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
     try {
       $package.Position = 0
@@ -203,8 +245,8 @@
 
   # 启动脚本：照 current 找程序，只用相对它自己的路径（路径里有中文也不用管 cmd 按什么编码读）。内容不随版本变，平常不用改写。
   # 从 0.9.2 及以前升上来时要改写，而那时它可能正跑着（speakmore update 就是它起的）：cmd 等程序退出后，从原来读到的
-  # 那个字节位置接着读这个文件。所以新内容不能比旧的长，读到的就是文件末尾（旧的 348 字节）。以后改这几行也守着这条：
-  # 不比上一版长（test/install/install-ps1.test.mjs 查）
+  # 那个字节位置接着读这个文件。所以新内容不能比旧的长，读到的就是文件末尾。以后改这几行也守着这条：
+  # 不比发出去过的任何一版长，现在最短的是这一版（0.9.3 起）的 303 字节（test/install/install-ps1.test.mjs 查）
   $LauncherText = @(
     '@echo off',
     'setlocal',
@@ -235,11 +277,19 @@
     Ok "Installed to $(Pretty $script:HomeDir)"
   }
 
-  # 等这几个进程退出后把这几个目录删掉：交给一个隐藏的 PowerShell，这个窗口不用等。目录走环境变量传过去，脚本里不拼路径
-  function Remove-AfterExit($ids, $dirs) {
-    $cleanup = "Wait-Process -Id $(($ids | Sort-Object -Unique) -join ',') -ErrorAction SilentlyContinue`n" +
-      "Start-Sleep -Milliseconds 800`n" +
-      'foreach ($dir in $env:SPEAKMORE_REMOVE.Split([char]10)) { if ($dir) { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue } }'
+  # 现在删不掉的目录交给一个隐藏的 PowerShell 慢慢删，这个窗口不用等：给了进程就先等它们退出，然后每隔 3 秒试一次，试一分钟
+  # （刚解出来、刚跑过的文件杀毒软件要扫一阵，扫完才删得掉）。还剩下的，下次安装时再删。目录走环境变量传过去，脚本里不拼路径
+  function Remove-Later($ids, $dirs) {
+    $ids = @($ids | Sort-Object -Unique)
+    $cleanup = @(
+      $(if ($ids.Count -gt 0) { "Wait-Process -Id $($ids -join ',') -ErrorAction SilentlyContinue" } else { '' }),
+      '$dirs = @($env:SPEAKMORE_REMOVE.Split([char]10) | Where-Object { $_ })',
+      'for ($i = 0; $i -lt 20 -and $dirs.Count -gt 0; $i++) {',
+      '  if ($i -gt 0) { Start-Sleep -Seconds 3 } else { Start-Sleep -Milliseconds 800 }',
+      '  foreach ($dir in $dirs) { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }',
+      '  $dirs = @($dirs | Where-Object { Test-Path -LiteralPath $_ })',
+      '}'
+    ) -join "`n"
     $env:SPEAKMORE_REMOVE = $dirs -join "`n"
     try {
       Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile', '-NonInteractive', '-EncodedCommand', ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cleanup)))
@@ -247,11 +297,11 @@
   }
 
   # 换下来的：versions 里别的版本、0.9.2 及以前直接放在家目录里的 app 和 runtime（连同那时换下来的 *.old.*、
-  # 装到一半留下的下载临时目录 .install.*）。没有程序在用的现在删；有程序在用的（比如正在跑 speakmore update 的那个旧版本）等那些程序
-  # 退出后再删。删不掉的说一声，下次安装时再删
+  # 装到一半留下的下载临时目录 .install.*）。没有程序在用的现在删；有程序在用的（比如正在跑 speakmore update 的那个旧版本）
+  # 和现在删不掉的，交给 Remove-Later
   function Remove-Old {
     $old = @(Get-ChildItem -LiteralPath $script:HomeDir -Directory -Force | Where-Object { $_.Name -match '^(app|runtime)(\.old\..+)?$|^\.install\.' })
-    $old += @(Get-ChildItem -LiteralPath $script:VersionsDir -Directory -Force | Where-Object { $_.Name -ne $script:VersionName })
+    $old += @(Get-ChildItem -LiteralPath $script:VersionsDir -Directory -Force | Where-Object { $_.Name -match $VersionNamePattern -and $_.Name -ne $script:VersionName })
     if ($old.Count -eq 0) { return }
     $running = @(Get-Process | Where-Object { $_.Path })
     $later = @(); $waitFor = @(); $left = @()
@@ -262,11 +312,10 @@
       Remove-Item -LiteralPath $dir.FullName -Recurse -Force -ErrorAction SilentlyContinue
       if (Test-Path -LiteralPath $dir.FullName) { $left += $dir.FullName }
     }
-    if ($later.Count -gt 0) {
-      Remove-AfterExit $waitFor $later
-      Note "The previous version is still running; it will be removed once it exits."
-    }
-    if ($left.Count -gt 0) { Note "Another program still has files open in $(($left | ForEach-Object { Pretty $_ }) -join ', '); they'll be removed next time." }
+    if ($later.Count + $left.Count -eq 0) { return }
+    Remove-Later $waitFor ($later + $left)
+    if ($later.Count -gt 0) { Note "The previous version is still running; it will be removed once it exits." }
+    if ($left.Count -gt 0) { Note "Another program still has files open in $(($left | ForEach-Object { Pretty $_ }) -join ', '); they'll be removed once it lets go." }
   }
 
   # 记下在家目录以外动了什么，卸载时照着删（src/cli/commands/uninstall.mjs）
@@ -304,20 +353,50 @@
     if (($env:Path -split ';') -notcontains $binDir) { $env:Path = "$env:Path;$binDir" }
   }
 
-  # 开始菜单里的快捷方式：直接起 Electron、把程序目录交给它（和 speakmore 命令起的是同一个，用同一套 key 和设置）
-  function Add-Shortcut {
-    $programs = [Environment]::GetFolderPath('Programs')
-    $link = Join-Path $programs 'SpeakMore.lnk'
-    $shell = New-Object -ComObject WScript.Shell
-    $shortcut = $shell.CreateShortcut($link)
+  # 快捷方式指到新版本：直接起 Electron、把程序目录交给它（和 speakmore 命令起的是同一个，用同一套 key 和设置）
+  function Set-Shortcut($shortcut) {
     $shortcut.TargetPath = $script:NewElectron
     $shortcut.Arguments = '"' + $script:NewApp + '"'
     $shortcut.WorkingDirectory = $script:HomeDir
     $shortcut.IconLocation = (Join-Path $script:NewApp 'assets\icon.ico') + ',0'
-    $shortcut.Description = 'SpeakMore: press a hotkey, speak, and polished text is pasted in'
     $shortcut.Save()
+  }
+
+  function Add-Shortcut {
+    $programs = [Environment]::GetFolderPath('Programs')
+    $link = Join-Path $programs 'SpeakMore.lnk'
+    $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($link)
+    $shortcut.Description = 'SpeakMore: press a hotkey, speak, and polished text is pasted in'
+    Set-Shortcut $shortcut
     Add-Link "shortcut $link"
     Ok "Start menu: SpeakMore"
+  }
+
+  # 固定到任务栏、发送到桌面的是开始菜单那个快捷方式的副本，还指着换下来的版本，旧版本删掉后就打不开了。
+  # 指着这个家目录里的 Electron（versions 下的，或者 0.9.2 及以前的 runtime 里的）的，改指到新版本。
+  # Squirrel 那一类按版本放程序的安装程序也这么修固定的图标
+  function Update-ShortcutCopies {
+    $places = @(
+      @{ Dir = Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned'; Recurse = $true },
+      @{ Dir = [Environment]::GetFolderPath('Desktop'); Recurse = $false }
+    )
+    $shell = New-Object -ComObject WScript.Shell
+    $prefix = "$($script:HomeDir.TrimEnd('\'))\"
+    $updated = 0
+    foreach ($place in $places) {
+      if (-not $place.Dir -or -not (Test-Path -LiteralPath $place.Dir)) { continue }
+      foreach ($file in @(Get-ChildItem -LiteralPath $place.Dir -Filter '*.lnk' -File -Recurse:$place.Recurse -Force -ErrorAction SilentlyContinue)) {
+        try {
+          $shortcut = $shell.CreateShortcut($file.FullName)
+          $target = $shortcut.TargetPath
+          if (-not $target.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -or -not $target.EndsWith('\runtime\electron.exe', [StringComparison]::OrdinalIgnoreCase)) { continue }
+          if ($target -ieq $script:NewElectron) { continue }
+          Set-Shortcut $shortcut
+          $updated++
+        } catch { Note "Couldn't update the shortcut $(Pretty $file.FullName): $($_.Exception.Message)" }
+      }
+    }
+    if ($updated -gt 0) { Ok "Pinned shortcuts: SpeakMore $($script:NewVersion)" }
   }
 
   # App 设置里开了开机启动的话，Run 里那一项指着旧版本的程序：改指到新版本，写法和 Electron 一样（程序、参数各加引号）。
@@ -335,29 +414,38 @@
   # ---------- 入口 ----------
 
   try {
-    $script:HomeDir = if ($env:SPEAKMORE_HOME) { $env:SPEAKMORE_HOME } else { Join-Path $env:USERPROFILE '.speakmore' }
-    $script:VersionsDir = Join-Path $script:HomeDir 'versions'
-    $script:CurrentFile = Join-Path $script:HomeDir 'current'
     # irm | iex 时这些记在用户窗口的全局作用域里：同一个窗口再跑一次，不能接着用上一次的
-    $script:VersionDir = $null; $script:Stopped = $false; $script:Switched = $false
+    $script:VersionDir = $null; $script:Stopped = $false; $script:Switched = $false; $script:InstallLock = $null; $script:LockHeld = $false
     $script:Base = if ($env:SPEAKMORE_INSTALL_BASE) { $env:SPEAKMORE_INSTALL_BASE.TrimEnd('/', '\') } else { $DownloadUrl }
     # 本机的一个目录也可以当下载地址
     $script:LocalBase = $script:Base -notmatch '^[a-z]+://'
 
     Write-Host ""
     Write-Host "  SpeakMore installer"
+    $requested = if ($env:SPEAKMORE_HOME) { $env:SPEAKMORE_HOME } else { Join-Path $env:USERPROFILE '.speakmore' }
+    if (-not [IO.Path]::IsPathRooted($requested)) { Fail "SPEAKMORE_HOME must be an absolute path, not $requested" }
+    # 规范成完整的写法（/ 换成 \、去掉 ..）：下面要拿它和开机启动、快捷方式里记的路径比前缀
+    $script:HomeDir = [IO.Path]::GetFullPath($requested)
+    $script:VersionsDir = Join-Path $script:HomeDir 'versions'
+    $script:CurrentFile = Join-Path $script:HomeDir 'current'
+    Enter-Install
+
     Heading "Checks"
     Test-System
-    Test-Home
+    # 先定版本再建目录：版本不对、问不到最新的，磁盘上什么都没动
     Resolve-Version
+    Test-Home
 
     Heading "Install"
     Get-Package
     Use-Version
     Add-ToPath
     Add-Shortcut
+    Update-ShortcutCopies
     Update-LoginItem
     Remove-Old
+    # 装完了：下面启动的 speakmore 可能一直开着（问 key、前台跑），不占着锁
+    Exit-Install
 
     Write-Host ""
     if ($script:InstalledVersion -and $script:InstalledVersion -ne $script:NewVersion) {
@@ -376,11 +464,15 @@
       Write-Host ""
     }
   } catch {
-    # 还没切过去的话，解了一半（或者跑不起来）的新版本没人会用，删掉；删不掉的下次安装时删
+    $failure = $_
+    # 还没切过去的话，解了一半（或者跑不起来）的新版本没人会用，删掉；现在删不掉的交给 Remove-Later
     if (-not $script:Switched -and $script:VersionDir -and (Test-Path -LiteralPath $script:VersionDir)) {
       Remove-Item -LiteralPath $script:VersionDir -Recurse -Force -ErrorAction SilentlyContinue
+      if (Test-Path -LiteralPath $script:VersionDir) {
+        try { Remove-Later @() @($script:VersionDir) } catch { Note "Couldn't remove $(Pretty $script:VersionDir); it's safe to delete it yourself." }
+      }
     }
-    $message = $_.Exception.Message
+    $message = $failure.Exception.Message
     if ($message.StartsWith('SPEAKMORE_INSTALL_FAILED')) {
       $lines = $message.Split("`n") | Select-Object -Skip 1 | Where-Object { $_ }
       Write-Host ""
@@ -392,10 +484,12 @@
     } else {
       Write-Host ""
       Write-Host "  x Something went wrong: $message" -ForegroundColor Red
-      Write-Host "    $($_.InvocationInfo.PositionMessage)"
+      Write-Host "    $($failure.InvocationInfo.PositionMessage)"
       Write-Host "    Please open an issue at $RepoUrl/issues with the text above."
     }
     # 给调用的人（speakmore update）一个非零的结果，但不 exit：那会关掉用户的窗口
     $global:LASTEXITCODE = 1
+  } finally {
+    Exit-Install
   }
 }
