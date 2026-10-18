@@ -15,5 +15,8 @@ metadata:
 - 启动验证用隔离的 SPEAKMORE_HOME，不碰他的真数据；在他的 Windows 桌面会话里跑东西前照旧先问。
 - 汇报写清怎么验的、看到了什么；没验到的点名说明原因，不拿"单测全绿"顶替。
 - 能自动化的就接进流程（比如 ship 里加一步启动冒烟），不靠记得。
+- 不同步干等（2026-10-18 他说的："打 Windows 会快……打出来的时候你就直接并行地……去验证，不要同步阻塞"）：ship 里 Windows 包先打好，一出来就拷到 Windows 开发机上跑端到端；Mac 的 dmg 公证完一出来就挂载验，都在后台挂着，和上传并行。
+- Mac 上启动验证的 SPEAKMORE_HOME 要短：会话临时目录的路径太长，超过控制套接字 103 字节的上限，App 照设计报错退出、不写日志。用 `mktemp -d "$TMPDIR/sm.XXXX"`，验完删掉。
+- issue 等正式版发出、各平台验收都过了再回复并关闭，中途不回（10-18 他说的）。
 
 相关：[[speakmore-release-on-cos]]、[[typeless-clone-as-real-product]]
