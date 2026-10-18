@@ -43,30 +43,30 @@ test(
     const dir = mkdtempSync(join(tmpdir(), "sm-快捷方式-"));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
     const home = join(dir, "用户", ".speakmore");
-    const make = (name, target) => {
-      const file = join(dir, name);
-      // 和 install.ps1 的 Add-Shortcut 一样用 WScript.Shell 建；目标不用真的存在
-      execFileSync(
-        "powershell",
-        [
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          "$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:LNK); $s.TargetPath = $env:TARGET; $s.Arguments = $env:ARGS; $s.Save()",
-        ],
-        { env: { ...process.env, LNK: file, TARGET: target, ARGS: `"${join(home, "app")}"` } },
-      );
-      return file;
+    const targets = {
+      "ours.lnk": join(home, "versions", "0.9.3-1a2b3c4d", "runtime", "electron.exe"),
+      // 0.9.2 及以前装的：程序直接在家目录的 runtime 里
+      "legacy.lnk": join(home, "runtime", "electron.exe"),
+      "theirs.lnk": join(dir, "别的", "runtime", "electron.exe"),
+      // 名字只是前面一截一样的另一个目录
+      "prefix.lnk": join(`${home}-old`, "runtime", "electron.exe"),
     };
-    assert.equal(
-      isOurShortcut(make("ours.lnk", join(home, "versions", "0.9.3-1a2b3c4d", "runtime", "electron.exe")), home),
-      true,
+    // 和 install.ps1 的 Add-Shortcut 一样用 WScript.Shell 建，一次起 PowerShell 建完（整个文件只有 5 秒）；目标不用真的存在
+    execFileSync(
+      "powershell",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "$shell = New-Object -ComObject WScript.Shell; ($env:LINKS | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $s = $shell.CreateShortcut((Join-Path $env:DIR $_.Name)); $s.TargetPath = $_.Value; $s.Arguments = $env:ARGS; $s.Save() }",
+      ],
+      { env: { ...process.env, DIR: dir, LINKS: JSON.stringify(targets), ARGS: `"${join(home, "app")}"` } },
     );
-    // 0.9.2 及以前装的：程序直接在家目录的 runtime 里
-    assert.equal(isOurShortcut(make("legacy.lnk", join(home, "runtime", "electron.exe")), home), true);
-    assert.equal(isOurShortcut(make("theirs.lnk", join(dir, "别的", "runtime", "electron.exe")), home), false);
-    // 名字只是前面一截一样的另一个目录
-    assert.equal(isOurShortcut(make("prefix.lnk", join(`${home}-old`, "runtime", "electron.exe")), home), false);
-    assert.equal(isOurShortcut(join(dir, "missing.lnk"), home), false);
+    const ours = (name) => isOurShortcut(join(dir, name), home);
+    assert.equal(ours("ours.lnk"), true);
+    assert.equal(ours("legacy.lnk"), true);
+    assert.equal(ours("theirs.lnk"), false);
+    assert.equal(ours("prefix.lnk"), false);
+    assert.equal(ours("missing.lnk"), false);
   },
 );
