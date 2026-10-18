@@ -167,10 +167,11 @@ export function earlyMisses(rows, { files, self }) {
     if (row.status !== 404 || !version || self.has(row.ip)) continue;
     const entry = files.has(row.path) ? { kind: "early", version } : { kind: "missing", path: decode(row.path) };
     const key = `${entry.kind} ${entry.version ?? entry.path}`;
-    if (!groups.has(key)) groups.set(key, { ...entry, requests: 0, ips: new Set() });
+    if (!groups.has(key)) groups.set(key, { ...entry, requests: 0, ips: new Set(), last: row.time });
     const g = groups.get(key);
     g.requests += 1;
     g.ips.add(row.ip);
+    if (row.time > g.last) g.last = row.time;
   }
   return [...groups.values()]
     .sort(
@@ -181,21 +182,29 @@ export function earlyMisses(rows, { files, self }) {
     .map((g) => ({ ...g, ips: g.ips.size }));
 }
 
-/** 同一个坏链接有两个以上真用户拿到 404 才报：一个人的多半是手敲错了 */
-export const missAlerts = (misses, domain) =>
+/** 日志时间 YYYYMMDDHHMMSS 写成 MM-DD HH:MM */
+export const at = (time) =>
+  time ? `${time.slice(4, 6)}-${time.slice(6, 8)} ${time.slice(8, 10)}:${time.slice(10, 12)}` : "-";
+
+/**
+ * 坏链接告警：同一个不存在的文件有两个以上真用户点到，而且 since（YYYYMMDDHHMMSS）之后还有人点到才报。
+ * 一个人的多半是手敲错了；很久没人点的多半已经改好了，缓存的日志一直留着，不能天天报。
+ */
+export const missAlerts = (misses, domain, since) =>
   misses
-    .filter((m) => m.kind === "missing" && m.ips >= 2)
+    .filter((m) => m.kind === "missing" && m.ips >= 2 && m.last >= since)
     .map((m) => ({
       level: "warn",
       domain,
-      text: `没有这个文件：${m.path}，${m.ips} 个真用户拿到 404，多半是哪里的链接写坏了`,
+      text: `没有这个文件：${m.path}，${m.ips} 个真用户拿到 404（最近一次 ${at(m.last)}），多半是哪里的链接写坏了`,
     }));
 
 const AREA = { mainland: "境内", overseas: "境外" };
-const gb = (bytes) => (bytes / 1e9).toFixed(1);
+/** 字节换成 GB，和腾讯云控制台一样按 1024 算（控制台里填的"50 GB"封顶是 50 × 1024³ 字节） */
+export const gb = (bytes) => (bytes / 2 ** 30).toFixed(1);
 
 /**
- * 流量告警。每个域名：{ name, today, days: [{ day, flux: { mainland, overseas }, status: { "5xx" }, originFail }],
+ * 流量告警。每个域名：{ name, today, days: [{ day, flux: { mainland, overseas }, status: { "5xx" }, originRequest, originFail }],
  * cap: { on, metric, cycle, threshold, lastTrigger: { mainland, overseas } } }。
  * 封顶按境内、境外分别触发（两个区的上次触发时间分开记），所以分别对照。
  * level：alert 已经影响下载，warn 要留意。
@@ -231,8 +240,13 @@ export function trafficAlerts(domains) {
     };
     const s5 = sum((x) => x.status?.["5xx"] ?? 0);
     if (s5.n > 0) add("warn", `5xx 共 ${s5.n} 次（${s5.days}）`);
-    const of = sum((x) => x.originFail ?? 0);
-    if (of.n > 0) add("warn", `回源失败共 ${of.n} 次（${of.days}）`);
+    // 回源失败平时也有零星几次（同期回源 5xx 为 0，多半是超时、断连），按天看失败率：至少 10 次且到 5% 才报
+    for (const x of d.days) {
+      const fail = x.originFail ?? 0;
+      const total = x.originRequest ?? 0;
+      if (fail >= 10 && total > 0 && fail / total >= 0.05)
+        add("warn", `回源失败率 ${((100 * fail) / total).toFixed(1)}%（${x.day}，${total} 次回源失败 ${fail} 次）`);
+    }
   }
   return alerts;
 }
