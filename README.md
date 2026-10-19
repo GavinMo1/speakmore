@@ -398,7 +398,7 @@ flowchart LR
 - `check` 类命令发送最小请求（本机模型由系统语音朗读样句），检测连通性与响应速度。
 - `local` 为转写 + 润色，`private` 为数据隐私。
 - 原生识别厂商：`gemini` / `openai` / `bailian`。
-- 润色厂商：`deepseek` / `bailian` / `moonshot` / `zhipu` / `minimax` / `custom`；自定义服务另需 `--url <地址>`。
+- 润色厂商：`deepseek` / `bailian` / `moonshot` / `zhipu` / `minimax` / `custom`；自定义服务另需 `--url <地址>`，可选 `--params '<JSON>'` 附加请求参数。
 - 管道输入示例：`pbpaste | speakmore key`（Windows：`Get-Clipboard | speakmore key`）。
 
 </details>
@@ -416,6 +416,7 @@ flowchart LR
 | `privateTranscriber` | `qwen3-asr-0.6b-q8` | 数据隐私方式的本机模型 |
 | `polish` | `deepseek/deepseek-flash` | 润色模型，`厂商/模型` |
 | `customUrl` | 空 | OpenAI 兼容服务地址 |
+| `customParams` | 空 | 自定义服务的额外请求参数，JSON 对象 |
 | `modelSource` | `cn` | 下载源：`cn` / `original` |
 | `acceleration` | `auto` | 加速：`auto` / `cpu` |
 | `barHint` | `on` | 悬浮条操作提示：`on` / `off` |
@@ -426,6 +427,7 @@ flowchart LR
 - 快捷键可选：macOS `right_option` / `right_command` / `right_control` / `fn`；Windows `right_alt` / `right_ctrl`。
 - Gemini 思考档位可选：`MINIMAL` / `LOW` / `MEDIUM` / `HIGH`。
 - 自建服务的润色模型写作 `custom/<模型>`，地址示例 `http://127.0.0.1:11434/v1`。
+- 自定义服务需要额外参数时写入 `customParams`，例如 `{"max_completion_tokens": 1024}` 或 `{"reasoning_effort": "minimal"}`；检测与润色请求均附带，`model`、`messages`、`stream` 不可覆盖。
 - 通过 App 或 `speakmore mode`、`model`、`transcriber`、`polish` 切换时先行检测，立即生效。
 - `config set` 直接写入，不做检测。
 - 临时覆盖：启动时设置 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL` 等环境变量。
