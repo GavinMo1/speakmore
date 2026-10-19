@@ -447,6 +447,11 @@ export default {
       urlPlaceholder: "API address, e.g. https://api.example.com/v1",
       model: "Model name",
       modelPlaceholder: "Model name",
+      params: "Extra parameters",
+      paramsPlaceholder: "Extra parameters (JSON, optional)",
+      paramsTip:
+        'Extra request parameters for this service, e.g. {"max_completion_tokens": 1024}; sent with checks and polishing',
+      keyKept: "Key configured; leave blank to keep it",
     },
     empty: { title: "No matching models", search: "Search “{query}”", clear: "Clear filters" },
     keys: {
@@ -470,6 +475,8 @@ export default {
       enabled: "{model} enabled",
       keySaved: { one: "Key saved · {count} model now available", other: "Key saved · {count} models now available" },
       keySavedOnly: "Key saved",
+      customUpdated: "Custom service settings updated",
+      customChecked: "Check passed · takes effect when enabled",
       keyRemoved: "{platform} key removed",
       canceled: "Download canceled",
       removed: "{model} removed",

@@ -439,6 +439,10 @@ export default {
       urlPlaceholder: "接口地址，如 https://api.example.com/v1",
       model: "模型名",
       modelPlaceholder: "模型名",
+      params: "额外参数",
+      paramsPlaceholder: "额外参数（JSON，选填）",
+      paramsTip: '发给这个服务的额外请求参数，如 {"max_completion_tokens": 1024}，检测和润色都会带上',
+      keyKept: "密钥已配置，留空则不更改",
     },
     empty: { title: "无匹配模型", search: "搜索 “{query}”", clear: "清除筛选" },
     keys: {
@@ -463,6 +467,8 @@ export default {
       keySaved: { other: "密钥已保存 · 新增 {count} 个可用模型" },
       // 自定义服务没有清单，存好 key 不会多出列着的模型
       keySavedOnly: "密钥已保存",
+      customUpdated: "自定义服务设置已更新",
+      customChecked: "检测通过 · 启用后生效",
       keyRemoved: "{platform} 密钥已删除",
       canceled: "已取消下载",
       removed: "{model} 已删除",

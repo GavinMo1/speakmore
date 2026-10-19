@@ -61,8 +61,11 @@ export function createModels({ refresh, pickMode }) {
     via: {},
     /** 展开了密钥表单的平台 */
     openKey: null,
-    /** 自定义服务这次填的地址和模型名（存 key 时一起验，启用时一起交） */
-    custom: { url: "", model: "" },
+    /**
+     * 自定义服务这次填的地址、模型名和额外参数（存 key 时一起验，启用时一起交）。
+     * 额外参数可以清空，所以没填过是 null（照设置里的），填过就是填的那段（空的是清空）
+     */
+    custom: { url: "", model: "", params: null },
     /** 正在等主进程回话的那一次操作，按钮不重复点 */
     busy: null,
     /** 从某一排货架点"配置密钥"跳到密钥表时，那一排是哪个分类：存好 key 就回去，接着启用那一行的模型 */
@@ -119,11 +122,30 @@ export function createModels({ refresh, pickMode }) {
     return hasKey(viaOf(role, group)) && offerOf(role, group, item) !== null;
   }
 
+  /** 两段额外参数意思一样不一样：读成 JSON 再比，空白不同不算；读不出来的按原文比（没填和 {} 一样） */
+  function sameParams(a, b) {
+    const canonical = (text) => {
+      try {
+        return JSON.stringify(JSON.parse(text || "{}"));
+      } catch {
+        return text;
+      }
+    };
+    return canonical(a) === canonical(b);
+  }
+
   const customUrl = () => state.custom.url || setup.plaza.chosen.customUrl;
+  const customParams = () => state.custom.params ?? setup.plaza.chosen.customParams;
+  /** 自定义服务除了模型名还要一起交的两项 */
+  const customExtra = () => ({ customUrl: customUrl(), customParams: customParams() });
 
   const isChosen = (role, group, item) => {
     const choice = choiceOf(role, group, item);
-    return choice !== null && chosenOf(role) === choice;
+    if (choice === null || chosenOf(role) !== choice) return false;
+    // 自定义服务在表单里改了地址或额外参数、还没换上：不算选定，留着启用按钮让它生效
+    if (group.kind !== "custom") return true;
+    const { chosen } = setup.plaza;
+    return customUrl() === chosen.customUrl && sameParams(customParams(), chosen.customParams);
   };
   /** 这个角色在正在用的识别方式里：转写在转写 + 润色、数据隐私两种里都算 */
   const isLive = (role) => ROLES[role].mode === setup.plaza.mode || (role === "transcribe" && privateNow());
@@ -168,17 +190,17 @@ export function createModels({ refresh, pickMode }) {
     const setting = mode === "private" ? "privateTranscriber" : ROLES[role].setting;
     const switching = setup.plaza.mode !== mode;
     const name = itemName(group, item);
-    const customExtra = group.kind === "custom" ? { customUrl: customUrl() } : {};
+    const extra = group.kind === "custom" ? customExtra() : {};
     act(
       rowKey,
       () => {
         if (switching) {
-          const changes = { [setting === "native" ? "model" : setting]: choice, ...customExtra };
+          const changes = { [setting === "native" ? "model" : setting]: choice, ...extra };
           return window.speakmore.setMode(mode, changes);
         }
         if (role === "native") return window.speakmore.setModel(choice);
         if (role === "transcribe") return window.speakmore.setTranscriber(choice);
-        return window.speakmore.setPolish(choice, customExtra.customUrl);
+        return window.speakmore.setPolish(choice, extra);
       },
       {
         done: () =>
@@ -191,13 +213,28 @@ export function createModels({ refresh, pickMode }) {
     );
   }
 
+  /** 润色正在交给自定义服务 */
+  const customInUse = () => setup.plaza.mode === "local" && setup.plaza.chosen.polish.startsWith("custom/");
+
+  /**
+   * 自定义服务已经有 key 时改它的地址、模型名、额外参数：正在用它就当场换上（同启用，key 在后台验），
+   * 没在用就拿现有的 key 检测一下；填的留在这次的表单里，启用时一起交
+   * @param {{ polish: string, customUrl: string, customParams: string }} changes
+   * @param {boolean} inUse
+   */
+  function updateCustom(changes, inUse) {
+    const { polish, ...extra } = changes;
+    if (inUse) return window.speakmore.setPolish(polish, extra);
+    return window.speakmore.checkModel("local", changes);
+  }
+
   /** 检测一行：本机模型念一句交给它转，云端的按那一行的设置发一个最小的请求 */
   function checkCall(role, group, item) {
     if (group.kind === "local") return () => window.speakmore.checkTranscriber(item.choice);
     const choice = choiceOf(role, group, item);
     if (role === "native") return () => window.speakmore.checkModel("native", { model: choice });
     if (role === "transcribe") return () => window.speakmore.checkModel("local", { transcriber: choice });
-    const extra = group.kind === "custom" ? { customUrl: customUrl() } : {};
+    const extra = group.kind === "custom" ? customExtra() : {};
     return () => window.speakmore.checkModel("local", { polish: choice, ...extra });
   }
 
@@ -205,7 +242,7 @@ export function createModels({ refresh, pickMode }) {
   function keyCheckCall(platform) {
     if (platform.id === "custom") {
       const choice = customChoice();
-      return () => window.speakmore.checkModel("local", { polish: choice, customUrl: customUrl() });
+      return () => window.speakmore.checkModel("local", { polish: choice, ...customExtra() });
     }
     if (platform.coverage.polish > 0) return () => window.speakmore.checkModel("local", { polish: platform.id });
     if (platform.coverage.native > 0) return () => window.speakmore.checkModel("native", { model: platform.id });
@@ -913,12 +950,25 @@ export function createModels({ refresh, pickMode }) {
           event.preventDefault();
           const value = $(`plaza-key-${platform.id}`).value.trim();
           if (custom) {
-            state.custom = { url: $("plaza-custom-url").value.trim(), model: $("plaza-custom-model").value.trim() };
+            state.custom = {
+              url: $("plaza-custom-url").value.trim(),
+              model: $("plaza-custom-model").value.trim(),
+              params: $("plaza-custom-params").value.trim(),
+            };
           }
           const changes =
-            custom && state.custom.model
-              ? { polish: `custom/${state.custom.model}`, customUrl: state.custom.url }
-              : undefined;
+            custom && state.custom.model ? { polish: `custom/${state.custom.model}`, ...customExtra() } : undefined;
+          // 自定义服务已经有 key、这次没填：只改地址、模型名或额外参数，不用再贴一遍 key
+          if (custom && value === "" && hasKey(platform.id) && changes) {
+            const inUse = customInUse();
+            act(key, () => updateCustom(changes, inUse), {
+              done: () => {
+                state.openKey = null;
+                toast(t(inUse ? "plaza.toast.customUpdated" : "plaza.toast.customChecked"));
+              },
+            });
+            return;
+          }
           act(key, () => window.speakmore.saveKey(value, platform.id, changes), {
             done: () => {
               state.openKey = null;
@@ -946,9 +996,19 @@ export function createModels({ refresh, pickMode }) {
       field(`plaza-key-${platform.id}`, {
         type: "password",
         class: "input key-input",
-        placeholder: t("plaza.keys.placeholder", { platform: name }),
+        placeholder:
+          custom && hasKey(platform.id) ? t("plaza.custom.keyKept") : t("plaza.keys.placeholder", { platform: name }),
         "aria-label": t("plaza.keys.label", { platform: name }),
       }),
+      // 选填，放在 key 后面：多数服务用不上
+      custom &&
+        field("plaza-custom-params", {
+          class: "input custom-params",
+          value: customParams(),
+          placeholder: t("plaza.custom.paramsPlaceholder"),
+          "aria-label": t("plaza.custom.params"),
+          title: t("plaza.custom.paramsTip"),
+        }),
       h("button", {
         type: "submit",
         class: "button primary",
