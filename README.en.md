@@ -95,7 +95,8 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 3. Press the hotkey again to insert the text at the cursor, or press `esc` to discard the dictation.
 
 - SpeakMore resides in the menu bar (the notification area on Windows).
-- The main window provides statistics, history, models and settings.
+- The main window provides statistics, history, dictionary, models and settings.
+- **Dictionary**: add the names, products and terms you say often, and dictation spells them as written. The dictionary is stored on this device only and sent with each request to the chosen model; the dictionary page lists the models that support it.
 
 ### Onboarding
 
@@ -236,7 +237,7 @@ The **Models** page lists every model by role:
 - **No intermediary servers**: audio or text goes directly to the selected vendor with the user's own key.
 - **No analytics.**
 - **Encrypted keys**: protected by the macOS Keychain or Windows DPAPI.
-- **Local data**: history and recordings remain on the local machine.
+- **Local data**: history, recordings and the dictionary remain on the local machine.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/download-speed-dark.en.8b4db543.webp" />
@@ -337,7 +338,7 @@ Comparison with every Typeless plan (heavy use, 100 dictations a day):
 - **Plug-in architecture**: each vendor is a strategy behind a common interface.
 - **Unified I/O**: audio is normalized to 16 kHz mono; every transcriber returns `{ text }`.
 - **Cross-platform development**: [`scripts/dev/win-*.sh`](scripts/dev) synchronize the working tree to a Windows machine over SSH, run tests remotely, restart the app from source with a debugging port, and capture the desktop.
-- **Automated tests**: 939 unit tests and 19 installation tests.
+- **Automated tests**: 1046 unit tests and 22 installation tests.
 - **Quality gates**: Biome linting plus checks on interface sizing, typography and copy; `npm run check` runs them all.
 
 ```bash
@@ -376,6 +377,9 @@ flowchart LR
 | `speakmore update` | Update to the latest version |
 | `speakmore history [-n count] [--json]` | History, newest first |
 | `speakmore usage [--json]` | Spending, tokens and response times per model |
+| `speakmore dict [--json]` | Show the dictionary |
+| `speakmore dict add` / `remove <word>…` | Add / remove words |
+| `speakmore dict import <file>` | Import a one-column CSV or a one-word-per-line text file; existing words are skipped |
 | `speakmore mode [native\|local\|private]` | Show or switch the recognition mode |
 | `speakmore model [<provider>[/<model>]]` | Show or switch the native model |
 | `speakmore transcriber [<model>]` | Show or switch the transcription model |
@@ -394,7 +398,7 @@ flowchart LR
 | `speakmore logs [-n lines] [-f]` | Show logs |
 | `speakmore uninstall [--keep-data]` | Uninstall, after confirmation |
 
-- `update` also updates SpeakMore.app; settings, keys, history and recordings are preserved.
+- `update` also updates SpeakMore.app; settings, keys, history, recordings and the dictionary are preserved.
 - `check` commands send a minimal request (for on-device models, a sentence read by the system voice) to check connectivity and response time.
 - `local` is Transcribe + Polish; `private` is Data Privacy.
 - Native providers: `gemini` / `openai` / `bailian`.
@@ -469,6 +473,7 @@ flowchart LR
 | File | Description |
 | --- | --- |
 | `settings.json` | Settings |
+| `vocabulary.json` | Dictionary |
 | `<vendor>-key.bin` | Encrypted keys, one per vendor |
 | `data/history.db` | History and spending records |
 | `data/Recordings/` | Recordings |
@@ -507,10 +512,10 @@ flowchart LR
 
 - **Update**: `speakmore update` updates both the terminal installation and SpeakMore.app, then reopens whichever was running.
 - **Update, app only**: download the new dmg and install it over the existing copy.
-- **Preserved on update**: settings, keys, history and recordings.
+- **Preserved on update**: settings, keys, history, recordings and the dictionary.
 - **Uninstall**: `speakmore uninstall` stops SpeakMore and removes the entire directory, the command and the Keychain entry.
 - **Uninstall on Windows**: also removes the Path entry, Start menu shortcut and open-at-login entry.
-- **Keep data**: add `--keep-data` to preserve settings, keys, history and recordings.
+- **Keep data**: add `--keep-data` to preserve settings, keys, history, recordings and the dictionary.
 - **Uninstall, app only**: quit it from the menu bar and move it to the Trash.
 
 </details>

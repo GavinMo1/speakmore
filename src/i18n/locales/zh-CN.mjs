@@ -315,6 +315,7 @@ export default {
     home: "首页",
     models: "模型",
     history: "历史",
+    vocabulary: "词典",
     settings: "设置",
     about: "关于",
     missing: "还差：{items}",
@@ -586,6 +587,91 @@ export default {
     unpriced: "价格不明",
   },
 
+  // 侧栏"词典"一页（renderer/hub/vocabulary.mjs），版式照原版的词典页
+  vocabulary: {
+    title: "词典",
+    add: "新词",
+    import: "导入",
+    local: "仅保存在本机",
+    // 词典文件只在本机；当前方式里有收词典的云端模型时，听写时那部分词随请求发出去，照实说
+    localMeta: { device: "不上传 · 不离开本机", cloud: "不同步 · 随听写请求发出" },
+    localTip:
+      "词典保存在 {file}，不上传、不同步。听写时，所用模型收得下的那部分词随这次请求一并发出；数据隐私方式下不离开本机",
+    current: "当前 · {mode}",
+    composer: { placeholder: "输入新词", add: "添加", close: "收起" },
+    unused: "不使用词典",
+    supportTrigger: "支持的模型",
+    support: {
+      title: "支持的模型",
+      meta: "各模型接收词典的方式不同",
+      all: "全部模型",
+      roles: { native: "原生识别", transcribe: "转写", polish: "润色" },
+      limitTerms: "前 {count} 个词",
+      limitChars: "前 {count} 字",
+      limitAll: "全部词",
+      limits: {
+        terms: "最多 {count} 个词",
+        chars: "合计 {count} 字以内",
+        termChars: "每个词 {count} 字以内",
+        termWords: "英文词 {count} 个单词以内",
+      },
+    },
+    kinds: { prompt: "提示词", context: "上下文", hotwords: "热词", none: "不支持" },
+    kindTips: {
+      prompt: "写入模型的系统提示词，按词典的写法输出",
+      context: "作为背景文本随录音发给识别模型",
+      hotwords: "作为热词随录音发给识别模型",
+      none: "此模型不接收词典",
+    },
+    search: "搜索",
+    count: "{count} 个词",
+    empty: { title: "还没有词汇", description: "常说的人名、产品名和术语 · 识别时按此写法输出" },
+    noResults: "没有匹配的词",
+    loadError: "读不出词典：{reason}",
+    editHint: "回车保存 · Esc 放弃",
+    fixFileFirst: "词典文件读不出，修好后才能修改",
+    edit: "编辑",
+    delete: "删除",
+    select: "选择",
+    selection: { count: "已选定 {count} 个词", all: "全选", clear: "清除选择", delete: "删除" },
+    dialogs: {
+      cancel: "取消",
+      remove: { title: "删除词汇？", description: "“{term}”将从词典中删除，无法恢复", confirm: "删除" },
+      removeMany: { title: "删除 {count} 个词？", description: "所选的词将从词典中删除，无法恢复", confirm: "删除" },
+      import: {
+        title: "导入词汇",
+        found: "{file} 中有 {count} 个新词",
+        skipped: { existing: "已在词典中 {count} 个", duplicates: "文件内重复 {count} 个", invalid: "无效 {count} 个" },
+        none: "{file} 中没有可添加的新词",
+        confirm: "添加 {count} 个",
+        hint: "一列的 CSV 或文本文件，每行一个词",
+        more: "还有 {count} 个",
+      },
+    },
+    toast: {
+      added: "已添加“{term}”",
+      updated: "已更新“{term}”",
+      removed: "已删除“{term}”",
+      removedMany: "已删除 {count} 个词",
+      imported: "已导入 {count} 个词",
+    },
+    problems: {
+      empty: "请输入一个词",
+      tooLong: "一个词最多 {max} 个字",
+    },
+    duplicate: "“{term}”已在词典中",
+    full: "词典最多 {max} 个词，已满",
+    tooMany: "词典最多 {max} 个词，还能添加 {room} 个，这次要添加 {count} 个",
+    notFound: "词典中没有“{term}”",
+    fileTooLarge: "文件过大，最大 {max} MB",
+    unreadable: "读不出词典文件 {file}：{reason}",
+    unwritable: "写不进词典文件 {file}：{reason}",
+    importUnreadable: "读不出 {file}：{reason}",
+    notText: "{file} 不是文本文件",
+    fileErrors: { ENOENT: "文件不存在", EACCES: "没有权限", EPERM: "没有权限", EISDIR: "这是一个文件夹" },
+    malformed: '词典文件 {file} 的格式不对，应为 {"terms": ["词", …]}',
+  },
+
   preferences: {
     title: "设置",
     sections: "设置分类",
@@ -748,10 +834,14 @@ export default {
   speakmore stop                停掉
   speakmore restart             重启
   speakmore status [--json]     看状态：在不在运行、key、系统权限、今天和累计说了多少
-  speakmore update              更新到最新版本（Mac 上装着 SpeakMore.app 的话连它一起）。设置、key、历史和录音不动
+  speakmore update              更新到最新版本（Mac 上装着 SpeakMore.app 的话连它一起）。设置、key、词典、历史和录音不动
 
   speakmore history [-n 条数] [--json]
                                 看说过的话，按天分组，新的在前（默认最近 {limit} 条）
+  speakmore dict [--json]       看词典：常说的人名、产品名和术语，识别时按这里的写法。只存在本机
+  speakmore dict add|remove <词>…
+                                加词、删词，几个词一次给（有空格的词加引号）
+  speakmore dict import <文件>   从一列的 CSV 或一行一个词的文本导入，已有的跳过
   speakmore usage [--json]      看花了多少钱：今天、本月、累计的花费、token，模型多久回话，按型号分开
   speakmore mode                看三种识别模式各用什么：native 录音直接交给模型，local 先转写、再交给模型润色，private 只用本机模型转写、什么都不上传
   speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url … --params …]
@@ -784,7 +874,7 @@ export default {
   speakmore settings            打开设置（去系统设置授权时用）
   speakmore logs [-n 行数] [-f]  看日志，-f 一直跟着
   speakmore uninstall [--keep-data] [--yes]
-                                卸载：停掉后台，把 SpeakMore 的目录整个删掉。--keep-data 留下设置、key、历史和录音
+                                卸载：停掉后台，把 SpeakMore 的目录整个删掉。--keep-data 留下设置、key、词典、历史和录音
 
   speakmore help                这段说明
   speakmore --version           版本号
@@ -903,7 +993,7 @@ export default {
       folder: "目录",
       settingsFile: "设置文件",
       log: "日志",
-      oneFolder: "程序、设置、key、历史、录音都在这一个目录里。",
+      oneFolder: "程序、设置、key、词典、历史、录音都在这一个目录里。",
       uninstallHint: "不想用了：speakmore uninstall 会停掉后台，把它整个删掉。",
     },
     source: {
@@ -1091,6 +1181,15 @@ export default {
 speakmore usage    看花了多少钱   speakmore stop    停掉
 speakmore help     全部命令`,
     },
+    dict: {
+      usage: "用法：speakmore dict [--json] | speakmore dict add|remove <词>… | speakmore dict import <文件>",
+      empty: "词典是空的。加词：speakmore dict add <词>…",
+      header: "词典里有 {count} 个词（{file}，只存在本机）：",
+      added: "已添加：{term}",
+      notAdded: "没加上 {term}：{reason}",
+      removed: "已删除 {count} 个词。",
+      imported: "已导入 {count} 个词（已在词典中 {existing} 个，文件内重复 {duplicates} 个，无效 {invalid} 个）。",
+    },
     history: {
       empty: "还没有听写记录。运行 {command} 启动之后，按一下热键说句话试试。",
       today: "今天 · {date}",
@@ -1125,7 +1224,7 @@ speakmore help     全部命令`,
       none: "还没有日志：SpeakMore 启动过之后会写到 {file}",
     },
     uninstall: {
-      yours: "设置、key、历史和录音",
+      yours: "设置、key、词典、历史和录音",
       needsConfirm: "卸载要先确认。不在终端里运行时加上 --yes。",
       planKeep: "要卸载 SpeakMore：删掉 {home} 里的程序和运行环境，{yours}留着。",
       planAll: "要卸载 SpeakMore：把 {home} 整个删掉，包括程序、运行环境，以及你的{yours}。删了找不回来。",

@@ -10,6 +10,18 @@
 //
 // 这里只放说明，不加载适配器：命令行列模型时也要读这份清单。加一家 = 写一个适配器、在下面登记一项。
 // 设置里的写法是 厂商/模型（bailian/qwen3-asr-flash），和本机模型的 id（不带斜杠）区分开。
+//
+// 用户词典：每个型号收不收、怎么收、收多少写在 vocabulary 里（做法和挑词见 ../../../vocabulary/support.mjs），
+// 不收的不写；放进请求的哪里由各家的适配器按做法管。2026-10-19 拿真 key 和真实录音逐个试过，带上词表后
+// 专有名词认对得更多（Runzo、multica、AE Sparky Brainstorm），MiniMax 的接口没有这一项。
+
+import { vocabularySupport } from "../../../vocabulary/support.mjs";
+
+/**
+ * 百炼的热词怎么才收（"提升识别准确率"文档）：含中文等非 ASCII 字符的，连英文一起不超过 15 个字；
+ * 纯 ASCII 的按空格分不超过 7 段
+ */
+const BAILIAN_HOTWORDS = vocabularySupport("hotwords", { maxTerms: 2000, maxTermWords: 7, maxTermChars: 15 });
 
 export const CLOUD_TRANSCRIBERS = Object.freeze([
   Object.freeze({
@@ -24,10 +36,34 @@ export const CLOUD_TRANSCRIBERS = Object.freeze([
     // multimodal-generation。qwen-audio、fun-asr 在兼容接口上回 404 或 400 "format is empty"，只能走后者
     models: Object.freeze(
       [
-        { id: "qwen3-asr-flash", name: "Qwen3 ASR Flash", wire: "chat" },
-        { id: "qwen-audio-3.1-asr-flash", name: "Qwen Audio 3.1 ASR Flash", wire: "dashscope" },
-        { id: "qwen-audio-3.0-asr-flash", name: "Qwen Audio 3.0 ASR Flash", wire: "dashscope" },
-        { id: "fun-asr-flash-2026-06-15", name: "Fun-ASR Flash", wire: "dashscope" },
+        // 词表作为背景文本：文档没写上限，限在 1000 字以内，免得把识别带偏
+        {
+          id: "qwen3-asr-flash",
+          name: "Qwen3 ASR Flash",
+          wire: "chat",
+          vocabulary: vocabularySupport("context", { maxChars: 1000 }),
+        },
+        // 即时热词：一次最多 2000 个
+        {
+          id: "qwen-audio-3.1-asr-flash",
+          name: "Qwen Audio 3.1 ASR Flash",
+          wire: "dashscope",
+          vocabulary: BAILIAN_HOTWORDS,
+        },
+        {
+          id: "qwen-audio-3.0-asr-flash",
+          name: "Qwen Audio 3.0 ASR Flash",
+          wire: "dashscope",
+          vocabulary: BAILIAN_HOTWORDS,
+        },
+        // 不收即时热词（要先在控制台建热词表）。收上下文（录音前的一条文字消息，一轮最多 400 字），但不送词典：
+        // 2026-10-19 在 127 条真实录音上实测只多认对 5 个词，录音里有停顿时还会把这条消息原样写进成品
+        // （bench/results/vocabulary-2026-10-19.md），作者定了不送
+        {
+          id: "fun-asr-flash-2026-06-15",
+          name: "Fun-ASR Flash",
+          wire: "dashscope",
+        },
       ].map((model) => Object.freeze({ ...model, maker: "qwen" })),
     ),
     load: () => import("./bailian.mjs"),
@@ -42,8 +78,15 @@ export const CLOUD_TRANSCRIBERS = Object.freeze([
     keyPage: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
     defaultModel: "glm-asr-2512",
     // 2026-10-16 拿真 key 实测过（zhipu.mjs）。文档写的是一段不超过 30 秒，切的时候留一秒余量，免得卡在边上被拒
+    // 热词一次最多 100 个
     models: Object.freeze([
-      Object.freeze({ id: "glm-asr-2512", name: "GLM-ASR-2512", maker: "zhipu", maxSeconds: 29 }),
+      Object.freeze({
+        id: "glm-asr-2512",
+        name: "GLM-ASR-2512",
+        maker: "zhipu",
+        maxSeconds: 29,
+        vocabulary: vocabularySupport("hotwords", { maxTerms: 100 }),
+      }),
     ]),
     load: () => import("./zhipu.mjs"),
     prices: () => import("./prices/zhipu.mjs"),
@@ -54,7 +97,7 @@ export const CLOUD_TRANSCRIBERS = Object.freeze([
     keyEnv: "MINIMAX_API_KEY",
     keyPage: "https://platform.minimax.cn/user-center/basic-information/interface-key",
     defaultModel: "asr-1.0",
-    // 2026-10-16 拿真 key 实测过（minimax.mjs）。文档写的是一段不超过 500 秒、超了回 400 不截断
+    // 2026-10-16 拿真 key 实测过（minimax.mjs）。文档写的是一段不超过 500 秒、超了回 400 不截断；接口不收词表
     models: Object.freeze([
       Object.freeze({ id: "asr-1.0", name: "MiniMax ASR 1.0", maker: "minimax", maxSeconds: 500 }),
     ]),

@@ -183,7 +183,7 @@ function transcribeHop(transcriber) {
 }
 
 /** 每种方式一路经过哪几个模型，按先后 */
-const HOPS = {
+const HOPS = Object.freeze({
   native: (route) => [cloudHop("native", PROVIDERS, route.model.provider, route.model.model)],
   local: (route) => [
     transcribeHop(route.transcriber),
@@ -192,7 +192,13 @@ const HOPS = {
       : cloudHop("polish", CHAT_VENDORS, route.polish.vendor, route.polish.model),
   ],
   private: (route) => [transcribeHop(route.transcriber)],
-};
+});
+
+/**
+ * 一条路线一路经过的模型，按先后：{ role, platform, maker, name }。词典页说每一跳收不收词表也按它（app/vocabulary.mjs）
+ * @param {object} route storage/settings.mjs 的 routeOf 拼出来的
+ */
+export const hopsOf = (route) => HOPS[route.mode](route);
 
 /**
  * 一种识别方式的样子。差什么只列看得见的：本机模型没下载好、要的那家没有 key、自定义服务没写地址；
@@ -207,7 +213,7 @@ function wayOf(route, { keys, status }) {
   }
   if (route.mode === "local" && route.polish.vendor === "custom" && !route.customUrl) needs.push({ kind: "url" });
   for (const { id } of keyVendorsOf(route)) if (!keys[id]) needs.push({ kind: "key", platform: id });
-  return { hops: HOPS[route.mode](route), needs };
+  return { hops: hopsOf(route), needs };
 }
 
 /** 每天 100 次的月成本，美元和折成的人民币（界面按语言挑一种）；算不出来是 null */

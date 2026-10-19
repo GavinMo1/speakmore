@@ -12,8 +12,9 @@ import { ModelError } from "../providers/errors.mjs";
 
 /**
  * @param {object} options
- * @param {{ transcribe(samples: Float32Array, o: { signal?: AbortSignal, audioId?: string }): Promise<{ text: string }> }} options.transcriber
- *   第一跳：本机模型（asr/host.mjs）或云端模型（asr/cloud/transcriber.mjs）
+ * @param {{ transcribe(samples: Float32Array, o: { signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }): Promise<{ text: string }> }} options.transcriber
+ *   第一跳：本机模型（asr/host.mjs）或云端模型（asr/cloud/transcriber.mjs）。用户词典两跳都交，各按自己的收法用
+ *   （收不收、收多少写在模型清单里，见 vocabulary/support.mjs）
  * @param {{ warmUp(): Promise<void>, polish(text: string, o: object): Promise<string> } | null} options.polisher
  *   第二跳（polisher.mjs）。数据隐私模式不接（null）：原文去掉首尾空白直接交出，什么都不往外发
  * @param {{ info: Function, error: Function }} options.log
@@ -58,7 +59,7 @@ export function createLocalRefiner({ transcriber, polisher, log, model, onCall =
     /** 开口时没什么要先备的：模型一直装在转写进程里 */
     async prepare() {},
 
-    async refine(audio, { mimeType, signal, audioId = null }) {
+    async refine(audio, { mimeType, signal, audioId = null, vocabulary = [] }) {
       const startedAt = performance.now();
       let samples;
       try {
@@ -69,7 +70,7 @@ export function createLocalRefiner({ transcriber, polisher, log, model, onCall =
       const decodedAt = performance.now();
       let transcript;
       try {
-        ({ text: transcript } = await transcriber.transcribe(samples, { signal, audioId }));
+        ({ text: transcript } = await transcriber.transcribe(samples, { signal, audioId, vocabulary }));
       } catch (error) {
         // 云端转写已经分好类了（key 不对、暂时够不着……），原样往上交
         if (error instanceof ModelError) throw error;
@@ -93,7 +94,7 @@ export function createLocalRefiner({ transcriber, polisher, log, model, onCall =
       }
       // 转写的这段时间里用户已经断开了：润色要花钱，不必再发
       signal?.throwIfAborted();
-      const refined = await polisher.polish(transcript, { signal, audioId });
+      const refined = await polisher.polish(transcript, { signal, audioId, vocabulary });
       // 只记长度和耗时：原文和成品都是用户说的话
       log.info("local_refined", {
         audio_id: audioId,

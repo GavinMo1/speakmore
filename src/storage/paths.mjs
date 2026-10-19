@@ -11,7 +11,7 @@ import { restrictToOwner } from "./owner-only.mjs";
 //   ~/.speakmore/
 //     bin/ app/ runtime/           程序本身：安装时放进去，升级时整个换掉（macOS）
 //     bin\ versions\ current       Windows：每个版本装进 versions 下自己的目录，current 记着现在用哪个
-//     settings.json <厂商>-key.bin data/    你的东西（每家模型一把 key：gemini-key.bin、openai-key.bin）
+//     settings.json vocabulary.json <厂商>-key.bin data/    你的东西（词典；每家模型一把 key：gemini-key.bin、openai-key.bin）
 //     models/                      本地转写用的模型：用到时自动下载，删了下次用时再下
 //     logs/ run/ cache/            运行时产生的，删了会自己再建
 //
@@ -70,6 +70,8 @@ export function resolvePaths(env = process.env, userHome = homedir(), platform =
     currentFile: join(home, "current"),
 
     settingsFile: join(home, "settings.json"),
+    /** 用户的词典（storage/vocabulary.mjs）：只存在本机 */
+    vocabularyFile: join(home, "vocabulary.json"),
     historyDb: join(home, "data", "history.db"),
     recordingsDir: join(home, "data", "Recordings"),
     /** 本地转写的模型，一个模型一个目录（models/store.mjs） */

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { MODELS } from "../../../src/models/catalog.mjs";
 import { spawnTranscriber } from "../../../src/server/asr/host.mjs";
 
 const FAKE_WORKER = fileURLToPath(new URL("../../fixtures/asr/fake-worker.mjs", import.meta.url));
@@ -24,6 +25,42 @@ test("在子进程里装上模型，样本原样（Float32Array）交过去，�
   assert.ok(log.events.some((e) => e.event === "transcriber_loaded" && e.backend === "fake"));
   transcriber.dispose();
   await assert.rejects(transcriber.transcribe(new Float32Array(8)), /已经关了/);
+});
+
+test("用户词典随这一次转写交给子进程", async () => {
+  const transcriber = await spawn();
+  assert.deepEqual(await transcriber.transcribe(new Float32Array(8), { vocabulary: ["Runzo", "埋点"] }), {
+    text: "fake-model:8:Runzo|埋点",
+  });
+  assert.deepEqual(await transcriber.transcribe(new Float32Array(8), {}), { text: "fake-model:8" });
+  transcriber.dispose();
+});
+
+test("配置表里的模型整项交给子进程装：带着词典的收法也复制得过去（2026-10-19 App 端到端里装不上过）", async () => {
+  const model = MODELS.find((each) => each.vocabulary);
+  const transcriber = await spawn({ model });
+  assert.deepEqual(await transcriber.transcribe(new Float32Array(8), { vocabulary: ["Runzo"] }), {
+    text: `${model.id}:8:Runzo`,
+  });
+  transcriber.dispose();
+});
+
+test("日志：带词典时记这一跳按模型的上限送了几个词；运行库说位置不够（会截掉录音）单独记一条警告", async () => {
+  const log = recordingLog();
+  const model = MODELS.find((each) => each.vocabulary);
+  const transcriber = await spawn({ model, log });
+  await transcriber.transcribe(new Float32Array(4), { vocabulary: ["Runzo", "埋点"] });
+  // stderr 和回话走两条路，回话先到也不奇怪：等 stderr 跟上
+  for (let i = 0; i < 50 && !log.events.some((e) => e.event === "transcriber_overflow"); i += 1) {
+    await new Promise((done) => setTimeout(done, 20));
+  }
+  transcriber.dispose();
+  assert.ok(
+    log.events.some((e) => e.event === "vocabulary_fitted" && e.sent === 2 && e.of === 2 && e.model === model.id),
+  );
+  const overflow = log.events.find((e) => e.event === "transcriber_overflow");
+  assert.equal(overflow?.level, "warn");
+  assert.match(overflow.said, /Reduce hotwords/);
 });
 
 test("装不上模型：直接报错，说是哪个模型", async () => {

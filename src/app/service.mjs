@@ -23,6 +23,7 @@ import { startServer, WS_PATH } from "../server/server.mjs";
  *   见 ../server/refine/meter.mjs
  * @param {() => void} [options.onLocalModel] 本地模型的状态变了（缺、装载中、装好了、出错）
  * @param {"auto" | "cpu"} [options.acceleration] 本地模型用不用显卡（设置里的 acceleration），换了调 setAcceleration
+ * @param {() => readonly string[]} [options.vocabulary] 用户的词典（storage/vocabulary.mjs 的 terms），服务端每次听写读一次
  * @param {typeof createModeRefiner} [options.createRefiner] 测试时换成假的
  * @param {typeof startTranscriber} [options.startLocal] 测试时换成假的
  */
@@ -34,6 +35,7 @@ export async function startService({
   onModelCall,
   onLocalModel = () => {},
   acceleration: initialAcceleration = "auto",
+  vocabulary = () => [],
   createRefiner = createModeRefiner,
   startLocal = startTranscriber,
 }) {
@@ -119,10 +121,10 @@ export async function startService({
     return download ? { ...local, received: download.received, total: download.total } : local;
   }
 
-  /** 交给本地转写链路的转写器：模型还没装好时说清是怎么回事，不让这次听写干等 */
+  /** 交给本地转写链路的转写器：模型还没装好时说清是怎么回事，不让这次听写干等。用户词典随 options 原样转过去 */
   const transcriber = {
-    transcribe(samples) {
-      if (loading?.transcriber) return loading.transcriber.transcribe(samples);
+    transcribe(samples, options) {
+      if (loading?.transcriber) return loading.transcriber.transcribe(samples, options);
       const view = localView();
       if (view.state === "missing" && view.total) {
         const percent = Math.floor((view.received / view.total) * 100);
@@ -144,14 +146,15 @@ export async function startService({
   const server = await startServer({
     port: 0,
     log,
+    vocabulary,
     refiner: {
       async refine(audio, options) {
         if (!refiner) throw noKey();
         return refiner.refine(audio, options);
       },
-      /** 开口时先做的准备（Gemini 建提示词缓存）。还没有 key 时没什么可准备的 */
-      async prepare() {
-        await refiner?.prepare?.();
+      /** 开口时先做的准备（Gemini 建提示词缓存，带着词典）。还没有 key 时没什么可准备的 */
+      async prepare(options) {
+        await refiner?.prepare?.(options);
       },
     },
   });

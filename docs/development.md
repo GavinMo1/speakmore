@@ -26,6 +26,7 @@ scripts/dev/with-key.sh gemini node scripts/dev/e2e.mjs 一段录音.wav   # 端
 SPEAKMORE_MODEL=openai scripts/dev/with-key.sh openai node scripts/dev/e2e.mjs 一段录音.wav   # 同上，换成 OpenAI
 SPEAKMORE_MODE=local scripts/dev/with-key.sh deepseek node scripts/dev/e2e.mjs 一段录音.wav   # 本地转写加 DeepSeek 润色：新的数据目录，模型真从下载源下
 SPEAKMORE_E2E_ELECTRON=dist/SpeakMore-darwin-arm64/SpeakMore.app/Contents/MacOS/SpeakMore …   # 同上，用打好的应用跑（npm run dist 打的，签了名时开着 hardened runtime）
+SPEAKMORE_E2E_VOCABULARY="词1,词2" SPEAKMORE_E2E_EXPECT=词1 …   # 同上，带一份词典跑，成品里要有那个词；SPEAKMORE_E2E_MODELS=<已装好的模型仓> 免得每次重下本机模型
 scripts/dev/with-key.sh gemini node scripts/dev/eval-prompt.mjs --label v1   # 拿自己 Typeless 的历史录音评估提示词
 SPEAKMORE_MODE=local scripts/dev/with-key.sh deepseek node scripts/dev/eval-prompt.mjs --label v1 --polish-prompt=候选.txt   # 评估润色的提示词：本机转写一次、存下原文，之后只调润色
 scripts/dev/with-key.sh bailian scripts/dev/with-key.sh deepseek node scripts/dev/smoke-models.mjs --platform bailian --recording 一段录音.webm   # 跑通一个平台的每个模型：原生单独跑，转写后面固定 DeepSeek，润色前面固定本机 Qwen3 Q8
@@ -44,6 +45,13 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 
 加一个推荐组合（模型页标题行右边那个下拉）：在 `src/models/presets.mjs` 加一项（方式、带的设置、适合哪类芯片，排在哪按推荐的先后），文案加 `presets.items.<id>` 的名字和说明，中英各一份；删一个就删这两处。月成本不手写，按"每天 100 次、一个月 30 天"和一次典型口述的用量（`src/usage/estimate.mjs` 的 `TYPICAL`）现算，价目改了跟着变。用到还没量过用量的那一家时，`test/models/presets.test.mjs` 会说算不出月成本：用 `scripts/dev/measure-dictation.mjs` 在评测语料上量一下，把平均数填进 `TYPICAL`。那个测试还查引用的模型在不在清单里、设置属不属于那种方式、文案齐不齐。
 
+词典（`src/vocabulary/`）：用户的词存在 `~/.speakmore/vocabulary.json`，每次听写开头读一次，交给识别的每一跳（原生、云端转写、本机转写、润色）。一个模型怎么收词分三层，各管一块：
+1. **收不收、收多少**写在模型清单里，是数据：本机模型在 `src/models/catalog.mjs`，云端转写在 `src/server/asr/cloud/vendors.mjs`，每项一个 `vocabulary: vocabularySupport(做法, 上限)`。做法只有三种：`prompt`（写进提示词）、`context`（上下文）、`hotwords`（热词）。读提示词的原生识别和润色统一用 `PROMPT_VOCABULARY`。
+2. **词多了挑哪些**各家共用（`fitTerms`）：按词典的先后挑，放不下的跳过、接着挑后面的。
+3. **怎么放进请求**由各家适配器自己管，按做法查自己的表：提示词在 `src/server/refine/prompt.mjs`、`polish-prompt.mjs`，百炼在 `bailian.mjs` 的 `VOCABULARY`，智谱在 `zhipu.mjs`，本机运行库在各引擎的 `FAMILIES`。
+
+给一个模型加上词典：在清单里写上做法和上限（上限照实测定，测法写进注释），它的适配器里已有这种做法的放法就完了，没有就在适配器的表里加一条。`test/models/catalog.test.mjs` 会查本机模型声明的做法引擎都放得进去。改讲词典的那段写法前，先用 `scripts/dev/eval-vocabulary.mjs` 在真实录音上比一比带不带词典；要逐轮试写法，用 `scripts/dev/climb-vocabulary.mjs`，做法和上一次的结果见 [bench/results/vocabulary-hillclimb-2026-10-19.md](../bench/results/vocabulary-hillclimb-2026-10-19.md)。
+
 不发布也可以试安装脚本：`SPEAKMORE_INSTALL_BASE=$PWD/dist/release SPEAKMORE_HOME=/tmp/sm bash install.sh`，装进一个临时目录。
 
 | 目录 | 内容 |
@@ -59,11 +67,12 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `src/usage/` | 用量报表（今天、本月、累计、按型号）、首页的统计（字数、语速、连续天数、热力图）和数字的写法，命令和主窗口共用；`estimate.mjs` 估推荐组合的月成本 |
 | `native/` | 听热键、贴字、说话时截住 `esc` 和悬浮条上点击的小程序：macOS 的是 Swift，`windows/` 是 Go（只用标准库，在 Mac 上交叉编译） |
 | `assets/` | 图标：`icon.svg` 是那方印，`tray.svg` 是菜单栏上的五道；`.icns`、Windows 用的 `icon.ico` 和 `trayTemplate*.png` 由 `scripts/build/make-icon.sh` 从它们生成 |
-| `src/storage/` | `~/.speakmore` 里的东西：放在哪、设置、历史库、旧数据的迁移。命令和后台应用共用 |
+| `src/storage/` | `~/.speakmore` 里的东西：放在哪、设置、历史库、词典、旧数据的迁移。命令和后台应用共用 |
+| `src/vocabulary/` | 词典：词怎么规整、导入怎么解析，各模型收词的三种做法和挑词（`fitTerms`） |
 | `src/control.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道、日志 |
 | `test/` | 自动测试，目录和 `src/` 对应 |
 | `scripts/` | 开发用的脚本，按用途分四组：`build/` 编译小程序、打 .app；`release/` 发新版本（`ship.sh`：把关、打包、上传、核对）、把本地模型传到国内源（`sync-models.mjs`）；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key、在 Windows 开发机上跑（`win-*.sh`，见上面的 Windows 一节）；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
-| `bench/` | 本地转写的评测（[说明](../bench/README.md)）：洗样本、跑参照和各个本地模型、判分、出报告 |
+| `bench/` | 评测（[说明](../bench/README.md)）：本地转写这一跳（洗样本、跑参照和各个本地模型、判分、出报告），词典的判法（`lib/vocabulary.mjs`），各轮的记录在 `results/` |
 | `docs/` | [实现笔记](implementation-notes.md)、这份开发说明、README 的图在图片桶上的清单（`media.json`，见下面的"README 的图"） |
 | `website/` | 官网（[说明](../website/README.md)）：React + Tailwind CSS v4 的单页静态站，中英双语，Docker 部署；截图从 App 的真页面离屏截、放在单独的 COS 桶 |
 | `targets/typeless/` | 对 Typeless 的[逆向分析](../targets/typeless/README.md)，18 篇文档。SpeakMore 是照着它做的 |

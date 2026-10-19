@@ -1,0 +1,701 @@
+/* 侧栏"词典"一页（vocabulary.mjs）。结构照原版的词典页：一格一个词，三列铺开，鼠标移上去才出现编辑和删除。
+   标题下面多一栏原版没有的：词典只存在本机、当前方式每一步怎么收、"支持的模型"浮层。
+   按钮、标签、搜索框、浮层都是规范里的那几样（shared/window.css、models.css、picker.css），这里只排版。 */
+
+#vocabulary-support-trigger {
+  anchor-name: --vocabulary-support;
+}
+
+#vocabulary-support {
+  position-anchor: --vocabulary-support;
+}
+
+/* ---------- 标题下面那一栏：两件事各一格，右边是浮层的按钮 ---------- */
+
+/* 三列：存在哪 · 当前方式（占剩下的宽，窄了标签折行）· 浮层的按钮。窗口最窄时也排在一行 */
+.vocab-about {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem 2rem;
+  padding: 0.875rem 0.875rem 0.875rem 1rem;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--edge);
+}
+
+/* 一件事：左边一个带底色的图标，右边一行标题、一行小字 */
+.vocab-fact {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.vocab-fact-glyph {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-lg);
+  aspect-ratio: 1;
+  border-radius: var(--radius-block);
+}
+
+.vocab-fact-glyph .icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.vocab-fact-glyph[data-tone="ok"] {
+  color: var(--ok);
+  background: color-mix(in oklch, var(--ok) 13%, transparent);
+}
+
+.vocab-fact-glyph[data-tone="accent"] {
+  color: var(--on-primary);
+  background: var(--gradient);
+  box-shadow: inset 0 1px 0 var(--sheen);
+}
+
+.vocab-fact-glyph[data-tone="problem"] {
+  color: var(--problem);
+  background: color-mix(in oklch, var(--problem) 13%, transparent);
+}
+
+.vocab-fact-body {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.vocab-fact-title {
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  line-height: 1.4;
+}
+
+.vocab-fact-meta {
+  font-size: var(--text-micro);
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+#vocabulary-local {
+  cursor: help;
+}
+
+.vocab-route[data-tone="problem"] .vocab-fact-meta {
+  font-weight: var(--weight-medium);
+  color: var(--problem);
+}
+
+/* 当前方式经过的每一步一个小标签："转写 · 热词"。悬停看是哪个模型、这种收法怎么回事 */
+.vocab-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.vocab-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.0625rem 0.5rem;
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  line-height: 1.5;
+  white-space: nowrap;
+  color: color-mix(in oklch, var(--primary) 82%, var(--ink));
+  background: color-mix(in oklch, var(--primary) 11%, transparent);
+  border-radius: var(--radius-full);
+  cursor: help;
+}
+
+.vocab-step-role {
+  color: var(--ink-2);
+}
+
+.vocab-step-role::after {
+  content: "·";
+  margin-left: 0.375rem;
+}
+
+.vocab-step[data-off] {
+  color: var(--problem);
+  background: color-mix(in oklch, var(--problem) 12%, transparent);
+}
+
+/* ---------- 支持的模型（浮层） ---------- */
+
+.vocab-support {
+  display: grid;
+  gap: 0.25rem;
+  /* 浮层在标题下面那一栏的下方展开：留出上面的距离，整张单子一屏放得下就不滚 */
+  max-height: min(40rem, 100vh - 14rem);
+  overflow-y: auto;
+  padding: 0 0.25rem 0.25rem;
+}
+
+.vocab-support-title {
+  margin: 0.5rem 0.5rem 0.25rem;
+  font-size: var(--text-micro);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-2);
+}
+
+.vocab-support-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 一行：图标、名字（下面一小行是在哪）、收多少、做法。后两列各行对齐 */
+.vocab-support-row {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) 6.5rem 4.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: var(--control-md);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-control);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.vocab-support-row:hover {
+  background: var(--fill-hover);
+}
+
+.vocab-support-row > :is(.provider-icon, .icon) {
+  width: 1rem;
+  height: 1rem;
+}
+
+.vocab-support-row > .icon {
+  color: var(--ink-2);
+}
+
+.vocab-support-row > .tag {
+  justify-self: end;
+}
+
+.vocab-support-name {
+  min-width: 0;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.vocab-support-row[data-off] .vocab-support-name {
+  color: var(--ink-2);
+}
+
+.vocab-support-limit {
+  justify-self: end;
+  font-size: var(--text-micro);
+  color: var(--ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 搜索和个数 ---------- */
+
+.vocab-count {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 新词：就地输入的那一行 ---------- */
+
+.vocab-composer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.75rem;
+  margin: -0.5rem 0 1rem;
+  padding: 0.375rem 0.375rem 0.375rem 0.5rem;
+  background: var(--surface-solid);
+  border-radius: var(--radius-block);
+  box-shadow:
+    0 0 0 1px var(--primary),
+    0 0 0 4px color-mix(in oklch, var(--primary) 16%, transparent),
+    var(--lift);
+  animation: vocab-rise var(--dur-base) var(--ease-out);
+}
+
+.vocab-composer[data-problem] {
+  box-shadow:
+    0 0 0 1px var(--problem),
+    0 0 0 4px color-mix(in oklch, var(--problem) 14%, transparent),
+    var(--lift);
+}
+
+.vocab-composer-glyph {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-md);
+  aspect-ratio: 1;
+  color: var(--on-primary);
+  background: var(--gradient);
+  border-radius: var(--radius-control);
+  box-shadow: inset 0 1px 0 var(--sheen);
+}
+
+.vocab-composer-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  height: var(--control-md);
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.vocab-composer-input::placeholder {
+  color: var(--ink-2);
+}
+
+/* 回车添加 · esc 收起：键帽的样子，小一档 */
+.vocab-composer-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--text-micro);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.vocab-composer-hint kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  padding: 0 0.3rem;
+  font: var(--weight-medium) var(--text-micro) / 1.5 var(--font);
+  color: var(--ink);
+  background: var(--fill-hover);
+  border-radius: var(--radius-control);
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+
+.vocab-composer-hint span + kbd {
+  margin-left: 0.5rem;
+}
+
+.vocab-composer-problem {
+  flex-basis: 100%;
+  padding: 0.25rem 0 0.25rem 2.75rem;
+  font-size: var(--text-small);
+}
+
+/* ---------- 多选的那一条 ---------- */
+
+.vocab-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: -0.5rem 0 1rem;
+  padding: 0.375rem 0.375rem 0.375rem 1rem;
+  background: color-mix(in oklch, var(--primary) 9%, var(--surface-solid));
+  border-radius: var(--radius-block);
+  box-shadow: var(--edge);
+  animation: vocab-rise var(--dur-base) var(--ease-out);
+}
+
+.vocab-selection-count {
+  flex: 1;
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 空的时候 ---------- */
+
+.vocab-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  padding: 4rem 1rem 3rem;
+  text-align: center;
+}
+
+.vocab-empty-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 3.5rem;
+  aspect-ratio: 1;
+  margin-bottom: 0.75rem;
+  color: var(--on-primary);
+  background: var(--gradient);
+  border-radius: var(--radius-card);
+  box-shadow:
+    inset 0 1px 0 var(--sheen),
+    0 10px 24px -12px var(--primary);
+}
+
+.vocab-empty-glyph .icon {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.vocab-empty-title {
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+}
+
+.vocab-empty-text {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.vocab-empty-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+/* 搜不到时只有一句，不要大图标 */
+.vocab-empty[data-kind="search"] {
+  padding-top: 2.5rem;
+}
+
+.vocab-empty[data-kind="search"] .vocab-empty-glyph {
+  display: none;
+}
+
+.vocab-empty[data-kind="search"] .vocab-empty-title {
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+}
+
+/* ---------- 词：三列铺开，窄了自动少几列；长词换行，不截断 ---------- */
+
+.vocab-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vocab-term {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+  min-height: var(--control-lg);
+  padding: 0.5rem 0.875rem;
+  background: var(--surface);
+  border-radius: var(--radius-block);
+  box-shadow: var(--edge);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.vocab-term:hover {
+  background: var(--surface-solid);
+  box-shadow: var(--edge), var(--lift);
+}
+
+.vocab-term[data-selected] {
+  background: color-mix(in oklch, var(--primary) 7%, var(--surface-solid));
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--primary) 55%, transparent),
+    inset 0 1px 0 var(--sheen);
+}
+
+/* 刚加进来、刚改过的那一个亮一下 */
+.vocab-term[data-fresh] {
+  animation: vocab-fresh 1.2s var(--ease-out);
+}
+
+.vocab-term-icon {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  color: color-mix(in oklch, var(--primary) 78%, var(--ink-2));
+}
+
+.vocab-term-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.vocab-grid[data-selecting] .vocab-term-text {
+  cursor: pointer;
+}
+
+/* 多选的勾：平时看不见（但键盘 Tab 得到），鼠标移上去、焦点在格子里、或者已经在多选时，盖在图标的位置上 */
+.vocab-check {
+  position: absolute;
+  top: 50%;
+  left: 0.875rem;
+  display: inline-grid;
+  place-items: center;
+  width: 0.875rem;
+  height: 0.875rem;
+  padding: 0;
+  color: var(--on-primary);
+  background: var(--surface-solid);
+  border: none;
+  border-radius: var(--radius-full);
+  box-shadow: var(--ring-strong);
+  cursor: pointer;
+  opacity: 0;
+  translate: 0 -50%;
+}
+
+/* 勾本身只有 14px：点击范围往外扩一圈 */
+.vocab-check::before {
+  position: absolute;
+  inset: -0.375rem;
+  content: "";
+  border-radius: var(--radius-full);
+}
+
+.vocab-check .icon {
+  width: 0.625rem;
+  height: 0.625rem;
+  stroke-width: 3;
+  opacity: 0;
+}
+
+.vocab-check[aria-checked="true"] {
+  background: var(--gradient);
+  box-shadow: none;
+}
+
+.vocab-check[aria-checked="true"] .icon {
+  opacity: 1;
+}
+
+.vocab-check:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.vocab-term:is(:hover, :focus-within) .vocab-check,
+.vocab-grid[data-selecting] .vocab-check {
+  opacity: 1;
+}
+
+/* 勾出现时图标让位，但占着地方：字不跟着挪 */
+.vocab-term:is(:hover, :focus-within) .vocab-term-icon,
+.vocab-grid[data-selecting] .vocab-term-icon {
+  visibility: hidden;
+}
+
+.vocab-term[data-editing] .vocab-term-icon {
+  visibility: visible;
+}
+
+/* 编辑、删除：浮在格子右边，平时不占地方（长词不会因为它们被挤短）；底色和格子一样，盖住下面的字 */
+.vocab-term-actions {
+  position: absolute;
+  inset: 0.25rem 0.25rem 0.25rem auto;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding-left: 1.25rem;
+  background: linear-gradient(to right, transparent, var(--surface-solid) 1.25rem);
+  border-radius: var(--radius-control);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.vocab-term[data-selected] .vocab-term-actions {
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in oklch, var(--primary) 7%, var(--surface-solid)) 1.25rem
+  );
+}
+
+.vocab-term:is(:hover, :focus-within) .vocab-term-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.vocab-grid[data-selecting] .vocab-term-actions {
+  display: none;
+}
+
+.vocab-term-actions .icon-button {
+  width: var(--control-sm);
+  height: var(--control-sm);
+}
+
+.vocab-term-actions .icon-button:last-child:hover {
+  color: var(--problem);
+  background: color-mix(in oklch, var(--problem) 10%, transparent);
+}
+
+/* 就地编辑：格子描主题色的边，里面是一个没有框的输入框 */
+.vocab-term[data-editing] {
+  background: var(--surface-solid);
+  box-shadow:
+    0 0 0 1px var(--primary),
+    0 0 0 4px color-mix(in oklch, var(--primary) 16%, transparent);
+}
+
+.vocab-term[data-editing][data-problem] {
+  box-shadow:
+    0 0 0 1px var(--problem),
+    0 0 0 4px color-mix(in oklch, var(--problem) 14%, transparent);
+}
+
+.vocab-term-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  line-height: 1.4;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+/* ---------- 删除、导入的确认框 ---------- */
+
+.vocab-dialog {
+  width: min(26rem, 100vw - 4rem);
+  padding: 0;
+  color: var(--ink);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-filter);
+  border: none;
+  border-radius: var(--radius-card);
+  box-shadow:
+    var(--edge),
+    0 30px 80px -24px oklch(0 0 0 / 0.4);
+  -webkit-app-region: no-drag;
+}
+
+.vocab-dialog[open] {
+  animation: dialog-in var(--dur-slow) var(--ease-out);
+}
+
+.vocab-dialog::backdrop {
+  background: oklch(0 0 0 / 0.18);
+  backdrop-filter: blur(6px);
+  animation: fade-in var(--dur-slow) var(--ease-out);
+}
+
+.vocab-dialog-form {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1.5rem 1.5rem 1.25rem;
+}
+
+.vocab-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.vocab-dialog-title {
+  margin: 0;
+  font-size: var(--text-heading);
+  font-weight: var(--weight-bold);
+  line-height: 1.35;
+}
+
+/* 说明和补充对齐到标题的字，不顶着图标 */
+.vocab-dialog-text,
+.vocab-dialog-note,
+.vocab-dialog-problem {
+  padding-left: calc(var(--control-lg) + 0.75rem);
+}
+
+.vocab-dialog-text {
+  font-size: var(--text-small);
+  overflow-wrap: anywhere;
+}
+
+.vocab-dialog-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  max-height: 7.5rem;
+  margin: 0.25rem 0;
+  /* 和说明一样对齐到标题的字 */
+  padding: 0 0 0 calc(var(--control-lg) + 0.75rem);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.vocab-dialog-more {
+  align-self: center;
+  font-size: var(--text-micro);
+  color: var(--ink-2);
+}
+
+.vocab-dialog-note {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  white-space: pre-line;
+}
+
+.vocab-dialog-problem {
+  font-size: var(--text-small);
+}
+
+.vocab-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+/* ---------- 动效：出现时从下面浮上来一点；刚加的词底色亮一下再退回去 ---------- */
+
+@keyframes vocab-rise {
+  from {
+    opacity: 0;
+    translate: 0 0.25rem;
+  }
+}
+
+@keyframes vocab-fresh {
+  from {
+    background: color-mix(in oklch, var(--primary) 18%, var(--surface-solid));
+    box-shadow: 0 0 0 1px var(--primary);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vocab-composer,
+  .vocab-selection,
+  .vocab-term[data-fresh],
+  .vocab-dialog[open],
+  .vocab-dialog::backdrop {
+    animation: none;
+  }
+
+  .vocab-term,
+  .vocab-term-actions,
+  .vocab-support-row {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .vocab-dialog::backdrop {
+    backdrop-filter: none;
+  }
+}

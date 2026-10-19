@@ -325,6 +325,7 @@ export default {
     home: "Home",
     models: "Models",
     history: "History",
+    vocabulary: "Dictionary",
     settings: "Settings",
     about: "About",
     missing: "Missing: {items}",
@@ -595,6 +596,109 @@ export default {
     unpriced: "price unknown",
   },
 
+  vocabulary: {
+    title: "Dictionary",
+    add: "New word",
+    import: "Import",
+    local: "Stored on this device only",
+    localMeta: { device: "Never leaves this device", cloud: "Never synced · sent with requests" },
+    localTip:
+      "The dictionary is saved in {file} and is never uploaded or synced. When you dictate, the words your model can take are sent along with that request; in Privacy mode they never leave this device",
+    current: "Current · {mode}",
+    composer: { placeholder: "Type a new word", add: "Add", close: "Close" },
+    unused: "Doesn't use the dictionary",
+    supportTrigger: "Supported models",
+    support: {
+      title: "Supported models",
+      meta: "Each model takes the dictionary its own way",
+      all: "All models",
+      roles: { native: "Native", transcribe: "Transcription", polish: "Polishing" },
+      limitTerms: "First {count} words",
+      limitChars: "First {count} characters",
+      limitAll: "All words",
+      limits: {
+        terms: { one: "Up to {count} word", other: "Up to {count} words" },
+        chars: "Up to {count} characters in total",
+        termChars: "Up to {count} characters per word",
+        termWords: "Up to {count} English words per entry",
+      },
+    },
+    kinds: { prompt: "Prompt", context: "Context", hotwords: "Hotwords", none: "Not supported" },
+    kindTips: {
+      prompt: "Written into the model's system prompt, so it spells words as in the dictionary",
+      context: "Sent to the recognition model with the audio as background text",
+      hotwords: "Sent to the recognition model with the audio as hotwords",
+      none: "This model doesn't take a dictionary",
+    },
+    search: "Search",
+    count: { one: "{count} word", other: "{count} words" },
+    empty: {
+      title: "No words yet",
+      description: "Names, products and terms you say often · spelled as written here",
+    },
+    noResults: "No matching words",
+    loadError: "Couldn't read the dictionary: {reason}",
+    editHint: "Enter to save · Esc to cancel",
+    fixFileFirst: "Fix the dictionary file before making changes",
+    edit: "Edit",
+    delete: "Delete",
+    select: "Select",
+    selection: { count: "{count} selected", all: "Select all", clear: "Clear selection", delete: "Delete" },
+    dialogs: {
+      cancel: "Cancel",
+      remove: {
+        title: "Delete word?",
+        description: "“{term}” will be removed from the dictionary for good",
+        confirm: "Delete",
+      },
+      removeMany: {
+        title: { one: "Delete {count} word?", other: "Delete {count} words?" },
+        description: "The selected words will be removed from the dictionary for good",
+        confirm: "Delete",
+      },
+      import: {
+        title: "Import words",
+        found: { one: "{count} new word in {file}", other: "{count} new words in {file}" },
+        skipped: {
+          existing: "{count} already in the dictionary",
+          duplicates: "{count} repeated in the file",
+          invalid: "{count} invalid",
+        },
+        none: "No new words to add in {file}",
+        confirm: "Add {count}",
+        hint: "A one-column CSV or text file, one word per line",
+        more: "{count} more",
+      },
+    },
+    toast: {
+      added: "Added “{term}”",
+      updated: "Updated “{term}”",
+      removed: "Deleted “{term}”",
+      removedMany: { one: "Deleted {count} word", other: "Deleted {count} words" },
+      imported: { one: "Imported {count} word", other: "Imported {count} words" },
+    },
+    problems: {
+      empty: "Enter a word",
+      tooLong: "A word can have at most {max} characters",
+    },
+    duplicate: "“{term}” is already in the dictionary",
+    full: "The dictionary is full ({max} words)",
+    tooMany: "The dictionary holds {max} words; {room} more can be added, this adds {count}",
+    notFound: "“{term}” isn't in the dictionary",
+    fileTooLarge: "The file is too large; the limit is {max} MB",
+    unreadable: "Couldn't read the dictionary file {file}: {reason}",
+    unwritable: "Couldn't save the dictionary file {file}: {reason}",
+    importUnreadable: "Couldn't read {file}: {reason}",
+    notText: "{file} isn't a text file",
+    fileErrors: {
+      ENOENT: "the file doesn't exist",
+      EACCES: "permission denied",
+      EPERM: "permission denied",
+      EISDIR: "it's a folder",
+    },
+    malformed: 'The dictionary file {file} isn\'t in the expected format: {"terms": ["word", …]}',
+  },
+
   preferences: {
     title: "Settings",
     sections: "Settings sections",
@@ -761,10 +865,14 @@ export default {
   speakmore stop                Stop
   speakmore restart             Restart
   speakmore status [--json]     Status: running or not, key, system permissions, how much you said today and in total
-  speakmore update              Update to the latest version (on a Mac, SpeakMore.app too if you have it). Settings, keys, history, and recordings are kept
+  speakmore update              Update to the latest version (on a Mac, SpeakMore.app too if you have it). Settings, keys, the dictionary, history, and recordings are kept
 
   speakmore history [-n count] [--json]
                                 What you said, grouped by day, newest first (latest {limit} by default)
+  speakmore dict [--json]       The dictionary: names, products and terms you say often, spelled as written. Stored on this device only
+  speakmore dict add|remove <word>…
+                                Add or delete words, several at once (quote words with spaces)
+  speakmore dict import <file>  Import a one-column CSV or a one-word-per-line text file; existing words are skipped
   speakmore usage [--json]      What it cost: spend and tokens today, this month, and in total, model reply times, per model
   speakmore mode                The three recognition modes and what each uses: native sends the recording to the model; local transcribes, then a model polishes it; private transcribes with an on-device model and uploads nothing
   speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url … --params …]
@@ -798,7 +906,7 @@ export default {
   speakmore logs [-n lines] [-f]
                                 Show logs; -f keeps following
   speakmore uninstall [--keep-data] [--yes]
-                                Uninstall: stop it and delete the whole SpeakMore folder. --keep-data keeps settings, keys, history, and recordings
+                                Uninstall: stop it and delete the whole SpeakMore folder. --keep-data keeps settings, keys, the dictionary, history, and recordings
 
   speakmore help                This help
   speakmore --version           Version
@@ -930,7 +1038,7 @@ export default {
       folder: "Folder",
       settingsFile: "Settings file",
       log: "Log",
-      oneFolder: "The program, settings, keys, history, and recordings all live in this one folder.",
+      oneFolder: "The program, settings, keys, dictionary, history, and recordings all live in this one folder.",
       uninstallHint: "Done with it? speakmore uninstall stops it and deletes the whole folder.",
     },
     source: {
@@ -1135,6 +1243,22 @@ export default {
 speakmore usage    what it cost      speakmore stop    stop it
 speakmore help     all commands`,
     },
+    dict: {
+      usage: "Usage: speakmore dict [--json] | speakmore dict add|remove <word>… | speakmore dict import <file>",
+      empty: "The dictionary is empty. Add words: speakmore dict add <word>…",
+      header: {
+        one: "{count} word in the dictionary ({file}, stored on this device only):",
+        other: "{count} words in the dictionary ({file}, stored on this device only):",
+      },
+      added: "Added: {term}",
+      notAdded: "Didn't add {term}: {reason}",
+      removed: { one: "Deleted {count} word.", other: "Deleted {count} words." },
+      imported: {
+        one: "Imported {count} word ({existing} already in the dictionary, {duplicates} repeated in the file, {invalid} invalid).",
+        other:
+          "Imported {count} words ({existing} already in the dictionary, {duplicates} repeated in the file, {invalid} invalid).",
+      },
+    },
     history: {
       empty: "No dictations yet. Run {command} to start, then press the hotkey and say something.",
       today: "Today · {date}",
@@ -1170,7 +1294,7 @@ speakmore help     all commands`,
       none: "No logs yet: SpeakMore writes them to {file} once it has started",
     },
     uninstall: {
-      yours: "settings, keys, history, and recordings",
+      yours: "settings, keys, dictionary, history, and recordings",
       needsConfirm: "Uninstalling needs confirmation. Add --yes when not running in a terminal.",
       planKeep: "About to uninstall SpeakMore: delete the program and runtime in {home}, keeping your {yours}.",
       planAll:

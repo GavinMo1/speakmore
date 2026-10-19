@@ -279,6 +279,35 @@ test("开口时的准备交给正在用的那一个；还没有 key 时什么都
   assert.equal(prepared, 1);
 });
 
+test("用户词典：服务端每次听写读一次，开口的准备和整理都带上", async (t) => {
+  const seen = [];
+  const service = await startService({
+    log: quietLog,
+    route: GEMINI,
+    vocabulary: () => ["Runzo"],
+    createRefiner: () => ({
+      warmUp: async () => {},
+      prepare: async (options) => void seen.push(["prepare", options.vocabulary]),
+      refine: async (_audio, options) => {
+        seen.push(["refine", options.vocabulary]);
+        return "Runzo";
+      },
+    }),
+  });
+  t.after(() => service.close());
+  await service.useKey("gemini-key");
+  assert.equal((await dictateOnce(service.url)).V.refined_text, "Runzo");
+  assert.deepEqual(
+    seen.find(([step]) => step === "refine"),
+    ["refine", ["Runzo"]],
+  );
+  await tick();
+  assert.deepEqual(
+    seen.find(([step]) => step === "prepare"),
+    ["prepare", ["Runzo"]],
+  );
+});
+
 const LOCAL = {
   mode: "local",
   transcriber: "qwen3-asr-0.6b-q8",
@@ -296,7 +325,9 @@ function fakeLocal() {
       control.finish = () =>
         resolve({
           backend: "fake",
-          transcribe: async (samples) => ({ text: `转写了 ${samples.length}` }),
+          transcribe: async (samples, options) => ({
+            text: `转写了 ${samples.length}${options?.vocabulary?.length ? ` 带着 ${options.vocabulary.join("、")}` : ""}`,
+          }),
           dispose: () => control.disposed++,
         });
       control.fail = (error) => reject(error);
@@ -355,6 +386,27 @@ test("本地转写链路：下载好了的启动时就装上；装载中按下�
   assert.equal(service.localModel.state, "ready");
   assert.equal((await dictateOnce(service.url)).V.refined_text, "转写了 3");
   assert.ok(changes >= 2);
+});
+
+test("用户词典：交给本机模型的转写器原样转过去", async (t) => {
+  const { control, startLocal } = fakeLocal();
+  const service = await startService({
+    log: quietLog,
+    route: LOCAL,
+    models: fakeModels(),
+    startLocal,
+    vocabulary: () => ["埋点"],
+    createRefiner: async ({ transcriber }) => ({
+      warmUp: async () => {},
+      refine: async (_audio, options) =>
+        (await transcriber.transcribe(new Float32Array(3), { vocabulary: options.vocabulary })).text,
+    }),
+  });
+  t.after(() => service.close());
+  await service.useKey("deepseek-key");
+  control.finish();
+  await tick();
+  assert.equal((await dictateOnce(service.url)).V.refined_text, "转写了 3 带着 埋点");
 });
 
 test("加速设置：装模型时交给它；换了就卸掉重装（正在装的那次作废），没换不动", async (t) => {

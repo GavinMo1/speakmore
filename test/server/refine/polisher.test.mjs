@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createTranslator, msg } from "../../../src/i18n/index.mjs";
 import { ModelError } from "../../../src/server/providers/errors.mjs";
-import { POLISH_PROMPT, polishInput } from "../../../src/server/refine/polish-prompt.mjs";
+import { POLISH_PROMPT, polishInput, polishPromptWith } from "../../../src/server/refine/polish-prompt.mjs";
 import { createChatPolisher, createPolisher } from "../../../src/server/refine/polisher.mjs";
 import { NO_SPEECH_MARK } from "../../../src/server/refine/prompt.mjs";
 
@@ -52,6 +52,22 @@ test("原文交给模型，成品照样经过收尾（繁转简、去句末句�
   assert.equal(await polisher.polish("这个 bug 我我看了一下", { audioId: "a1" }), "这个 bug 我看了一下");
   assert.equal(requests[0].system, POLISH_PROMPT);
   assert.equal(requests[0].user, polishInput("这个 bug 我我看了一下"));
+});
+
+test("词典：接在润色提示词最后、一行一个，说的是按原文里读音相近的写法改；词典是空的时提示词一字不差", () => {
+  assert.equal(polishPromptWith([]), POLISH_PROMPT);
+  const prompt = polishPromptWith(["Runzo", "埋点"]);
+  assert.ok(prompt.startsWith(POLISH_PROMPT));
+  assert.match(prompt.slice(POLISH_PROMPT.length), /用户词典[\s\S]*\nRunzo\n埋点\n[\s\S]*原文/);
+  // 评测换上候选的提示词时，词典接在候选的后面
+  assert.equal(polishPromptWith(["x"], "候选").split("\n")[0], "候选");
+});
+
+test("词典：润色时写进系统提示词，原文那条消息不变", async () => {
+  const { client, requests } = fakeClient({ text: "Runzo 的图标", problem: null, usage: USAGE });
+  await polisherWith(client).polish("润佐的图标", { vocabulary: ["Runzo"] });
+  assert.equal(requests[0].system, polishPromptWith(["Runzo"]));
+  assert.equal(requests[0].user, polishInput("润佐的图标"));
 });
 
 test("原文是空的（没转出字）：不调模型，成品是空的", async () => {

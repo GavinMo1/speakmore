@@ -54,5 +54,9 @@ node bench/report.mjs                                     # 只出报告
 | asr-round1-2026-10-16 | 本地转写这一跳，5 个候选 | [results/asr-round1-2026-10-16.md](results/asr-round1-2026-10-16.md) |
 | e2e-local-2026-10-16 | local 模式整条链路（转写加润色），和从哪个下载源下得快 | [results/e2e-local-2026-10-16.md](results/e2e-local-2026-10-16.md) |
 | asr-windows-2026-10-17 | 本地转写这一跳在 Windows 上（Vulkan 和 CPU），6 个候选 | [results/asr-windows-2026-10-17.md](results/asr-windows-2026-10-17.md) |
+| vocabulary-2026-10-19 | 词典：15 个模型带不带词典，认对了几个、硬塞了几个 | [results/vocabulary-2026-10-19.md](results/vocabulary-2026-10-19.md) |
+| vocabulary-hillclimb-2026-10-19 | 在词典评测上爬山改三处讲词典的写法（一处都没留下） | [results/vocabulary-hillclimb-2026-10-19.md](results/vocabulary-hillclimb-2026-10-19.md) |
+
+词典的两轮不走上面的结果库：评测是 `scripts/dev/eval-vocabulary.mjs`，爬山是 `scripts/dev/climb-vocabulary.mjs`（照 Claude Code 的 `/claude-api hillclimb` 流程），判法共用 `lib/vocabulary.mjs`，数据在 `_work/vocabulary/` 和 `_work/hillclimb/`。
 
 `_work/` 不进仓库：里面有洗好的录音、下载的模型、结果库和报告，都包含说过的话。

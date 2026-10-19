@@ -95,7 +95,8 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 3. 再次按下快捷键，文字写入光标位置；按 `esc` 取消本次口述。
 
 - SpeakMore 常驻菜单栏（Windows 为任务栏通知区域）。
-- 主窗口提供统计、历史记录、模型与设置。
+- 主窗口提供统计、历史记录、词典、模型与设置。
+- **词典**：常说的专有名词、产品名与术语加入词典后，听写时按词典的写法输出。词典仅保存在本机，随请求发送给所选模型；支持词典的模型列于词典页。
 
 ### 首次引导
 
@@ -236,7 +237,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 - **无中转服务器**：录音或文字以用户自有密钥直接发送至所选厂商。
 - **不采集统计数据**。
 - **密钥加密存储**：macOS 使用钥匙串，Windows 使用 DPAPI。
-- **数据留存本机**：历史记录与录音仅保存在本机。
+- **数据留存本机**：历史记录、录音与词典仅保存在本机。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/download-speed-dark.zh-CN.170a9ced.webp" />
@@ -337,7 +338,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 - **插件化架构**：各厂商以策略模式实现统一接口。
 - **统一输入输出**：录音统一为 16 kHz 单声道，转写结果统一为 `{ text }`。
 - **跨平台开发**：[`scripts/dev/win-*.sh`](scripts/dev) 经 SSH 同步工作区至 Windows 机器，在远端运行测试、以调试端口从源码重启 App、截取桌面画面。
-- **自动化测试**：939 个单元测试与 19 个安装测试。
+- **自动化测试**：1046 个单元测试与 22 个安装测试。
 - **门禁**：Biome 代码检查，界面尺寸、字号与文案规范检查；`npm run check` 一次执行全部检查。
 
 ```bash
@@ -376,6 +377,9 @@ flowchart LR
 | `speakmore update` | 升级至最新版本 |
 | `speakmore history [-n 条数] [--json]` | 历史记录，按时间倒序 |
 | `speakmore usage [--json]` | 花费、token 与响应耗时，按模型分列 |
+| `speakmore dict [--json]` | 查看词典 |
+| `speakmore dict add` / `remove <词>…` | 添加 / 删除词 |
+| `speakmore dict import <文件>` | 从单列 CSV 或每行一词的文本导入，已有的词跳过 |
 | `speakmore mode [native\|local\|private]` | 查看或切换识别方式 |
 | `speakmore model [<厂商>[/<模型>]]` | 查看或切换原生识别模型 |
 | `speakmore transcriber [<模型>]` | 查看或切换转写模型 |
@@ -394,7 +398,7 @@ flowchart LR
 | `speakmore logs [-n 行数] [-f]` | 查看日志 |
 | `speakmore uninstall [--keep-data]` | 卸载（执行前确认） |
 
-- `update` 同时升级 SpeakMore.app，设置、密钥、历史记录与录音保留。
+- `update` 同时升级 SpeakMore.app，设置、密钥、历史记录、录音与词典保留。
 - `check` 类命令发送最小请求（本机模型由系统语音朗读样句），检测连通性与响应速度。
 - `local` 为转写 + 润色，`private` 为数据隐私。
 - 原生识别厂商：`gemini` / `openai` / `bailian`。
@@ -469,6 +473,7 @@ flowchart LR
 | 文件 | 说明 |
 | --- | --- |
 | `settings.json` | 设置 |
+| `vocabulary.json` | 词典 |
 | `<厂商>-key.bin` | 加密后的密钥，每个厂商一份 |
 | `data/history.db` | 历史记录与花费记录 |
 | `data/Recordings/` | 录音 |
@@ -507,10 +512,10 @@ flowchart LR
 
 - **升级**：`speakmore update` 同时升级终端安装与 SpeakMore.app，并重新打开升级前运行的一方。
 - **仅安装 App 时升级**：下载新版 dmg 覆盖安装。
-- **升级保留**：设置、密钥、历史记录与录音。
+- **升级保留**：设置、密钥、历史记录、录音与词典。
 - **卸载**：`speakmore uninstall` 停止 SpeakMore，删除整个目录、命令及钥匙串条目。
 - **Windows 卸载**：另删除 Path 条目、开始菜单快捷方式与开机自启项。
-- **保留数据卸载**：附加 `--keep-data`，保留设置、密钥、历史记录与录音。
+- **保留数据卸载**：附加 `--keep-data`，保留设置、密钥、历史记录、录音与词典。
 - **仅安装 App 时卸载**：从菜单栏退出后，将其移至废纸篓。
 
 </details>

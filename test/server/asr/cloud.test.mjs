@@ -4,10 +4,11 @@ import { createTranslator } from "../../../src/i18n/index.mjs";
 import { createClient } from "../../../src/server/asr/cloud/bailian.mjs";
 import * as minimax from "../../../src/server/asr/cloud/minimax.mjs";
 import { createCloudTranscriber } from "../../../src/server/asr/cloud/transcriber.mjs";
-import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../../../src/server/asr/cloud/vendors.mjs";
+import { CLOUD_TRANSCRIBERS, cloudModelOf, cloudTranscriberOf } from "../../../src/server/asr/cloud/vendors.mjs";
 import * as zhipu from "../../../src/server/asr/cloud/zhipu.mjs";
 import { encodeWav } from "../../../src/server/audio/pcm.mjs";
 import { toModelError } from "../../../src/server/providers/errors.mjs";
+import { fitTerms, VOCABULARY_KINDS } from "../../../src/vocabulary/support.mjs";
 
 const zh = createTranslator("zh-CN");
 const log = { info() {}, warn() {}, error() {} };
@@ -116,8 +117,15 @@ function fakeUpload(status, reply, delay = () => 0) {
   const fetch = async (url, init) => {
     const index = requests.length;
     const file = init.body.get("file");
-    const fields = Object.fromEntries([...init.body.entries()].filter(([name]) => name !== "file"));
-    requests.push({ url, headers: init.headers, fields, file: { name: file.name, type: file.type, size: file.size } });
+    const entries = [...init.body.entries()].filter(([name]) => name !== "file");
+    const fields = Object.fromEntries(entries);
+    requests.push({
+      url,
+      headers: init.headers,
+      fields,
+      entries,
+      file: { name: file.name, type: file.type, size: file.size },
+    });
     await new Promise((resolve) => setTimeout(resolve, delay(index)));
     return new Response(JSON.stringify(typeof reply === "function" ? reply(index) : reply), { status });
   };
@@ -270,4 +278,122 @@ test("百炼：回了 2xx 却找不到原文，说明接口和这里对不上，
     const { fetch } = fakeFetch(200, body);
     await assert.rejects(createClient({ apiKey: "k", model, fetch }).transcribe({ wav: Buffer.from("RIFF") }), /原文/);
   }
+});
+
+// ---------- 用户词典：每个型号收不收、怎么收写在清单里，放进请求的哪里由各家的适配器管 ----------
+
+const bailianModel = (id) =>
+  cloudModelOf(
+    CLOUD_TRANSCRIBERS.find((vendor) => vendor.id === "bailian"),
+    id,
+  );
+
+test("词典：清单里每个型号写明收法（不收的不写），2026-10-19 拿真 key 逐个试过", () => {
+  const kinds = Object.fromEntries(
+    CLOUD_TRANSCRIBERS.flatMap((vendor) =>
+      vendor.models.map((model) => [`${vendor.id}/${model.id}`, model.vocabulary?.kind ?? null]),
+    ),
+  );
+  assert.deepEqual(kinds, {
+    "bailian/qwen3-asr-flash": "context",
+    "bailian/qwen-audio-3.1-asr-flash": "hotwords",
+    "bailian/qwen-audio-3.0-asr-flash": "hotwords",
+    // 收上下文，但会把它原样写进成品：不送（2026-10-19 作者定的）
+    "bailian/fun-asr-flash-2026-06-15": null,
+    "zhipu/glm-asr-2512": "hotwords",
+    "minimax/asr-1.0": null,
+  });
+  for (const kind of Object.values(kinds)) assert.ok(kind === null || VOCABULARY_KINDS.includes(kind));
+});
+
+test("词典：百炼的热词照它的规矩挑（含中文的不超过 15 个字，纯英文不超过 7 个词）", () => {
+  const { vocabulary } = bailianModel("qwen-audio-3.1-asr-flash");
+  const kept = (term) => fitTerms([term], vocabulary).length === 1;
+  assert.equal(kept("喜马拉雅式"), true);
+  assert.equal(kept("一二三四五六七八九十一二三四五"), true);
+  assert.equal(kept("一二三四五六七八九十一二三四五六"), false);
+  assert.equal(kept("AE Sparky Brainstorm"), true);
+  assert.equal(kept("one two three four five six seven eight"), false);
+});
+
+test("词典：qwen3-asr-flash 放在最前面的 system 消息里（content 写成数组，写成字符串回 400）；没有词就不加这条", async () => {
+  const reply = { choices: [{ message: { content: "好" } }], usage: { seconds: 1 } };
+  const { fetch, requests } = fakeFetch(200, reply);
+  const client = createClient({ apiKey: "k", model: "qwen3-asr-flash", fetch });
+  await client.transcribe({ wav: Buffer.from("RIFF"), vocabulary: ["Runzo", "埋点"] });
+  const [system, audio] = requests[0].body.messages;
+  assert.deepEqual(system, { role: "system", content: [{ type: "text", text: "Runzo，埋点" }] });
+  assert.equal(audio.content[0].type, "input_audio");
+  await client.transcribe({ wav: Buffer.from("RIFF"), vocabulary: [] });
+  assert.equal(requests[1].body.messages.length, 1);
+});
+
+test("词典：qwen-audio 交热词（parameters.vocabulary，权重照文档建议的 4）；fun-asr 不送，请求里只有录音", async () => {
+  const reply = { output: { text: "好" }, usage: { duration: 1 } };
+  const audio = fakeFetch(200, reply);
+  await createClient({ apiKey: "k", model: "qwen-audio-3.1-asr-flash", fetch: audio.fetch }).transcribe({
+    wav: Buffer.from("RIFF"),
+    vocabulary: ["Runzo", "埋点"],
+  });
+  assert.deepEqual(audio.requests[0].body.parameters, {
+    format: "wav",
+    sample_rate: "16000",
+    vocabulary: { Runzo: 4, 埋点: 4 },
+  });
+  assert.equal(audio.requests[0].body.input.messages.length, 1);
+
+  const fun = fakeFetch(200, reply);
+  await createClient({ apiKey: "k", model: "fun-asr-flash-2026-06-15", fetch: fun.fetch }).transcribe({
+    wav: Buffer.from("RIFF"),
+    vocabulary: ["Runzo", "埋点"],
+  });
+  const [recording, ...rest] = fun.requests[0].body.input.messages;
+  assert.equal(recording.content[0].type, "input_audio");
+  assert.deepEqual(rest, []);
+  assert.deepEqual(fun.requests[0].body.parameters, { format: "wav", sample_rate: "16000" });
+});
+
+test("词典：智谱每个热词一个 hotwords 字段（词里带逗号也不会被拆开）", async () => {
+  const { fetch, requests } = fakeUpload(200, { text: "好" });
+  await zhipu
+    .createClient({ apiKey: "k", model: "glm-asr-2512", fetch })
+    .transcribe({ wav: wavOf(1), vocabulary: ["Runzo", "Hello, World"] });
+  assert.deepEqual(
+    requests[0].entries.filter(([name]) => name === "hotwords").map(([, value]) => value),
+    ["Runzo", "Hello, World"],
+  );
+});
+
+test("词典：转写器按清单里这个型号的上限挑好词再交给适配器；不收的（MiniMax）、清单外的型号一个都不交", async () => {
+  const many = Array.from({ length: 150 }, (_, i) => `t${i}`);
+  const zhipuUpload = fakeUpload(200, { text: "好" });
+  const zhipuTranscriber = await createCloudTranscriber({
+    choice: { vendor: "zhipu", model: "glm-asr-2512" },
+    apiKey: "k",
+    log,
+    fetch: zhipuUpload.fetch,
+  });
+  await zhipuTranscriber.transcribe(new Float32Array(16_000).fill(0.1), { vocabulary: many });
+  const sent = zhipuUpload.requests[0].entries.filter(([name]) => name === "hotwords").map(([, value]) => value);
+  assert.deepEqual(sent, many.slice(0, 100));
+
+  const minimaxUpload = fakeUpload(200, { text: "好", duration: 1 });
+  const minimaxTranscriber = await createCloudTranscriber({
+    choice: { vendor: "minimax", model: "asr-1.0" },
+    apiKey: "k",
+    log,
+    fetch: minimaxUpload.fetch,
+  });
+  await minimaxTranscriber.transcribe(new Float32Array(16_000).fill(0.1), { vocabulary: many });
+  assert.deepEqual(minimaxUpload.requests[0].fields, { model: "asr-1.0" });
+
+  const unknown = fakeFetch(200, { choices: [{ message: { content: "好" } }], usage: { seconds: 1 } });
+  const unlisted = await createCloudTranscriber({
+    choice: { vendor: "bailian", model: "qwen3-asr-flash-2099" },
+    apiKey: "k",
+    log,
+    fetch: unknown.fetch,
+  });
+  await unlisted.transcribe(new Float32Array(16_000).fill(0.1), { vocabulary: many });
+  assert.equal(unknown.requests[0].body.messages.length, 1);
 });

@@ -2722,3 +2722,87 @@ test("polish check custom/<模型> --url --params：按填的额外参数查，�
     },
   });
 });
+
+// ---------- speakmore dict：词典只是本机的一个文件，直接读写，不经过后台应用 ----------
+
+const storedTerms = () => JSON.parse(readFileSync(paths.vocabularyFile, "utf8")).terms;
+
+test("dict：空词典说一句怎么加；加几个词、新加的在前；不碰后台应用", async () => {
+  const empty = harness();
+  assert.equal(await empty.speakmore("dict"), 0);
+  assert.match(empty.output.out, /词典是空的/);
+
+  const add = harness();
+  assert.equal(await add.speakmore("dict", "add", "Runzo", "  Claude   Code "), 0);
+  assert.match(add.output.out, /已添加：Runzo\n已添加：Claude Code/);
+  assert.deepEqual(storedTerms(), ["Claude Code", "Runzo"]);
+  assert.deepEqual(add.daemon.calls, []);
+
+  const list = harness();
+  assert.equal(await list.speakmore("dict"), 0);
+  assert.match(list.output.out, /2 个词/);
+  assert.match(list.output.out, /Claude Code\n {2}Runzo/);
+
+  const json = harness();
+  await json.speakmore("dict", "--json");
+  assert.deepEqual(JSON.parse(json.output.out), ["Claude Code", "Runzo"]);
+});
+
+test("dict add：重复的说清楚、其余照加，有没加上的就以 1 退出；不给词是用法错", async () => {
+  await harness().speakmore("dict", "add", "GitHub");
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("dict", "add", "github", "埋点"), 1);
+  assert.match(output.err, /github.*“GitHub”已在词典中/);
+  assert.deepEqual(storedTerms(), ["埋点", "GitHub"]);
+  assert.equal(await harness().speakmore("dict", "add"), 2);
+});
+
+test("dict remove：删几个词，说删了几个；有不在词典里的照实说、以 1 退出（同 add）", async () => {
+  await harness().speakmore("dict", "add", "a", "b", "c");
+  const removed = harness();
+  assert.equal(await removed.speakmore("dict", "remove", "A", "c", "zzz", "yyy"), 1);
+  assert.match(removed.output.out, /已删除 2 个词/);
+  assert.match(removed.output.err, /词典中没有“zzz、yyy”/);
+  assert.deepEqual(storedTerms(), ["b"]);
+  const none = harness();
+  assert.equal(await none.speakmore("dict", "remove", "zzz"), 1);
+  assert.match(none.output.err, /词典中没有/);
+});
+
+test("dict import：一列的 CSV 或一行一个词，已有的、无效的跳过，说清各几个；文件读不出来照实说", async () => {
+  await harness().speakmore("dict", "add", "Runzo");
+  const file = join(paths.home, "words.csv");
+  writeFileSync(file, `Runzo\nmultica,备注\n"Hello, World"\n${"x".repeat(60)}\n`);
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("dict", "import", file), 0);
+  assert.match(output.out, /已导入 2 个词.*已在词典中 1 个.*文件内重复 0 个.*无效 1 个/);
+  assert.deepEqual(storedTerms(), ["multica", "Hello, World", "Runzo"]);
+  const missing = harness();
+  assert.equal(await missing.speakmore("dict", "import", join(paths.home, "nope.csv")), 1);
+  assert.match(missing.output.err, /nope\.csv/);
+});
+
+test("dict import：GBK 存的 CSV（中文 Windows 上 Excel 的默认）照样认；不是文本的文件不导", async () => {
+  const gbk = join(paths.home, "gbk.csv");
+  // "埋点,备注" 的 GBK
+  writeFileSync(gbk, Buffer.from([0xc2, 0xf1, 0xb5, 0xe3, 0x2c, 0xb1, 0xb8, 0xd7, 0xa2]));
+  const { speakmore } = harness();
+  assert.equal(await speakmore("dict", "import", gbk), 0);
+  assert.deepEqual(storedTerms(), ["埋点"]);
+  const binary = join(paths.home, "bin.csv");
+  writeFileSync(binary, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0, 1, 2]));
+  const refused = harness();
+  assert.equal(await refused.speakmore("dict", "import", binary), 1);
+  assert.match(refused.output.err, /不是文本文件/);
+  assert.deepEqual(storedTerms(), ["埋点"]);
+});
+
+test("dict：--json 只给看词典用，加、删、导入带上它是用法错", async () => {
+  assert.equal(await harness().speakmore("dict", "add", "x", "--json"), 2);
+});
+
+test("dict：不认识的子命令是用法错，说怎么用", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("dict", "frobnicate"), 2);
+  assert.match(output.err, /speakmore dict/);
+});

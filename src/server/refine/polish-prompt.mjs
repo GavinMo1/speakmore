@@ -117,3 +117,18 @@ export const POLISH_PROMPT = `你是语音输入法的整理引擎。用户对�
 export function polishInput(transcript) {
   return `${OPEN}\n${transcript}\n${CLOSE}\n\n把上面${OPEN}里的内容整理成成品文字，只输出成品。`;
 }
+
+/**
+ * 润色的系统提示词带上用户词典（storage/vocabulary.mjs）：接在最后，一行一个词。词典是空的就原样交出，
+ * 和没有词典时一字不差。挑哪些词送进来由调用方按上限挑好（vocabulary/support.mjs 的 PROMPT_VOCABULARY）
+ * @param {readonly string[]} terms
+ * @param {string} [prompt] 评测换成候选的提示词时用
+ */
+export function polishPromptWith(terms, prompt = POLISH_PROMPT) {
+  if (terms.length === 0) return prompt;
+  return `${prompt}
+
+用户词典：下面是他常说的专有名词、术语和人名，一行一个，写法以这里为准。
+${terms.join("\n")}
+原文里读音相同或相近的写法（同音字、拆开或拼错的英文、音译成的中文），按上下文指的就是其中某个词时，改成词典里的写法（大小写、空格、连字符都照抄）。原文里没有对应的说法就不要加进去，读音不像的也不要硬套。`;
+}

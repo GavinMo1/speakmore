@@ -1,21 +1,32 @@
 ---
 name: speakmore-vocabulary-plan
-description: 词典功能（issue #9 提的行业词库）10-19 开始讨论；收录的本地模型里只有 Qwen3-ASR 收词表，原版有个人词典和按修改自动加词
+description: "词典功能 10-19 在 feat/vocabulary 做完：链路、页面、命令行、评测、爬山、App 端到端、一轮对抗审查（27 条已改）都提交了；等他点头合并推送，还有几件待他定"
 metadata:
+  node_type: memory
   type: project
+  originSessionId: 6b5e9ce5-00ff-48cc-99ba-a927306fc7c3
+  modified: 2026-10-19T07:42:45.012Z
 ---
 
-2026-10-19 回复了 issue #9（行业词库、行业小模型、内网处理）：词库可以做，已排进计划。用户的原话是"并不着急直接开干，手头还有活没干完呢"，等用户点名再开工。行业小模型不做。内网就答成现有的数据隐私方式搭配词库，回复里不提润色（"都内网了、连不了网，那肯定就是本地模型"）。
+2026-10-19 用户说"开分支，彻底开干"，在 feat/vocabulary 上做。他的要求：
+- 整条链路都支持词表：本机转写、云端转写、原生识别、润色，热词、上下文、提示词三种做法都要覆盖。
+- 严格策略模式：统一接口加各模型的适配策略，改一个模型只动一小块，"不能拧成一团麻花"。
+- 做完全面端到端验证，本机模型也要测完；开发 key 的额度可以用（不太过分）。
+- 界面对齐 Typeless 的词典页，讲清两点：词表只存在本机、支持哪些模型。要极高审美（"不要像前端初学者"）；他嫌信息栏一行塞了内容、模型名、识别方式太挤，已改成两栏加短标签。
+- 做完起一轮对抗性审查。
 
-2026-10-19 实测：收录的 4 个本地模型里只有 Qwen3-ASR 的两份能收词表。
-- transcribe.cpp 的 GGUF 版：`supports("vocabulary")`、`supports("context_prompt")` 都是 true，运行时选项是 `vocabulary`、`prompt`。
-- sherpa-onnx 的 int8 版：配置里有 `qwen3Asr.hotwords`，库把热词作为文字放在提示开头、音频之前。现在传的是空串（`src/server/asr/engines/sherpa-onnx.mjs`）。
-- SenseVoice 两份都不支持。加了词表能准多少还没测。
+已提交（分支上 4 个 commit，main 上还有一个记忆 commit 755c9c0 没推）：
+- 449adb1 src/vocabulary/（terms 规整导入、support 收法和挑词）+ storage/vocabulary.mjs（~/.speakmore/vocabulary.json）
+- b29415b 链路：server.mjs 每次听写读一次词典交给 prepare/refine；收法写在模型清单（catalog.mjs、asr/cloud/vendors.mjs），放进请求由适配器管
+- 797b623 词典页（renderer/hub/vocabulary.*、app/vocabulary.mjs、docs/PRODUCT.md）
+- 5339db3 命令行 speakmore dict
 
-2026-10-19 发完 0.9.4 后，用户说要开始讨论词典功能："这个其实我早就想做了，但之前一直没有契机……这回既然有人提了，咱们就顺手接过来吧"。
+实测定下的（都在代码注释里）：百炼 qwen3-asr-flash 的 system 消息 content 必须写成数组，写成字符串回 400；智谱 hotwords 每个词一个字段；sherpa-onnx 的 Qwen3 KV 只有 512 个位置，热词 400 字开始截音频，限 120 字；transcribe.cpp 版限 600 字（CPU 上多 0.3 秒）；MiniMax、SenseVoice 不收。
 
-原版（Typeless）的做法见逆向笔记：主界面有词典页，接口 `/user/dictionary/{list,add,update,delete,batch-delete,bulk-import,bulk-import/preview}`，能从 CSV 导入（targets/typeless/docs/05-network-protocol.md、03-process-architecture.md）；贴字后约 15 秒内盯着输入框，把用户的手动修改发到 `/user/traits`，服务端可能据此自动加词，回包带 `auto_add_dictionary` 时弹"已自动加入词典"（06-context-capture-and-privacy.md）。服务端怎么用词典影响结果没查清（91-open-questions.md Q26）。
+10-19 加了爬山（他点名试 claude-api skill 的 hillclimb，要当成这个理论的一次实践记下来）：三处写法（nativePromptWith、polishPromptWith、contextOf）各爬 1–3 轮，一处都没留下，记录在 bench/results/vocabulary-hillclimb-2026-10-19.md，全模型对比在 vocabulary-2026-10-19.md。工具：scripts/dev/climb-vocabulary.mjs（run/score/split）、climb-vocabulary-pack.mjs（只拷训练集给分析员）、bench/lib/vocabulary.mjs（共用判法；佳明和 Garmin 都算对是他定的）。待他定：fun-asr 会把词典原样吐进成品（要不要不给它送词典）、西里尔形近字归一、参照错 4 条和 multicard 判法要不要修。
 
-**Why:** 用户要对外说清楚：是我们收录的模型里只有它能做，不是天下只有它；有更好的模型欢迎推荐，可以再加。
+10-19 收尾：App 端到端（数据隐私、转写加润色、原生）带词典都写对了，第一次跑查出收法里混了函数、本机模型装不上，已改成纯数据。一轮对抗审查（链路、存储与命令行、界面三路）27 条全改，单测 1046 个全过，界面在真窗口里验过。没做的：跨进程加锁（窗口只有几毫秒，代码注释写了理由）；原生和润色共用一个提示词上限（接小上下文本机大模型可能挤爆，未验证）。
 
-**How to apply:** 开工时先拿带行业词的录音，对比加词表和不加的结果再定方案。词表还可以进润色提示词（native、local 两种方式）。回复 #9 的进展时照这个口径。相关：[[speakmore-model-plaza]]、[[speakmore-two-pipelines]]
+**Why:** 用户早就想做，issue #9 给了契机；他要的是能长期维护的结构和真实验证过的效果。
+
+**How to apply:** 剩下的只有：问他合并 feat/vocabulary 进 main、推送（main 上还有 755c9c0 没推）；待他定的几件见上。原来的步骤：1. 读 bench/_work/vocabulary/report.md（scripts/dev/eval-vocabulary.mjs，30 条原版录音，各模型带不带词典对比，含"硬塞"计数），效果写进 bench/results/vocabulary-2026-10-19.md，必要时调上限或提示词；2. App 端到端（scripts/dev/e2e.mjs，家目录放 vocabulary.json，native、local、private 各一遍）；3. 文档：docs/development.md、README 中英；4. 一轮对抗审查；5. 合并、推送前问用户。开发窗口用 /tmp/smv 家目录、热键右 Control，驱动脚本在会话 scratchpad/ui/cdp.mjs。相关：[[speakmore-model-plaza]]、[[speakmore-two-pipelines]]、[[desktop-copy-and-look]]

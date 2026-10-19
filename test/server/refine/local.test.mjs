@@ -24,8 +24,9 @@ function parts({ transcript = "原文", transcribeError = null, polishError = nu
       return SAMPLES;
     },
     transcriber: {
-      async transcribe(samples) {
+      async transcribe(samples, options) {
         seen.transcribed.push(samples);
+        seen.transcribeOptions = options;
         if (transcribeError) throw transcribeError;
         return { text: transcript };
       },
@@ -53,10 +54,26 @@ test("录音 → 统一格式 → 本地转写 → 润色；和原生链路一�
   assert.equal(await refiner.refine(audio, { mimeType: "audio/webm", signal, audioId: "a1" }), "成品：原文");
   assert.deepEqual(seen.decoded, [{ audio, mimeType: "audio/webm" }]);
   assert.equal(seen.transcribed[0], SAMPLES);
-  assert.deepEqual(seen.polished, [{ text: "原文", options: { signal, audioId: "a1" } }]);
+  assert.deepEqual(seen.polished, [{ text: "原文", options: { signal, audioId: "a1", vocabulary: [] } }]);
   await refiner.prepare();
   await refiner.warmUp();
   assert.equal(polisher.warmUps, 1);
+});
+
+test("用户词典：转写和润色两跳都拿到同一份，各按各的收法用", async () => {
+  const { seen, decode, transcriber, polisher } = parts();
+  const refiner = createLocalRefiner({ transcriber, polisher, log: recordingLog(), decode });
+  const vocabulary = ["Runzo", "埋点"];
+  await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm", audioId: "a9", vocabulary });
+  assert.deepEqual(seen.transcribeOptions.vocabulary, vocabulary);
+  assert.deepEqual(seen.polished[0].options.vocabulary, vocabulary);
+});
+
+test("用户词典：数据隐私模式不润色，词典只交给转写这一跳", async () => {
+  const { seen, decode, transcriber } = parts();
+  const refiner = createLocalRefiner({ transcriber, polisher: null, log: recordingLog(), decode });
+  await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm", vocabulary: ["Runzo"] });
+  assert.deepEqual(seen.transcribeOptions.vocabulary, ["Runzo"]);
 });
 
 test("每次记一条日志：两跳各花了多久、原文多长，不记原文和成品", async () => {
