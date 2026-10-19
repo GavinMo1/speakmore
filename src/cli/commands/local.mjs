@@ -10,7 +10,7 @@ import { currentSettings, ensureRunning, parse, renderOptions, UsageError } from
 import { polishTitle, renderPolish, renderTranscribers } from "../render/modes.mjs";
 import { keySourceFor } from "./key.mjs";
 import { downloadAndWait, modelStatus, offerDownload } from "./local-models.mjs";
-import { needUrl } from "./mode.mjs";
+import { needCustom } from "./mode.mjs";
 import { applyChange, checked, ensureKey, inMode, modeNow, routeWith } from "./route.mjs";
 
 // local 模式的两跳，各一个命令，只在 local 模式里能换（不在就说先 speakmore mode local）：
@@ -226,21 +226,24 @@ async function remove(io, id, { yes }) {
 }
 
 export async function polish(args, io) {
-  const { values, positionals } = parse(args, { url: { type: "string" } });
+  const { values, positionals } = parse(args, { url: { type: "string" }, params: { type: "string" } });
   const [first, second, ...extra] = positionals;
   if (extra.length > 0) throw new UsageError(msg("cli.syntax.polish"));
-  if (first === "check") return check(io, second, values.url);
+  // 自定义服务的地址和额外参数：只在写了模型时才有意义
+  const custom = { url: values.url, params: values.params };
+  const withCustom = custom.url !== undefined || custom.params !== undefined;
+  if (first === "check") return check(io, second, custom);
   if (second !== undefined) throw new UsageError(msg("cli.syntax.polish"));
   const status = await io.daemon.status();
   if (first === undefined) {
-    if (values.url !== undefined) throw new UsageError(msg("cli.syntax.polish"));
+    if (withCustom) throw new UsageError(msg("cli.syntax.polish"));
     return list(io, status);
   }
 
   // 先查写得对不对（以 2 退出），再看是不是在 local 模式里（以 1 退出）
-  const changes = choiceFrom(io, first, values.url);
+  const changes = choiceFrom(io, first, custom);
   const route = routeWith(io, "local", changes);
-  needUrl(route);
+  needCustom(route, changes);
   if (!inMode(io, status, "local", "polish")) return 1;
   const vendor = findChatVendor(route.polish.vendor);
   if (!(await ensureKey(io, vendor, changes))) return 1;
@@ -253,12 +256,16 @@ export async function polish(args, io) {
 }
 
 /**
- * 用户写的润色模型（和地址）→ 查过的设置。写的是收音频的那家、写错了，以 2 退出说能填什么
- * @returns {{ polish: string, customUrl?: string }}
+ * 用户写的润色模型（和自定义服务的地址、额外参数）→ 查过的设置。写的是收音频的那家、写错了，以 2 退出说能填什么
+ * @param {{ url?: string, params?: string }} custom
+ * @returns {{ polish: string, customUrl?: string, customParams?: string }}
  */
-function choiceFrom(io, value, url) {
-  const changes = url === undefined ? { polish: value } : { polish: value, customUrl: url };
-  return checked(io, changes);
+function choiceFrom(io, value, { url, params }) {
+  return checked(io, {
+    polish: value,
+    ...(url === undefined ? {} : { customUrl: url }),
+    ...(params === undefined ? {} : { customParams: params }),
+  });
 }
 
 function list(io, status) {
@@ -268,6 +275,7 @@ function list(io, status) {
     vendors: CHAT_VENDORS,
     polish: parseChatChoice(settings.polish.value),
     customUrl: settings.customUrl.value,
+    customParams: settings.customParams.value,
     keys,
     current: modeNow(io, status),
   };
@@ -276,15 +284,20 @@ function list(io, status) {
 }
 
 /** 第二跳的某个模型现在能不能用：交给后台应用，用那一家的 key 发一个最小的请求。在哪种模式里都能查 */
-async function check(io, value, url) {
-  const changes = value === undefined ? {} : choiceFrom(io, value, url);
+async function check(io, value, custom) {
+  // 没写模型时查的是设置里的那个，地址和额外参数也照设置里的：单给它们没有意义
+  if (value === undefined && (custom.url !== undefined || custom.params !== undefined)) {
+    throw new UsageError(msg("cli.syntax.polish"));
+  }
+  const changes = value === undefined ? {} : choiceFrom(io, value, custom);
   const route = routeWith(io, "local", changes);
-  needUrl(route);
+  needCustom(route, changes);
   await ensureRunning(io);
   const title = io.t.text(polishTitle(route.polish, route.customUrl));
   io.out(io.t("cli.model.checking", { model: title }));
   const params = { polish: `${route.polish.vendor}/${route.polish.model}` };
   if (changes.customUrl !== undefined) params.customUrl = changes.customUrl;
+  if (changes.customParams !== undefined) params.customParams = changes.customParams;
   let result;
   try {
     result = await io.daemon.request("check-polish", params, { timeoutMs: CHECK_TIMEOUT_MS });

@@ -20,7 +20,7 @@ import { applyChange, checked, ensureKey, modeNow, routeWith } from "./route.mjs
 /** 切到某种模式时能连带的设置，写成命令行参数：参数名 → 设置名（只能是那种模式自己的，storage/settings.mjs 的 MODE_SETTINGS） */
 const MODE_FLAGS = {
   native: { model: "model" },
-  local: { transcriber: "transcriber", polish: "polish", url: "customUrl" },
+  local: { transcriber: "transcriber", polish: "polish", url: "customUrl", params: "customParams" },
   private: { transcriber: "privateTranscriber" },
 };
 const FLAG_OPTIONS = {
@@ -28,6 +28,7 @@ const FLAG_OPTIONS = {
   transcriber: { type: "string" },
   polish: { type: "string" },
   url: { type: "string" },
+  params: { type: "string" },
 };
 
 /** 每种模式按现在的设置走哪条路线 */
@@ -53,7 +54,7 @@ export async function mode(args, io) {
   }
   const changes = checked(io, Object.fromEntries(flags.map((flag) => [MODE_FLAGS[target][flag], values[flag]])));
   const route = routeWith(io, target, changes);
-  if (route.mode === "local") needUrl(route);
+  if (route.mode === "local") needCustom(route, changes);
 
   if (modeNow(io, status) === target && flags.length === 0) {
     io.out(io.t("cli.modes.already", { mode: target, route: io.t.text(routeTitle(route)) }));
@@ -75,9 +76,15 @@ export async function mode(args, io) {
   });
 }
 
-/** 润色交给自定义服务却没有地址：说要给 --url */
-export function needUrl(route) {
-  if (route.polish.vendor === "custom" && !route.customUrl) throw new UsageError(msg("cli.local.urlNeeded"));
+/**
+ * 自定义服务那两项给得对不对：润色交给它却没有地址，说要给 --url；给了 --params 润色却不交给它，说它只给自定义服务
+ * （存下来也用不上，不如当场说）
+ * @param {Record<string, string>} changes 这次要改的设置
+ */
+export function needCustom(route, changes) {
+  const custom = route.polish.vendor === "custom";
+  if (custom && !route.customUrl) throw new UsageError(msg("cli.local.urlNeeded"));
+  if (!custom && Object.hasOwn(changes, "customParams")) throw new UsageError(msg("cli.local.paramsCustomOnly"));
 }
 
 const MAX_CHOICE_ATTEMPTS = 3;

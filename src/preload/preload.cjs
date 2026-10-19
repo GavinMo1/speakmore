@@ -57,7 +57,8 @@ contextBridge.exposeInMainWorld("speakmore", {
   setMode: (mode, changes) => ipcRenderer.invoke("setup:set-mode", mode, changes),
   setModel: (model) => ipcRenderer.invoke("setup:set-model", model),
   setTranscriber: (id) => ipcRenderer.invoke("setup:set-transcriber", id),
-  setPolish: (polish, customUrl) => ipcRenderer.invoke("setup:set-polish", polish, customUrl),
+  // custom：自定义服务的 { customUrl, customParams }，和模型一起换
+  setPolish: (polish, custom) => ipcRenderer.invoke("setup:set-polish", polish, custom),
   setModelSource: (id) => ipcRenderer.invoke("setup:set-model-source", id),
   setAcceleration: (id) => ipcRenderer.invoke("setup:set-acceleration", id),
   // 本机模型：用户点了才下载；取消、删除（正在用的删不了）

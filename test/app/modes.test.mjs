@@ -182,6 +182,24 @@ test("local 第二跳换润色：当场换上；自定义服务连地址一起�
   assert.equal(saved("customUrl"), "http://127.0.0.1:11434/v1");
 });
 
+test("local 第二跳换成自定义服务：额外参数和地址一起换、一起存；写错了不换不存，说哪里不对", async () => {
+  saveSetting(file, "mode", "local");
+  const { modes, service } = setup();
+  const result = await modes.setPolish("custom/gpt-5-mini", {
+    customUrl: "https://router.example/v1",
+    customParams: '{ "max_completion_tokens": 1024 }',
+  });
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(service.route.customParams, { max_completion_tokens: 1024 });
+  assert.equal(saved("customParams"), '{"max_completion_tokens":1024}');
+
+  const wrong = await modes.setPolish("custom/gpt-5-mini", { customParams: '{"stream": true}' });
+  assert.equal(wrong.ok, false);
+  assert.match(zh.text(wrong.problem), /stream/);
+  assert.deepEqual(service.route.customParams, { max_completion_tokens: 1024 });
+  assert.equal(saved("customParams"), '{"max_completion_tokens":1024}');
+});
+
 test("local 第二跳换不了（连着单独启动的服务端）：润色和地址都不存", async () => {
   saveSetting(file, "mode", "local");
   const { modes } = setup({ verdict: () => ({ ok: false, problem: msg("key.externalModel") }) });

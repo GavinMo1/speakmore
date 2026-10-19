@@ -21,7 +21,7 @@ import {
 //     └ setModel        换收音频的模型
 //   local
 //     ├ setTranscriber  第一跳：本机模型（不用 key，要下载好了的）或云端模型（验它那家的 key）
-//     └ setPolish       第二跳：润色的厂商和模型（自定义服务连同地址）
+//     └ setPolish       第二跳：润色的厂商和模型（自定义服务连同地址、额外参数）
 //   private（数据隐私）
 //     └ setTranscriber  唯一的一跳：只能是本机模型（不用 key，要下载好了的），存在它自己的 privateTranscriber
 //
@@ -34,6 +34,13 @@ import {
 // 本机模型没下载）记在 key 管理和服务的状态里，界面和听写时照实说，补齐了自己就能用（下载由用户点，models/library.mjs，
 // 下好了服务自己装上）。以前要先验过、先下好才让换：刚装好时哪种都不齐，人就困在默认的那一种里出不来。
 // 拦下的只有写错的（不认识的模式、模型、厂商，不是那种模式的设置）。正在用的本机模型不能删。
+
+/** 换润色时一起给的自定义服务的两项（地址、额外参数）：没给的不算改，照设置里的 */
+const polishChanges = (polish, { customUrl, customParams } = {}) => ({
+  polish,
+  ...(customUrl === undefined ? {} : { customUrl }),
+  ...(customParams === undefined ? {} : { customParams }),
+});
 
 /**
  * @param {object} options
@@ -198,11 +205,20 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
     /**
      * local 第二跳：润色的厂商和模型，写法同设置里的 polish（厂商、厂商/模型、custom/模型名）
      * @param {string} polish
-     * @param {{ customUrl?: string }} [options] 自定义服务的地址，和模型一起验证、一起存
+     * @param {{ customUrl?: string, customParams?: string }} [options] 自定义服务的地址和额外参数（一段 JSON），
+     *   和模型一起验证、一起存；没给的照设置里的
      */
-    setPolish(polish, { customUrl } = {}) {
-      const changes = customUrl === undefined ? { polish } : { polish, customUrl };
-      return within("local", "polish", changes, useRoute);
+    setPolish(polish, { customUrl, customParams } = {}) {
+      return within("local", "polish", polishChanges(polish, { customUrl, customParams }), useRoute);
+    },
+
+    /**
+     * 第二跳的某个润色模型能不能用，写法同 setPolish：只是试一下，不换掉正在用的（见 check）
+     * @param {string} polish
+     * @param {{ customUrl?: string, customParams?: string }} [options]
+     */
+    checkPolish(polish, options = {}) {
+      return this.check("local", polishChanges(polish, options));
     },
 
     /**

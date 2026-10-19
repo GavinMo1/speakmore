@@ -219,7 +219,7 @@ function monthlyOf(route, { costOf }, at) {
 /**
  * @param {object} options
  * @param {"native" | "local" | "private"} options.mode 正在用哪种识别方式
- * @param {{ native: string, transcriber: string, privateTranscriber: string, polish: string, customUrl: string }} options.chosen
+ * @param {{ native: string, transcriber: string, privateTranscriber: string, polish: string, customUrl: string, customParams: string }} options.chosen
  *   设置里各角色选的（转写在 local、private 两种方式里各选各的）
  * @param {Record<string, "env" | "stored" | null>} options.keys 每家的 key 在哪（key-manager 的 sources）
  * @param {Record<string, object>} options.status 本机模型的状态，按 id（models/library.mjs 的 status）

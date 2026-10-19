@@ -747,7 +747,7 @@ export default {
                                 看说过的话，按天分组，新的在前（默认最近 {limit} 条）
   speakmore usage [--json]      看花了多少钱：今天、本月、累计的花费、token，模型多久回话，按型号分开
   speakmore mode                看三种识别模式各用什么：native 录音直接交给模型，local 先转写、再交给模型润色，private 只用本机模型转写、什么都不上传
-  speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url …]
+  speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url … --params …]
                                 切模式，当场生效。可以连带那种模式自己的设置，比如第一次进 local 就用自定义服务
   speakmore model               native 模式：看能用哪几家的模型（{providers}）、各家的 key 有没有、现在用的哪个
   speakmore model <厂商>[/<模型>]
@@ -758,9 +758,10 @@ export default {
                                 下载、停下、删除本机转写模型（哪种模式里都能做；正在用的删不了）
   speakmore transcriber check [<模型>]
                                 检查本机转写模型：用系统朗读念一句交给它转，看能不能正常出字。不写就查现在选的
-  speakmore polish [<厂商>[/<模型>] [--url <地址>]]
-                                local 模式第二跳：看、换润色的模型（{polishers}）。custom 是兼容 OpenAI 接口的任意服务
-  speakmore polish check [<厂商>[/<模型>]]
+  speakmore polish [<厂商>[/<模型>] [--url <地址>] [--params <JSON>]]
+                                local 模式第二跳：看、换润色的模型（{polishers}）。custom 是兼容 OpenAI 接口的任意服务，
+                                --params 是发给它的额外请求参数，比如 '{"max_completion_tokens": 1024}'
+  speakmore polish check [<厂商>[/<模型>] [--url <地址>] [--params <JSON>]]
                                 检查第二跳能不能用
   speakmore model check [<厂商>[/<模型>]]
                                 检查能不能用：拿那一家的 key 发一个最小的请求。不写就查现在用的
@@ -806,11 +807,11 @@ export default {
       config: "用法：speakmore config | speakmore config set <名字> <值> | speakmore config unset <名字>",
       theme: "用法：speakmore theme | speakmore theme <名字>",
       model: "用法：speakmore model | speakmore model <厂商>[/<模型>] | speakmore model check [<厂商>[/<模型>]]",
-      mode: "用法：speakmore mode | speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url …]",
+      mode: "用法：speakmore mode | speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url … --params …]",
       transcriber:
         "用法：speakmore transcriber | speakmore transcriber <模型> | speakmore transcriber download|cancel|delete <模型> [--yes] | speakmore transcriber check [<模型>]",
       polish:
-        "用法：speakmore polish | speakmore polish <厂商>[/<模型>] [--url <地址>] | speakmore polish check [<厂商>[/<模型>]]",
+        "用法：speakmore polish | speakmore polish <厂商>[/<模型>] [--url <地址>] [--params <JSON>] | speakmore polish check [<厂商>[/<模型>] [--url <地址>] [--params <JSON>]]",
     },
     update: {
       fromSource: "这一份是从源码跑的（{dir}）：用 git pull 更新。",
@@ -974,10 +975,12 @@ export default {
       alsoModels: "也能选：{models}",
       polishCurrent: "现在用的是 {model}",
       polishSwitch: "换一个：speakmore polish deepseek/deepseek-v4-pro",
-      polishCustom: "自定义服务（兼容 OpenAI 接口）：speakmore polish custom/<模型名> --url <地址>",
+      polishCustom: "自定义服务（兼容 OpenAI 接口）：speakmore polish custom/<模型名> --url <地址> [--params '<JSON>']",
+      polishParams: "额外参数：{params}",
       polishCheck: "看能不能用：speakmore polish check",
       polishSwitched: "第二跳换成了 {model}。",
       urlNeeded: "润色交给自定义服务时要给它的地址：--url <地址>（兼容 OpenAI 接口，多数以 /v1 结尾）",
+      paramsCustomOnly: "--params 只给自定义服务：润色交给 custom/<模型名> 时才带上",
       sourceCurrent: "下载源：{source}",
       sourceSwitch: "换下载源：speakmore config set modelSource {other}（下不动时会自动换另一个）",
     },
