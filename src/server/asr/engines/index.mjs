@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { fitTerms } from "../../../vocabulary/support.mjs";
 import { SPEECH_SAMPLE_RATE } from "../../audio/pcm.mjs";
 import { joinTexts, planWindows } from "../segment.mjs";
 
@@ -6,11 +7,13 @@ import { joinTexts, planWindows } from "../segment.mjs";
 // 把"一个下载好的模型目录"变成同一个接口，上面的人只认这个接口，换模型、换运行库都不用改：
 //
 //   const transcriber = await loadTranscriber({ model, dir, options });  // dir：模型下载到的目录
-//   const { text } = await transcriber.transcribe(samples);   // samples：16 kHz 单声道的 Float32Array，多长都行
+//   const { text } = await transcriber.transcribe(samples, { vocabulary });   // samples：16 kHz 单声道的 Float32Array，多长都行
 //   transcriber.backend                                       // 实际跑在哪：cpu、metal…
 //   transcriber.dispose();
 //
 // 模型一次吃不下的长录音（清单里写了 maxSeconds）在这一层切开逐段转写，全是静音的段不交给模型，适配器只管一段。
+// 用户词典（vocabulary，按先后）也在这一层按清单里这个模型的上限挑好，每一段都带上；不收词表的模型交空的。
+// 挑好的词放进哪里由适配器管：FAMILIES 里这一族写了 vocabulary 的才收。
 // text 是识别出的原文：去掉运行库自带的标记、首尾空白，别的不动（不转简体、不改标点），那是后面润色的事。
 // 适配器还导出 FAMILIES（认得哪几族模型：config 是文件怎么填进配置，clean 是这一族在这个运行库里吐出的标记怎么去掉）
 // 和 version()（运行库的版本，评测记进指纹）。
@@ -51,22 +54,24 @@ export async function loadTranscriber({ model, dir, options = {} }) {
     if (!entry) throw new Error(`模型 ${model.id} 的清单里没有 ${role} 这个文件`);
     return join(dir, entry.path);
   };
-  return windowed(await adapter.load({ model, file, options }), model.maxSeconds);
+  return windowed(await adapter.load({ model, file, options }), model.maxSeconds, model.vocabulary);
 }
 
 /**
- * 在适配器外面包一层：长录音按 maxSeconds 切开逐段转写再接起来，全是静音的段（或整段静音）不交给模型。
- * 上面的人照样只管交一整段录音。backend、dispose 照旧用适配器的
- * @param {{ transcribe(samples: Float32Array): Promise<{ text: string }> }} transcriber 适配器装出来的
+ * 在适配器外面包一层：长录音按 maxSeconds 切开逐段转写再接起来，全是静音的段（或整段静音）不交给模型；
+ * 用户词典按这个模型的上限挑好，每一段都带上。上面的人照样只管交一整段录音和整本词典。backend、dispose 照旧用适配器的
+ * @param {{ transcribe(samples: Float32Array, o: { vocabulary: string[] }): Promise<{ text: string }> }} transcriber 适配器装出来的
  * @param {number | null | undefined} maxSeconds 一次最多吃多少秒，没有上限是空的
+ * @param {object | null | undefined} [support] 这个模型怎么收词表（清单里的 vocabulary），不收是空的
  */
-export function windowed(transcriber, maxSeconds) {
+export function windowed(transcriber, maxSeconds, support = null) {
   return {
     ...transcriber,
-    async transcribe(samples) {
+    async transcribe(samples, { vocabulary = [] } = {}) {
+      const terms = fitTerms(vocabulary, support);
       const parts = [];
       for (const [start, end] of planWindows(samples, SPEECH_SAMPLE_RATE, maxSeconds)) {
-        parts.push((await transcriber.transcribe(samples.subarray(start, end))).text);
+        parts.push((await transcriber.transcribe(samples.subarray(start, end), { vocabulary: terms })).text);
       }
       return { text: joinTexts(parts) };
     },

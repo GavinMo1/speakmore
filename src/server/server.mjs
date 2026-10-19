@@ -19,9 +19,19 @@ const ERROR_DETAIL_MAX_LENGTH = 300;
 /**
  * 启动听写服务。refiner 是"音频进、文字出"的那一步（refine），可以带一个开口时先做准备的 prepare，
  * 由调用方传入，测试时换成假的。
+ * vocabulary 交出用户的词典（storage/vocabulary.mjs 的 terms）：开口时、整理时各读一次，交给 prepare 和 refine，
+ * 各个模型按自己的收法用（原版的词典在它的服务端，我们的在本机，读的地方也在这一层）
+ * @param {{ vocabulary?: () => readonly string[] }} options
  * @returns {Promise<{ port: number, close: () => Promise<void> }>}
  */
-export function startServer({ host = "127.0.0.1", port, refiner, log, maxAudioBytes = DEFAULT_MAX_AUDIO_BYTES }) {
+export function startServer({
+  host = "127.0.0.1",
+  port,
+  refiner,
+  log,
+  maxAudioBytes = DEFAULT_MAX_AUDIO_BYTES,
+  vocabulary = () => [],
+}) {
   return new Promise((resolve, reject) => {
     const wss = new WebSocketServer({
       host,
@@ -36,7 +46,16 @@ export function startServer({ host = "127.0.0.1", port, refiner, log, maxAudioBy
       wss.on("error", (error) => log.error("server_error", { error: String(error) }));
       resolve({ port: wss.address().port, close: () => closeServer(wss) });
     });
-    wss.on("connection", (socket) => handleConnection(socket, { refiner, log, maxAudioBytes }));
+    /** 这一次听写用的词典。读不出来（文件坏了）只是这次不带词典，记一条警告，不耽误听写 */
+    const vocabularyFor = (audioId) => {
+      try {
+        return vocabulary();
+      } catch (error) {
+        log.warn("vocabulary_unavailable", { audio_id: audioId, error: String(error?.message ?? error) });
+        return [];
+      }
+    };
+    wss.on("connection", (socket) => handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor }));
   });
 }
 
@@ -53,7 +72,7 @@ function closeServer(wss) {
   return new Promise((resolve, reject) => wss.close((error) => (error ? reject(error) : resolve())));
 }
 
-function handleConnection(socket, { refiner, log, maxAudioBytes }) {
+function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor }) {
   /** 正在收音频的那一次录音；end_audio 之后清空，整理在后台继续 */
   let session = null;
   /** 正在进行的整理，连接断开时用来取消 */
@@ -87,7 +106,7 @@ function handleConnection(socket, { refiner, log, maxAudioBytes }) {
         // 用户开口了：让模型那边先备好要用的东西（Gemini 建提示词缓存），说完整理时就用得上。
         // 不等它；备不好只是这一次贵一点，记一笔就算了
         Promise.resolve()
-          .then(() => refiner.prepare?.())
+          .then(() => refiner.prepare?.({ vocabulary: vocabularyFor(message.audioId) }))
           .catch((error) => log.warn("prepare_failed", { audio_id: message.audioId, error: String(error?.message) }));
         send(ServerType.STARTED, { audio_id: message.audioId, start_time: Date.now() });
         break;
@@ -136,6 +155,7 @@ function handleConnection(socket, { refiner, log, maxAudioBytes }) {
         mimeType: finished.mimeType,
         signal: abort.signal,
         audioId: finished.audioId,
+        vocabulary: vocabularyFor(finished.audioId),
       });
       // 日志只记长度：成品是用户说的话，不该留在日志里
       log.info("refined", {

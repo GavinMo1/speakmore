@@ -11,6 +11,8 @@ import { costOf } from "./prices/zhipu.mjs";
 //     原文在 text
 //   - 一段最长 30 秒、最大 25 MB。更长的录音由 transcriber.mjs 按清单里的 maxSeconds 切开，这里只管一段
 //   - 回话不报用量，按录音时长记账（价目在 prices/zhipu.mjs，是个约数）
+//   - 用户词典交成热词：每个词一个 hotwords 字段（文档写的是字符串数组，最多 100 个）。2026-10-19 拿真录音试过，
+//     这样写、写成一段 JSON 都生效（multica、DeepSeek Harness 认对了）；选前者，词里带逗号也不会被拆开
 //   - 报错写成 {"error":{"code","message"}}，业务码见 https://docs.bigmodel.cn/cn/api/api-code。欠费是 429 加 1113，
 //     照状态码会被当成暂时用不了，单独认出来
 
@@ -25,15 +27,16 @@ const secondsOf = (wav) => wav.readUInt32LE(40) / wav.readUInt32LE(28);
 /**
  * @param {{ apiKey: string, model: string, fetch?: typeof fetch }} options
  * @returns {{ ping(o: { signal?: AbortSignal }): Promise<{ text: string, usage: object }>,
- *   transcribe(o: { wav: Buffer, signal?: AbortSignal }): Promise<{ text: string, usage: object }> }}
+ *   transcribe(o: { wav: Buffer, signal?: AbortSignal, vocabulary?: readonly string[] }): Promise<{ text: string, usage: object }> }}
+ *   vocabulary：转写器按清单挑好的词（transcriber.mjs）
  */
 export function createClient({ apiKey, model, fetch = globalThis.fetch }) {
-  async function transcribe({ wav, signal }) {
+  async function transcribe({ wav, signal, vocabulary = [] }) {
     const payload = await postAudio(ENDPOINT, {
       name: NAME,
       apiKey,
       wav,
-      fields: { model, stream: "false" },
+      fields: { model, stream: "false", ...(vocabulary.length > 0 ? { hotwords: vocabulary } : {}) },
       signal,
       fetch,
     });

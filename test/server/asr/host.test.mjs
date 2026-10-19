@@ -26,6 +26,15 @@ test("在子进程里装上模型，样本原样（Float32Array）交过去，�
   await assert.rejects(transcriber.transcribe(new Float32Array(8)), /已经关了/);
 });
 
+test("用户词典随这一次转写交给子进程", async () => {
+  const transcriber = await spawn();
+  assert.deepEqual(await transcriber.transcribe(new Float32Array(8), { vocabulary: ["Runzo", "埋点"] }), {
+    text: "fake-model:8:Runzo|埋点",
+  });
+  assert.deepEqual(await transcriber.transcribe(new Float32Array(8), {}), { text: "fake-model:8" });
+  transcriber.dispose();
+});
+
 test("装不上模型：直接报错，说是哪个模型", async () => {
   await assert.rejects(spawn({ options: { failLoad: true } }), /装不上模型 fake-model：.*模型文件坏了/s);
 });

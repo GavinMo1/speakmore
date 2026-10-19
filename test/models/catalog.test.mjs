@@ -79,6 +79,15 @@ test("配置表：用的运行库登记过，它认得这一族，填配置时�
   }
 });
 
+test("词典：配置表里写了收词表的模型，它的运行库认得怎么放；没写的不放。只有 Qwen3-ASR 收（2026-10-19 两种运行库都实测过）", async () => {
+  for (const model of MODELS) {
+    const { FAMILIES } = await findEngine(model.engine).load();
+    assert.equal(Boolean(model.vocabulary), typeof FAMILIES[model.family].vocabulary === "function", model.id);
+    assert.equal(Boolean(model.vocabulary), model.family === "qwen3-asr", model.id);
+    if (model.vocabulary) assert.equal(model.vocabulary.kind, "hotwords");
+  }
+});
+
 test("标签按实测打：适合哪类芯片、能用什么跑，measured 里都要有对应的那一条", () => {
   for (const model of MODELS) {
     for (const tag of model.tags) {

@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createTranslator, msg } from "../../../src/i18n/index.mjs";
 import { ModelError } from "../../../src/server/providers/errors.mjs";
-import { SYSTEM_PROMPT, TASK_REMINDER } from "../../../src/server/refine/prompt.mjs";
+import { nativePromptWith, SYSTEM_PROMPT, TASK_REMINDER } from "../../../src/server/refine/prompt.mjs";
 import { createModelRefiner, createRefiner, generateClean } from "../../../src/server/refine/refiner.mjs";
+import { PROMPT_VOCABULARY } from "../../../src/vocabulary/support.mjs";
 
 const zh = createTranslator("zh-CN");
 
@@ -304,6 +305,31 @@ test("适配器没带回用量（它自己的毛病）：成品照常给，记�
   assert.equal(await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a6" }), "好的");
   assert.deepEqual(records, []);
   assert.equal(events.find(({ event }) => event === "usage_missing")?.level, "warn");
+});
+
+// ---------- 用户词典：原生识别的大模型都读系统提示词，词典接在提示词最后 ----------
+
+test("词典：接在系统提示词最后、一行一个；词典是空的时提示词和原来一字不差", () => {
+  assert.equal(nativePromptWith([]), SYSTEM_PROMPT);
+  const prompt = nativePromptWith(["Runzo", "Claude Code"]);
+  assert.ok(prompt.startsWith(SYSTEM_PROMPT));
+  assert.match(prompt.slice(SYSTEM_PROMPT.length), /用户词典[\s\S]*\nRunzo\nClaude Code\n/);
+});
+
+test("词典：听写时按提示词的上限挑词写进系统提示词，开口时建缓存用的是同一份", async () => {
+  const client = fakeClient(["好的"]);
+  const prepared = [];
+  client.prepare = async (request) => {
+    prepared.push(request);
+    return { usage: null };
+  };
+  const { refiner } = refinerWith(client, { audioTypes: ["audio/webm"] });
+  const vocabulary = Array.from({ length: PROMPT_VOCABULARY.maxTerms + 5 }, (_, i) => `term${i}`);
+  await refiner.prepare({ vocabulary });
+  await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", vocabulary });
+  const expected = nativePromptWith(vocabulary.slice(0, PROMPT_VOCABULARY.maxTerms));
+  assert.equal(client.calls[0].systemPrompt, expected);
+  assert.deepEqual(prepared, [{ systemPrompt: expected }]);
 });
 
 // ---------- 开口说话时先备好：Gemini 建提示词缓存，花的钱单记一笔 ----------

@@ -1,9 +1,10 @@
 import { LocalizedError, msg } from "../../i18n/index.mjs";
+import { fitTerms, PROMPT_VOCABULARY } from "../../vocabulary/support.mjs";
 import { chatEndpoint, findChatVendor, PROTOCOLS, requestFor } from "../chat/vendors.mjs";
 import { toModelError } from "../providers/errors.mjs";
 import { createMeter } from "./meter.mjs";
 import { textFromModelOutput } from "./output.mjs";
-import { POLISH_PROMPT, polishInput } from "./polish-prompt.mjs";
+import { POLISH_PROMPT, polishInput, polishPromptWith } from "./polish-prompt.mjs";
 
 // 润色：本地转写出的原文 → 成品文字。本地转写链路的第二跳，交给哪一家的哪个纯文字模型由用户选（chat/vendors.mjs）。
 // 和原生链路的 refiner.mjs 是兄弟：记账（meter.mjs）和收尾（output.mjs）共用，提示词各用各的。
@@ -20,7 +21,8 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * @param {string} [options.apiKey] 只用来从报错里抹掉它
  * @param {(record: object) => void} [options.onCall] 记账，见 meter.mjs
  * @param {string} [options.prompt] 系统提示词。调提示词时评测脚本（scripts/dev/eval-prompt.mjs）换成候选的版本
- * @returns {{ warmUp(): Promise<void>, polish(transcript: string, o: { signal?: AbortSignal, audioId?: string }): Promise<string> }}
+ * @returns {{ warmUp(): Promise<void>,
+ *   polish(transcript: string, o: { signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }): Promise<string> }}
  *   出错时抛的都是 ModelError
  */
 export function createPolisher({
@@ -52,14 +54,20 @@ export function createPolisher({
 
     /**
      * @param {string} transcript 本地转写出的原文
+     * @param {{ signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }} [options]
+     *   vocabulary：用户词典，按先后（按大模型提示词的上限挑好、写进系统提示词）
      * @returns {Promise<string>} 成品文字；原文是空的、或者模型判断没有要输入的内容时是空字符串
      */
-    async polish(transcript, { signal, audioId = null } = {}) {
+    async polish(transcript, { signal, audioId = null, vocabulary = [] } = {}) {
       // 没转出字（静音、只有噪声）就不必花这一次请求
       if (transcript.trim() === "") return "";
       try {
         const reply = await metered("dictation", audioId, () =>
-          client.complete({ system: prompt, user: polishInput(transcript), signal: withTimeout(signal) }),
+          client.complete({
+            system: polishPromptWith(fitTerms(vocabulary, PROMPT_VOCABULARY), prompt),
+            user: polishInput(transcript),
+            signal: withTimeout(signal),
+          }),
         );
         if (reply.problem) throw new LocalizedError(reply.problem);
         return textFromModelOutput(reply.text);

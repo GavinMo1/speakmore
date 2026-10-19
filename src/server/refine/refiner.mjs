@@ -1,16 +1,20 @@
 import { LocalizedError, msg } from "../../i18n/index.mjs";
+import { fitTerms, PROMPT_VOCABULARY } from "../../vocabulary/support.mjs";
 import { toWav } from "../audio/transcode.mjs";
 import { toModelError } from "../providers/errors.mjs";
 import { findProvider } from "../providers/index.mjs";
 import { createMeter } from "./meter.mjs";
 import { textFromModelOutput } from "./output.mjs";
-import { SYSTEM_PROMPT, TASK_REMINDER } from "./prompt.mjs";
+import { nativePromptWith, TASK_REMINDER } from "./prompt.mjs";
 
 // 原生链路：录音直接交给收音频的大模型，一次请求出成品。
 // 数字来自 scripts/dev/eval-prompt.mjs：同一批 60 条真实录音跑了 12 遍，共 720 条成品。
 
 /** 模型听音频时自带"几分几秒"的定位，偶尔会写进正文（720 条里 10 条，像"全面开干、 00:30 全面迁移"） */
 const STRAY_TIMESTAMP = /(?<!\d)\d{1,2}:\d{2}(?!\d)/;
+
+/** 这一次的系统提示词：用户词典按大模型提示词的上限挑好、接在最后 */
+const promptFor = (vocabulary) => nativePromptWith(fitTerms(vocabulary, PROMPT_VOCABULARY));
 
 /** 一次请求最多等多久。Gemini 一两秒、OpenAI 一分半的录音七八秒，留足余量 */
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -30,7 +34,8 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * @param {string} [options.apiKey] 只用来从报错里抹掉它
  * @param {(audio: Buffer, mimeType: string) => Promise<{ audio: Buffer, mimeType: string }>} [options.transcode]
  * @param {(record: object) => void} [options.onCall] 记账，见 meter.mjs
- * @returns {{ warmUp(): Promise<void>, prepare(): Promise<void>, refine(audio: Buffer, o: { mimeType: string, signal?: AbortSignal, audioId?: string }): Promise<string> }}
+ * @returns {{ warmUp(): Promise<void>, prepare(o?: { vocabulary?: readonly string[] }): Promise<void>,
+ *   refine(audio: Buffer, o: { mimeType: string, signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }): Promise<string> }}
  *   出错时抛的都是 ModelError
  */
 export function createRefiner({
@@ -68,22 +73,26 @@ export function createRefiner({
 
     /**
      * 用户开口说话了：让这一家先把要用的东西备好，说完整理时就用得上。现在只有 Gemini 有事做（建提示词缓存，
-     * 见 providers/gemini-cache.mjs），花的钱记一笔"缓存"。备不好只是这一次贵一点，记一条警告，从不往外抛
+     * 见 providers/gemini-cache.mjs），花的钱记一笔"缓存"。备不好只是这一次贵一点，记一条警告，从不往外抛。
+     * 缓存的是带着词典的那份提示词：和说完整理时用的是同一份
+     * @param {{ vocabulary?: readonly string[] }} [options] 用户词典，按先后
      */
-    async prepare() {
+    async prepare({ vocabulary = [] } = {}) {
       if (!client.prepare) return;
       try {
-        await metered("cache", null, () => client.prepare({ systemPrompt: SYSTEM_PROMPT }));
+        await metered("cache", null, () => client.prepare({ systemPrompt: promptFor(vocabulary) }));
       } catch (error) {
         log.warn("prompt_cache_failed", { provider: provider.id, error: described(error).detail.slice(0, 300) });
       }
     },
 
     /**
-     * @param {{ mimeType: string, signal?: AbortSignal, audioId?: string }} options audioId：这是哪一次听写，记账时用
+     * @param {{ mimeType: string, signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }} options
+     *   audioId：这是哪一次听写，记账时用；vocabulary：用户词典，按先后（写进系统提示词）
      * @returns {Promise<string>} 整理好的文字；没有人声时是空字符串
      */
-    async refine(audio, { mimeType, signal, audioId = null }) {
+    async refine(audio, { mimeType, signal, audioId = null, vocabulary = [] }) {
+      const systemPrompt = promptFor(vocabulary);
       try {
         // 只换一次：夹着时间戳要重来时用的是同一份
         const input = audioTypes.includes(mimeType)
@@ -93,7 +102,7 @@ export function createRefiner({
           const reply = await metered("dictation", audioId, () =>
             client.generate({
               ...input,
-              systemPrompt: SYSTEM_PROMPT,
+              systemPrompt,
               reminder: TASK_REMINDER,
               signal: withTimeout(signal),
             }),

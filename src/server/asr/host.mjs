@@ -33,7 +33,8 @@ function forkWorker(workerPath) {
  * @param {{ info: Function, warn: Function, error: Function }} request.log
  * @param {string} [request.workerPath] 测试时换成假的 worker
  * @param {(samples: Float32Array) => number} [request.timeoutFor] 一次转写最多等多少毫秒，测试时换成短的
- * @returns {Promise<{ backend: string, transcribe(samples: Float32Array): Promise<{ text: string }>, dispose(): void }>}
+ * @returns {Promise<{ backend: string,
+ *   transcribe(samples: Float32Array, o?: { vocabulary?: readonly string[] }): Promise<{ text: string }>, dispose(): void }>}
  *   装好了才返回；装不上会抛错（模型文件坏了、运行库加载不了）
  */
 export async function spawnTranscriber({
@@ -110,7 +111,8 @@ export async function spawnTranscriber({
   return {
     backend: first.backend,
 
-    async transcribe(samples) {
+    /** vocabulary：用户词典，按先后，随这一次交给子进程（收多少由那边按模型挑） */
+    async transcribe(samples, { vocabulary = [] } = {}) {
       if (disposed) throw new Error("转写进程已经关了");
       const state = await ready();
       const id = nextId++;
@@ -125,7 +127,7 @@ export async function spawnTranscriber({
         }, timeoutFor(samples));
         state.pending.set(id, { resolve, reject, timer });
         // 刚好在这一刻崩掉的话通道已经关了，退出的处理会把它报成失败
-        if (state.child.connected) state.child.send({ type: "transcribe", id, samples });
+        if (state.child.connected) state.child.send({ type: "transcribe", id, samples, vocabulary });
       });
     },
 

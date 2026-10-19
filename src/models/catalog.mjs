@@ -8,9 +8,11 @@
 // 国内源是同一批文件的副本。每个文件下载完都按 sha256 校验，所以从哪个源下的都一样。
 // files 按用途起名（encoder、tokens…），运行库的适配器按这些名字把文件填进它的配置（server/asr/engines/*.mjs 的 FAMILIES）。
 // maxSeconds 是一次最多吃多少秒的音频，有上限的才写：更长的录音由 server/asr/segment.mjs 切开逐段转写。
+// vocabulary 是收不收用户词典、收多少（vocabulary/support.mjs），不收的不写；放进哪里由运行库的适配器管。
 //
 // 加一个模型 = 在 MODELS 里加一项（它用的运行库要在 server/asr/engines/index.mjs 登记过，family 要是那个运行库认得的），
 // 再跑一次 scripts/release/sync-models.mjs 把文件传到国内源。标签和实测数字跑过评测再补。
+import { vocabularySupport } from "../vocabulary/support.mjs";
 
 // ---------- 下载源 ----------
 
@@ -118,7 +120,7 @@ const freeze = (model) =>
 
 /**
  * 每一项：
- *   id、name、engine（运行库）、family（运行库里的哪一族）、maxSeconds（可有可无）
+ *   id、name、engine（运行库）、family（运行库里的哪一族）、maxSeconds、vocabulary（都可有可无）
  *   license   许可的名字和原文地址
  *   author    原作者发布这个模型的仓库（Hugging Face）。FunASR 的许可要求注明来源和作者、保留模型名
  *   origin    原始地址：下载的这一份在哪个仓库、钉在哪次提交；notice 是那个仓库里随文件分发的声明（可有可无）
@@ -136,6 +138,9 @@ export const MODELS = Object.freeze(
       name: "Qwen3-ASR 0.6B (Q8_0)",
       engine: "transcribe-cpp",
       family: "qwen3-asr",
+      // 词表放在系统提示词里，超出运行库的预算它自己从后往前丢。2026-10-19 实测 27 秒的录音：Metal 上 1000 字只多 0.07 秒，
+      // 只用 CPU 时 600 字多 0.3 秒、1000 字多 0.6 秒，取 600
+      vocabulary: vocabularySupport("hotwords", { maxChars: 600 }),
       license: APACHE_LICENSE,
       author: "Qwen/Qwen3-ASR-0.6B",
       origin: {
@@ -262,6 +267,9 @@ export const MODELS = Object.freeze(
       // 这份 ONNX 导出时把解码器的 KV 缓存定死成 512 个位置（提示词 + 音频 + 输出的字都算在内），音频一秒约折 13 个。
       // 实测（bench/）：38 秒以上的录音只吐出 "language" 或空的，33–35 秒的悄悄丢掉后一半。按 20 秒一段切开留足余量
       maxSeconds: 20,
+      // 词表也占这 512 个位置。2026-10-19 拿 18.7 秒的录音实测：400 字（275 个 token）开始截音频，600 字只吐出标记。
+      // 20 秒一段的音频约 260 个，再给输出留出余量，词表限在 120 字（约 90 个）
+      vocabulary: vocabularySupport("hotwords", { maxChars: 120 }),
       license: APACHE_LICENSE,
       author: "Qwen/Qwen3-ASR-0.6B",
       origin: {

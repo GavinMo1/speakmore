@@ -16,8 +16,8 @@ afterEach(async () => {
   server = undefined;
 });
 
-async function start(refiner) {
-  server = await startServer({ port: 0, refiner, log: silentLog });
+async function start(refiner, options = {}) {
+  server = await startServer({ port: 0, refiner, log: silentLog, ...options });
   return server.port;
 }
 
@@ -243,4 +243,58 @@ test("整理的那一步不做准备（没有 prepare）也照常听写", async 
   const client = await connect(port);
   client.sendJson({ type: "start_audio", audio_id: "p2" });
   assert.equal((await client.next()).K, "audio_session_started");
+});
+
+test("用户词典：开口时和整理时各读一次，交给 prepare 和 refine", async () => {
+  const seen = [];
+  const port = await start(
+    {
+      async prepare(options) {
+        seen.push(["prepare", options.vocabulary]);
+      },
+      async refine(_audio, options) {
+        seen.push(["refine", options.vocabulary]);
+        return "Runzo";
+      },
+    },
+    { vocabulary: () => ["Runzo", "埋点"] },
+  );
+  const client = await connect(port);
+  client.sendJson({ type: "start_audio", audio_id: "v1" });
+  await client.next();
+  await sendChunk(client, "v1", 1, ogg("x"));
+  client.sendJson({ type: "end_audio", audio_id: "v1" });
+  await client.next();
+  assert.equal((await client.next()).V.refined_text, "Runzo");
+  assert.deepEqual(seen, [
+    ["prepare", ["Runzo", "埋点"]],
+    ["refine", ["Runzo", "埋点"]],
+  ]);
+});
+
+test("用户词典读不出来（文件坏了）：记一条警告，这次照常听写、不带词典", async () => {
+  const warnings = [];
+  const seen = [];
+  server = await startServer({
+    port: 0,
+    refiner: {
+      async refine(_audio, options) {
+        seen.push(options.vocabulary);
+        return "文字";
+      },
+    },
+    log: { ...silentLog, warn: (event, fields) => warnings.push({ event, ...fields }) },
+    vocabulary: () => {
+      throw new LocalizedError(msg("vocabulary.malformed", { file: "/x/vocabulary.json" }));
+    },
+  });
+  const client = await connect(server.port);
+  client.sendJson({ type: "start_audio", audio_id: "v2" });
+  await client.next();
+  await sendChunk(client, "v2", 1, ogg("x"));
+  client.sendJson({ type: "end_audio", audio_id: "v2" });
+  await client.next();
+  assert.equal((await client.next()).V.refined_text, "文字");
+  assert.deepEqual(seen, [[]]);
+  assert.ok(warnings.some(({ event, audio_id }) => event === "vocabulary_unavailable" && audio_id === "v2"));
 });

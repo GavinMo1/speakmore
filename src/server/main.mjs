@@ -2,6 +2,7 @@ import { log } from "../log.mjs";
 import { findModel } from "../models/catalog.mjs";
 import { createModelStore } from "../models/store.mjs";
 import { resolvePaths } from "../storage/paths.mjs";
+import { openVocabulary } from "../storage/vocabulary.mjs";
 import { startTranscriber } from "./asr/start.mjs";
 import { loadConfig } from "./config.mjs";
 import { createModeRefiner, describeRoute, usesLocalModel } from "./modes.mjs";
@@ -11,9 +12,13 @@ import { startServer, WS_PATH } from "./server.mjs";
 let config;
 /** 本地模型放在哪：只有本地转写链路用得上 */
 let modelsDir = null;
+/** 用户的词典：和后台应用读的是同一份（SPEAKMORE_HOME 下的 vocabulary.json） */
+let vocabulary;
 try {
   config = loadConfig(process.env);
-  if (usesLocalModel(config.route)) modelsDir = resolvePaths(process.env).modelsDir;
+  const paths = resolvePaths(process.env);
+  if (usesLocalModel(config.route)) modelsDir = paths.modelsDir;
+  vocabulary = openVocabulary(paths.vocabularyFile);
 } catch (error) {
   // 配置写错是使用上的问题，给一句人话就够了，不需要调用栈
   console.error(error.message);
@@ -49,7 +54,7 @@ const refiner = await createModeRefiner({ route, keys, transcriber, log });
 
 let server;
 try {
-  server = await startServer({ host: config.host, port: config.port, refiner, log });
+  server = await startServer({ host: config.host, port: config.port, refiner, log, vocabulary: vocabulary.terms });
 } catch (error) {
   if (error.code !== "EADDRINUSE") throw error;
   // 最常见的原因是已经开着一个了，给一句人话，不甩调用栈

@@ -20,12 +20,14 @@ export class UploadError extends Error {
 /**
  * 把一段 wav 连同几个字段 POST 出去，读完整个回话再解析。不是 2xx 就抛 UploadError
  * @param {string} url
- * @param {{ name: string, apiKey: string, wav: Buffer, fields: Record<string, string>, signal?: AbortSignal,
- *   fetch?: typeof fetch }} options name 是报错时怎么称呼对面
+ * @param {{ name: string, apiKey: string, wav: Buffer, fields: Record<string, string | readonly string[]>,
+ *   signal?: AbortSignal, fetch?: typeof fetch }} options name 是报错时怎么称呼对面；值是数组的字段每一项发一个同名字段
  */
 export async function postAudio(url, { name, apiKey, wav, fields, signal, fetch = globalThis.fetch }) {
   const form = new FormData();
-  for (const [field, value] of Object.entries(fields)) form.append(field, value);
+  for (const [field, value] of Object.entries(fields)) {
+    for (const each of Array.isArray(value) ? value : [value]) form.append(field, each);
+  }
   form.append("file", new Blob([wav], { type: "audio/wav" }), "audio.wav");
   // Content-Type 不自己写：fetch 按 FormData 写上带分隔串的那个
   const response = await fetch(url, {

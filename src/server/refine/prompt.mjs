@@ -97,3 +97,19 @@ export const SYSTEM_PROMPT = `你是语音输入法的整理引擎。用户对�
 3. 把图标换成线性的
 
 录音里没有人说话（静音、只有环境噪声）时，只输出 ${NO_SPEECH_MARK}，不要输出别的。`;
+
+/**
+ * 系统提示词带上用户词典（storage/vocabulary.mjs）：接在最后，一行一个词。词典是空的就原样交出 SYSTEM_PROMPT，
+ * 和没有词典时一字不差（Gemini 的提示词缓存、评测的指纹都照旧）。
+ * 挑哪些词送进来由调用方按上限挑好（vocabulary/support.mjs 的 PROMPT_VOCABULARY）
+ * @param {readonly string[]} terms
+ * @param {string} [prompt] 评测换成候选的提示词时用
+ */
+export function nativePromptWith(terms, prompt = SYSTEM_PROMPT) {
+  if (terms.length === 0) return prompt;
+  return `${prompt}
+
+用户词典：下面是他常说的专有名词、术语和人名，一行一个，写法以这里为准。
+${terms.join("\n")}
+录音里出现读音相同或相近、按上下文指的就是其中某个词的说法时，照词典的写法写（大小写、空格、连字符都照抄）。他没说到的词不要写进去，读音不像的也不要硬套。`;
+}
