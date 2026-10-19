@@ -748,7 +748,7 @@ test("update：下载地址上有更新的版本，就让安装脚本装上它�
   // 安装脚本没装成：它说的原因已经在终端上了，这边说一句没装成、原来的版本不变，退出码 1
   const failing = harness({ latest: "v0.2.0", installerExit: 1 });
   assert.equal(await failing.speakmore("update"), 1);
-  assert.match(failing.output.err, /安装未完成（安装脚本退出码 1），原来的版本保持不变/);
+  assert.match(failing.output.err, /安装未完成（安装脚本的退出码是 1）/);
 });
 
 const APP = "/Applications/SpeakMore.app";
@@ -782,8 +782,8 @@ test("update：正在跑的是 App：先把新的下好（这时它还在跑）�
   const daemon = fakeDaemon({ running: APP_RUNNING });
   const { speakmore, output, updates } = harness({ daemon, latest: "v0.2.0", app: { path: APP, version: "0.1.0" } });
   assert.equal(await speakmore("update"), 0);
-  // 按正在跑的那个进程去找：用户可能没放在"应用程序"里
-  assert.deepEqual(updates.lookedFor, [4242]);
+  // 按正在跑的那个进程去找：用户可能没放在"应用程序"里。下好以后、停之前再按它找一次（下载期间可能换了一个在跑）
+  assert.deepEqual(updates.lookedFor, [4242, 4242]);
   assert.deepEqual(updates.staged, [{ version: "0.2.0", path: APP, stillRunning: true }]);
   assert.deepEqual(updates.apps, [{ version: "v0.2.0", path: APP, stillRunning: false }]);
   assert.deepEqual(updates.installs, ["v0.2.0"]);

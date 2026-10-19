@@ -875,7 +875,12 @@ export default {
       "The downloaded SpeakMore.app is signed by a different developer ({found}; the installed one is {installed}), so it wasn't installed.",
     appReplace: "Couldn't replace {path}: {reason}. You can download {url} and drag it into Applications yourself.",
     busy: "Another update is in progress (PID {pid}). Wait for it to finish.",
-    installFailed: "The installation didn't finish (installer exit code {code}); the previous version is unchanged.",
+    installFailed: "The installation didn't finish (installer exit code {code}); see its output or the log for why.",
+    recordFailed: "Couldn't write the update record to {file} ({reason}); the progress shown in Settings may be off.",
+    exitedEarly: "The update process quit unexpectedly (exit code {code}); details are in {log}.",
+    reopenUnknown: "The new version is installed, but SpeakMore.app's location is unknown. Open it from Applications.",
+    appUnmount:
+      "Couldn't unmount the downloaded {file} ({reason}); it's still mounted at {mountpoint}. Eject it in Finder.",
     reopenFailed:
       "The new version is installed, but SpeakMore.app couldn't be reopened ({reason}). Open it from Applications.",
     restartFailed:

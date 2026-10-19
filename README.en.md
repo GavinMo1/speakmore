@@ -338,7 +338,7 @@ Comparison with every Typeless plan (heavy use, 100 dictations a day):
 - **Plug-in architecture**: each vendor is a strategy behind a common interface.
 - **Unified I/O**: audio is normalized to 16 kHz mono; every transcriber returns `{ text }`.
 - **Cross-platform development**: [`scripts/dev/win-*.sh`](scripts/dev) synchronize the working tree to a Windows machine over SSH, run tests remotely, restart the app from source with a debugging port, and capture the desktop.
-- **Automated tests**: 1088 unit tests and 22 installation tests.
+- **Automated tests**: 1100 unit tests and 22 installation tests.
 - **Quality gates**: Biome linting plus checks on interface sizing, typography and copy; `npm run check` runs them all.
 
 ```bash
@@ -510,7 +510,7 @@ flowchart LR
 <details>
 <summary><b>🔄 Updating and uninstalling</b></summary>
 
-- **Update**: in the app, Settings › General › Software update checks for and installs new versions; `speakmore update` in a terminal does the same. Both use one update process: download and verify first, then replace the terminal installation and SpeakMore.app, and reopen whichever was running. SpeakMore is unavailable for only a few seconds.
+- **Update**: in the app, Settings › General › Software update checks for and installs new versions; `speakmore update` in a terminal does the same. Both use one update process: download and verify in the background first, then replace the terminal installation and SpeakMore.app, and reopen whichever was running. SpeakMore stops only while the files are being replaced.
 - **0.10.0 and earlier**: the app has no update button yet. On a Mac, download the new dmg and install it over the existing copy; on Windows, run `speakmore update` or the installer again.
 - **Preserved on update**: settings, keys, history, recordings and the dictionary.
 - **Uninstall**: `speakmore uninstall` stops SpeakMore and removes the entire directory, the command and the Keychain entry.

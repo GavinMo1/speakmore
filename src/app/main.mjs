@@ -287,6 +287,7 @@ async function main() {
     launch: launchUpdate,
     onChange: () => setupChanged(),
     log,
+    logFile: PATHS.logFile,
   });
   // 每次调模型记一笔账，开着的历史窗口跟着更新花费（记账出错由整理流程写日志，不连累听写）
   const service = EXTERNAL_SERVER_URL

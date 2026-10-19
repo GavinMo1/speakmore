@@ -30,6 +30,7 @@ export function relevantFailure(progress, current, now = new Date()) {
  * @param {() => { on: (event: string, listener: (code: number | null) => void) => void }} options.launch
  *   起更新进程（交回子进程，退出时报一声）。起不来就抛
  * @param {() => void} options.onChange 要显示的东西变了：让窗口、菜单栏重画
+ * @param {string} options.logFile 更新进程说的话记在哪：它没留下记录就退出时，告诉用户去哪看
  */
 export function createAppUpdates({
   updates,
@@ -37,6 +38,7 @@ export function createAppUpdates({
   launch,
   onChange,
   log,
+  logFile,
   now = () => new Date(),
   every = setInterval,
   stopEvery = clearInterval,
@@ -54,9 +56,24 @@ export function createAppUpdates({
   let justUpdated = null;
   let watcher = null;
 
+  /**
+   * update.json 里现在记着的（中断的算没完成）。读不了（权限、被占着）不能拖垮 App：
+   * 记一笔，当没有记录，更新照样能从设置里点
+   */
+  function recordedProgress() {
+    try {
+      return updates.progress();
+    } catch (error) {
+      log.warn("update_record_unreadable", { error: String(error?.message ?? error) });
+      return null;
+    }
+  }
+
   /** 设置页、菜单栏要的：现在是哪个版本、有没有新的、更新进行到哪了 */
   function describe() {
-    const recorded = updates.progress();
+    const recorded = recordedProgress();
+    // 命令行那边正在更新、这边才打开设置：接着盯，进行到哪跟着变
+    if (recorded?.state === "running") watch();
     let progress = null;
     if (recorded?.state === "running") progress = recorded;
     else if (launching) progress = { state: "running", phase: "starting", by: "app" };
@@ -98,9 +115,9 @@ export function createAppUpdates({
   /** 更新进行中盯着 update.json：有变化就重画；做完了（没把这个 App 换掉的情形）停下、按新的记录再看一次有没有新版本 */
   function watch() {
     if (watcher !== null) return;
-    let last = JSON.stringify(updates.progress());
+    let last = JSON.stringify(recordedProgress());
     watcher = every(() => {
-      const seen = updates.progress();
+      const seen = recordedProgress();
       const text = JSON.stringify(seen);
       if (text !== last) {
         last = text;
@@ -109,9 +126,19 @@ export function createAppUpdates({
       if (seen?.state !== "running" && !launching) {
         stopEvery(watcher);
         watcher = null;
+        // 这个 App 还开着就看到了结果（没被这次更新停掉）：已经告诉过用户了，下次启动不再说
+        if (seen?.by === "app" && ["done", "failed"].includes(seen.state)) markShown();
         refresh().catch(() => {});
       }
     }, WATCH_MS);
+  }
+
+  function markShown() {
+    try {
+      updates.markShown();
+    } catch (error) {
+      log.warn("update_record_unwritable", { error: String(error?.message ?? error) });
+    }
   }
 
   return {
@@ -120,12 +147,17 @@ export function createAppUpdates({
 
     /** 启动之后：上一次是 App 自己点的更新，说结果（交回 true 让主进程把设置打开）；顺带看看有没有新版本，之后隔一阵看一次 */
     afterLaunch() {
-      const recorded = updates.progress();
-      // 这里点的更新做完了（换成了或者没换成）、这个 App 是被它重新打开的：把设置亮出来说结果，只说一次
-      const announce = ["done", "failed"].includes(recorded?.state) && recorded.by === "app" && !recorded.shown;
+      const recorded = recordedProgress();
+      // 这里点的更新做完了（换成了、没换成，或者半路断了）、这个 App 是被它停掉的：把设置亮出来说结果，只说一次。
+      // 没被停掉的 App 当场就看到了结果（watch 里记过），不再说
+      const announce =
+        ["done", "failed"].includes(recorded?.state) &&
+        recorded.by === "app" &&
+        Boolean(recorded.stopped) &&
+        !recorded.shown;
       if (announce) {
         if (recorded.state === "done") justUpdated = recorded.version;
-        updates.markShown();
+        markShown();
       }
       if (recorded?.state === "running") watch();
       refresh().catch(() => {});
@@ -136,13 +168,19 @@ export function createAppUpdates({
     /** 开始更新：另起一个进程去做。已经在更新了（命令行或者刚才点过）就不再起 */
     start() {
       if (updates.self === null) throw new LocalizedError(msg("preferences.update.fromSource"));
-      if (updates.progress()?.state === "running" || launching) return describe();
+      const before = recordedProgress();
+      if (before?.state === "running" || launching) return describe();
       launchProblem = null;
       launching = true;
       try {
         const child = launch();
         child.on("exit", (code) => {
           launching = false;
+          // 没留下这一次的记录就退出了（家目录读不了、锁被占着、一启动就出错）：不能让按钮转一下就没了下文
+          const after = recordedProgress();
+          if (code !== 0 && after?.startedAt === before?.startedAt && after?.state !== "running") {
+            launchProblem = msg("update.exitedEarly", { code, log: logFile });
+          }
           if (code !== 0) log.warn("update_process_exited", { code });
           onChange();
         });

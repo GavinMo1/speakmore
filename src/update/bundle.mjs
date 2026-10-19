@@ -117,6 +117,9 @@ export function createBundles({ env, release, platform = process.platform, arch 
       const old = join(dirname(app), `.${basename(app)}.old`);
       const cannotReplace = (error, reason = error.message) =>
         new LocalizedError(msg("update.appReplace", { path: app, reason, url: release.url(path) }), { cause: error });
+      /** 新的已经拷好放在旁边、可以换了 */
+      let ready = false;
+      let failure = null;
       try {
         const dmg = join(dir, name);
         await release.fetchVerified(path, dmg);
@@ -144,17 +147,32 @@ export function createBundles({ env, release, platform = process.platform, arch 
           // ditto 原样拷贝应用包，保留签名和里面的符号链接
           await run("ditto", [source, staged]);
         } catch (error) {
-          rmSync(staged, { recursive: true, force: true });
           throw cannotReplace(error, error.said);
         }
-      } finally {
-        // 卸不下来时目录还挂着，不能连目录一起删（会去删只读盘上的文件）：强制卸，再不行就把错报出去
-        if (mounted) {
-          await run("hdiutil", ["detach", "-quiet", mountpoint]).catch(() =>
-            run("hdiutil", ["detach", "-force", "-quiet", mountpoint]),
-          );
-        }
-        rmSync(dir, { recursive: true, force: true });
+        ready = true;
+      } catch (error) {
+        failure = error;
+      }
+      // 卸下下载的安装包：卸不掉就强制卸
+      let unmountError = null;
+      if (mounted) {
+        await run("hdiutil", ["detach", "-quiet", mountpoint])
+          .catch(() => run("hdiutil", ["detach", "-force", "-quiet", mountpoint]))
+          .catch((error) => {
+            unmountError = error;
+          });
+      }
+      // 没走到可以换的那一步（出错了），或者要报卸不下来：不在 App 旁边留下拷了一半、或者拷好了的几百兆
+      if (!ready || unmountError) rmSync(staged, { recursive: true, force: true });
+      // 卸不下来时目录还挂着，不能连目录一起删（会去删只读盘上的文件）
+      if (!unmountError) rmSync(dir, { recursive: true, force: true });
+      // 前面已经出错的报前面那个，那个更说明问题
+      if (failure) throw failure;
+      if (unmountError) {
+        throw new LocalizedError(
+          msg("update.appUnmount", { file: name, mountpoint, reason: unmountError.said ?? unmountError.message }),
+          { cause: unmountError },
+        );
       }
 
       return {

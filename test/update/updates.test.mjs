@@ -46,7 +46,21 @@ function setup({
 } = {}) {
   const steps = [];
   const phases = [];
-  const phase = () => phases.push(readProgress(paths)?.phase ?? null);
+  /** update.json 里现在记的 state；读不了（测试里故意弄坏的）是 unreadable */
+  const stateNow = () => {
+    try {
+      return readProgress(paths)?.state;
+    } catch {
+      return "unreadable";
+    }
+  };
+  const phase = () => {
+    try {
+      phases.push(readProgress(paths)?.phase ?? null);
+    } catch {
+      phases.push("unreadable");
+    }
+  };
   let current = running;
   const instance = {
     async status() {
@@ -98,7 +112,7 @@ function setup({
       async open(path) {
         steps.push(`open-app:${path}`);
         // 重新打开的那一刻结果已经记下了：打开的那个一启动就照它说
-        phases.push(`reopen:${readProgress(paths)?.state}`);
+        phases.push(`reopen:${stateNow()}`);
         openApp();
       },
     },
@@ -121,12 +135,20 @@ function setup({
       },
       async start() {
         steps.push("start-home");
-        phases.push(`reopen:${readProgress(paths)?.state}`);
+        phases.push(`reopen:${stateNow()}`);
         return startCode;
       },
     },
   });
-  return { updates, steps, phases };
+  return {
+    updates,
+    steps,
+    phases,
+    /** 改成另一个在跑（模拟下载期间用户打开、退出了 SpeakMore） */
+    setRunning: (value) => {
+      current = value;
+    },
+  };
 }
 
 const APP = { path: "/Applications/SpeakMore.app", version: "0.1.0" };
@@ -206,6 +228,7 @@ test("更新：先把两份都下好（这时 App 还在跑），再停、换、
     "find-app:4242",
     "stage-app:0.2.0",
     "stage-home:0.2.0",
+    "find-app:4242",
     "stop",
     "commit-app",
     "install-home:0.2.0",
@@ -218,6 +241,7 @@ test("更新：先把两份都下好（这时 App 还在跑），再停、换、
   assert.equal(record.by, "app");
   assert.equal(record.version, "0.2.0");
   assert.deepEqual(record.from, { home: "0.1.0", bundle: "0.1.0" });
+  assert.equal(record.stopped, "bundle", "记下停掉的是谁：被停掉又打开的 App 一启动就说结果");
   assert.equal(existsSync(paths.updateLock), false, "锁放掉了");
 });
 
@@ -253,7 +277,7 @@ test("更新：下载、核对失败：什么都不停，记下原因，下好�
 
 test("更新：安装脚本没装成：原来在跑的照样重新打开，记下没装成", async () => {
   const { updates, steps, phases } = setup({ running: HOME_RUNNING, installCode: 2 });
-  await assert.rejects(updates.run({ by: "cli" }), (error) => /退出码 2/.test(zh.text(error.problem)));
+  await assert.rejects(updates.run({ by: "cli" }), (error) => /退出码是 2/.test(zh.text(error.problem)));
   assert.equal(phases.at(-1), "reopen:failed");
   assert.deepEqual(steps.slice(-3), ["install-home:0.2.0", "start-home", "discard-home"]);
   assert.equal(readProgress(paths).state, "failed");
@@ -377,4 +401,94 @@ test("更新：临时目录删不掉不算失败，说一声留在了哪", async
   assert.equal(result.updated, true);
   assert.ok(said.includes("临时文件未能删除：/tmp/x（EBUSY），可以手动删除。"), said.join("\n"));
   assert.equal(readProgress(paths).state, "done");
+});
+
+test("更新：下载期间用户打开了 App（之前什么都没在跑）：换之前看出来，停掉它、换上、重新打开", async () => {
+  let setRunning;
+  const kit = setup({
+    running: null,
+    app: APP,
+    home: null,
+    stageApp: () => setRunning(APP_RUNNING),
+  });
+  setRunning = kit.setRunning;
+  const result = await kit.updates.run({ by: "cli" });
+  assert.equal(result.restarted, "bundle");
+  assert.deepEqual(kit.steps.slice(-4), ["find-app:4242", "stop", "commit-app", `open-app:${APP.path}`]);
+});
+
+test("更新：下载期间用户自己退出了 App：不停、换完也不替他打开", async () => {
+  let setRunning;
+  const kit = setup({ running: APP_RUNNING, app: APP, stageHome: () => setRunning(null) });
+  setRunning = kit.setRunning;
+  const result = await kit.updates.run({ by: "cli" });
+  assert.deepEqual([result.restarted, result.running], [null, false]);
+  assert.ok(!kit.steps.includes("stop"));
+  assert.ok(!kit.steps.some((step) => step.startsWith("open-app")));
+});
+
+test("更新：在跑的是打包的 App、可找不到它的应用包：照样换家目录那一份，最后照实说不知道该打开哪个", async () => {
+  const { updates, steps } = setup({ running: APP_RUNNING, app: null });
+  await assert.rejects(updates.run({ by: "cli" }), (error) =>
+    /不知道 SpeakMore\.app 在哪/.test(zh.text(error.problem)),
+  );
+  assert.ok(steps.includes("install-home:0.2.0"));
+  assert.equal(readProgress(paths).state, "failed");
+});
+
+test("更新：记录写不进去（被占着、磁盘满）不耽误换程序和重新打开，最后说一声", async () => {
+  const said = [];
+  const { updates, steps } = setup({ running: HOME_RUNNING });
+  // update.json 的位置上是一个目录：写不进去
+  mkdirSync(paths.updateFile, { recursive: true });
+  const result = await updates.run({ by: "cli", report: (message) => said.push(zh.text(message)) });
+  assert.equal(result.updated, true);
+  assert.deepEqual(steps.slice(-3), ["install-home:0.2.0", "start-home", "discard-home"]);
+  assert.ok(
+    said.some((line) => line.startsWith("更新记录写不进")),
+    said.join("\n"),
+  );
+});
+
+test("检查：上一次没问到的，一小时后就再问，不等一天", async () => {
+  const offline = setup({ latest: new Error("没网") });
+  await offline.updates.check();
+  assert.equal(JSON.parse(readFileSync(paths.updateCheckFile, "utf8")).failed, true);
+  const soon = setup({ now: () => new Date(NOW.getTime() + 30 * 60 * 1000) });
+  await soon.updates.check();
+  assert.deepEqual(soon.steps, [], "半小时内不再问");
+  const later = setup({ now: () => new Date(NOW.getTime() + 61 * 60 * 1000) });
+  await later.updates.check();
+  assert.ok(later.steps.includes("latest"));
+  assert.equal(JSON.parse(readFileSync(paths.updateCheckFile, "utf8")).failed, undefined, "问到了就不再标没问到");
+});
+
+test("中断的更新：告诉过用户之后记成没完成、已说过，不再每次启动都当成新的", () => {
+  const { updates } = setup();
+  mkdirSync(paths.runDir, { recursive: true });
+  writeFileSync(
+    paths.updateFile,
+    JSON.stringify({
+      state: "running",
+      phase: "installing",
+      by: "app",
+      pid: DEAD_PID,
+      startedAt: NOW.toISOString(),
+      stopped: "bundle",
+    }),
+  );
+  assert.equal(updates.progress().finishedAt, NOW.toISOString());
+  updates.markShown();
+  const record = readProgress(paths);
+  assert.deepEqual([record.state, record.shown], ["failed", true]);
+});
+
+test("锁：拿了两小时还没放的不算（进程号可能被别的程序用上了）", async () => {
+  const { utimesSync } = await import("node:fs");
+  mkdirSync(paths.runDir, { recursive: true });
+  writeFileSync(paths.updateLock, String(process.pid));
+  const old = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  utimesSync(paths.updateLock, old, old);
+  assert.doesNotThrow(() => acquireLock(paths, { pid: 444, alive: () => true }));
+  assert.equal(readFileSync(paths.updateLock, "utf8"), "444");
 });

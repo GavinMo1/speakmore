@@ -44,6 +44,9 @@ export function writeProgress(paths, record) {
   writeJson(paths.updateFile, record);
 }
 
+/** 一次更新最多做多久。拿锁超过这么久的当没人拿着（和 index.mjs 里算中断的时限一样） */
+const LOCK_AT_MOST_MS = 2 * 60 * 60 * 1000;
+
 /** 这个进程还在不在。在、只是不归我们管（EPERM）也算在 */
 export function isAlive(pid) {
   try {
@@ -69,9 +72,12 @@ export function acquireLock(paths, { pid = process.pid, alive = isAlive } = {}) 
       if (error.code !== "EEXIST") throw error;
       const text = readFileSync(paths.updateLock, "utf8").trim();
       const holder = /^\d+$/.test(text) ? Number(text) : Number.NaN;
+      const age = Date.now() - statSync(paths.updateLock).mtimeMs;
       // 还没写进进程号的：别人刚建好、正要写。刚建的几秒内算有人拿着
-      const fresh = !Number.isInteger(holder) && Date.now() - statSync(paths.updateLock).mtimeMs < 10_000;
-      if (fresh || (Number.isInteger(holder) && holder > 0 && holder !== pid && alive(holder))) {
+      const fresh = !Number.isInteger(holder) && age < 10_000;
+      // 拿了两小时还没放的：那个进程早就没了，进程号被别的程序用上了（Windows 上常见），不算
+      const held = Number.isInteger(holder) && holder > 0 && holder !== pid && alive(holder) && age < LOCK_AT_MOST_MS;
+      if (fresh || held) {
         throw new LocalizedError(msg("update.busy", { pid: Number.isInteger(holder) ? holder : "?" }));
       }
       rmSync(paths.updateLock, { force: true });

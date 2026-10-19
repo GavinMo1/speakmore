@@ -1,4 +1,5 @@
 import { TimeoutError } from "../../control.mjs";
+import { problemOf } from "../../i18n/index.mjs";
 import {
   currentSettings,
   noPositionals,
@@ -104,9 +105,16 @@ export async function status(args, io) {
   noPositionals(positionals, "status");
   const settings = currentSettings(io);
   const current = await io.daemon.status({ recheck: true });
-  // 顺带看有没有新版本（一天最多问一次下载地址，App 问过的这边也认）和更新进行得怎样：和 App 设置里显示的是同一份
-  const check = await io.updates.check({ runningApp: current?.packaged ? current.pid : null });
-  const progress = io.updates.progress();
+  // 顺带看有没有新版本（一天最多问一次下载地址，App 问过的这边也认）和更新进行得怎样：和 App 设置里显示的是同一份。
+  // 这是顺带的：家目录里的记录读不了也不能让看状态失败，照实提一句
+  let check = { available: false, behind: [], latest: null };
+  let progress = null;
+  try {
+    check = await io.updates.check({ runningApp: current?.packaged ? current.pid : null });
+    progress = io.updates.progress();
+  } catch (error) {
+    io.err(io.t.text(problemOf(error)));
+  }
   if (values.json) {
     const newVersion = check.available ? check.latest : null;
     io.out(JSON.stringify({ running: current !== null, status: current, settings, stats: readStats(io), newVersion }));

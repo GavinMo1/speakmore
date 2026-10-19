@@ -75,6 +75,7 @@ function setup(kernelOptions, { launch } = {}) {
       }),
     onChange: () => changes++,
     log: quietLog,
+    logFile: "/tmp/main.log",
     now: () => NOW,
     every: timers.every,
     stopEvery: timers.stopEvery,
@@ -180,15 +181,19 @@ test("从源码跑的：不查、不让更新", async () => {
 });
 
 test("上一次是这里点的更新、刚换好重新打开：说一句已更新到哪个版本，只说一次；命令行更新的不说", () => {
-  const done = { state: "done", version: "0.10.1", by: "app", pid: 1 };
+  const done = { state: "done", version: "0.10.1", by: "app", pid: 1, stopped: "bundle" };
   const fresh = setup({ progress: done });
   assert.equal(fresh.appUpdates.afterLaunch(), true);
   assert.equal(fresh.appUpdates.describe().justUpdated, "0.10.1");
   assert.equal(fresh.kernel.shown, 1);
   assert.equal(setup({ progress: { ...done, shown: true } }).appUpdates.afterLaunch(), false);
   assert.equal(setup({ progress: { ...done, by: "cli" } }).appUpdates.afterLaunch(), false);
+  // 这个 App 没被停掉（下载就没成，或者换的是另一份）：当场就看到了，不再说
+  assert.equal(setup({ progress: { ...done, stopped: null } }).appUpdates.afterLaunch(), false);
   // 没换成、被重新打开的也说（设置里照记录说原因）
-  const failed = setup({ progress: { state: "failed", version: "0.10.1", by: "app", pid: 1, problem: "x" } });
+  const failed = setup({
+    progress: { state: "failed", version: "0.10.1", by: "app", pid: 1, problem: "x", stopped: "home" },
+  });
   assert.equal(failed.appUpdates.afterLaunch(), true);
   assert.equal(failed.appUpdates.describe().justUpdated, null);
   assert.equal(failed.appUpdates.describe().progress.state, "failed");
@@ -205,4 +210,50 @@ test("没成的更新提不提：要换的版本还没装上才提；不知道�
   const { appUpdates } = setup({ progress: { ...failed, version: "0.10.1" } });
   assert.equal(appUpdates.describe().progress.state, "failed");
   assert.equal(setup({ progress: { ...failed, version: "0.9.0" } }).appUpdates.describe().progress, null);
+});
+
+test("更新进程没留下这一次的记录就退出了：说它意外退出、去哪看日志；有记录（拿不到锁时是命令行那条）就照记录", () => {
+  const { appUpdates, children } = setup({ check: AVAILABLE });
+  appUpdates.start();
+  children[0].emit("exit", 1);
+  assert.match(
+    zh.text(appUpdates.describe().launchProblem),
+    /更新进程意外退出（退出码 1），经过见日志 \/tmp\/main\.log/,
+  );
+
+  const busy = setup({ check: AVAILABLE });
+  busy.appUpdates.start();
+  busy.kernel.record = {
+    state: "running",
+    phase: "downloading",
+    by: "cli",
+    version: "0.10.1",
+    pid: process.pid,
+    startedAt: "x",
+  };
+  busy.children[0].emit("exit", 1);
+  assert.equal(busy.appUpdates.describe().launchProblem, null);
+  assert.equal(busy.appUpdates.describe().progress.by, "cli");
+});
+
+test("这个 App 开着就看到了结果：记下已经说过，下次启动不再说；命令行正在更新时打开设置也接着盯", () => {
+  const { appUpdates, kernel, timers, children } = setup({ check: AVAILABLE });
+  appUpdates.start();
+  kernel.record = { state: "failed", version: "0.10.1", by: "app", pid: 1, problem: "x", stopped: null };
+  children[0].emit("exit", 1);
+  timers.tick(500);
+  assert.equal(kernel.shown, 1);
+
+  const cli = setup({ progress: { state: "running", phase: "downloading", by: "cli", version: "0.10.1", pid: 1 } });
+  cli.appUpdates.describe();
+  assert.equal(cli.timers.count(), 1, "开始盯 update.json");
+});
+
+test("update.json 读不了（权限、被占着）：App 照常起来，当没有记录", () => {
+  const { appUpdates, kernel } = setup({ check: AVAILABLE });
+  kernel.progress = () => {
+    throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+  };
+  assert.equal(appUpdates.describe().progress, null);
+  assert.equal(appUpdates.afterLaunch(), false);
 });

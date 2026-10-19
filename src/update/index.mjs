@@ -16,6 +16,8 @@ import { compareVersions, parseVersion } from "./versions.mjs";
 // App 发起的更新跑在另一个进程里（background.mjs）：App 在第 3 步退出、第 4 步被重新打开，照 update.json 显示结果。
 
 const CHECK_EVERY_MS = 24 * 60 * 60 * 1000;
+/** 上一次没问到（开机时网还没起来、断网）：隔一小时再试，不等一天 */
+const RETRY_FAILED_MS = 60 * 60 * 1000;
 /** 顺带的检查（status、App 启动后）最多等几秒：不能因为没网让看状态变慢 */
 const PASSIVE_TIMEOUT_SECONDS = 3;
 /** 用户点了检查、要更新时等得久一些 */
@@ -31,7 +33,7 @@ const RUN_AT_MOST_MS = 2 * 60 * 60 * 1000;
  * @param {string} options.version 这份程序的版本
  * @param {ReturnType<import("../instance.mjs").createInstance>} options.instance 正在运行的那个：问状态、请它退出
  * @param {boolean} [options.progress] 下载时在终端上显示进度条
- * @param {"inherit" | unknown[]} [options.stdio] 安装脚本、启动命令说的话接到哪
+ * @param {"inherit" | "forward"} [options.stdio] 安装脚本、启动命令说的话接到哪（exec.mjs 的 runToEnd）
  */
 export function createUpdates({
   paths,
@@ -87,11 +89,12 @@ export function createUpdates({
   }
 
   /** 把停掉的那个重新打开。家目录里那一份的启动命令自己会说状态，失败的原因也在它说的话里 */
-  async function reopen(stopped, copies, report) {
+  async function reopen(stopped, bundlePath, report) {
     if (stopped === "bundle") {
-      const bundle = copies.find((copy) => copy.kind === "bundle");
+      // 停掉的是一个不认得的应用包（应用标识对不上、SPEAKMORE_APP 指着别处）：不知道该打开哪个，照实说
+      if (!bundlePath) throw new LocalizedError(msg("update.reopenUnknown"));
       try {
-        await bundles.open(bundle.path);
+        await bundles.open(bundlePath);
       } catch (error) {
         throw new LocalizedError(msg("update.reopenFailed", { reason: error.said ?? error.message }), { cause: error });
       }
@@ -100,6 +103,19 @@ export function createUpdates({
       const code = await homes.start();
       if (code !== 0) throw new LocalizedError(msg("update.restartFailed", { code, log: paths.logFile }));
     }
+  }
+
+  /**
+   * 正在进行的、或者上一次的更新（update.json）；没有是 null。标着正在进行、可那个进程已经不在了（或者过了两小时，
+   * 进程号多半被别的程序用上了）的，算中断：记成没完成，完成时间按开始的时间算
+   */
+  function currentProgress() {
+    const record = readProgress(paths);
+    if (record?.state !== "running") return record;
+    const stale = !alive(record.pid) || now() - Date.parse(record.startedAt) > RUN_AT_MOST_MS;
+    if (!stale) return record;
+    const problem = msg("update.interrupted", { log: paths.logFile });
+    return { ...record, state: "failed", phase: null, problem, finishedAt: record.startedAt };
   }
 
   return {
@@ -119,15 +135,20 @@ export function createUpdates({
       const last = readCheck(paths);
       result.latest = parseVersion(last?.latest);
       result.checkedAt = last?.checkedAt ?? null;
-      if (force || last === null || now() - Date.parse(last.checkedAt) >= CHECK_EVERY_MS) {
+      const every = last?.failed ? RETRY_FAILED_MS : CHECK_EVERY_MS;
+      if (force || last === null || now() - Date.parse(last.checkedAt) >= every) {
         try {
           result.latest = await latestVersion(force ? ACTIVE_TIMEOUT_SECONDS : PASSIVE_TIMEOUT_SECONDS);
         } catch (error) {
           result.problem = problemOf(error);
         }
-        // 没问到也记下：一天之内不再每次都等它（用户点检查、要更新时照样去问）
+        // 没问到也记下（failed）：一小时之内不再每次都等它（用户点检查、要更新时照样去问）
         result.checkedAt = now().toISOString();
-        writeCheck(paths, { checkedAt: result.checkedAt, latest: result.latest });
+        writeCheck(paths, {
+          checkedAt: result.checkedAt,
+          latest: result.latest,
+          ...(result.problem === null ? {} : { failed: true }),
+        });
       }
       const latest = result.latest;
       const behind =
@@ -140,18 +161,11 @@ export function createUpdates({
     /**
      * 正在进行的、或者上一次的更新（update.json）；没有是 null。标着正在进行、可那个进程已经不在了的，算中断
      */
-    progress() {
-      const record = readProgress(paths);
-      if (record?.state !== "running") return record;
-      const stale = !alive(record.pid) || now() - Date.parse(record.startedAt) > RUN_AT_MOST_MS;
-      return stale
-        ? { ...record, state: "failed", problem: msg("update.interrupted", { log: paths.logFile }) }
-        : record;
-    },
+    progress: currentProgress,
 
-    /** App 把更新的结果告诉过用户了，下次启动不再说 */
+    /** App 把更新的结果告诉过用户了，下次启动不再说。中断的那种也记下（记成没完成），不然每次启动都当成新的 */
     markShown() {
-      const record = readProgress(paths);
+      const record = currentProgress();
       if (record?.state === "done" || record?.state === "failed") writeProgress(paths, { ...record, shown: true });
     },
 
@@ -167,9 +181,15 @@ export function createUpdates({
       if (self === null) throw new LocalizedError(msg("update.fromSource", { dir: packageDir }));
       const unlock = acquireLock(paths, { pid, alive });
       const record = { state: "running", phase: "checking", by, pid, startedAt: now().toISOString() };
+      /** 记录写不进去（杀毒软件占着、磁盘满）不能耽误换程序和重新打开：照常往下做，最后说一声 */
+      let recordProblem = null;
       const save = (changes) => {
         Object.assign(record, changes);
-        writeProgress(paths, record);
+        try {
+          writeProgress(paths, record);
+        } catch (error) {
+          recordProblem ??= error.code ?? error.message;
+        }
       };
       /** 下好了、还没换上的：没走到换那一步就出错时删掉 */
       let stagedBundle = null;
@@ -178,13 +198,14 @@ export function createUpdates({
         save({});
         const latest = await latestVersion(ACTIVE_TIMEOUT_SECONDS);
         writeCheck(paths, { checkedAt: now().toISOString(), latest });
-        const running = await runningNow();
-        const runningKind = running === null || running === "hung" ? null : running.packaged ? "bundle" : "home";
-        const copies = await installed(runningKind === "bundle" ? running.pid : null);
+        const kindOf = (running) =>
+          running === null || running === "hung" ? null : running.packaged ? "bundle" : "home";
+        const before = await runningNow();
+        const copies = await installed(kindOf(before) === "bundle" ? before.pid : null);
         const behind = copies.filter((copy) => compareVersions(latest, copy.version) > 0);
         if (behind.length === 0) {
           save({ state: "current", phase: null, version: latest, finishedAt: now().toISOString() });
-          return { updated: false, latest, restarted: null, running: Boolean(runningKind) };
+          return { updated: false, latest, restarted: null, running: kindOf(before) !== null };
         }
         const bundle = behind.find((copy) => copy.kind === "bundle") ?? null;
         const home = behind.find((copy) => copy.kind === "home") ?? null;
@@ -196,13 +217,22 @@ export function createUpdates({
         if (bundle) stagedBundle = await bundles.stage(latest, bundle.path);
         if (home) stagedHome = await homes.stage(latest);
 
+        // 下载可能要好几分钟，这期间用户可能打开或退出了 SpeakMore：停谁、换完开谁，按现在在跑的那个定。
         // 要换的程序正在运行就请它退出。安装脚本换家目录里那一份之前，不管在跑的是哪一份都会先停掉它，所以这时都停；
         // 只换 App、在跑的是家目录里那一份的话不碍事，不停。卡住不答话的不知道是哪一份，停掉，之后也不知道该打开谁
+        const running = await runningNow();
+        const runningKind = kindOf(running);
         const stop =
           running === "hung" || (running !== null && (home !== null || (bundle !== null && runningKind === "bundle")));
-        save({ phase: "installing" });
-        if (stop) await instance.stop();
+        // 换完要打开的那个 App 在哪：按正在跑的那个进程找（下载期间才打开的也找得到）
+        const bundlePath =
+          runningKind === "bundle"
+            ? ((await bundles.find({ pid: running.pid, self: selfBundle }))?.path ?? null)
+            : null;
         const stopped = stop ? runningKind : null;
+        // stopped 记下来：App 被这次更新停掉又打开，一启动就把结果亮出来；没被停的 App 当场看得到结果，不用再说
+        save({ phase: "installing", stopped });
+        if (stop) await instance.stop();
 
         let failure = null;
         try {
@@ -231,14 +261,14 @@ export function createUpdates({
           );
         finish(failure);
         try {
-          await reopen(stopped, copies, report);
+          await reopen(stopped, bundlePath, report);
         } catch (error) {
           failure ??= error;
           finish(failure);
         }
         if (failure) throw failure;
         // running：换完以后还有没有一个在运行（没停的那个，或者重新打开的那个）
-        return { updated: true, latest, restarted: stopped, running: Boolean(runningKind) };
+        return { updated: true, latest, restarted: stopped, running: runningKind !== null };
       } catch (error) {
         if (record.state !== "failed") {
           save({ state: "failed", phase: null, problem: problemOf(error), finishedAt: now().toISOString() });
@@ -250,6 +280,7 @@ export function createUpdates({
           const left = staged?.discard();
           if (left) report(msg("update.leftover", left));
         }
+        if (recordProblem) report(msg("update.recordFailed", { file: paths.updateFile, reason: recordProblem }));
         unlock();
       }
     },

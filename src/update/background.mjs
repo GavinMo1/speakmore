@@ -21,7 +21,8 @@ try {
     packageDir,
     version,
     instance: createInstance({ paths }),
-    stdio: "inherit",
+    // 安装脚本、启动命令说的话经管道转进日志（Windows 上它们不会开控制台窗口，见 exec.mjs）
+    stdio: "forward",
   });
   log.info("update_started", { version, self: updates.self });
   const result = await updates.run({

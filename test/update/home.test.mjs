@@ -145,6 +145,37 @@ test("装：让下好的安装脚本从临时目录装（不再联网），指�
   staged.discard();
 });
 
+test(
+  "装：命令的链接原来建在哪，这次还建在那里（从 App 起时 PATH 是精简的，安装脚本自己挑会挑到别处）",
+  macOnly,
+  async () => {
+    const release = join(dir, "release");
+    const record = join(dir, "bin-record");
+    publish(release, "9.9.9", {
+      script: `printf '%s' "\${SPEAKMORE_BIN_DIR:-}" > ${JSON.stringify(record)}\n`,
+      scriptName: "install.sh",
+      archive: "speakmore-darwin-arm64.tar.gz",
+    });
+    const linkDir = join(dir, "usr-local-bin");
+    mkdirSync(linkDir);
+    mkdirSync(paths.binDir, { recursive: true });
+    symlinkSync(join(paths.binDir, "speakmore"), join(linkDir, "speakmore"));
+    writeFileSync(paths.linksFile, `${join(dir, "gone", "speakmore")}\n${join(linkDir, "speakmore")}\n`);
+    const { SPEAKMORE_BIN_DIR: _unset, ...env } = process.env;
+    const homes = createHomes({
+      paths,
+      env: { ...env, SPEAKMORE_INSTALL_BASE: release },
+      release: createRelease({ env: { ...env, SPEAKMORE_INSTALL_BASE: release } }),
+      stdio: ["ignore", "ignore", "ignore"],
+      arch: "arm64",
+    });
+    const staged = await homes.stage("9.9.9");
+    assert.equal(await homes.install(staged, "9.9.9"), 0);
+    assert.equal(readFileSync(record, "utf8"), linkDir);
+    staged.discard();
+  },
+);
+
 test("启动：跑家目录里装好的 speakmore start，带上家目录，不带 ELECTRON_RUN_AS_NODE", macOnly, async () => {
   const record = join(dir, "start-record");
   mkdirSync(paths.binDir, { recursive: true });
@@ -179,11 +210,19 @@ test(
     assert.equal(await failing.install(staged, "9.9.9"), 1);
     staged.discard();
 
-    // 启动：家目录的路径里带空格也跑得起来
+    // 启动：家目录的路径里带空格也跑得起来；说的话经管道转出来（App 起的更新进程用的那种）
+    const spaced = resolvePaths({ SPEAKMORE_HOME: join(dir, "my home") }, undefined, "win32");
     const startRecord = join(dir, "start record");
-    mkdirSync(paths.binDir, { recursive: true });
-    writeFileSync(join(paths.binDir, "speakmore.cmd"), `@echo off\r\necho %*^|%SPEAKMORE_HOME%> "${startRecord}"\r\n`);
-    assert.equal(await homes.start(), 0);
-    assert.equal(readFileSync(startRecord, "utf8").trim(), `start|${paths.home}`);
+    mkdirSync(spaced.binDir, { recursive: true });
+    writeFileSync(join(spaced.binDir, "speakmore.cmd"), `@echo off\r\necho %*^|%SPEAKMORE_HOME%> "${startRecord}"\r\n`);
+    const spacedHomes = createHomes({
+      paths: spaced,
+      env: process.env,
+      release: null,
+      stdio: "forward",
+      platform: "win32",
+    });
+    assert.equal(await spacedHomes.start(), 0);
+    assert.equal(readFileSync(startRecord, "utf8").trim(), `start|${spaced.home}`);
   },
 );

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { runToEnd } from "./exec.mjs";
@@ -50,6 +50,26 @@ export function isHomeCopy(packageDir, paths, platform) {
   }
 }
 
+/** 安装脚本上次把 speakmore 命令的链接建在了哪个目录（bin/links 里记着，一行一个）；没记、链接不在了是 null */
+function existingLinkDir(paths) {
+  let lines;
+  try {
+    lines = readFileSync(paths.linksFile, "utf8").split("\n");
+  } catch {
+    return null;
+  }
+  const link = lines.map((line) => line.trim()).find((line) => line.startsWith("/") && isSymlink(line));
+  return link ? dirname(link) : null;
+}
+
+function isSymlink(path) {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
 /**
  * 安装脚本按什么芯片取包：Apple 芯片上即使这个进程跑在转译里，install.sh 也装 arm64 的（它看 sysctl.proc_translated）
  * @returns {"arm64" | "x64"}
@@ -72,7 +92,7 @@ function sysctlTranslated() {
  * @param {ReturnType<import("../storage/paths.mjs").resolvePaths>} options.paths
  * @param {Record<string, string | undefined>} options.env 安装脚本也在这个环境里跑（代理这些传过去）
  * @param {ReturnType<import("./release.mjs").createRelease>} options.release
- * @param {"inherit" | ["ignore", number, number]} options.stdio 安装脚本和启动时说的话接到哪：终端，或者日志
+ * @param {"inherit" | "forward"} options.stdio 安装脚本和启动时说的话接到哪：终端，或者转到这个进程的输出上（exec.mjs）
  */
 export function createHomes({
   paths,
@@ -136,6 +156,11 @@ export function createHomes({
       };
       // 它自己用装好的那份 Electron 当 Node 跑命令，不要把这边的带过去
       delete installerEnv.ELECTRON_RUN_AS_NODE;
+      // 命令的链接放在原来那个地方：从 App 起的进程拿到的是系统给的精简 PATH，安装脚本按 PATH 挑的话会另挑一处
+      if (!windows && !installerEnv.SPEAKMORE_BIN_DIR) {
+        const linkDir = existingLinkDir(paths);
+        if (linkDir) installerEnv.SPEAKMORE_BIN_DIR = linkDir;
+      }
       if (windows) {
         // install.ps1 从 irm | iex 跑时传不了参数，只认环境变量。按 UTF-8 读进来再当脚本块跑：存成文件直接 -File 的话，
         // 5.1 把没有 BOM 的脚本当成系统编码（GBK）读；也绕开了执行策略（只允许跑文件这一层管着的那种）
