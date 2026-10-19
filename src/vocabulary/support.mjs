@@ -22,9 +22,14 @@ export const VOCABULARY_KINDS = Object.freeze(["prompt", "context", "hotwords"])
  * @param {object} [limits]
  * @param {number} [limits.maxTerms] 最多几个词
  * @param {number} [limits.maxChars] 挑出来的词连起来最多几个字（词之间算一个分隔）
- * @param {(term: string) => boolean} [limits.accepts] 这一家收不收这个词（百炼的热词有自己的长度规矩）；不写是都收
+ * @param {number} [limits.maxTermWords] 单个词最多几个英文单词（只管纯英文的词，按空格数）
+ * @param {number} [limits.maxTermChars] 单个词最多几个字（只管含中文等非英文字符的词）
+ * 全是数据、没有函数：装本机模型时整项配置要复制给转写进程，函数复制不过去
  */
-export function vocabularySupport(kind, { maxTerms = Number.POSITIVE_INFINITY, maxChars, accepts } = {}) {
+export function vocabularySupport(
+  kind,
+  { maxTerms = Number.POSITIVE_INFINITY, maxChars, maxTermWords, maxTermChars } = {},
+) {
   if (!VOCABULARY_KINDS.includes(kind)) {
     throw new Error(`收词表的做法没有 ${kind} 这一种，只有 ${VOCABULARY_KINDS.join(" / ")}`);
   }
@@ -32,9 +37,17 @@ export function vocabularySupport(kind, { maxTerms = Number.POSITIVE_INFINITY, m
     kind,
     maxTerms,
     maxChars: maxChars ?? Number.POSITIVE_INFINITY,
-    accepts: accepts ?? (() => true),
+    maxTermWords: maxTermWords ?? Number.POSITIVE_INFINITY,
+    maxTermChars: maxTermChars ?? Number.POSITIVE_INFINITY,
   });
 }
+
+// biome-ignore lint/suspicious/noControlCharactersInRegex: 判断是不是纯英文（ASCII），要从 \x00 算起
+const ASCII = /^[\x00-\x7F]*$/;
+
+/** 单个词在这一家的上限之内：纯英文的按词数，含中文等的按字数 */
+const termFits = (term, support) =>
+  ASCII.test(term) ? term.split(" ").length <= support.maxTermWords : termLength(term) <= support.maxTermChars;
 
 /**
  * 原生识别和润色的大模型：词表写进系统提示词。上限是怕提示词无限变长：每次听写都要带上它，
@@ -55,7 +68,7 @@ export function fitTerms(terms, support) {
   let chars = 0;
   for (const term of terms) {
     if (picked.length >= support.maxTerms) break;
-    if (!support.accepts(term)) continue;
+    if (!termFits(term, support)) continue;
     const added = termLength(term) + (picked.length > 0 ? 1 : 0);
     if (chars + added > support.maxChars) continue;
     picked.push(term);

@@ -99,7 +99,13 @@ export async function spawnTranscriber({
         if (!disposed) log.error("transcriber_exited", { model: model.id, code, signal, stderr: stderr.join("\n") });
       });
     });
-    child.send({ type: "load", model, dir, options });
+    try {
+      child.send({ type: "load", model, dir, options });
+    } catch (error) {
+      // 交不过去（比如配置里混进了复制不了的东西）：刚开的子进程关掉，别让它挂着
+      child.kill();
+      throw error;
+    }
     current = state;
     return loaded;
   }

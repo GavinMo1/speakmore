@@ -21,10 +21,7 @@ import { vocabularySupport } from "../../../vocabulary/support.mjs";
  * 百炼的热词怎么才收（"提升识别准确率"文档）：含中文等非 ASCII 字符的，连英文一起不超过 15 个字；
  * 纯 ASCII 的按空格分不超过 7 段
  */
-const bailianHotword = (term) =>
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: 判断是不是纯 ASCII，要从 \x00 算起
-  /^[\x00-\x7F]*$/.test(term) ? term.split(" ").length <= 7 : [...term].length <= 15;
-const BAILIAN_HOTWORDS = vocabularySupport("hotwords", { maxTerms: 2000, accepts: bailianHotword });
+const BAILIAN_HOTWORDS = vocabularySupport("hotwords", { maxTerms: 2000, maxTermWords: 7, maxTermChars: 15 });
 
 export const CLOUD_TRANSCRIBERS = Object.freeze([
   Object.freeze({

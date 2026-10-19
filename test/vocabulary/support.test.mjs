@@ -19,9 +19,15 @@ test("挑词：总字数（词之间算一个分隔）放不下的跳过，后�
   assert.deepEqual(fitTerms(["abc", "defgh", "de"], support), ["abc", "de"]);
 });
 
-test("挑词：这一家不收的词（accepts 说不行）跳过，不占个数", () => {
-  const support = vocabularySupport("hotwords", { maxTerms: 2, accepts: (term) => !term.includes(",") });
-  assert.deepEqual(fitTerms(["a,b", "c", "d", "e"], support), ["c", "d"]);
+test("挑词：单个词超了这一家的上限（纯英文按词数、含中文的按字数）就跳过，不占个数", () => {
+  const support = vocabularySupport("hotwords", { maxTerms: 2, maxTermWords: 2, maxTermChars: 3 });
+  assert.deepEqual(fitTerms(["one two three", "一二三四", "a b", "一二三", "c"], support), ["a b", "一二三"]);
+});
+
+test("收法是纯数据：能原样复制给别的进程（装本机模型时整项配置交给转写进程）", () => {
+  const support = vocabularySupport("hotwords", { maxTerms: 2, maxTermWords: 7, maxTermChars: 15 });
+  assert.deepEqual(structuredClone(support), support);
+  assert.deepEqual(structuredClone(PROMPT_VOCABULARY), PROMPT_VOCABULARY);
 });
 
 test("挑词：词典是空的、或者模型不收词表（support 是 null）时一个都不送", () => {

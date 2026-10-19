@@ -8,7 +8,7 @@ import { CLOUD_TRANSCRIBERS, cloudModelOf, cloudTranscriberOf } from "../../../s
 import * as zhipu from "../../../src/server/asr/cloud/zhipu.mjs";
 import { encodeWav } from "../../../src/server/audio/pcm.mjs";
 import { toModelError } from "../../../src/server/providers/errors.mjs";
-import { VOCABULARY_KINDS } from "../../../src/vocabulary/support.mjs";
+import { fitTerms, VOCABULARY_KINDS } from "../../../src/vocabulary/support.mjs";
 
 const zh = createTranslator("zh-CN");
 const log = { info() {}, warn() {}, error() {} };
@@ -306,12 +306,13 @@ test("词典：清单里每个型号写明收法（不收的不写），2026-10-
 });
 
 test("词典：百炼的热词照它的规矩挑（含中文的不超过 15 个字，纯英文不超过 7 个词）", () => {
-  const { accepts } = bailianModel("qwen-audio-3.1-asr-flash").vocabulary;
-  assert.equal(accepts("喜马拉雅式"), true);
-  assert.equal(accepts("一二三四五六七八九十一二三四五"), true);
-  assert.equal(accepts("一二三四五六七八九十一二三四五六"), false);
-  assert.equal(accepts("AE Sparky Brainstorm"), true);
-  assert.equal(accepts("one two three four five six seven eight"), false);
+  const { vocabulary } = bailianModel("qwen-audio-3.1-asr-flash");
+  const kept = (term) => fitTerms([term], vocabulary).length === 1;
+  assert.equal(kept("喜马拉雅式"), true);
+  assert.equal(kept("一二三四五六七八九十一二三四五"), true);
+  assert.equal(kept("一二三四五六七八九十一二三四五六"), false);
+  assert.equal(kept("AE Sparky Brainstorm"), true);
+  assert.equal(kept("one two three four five six seven eight"), false);
 });
 
 test("词典：qwen3-asr-flash 放在最前面的 system 消息里（content 写成数组，写成字符串回 400）；没有词就不加这条", async () => {

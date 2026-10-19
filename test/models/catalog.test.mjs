@@ -88,6 +88,10 @@ test("词典：配置表里写了收词表的模型，它的运行库认得怎�
   }
 });
 
+test("配置表全是数据：整项能原样复制（装本机模型时交给转写进程；混进函数就装不上）", () => {
+  assert.deepEqual(structuredClone(MODELS), MODELS);
+});
+
 test("标签按实测打：适合哪类芯片、能用什么跑，measured 里都要有对应的那一条", () => {
   for (const model of MODELS) {
     for (const tag of model.tags) {
