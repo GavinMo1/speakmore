@@ -98,7 +98,7 @@ export default {
         "On the local path, which provider and model polishes the text, as provider/model; for a custom service write custom/<model>",
       customUrl: "Address of your custom polishing service (OpenAI-compatible), e.g. https://api.example.com/v1",
       customParams:
-        'Extra request parameters for the custom service, as one JSON object, e.g. {"max_completion_tokens": 1024}; sent with checks and polishing alike. model, messages, and stream can\'t be set',
+        'Extra request parameters for the custom service, as one JSON object, e.g. {"reasoning_effort": "minimal"}; sent with checks and polishing alike. model, messages, and stream can\'t be set',
       modelSource:
         "Where on-device models download from: cn is SpeakMore's mirror in China, original is Hugging Face. If the chosen one stalls, the other is tried",
       acceleration:
@@ -202,8 +202,8 @@ export default {
     endpointNotFound:
       "{provider} has no chat API at this address (HTTP 404). Check the address is complete; most end in /v1",
     paramsNotJson:
-      'the extra parameters aren\'t valid JSON: keys and strings need straight double quotes, e.g. {"max_completion_tokens": 1024}',
-    paramsNotObject: 'the extra parameters must be one JSON object in braces, e.g. {"max_completion_tokens": 1024}',
+      'the extra parameters aren\'t valid JSON: keys and strings need straight double quotes, e.g. {"reasoning_effort": "minimal"}',
+    paramsNotObject: 'the extra parameters must be one JSON object in braces, e.g. {"reasoning_effort": "minimal"}',
     paramsReserved: "the extra parameters can't set {name}: SpeakMore sends {names} itself",
   },
 
@@ -450,8 +450,9 @@ export default {
       params: "Extra parameters",
       paramsPlaceholder: "Extra parameters (JSON, optional)",
       paramsTip:
-        'Extra request parameters for this service, e.g. {"max_completion_tokens": 1024}; sent with checks and polishing',
+        'Extra request parameters for this service, e.g. {"reasoning_effort": "minimal"}; sent with checks and polishing',
       keyKept: "Key configured; leave blank to keep it",
+      modelMissing: "Enter a model name",
     },
     empty: { title: "No matching models", search: "Search “{query}”", clear: "Clear filters" },
     keys: {
@@ -779,7 +780,7 @@ export default {
                                 Check an on-device model: the system voice reads a sentence and the model transcribes it. Defaults to the selected one
   speakmore polish [<provider>[/<model>] [--url <url>] [--params <JSON>]]
                                 Local mode, step 2: list or switch the polishing model ({polishers}). custom is any OpenAI-compatible service;
-                                --params adds request parameters for it, e.g. '{"max_completion_tokens": 1024}'
+                                --params adds request parameters for it, e.g. '{"reasoning_effort": "minimal"}'
   speakmore polish check [<provider>[/<model>] [--url <url>] [--params <JSON>]]
                                 Check step 2 works
   speakmore model check [<provider>[/<model>]]
@@ -1231,6 +1232,11 @@ speakmore help     all commands`,
       key: { storage: "It's encrypted with Windows data protection and stays on this PC." },
     },
     permissions: { openSettings: "Settings" },
+    // PowerShell strips double quotes from arguments it passes to speakmore.cmd; they need a backslash
+    chat: {
+      paramsNotJson:
+        'the extra parameters aren\'t valid JSON: keys and strings need straight double quotes, e.g. {"reasoning_effort": "minimal"}. In PowerShell, put a backslash before each double quote in --params: \'{\\"reasoning_effort\\": \\"minimal\\"}\'',
+    },
     settings: {
       describe: {
         mode: "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this PC first, then has any LLM polish the text; private only transcribes on this PC and uploads nothing",

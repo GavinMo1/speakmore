@@ -427,7 +427,8 @@ flowchart LR
 - 快捷键可选：macOS `right_option` / `right_command` / `right_control` / `fn`；Windows `right_alt` / `right_ctrl`。
 - Gemini 思考档位可选：`MINIMAL` / `LOW` / `MEDIUM` / `HIGH`。
 - 自建服务的润色模型写作 `custom/<模型>`，地址示例 `http://127.0.0.1:11434/v1`。
-- 自定义服务需要额外参数时写入 `customParams`，例如 `{"max_completion_tokens": 1024}` 或 `{"reasoning_effort": "minimal"}`；检测与润色请求均附带，`model`、`messages`、`stream` 不可覆盖。
+- 自定义服务需要额外参数时写入 `customParams`，例如 `{"reasoning_effort": "minimal"}`；检测与润色请求均附带，`model`、`messages`、`stream` 不可覆盖。推理模型限制输出长度时留足思考的余量（如 `{"max_completion_tokens": 4096}`），否则长段落会被截断。
+- Windows PowerShell 中 `--params` 的双引号前需加反斜杠：`--params '{\"reasoning_effort\": \"minimal\"}'`。
 - 通过 App 或 `speakmore mode`、`model`、`transcriber`、`polish` 切换时先行检测，立即生效。
 - `config set` 直接写入，不做检测。
 - 临时覆盖：启动时设置 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL` 等环境变量。

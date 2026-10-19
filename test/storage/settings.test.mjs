@@ -298,6 +298,15 @@ test("自定义服务的额外参数：存成紧凑的 JSON，路线里是对象
   assert.throws(() => saveSetting(file, "customParams", '{"model": "x"}'), said(/model/));
 });
 
+test("自定义服务的额外参数：手改 settings.json 直接写成对象也认，读出来是同一行 JSON；写成数组照样拒绝", () => {
+  writeFileSync(file, JSON.stringify({ customParams: { reasoning_effort: "minimal" } }));
+  const settings = resolveSettings({ file, env: {} });
+  assert.deepEqual(settings.customParams, { value: '{"reasoning_effort":"minimal"}', source: "file" });
+  assert.deepEqual(routeOf(settings, "local").customParams, { reasoning_effort: "minimal" });
+  writeFileSync(file, JSON.stringify({ customParams: [1] }));
+  assert.throws(() => resolveSettings({ file, env: {} }), said(/customParams.*对象/));
+});
+
 test("数据隐私模式的本机模型：和 local 的第一跳分开存，只认本机模型的 id，云端的拒绝", () => {
   const settings = resolveSettings({ file, env: {} });
   assert.deepEqual(routeOf(settings, "private"), { mode: "private", transcriber: "qwen3-asr-0.6b-q8" });

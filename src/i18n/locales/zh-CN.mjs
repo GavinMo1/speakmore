@@ -93,7 +93,7 @@ export default {
       polish: "local 那条路上把文字交给哪一家的哪个模型润色，写成 厂商/模型；自定义服务写 custom/模型名",
       customUrl: "自定义润色服务的地址（兼容 OpenAI 接口的那种），比如 https://api.example.com/v1",
       customParams:
-        '发给自定义服务的额外请求参数，一段 JSON 对象，比如 {"max_completion_tokens": 1024}；验证和润色都带上，不能写 model、messages、stream',
+        '发给自定义服务的额外请求参数，一段 JSON 对象，比如 {"reasoning_effort": "minimal"}；验证和润色都带上，不能写 model、messages、stream',
       modelSource:
         "本机模型从哪下载：cn 是 SpeakMore 的国内源，original 是 Hugging Face 原始地址。选的那个下不动会自动换另一个",
       acceleration:
@@ -194,8 +194,8 @@ export default {
     urlQuery: "地址里不能有 ? 或 #",
     urlMissing: "还没填自定义服务的地址（customUrl）",
     endpointNotFound: "{provider} 的这个地址上没有对话接口（HTTP 404）：检查地址是否写全，多数以 /v1 结尾",
-    paramsNotJson: '额外参数不是有效的 JSON：键名和字符串都要用英文双引号，比如 {"max_completion_tokens": 1024}',
-    paramsNotObject: '额外参数要是一个 JSON 对象，用大括号括起来，比如 {"max_completion_tokens": 1024}',
+    paramsNotJson: '额外参数不是有效的 JSON：键名和字符串都要用英文双引号，比如 {"reasoning_effort": "minimal"}',
+    paramsNotObject: '额外参数要是一个 JSON 对象，用大括号括起来，比如 {"reasoning_effort": "minimal"}',
     paramsReserved: "额外参数里不能写 {name}：{names} 由 SpeakMore 发送",
   },
 
@@ -441,8 +441,9 @@ export default {
       modelPlaceholder: "模型名",
       params: "额外参数",
       paramsPlaceholder: "额外参数（JSON，选填）",
-      paramsTip: '发给这个服务的额外请求参数，如 {"max_completion_tokens": 1024}，检测和润色都会带上',
+      paramsTip: '发给这个服务的额外请求参数，如 {"reasoning_effort": "minimal"}，检测和润色都会带上',
       keyKept: "密钥已配置，留空则不更改",
+      modelMissing: "请填写模型名",
     },
     empty: { title: "无匹配模型", search: "搜索 “{query}”", clear: "清除筛选" },
     keys: {
@@ -766,7 +767,7 @@ export default {
                                 检查本机转写模型：用系统朗读念一句交给它转，看能不能正常出字。不写就查现在选的
   speakmore polish [<厂商>[/<模型>] [--url <地址>] [--params <JSON>]]
                                 local 模式第二跳：看、换润色的模型（{polishers}）。custom 是兼容 OpenAI 接口的任意服务，
-                                --params 是发给它的额外请求参数，比如 '{"max_completion_tokens": 1024}'
+                                --params 是发给它的额外请求参数，比如 '{"reasoning_effort": "minimal"}'
   speakmore polish check [<厂商>[/<模型>] [--url <地址>] [--params <JSON>]]
                                 检查第二跳能不能用
   speakmore model check [<厂商>[/<模型>]]
@@ -1183,6 +1184,11 @@ speakmore help     全部命令`,
     },
     permissions: { openSettings: "设置" },
     setup: { openSettings: "任务栏通知区域的图标 › 设置" },
+    // PowerShell 调 speakmore.cmd 时会去掉参数里的双引号（2026-10-19 在 PowerShell 5.1 上实测），要在双引号前加反斜杠
+    chat: {
+      paramsNotJson:
+        '额外参数不是有效的 JSON：键名和字符串都要用英文双引号，比如 {"reasoning_effort": "minimal"}。在 PowerShell 里给 --params 时，双引号前要加反斜杠：\'{\\"reasoning_effort\\": \\"minimal\\"}\'',
+    },
     key: {
       keychainUnavailable: "系统的加密存储不可用，没法安全地保存 key",
       noKeyService:

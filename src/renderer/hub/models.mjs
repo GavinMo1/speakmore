@@ -62,10 +62,12 @@ export function createModels({ refresh, pickMode }) {
     /** 展开了密钥表单的平台 */
     openKey: null,
     /**
-     * 自定义服务这次填的地址、模型名和额外参数（存 key 时一起验，启用时一起交）。
-     * 额外参数可以清空，所以没填过是 null（照设置里的），填过就是填的那段（空的是清空）
+     * 自定义服务的两份草稿，各是 { url, model, params } 或 null（照设置里存的）：
+     *   form   上次提交时表单里填的：提交没成时照它重画表单，免得白填
+     *   draft  验证过、还没换上的：那一行显示"启用"，启用、检测都按它来；换上了就清掉
+     * 不拿它和设置里存的比：存的地址是规整过的（去掉结尾斜杠、/chat/completions），比不上
      */
-    custom: { url: "", model: "", params: null },
+    custom: { form: null, draft: null },
     /** 正在等主进程回话的那一次操作，按钮不重复点 */
     busy: null,
     /** 从某一排货架点"配置密钥"跳到密钥表时，那一排是哪个分类：存好 key 就回去，接着启用那一行的模型 */
@@ -110,10 +112,18 @@ export function createModels({ refresh, pickMode }) {
     return offerOf(role, group, item)?.choice ?? null;
   }
 
+  /** 设置里存的自定义服务：模型名（润色没选它时是空的）、地址、额外参数 */
+  function storedCustom() {
+    const { polish, customUrl: url, customParams: params } = setup.plaza.chosen;
+    return { model: polish.startsWith("custom/") ? polish.slice("custom/".length) : "", url, params };
+  }
+
+  /** 启用、检测时交的：验证过还没换上的草稿，没有就是设置里存的 */
+  const customNow = () => state.custom.draft ?? storedCustom();
+
   function customChoice() {
-    const chosen = setup.plaza.chosen.polish;
-    if (state.custom.model) return `custom/${state.custom.model}`;
-    return chosen.startsWith("custom/") ? chosen : null;
+    const { model } = customNow();
+    return model ? `custom/${model}` : null;
   }
 
   function usable(role, group, item) {
@@ -122,30 +132,15 @@ export function createModels({ refresh, pickMode }) {
     return hasKey(viaOf(role, group)) && offerOf(role, group, item) !== null;
   }
 
-  /** 两段额外参数意思一样不一样：读成 JSON 再比，空白不同不算；读不出来的按原文比（没填和 {} 一样） */
-  function sameParams(a, b) {
-    const canonical = (text) => {
-      try {
-        return JSON.stringify(JSON.parse(text || "{}"));
-      } catch {
-        return text;
-      }
-    };
-    return canonical(a) === canonical(b);
-  }
-
-  const customUrl = () => state.custom.url || setup.plaza.chosen.customUrl;
-  const customParams = () => state.custom.params ?? setup.plaza.chosen.customParams;
+  const customUrl = () => customNow().url;
   /** 自定义服务除了模型名还要一起交的两项 */
-  const customExtra = () => ({ customUrl: customUrl(), customParams: customParams() });
+  const customExtra = () => ({ customUrl: customNow().url, customParams: customNow().params });
 
   const isChosen = (role, group, item) => {
     const choice = choiceOf(role, group, item);
     if (choice === null || chosenOf(role) !== choice) return false;
-    // 自定义服务在表单里改了地址或额外参数、还没换上：不算选定，留着启用按钮让它生效
-    if (group.kind !== "custom") return true;
-    const { chosen } = setup.plaza;
-    return customUrl() === chosen.customUrl && sameParams(customParams(), chosen.customParams);
+    // 自定义服务有验证过、还没换上的草稿：不算选定，留着启用按钮让它生效
+    return group.kind !== "custom" || state.custom.draft === null;
   };
   /** 这个角色在正在用的识别方式里：转写在转写 + 润色、数据隐私两种里都算 */
   const isLive = (role) => ROLES[role].mode === setup.plaza.mode || (role === "transcribe" && privateNow());
@@ -203,12 +198,15 @@ export function createModels({ refresh, pickMode }) {
         return window.speakmore.setPolish(choice, extra);
       },
       {
-        done: () =>
+        done: () => {
+          // 草稿换上了，往后照设置里存的
+          if (group.kind === "custom") state.custom.draft = null;
           toast(
             switching
               ? t("plaza.toast.switchedWith", { mode: modeName(mode), model: name })
               : t("plaza.toast.enabled", { model: name }),
-          ),
+          );
+        },
       },
     );
   }
@@ -939,6 +937,8 @@ export function createModels({ refresh, pickMode }) {
     const custom = platform.id === "custom";
     const name = platformName(platform);
     const key = `key:${platform.id}`;
+    // 自定义服务那几格先填上：上次没交上去的，否则是要启用的草稿或设置里存的
+    const shown = custom ? (state.custom.form ?? customNow()) : null;
     const field = (id, props) => h("input", { class: "input", id, autocomplete: "off", spellcheck: "false", ...props });
     return h(
       "form",
@@ -949,21 +949,38 @@ export function createModels({ refresh, pickMode }) {
         onsubmit: (event) => {
           event.preventDefault();
           const value = $(`plaza-key-${platform.id}`).value.trim();
-          if (custom) {
-            state.custom = {
-              url: $("plaza-custom-url").value.trim(),
-              model: $("plaza-custom-model").value.trim(),
-              params: $("plaza-custom-params").value.trim(),
-            };
-          }
+          const typed = custom
+            ? {
+                url: $("plaza-custom-url").value.trim(),
+                model: $("plaza-custom-model").value.trim(),
+                params: $("plaza-custom-params").value.trim(),
+              }
+            : null;
+          if (custom) state.custom.form = typed;
           const changes =
-            custom && state.custom.model ? { polish: `custom/${state.custom.model}`, ...customExtra() } : undefined;
+            custom && typed.model
+              ? { polish: `custom/${typed.model}`, customUrl: typed.url, customParams: typed.params }
+              : undefined;
+          /** 验证过了：和设置里存的不一样就记成草稿，等启用；一样就没有要换的 */
+          const accept = () => {
+            const stored = storedCustom();
+            const same = typed.model === stored.model && typed.url === stored.url && typed.params === stored.params;
+            state.custom = { form: null, draft: same ? null : typed };
+          };
           // 自定义服务已经有 key、这次没填：只改地址、模型名或额外参数，不用再贴一遍 key
-          if (custom && value === "" && hasKey(platform.id) && changes) {
+          if (custom && value === "" && hasKey(platform.id)) {
+            if (!changes) {
+              failed(key, t("plaza.custom.modelMissing"));
+              draw();
+              return;
+            }
             const inUse = customInUse();
             act(key, () => updateCustom(changes, inUse), {
               done: () => {
                 state.openKey = null;
+                // 正在用就已经换上了，往后照设置里存的
+                if (inUse) state.custom = { form: null, draft: null };
+                else accept();
                 toast(t(inUse ? "plaza.toast.customUpdated" : "plaza.toast.customChecked"));
               },
             });
@@ -972,6 +989,7 @@ export function createModels({ refresh, pickMode }) {
           act(key, () => window.speakmore.saveKey(value, platform.id, changes), {
             done: () => {
               state.openKey = null;
+              if (changes) accept();
               delete checks.results[key];
               const count = newlyUsable(platform);
               toast(count > 0 ? t("plaza.toast.keySaved", { count }) : t("plaza.toast.keySavedOnly"));
@@ -983,13 +1001,13 @@ export function createModels({ refresh, pickMode }) {
       custom &&
         field("plaza-custom-url", {
           type: "url",
-          value: customUrl(),
+          value: shown.url,
           placeholder: t("plaza.custom.urlPlaceholder"),
           "aria-label": t("plaza.custom.url"),
         }),
       custom &&
         field("plaza-custom-model", {
-          value: customChoice()?.slice("custom/".length) ?? "",
+          value: shown.model,
           placeholder: t("plaza.custom.modelPlaceholder"),
           "aria-label": t("plaza.custom.model"),
         }),
@@ -1004,7 +1022,7 @@ export function createModels({ refresh, pickMode }) {
       custom &&
         field("plaza-custom-params", {
           class: "input custom-params",
-          value: customParams(),
+          value: shown.params,
           placeholder: t("plaza.custom.paramsPlaceholder"),
           "aria-label": t("plaza.custom.params"),
           title: t("plaza.custom.paramsTip"),
@@ -1021,6 +1039,8 @@ export function createModels({ refresh, pickMode }) {
         text: t("plaza.keys.cancel"),
         onclick: () => {
           state.openKey = null;
+          // 表单里没交上去的不要了，验证过的草稿还留着
+          state.custom.form = null;
           draw();
         },
       }),
