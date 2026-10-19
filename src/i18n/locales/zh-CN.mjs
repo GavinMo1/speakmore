@@ -855,6 +855,7 @@ export default {
     updatingApp: "更新 SpeakMore.app：{current} → {latest}",
     appDone: "SpeakMore.app 已更新到 {version}。",
     reopened: "已重新打开 SpeakMore.app。",
+    leftover: "临时文件未能删除：{dir}（{reason}），可以手动删除。",
     copies: { home: "终端安装的 SpeakMore", bundle: "SpeakMore.app" },
   },
 

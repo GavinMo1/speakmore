@@ -69,7 +69,8 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `assets/` | 图标：`icon.svg` 是那方印，`tray.svg` 是菜单栏上的五道；`.icns`、Windows 用的 `icon.ico` 和 `trayTemplate*.png` 由 `scripts/build/make-icon.sh` 从它们生成 |
 | `src/storage/` | `~/.speakmore` 里的东西：放在哪、设置、历史库、词典、旧数据的迁移。命令和后台应用共用 |
 | `src/vocabulary/` | 词典：词怎么规整、导入怎么解析，各模型收词的三种做法和挑词（`fitTerms`） |
-| `src/control.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道、日志 |
+| `src/update/` | 版本检查和更新，命令行（`speakmore status`、`update`）和 App（设置 › 通用 › 软件更新）只调这里，壳里不写更新的逻辑。查新版本一天最多问一次下载地址，记在 `run/update-check.json`，两边共用；更新进行到哪、失败原因记在 `run/update.json`，`run/update.lock` 不让两边同时换。更新把本机装着的每一份都换成最新：家目录里的那一份（`home.mjs`，用新版本自己的安装脚本装），Mac 上还有 SpeakMore.app（`bundle.mjs`，核对校验值、签名和开发者后对调）。下载和核对都在停掉正在运行的那个之前做完，停着的只有换程序那几秒；换完只重新打开原来在运行的那个。App 点了更新另起一个进程（`background.mjs`，借 App 自己的 Electron 当 Node 跑）：它要让 App 退出、换掉、再打开。发布包的名字在 `layout.mjs`，打包和更新共用 |
+| `src/control.mjs`、`src/instance.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道；问正在运行的那个的状态、请它退出（命令行和更新共用）；日志 |
 | `test/` | 自动测试，目录和 `src/` 对应 |
 | `scripts/` | 开发用的脚本，按用途分四组：`build/` 编译小程序、打 .app；`release/` 发新版本（`ship.sh`：把关、打包、上传、核对）、把本地模型传到国内源（`sync-models.mjs`）；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key、在 Windows 开发机上跑（`win-*.sh`，见上面的 Windows 一节）；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
 | `bench/` | 评测（[说明](../bench/README.md)）：本地转写这一跳（洗样本、跑参照和各个本地模型、判分、出报告），词典的判法（`lib/vocabulary.mjs`），各轮的记录在 `results/` |

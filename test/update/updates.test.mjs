@@ -81,7 +81,7 @@ function setup({
         steps.push(`find-app:${pid}`);
         return app;
       },
-      async stage(version, path) {
+      async stage(version, _path) {
         steps.push(`stage-app:${version}`);
         phase();
         stageApp();
@@ -97,6 +97,8 @@ function setup({
       },
       async open(path) {
         steps.push(`open-app:${path}`);
+        // 重新打开的那一刻结果已经记下了：打开的那个一启动就照它说
+        phases.push(`reopen:${readProgress(paths)?.state}`);
         openApp();
       },
     },
@@ -119,6 +121,7 @@ function setup({
       },
       async start() {
         steps.push("start-home");
+        phases.push(`reopen:${readProgress(paths)?.state}`);
         return startCode;
       },
     },
@@ -209,7 +212,7 @@ test("更新：先把两份都下好（这时 App 还在跑），再停、换、
     `open-app:${APP.path}`,
     "discard-home",
   ]);
-  assert.deepEqual(phases, ["downloading", "installing", "installing"]);
+  assert.deepEqual(phases, ["downloading", "installing", "installing", "reopen:done"]);
   const record = readProgress(paths);
   assert.equal(record.state, "done");
   assert.equal(record.by, "app");
@@ -249,8 +252,9 @@ test("更新：下载、核对失败：什么都不停，记下原因，下好�
 });
 
 test("更新：安装脚本没装成：原来在跑的照样重新打开，记下没装成", async () => {
-  const { updates, steps } = setup({ running: HOME_RUNNING, installCode: 2 });
+  const { updates, steps, phases } = setup({ running: HOME_RUNNING, installCode: 2 });
   await assert.rejects(updates.run({ by: "cli" }), (error) => /退出码 2/.test(zh.text(error.problem)));
+  assert.equal(phases.at(-1), "reopen:failed");
   assert.deepEqual(steps.slice(-3), ["install-home:0.2.0", "start-home", "discard-home"]);
   assert.equal(readProgress(paths).state, "failed");
 });
@@ -346,4 +350,31 @@ test("更新好了告诉过用户之后记一笔，下次启动不再说；写�
   assert.equal(readProgress(paths).shown, true);
   writeFileSync(paths.updateFile, '{"state": "do');
   assert.equal(updates.progress(), null);
+});
+
+test("更新：临时目录删不掉不算失败，说一声留在了哪", async () => {
+  const said = [];
+  // 临时目录删不掉的一套
+  const kernel = createUpdates({
+    paths,
+    env: {},
+    packageDir: paths.appDir,
+    version: "0.1.0",
+    instance: { status: async () => null, stop: async () => "not-running" },
+    platform: "darwin",
+    now: () => NOW,
+    pid: 999_999,
+    release: { latest: async () => "v0.2.0" },
+    bundles: { find: async () => null },
+    homes: {
+      find: () => ({ version: "0.1.0" }),
+      stage: async () => ({ dir: "staged", discard: () => ({ dir: "/tmp/x", reason: "EBUSY" }) }),
+      install: async () => 0,
+      start: async () => 0,
+    },
+  });
+  const result = await kernel.run({ by: "cli", report: (message) => said.push(zh.text(message)) });
+  assert.equal(result.updated, true);
+  assert.ok(said.includes("临时文件未能删除：/tmp/x（EBUSY），可以手动删除。"), said.join("\n"));
+  assert.equal(readProgress(paths).state, "done");
 });

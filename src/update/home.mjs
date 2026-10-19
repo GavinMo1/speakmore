@@ -95,12 +95,20 @@ export function createHomes({
     /**
      * 把这个版本的安装脚本和包（连同校验值）下到一个临时目录，摆成下载地址的样子，核对好校验值
      * @param {string} version 不带 v
-     * @returns {Promise<{ dir: string, discard: () => void }>}
+     * @returns {Promise<{ dir: string, discard: () => { dir: string, reason: string } | null }>} discard 交回删不掉的
      */
     async stage(version) {
       const { archive, script } = homePackage(platform, homeArch(platform, arch, translated));
       const dir = mkdtempSync(join(tmpdir(), "speakmore-update-"));
-      const discard = () => rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      // 删不掉（Windows 上杀毒软件正扫着刚下的包）不算出错：交回留在了哪、为什么，由更新那一层说一声
+      const discard = () => {
+        try {
+          rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+          return null;
+        } catch (error) {
+          return { dir, reason: error.code ?? error.message };
+        }
+      };
       try {
         mkdirSync(join(dir, versionDir(version)));
         await release.fetch(script, join(dir, script));
@@ -151,12 +159,8 @@ export function createHomes({
       const { ELECTRON_RUN_AS_NODE: _asNode, ...startEnv } = env;
       startEnv.SPEAKMORE_HOME = paths.home;
       if (windows) {
-        // .cmd 要经 cmd 才跑得起来；路径里可能有空格，整个用引号括起来
-        return runToEnd(`"${join(paths.binDir, "speakmore.cmd")}"`, ["start"], {
-          env: startEnv,
-          stdio,
-          shell: true,
-        });
+        // .cmd 要经 cmd 才跑得起来。整条命令写成一串交给它（参数另给的话 Node 会警告不转义）；路径里可能有空格，用引号括起来
+        return runToEnd(`"${join(paths.binDir, "speakmore.cmd")}" start`, [], { env: startEnv, stdio, shell: true });
       }
       return runToEnd(join(paths.binDir, "speakmore"), ["start"], { env: startEnv, stdio });
     },

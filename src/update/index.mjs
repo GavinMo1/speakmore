@@ -149,10 +149,10 @@ export function createUpdates({
         : record;
     },
 
-    /** App 把"更新好了"告诉过用户了，下次启动不再说 */
+    /** App 把更新的结果告诉过用户了，下次启动不再说 */
     markShown() {
       const record = readProgress(paths);
-      if (record?.state === "done") writeProgress(paths, { ...record, shown: true });
+      if (record?.state === "done" || record?.state === "failed") writeProgress(paths, { ...record, shown: true });
     },
 
     /**
@@ -221,19 +221,35 @@ export function createUpdates({
         } catch (error) {
           failure = error;
         }
-        // 原来在运行的重新打开。没换成的也要打开（原来那个还在），只是最后照实报没换成
-        const reopened = await reopen(stopped, copies, report).catch((error) => error);
+        // 结果先记下，再把原来在运行的重新打开：打开的那个一启动就照它说（App 发起的，会把设置亮出来说一句）。
+        // 没换成的也要打开（原来那个还在），只是照实报没换成
+        const finish = (error) =>
+          save(
+            error
+              ? { state: "failed", phase: null, problem: problemOf(error), finishedAt: now().toISOString() }
+              : { state: "done", phase: null, finishedAt: now().toISOString() },
+          );
+        finish(failure);
+        try {
+          await reopen(stopped, copies, report);
+        } catch (error) {
+          failure ??= error;
+          finish(failure);
+        }
         if (failure) throw failure;
-        if (reopened instanceof Error) throw reopened;
-        save({ state: "done", phase: null, finishedAt: now().toISOString() });
         // running：换完以后还有没有一个在运行（没停的那个，或者重新打开的那个）
         return { updated: true, latest, restarted: stopped, running: Boolean(runningKind) };
       } catch (error) {
-        save({ state: "failed", phase: null, problem: problemOf(error), finishedAt: now().toISOString() });
+        if (record.state !== "failed") {
+          save({ state: "failed", phase: null, problem: problemOf(error), finishedAt: now().toISOString() });
+        }
         throw error;
       } finally {
-        stagedBundle?.discard();
-        stagedHome?.discard();
+        // 下好了没换上的、临时目录：删不掉不算更新失败，说一声留在了哪
+        for (const staged of [stagedBundle, stagedHome]) {
+          const left = staged?.discard();
+          if (left) report(msg("update.leftover", left));
+        }
         unlock();
       }
     },

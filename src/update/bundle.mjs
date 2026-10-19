@@ -103,7 +103,8 @@ export function createBundles({ env, release, platform = process.platform, arch 
      * （校验值和安装包放在同一个地方，只防得住路上坏了；同一个开发者才防得住被人换了）
      * @param {string} version 不带 v
      * @param {string} app 装着的 App
-     * @returns {Promise<{ commit: () => void, discard: () => void }>} commit 换上（调用前 App 要已经退出），discard 不换了、删掉待换的
+     * @returns {Promise<{ commit: () => void, discard: () => { dir: string, reason: string } | null }>}
+     *   commit 换上（调用前 App 要已经退出），discard 不换了、删掉待换的
      */
     async stage(version, app) {
       const name = dmgName(arch === "arm64" ? "arm64" : "x64");
@@ -174,8 +175,14 @@ export function createBundles({ env, release, platform = process.platform, arch 
           }
           rmSync(old, { recursive: true, force: true });
         },
+        /** 不换了：删掉待换的。删不掉交回留在了哪、为什么 */
         discard() {
-          rmSync(staged, { recursive: true, force: true });
+          try {
+            rmSync(staged, { recursive: true, force: true });
+            return null;
+          } catch (error) {
+            return { dir: staged, reason: error.code ?? error.message };
+          }
         },
       };
     },

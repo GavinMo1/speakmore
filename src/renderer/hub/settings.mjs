@@ -2,8 +2,8 @@ import { LOCALES, SYSTEM_LOCALE } from "../../i18n/index.mjs";
 import { t } from "../shared/i18n.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
 
-// 设置对话框：原版的"设置中心"，左边一列菜单。我们的三页：通用（热键、主题、语言、本机模型的下载源、开机启动）、
-// 权限、关于。
+// 设置对话框：原版的"设置中心"，左边一列菜单。我们的三页：通用（热键、主题、语言、本机模型的下载源、开机启动、
+// 软件更新）、权限、关于。
 // 识别方式、模型和 key 不在这里：在侧栏的"模型"一页（models.mjs）。
 // 状态都在主进程，这里只负责画出来和转达用户的操作。
 
@@ -20,6 +20,89 @@ export function fixTarget(setup) {
   if (keyMissing(setup)) return { route: "models", tab: "keys" };
   return { pane: permissionDenied(setup) || setup.helper === "stopped" ? "permissions" : "general" };
 }
+
+/**
+ * 软件更新那一行怎么显示：一句状态（语气、图标）和按钮做什么。按钮总是下一步该做的事：
+ * 检查、更新到新版本、重试；进行中不给按。
+ * @param {object} update 主进程给的（app/updates.mjs 的 describe）
+ * @returns {{ text: string, tone: string, icon: string | null, action: "check" | "start" | null, label: string,
+ *   primary: boolean, busy: boolean }}
+ */
+export function describeUpdate(update, t) {
+  const check = t("preferences.update.check");
+  const view = { tone: "", icon: null, action: "check", label: check, primary: false, busy: false };
+  const { progress, current, latest } = update;
+  if (update.fromSource) return { ...view, text: t("preferences.update.fromSource"), action: null };
+  if (progress?.state === "running") {
+    const text =
+      progress.by === "cli"
+        ? t("preferences.update.cliRunning", { version: progress.version ?? "…" })
+        : progress.phase === "downloading"
+          ? t("preferences.update.downloading", { version: progress.version })
+          : progress.phase === "installing"
+            ? t("preferences.update.installing")
+            : t("preferences.update.checking");
+    return { ...view, text, icon: "i-loader-circle", action: null, busy: true };
+  }
+  if (update.checking) {
+    return { ...view, text: t("preferences.update.checking"), icon: "i-loader-circle", busy: true };
+  }
+  const retry = { tone: "problem", icon: "i-circle-alert", action: "start", label: t("preferences.update.retry") };
+  if (update.launchProblem) {
+    return { ...view, ...retry, text: t("preferences.update.startFailed", { reason: t.text(update.launchProblem) }) };
+  }
+  if (progress?.state === "failed") {
+    return {
+      ...view,
+      ...retry,
+      primary: true,
+      text: t("preferences.update.failed", { problem: t.text(progress.problem) }),
+    };
+  }
+  if (update.available) {
+    // 这个 App 自己旧了说"新版本可用"；只是另一份（终端安装的、或者 SpeakMore.app）旧了，说是哪一份
+    const { other } = update;
+    const text = other
+      ? t("preferences.update.otherBehind", {
+          copy: t(`update.copies.${other.kind}`),
+          current: other.version,
+          latest,
+        })
+      : t("preferences.update.available", { latest, current });
+    return {
+      ...view,
+      text,
+      tone: "new",
+      icon: "i-download",
+      action: "start",
+      label: t("preferences.update.updateTo", { version: latest }),
+      primary: true,
+    };
+  }
+  if (update.checkProblem) {
+    return {
+      ...view,
+      text: t("preferences.update.checkFailed", { problem: t.text(update.checkProblem) }),
+      tone: "problem",
+      icon: "i-circle-alert",
+    };
+  }
+  if (update.justUpdated) {
+    return {
+      ...view,
+      text: t("preferences.update.updated", { version: update.justUpdated }),
+      tone: "ok",
+      icon: "i-check",
+    };
+  }
+  // 还没问到过最新版本（没网、刚装好）：只说现在的版本
+  if (latest === null) return { ...view, text: `v${current}` };
+  return { ...view, text: t("preferences.update.upToDate", { version: current }), tone: "ok", icon: "i-check" };
+}
+
+/** 设置菜单、侧栏的设置图标上要不要标个点：有新版本，或者上一次更新没成（正在更新时不标） */
+export const updateFlagged = (update) =>
+  Boolean(update) && update.progress?.state !== "running" && (update.available || update.progress?.state === "failed");
 
 /**
  * @param {{ refresh: () => Promise<object> }} options refresh：重新问主进程要一份状态，并让整个窗口跟着更新
@@ -167,6 +250,44 @@ export function createSettings({ refresh }) {
     await refresh();
   });
 
+  // ---------- 通用：软件更新 ----------
+
+  /** 按钮现在做什么（describeUpdate 的 action） */
+  let updateAction = null;
+
+  function renderUpdate(update) {
+    if (!update) return;
+    const view = describeUpdate(update, t);
+    const status = $("update-status");
+    status.dataset.tone = view.tone;
+    if (view.icon) status.dataset.icon = view.icon;
+    else delete status.dataset.icon;
+    const icon = status.querySelector(".icon");
+    icon.classList.toggle("spin", view.icon === "i-loader-circle");
+    icon.querySelector("use").setAttribute("href", `#${view.icon ?? "i-check"}`);
+    $("update-status-text").textContent = view.text;
+    const button = $("update-action");
+    updateAction = view.action;
+    button.hidden = view.action === null;
+    button.textContent = view.label;
+    button.disabled = view.busy;
+    button.classList.toggle("primary", view.primary);
+  }
+
+  $("update-action").addEventListener("click", async () => {
+    showNote("general-problem", null);
+    const action = updateAction;
+    try {
+      if (action === "check") await window.speakmore.checkForUpdate();
+      else if (action === "start") await window.speakmore.startUpdate();
+    } catch (error) {
+      const key = action === "start" ? "preferences.update.startFailed" : "preferences.update.checkFailed";
+      const param = action === "start" ? { reason: describeError(error) } : { problem: describeError(error) };
+      showNote("general-problem", t(key, param), "problem");
+    }
+    await refresh();
+  });
+
   // ---------- 权限 ----------
 
   function renderPermissions(setup) {
@@ -221,9 +342,16 @@ export function createSettings({ refresh }) {
       renderPermissions(setup);
       $("about-version").textContent = `v${setup.version}`;
       $("about-home").textContent = setup.home;
-      // 菜单上标个红点：这一页里有东西要补
-      const flagged = { permissions: permissionDenied(setup) };
+      renderUpdate(setup.update);
+      // 菜单上标个点：权限这一页有东西要补（红点），通用这一页有更新的事（见下），侧栏的设置图标上也标
+      const update = updateFlagged(setup.update);
+      const flagged = { permissions: permissionDenied(setup), general: update };
       for (const dot of dialog.querySelectorAll(".menu-dot")) dot.hidden = !flagged[dot.dataset.for];
+      // 有新版本是主题色的点，上一次没更新成是红点
+      const tone = setup.update?.progress?.state === "failed" ? "problem" : "new";
+      dialog.querySelector('.menu-dot[data-for="general"]').dataset.tone = tone;
+      $("settings-dot").hidden = !update;
+      $("settings-dot").dataset.tone = tone;
     },
   };
 }

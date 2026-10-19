@@ -885,6 +885,7 @@ export default {
     updatingApp: "Updating SpeakMore.app {current} → {latest}",
     appDone: "SpeakMore.app is now {version}.",
     reopened: "Reopened SpeakMore.app.",
+    leftover: "Couldn't remove the temporary files at {dir} ({reason}); you can delete them yourself.",
     copies: { home: "The terminal install of SpeakMore", bundle: "SpeakMore.app" },
   },
 

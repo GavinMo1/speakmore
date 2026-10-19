@@ -1,4 +1,5 @@
-import { existsSync, rmSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { closeSync, existsSync, openSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import {
   app,
@@ -17,6 +18,7 @@ import {
 } from "electron";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale } from "../i18n/index.mjs";
+import { createInstance } from "../instance.mjs";
 import { alsoLogTo, log } from "../log.mjs";
 import { chipOf, downloadSize, MODELS, makerOf, measuredOn, SOURCES, tagsOn } from "../models/catalog.mjs";
 import { createLocalModels, freeBytesAt } from "../models/library.mjs";
@@ -43,6 +45,7 @@ import { openVocabulary, readImportFile } from "../storage/vocabulary.mjs";
 import { toHex } from "../themes/color.mjs";
 import { themeCss } from "../themes/contract.mjs";
 import { findTheme, THEMES } from "../themes/index.mjs";
+import { createUpdates } from "../update/index.mjs";
 import { estimateTime } from "../usage/estimate.mjs";
 import { insights } from "../usage/insights.mjs";
 import { usageReport } from "../usage/report.mjs";
@@ -55,6 +58,7 @@ import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
 import { createModeSwitch } from "./modes.mjs";
 import { startService } from "./service.mjs";
 import { summarizeSetup, summaryAsText } from "./setup-state.mjs";
+import { createAppUpdates } from "./updates.mjs";
 import { describeVocabularySupport, vocabularyHops } from "./vocabulary.mjs";
 
 // 后台应用的主进程：两个窗口（悬浮条、主窗口）、菜单栏图标、原生小帮手、内置的听写服务，
@@ -138,6 +142,27 @@ const PRIVACY_PANES = WINDOWS
 async function askMicrophone() {
   if (WINDOWS) return systemPreferences.getMediaAccessStatus("microphone") === "granted";
   return systemPreferences.askForMediaAccess("microphone");
+}
+
+/**
+ * 起更新进程（src/update/background.mjs）：借这个 App 自己的 Electron 当 Node 跑，App 退出了它还在（detached），
+ * 说的话接到日志上。它会让这个 App 退出、换掉、再打开
+ */
+function launchUpdate() {
+  const logFd = openSync(PATHS.logFile, "a");
+  try {
+    const child = spawn(process.execPath, [join(app.getAppPath(), "src", "update", "background.mjs")], {
+      detached: true,
+      windowsHide: true,
+      stdio: ["ignore", logFd, logFd],
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", SPEAKMORE_HOME: PATHS.home },
+    });
+    child.unref();
+    log.info("update_launched", { pid: child.pid });
+    return child;
+  } finally {
+    closeSync(logFd);
+  }
 }
 
 // Windows 认应用靠这个 id：任务栏把窗口归到一起、通知写谁发的。和 macOS 应用包的标识一样
@@ -248,6 +273,21 @@ async function main() {
   });
   /** 用户的词典：只存在本机。内置服务每次听写读一次（命令行改了文件也读得到），词典页增删改都经这里 */
   const vocabulary = openVocabulary(PATHS.vocabularyFile);
+  // 版本检查和更新（app/updates.mjs，内核在 src/update）：设置 › 通用里那一行、菜单栏的提醒
+  const appUpdates = createAppUpdates({
+    updates: createUpdates({
+      paths: PATHS,
+      env: process.env,
+      packageDir: app.getAppPath(),
+      version: app.getVersion(),
+      instance: createInstance({ paths: PATHS }),
+      stdio: "ignore",
+    }),
+    version: app.getVersion(),
+    launch: launchUpdate,
+    onChange: () => setupChanged(),
+    log,
+  });
   // 每次调模型记一笔账，开着的历史窗口跟着更新花费（记账出错由整理流程写日志，不连累听写）
   const service = EXTERNAL_SERVER_URL
     ? null
@@ -610,6 +650,9 @@ async function main() {
   handle("insights:get", () => insights(history.dictations(), { now: new Date() }));
   handle("app:info", () => ({ version: app.getVersion(), hotkey }));
   handle("app:open-homepage", () => shell.openExternal(HOMEPAGE));
+  // 设置 › 通用的"软件更新"：检查、开始更新。进行到哪了跟着 setup:get 一起给（update）
+  handle("update:check", () => appUpdates.check());
+  handle("update:start", () => appUpdates.start());
   handle("clipboard:write", (_event, text) => {
     if (typeof text !== "string") throw new TypeError("要复制的不是文字");
     clipboard.writeText(text);
@@ -722,6 +765,7 @@ async function main() {
       },
       home: PATHS.home,
       version: app.getVersion(),
+      update: appUpdates.describe(),
       // 正在用 key 的那一家；数据隐私模式不用 key，是 null
       provider: provider() ? describeVendor(provider()) : null,
       ...describeModes(),
@@ -1111,6 +1155,7 @@ async function main() {
 
   function refreshTrayMenu() {
     if (trayIcon.isEmpty()) tray.setTitle(t("tray.fallbackTitle"));
+    const update = appUpdates.describe();
     const summary = summarizeSetup(currentSetup());
     const headline = summary.ready
       ? t("tray.ready", { keycap: t(`hotkeys.${hotkey}.keycap`) })
@@ -1129,6 +1174,15 @@ async function main() {
         { label: t("tray.settings"), accelerator: "CmdOrCtrl+,", click: () => showHub({ pane: "general" }) },
         { type: "separator" },
         { label: t("tray.version", { version: app.getVersion() }), enabled: false },
+        // 有新版本：点了打开设置的通用页，更新按钮在那里
+        ...(update.available && update.progress?.state !== "running"
+          ? [
+              {
+                label: t("tray.updateAvailable", { version: update.latest }),
+                click: () => showHub({ pane: "general" }),
+              },
+            ]
+          : []),
         { label: t("tray.quit"), accelerator: "CmdOrCtrl+Q", click: () => app.quit() },
       ]),
     );
@@ -1320,6 +1374,8 @@ async function main() {
   startupChecked = true;
   setupChanged();
   offerSettingsIfIncomplete();
+  // 上一次是在这里点的更新、刚换好重新打开：把设置的通用页亮出来，说一句已更新到哪个版本。顺带看看有没有新版本
+  if (appUpdates.afterLaunch()) showHub({ pane: "general" });
   // 已经开着时又去双击应用图标，系统不会再起一个，而是"重新打开"这一个：同样把主窗口亮出来。
   // 等启动检查做完才挂上，免得把启动本身也当成一次重新打开
   app.on("activate", showMain);
