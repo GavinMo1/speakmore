@@ -72,6 +72,8 @@ const VOCABULARY = [
 const SCORED = ["Grok", "multica", "Runzo", "AE-PM", "Garmin", "埋点", "Claude Code", "全量"];
 /** 硬塞检查看的词：词典里专有、平常不会顺手出现的那些 */
 const DISTINCT = VOCABULARY.filter((term) => !["cli", "onboarding", "App", "agent", "load", "harness"].includes(term));
+/** 参照里和词典词同义的写法（中文名、译名）：成品写成词典里的样子不算硬塞 */
+const ALIASES = { Garmin: ["佳明"] };
 /** 每个算分的词挑几条录音，再挑几条一个词都不含的当反例 */
 const PER_TERM = 3;
 const NEGATIVES = 8;
@@ -234,7 +236,8 @@ async function run() {
         ["plain", []],
         ["vocabulary", VOCABULARY],
       ]
-        .filter(([variant]) => !results[clip.id]?.[variant])
+        // 失败的格也记下了错误，重跑时要再试
+        .filter(([variant]) => !results[clip.id]?.[variant] || results[clip.id][variant].error)
         .map(([variant, vocabulary]) => ({ clip, variant, vocabulary })),
     );
     // 本机模型一个一个转（同一个模型实例不并发），云端的几个一起发
@@ -272,8 +275,19 @@ async function run() {
 
 function report() {
   const clips = JSON.parse(readFileSync(join(WORK, "clips.json"), "utf8"));
-  const inText = (text, term) => text.toLowerCase().includes(term.toLowerCase());
+  // 空格不算差别（原版成品写 Grokbot，词典里是 Grok Bot）；英文词前面不能紧挨字母（ngrok 不算 Grok）
+  const patternOf = (term) =>
+    new RegExp(
+      `${/^[a-z]/i.test(term) ? "(?<![a-z])" : ""}${term
+        .split(/\s+/)
+        .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join("\\s*")}`,
+      "i",
+    );
+  const inText = (text, term) => patternOf(term).test(text);
   const exactIn = (text, term) => text.includes(term);
+  // 参照里的等价写法：说的是"佳明"，写成 Garmin 不算硬塞
+  const inReference = (reference, term) => [term, ...(ALIASES[term] ?? [])].some((form) => inText(reference, form));
   const lines = [];
   lines.push("| 模型 | 认对（不带 → 带） | 写法全对（不带 → 带） | 硬塞的词（不带 → 带） | 失败 | 带词典多花的时间 |");
   lines.push("| --- | --- | --- | --- | --- | --- |");
@@ -301,7 +315,7 @@ function report() {
           if (exactIn(cell.text, term)) t.exact += 1;
         }
         // 硬塞：成品里出现了词典里的专有词，参照里却没有
-        t.inserted += DISTINCT.filter((term) => inText(cell.text, term) && !inText(clip.reference, term)).length;
+        t.inserted += DISTINCT.filter((term) => inText(cell.text, term) && !inReference(clip.reference, term)).length;
       }
     }
     const median = (ms) => [...ms].sort((a, b) => a - b)[Math.floor(ms.length / 2)] ?? 0;
