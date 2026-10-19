@@ -1,6 +1,6 @@
 ---
 name: speakmore-vocabulary-plan
-description: 行业词库（issue #9）已答应排进计划、还没开工；收录的本地模型里只有 Qwen3-ASR 收词表，内网就答数据隐私方式
+description: 词典功能（issue #9 提的行业词库）10-19 开始讨论；收录的本地模型里只有 Qwen3-ASR 收词表，原版有个人词典和按修改自动加词
 metadata:
   type: project
 ---
@@ -11,6 +11,10 @@ metadata:
 - transcribe.cpp 的 GGUF 版：`supports("vocabulary")`、`supports("context_prompt")` 都是 true，运行时选项是 `vocabulary`、`prompt`。
 - sherpa-onnx 的 int8 版：配置里有 `qwen3Asr.hotwords`，库把热词作为文字放在提示开头、音频之前。现在传的是空串（`src/server/asr/engines/sherpa-onnx.mjs`）。
 - SenseVoice 两份都不支持。加了词表能准多少还没测。
+
+2026-10-19 发完 0.9.4 后，用户说要开始讨论词典功能："这个其实我早就想做了，但之前一直没有契机……这回既然有人提了，咱们就顺手接过来吧"。
+
+原版（Typeless）的做法见逆向笔记：主界面有词典页，接口 `/user/dictionary/{list,add,update,delete,batch-delete,bulk-import,bulk-import/preview}`，能从 CSV 导入（targets/typeless/docs/05-network-protocol.md、03-process-architecture.md）；贴字后约 15 秒内盯着输入框，把用户的手动修改发到 `/user/traits`，服务端可能据此自动加词，回包带 `auto_add_dictionary` 时弹"已自动加入词典"（06-context-capture-and-privacy.md）。服务端怎么用词典影响结果没查清（91-open-questions.md Q26）。
 
 **Why:** 用户要对外说清楚：是我们收录的模型里只有它能做，不是天下只有它；有更好的模型欢迎推荐，可以再加。
 

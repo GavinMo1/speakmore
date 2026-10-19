@@ -43,4 +43,4 @@
 - [下载量与流量](speakmore-download-stats.md) — scripts/release/with-cos-key.sh npm run stats，已扣除自测；他点名要看才跑
 - [链接后面别贴中文标点](links-no-cjk-punctuation.md) — 对外写的网址单独一行或留空格，issue #1 因此有人点到 404
 - [Linux 暂不做](speakmore-no-linux-yet.md) — #6 留着不关、用户多了再议；整理笔记关联 Obsidian 不在范围（#7 已关）
-- [行业词库已排进计划](speakmore-vocabulary-plan.md) — issue #9 答应做、等用户点名再开工；收录的本地模型里只有 Qwen3-ASR 收词表，内网就答数据隐私方式
+- [词典功能](speakmore-vocabulary-plan.md) — issue #9 引出，10-19 开始讨论；本地模型只有 Qwen3-ASR 收词表，原版有词典页、CSV 导入、按修改自动加词
