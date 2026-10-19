@@ -13,13 +13,18 @@ import { hopsOf } from "./model-plaza.mjs";
 //   原生识别、润色：都是读提示词的大模型，全部写进提示词
 //   转写：本机、云端的每个模型各自写明，不收的是 null
 
-/** 收法写成页面要的样子：上限没有的写 null（JSON 里放不下无穷大） */
+/** 上限：没有的写 null（JSON 里放不下无穷大） */
+const finite = (value) => (Number.isFinite(value) ? value : null);
+
+/** 收法写成页面要的样子：个数、总字数，和单个词的长度（悬停时看） */
 const plain = (support) =>
   support
     ? {
         kind: support.kind,
-        maxTerms: Number.isFinite(support.maxTerms) ? support.maxTerms : null,
-        maxChars: Number.isFinite(support.maxChars) ? support.maxChars : null,
+        maxTerms: finite(support.maxTerms),
+        maxChars: finite(support.maxChars),
+        maxTermChars: finite(support.maxTermChars),
+        maxTermWords: finite(support.maxTermWords),
       }
     : null;
 

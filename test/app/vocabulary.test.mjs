@@ -11,6 +11,8 @@ test("支持的模型：原生识别、润色都是写进提示词（全部模�
     kind: "prompt",
     maxTerms: PROMPT_VOCABULARY.maxTerms,
     maxChars: PROMPT_VOCABULARY.maxChars,
+    maxTermChars: null,
+    maxTermWords: null,
   });
   assert.deepEqual(support.polish, support.native);
   const count = MODELS.length + CLOUD_TRANSCRIBERS.reduce((sum, vendor) => sum + vendor.models.length, 0);
@@ -20,9 +22,27 @@ test("支持的模型：原生识别、润色都是写进提示词（全部模�
     kind: "hotwords",
     maxTerms: null,
     maxChars: 600,
+    maxTermChars: null,
+    maxTermWords: null,
   });
   assert.equal(byName["local/SenseVoice Small (Q8_0)"].vocabulary, null);
-  assert.deepEqual(byName["zhipu/GLM-ASR-2512"].vocabulary, { kind: "hotwords", maxTerms: 100, maxChars: null });
+  assert.deepEqual(byName["zhipu/GLM-ASR-2512"].vocabulary, {
+    kind: "hotwords",
+    maxTerms: 100,
+    maxChars: null,
+    maxTermChars: null,
+    maxTermWords: null,
+  });
+  // 单个词的长度也给页面（悬停时看）：百炼的热词，中文词 15 字、英文词 7 个单词
+  assert.deepEqual(
+    support.transcribe
+      .filter(({ vocabulary }) => vocabulary?.maxTermChars)
+      .map(({ vocabulary }) => [vocabulary.maxTermChars, vocabulary.maxTermWords]),
+    [
+      [15, 7],
+      [15, 7],
+    ],
+  );
   assert.equal(byName["minimax/MiniMax ASR 1.0"].vocabulary, null);
   // 本机的排在云端前面
   assert.equal(support.transcribe[0].platform, "local");

@@ -1,4 +1,4 @@
-import { termKey } from "../../vocabulary/terms.mjs";
+import { MAX_TERMS, termKey } from "../../vocabulary/terms.mjs";
 import { $, brand, h, platformName, svg } from "../shared/dom.mjs";
 import { t } from "../shared/i18n.mjs";
 import { describeError } from "../shared/setup-text.mjs";
@@ -11,6 +11,8 @@ import { toast } from "./toast.mjs";
 //     "支持的模型"点开是全部模型各怎么收（数据来自主进程 app/vocabulary.mjs，按模型清单里写的拼）
 //   - 新词就地输入、回车就加、接着输下一个；编辑在格子里直接改。删除、导入才弹对话框（要确认的事）
 // 增删改都交给主进程（storage/vocabulary.mjs），改完重读一遍。
+// 后台会时常让这一页重读（下载模型时每半秒、窗口拿回焦点时）：内容没变就不重画，正在格子里改词时先不动词格，
+// 免得把改到一半的字存掉、把键盘焦点弄丢。
 
 /** 搜索：大小写、全角半角不论，包含就算 */
 export const matchTerms = (terms, query) => {
@@ -18,16 +20,38 @@ export const matchTerms = (terms, query) => {
   return wanted === "" ? terms : terms.filter((term) => termKey(term).includes(wanted));
 };
 
-/** 收多少写成一句："前 100 个词"、"前 600 字"；不限的是 null */
+/** 有这个上限（主进程把"不限"写成 null） */
+const limited = (value) => value !== null && value !== undefined;
+
+/**
+ * 收多少写成一个短语，放在"支持的模型"那一列："前 100 个词"、"前 600 字"、"全部词"；不收的是 null。
+ * 个数上限不少于词典本身的上限（1000 个）就等于全收，不写
+ */
 export function limitText(support) {
-  if (support?.maxTerms !== null && support?.maxTerms !== undefined) {
+  if (!support) return null;
+  if (limited(support.maxTerms) && support.maxTerms < MAX_TERMS) {
     return t("vocabulary.support.limitTerms", { count: support.maxTerms });
   }
-  if (support?.maxChars !== null && support?.maxChars !== undefined) {
-    return t("vocabulary.support.limitChars", { count: support.maxChars });
-  }
-  return null;
+  if (limited(support.maxChars)) return t("vocabulary.support.limitChars", { count: support.maxChars });
+  return t("vocabulary.support.limitAll");
 }
+
+/** 全部的上限，一条一行，悬停在那一列上看：个数、总字数、单个词的长度 */
+export function limitDetail(support) {
+  if (!support) return "";
+  return [
+    limited(support.maxTerms) && support.maxTerms < MAX_TERMS && ["terms", support.maxTerms],
+    limited(support.maxChars) && ["chars", support.maxChars],
+    limited(support.maxTermChars) && ["termChars", support.maxTermChars],
+    limited(support.maxTermWords) && ["termWords", support.maxTermWords],
+  ]
+    .filter(Boolean)
+    .map(([name, count]) => t(`vocabulary.support.limits.${name}`, { count }))
+    .join("\n");
+}
+
+/** 输入法正在组字时的回车、Esc 是给输入法的（上屏、取消），不是给我们的 */
+const composing = (event) => event.isComposing || event.keyCode === 229;
 
 /** 收法的标签：做法用描边，不收的灰底；悬停说这种做法是怎么回事 */
 function kindTag(kind) {
@@ -58,6 +82,10 @@ export function createVocabulary() {
   let fresh = null;
   /** 对话框确认时做的事：返回提示的那句话 */
   let onConfirm = null;
+  /** 上次画出来的内容（主进程给的那份原样），一样就不重画 */
+  let drawn = null;
+  /** 改词时来了新内容：先不动词格，改完再画 */
+  let deferred = false;
 
   const dialog = $("vocabulary-dialog");
   const confirmButton = $("vocabulary-dialog-confirm");
@@ -65,25 +93,31 @@ export function createVocabulary() {
   const composerInput = $("vocabulary-composer-input");
 
   async function reload() {
+    let next;
     try {
-      data = await window.speakmore.getVocabulary();
+      next = await window.speakmore.getVocabulary();
     } catch (error) {
       console.error("读词典失败", error);
-      showError(describeError(error));
+      showError(t("vocabulary.loadError", { reason: describeError(error) }));
       return;
     }
+    const snapshot = JSON.stringify(next);
+    if (snapshot === drawn) return;
+    data = next;
+    drawn = snapshot;
     // 别处删掉了的词不再算勾着
     for (const term of selected) if (!data.terms.includes(term)) selected.delete(term);
     render();
   }
 
-  function showError(reason) {
-    $("vocabulary-error").textContent = t("vocabulary.loadError", { reason });
+  function showError(text) {
+    $("vocabulary-error").textContent = text;
     $("vocabulary-error").hidden = false;
   }
 
   function render() {
     $("vocabulary-error").hidden = data.problem === null;
+    // 主进程给的那句话已经说了是哪个文件、怎么了，不再加前缀
     if (data.problem) showError(t.text(data.problem));
     $("vocabulary-local").title = t("vocabulary.localTip", { file: data.file });
     // 当前方式里有收词典的云端模型，词就会随听写的请求发出去：照实写
@@ -91,12 +125,22 @@ export function createVocabulary() {
     $("vocabulary-local-meta").textContent = t(`vocabulary.localMeta.${leaves ? "cloud" : "device"}`);
     // 文件坏了不能改：先照提示修好文件，免得把它覆盖掉
     const full = data.terms.length >= data.limits.maxTerms;
-    for (const id of ["vocabulary-add", "vocabulary-empty-add"]) $(id).disabled = data.problem !== null || full;
-    for (const id of ["vocabulary-import", "vocabulary-empty-import"]) $(id).disabled = data.problem !== null;
+    // 置灰的按钮悬停时说为什么
+    const blocked = data.problem ? t("vocabulary.fixFileFirst") : null;
+    const fullText = full ? t("vocabulary.full", { max: data.limits.maxTerms }) : null;
+    for (const id of ["vocabulary-add", "vocabulary-empty-add"]) {
+      $(id).disabled = blocked !== null || full;
+      $(id).title = blocked ?? fullText ?? "";
+    }
+    for (const id of ["vocabulary-import", "vocabulary-empty-import"]) {
+      $(id).disabled = blocked !== null;
+      $(id).title = blocked ?? "";
+    }
     if (full || data.problem) closeComposer();
     renderCurrent();
     renderSupport();
-    renderTerms();
+    if (editing !== null) deferred = true;
+    else renderTerms();
   }
 
   /**
@@ -145,7 +189,7 @@ export function createVocabulary() {
         { class: "vocab-support-row", "data-off": support ? null : true },
         icon,
         h("span", { class: "vocab-support-name", text: name }),
-        h("span", { class: "vocab-support-limit", text: limitText(support) ?? "" }),
+        h("span", { class: "vocab-support-limit", text: limitText(support) ?? "", title: limitDetail(support) }),
         kindTag(support?.kind ?? null),
       );
     const allModels = (support) => row({ icon: svg("i-layout-grid"), name: t("vocabulary.support.all"), support });
@@ -175,9 +219,11 @@ export function createVocabulary() {
   }
 
   function renderTerms() {
+    deferred = false;
     const query = $("vocabulary-search").value;
     const shown = matchTerms(data.terms, query);
-    $("vocabulary-count").textContent = t("vocabulary.count", { count: data.terms.length });
+    // 文件读不出时没有可数的
+    $("vocabulary-count").textContent = data.problem ? "" : t("vocabulary.count", { count: data.terms.length });
     const empty = data.problem === null && shown.length === 0;
     const searching = data.terms.length > 0;
     $("vocabulary-empty").hidden = !empty;
@@ -186,11 +232,19 @@ export function createVocabulary() {
     $("vocabulary-empty-text").textContent = searching ? "" : t("vocabulary.empty.description");
     $("vocabulary-empty-actions").hidden = searching;
     const grid = $("vocabulary-grid");
+    // 重画前焦点在哪个词的哪个按钮上，画完放回去（键盘操作不会掉到页面最前面）
+    const focused = grid.contains(document.activeElement) ? document.activeElement.dataset.focus : undefined;
     grid.toggleAttribute("data-selecting", selected.size > 0);
     grid.replaceChildren(...shown.map((term) => (term === editing ? editCard(term) : termCard(term))));
+    if (focused) grid.querySelector(`[data-focus="${CSS.escape(focused)}"]`)?.focus();
     fresh = null;
     renderSelection(shown);
   }
+
+  /** 词格之外的东西关掉、删掉以后，焦点放到哪：搜索框（一定在） */
+  const focusFallback = () => {
+    if (document.activeElement === document.body || document.activeElement === null) $("vocabulary-search").focus();
+  };
 
   function toggle(term) {
     if (selected.has(term)) selected.delete(term);
@@ -211,6 +265,7 @@ export function createVocabulary() {
           role: "checkbox",
           "aria-checked": String(checked),
           "aria-label": `${t("vocabulary.select")} ${term}`,
+          "data-focus": `select:${term}`,
           title: t("vocabulary.select"),
           onclick: () => toggle(term),
         },
@@ -233,6 +288,7 @@ export function createVocabulary() {
             class: "icon-button",
             title: t("vocabulary.edit"),
             "aria-label": `${t("vocabulary.edit")} ${term}`,
+            "data-focus": `edit:${term}`,
             onclick: () => startEdit(term),
           },
           svg("i-pencil"),
@@ -244,6 +300,7 @@ export function createVocabulary() {
             class: "icon-button",
             title: t("vocabulary.delete"),
             "aria-label": `${t("vocabulary.delete")} ${term}`,
+            "data-focus": `delete:${term}`,
             onclick: () => openRemove([term]),
           },
           svg("i-trash"),
@@ -253,10 +310,26 @@ export function createVocabulary() {
   }
 
   // ---------- 就地编辑：格子换成输入框，回车或点别处保存，Esc 放弃 ----------
+  // 改完只换这一格，不重画整片词格：点别处时按下和松开要落在同一个按钮上，点击才算数
 
   function startEdit(term) {
     editing = term;
     renderTerms();
+  }
+
+  /** 改完了：这一格换回普通的格子；改的时候来了新内容就整片重画 */
+  function endEdit(card, term, { focus = false } = {}) {
+    editing = null;
+    if (deferred || !card.isConnected) {
+      renderTerms();
+    } else {
+      card.replaceWith(termCard(term));
+      fresh = null;
+    }
+    if (focus)
+      $("vocabulary-grid")
+        .querySelector(`[data-focus="${CSS.escape(`edit:${term}`)}"]`)
+        ?.focus();
   }
 
   function editCard(term) {
@@ -266,38 +339,49 @@ export function createVocabulary() {
       value: term,
       autocomplete: "off",
       spellcheck: "false",
-      "aria-label": t("vocabulary.edit"),
+      "aria-label": `${t("vocabulary.edit")} ${term}`,
+      title: t("vocabulary.editHint"),
     });
     const card = h("li", { class: "vocab-term", "data-editing": true }, svg("i-pencil", "icon vocab-term-icon"), input);
     let settled = false;
-    const finish = async (save) => {
+    /**
+     * @param {boolean} save 存（回车、点别处）还是放弃（Esc）
+     * @param {boolean} fromKeyboard 回车存的：存不成就留在输入框里改；点别处存不成就放弃这次修改，只提示原因
+     */
+    const finish = async (save, fromKeyboard = false) => {
       if (settled) return;
       settled = true;
       const value = input.value;
       if (!save || value.trim() === term) {
-        editing = null;
-        renderTerms();
+        endEdit(card, term, { focus: fromKeyboard });
         return;
       }
       try {
         const updated = await window.speakmore.updateTerm(term, value);
         if (selected.delete(term)) selected.add(updated);
-        editing = null;
+        // 先在本地改好、记成已画：接着的重读和这一样，就不会整片重画（那会吞掉他正在点的下一下）
+        data = { ...data, terms: data.terms.map((each) => (each === term ? updated : each)) };
+        drawn = JSON.stringify(data);
         fresh = updated;
+        endEdit(card, updated, { focus: fromKeyboard });
         toast(t("vocabulary.toast.updated", { term: updated }));
         await reload();
       } catch (error) {
-        // 改不成（重复、太长）：留在输入框里，说清原因
+        toast(describeError(error));
+        if (!fromKeyboard || !card.isConnected) {
+          endEdit(card, term);
+          return;
+        }
         settled = false;
         card.dataset.problem = "";
         card.title = describeError(error);
-        toast(describeError(error));
         input.focus();
       }
     };
     input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") finish(true);
-      if (event.key === "Escape") finish(false);
+      if (composing(event)) return;
+      if (event.key === "Enter") finish(true, true);
+      if (event.key === "Escape") finish(false, true);
     });
     input.addEventListener("input", () => {
       delete card.dataset.problem;
@@ -329,10 +413,13 @@ export function createVocabulary() {
     composerInput.focus();
   }
 
-  function closeComposer() {
+  /** @param {{ focus?: boolean }} [options] focus：他自己收起的（Esc、点收起），焦点回到"新词"按钮 */
+  function closeComposer({ focus = false } = {}) {
+    const wasOpen = !composer.hidden;
     composer.hidden = true;
     composerInput.value = "";
     setComposerProblem(null);
+    if (focus && wasOpen) $("vocabulary-add").focus();
   }
 
   function setComposerProblem(problem) {
@@ -341,14 +428,18 @@ export function createVocabulary() {
     composer.toggleAttribute("data-problem", problem !== null);
   }
 
+  /** 正在加：连按两下回车只加一次 */
+  let adding = false;
   composer.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (composerInput.value.trim() === "") return;
+    if (adding || composerInput.value.trim() === "") return;
+    adding = true;
     try {
       const added = await window.speakmore.addTerm(composerInput.value);
       composerInput.value = "";
       fresh = added;
       $("vocabulary-search").value = "";
+      toast(t("vocabulary.toast.added", { term: added }));
       await reload();
       composerInput.focus();
     } catch (error) {
@@ -359,13 +450,15 @@ export function createVocabulary() {
         fresh = existing;
         renderTerms();
       }
+    } finally {
+      adding = false;
     }
   });
   composerInput.addEventListener("input", () => setComposerProblem(null));
   composerInput.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeComposer();
+    if (!composing(event) && event.key === "Escape") closeComposer({ focus: true });
   });
-  $("vocabulary-composer-close").addEventListener("click", closeComposer);
+  $("vocabulary-composer-close").addEventListener("click", () => closeComposer({ focus: true }));
 
   // ---------- 对话框：删除、导入（要确认的事） ----------
 
@@ -432,13 +525,17 @@ export function createVocabulary() {
       toast(said);
       await reload();
     } catch (error) {
-      setDialogProblem(describeError(error));
+      // 等回话时他已经按 Esc 关了对话框：在对话框里说就看不见了
+      if (dialog.open) setDialogProblem(describeError(error));
+      else toast(describeError(error));
     } finally {
       confirmButton.disabled = false;
       confirmButton.removeAttribute("aria-busy");
     }
   });
   $("vocabulary-dialog-cancel").addEventListener("click", () => dialog.close());
+  // 关掉以后焦点回到打开它的按钮；那个词已经删掉了的话，放到搜索框
+  dialog.addEventListener("close", () => queueMicrotask(focusFallback));
 
   function openRemove(terms) {
     const one = terms.length === 1;
@@ -479,14 +576,15 @@ export function createVocabulary() {
           : t("vocabulary.dialogs.import.none", { file: preview.fileName }),
       preview: preview.terms,
       note: [
-        preview.duplicates + preview.invalid > 0 &&
-          t("vocabulary.dialogs.import.skipped", { duplicates: preview.duplicates, invalid: preview.invalid }),
+        ["existing", "duplicates", "invalid"]
+          .filter((part) => preview[part] > 0)
+          .map((part) => t(`vocabulary.dialogs.import.skipped.${part}`, { count: preview[part] }))
+          .join(" · "),
         t("vocabulary.dialogs.import.hint"),
       ]
         .filter(Boolean)
         .join("\n"),
-      problem:
-        count > preview.room ? t("vocabulary.tooMany", { max: data.limits.maxTerms, room: preview.room, count }) : null,
+      problem: count > preview.room ? t("vocabulary.tooMany", { max: MAX_TERMS, room: preview.room, count }) : null,
       confirm: t("vocabulary.dialogs.import.confirm", { count }),
       disabled: count === 0,
       run: async () => t("vocabulary.toast.imported", { count: await window.speakmore.importTerms(preview.terms) }),
@@ -499,6 +597,7 @@ export function createVocabulary() {
   $("vocabulary-select-clear").addEventListener("click", () => {
     selected.clear();
     renderTerms();
+    focusFallback();
   });
   $("vocabulary-select-delete").addEventListener("click", () => openRemove([...selected]));
   $("vocabulary-support").addEventListener("toggle", (event) => {

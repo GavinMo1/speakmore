@@ -437,10 +437,12 @@
   cursor: pointer;
 }
 
-/* 多选的勾：平时不出现，鼠标移上去、或者已经在多选时，出现在图标的位置上 */
+/* 多选的勾：平时看不见（但键盘 Tab 得到），鼠标移上去、焦点在格子里、或者已经在多选时，盖在图标的位置上 */
 .vocab-check {
-  display: none;
-  flex: none;
+  position: absolute;
+  top: 50%;
+  left: 0.875rem;
+  display: inline-grid;
   place-items: center;
   width: 0.875rem;
   height: 0.875rem;
@@ -451,6 +453,16 @@
   border-radius: var(--radius-full);
   box-shadow: var(--ring-strong);
   cursor: pointer;
+  opacity: 0;
+  translate: 0 -50%;
+}
+
+/* 勾本身只有 14px：点击范围往外扩一圈 */
+.vocab-check::before {
+  position: absolute;
+  inset: -0.375rem;
+  content: "";
+  border-radius: var(--radius-full);
 }
 
 .vocab-check .icon {
@@ -476,16 +488,17 @@
 
 .vocab-term:is(:hover, :focus-within) .vocab-check,
 .vocab-grid[data-selecting] .vocab-check {
-  display: inline-grid;
+  opacity: 1;
 }
 
+/* 勾出现时图标让位，但占着地方：字不跟着挪 */
 .vocab-term:is(:hover, :focus-within) .vocab-term-icon,
 .vocab-grid[data-selecting] .vocab-term-icon {
-  display: none;
+  visibility: hidden;
 }
 
 .vocab-term[data-editing] .vocab-term-icon {
-  display: block;
+  visibility: visible;
 }
 
 /* 编辑、删除：浮在格子右边，平时不占地方（长词不会因为它们被挤短）；底色和格子一样，盖住下面的字 */
@@ -668,7 +681,21 @@
 @media (prefers-reduced-motion: reduce) {
   .vocab-composer,
   .vocab-selection,
-  .vocab-term[data-fresh] {
+  .vocab-term[data-fresh],
+  .vocab-dialog[open],
+  .vocab-dialog::backdrop {
     animation: none;
+  }
+
+  .vocab-term,
+  .vocab-term-actions,
+  .vocab-support-row {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .vocab-dialog::backdrop {
+    backdrop-filter: none;
   }
 }
