@@ -12,9 +12,21 @@
 // 想用打包时摆出来的那一份跑（只带运行时依赖，看漏没漏包）：SPEAKMORE_E2E_APP=<摆好的目录>
 // 想用打好的应用跑（签了名、开着 hardened runtime，看本地转写的原生库加载不加载得了）：
 //   SPEAKMORE_E2E_ELECTRON=<SpeakMore.app>/Contents/MacOS/SpeakMore
+// 带词典跑：SPEAKMORE_E2E_VOCABULARY="词1,词2" 先在数据目录里放一份词典，SPEAKMORE_E2E_EXPECT=词 要求成品里有这个词（不分大小写）。
+// 不想每次都重下本地模型：SPEAKMORE_E2E_MODELS=<已装好的模型仓>（比如 bench/_work/models），开跑前克隆进数据目录（APFS 上不占空间）。
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  constants,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -29,6 +41,20 @@ const electron = createRequire(import.meta.url)("electron");
 // 名字起得短：家目录里要放控制通道的套接字，路径有长度上限
 const workDir = mkdtempSync(join(tmpdir(), "sm-e2e-"));
 const outPath = join(workDir, "result.json");
+const home = join(workDir, "home");
+const vocabulary = process.env.SPEAKMORE_E2E_VOCABULARY?.split(",")
+  .map((term) => term.trim())
+  .filter(Boolean);
+if (vocabulary?.length) {
+  mkdirSync(home, { recursive: true });
+  writeFileSync(join(home, "vocabulary.json"), `${JSON.stringify({ terms: vocabulary }, null, 2)}\n`);
+}
+if (process.env.SPEAKMORE_E2E_MODELS) {
+  cpSync(resolve(process.env.SPEAKMORE_E2E_MODELS), join(home, "models"), {
+    recursive: true,
+    mode: constants.COPYFILE_FICLONE,
+  });
+}
 
 // 打好的应用自己知道程序在哪，不用指给它
 const packaged = process.env.SPEAKMORE_E2E_ELECTRON;
@@ -45,7 +71,7 @@ const child = spawn(
   ],
   {
     cwd: process.env.SPEAKMORE_E2E_APP ?? resolve(import.meta.dirname, "../.."),
-    env: { ...process.env, SPEAKMORE_E2E_OUT: outPath, SPEAKMORE_HOME: join(workDir, "home") },
+    env: { ...process.env, SPEAKMORE_E2E_OUT: outPath, SPEAKMORE_HOME: home },
     stdio: ["ignore", "inherit", "inherit"],
   },
 );
@@ -93,6 +119,9 @@ child.on("exit", (code) => {
     console.log(`本地模型：下载 ${(downloadMs / 1000).toFixed(1)} 秒，装载 ${loadMs} 毫秒，跑在 ${backend}`);
   }
   if (result?.delivered) console.log(`成品：${result.delivered}`);
+  const expected = process.env.SPEAKMORE_E2E_EXPECT;
+  if (expected && !result?.delivered?.toLowerCase().includes(expected.toLowerCase()))
+    problems.push(`成品里没有 ${expected}${vocabulary?.length ? `（词典里放了 ${vocabulary.length} 个词）` : ""}`);
   rmSync(workDir, { recursive: true, force: true });
   if (problems.length > 0) {
     for (const problem of problems) console.error(`✖ ${problem}`);
