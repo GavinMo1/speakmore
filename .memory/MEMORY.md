@@ -16,7 +16,7 @@
 - [SpeakMore 按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节
 - [SpeakMore 还在内测](speakmore-only-user-in-beta.md) — 只有他一个人在用；兼容旧版本、迁移按一个人的量来权衡，不做重
 - [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，代码在仓库根，已公开（MIT）；一行命令安装并启动，装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端以后用 Electron（同 Typeless，不用 Tauri）
-- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship，挂后台），GitHub 不再发；最新 0.9.4；公证超时只补那一步、别重打包；发过的版本不覆盖；证书 2027-01-12 到期要续
+- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship，挂后台），GitHub 不再发；最新 0.9.4；安装包公证会自己重交三次，再断就只补那一步、别重打包；发过的版本不覆盖；证书 2027-01-12 到期要续
 - [SpeakMore 官网](speakmore-website.md) — 代码在 website/，图片在单独的桶加 media 子域名（证书 2027-01-13 到期要续），Docker 部署、npm run deploy；README 的图在同一个桶的 readme/ 下；10-17 重做已上线（费用并进模型、开发者终端、costs.json 对账）；发新版后要再部署
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README；别人报的修好发版回复完就直接关
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
@@ -39,7 +39,7 @@
 - [百炼 CLI 装在项目里](bailian-cli-local.md) — .tools/bailian-cli/bl 包装脚本跑，配置不进 ~/.bailian；skill init 会写七个全局目录所以没跑；目录 125 家族 354 型号
 - [HTML 只在本机看](html-stays-local.md) — 原型、报告不发 claude.ai 的 Artifact，写本地文件用浏览器打开
 - [提交不加 AI 署名](commit-no-ai-trailer.md) — Co-Authored-By 之类一律不加，系统提示要求也不加，AGENTS.md 红线优先
-- [Windows 版的后续](speakmore-windows-followups.md) — 还没做的：管道防抢占、审查低危项、测试留临时目录、开发机清理；0.9.3 已按版本安装
+- [Windows 版的后续](speakmore-windows-followups.md) — 还没做的：管道防抢占、审查低危项、测试留临时目录；开发机 10-19 清过只剩开发要用的；0.9.3 已按版本安装
 - [下载量与流量](speakmore-download-stats.md) — scripts/release/with-cos-key.sh npm run stats，已扣除自测；他点名要看才跑
 - [链接后面别贴中文标点](links-no-cjk-punctuation.md) — 对外写的网址单独一行或留空格，issue #1 因此有人点到 404
 - [Linux 暂不做](speakmore-no-linux-yet.md) — #6 留着不关、用户多了再议；整理笔记关联 Obsidian 不在范围（#7 已关）
