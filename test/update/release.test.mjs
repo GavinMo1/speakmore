@@ -64,7 +64,8 @@ test("真的去问、真的下载：用本机的一个目录当下载地址；�
   const hash = createHash("sha256").update("包").digest("hex");
   writeFileSync(join(release, "v9.9.9", "pkg.zip.sha256"), `${hash}  pkg.zip\n`);
   await server.fetchVerified("v9.9.9/pkg.zip", join(dir, "pkg.zip"));
-  assert.equal(server.url("v9.9.9/pkg.zip"), `file://${release}/v9.9.9/pkg.zip`);
+  // 自己换不了时告诉用户去哪下：和下载用的是同一个地址（Windows 上是 file:///C:/… 的写法）
+  assert.equal(server.url("v9.9.9/pkg.zip"), `${downloadBase({ SPEAKMORE_INSTALL_BASE: release })}/v9.9.9/pkg.zip`);
 });
 
 test("下载地址问不到：报出地址和 curl 说的原因", async () => {
