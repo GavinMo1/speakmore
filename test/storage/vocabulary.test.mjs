@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
-import { openVocabulary, readImportFile } from "../../src/storage/vocabulary.mjs";
+import { openVocabulary, readImportFile, replaceFile } from "../../src/storage/vocabulary.mjs";
 import { MAX_IMPORT_BYTES, MAX_TERM_LENGTH, MAX_TERMS } from "../../src/vocabulary/terms.mjs";
 
 const zh = createTranslator("zh-CN");
@@ -161,6 +161,48 @@ test("写不进去（没有权限）报成一句人话，说是哪个文件", {
   } finally {
     chmodSync(dir, 0o700);
   }
+});
+
+test("换上新文件：Windows 上目标正被别的程序开着（EPERM、EACCES、EBUSY）隔一会儿再试；别的错误、别的系统不重试", () => {
+  /** 按给的错误代码依次失败，用完了就成功 */
+  const failing = (...codes) => {
+    const calls = [];
+    const rename = (from, to) => {
+      calls.push([from, to]);
+      const code = codes.shift();
+      if (code) throw Object.assign(new Error(code), { code });
+    };
+    return { calls, rename };
+  };
+  const waits = [0, 0, 0];
+
+  let attempt = failing("EPERM", "EBUSY");
+  replaceFile("tmp", "target", { rename: attempt.rename, platform: "win32", waits });
+  assert.deepEqual(attempt.calls, [
+    ["tmp", "target"],
+    ["tmp", "target"],
+    ["tmp", "target"],
+  ]);
+
+  // 一直被拒：等完了照原样抛出，交给上面报成"写不进去"
+  attempt = failing("EACCES", "EACCES", "EACCES", "EACCES", "EACCES");
+  assert.throws(() => replaceFile("tmp", "target", { rename: attempt.rename, platform: "win32", waits }), {
+    code: "EACCES",
+  });
+  assert.equal(attempt.calls.length, waits.length + 1);
+
+  attempt = failing("ENOENT");
+  assert.throws(() => replaceFile("tmp", "target", { rename: attempt.rename, platform: "win32", waits }), {
+    code: "ENOENT",
+  });
+  assert.equal(attempt.calls.length, 1);
+
+  // macOS、Linux 上的 EPERM 就是没有权限，等也没用
+  attempt = failing("EPERM");
+  assert.throws(() => replaceFile("tmp", "target", { rename: attempt.rename, platform: "darwin", waits }), {
+    code: "EPERM",
+  });
+  assert.equal(attempt.calls.length, 1);
 });
 
 test("读要导入的文件：UTF-8、带 BOM 的 UTF-16、GBK 都认；不是文本、太大、读不出都说清是哪个文件", async () => {

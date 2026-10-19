@@ -33,6 +33,27 @@ import {
 // 两个进程（后台应用和命令行）同时改的话后写的会盖掉先写的；不加跨进程的锁：改之前都重新读一遍，
 // 撞上的窗口只有几毫秒，一个人用的词典碰不上。
 
+/** Windows 上目标文件正被别的程序开着（杀毒软件扫描、搜索索引）时换不上，报的是这几种，过一会儿就好 */
+const BUSY = new Set(["EPERM", "EACCES", "EBUSY"]);
+/** 被拒后隔多久再试（毫秒），合计约半秒：写词典是在主进程里同步做的，等太久界面会卡 */
+const RETRY_WAITS = [10, 20, 40, 80, 160, 250];
+
+/**
+ * 把写好的临时文件换成正式的。Windows 上目标正被别的程序开着时会被拒（别的程序允许删除共享也一样），
+ * 隔一会儿再试（graceful-fs 也是这么做的）；别的系统、别的错误照原样抛
+ */
+export function replaceFile(from, to, { rename = renameSync, platform = process.platform, waits = RETRY_WAITS } = {}) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      rename(from, to);
+      return;
+    } catch (error) {
+      if (platform !== "win32" || attempt >= waits.length || !BUSY.has(error?.code)) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, waits[attempt]);
+    }
+  }
+}
+
 /** 读写文件出错时给人看的原因：常见的几种照这种语言说，别的给错误代码 */
 const fileReason = (error) =>
   ["ENOENT", "EACCES", "EPERM", "EISDIR"].includes(error?.code)
@@ -88,7 +109,7 @@ export function openVocabulary(file) {
     try {
       mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
       writeFileSync(temporary, `${JSON.stringify({ terms }, null, 2)}\n`, { mode: 0o600 });
-      renameSync(temporary, file);
+      replaceFile(temporary, file);
     } catch (error) {
       rmSync(temporary, { force: true });
       throw new LocalizedError(msg("vocabulary.unwritable", { file, reason: fileReason(error) }), { cause: error });
