@@ -1,6 +1,6 @@
 ---
 name: speakmore-vocabulary-plan
-description: "词典功能 10-19 在 feat/vocabulary 做完：链路、页面、命令行、评测、爬山、App 端到端、一轮对抗审查（27 条已改）都提交了；等他点头合并推送，还有几件待他定"
+description: "词典功能 10-19 已合并进 main 并推送（acfc33d），还没发版；fun-asr 已按他定的不送词典；剩西里尔形近字归一、评测参照错要不要修待他定"
 metadata:
   node_type: memory
   type: project
@@ -29,4 +29,4 @@ metadata:
 
 **Why:** 用户早就想做，issue #9 给了契机；他要的是能长期维护的结构和真实验证过的效果。
 
-**How to apply:** 剩下的只有：问他合并 feat/vocabulary 进 main、推送（main 上还有 755c9c0 没推）；待他定的几件见上。原来的步骤：1. 读 bench/_work/vocabulary/report.md（scripts/dev/eval-vocabulary.mjs，30 条原版录音，各模型带不带词典对比，含"硬塞"计数），效果写进 bench/results/vocabulary-2026-10-19.md，必要时调上限或提示词；2. App 端到端（scripts/dev/e2e.mjs，家目录放 vocabulary.json，native、local、private 各一遍）；3. 文档：docs/development.md、README 中英；4. 一轮对抗审查；5. 合并、推送前问用户。开发窗口用 /tmp/smv 家目录、热键右 Control，驱动脚本在会话 scratchpad/ui/cdp.mjs。相关：[[speakmore-model-plaza]]、[[speakmore-two-pipelines]]、[[desktop-copy-and-look]]
+**How to apply:** 10-19 他点头合并推送了（acfc33d）；fun-asr 定了不送词典（13dfd00）。还没发版（发版走 COS，见 speakmore-release-on-cos）。待他定：西里尔形近字归一、评测里 4 条参照错和 multicard 判法要不要修再爬一轮。原来的步骤（都做完了）：1. 读 bench/_work/vocabulary/report.md（scripts/dev/eval-vocabulary.mjs，30 条原版录音，各模型带不带词典对比，含"硬塞"计数），效果写进 bench/results/vocabulary-2026-10-19.md，必要时调上限或提示词；2. App 端到端（scripts/dev/e2e.mjs，家目录放 vocabulary.json，native、local、private 各一遍）；3. 文档：docs/development.md、README 中英；4. 一轮对抗审查；5. 合并、推送前问用户。开发窗口用 /tmp/smv 家目录、热键右 Control，驱动脚本在会话 scratchpad/ui/cdp.mjs。相关：[[speakmore-model-plaza]]、[[speakmore-two-pipelines]]、[[desktop-copy-and-look]]

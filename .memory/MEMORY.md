@@ -43,4 +43,4 @@
 - [下载量与流量](speakmore-download-stats.md) — scripts/release/with-cos-key.sh npm run stats，已扣除自测；他点名要看才跑
 - [链接后面别贴中文标点](links-no-cjk-punctuation.md) — 对外写的网址单独一行或留空格，issue #1 因此有人点到 404
 - [Linux 暂不做](speakmore-no-linux-yet.md) — #6 留着不关、用户多了再议；整理笔记关联 Obsidian 不在范围（#7 已关）
-- [词典功能](speakmore-vocabulary-plan.md) — 10-19 在 feat/vocabulary 开干：链路、页面、命令行已提交，在跑真实录音评测；剩文档、App 端到端、对抗审查、合并前问
+- [词典功能](speakmore-vocabulary-plan.md) — 10-19 做完并合并推送（acfc33d），未发版；fun-asr 不送词典；形近字归一、评测参照错待他定
