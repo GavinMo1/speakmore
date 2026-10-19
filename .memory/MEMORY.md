@@ -45,3 +45,4 @@
 - [Linux 暂不做](speakmore-no-linux-yet.md) — #6 留着不关、用户多了再议；整理笔记关联 Obsidian 不在范围（#7 已关）
 - [词典功能](speakmore-vocabulary-plan.md) — 已合并推送（acfc33d）；接下来发版 → Mac 和游戏电脑装好验 → 回并关 #9 → 同步官网
 - [Windows 上的系统窗口让他点](windows-gui-user-clicks.md) — 选文件这类系统窗口直接告诉他点哪，不用 SendKeys 或界面自动化；网页部分用 CDP 核对；那台机器的 Defender 是关着的
+- [腾讯云费用](speakmore-cloud-billing.md) — 按量付费、不能欠费，余额花完 CDN 两小时后下载全断；10-19 余额 137 元、告警 50 元；查下载量时顺带看余额
