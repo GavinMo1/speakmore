@@ -401,7 +401,14 @@ function score() {
       cells.push(`${(meanOf([...mine.values()]) * 100).toFixed(1)}%`);
       if (v === "baseline") cells.push("—");
       else {
-        const diffs = [...mine].filter(([id]) => base.has(id)).map(([id, value]) => value - base.get(id));
+        // 同一条录音在几个模型下的结果是一起动的，按录音聚起来再算区间（按格算会偏窄）
+        const byClip = new Map();
+        for (const [id, value] of mine) {
+          if (!base.has(id)) continue;
+          const clip = id.slice(0, id.indexOf("_"));
+          byClip.set(clip, [...(byClip.get(clip) ?? []), value - base.get(id)]);
+        }
+        const diffs = [...byClip.values()].map(meanOf);
         const half = (1.96 * sdOf(diffs)) / Math.sqrt(diffs.length);
         cells.push(`${(meanOf(diffs) * 100).toFixed(1)} ± ${(half * 100).toFixed(1)}`);
       }
