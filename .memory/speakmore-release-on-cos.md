@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 01cb214e-9235-4c39-87a1-f99a7f88b66e
-  modified: 2026-10-19T06:40:00.000Z
+  modified: 2026-10-19T12:55:00.000Z
 ---
 
 SpeakMore 的发布包放在用户自己的腾讯云 COS，前面是 CDN 域名 `dl.zephyrxiang.com`，东西都在 `speakmore/` 前缀下。2026-10-13 他定的：不用 GitHub Release（太慢），新建专用的桶，下载地址用 zephyrxiang.com 的子域名，以后官网的下载链接也从这里取。
@@ -23,6 +23,7 @@ SpeakMore 的发布包放在用户自己的腾讯云 COS，前面是 CDN 域名 
 - 发版记录：0.7.1 在 2026-10-16 发布（ship 一次跑通，10 个文件），官网同一天重新部署，用户电脑从 0.7.1-dev.2 用 update 升上来，App 是公证过的。0.8.0 在 2026-10-17 发布（模型广场、数据隐私模式、首页选识别方式、推荐组合；ship 一次跑通，10 个文件），官网同一天重新部署，线上包里的版本号是 0.8.0。0.9.0 在 2026-10-17 发布（Windows 版：安装程序 SpeakMore-Setup-x64.exe 和 zip，首次引导重做，悬浮条提示可关；ship 挂后台一次跑通，15 个文件），官网同一天部署（线上提交 c151704），Windows 的下载按钮放了正式版。0.9.1 在 2026-10-17 发布（修刚装好时切不出原生识别的死锁：识别方式选了就当场换上；ship 挂后台一次跑通，15 个文件），官网同一天部署（线上提交 691a833），两个下载地址都回 200。0.9.2 在 2026-10-17 发布（修 0.9.0、0.9.1 的 Mac 版 App 一启动就报找不到模块，issue #4；第一次 ship 在 Electron 的 Node 上撞到 tail 测试的竞态没发出去，修好后重跑一次跑通，15 个文件），发完下载线上的 Apple 芯片 dmg、挂载后用隔离的 SPEAKMORE_HOME 真启动一次（started 0.9.2、helper_ready、零报错）再算发好（[[acceptance-end-to-end]]）。官网同一天部署（线上提交 3b53daa）；这次部署先撞上脚本的毛病：重做时传的路径加了 docs/、src/，服务器端换代码只删原来四样，第二次部署 mv 撞目录停在构建前，已改成按传来的顶层条目删。
 - 0.9.3 在 2026-10-18 发布（Windows 安装按版本放进 versions\，杀毒软件扫着刚解出来的文件也装得上，issue #5；ship 由他挂后台一次跑通，15 个文件）。Windows 包打好就在开发机上跑了十个端到端场景，Apple 芯片 dmg 公证完挂载真启动（started 0.9.3、helper_ready、零报错），传完又从线上地址在 Windows 上装了一遍（irm 那一行和安装程序都起来了）。官网同一天部署（线上提交 3269059），issue #5 回复后关闭。
 - 0.9.4 在 2026-10-19 发布（自定义服务可以填额外请求参数 customParams，检测请求不再带 max_tokens，issue #8；15 个文件）。ship 由用户挂后台，Intel 安装包提交公证时连苹果超时（HTTPClientError.connectTimeout）退出，那时什么都还没传。没有重跑 ship，照 `scripts/build/dmg.mjs` 的步骤只补那个 dmg 的公证、钉票据、核对、写 .sha256，再补 release.mjs 最后的 install.sh、install.ps1、latest，然后 `publish-release -- --dry-run` 查齐、`publish-release` 上传、照 ship.sh 核对下载地址，写成自己挂后台的脚本交给用户跑。Windows zip 打好就在开发机上用隔离家目录真启动过，线上 Apple 芯片 dmg 公证完挂载跑了端到端。官网同一天部署（线上提交 7a8a6ac），issue #8 回复后关闭。
+- 0.10.0 在 2026-10-19 发布（用户词典，issue #9；15 个文件）。第一次 ship 断在签 Apple 芯片 App：codesign 要连苹果的时间戳服务器，回 "The timestamp transaction is not permitted or supported"，那时什么都还没传。拿一个小文件连签三次都带上了时间戳，确认是苹果那边临时的问题，整个重跑 ship 一次跑通。ship 打出的 Windows zip 一出来就在开发机隔离目录里起过；传完后用 `speakmore update` 把两台电脑上他真在用的那份升上去（Mac 0.9.3 → 0.10.0，App 公证通过、权限和 key 都在；游戏电脑 0.9.0 → 0.10.0，见 [[speakmore-windows-followups]]）。这次先推了 main 才跑 ship，README 的下载链接在包传上去之前 404 了约半小时：照以前的做法，先只推标签，传完再推 main。
 - 公证连苹果超时：不要整个重跑 ship。重打会让已验过的包作废、多花十几分钟，照上一条只补没过的那一步。0.9.4 之后 `scripts/build/dmg.mjs` 的公证没拿到苹果结论时隔 30 秒重交、最多三次；应用本身那次公证走 @electron/packager 的 osxNotarize，不重试，断在那里就整个重跑 ship（那时还什么都没传）。
 - 桶名、地域、凭据名、加载器都在不进 git 的 `.machine.env`（`COS_BUCKET`、`COS_REGION`、`COS_CREDENTIAL`、`COS_SECRETS_LOADER`），仓库里只认变量名（[[machine-facts-stay-local]]）。腾讯云这把凭据和 Gemini 那把不在同一个加载器下，所以有单独的 `COS_SECRETS_LOADER`；找不到时先看 `.machine.env`，不要满机器搜。
 - 以前 CI 用的子账号密钥（腾讯云子账号 `speakmore-ci`、策略 `speakmore-release-upload`，存在仓库 Actions secrets 里）已在 2026-10-14 照他的话全部删掉：四个 secrets、子账号连同密钥、策略都没了。以后要在 GitHub 上发布得重新签一把，但他定了只从本机发。

@@ -338,7 +338,7 @@ Comparison with every Typeless plan (heavy use, 100 dictations a day):
 - **Plug-in architecture**: each vendor is a strategy behind a common interface.
 - **Unified I/O**: audio is normalized to 16 kHz mono; every transcriber returns `{ text }`.
 - **Cross-platform development**: [`scripts/dev/win-*.sh`](scripts/dev) synchronize the working tree to a Windows machine over SSH, run tests remotely, restart the app from source with a debugging port, and capture the desktop.
-- **Automated tests**: 1046 unit tests and 22 installation tests.
+- **Automated tests**: 1047 unit tests and 22 installation tests.
 - **Quality gates**: Biome linting plus checks on interface sizing, typography and copy; `npm run check` runs them all.
 
 ```bash

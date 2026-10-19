@@ -1,6 +1,6 @@
 ---
 name: speakmore-windows-followups
-description: Windows 版还没做的：命名管道防抢占、审查剩下的低危项、测试在 Windows 留临时目录；开发机 10-19 清过只剩开发要用的；0.9.3 做掉了按版本安装
+description: Windows 版还没做的：命名管道防抢占（管理员权限起的 App 普通命令行连不上，10-19 真碰到过）、审查剩下的低危项、经典滚动条；他那台的正式安装 10-19 升到 0.10.0
 metadata:
   type: project
 ---
@@ -13,6 +13,9 @@ metadata:
 - 还剩：`test/models/store.test.mjs`、`test/storage/history.test.mjs` 在 Windows 上每跑一次在 %TEMP% 留一个 speakmore-models-*/speakmore-history-* 目录（各一个文件，10-18 清过一次）；开机启动在程序路径带空格时显示成关着（记在 docs/implementation-notes.md）；快捷方式目标每个版本都变，按 exe 路径记的设置（显卡偏好、着色器缓存）每次升级重来，根治要一个固定位置的小启动程序加 AppUserModelID。
 - 2026-10-19 用户说"清理干净"后，开发机上以前会话留的东西都删了：探测和安装、卸载试验的目录与计划任务、旧发布包、npm/Electron 缓存、rae-probe 系列、快照、%TEMP% 里测试留的目录。speakmore-dev 里现在只剩开发脚本要用的 repo、home、desktop、三个日志和计划任务 speakmore-dev（win-desktop.sh 默认的那个）。之后验收用 JOB= 另起的目录和计划任务，验完当场删。
 - **收尾清理**（等 Windows 开发告一段落）：删掉开发机上的 speakmore-dev 目录和所有 speakmore-dev 开头的计划任务，关掉本机到开发机的 SSH 隧道（端口 19333）。
+
+- **10-19 升级他游戏电脑上的正式安装时碰到的**：那台装的是 0.9.0（不是 0.9.3），用 `speakmore update` 升到 0.10.0。升级是经 win-desktop.sh 的计划任务跑的，SSH 登录拿的是管理员令牌，它打开的 App 也是管理员权限（High）。他在普通权限的 PowerShell 里跑命令行，连管道报 `connect EPERM`。从 SSH 停掉 App、他自己用 `speakmore` 重新打开后（Medium）就好了。所以他真在用的那份，升级和打开都让他自己在普通终端里做，不经计划任务。根治就是上面的管道防抢占：建管道时显式给当前用户访问权限，不靠默认 DACL。
+- 发版前在游戏电脑上看到的：整个 App 能滚动的地方都是系统经典滚动条（灰条带箭头），App 里从没设过滚动条样式，0.9.0 起就这样，他还没说要不要改。
 
 **Why:** 发版前他要先上线，这些留到之后做；开发机是他的真机，不能留垃圾。
 **How to apply:** 他提 Windows 相关的活时先看这里；在他的 Windows 桌面会话里跑东西前先问（之前被拒过一次）。相关：[[speakmore-release-on-cos]]。

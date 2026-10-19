@@ -163,6 +163,7 @@ export default {
     items: [
       { icon: "translate", title: "中英双语", text: "界面跟随系统语言" },
       { icon: "palette", title: "三套主题", text: "深浅色自动切换" },
+      { icon: "dictionary", title: "词典", text: "人名与术语，按词典写法输出" },
       { icon: "history", title: "历史与花费", text: "本机记录，随时查看" },
       { icon: "erase", title: "干净卸载", text: "数据集中一处，一条命令删除" },
     ],
@@ -174,7 +175,7 @@ export default {
       { title: "命令行全覆盖", text: "切换方式与模型、管理密钥、下载模型、查看历史与花费。" },
       { title: "JSON 输出", text: "status、history、usage 均可输出 JSON，便于接入脚本。" },
       { title: "跨平台开发", text: "经 SSH 同步到 Windows，远程测试、重启、截屏。" },
-      { title: "插件化架构", text: "各厂商实现同一接口，900 多个单元测试把关。" },
+      { title: "插件化架构", text: "各厂商实现同一接口，1000 多个单元测试把关。" },
     ],
     source: "在 GitHub 查看源码",
     terminal: { label: "终端演示", tabs: { cli: "命令行", windows: "Windows 开发" } },
@@ -197,7 +198,7 @@ export default {
         {
           comment: "同步代码，在 Windows 上跑全部单测",
           command: "scripts/dev/win-test.sh",
-          output: ["ℹ tests 920 ℹ pass 904 ℹ fail 0 ℹ skipped 16"],
+          output: ["ℹ tests 1047 ℹ pass 1030 ℹ fail 0 ℹ skipped 17"],
         },
         {
           comment: "从源码重启 App，带调试端口",
