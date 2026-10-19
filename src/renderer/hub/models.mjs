@@ -61,8 +61,13 @@ export function createModels({ refresh, pickMode }) {
     via: {},
     /** 展开了密钥表单的平台 */
     openKey: null,
-    /** 自定义服务这次填的地址和模型名（存 key 时一起验，启用时一起交） */
-    custom: { url: "", model: "" },
+    /**
+     * 自定义服务的两份草稿，各是 { url, model, params } 或 null（照设置里存的）：
+     *   form   上次提交时表单里填的：提交没成时照它重画表单，免得白填
+     *   draft  验证过、还没换上的：那一行显示"启用"，启用、检测都按它来；换上了就清掉
+     * 不拿它和设置里存的比：存的地址是规整过的（去掉结尾斜杠、/chat/completions），比不上
+     */
+    custom: { form: null, draft: null },
     /** 正在等主进程回话的那一次操作，按钮不重复点 */
     busy: null,
     /** 从某一排货架点"配置密钥"跳到密钥表时，那一排是哪个分类：存好 key 就回去，接着启用那一行的模型 */
@@ -107,10 +112,18 @@ export function createModels({ refresh, pickMode }) {
     return offerOf(role, group, item)?.choice ?? null;
   }
 
+  /** 设置里存的自定义服务：模型名（润色没选它时是空的）、地址、额外参数 */
+  function storedCustom() {
+    const { polish, customUrl: url, customParams: params } = setup.plaza.chosen;
+    return { model: polish.startsWith("custom/") ? polish.slice("custom/".length) : "", url, params };
+  }
+
+  /** 启用、检测时交的：验证过还没换上的草稿，没有就是设置里存的 */
+  const customNow = () => state.custom.draft ?? storedCustom();
+
   function customChoice() {
-    const chosen = setup.plaza.chosen.polish;
-    if (state.custom.model) return `custom/${state.custom.model}`;
-    return chosen.startsWith("custom/") ? chosen : null;
+    const { model } = customNow();
+    return model ? `custom/${model}` : null;
   }
 
   function usable(role, group, item) {
@@ -119,11 +132,15 @@ export function createModels({ refresh, pickMode }) {
     return hasKey(viaOf(role, group)) && offerOf(role, group, item) !== null;
   }
 
-  const customUrl = () => state.custom.url || setup.plaza.chosen.customUrl;
+  const customUrl = () => customNow().url;
+  /** 自定义服务除了模型名还要一起交的两项 */
+  const customExtra = () => ({ customUrl: customNow().url, customParams: customNow().params });
 
   const isChosen = (role, group, item) => {
     const choice = choiceOf(role, group, item);
-    return choice !== null && chosenOf(role) === choice;
+    if (choice === null || chosenOf(role) !== choice) return false;
+    // 自定义服务有验证过、还没换上的草稿：不算选定，留着启用按钮让它生效
+    return group.kind !== "custom" || state.custom.draft === null;
   };
   /** 这个角色在正在用的识别方式里：转写在转写 + 润色、数据隐私两种里都算 */
   const isLive = (role) => ROLES[role].mode === setup.plaza.mode || (role === "transcribe" && privateNow());
@@ -168,27 +185,45 @@ export function createModels({ refresh, pickMode }) {
     const setting = mode === "private" ? "privateTranscriber" : ROLES[role].setting;
     const switching = setup.plaza.mode !== mode;
     const name = itemName(group, item);
-    const customExtra = group.kind === "custom" ? { customUrl: customUrl() } : {};
+    const extra = group.kind === "custom" ? customExtra() : {};
     act(
       rowKey,
       () => {
         if (switching) {
-          const changes = { [setting === "native" ? "model" : setting]: choice, ...customExtra };
+          const changes = { [setting === "native" ? "model" : setting]: choice, ...extra };
           return window.speakmore.setMode(mode, changes);
         }
         if (role === "native") return window.speakmore.setModel(choice);
         if (role === "transcribe") return window.speakmore.setTranscriber(choice);
-        return window.speakmore.setPolish(choice, customExtra.customUrl);
+        return window.speakmore.setPolish(choice, extra);
       },
       {
-        done: () =>
+        done: () => {
+          // 草稿换上了，往后照设置里存的
+          if (group.kind === "custom") state.custom.draft = null;
           toast(
             switching
               ? t("plaza.toast.switchedWith", { mode: modeName(mode), model: name })
               : t("plaza.toast.enabled", { model: name }),
-          ),
+          );
+        },
       },
     );
+  }
+
+  /** 润色正在交给自定义服务 */
+  const customInUse = () => setup.plaza.mode === "local" && setup.plaza.chosen.polish.startsWith("custom/");
+
+  /**
+   * 自定义服务已经有 key 时改它的地址、模型名、额外参数：正在用它就当场换上（同启用，key 在后台验），
+   * 没在用就拿现有的 key 检测一下；填的留在这次的表单里，启用时一起交
+   * @param {{ polish: string, customUrl: string, customParams: string }} changes
+   * @param {boolean} inUse
+   */
+  function updateCustom(changes, inUse) {
+    const { polish, ...extra } = changes;
+    if (inUse) return window.speakmore.setPolish(polish, extra);
+    return window.speakmore.checkModel("local", changes);
   }
 
   /** 检测一行：本机模型念一句交给它转，云端的按那一行的设置发一个最小的请求 */
@@ -197,7 +232,7 @@ export function createModels({ refresh, pickMode }) {
     const choice = choiceOf(role, group, item);
     if (role === "native") return () => window.speakmore.checkModel("native", { model: choice });
     if (role === "transcribe") return () => window.speakmore.checkModel("local", { transcriber: choice });
-    const extra = group.kind === "custom" ? { customUrl: customUrl() } : {};
+    const extra = group.kind === "custom" ? customExtra() : {};
     return () => window.speakmore.checkModel("local", { polish: choice, ...extra });
   }
 
@@ -205,7 +240,7 @@ export function createModels({ refresh, pickMode }) {
   function keyCheckCall(platform) {
     if (platform.id === "custom") {
       const choice = customChoice();
-      return () => window.speakmore.checkModel("local", { polish: choice, customUrl: customUrl() });
+      return () => window.speakmore.checkModel("local", { polish: choice, ...customExtra() });
     }
     if (platform.coverage.polish > 0) return () => window.speakmore.checkModel("local", { polish: platform.id });
     if (platform.coverage.native > 0) return () => window.speakmore.checkModel("native", { model: platform.id });
@@ -902,6 +937,8 @@ export function createModels({ refresh, pickMode }) {
     const custom = platform.id === "custom";
     const name = platformName(platform);
     const key = `key:${platform.id}`;
+    // 自定义服务那几格先填上：上次没交上去的，否则是要启用的草稿或设置里存的
+    const shown = custom ? (state.custom.form ?? customNow()) : null;
     const field = (id, props) => h("input", { class: "input", id, autocomplete: "off", spellcheck: "false", ...props });
     return h(
       "form",
@@ -912,16 +949,47 @@ export function createModels({ refresh, pickMode }) {
         onsubmit: (event) => {
           event.preventDefault();
           const value = $(`plaza-key-${platform.id}`).value.trim();
-          if (custom) {
-            state.custom = { url: $("plaza-custom-url").value.trim(), model: $("plaza-custom-model").value.trim() };
-          }
+          const typed = custom
+            ? {
+                url: $("plaza-custom-url").value.trim(),
+                model: $("plaza-custom-model").value.trim(),
+                params: $("plaza-custom-params").value.trim(),
+              }
+            : null;
+          if (custom) state.custom.form = typed;
           const changes =
-            custom && state.custom.model
-              ? { polish: `custom/${state.custom.model}`, customUrl: state.custom.url }
+            custom && typed.model
+              ? { polish: `custom/${typed.model}`, customUrl: typed.url, customParams: typed.params }
               : undefined;
+          /** 验证过了：和设置里存的不一样就记成草稿，等启用；一样就没有要换的 */
+          const accept = () => {
+            const stored = storedCustom();
+            const same = typed.model === stored.model && typed.url === stored.url && typed.params === stored.params;
+            state.custom = { form: null, draft: same ? null : typed };
+          };
+          // 自定义服务已经有 key、这次没填：只改地址、模型名或额外参数，不用再贴一遍 key
+          if (custom && value === "" && hasKey(platform.id)) {
+            if (!changes) {
+              failed(key, t("plaza.custom.modelMissing"));
+              draw();
+              return;
+            }
+            const inUse = customInUse();
+            act(key, () => updateCustom(changes, inUse), {
+              done: () => {
+                state.openKey = null;
+                // 正在用就已经换上了，往后照设置里存的
+                if (inUse) state.custom = { form: null, draft: null };
+                else accept();
+                toast(t(inUse ? "plaza.toast.customUpdated" : "plaza.toast.customChecked"));
+              },
+            });
+            return;
+          }
           act(key, () => window.speakmore.saveKey(value, platform.id, changes), {
             done: () => {
               state.openKey = null;
+              if (changes) accept();
               delete checks.results[key];
               const count = newlyUsable(platform);
               toast(count > 0 ? t("plaza.toast.keySaved", { count }) : t("plaza.toast.keySavedOnly"));
@@ -933,22 +1001,32 @@ export function createModels({ refresh, pickMode }) {
       custom &&
         field("plaza-custom-url", {
           type: "url",
-          value: customUrl(),
+          value: shown.url,
           placeholder: t("plaza.custom.urlPlaceholder"),
           "aria-label": t("plaza.custom.url"),
         }),
       custom &&
         field("plaza-custom-model", {
-          value: customChoice()?.slice("custom/".length) ?? "",
+          value: shown.model,
           placeholder: t("plaza.custom.modelPlaceholder"),
           "aria-label": t("plaza.custom.model"),
         }),
       field(`plaza-key-${platform.id}`, {
         type: "password",
         class: "input key-input",
-        placeholder: t("plaza.keys.placeholder", { platform: name }),
+        placeholder:
+          custom && hasKey(platform.id) ? t("plaza.custom.keyKept") : t("plaza.keys.placeholder", { platform: name }),
         "aria-label": t("plaza.keys.label", { platform: name }),
       }),
+      // 选填，放在 key 后面：多数服务用不上
+      custom &&
+        field("plaza-custom-params", {
+          class: "input custom-params",
+          value: shown.params,
+          placeholder: t("plaza.custom.paramsPlaceholder"),
+          "aria-label": t("plaza.custom.params"),
+          title: t("plaza.custom.paramsTip"),
+        }),
       h("button", {
         type: "submit",
         class: "button primary",
@@ -961,6 +1039,8 @@ export function createModels({ refresh, pickMode }) {
         text: t("plaza.keys.cancel"),
         onclick: () => {
           state.openKey = null;
+          // 表单里没交上去的不要了，验证过的草稿还留着
+          state.custom.form = null;
           draw();
         },
       }),

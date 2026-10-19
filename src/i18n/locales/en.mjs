@@ -97,6 +97,8 @@ export default {
       polish:
         "On the local path, which provider and model polishes the text, as provider/model; for a custom service write custom/<model>",
       customUrl: "Address of your custom polishing service (OpenAI-compatible), e.g. https://api.example.com/v1",
+      customParams:
+        'Extra request parameters for the custom service, as one JSON object, e.g. {"reasoning_effort": "minimal"}; sent with checks and polishing alike. model, messages, and stream can\'t be set',
       modelSource:
         "Where on-device models download from: cn is SpeakMore's mirror in China, original is Hugging Face. If the chosen one stalls, the other is tried",
       acceleration:
@@ -199,6 +201,10 @@ export default {
     urlMissing: "no address set for the custom service (customUrl)",
     endpointNotFound:
       "{provider} has no chat API at this address (HTTP 404). Check the address is complete; most end in /v1",
+    paramsNotJson:
+      'the extra parameters aren\'t valid JSON: keys and strings need straight double quotes, e.g. {"reasoning_effort": "minimal"}',
+    paramsNotObject: 'the extra parameters must be one JSON object in braces, e.g. {"reasoning_effort": "minimal"}',
+    paramsReserved: "the extra parameters can't set {name}: SpeakMore sends {names} itself",
   },
 
   setup: {
@@ -441,6 +447,12 @@ export default {
       urlPlaceholder: "API address, e.g. https://api.example.com/v1",
       model: "Model name",
       modelPlaceholder: "Model name",
+      params: "Extra parameters",
+      paramsPlaceholder: "Extra parameters (JSON, optional)",
+      paramsTip:
+        'Extra request parameters for this service, e.g. {"reasoning_effort": "minimal"}; sent with checks and polishing',
+      keyKept: "Key configured; leave blank to keep it",
+      modelMissing: "Enter a model name",
     },
     empty: { title: "No matching models", search: "Search “{query}”", clear: "Clear filters" },
     keys: {
@@ -464,6 +476,8 @@ export default {
       enabled: "{model} enabled",
       keySaved: { one: "Key saved · {count} model now available", other: "Key saved · {count} models now available" },
       keySavedOnly: "Key saved",
+      customUpdated: "Custom service settings updated",
+      customChecked: "Check passed · takes effect when enabled",
       keyRemoved: "{platform} key removed",
       canceled: "Download canceled",
       removed: "{model} removed",
@@ -753,7 +767,7 @@ export default {
                                 What you said, grouped by day, newest first (latest {limit} by default)
   speakmore usage [--json]      What it cost: spend and tokens today, this month, and in total, model reply times, per model
   speakmore mode                The three recognition modes and what each uses: native sends the recording to the model; local transcribes, then a model polishes it; private transcribes with an on-device model and uploads nothing
-  speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url …]
+  speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url … --params …]
                                 Switch mode, live. Can bring that mode's own settings, e.g. a custom service on first entering local
   speakmore model               Native mode: available providers ({providers}), whether each has a key, which one is in use
   speakmore model <provider>[/<model>]
@@ -764,9 +778,10 @@ export default {
                                 Download, stop downloading, or delete an on-device model (in any mode; the one in use can't be deleted)
   speakmore transcriber check [<model>]
                                 Check an on-device model: the system voice reads a sentence and the model transcribes it. Defaults to the selected one
-  speakmore polish [<provider>[/<model>] [--url <url>]]
-                                Local mode, step 2: list or switch the polishing model ({polishers}). custom is any OpenAI-compatible service
-  speakmore polish check [<provider>[/<model>]]
+  speakmore polish [<provider>[/<model>] [--url <url>] [--params <JSON>]]
+                                Local mode, step 2: list or switch the polishing model ({polishers}). custom is any OpenAI-compatible service;
+                                --params adds request parameters for it, e.g. '{"reasoning_effort": "minimal"}'
+  speakmore polish check [<provider>[/<model>] [--url <url>] [--params <JSON>]]
                                 Check step 2 works
   speakmore model check [<provider>[/<model>]]
                                 Check it works: sends that provider a minimal request with its key. Defaults to the current one
@@ -815,11 +830,11 @@ export default {
       theme: "Usage: speakmore theme | speakmore theme <name>",
       model:
         "Usage: speakmore model | speakmore model <provider>[/<model>] | speakmore model check [<provider>[/<model>]]",
-      mode: "Usage: speakmore mode | speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url …]",
+      mode: "Usage: speakmore mode | speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url … --params …]",
       transcriber:
         "Usage: speakmore transcriber | speakmore transcriber <model> | speakmore transcriber download|cancel|delete <model> [--yes] | speakmore transcriber check [<model>]",
       polish:
-        "Usage: speakmore polish | speakmore polish <provider>[/<model>] [--url <url>] | speakmore polish check [<provider>[/<model>]]",
+        "Usage: speakmore polish | speakmore polish <provider>[/<model>] [--url <url>] [--params <JSON>] | speakmore polish check [<provider>[/<model>] [--url <url>] [--params <JSON>]]",
     },
     update: {
       fromSource: "This copy runs from source ({dir}): update it with git pull.",
@@ -1002,10 +1017,13 @@ export default {
       alsoModels: "also: {models}",
       polishCurrent: "In use: {model}",
       polishSwitch: "Switch: speakmore polish deepseek/deepseek-v4-pro",
-      polishCustom: "Custom service (OpenAI-compatible): speakmore polish custom/<model> --url <url>",
+      polishCustom:
+        "Custom service (OpenAI-compatible): speakmore polish custom/<model> --url <url> [--params '<JSON>']",
+      polishParams: "Extra parameters: {params}",
       polishCheck: "Check it works: speakmore polish check",
       polishSwitched: "Step 2 is now {model}.",
       urlNeeded: "A custom polishing service needs its address: --url <url> (OpenAI-compatible; most end in /v1)",
+      paramsCustomOnly: "--params is only for the custom service: use it when polishing goes to custom/<model>",
       sourceCurrent: "Downloads from: {source}",
       sourceSwitch: "Change: speakmore config set modelSource {other} (falls back to the other if one stalls)",
     },
@@ -1214,6 +1232,11 @@ speakmore help     all commands`,
       key: { storage: "It's encrypted with Windows data protection and stays on this PC." },
     },
     permissions: { openSettings: "Settings" },
+    // PowerShell strips double quotes from arguments it passes to speakmore.cmd; they need a backslash
+    chat: {
+      paramsNotJson:
+        'the extra parameters aren\'t valid JSON: keys and strings need straight double quotes, e.g. {"reasoning_effort": "minimal"}. In PowerShell, put a backslash before each double quote in --params: \'{\\"reasoning_effort\\": \\"minimal\\"}\'',
+    },
     settings: {
       describe: {
         mode: "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this PC first, then has any LLM polish the text; private only transcribes on this PC and uploads nothing",

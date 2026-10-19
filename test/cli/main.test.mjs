@@ -2313,12 +2313,23 @@ test("mode local 连带第二跳：没有 DeepSeek 的 key 也能直接用自定
   });
 });
 
+test("mode local 连带额外参数：和地址、模型一起验证、一起换", async () => {
+  haveModel();
+  const daemon = fakeDaemon({ running: READY });
+  const { speakmore } = harness({ daemon, secrets: ["sk-custom"] });
+  const flags = ["--polish", "custom/gpt-5-mini", "--url", "https://router.example/v1", "--params", '{"n": 1}'];
+  assert.equal(await speakmore("mode", "local", ...flags), 0);
+  const changes = { polish: "custom/gpt-5-mini", customUrl: "https://router.example/v1", customParams: '{"n":1}' };
+  assert.deepEqual(daemon.requests.find(({ cmd }) => cmd === "set-key").params.changes, { mode: "local", ...changes });
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "set-mode", params: { mode: "local", changes } });
+});
+
 test("mode 连带的设置不是那种模式的：以 2 退出说能带什么", async () => {
   const { speakmore, output } = harness();
   assert.equal(await speakmore("mode", "native", "--polish", "deepseek"), 2);
   assert.match(output.err, /--model/);
   assert.equal(await speakmore("mode", "local", "--model", "openai"), 2);
-  assert.match(output.err, /--transcriber.*--polish.*--url/);
+  assert.match(output.err, /--transcriber.*--polish.*--url.*--params/);
 });
 
 test("transcriber：列出本机转写模型（第一跳），大小、下载过没有、在下的进度，现在用的打一个点；最后说本机下了几个、怎么下载删除", async () => {
@@ -2629,6 +2640,46 @@ test("polish custom/<模型> --url <地址>：先问自定义服务的 key，连
   });
 });
 
+test("polish custom/<模型> --url --params：额外参数规整后连模型和地址一起验证、一起换（issue #8）", async () => {
+  const daemon = fakeDaemon({ running: LOCAL_READY });
+  const { speakmore, output } = harness({ daemon, secrets: ["sk-custom"] });
+  const params = '{ "max_completion_tokens": 1024 }';
+  assert.equal(
+    await speakmore("polish", "custom/gpt-5-mini", "--url", "https://router.example/v1", "--params", params),
+    0,
+  );
+  const changes = {
+    polish: "custom/gpt-5-mini",
+    customUrl: "https://router.example/v1",
+    customParams: '{"max_completion_tokens":1024}',
+  };
+  assert.deepEqual(daemon.requests.find(({ cmd }) => cmd === "set-key").params.changes, changes);
+  assert.deepEqual(daemon.requests.at(-1), { cmd: "set-polish", params: changes });
+  assert.match(output.out, /第二跳换成了 router\.example 的 gpt-5-mini/);
+});
+
+test("polish --params：写坏了、给的不是自定义服务，以 2 退出说清楚", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("polish", "custom/m", "--url", "https://x.example/v1", "--params", "{bad}"), 2);
+  assert.match(output.err, /JSON/);
+  assert.equal(await speakmore("polish", "deepseek", "--params", '{"temperature": 0.2}'), 2);
+  assert.match(output.err, /--params.*自定义服务/);
+});
+
+test("polish：自定义服务带着额外参数时，列表里写出来", async () => {
+  writeFileSync(
+    paths.settingsFile,
+    JSON.stringify({
+      polish: "custom/gpt-5-mini",
+      customUrl: "https://router.example/v1",
+      customParams: '{"reasoning_effort":"minimal"}',
+    }),
+  );
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("polish"), 0);
+  assert.match(output.out, /额外参数：\{"reasoning_effort":"minimal"\}/);
+});
+
 test("polish：自定义服务没给地址、写的是收音频的那家，以 2 退出说清楚", async () => {
   const { speakmore, output } = harness();
   assert.equal(await speakmore("polish", "custom/m"), 2);
@@ -2645,4 +2696,29 @@ test("polish check：查第二跳现在用的那个能不能用", async () => {
   assert.equal(await speakmore("polish", "check"), 0);
   assert.deepEqual(daemon.requests.at(-1), { cmd: "check-polish", params: { polish: "deepseek/deepseek-flash" } });
   assert.match(output.out, /能用：DeepSeek 的 deepseek-flash/);
+});
+
+test("polish check custom/<模型> --url --params：按填的额外参数查，不换掉正在用的", async () => {
+  const daemon = fakeDaemon({ running: LOCAL_READY });
+  const { speakmore } = harness({ daemon });
+  assert.equal(
+    await speakmore(
+      "polish",
+      "check",
+      "custom/gpt-5-mini",
+      "--url",
+      "https://router.example/v1",
+      "--params",
+      '{"max_completion_tokens":1024}',
+    ),
+    0,
+  );
+  assert.deepEqual(daemon.requests.at(-1), {
+    cmd: "check-polish",
+    params: {
+      polish: "custom/gpt-5-mini",
+      customUrl: "https://router.example/v1",
+      customParams: '{"max_completion_tokens":1024}',
+    },
+  });
 });

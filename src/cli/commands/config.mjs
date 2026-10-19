@@ -127,6 +127,7 @@ const MODE_COMMANDS = {
   transcriber: "speakmore transcriber",
   polish: "speakmore polish",
   customUrl: "speakmore polish",
+  customParams: "speakmore polish",
 };
 
 /** config set 写了模式那一层的设置：说平时走哪条路；这一项不属于现在的模式时，说切过去才用上 */

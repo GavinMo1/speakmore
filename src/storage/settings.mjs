@@ -3,7 +3,13 @@ import { dirname } from "node:path";
 import { findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
 import { DEFAULT_SOURCE, DEFAULT_TRANSCRIBER, MODELS, SOURCES } from "../models/catalog.mjs";
 import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../server/asr/cloud/vendors.mjs";
-import { formatChatChoice, normalizeBaseUrl, parseChatChoice } from "../server/chat/vendors.mjs";
+import {
+  formatChatChoice,
+  formatCustomParams,
+  normalizeBaseUrl,
+  parseChatChoice,
+  parseCustomParams,
+} from "../server/chat/vendors.mjs";
 import { DEFAULT_MODE, DEFAULT_POLISH, MODES, parseMode } from "../server/modes.mjs";
 import {
   DEFAULT_MODEL_CHOICE,
@@ -66,8 +72,9 @@ const oneOf = (choices) => new LocalizedError(msg("settings.oneOf", { choices: c
  * label 可有可无：值本身不好懂时（right_option、cinnabar）给出它叫什么，是一句话（msg）或者一个名字。
  * legacyEnv 可有可无：改名之前的环境变量，env 没设时照样认（README 里写过，用的人可能还在用）。
  * store 可有可无：规整后的值写进文件时换成什么样子（默认原样）。
+ * json 可有可无：值本身是一段 JSON，设置文件里直接写成对象、数组也认（先变回字符串再规整）。
  * ofMode 可有可无：这一项属于哪种识别模式（server/modes.mjs），只在那种模式里能换（app/modes.mjs）。
- *   local 的两跳各有各的：transcriber 是第一跳（本机模型或云端模型），polish 和 customUrl 是第二跳。
+ *   local 的两跳各有各的：transcriber 是第一跳（本机模型或云端模型），polish、customUrl、customParams 是第二跳。
  *   private（数据隐私）只有一跳：privateTranscriber，只能是本机模型；和 local 的第一跳分开存，各换各的。
  */
 export const SETTINGS = {
@@ -164,6 +171,16 @@ export const SETTINGS = {
     choices: null,
     parse: (value) => (value.trim() === "" ? "" : normalizeBaseUrl(value)),
   },
+  customParams: {
+    ofMode: "local",
+    env: "SPEAKMORE_CUSTOM_PARAMS",
+    // 发给自定义服务的额外参数，一段 JSON 对象（GitHub issue #8）。设置都存成字符串，存的是去掉空白的那一行；空的是没填。
+    // 手改 settings.json 的人多半直接写成对象，也认（json）：不认的话 App 一启动就因为设置读不出来退出
+    json: true,
+    default: "",
+    choices: null,
+    parse: (value) => formatCustomParams(parseCustomParams(value)),
+  },
   modelSource: {
     // 本地模型没下载过时先从哪下，哪种模式里都能改（切到 local 之前先选好）。选的那个下不动会换另一个，只影响快慢
     env: "SPEAKMORE_MODEL_SOURCE",
@@ -240,8 +257,9 @@ function settingNamed(name) {
 /** @param {string | object} where 哪里写的：设置的名字，或者一句话（msg） */
 function parseValue(name, value, where) {
   try {
-    if (typeof value !== "string") throw new LocalizedError(msg("settings.notText"));
-    return SETTINGS[name].parse(value);
+    const text = SETTINGS[name].json && value !== null && typeof value === "object" ? JSON.stringify(value) : value;
+    if (typeof text !== "string") throw new LocalizedError(msg("settings.notText"));
+    return SETTINGS[name].parse(text);
   } catch (error) {
     throw new LocalizedError(
       msg("settings.invalid", { where, value: JSON.stringify(value), reason: problemOf(error) }),
@@ -356,6 +374,7 @@ const ROUTES = {
     transcriber: settings.transcriber.value,
     polish: parseChatChoice(settings.polish.value),
     customUrl: settings.customUrl.value || null,
+    customParams: settings.customParams.value ? parseCustomParams(settings.customParams.value) : null,
   }),
   private: (settings) => ({ mode: "private", transcriber: settings.privateTranscriber.value }),
 };

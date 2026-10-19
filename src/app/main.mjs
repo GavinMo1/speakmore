@@ -654,6 +654,7 @@ async function main() {
         privateTranscriber: settings.privateTranscriber.value,
         polish: settings.polish.value,
         customUrl: settings.customUrl.value,
+        customParams: settings.customParams.value,
       },
       keys: service ? keys.sources() : {},
       status: Object.fromEntries(MODELS.map(({ id }) => [id, localModels.status(id)])),
@@ -736,6 +737,7 @@ async function main() {
         acceleration: { value: acceleration, choices: ACCELERATIONS },
         polish: settings.polish.value,
         customUrl: settings.customUrl.value,
+        customParams: settings.customParams.value,
         vendors: CHAT_VENDORS.map(describeVendor),
       },
     };
@@ -761,9 +763,8 @@ async function main() {
   handle("setup:set-mode", (_event, mode, changes) => viaModes((m) => m.switchMode(mode, changes ?? {})));
   handle("setup:set-model", (_event, model) => viaModes((m) => m.setModel(model)));
   handle("setup:set-transcriber", (_event, id) => viaModes((m) => m.setTranscriber(id)));
-  handle("setup:set-polish", (_event, polish, customUrl) =>
-    viaModes((m) => m.setPolish(polish, customUrl === undefined ? {} : { customUrl })),
-  );
+  // 自定义服务的地址和额外参数（custom）和模型一起换，没给的照设置里的
+  handle("setup:set-polish", (_event, polish, custom) => viaModes((m) => m.setPolish(polish, custom ?? {})));
   // 本机模型：下载、取消、删除都由用户点；正在用的不能删（模式那一层管）
   handle("setup:download-model", (_event, id) => localModels.download(id));
   handle("setup:cancel-download", (_event, id) => {
@@ -1157,9 +1158,9 @@ async function main() {
             withProblemText(await viaModes((m) => m.setModel(model)), translatorFor(wanted)),
           "set-transcriber": async ({ transcriber, locale: wanted }) =>
             withProblemText(await viaModes((m) => m.setTranscriber(transcriber)), translatorFor(wanted)),
-          "set-polish": async ({ polish, customUrl, locale: wanted }) =>
+          "set-polish": async ({ polish, customUrl, customParams, locale: wanted }) =>
             withProblemText(
-              await viaModes((m) => m.setPolish(polish, customUrl === undefined ? {} : { customUrl })),
+              await viaModes((m) => m.setPolish(polish, { customUrl, customParams })),
               translatorFor(wanted),
             ),
           "forget-key": ({ provider } = {}) => keys.forget({ provider }),
@@ -1169,9 +1170,9 @@ async function main() {
           // 某种模式按改后的设置能不能用（云端的第一跳、数据隐私模式）
           "check-mode": async ({ mode, changes, locale: wanted }) =>
             withProblemText(await viaModes((m) => m.check(mode, changes ?? {})), translatorFor(wanted)),
-          "check-polish": async ({ polish, customUrl, locale: wanted }) =>
+          "check-polish": async ({ polish, customUrl, customParams, locale: wanted }) =>
             withProblemText(
-              await viaModes((m) => m.check("local", customUrl === undefined ? { polish } : { polish, customUrl })),
+              await viaModes((m) => m.checkPolish(polish, { customUrl, customParams })),
               translatorFor(wanted),
             ),
           "reload-theme": reloadTheme,

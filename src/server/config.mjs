@@ -1,7 +1,7 @@
 import { LocalizedError } from "../i18n/index.mjs";
 import { DEFAULT_SOURCE, DEFAULT_TRANSCRIBER, findModel, findSource, MODELS, SOURCES } from "../models/catalog.mjs";
 import { cloudTranscriberOf } from "./asr/cloud/vendors.mjs";
-import { normalizeBaseUrl, parseChatChoice } from "./chat/vendors.mjs";
+import { normalizeBaseUrl, parseChatChoice, parseCustomParams } from "./chat/vendors.mjs";
 import { DEFAULT_MODE, DEFAULT_POLISH, keyVendorOf, keyVendorsOf, parseMode } from "./modes.mjs";
 import {
   apiKeyProblem,
@@ -45,7 +45,7 @@ function thinkingFrom(env) {
   return thinkingLevel;
 }
 
-/** 本地转写链路：第一跳用哪个本地模型（或云端的 厂商/模型）、润色交给谁、自定义服务的地址 */
+/** 本地转写链路：第一跳用哪个本地模型（或云端的 厂商/模型）、润色交给谁、自定义服务的地址和额外参数 */
 function localRouteFrom(env) {
   const written = given(env, "SPEAKMORE_TRANSCRIBER") ?? DEFAULT_TRANSCRIBER;
   const cloud = cloudTranscriberOf(written);
@@ -62,7 +62,9 @@ function localRouteFrom(env) {
   if (polish.vendor === "custom" && customUrl === null) {
     throw new Error("润色交给自定义服务时要给它的地址：SPEAKMORE_CUSTOM_URL");
   }
-  return { mode: "local", transcriber, polish, customUrl };
+  const params = given(env, "SPEAKMORE_CUSTOM_PARAMS") ? read(env, "SPEAKMORE_CUSTOM_PARAMS", parseCustomParams) : {};
+  const customParams = Object.keys(params).length > 0 ? params : null;
+  return { mode: "local", transcriber, polish, customUrl, customParams };
 }
 
 /** 本地模型没下载过时先从哪个源下（models/catalog.mjs 的 SOURCES） */

@@ -92,6 +92,8 @@ export default {
       privateTranscriber: "private 那条路上用哪个本机模型转文字，只能是本机模型，要先下载好",
       polish: "local 那条路上把文字交给哪一家的哪个模型润色，写成 厂商/模型；自定义服务写 custom/模型名",
       customUrl: "自定义润色服务的地址（兼容 OpenAI 接口的那种），比如 https://api.example.com/v1",
+      customParams:
+        '发给自定义服务的额外请求参数，一段 JSON 对象，比如 {"reasoning_effort": "minimal"}；验证和润色都带上，不能写 model、messages、stream',
       modelSource:
         "本机模型从哪下载：cn 是 SpeakMore 的国内源，original 是 Hugging Face 原始地址。选的那个下不动会自动换另一个",
       acceleration:
@@ -192,6 +194,9 @@ export default {
     urlQuery: "地址里不能有 ? 或 #",
     urlMissing: "还没填自定义服务的地址（customUrl）",
     endpointNotFound: "{provider} 的这个地址上没有对话接口（HTTP 404）：检查地址是否写全，多数以 /v1 结尾",
+    paramsNotJson: '额外参数不是有效的 JSON：键名和字符串都要用英文双引号，比如 {"reasoning_effort": "minimal"}',
+    paramsNotObject: '额外参数要是一个 JSON 对象，用大括号括起来，比如 {"reasoning_effort": "minimal"}',
+    paramsReserved: "额外参数里不能写 {name}：{names} 由 SpeakMore 发送",
   },
 
   setup: {
@@ -434,6 +439,11 @@ export default {
       urlPlaceholder: "接口地址，如 https://api.example.com/v1",
       model: "模型名",
       modelPlaceholder: "模型名",
+      params: "额外参数",
+      paramsPlaceholder: "额外参数（JSON，选填）",
+      paramsTip: '发给这个服务的额外请求参数，如 {"reasoning_effort": "minimal"}，检测和润色都会带上',
+      keyKept: "密钥已配置，留空则不更改",
+      modelMissing: "请填写模型名",
     },
     empty: { title: "无匹配模型", search: "搜索 “{query}”", clear: "清除筛选" },
     keys: {
@@ -458,6 +468,8 @@ export default {
       keySaved: { other: "密钥已保存 · 新增 {count} 个可用模型" },
       // 自定义服务没有清单，存好 key 不会多出列着的模型
       keySavedOnly: "密钥已保存",
+      customUpdated: "自定义服务设置已更新",
+      customChecked: "检测通过 · 启用后生效",
       keyRemoved: "{platform} 密钥已删除",
       canceled: "已取消下载",
       removed: "{model} 已删除",
@@ -742,7 +754,7 @@ export default {
                                 看说过的话，按天分组，新的在前（默认最近 {limit} 条）
   speakmore usage [--json]      看花了多少钱：今天、本月、累计的花费、token，模型多久回话，按型号分开
   speakmore mode                看三种识别模式各用什么：native 录音直接交给模型，local 先转写、再交给模型润色，private 只用本机模型转写、什么都不上传
-  speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url …]
+  speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url … --params …]
                                 切模式，当场生效。可以连带那种模式自己的设置，比如第一次进 local 就用自定义服务
   speakmore model               native 模式：看能用哪几家的模型（{providers}）、各家的 key 有没有、现在用的哪个
   speakmore model <厂商>[/<模型>]
@@ -753,9 +765,10 @@ export default {
                                 下载、停下、删除本机转写模型（哪种模式里都能做；正在用的删不了）
   speakmore transcriber check [<模型>]
                                 检查本机转写模型：用系统朗读念一句交给它转，看能不能正常出字。不写就查现在选的
-  speakmore polish [<厂商>[/<模型>] [--url <地址>]]
-                                local 模式第二跳：看、换润色的模型（{polishers}）。custom 是兼容 OpenAI 接口的任意服务
-  speakmore polish check [<厂商>[/<模型>]]
+  speakmore polish [<厂商>[/<模型>] [--url <地址>] [--params <JSON>]]
+                                local 模式第二跳：看、换润色的模型（{polishers}）。custom 是兼容 OpenAI 接口的任意服务，
+                                --params 是发给它的额外请求参数，比如 '{"reasoning_effort": "minimal"}'
+  speakmore polish check [<厂商>[/<模型>] [--url <地址>] [--params <JSON>]]
                                 检查第二跳能不能用
   speakmore model check [<厂商>[/<模型>]]
                                 检查能不能用：拿那一家的 key 发一个最小的请求。不写就查现在用的
@@ -801,11 +814,11 @@ export default {
       config: "用法：speakmore config | speakmore config set <名字> <值> | speakmore config unset <名字>",
       theme: "用法：speakmore theme | speakmore theme <名字>",
       model: "用法：speakmore model | speakmore model <厂商>[/<模型>] | speakmore model check [<厂商>[/<模型>]]",
-      mode: "用法：speakmore mode | speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url …]",
+      mode: "用法：speakmore mode | speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url … --params …]",
       transcriber:
         "用法：speakmore transcriber | speakmore transcriber <模型> | speakmore transcriber download|cancel|delete <模型> [--yes] | speakmore transcriber check [<模型>]",
       polish:
-        "用法：speakmore polish | speakmore polish <厂商>[/<模型>] [--url <地址>] | speakmore polish check [<厂商>[/<模型>]]",
+        "用法：speakmore polish | speakmore polish <厂商>[/<模型>] [--url <地址>] [--params <JSON>] | speakmore polish check [<厂商>[/<模型>] [--url <地址>] [--params <JSON>]]",
     },
     update: {
       fromSource: "这一份是从源码跑的（{dir}）：用 git pull 更新。",
@@ -969,10 +982,12 @@ export default {
       alsoModels: "也能选：{models}",
       polishCurrent: "现在用的是 {model}",
       polishSwitch: "换一个：speakmore polish deepseek/deepseek-v4-pro",
-      polishCustom: "自定义服务（兼容 OpenAI 接口）：speakmore polish custom/<模型名> --url <地址>",
+      polishCustom: "自定义服务（兼容 OpenAI 接口）：speakmore polish custom/<模型名> --url <地址> [--params '<JSON>']",
+      polishParams: "额外参数：{params}",
       polishCheck: "看能不能用：speakmore polish check",
       polishSwitched: "第二跳换成了 {model}。",
       urlNeeded: "润色交给自定义服务时要给它的地址：--url <地址>（兼容 OpenAI 接口，多数以 /v1 结尾）",
+      paramsCustomOnly: "--params 只给自定义服务：润色交给 custom/<模型名> 时才带上",
       sourceCurrent: "下载源：{source}",
       sourceSwitch: "换下载源：speakmore config set modelSource {other}（下不动时会自动换另一个）",
     },
@@ -1169,6 +1184,11 @@ speakmore help     全部命令`,
     },
     permissions: { openSettings: "设置" },
     setup: { openSettings: "任务栏通知区域的图标 › 设置" },
+    // PowerShell 调 speakmore.cmd 时会去掉参数里的双引号（2026-10-19 在 PowerShell 5.1 上实测），要在双引号前加反斜杠
+    chat: {
+      paramsNotJson:
+        '额外参数不是有效的 JSON：键名和字符串都要用英文双引号，比如 {"reasoning_effort": "minimal"}。在 PowerShell 里给 --params 时，双引号前要加反斜杠：\'{\\"reasoning_effort\\": \\"minimal\\"}\'',
+    },
     key: {
       keychainUnavailable: "系统的加密存储不可用，没法安全地保存 key",
       noKeyService:

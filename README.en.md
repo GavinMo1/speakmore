@@ -46,9 +46,9 @@
 ## 🚀 Installation
 
 <p align="center">
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.3/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Apple%20silicon-111?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac with Apple silicon" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.3/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Intel Mac" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.3/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/Download-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.4/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Apple%20silicon-111?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac with Apple silicon" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.4/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Intel Mac" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.4/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/Download-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>
 </p>
 
 **macOS**
@@ -398,7 +398,7 @@ flowchart LR
 - `check` commands send a minimal request (for on-device models, a sentence read by the system voice) to check connectivity and response time.
 - `local` is Transcribe + Polish; `private` is Data Privacy.
 - Native providers: `gemini` / `openai` / `bailian`.
-- Polishing providers: `deepseek` / `bailian` / `moonshot` / `zhipu` / `minimax` / `custom`; a custom service also takes `--url <url>`.
+- Polishing providers: `deepseek` / `bailian` / `moonshot` / `zhipu` / `minimax` / `custom`; a custom service also takes `--url <url>`, and optionally `--params '<JSON>'` for extra request parameters.
 - Piped input example: `pbpaste | speakmore key` (Windows: `Get-Clipboard | speakmore key`).
 
 </details>
@@ -416,6 +416,7 @@ flowchart LR
 | `privateTranscriber` | `qwen3-asr-0.6b-q8` | On-device model for Data Privacy |
 | `polish` | `deepseek/deepseek-flash` | Polishing model, as `provider/model` |
 | `customUrl` | empty | OpenAI-compatible endpoint |
+| `customParams` | empty | Extra request parameters for the custom service, as a JSON object |
 | `modelSource` | `cn` | Download source: `cn` / `original` |
 | `acceleration` | `auto` | Acceleration: `auto` / `cpu` |
 | `barHint` | `on` | Hint line above the voice bar: `on` / `off` |
@@ -426,6 +427,8 @@ flowchart LR
 - Hotkey values: macOS `right_option` / `right_command` / `right_control` / `fn`; Windows `right_alt` / `right_ctrl`.
 - Gemini thinking levels: `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`.
 - A self-hosted polishing model is written as `custom/<model>`, e.g. at `http://127.0.0.1:11434/v1`.
+- Extra parameters a custom service needs go in `customParams`, e.g. `{"reasoning_effort": "minimal"}`. They are sent with both checks and polishing; `model`, `messages`, and `stream` cannot be overridden. When capping a reasoning model's output, leave room for its thinking (e.g. `{"max_completion_tokens": 4096}`), or long passages get cut off.
+- In Windows PowerShell, put a backslash before each double quote in `--params`: `--params '{\"reasoning_effort\": \"minimal\"}'`.
 - Switching through the app or `speakmore mode`, `model`, `transcriber` and `polish` is checked first and takes effect immediately.
 - `config set` writes values directly, without checks.
 - Temporary overrides: set environment variables such as `SPEAKMORE_HOTKEY`, `SPEAKMORE_MODE` and `SPEAKMORE_MODEL` at startup.

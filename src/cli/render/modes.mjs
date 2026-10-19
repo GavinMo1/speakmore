@@ -142,11 +142,12 @@ const keyText = (t, vendor, where) => {
  * @param {ReadonlyArray<{ id: string, name: string, keyEnv: string, defaultModel: string | null, models: ReadonlyArray<{ id: string }> }>} view.vendors
  * @param {{ vendor: string, model: string }} view.polish 设置里选的那个
  * @param {string} view.customUrl 设置里的自定义地址（没填是空的）
+ * @param {string} [view.customParams] 设置里自定义服务的额外参数（一行 JSON，没填是空的）
  * @param {Record<string, "stored" | "env" | null>} view.keys
  * @param {string} view.current 现在是哪种模式
  * @param {{ color: boolean, t: Function }} options
  */
-export function renderPolish({ vendors, polish, customUrl, keys, current }, { color, t }) {
+export function renderPolish({ vendors, polish, customUrl, customParams = "", keys, current }, { color, t }) {
   const c = paint(color);
   const nameOf = (vendor) => (vendor.id === "custom" ? t("cli.local.customName") : vendor.name);
   const modelOf = (vendor) => {
@@ -176,9 +177,11 @@ export function renderPolish({ vendors, polish, customUrl, keys, current }, { co
     }
   }
   const url = polish.vendor === "custom" && customUrl ? customUrl : null;
+  const params = polish.vendor === "custom" && customParams ? customParams : null;
   lines.push(
     "",
     `${INDENT}${t("cli.local.polishCurrent", { model: t.text(polishTitle(polish, url)) })}`,
+    ...(params ? [`${INDENT}${t("cli.local.polishParams", { params })}`] : []),
     `${INDENT}${t("cli.local.polishSwitch")}`,
     `${INDENT}${t("cli.local.polishCustom")}`,
     `${INDENT}${t("cli.local.polishCheck")}`,

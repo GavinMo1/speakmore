@@ -95,9 +95,14 @@ export function createClient({
   };
 
   return {
-    /** 最小的请求：只要 1 个 token（这时回 finish_reason length，不算失败）。key、地址、模型名不对都会在这里暴露 */
+    /**
+     * 最小的请求：只说一个"1"。key、地址、模型名不对都会在这里暴露。
+     * 除了消息和润色的请求一模一样，不限 token：验证多带的参数对面可能不认，验证过了真用时却不带它，结论就不准了。
+     * GitHub issue #8 就是这样：2026-10-19 实测 OpenAI 的 gpt-5-mini 不认 max_tokens（回 400），
+     * 改成 max_completion_tokens: 1 又被思考用光、照样回 400；不限时用了 211 个 token（其中思考 128 个）
+     */
     async ping({ signal }) {
-      const payload = await complete({ max_tokens: 1, messages: [{ role: "user", content: "1" }] }, signal);
+      const payload = await complete({ messages: [{ role: "user", content: "1" }] }, signal);
       return { usage: usageOf(payload) };
     },
 

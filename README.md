@@ -46,9 +46,9 @@
 ## 🚀 安装
 
 <p align="center">
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.3/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Apple%20芯片-111?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版（Apple 芯片）" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.3/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版（Intel）" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.3/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/下载-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="下载 Windows 版" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.4/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Apple%20芯片-111?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版（Apple 芯片）" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.4/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版（Intel）" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.9.4/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/下载-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="下载 Windows 版" /></a>
 </p>
 
 **macOS**
@@ -398,7 +398,7 @@ flowchart LR
 - `check` 类命令发送最小请求（本机模型由系统语音朗读样句），检测连通性与响应速度。
 - `local` 为转写 + 润色，`private` 为数据隐私。
 - 原生识别厂商：`gemini` / `openai` / `bailian`。
-- 润色厂商：`deepseek` / `bailian` / `moonshot` / `zhipu` / `minimax` / `custom`；自定义服务另需 `--url <地址>`。
+- 润色厂商：`deepseek` / `bailian` / `moonshot` / `zhipu` / `minimax` / `custom`；自定义服务另需 `--url <地址>`，可选 `--params '<JSON>'` 附加请求参数。
 - 管道输入示例：`pbpaste | speakmore key`（Windows：`Get-Clipboard | speakmore key`）。
 
 </details>
@@ -416,6 +416,7 @@ flowchart LR
 | `privateTranscriber` | `qwen3-asr-0.6b-q8` | 数据隐私方式的本机模型 |
 | `polish` | `deepseek/deepseek-flash` | 润色模型，`厂商/模型` |
 | `customUrl` | 空 | OpenAI 兼容服务地址 |
+| `customParams` | 空 | 自定义服务的额外请求参数，JSON 对象 |
 | `modelSource` | `cn` | 下载源：`cn` / `original` |
 | `acceleration` | `auto` | 加速：`auto` / `cpu` |
 | `barHint` | `on` | 悬浮条操作提示：`on` / `off` |
@@ -426,6 +427,8 @@ flowchart LR
 - 快捷键可选：macOS `right_option` / `right_command` / `right_control` / `fn`；Windows `right_alt` / `right_ctrl`。
 - Gemini 思考档位可选：`MINIMAL` / `LOW` / `MEDIUM` / `HIGH`。
 - 自建服务的润色模型写作 `custom/<模型>`，地址示例 `http://127.0.0.1:11434/v1`。
+- 自定义服务需要额外参数时写入 `customParams`，例如 `{"reasoning_effort": "minimal"}`；检测与润色请求均附带，`model`、`messages`、`stream` 不可覆盖。推理模型限制输出长度时留足思考的余量（如 `{"max_completion_tokens": 4096}`），否则长段落会被截断。
+- Windows PowerShell 中 `--params` 的双引号前需加反斜杠：`--params '{\"reasoning_effort\": \"minimal\"}'`。
 - 通过 App 或 `speakmore mode`、`model`、`transcriber`、`polish` 切换时先行检测，立即生效。
 - `config set` 直接写入，不做检测。
 - 临时覆盖：启动时设置 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL` 等环境变量。
