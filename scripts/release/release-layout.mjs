@@ -16,14 +16,12 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
+// 包的名字由程序里的更新和这里共用（src/update/layout.mjs）：程序要按同样的名字去取
+import { archiveName, dmgName, versionDir, WINDOWS_ARCHIVE, WINDOWS_SETUP } from "../../src/update/layout.mjs";
+
+export { archiveName, dmgName, versionDir, WINDOWS_ARCHIVE, WINDOWS_SETUP };
+
 export const ARCHS = ["arm64", "x64"];
-export const archiveName = (arch) => `speakmore-darwin-${arch}.tar.gz`;
-export const dmgName = (arch) => `SpeakMore-${arch}.dmg`;
-/** Windows 只出 x64 的一个（Windows on ARM 靠系统自带的转译跑它） */
-export const WINDOWS_ARCHIVE = "speakmore-win32-x64.zip";
-/** Windows 直接下载的安装程序（scripts/build/windows-setup.mjs 打的） */
-export const WINDOWS_SETUP = "SpeakMore-Setup-x64.exe";
-export const versionDir = (version) => `v${version}`;
 
 /** 下载地址上，这个产品的东西都在这个前缀下面 */
 const KEY_PREFIX = "speakmore/";

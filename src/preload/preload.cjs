@@ -44,6 +44,9 @@ contextBridge.exposeInMainWorld("speakmore", {
   onHistoryChanged: (callback) => ipcRenderer.on("history:changed", () => callback()),
   onNavigate: (callback) => ipcRenderer.on("hub:navigate", (_event, target) => callback(target)),
   openHomepage: () => ipcRenderer.invoke("app:open-homepage"),
+  // 设置 › 通用的软件更新：检查一次（真去问下载地址）、开始更新（另起进程，App 会退出再打开）
+  checkForUpdate: () => ipcRenderer.invoke("update:check"),
+  startUpdate: () => ipcRenderer.invoke("update:start"),
 
   // 主窗口：词典（只存在本机）。改完由页面自己重读
   getVocabulary: () => ipcRenderer.invoke("vocabulary:get"),

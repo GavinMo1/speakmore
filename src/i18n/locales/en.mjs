@@ -310,6 +310,7 @@ export default {
     history: "History",
     settings: "Settings…",
     version: "Version {version}",
+    updateAvailable: "Version {version} is available…",
     quit: "Quit SpeakMore",
     fallbackTitle: "Dictate",
   },
@@ -723,6 +724,24 @@ export default {
     version: "Version",
     dataFolder: "Data folder",
     source: "Source code",
+    update: {
+      title: "Software update",
+      check: "Check for updates",
+      checking: "Checking…",
+      upToDate: "v{version} · Up to date",
+      available: "v{latest} is available · You have v{current}",
+      otherBehind: "{copy} is still v{current}; it can be updated to v{latest} too",
+      updateTo: "Update to v{version}",
+      downloading: "Downloading v{version}…",
+      installing: "Installing; SpeakMore will reopen automatically…",
+      cliRunning: "The command line is updating to v{version}…",
+      updated: "Updated to v{version}",
+      failed: "The update didn't finish: {problem}",
+      checkFailed: "Couldn't check: {problem}",
+      retry: "Try again",
+      fromSource: "Running from source · Update with git pull",
+      startFailed: "Couldn't start the update: {reason}",
+    },
   },
 
   keyPanel: {
@@ -836,6 +855,45 @@ export default {
     skipAll: "Skip setup",
   },
 
+  // The SpeakMore running in this home (src/instance.mjs): what to say when it can't be stopped
+  instance: {
+    stuckNoPid:
+      "SpeakMore is stuck and not answering, and its process can't be identified. Find the process named Electron or SpeakMore in Activity Monitor and quit it.",
+    cantStop: "Can't stop SpeakMore (PID {pid}). Quit it in Activity Monitor.",
+  },
+
+  // Version checks and updates (src/update): both the command line and the app say these
+  update: {
+    fromSource: "This copy runs from source ({dir}): update it with git pull.",
+    unreachable: "Couldn't reach {url}: {reason}",
+    badVersion: "The download server returned a bad version number: {value}",
+    checksum: "The downloaded {file} doesn't match the release; it was probably damaged in transit. Update again.",
+    appMount: "Couldn't open the downloaded {file}: {reason}",
+    appWrongPackage: "The downloaded {file} doesn't contain SpeakMore.app {version}, so nothing was installed.",
+    appUnsigned: "The downloaded SpeakMore.app isn't properly signed, so it wasn't installed: {reason}",
+    appOtherDeveloper:
+      "The downloaded SpeakMore.app is signed by a different developer ({found}; the installed one is {installed}), so it wasn't installed.",
+    appReplace: "Couldn't replace {path}: {reason}. You can download {url} and drag it into Applications yourself.",
+    busy: "Another update is in progress (PID {pid}). Wait for it to finish.",
+    installFailed: "The installation didn't finish (installer exit code {code}); see its output or the log for why.",
+    recordFailed: "Couldn't write the update record to {file} ({reason}); the progress shown in Settings may be off.",
+    exitedEarly: "The update process quit unexpectedly (exit code {code}); details are in {log}.",
+    reopenUnknown: "The new version is installed, but SpeakMore.app's location is unknown. Open it from Applications.",
+    appUnmount:
+      "Couldn't unmount the downloaded {file} ({reason}); it's still mounted at {mountpoint}. Eject it in Finder.",
+    reopenFailed:
+      "The new version is installed, but SpeakMore.app couldn't be reopened ({reason}). Open it from Applications.",
+    restartFailed:
+      "The new version is installed, but SpeakMore couldn't be restarted (exit code {code}). Run speakmore in a terminal to start it; details are in {log}.",
+    interrupted: "The last update was interrupted; details are in {log}. You can update again.",
+    updating: "Updating SpeakMore {current} → {latest}",
+    updatingApp: "Updating SpeakMore.app {current} → {latest}",
+    appDone: "SpeakMore.app is now {version}.",
+    reopened: "Reopened SpeakMore.app.",
+    leftover: "Couldn't remove the temporary files at {dir} ({reason}); you can delete them yourself.",
+    copies: { home: "The terminal install of SpeakMore", bundle: "SpeakMore.app" },
+  },
+
   paths: {
     homeNotAbsolute: "The SPEAKMORE_HOME env var must be an absolute path; it's {home}",
     homeTooLong:
@@ -945,23 +1003,12 @@ export default {
         "Usage: speakmore polish | speakmore polish <provider>[/<model>] [--url <url>] [--params <JSON>] | speakmore polish check [<provider>[/<model>] [--url <url>] [--params <JSON>]]",
     },
     update: {
-      fromSource: "This copy runs from source ({dir}): update it with git pull.",
-      unreachable: "Couldn't reach {url}: {reason}",
-      badVersion: "The download server returned a bad version number: {value}",
       upToDate: "Already up to date ({version}).",
-      updating: "Updating SpeakMore {current} → {latest}",
-      updatingApp: "Updating SpeakMore.app {current} → {latest}",
-      appDone: "SpeakMore.app is now {version}.",
-      reopened: "Reopened SpeakMore.app.",
-      appChecksum:
-        "The downloaded {file} doesn't match the release; it was probably damaged on the way. Run speakmore update again.",
-      appMount: "Couldn't open the downloaded {file}: {reason}",
-      appWrongPackage: "The downloaded {file} doesn't contain SpeakMore.app {version}, so nothing was installed.",
-      appUnsigned: "The downloaded SpeakMore.app isn't properly signed, so it wasn't installed: {reason}",
-      appOtherDeveloper:
-        "The downloaded SpeakMore.app is signed by a different developer ({found}; the installed one is {installed}), so it wasn't installed.",
-      appReplace: "Couldn't replace {path}: {reason}. You can download {url} and drag it into Applications yourself.",
       available: "SpeakMore {latest} is out (you have {current}): run speakmore update.",
+      otherAvailable: "{copy} is still {current}; {latest} is out: run speakmore update.",
+      startHint: "Updated to {version}. Run speakmore to start it.",
+      inProgress: "Updating to {version}…",
+      lastFailed: "The last update didn't finish: {problem}",
     },
 
     lifecycle: {
@@ -1332,9 +1379,6 @@ speakmore help     all commands`,
       exitedEarly: "exited midway",
       failed: "SpeakMore failed to start ({reason}). Last lines of the log {file}:\n{tail}",
       noAnswer: "SpeakMore didn't respond within {seconds} seconds of starting. Check the log: {file}",
-      stuckNoPid:
-        "SpeakMore is stuck and not answering, and its process can't be identified. Find the process named Electron or SpeakMore in Activity Monitor and quit it.",
-      cantStop: "Can't stop SpeakMore (PID {pid}). Quit it in Activity Monitor.",
       needXcode:
         "Building the key-listening helper needs the Xcode Command Line Tools. Run this first: xcode-select --install",
       buildFailed:
@@ -1347,12 +1391,16 @@ speakmore help     all commands`,
 
   // Windows 上说法不同的那几句，名字照抄通用的（见 src/i18n/index.mjs 开头）
   windows: {
+    instance: {
+      stuckNoPid:
+        "SpeakMore is stuck and not answering, and its process can't be identified. In Task Manager's Details tab, find electron.exe and end it.",
+      cantStop: "Can't stop SpeakMore (PID {pid}). End it in Task Manager.",
+    },
+    update: {
+      restartFailed:
+        "The new version is installed, but SpeakMore couldn't be restarted (exit code {code}). Open SpeakMore from the Start menu; details are in {log}.",
+    },
     cli: {
-      daemon: {
-        stuckNoPid:
-          "SpeakMore is stuck and not answering, and its process can't be identified. In Task Manager's Details tab, find electron.exe and end it.",
-        cantStop: "Can't stop SpeakMore (PID {pid}). End it in Task Manager.",
-      },
       key: { storage: "It's encrypted with Windows data protection and stays on this PC." },
     },
     permissions: { openSettings: "Settings" },

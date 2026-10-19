@@ -112,7 +112,7 @@
         </nav>
         <div class="sidebar-foot">
           <button type="button" class="icon-button" id="open-settings" data-i18n-aria-label="hub.settings" data-i18n-title="hub.settings">
-            <svg class="icon" aria-hidden="true"><use href="#i-settings" /></svg>
+            <svg class="icon" aria-hidden="true"><use href="#i-settings" /></svg><span class="icon-dot" id="settings-dot" hidden></span>
           </button>
           <button type="button" class="icon-button" id="open-about" data-i18n-aria-label="hub.about" data-i18n-title="hub.about">
             <svg class="icon" aria-hidden="true"><use href="#i-info" /></svg>
@@ -390,7 +390,7 @@
       <h2 class="visually-hidden" id="settings-heading" data-i18n="preferences.title">Settings</h2>
       <nav class="settings-menu" data-i18n-aria-label="preferences.sections">
         <button type="button" class="menu-item" data-pane="general">
-          <svg class="icon" aria-hidden="true"><use href="#i-sliders" /></svg><span data-i18n="preferences.general">General</span>
+          <svg class="icon" aria-hidden="true"><use href="#i-sliders" /></svg><span data-i18n="preferences.general">General</span><span class="menu-dot" data-for="general" hidden></span>
         </button>
         <button type="button" class="menu-item" data-pane="permissions">
           <svg class="icon" aria-hidden="true"><use href="#i-shield" /></svg><span data-i18n="preferences.permissions">Permissions</span><span class="menu-dot" data-for="permissions" hidden></span>
@@ -443,6 +443,16 @@
           <div class="setting" id="open-at-login-row">
             <label class="setting-title" for="open-at-login" data-i18n="preferences.openAtLogin">Launch at login</label>
             <input type="checkbox" class="switch" id="open-at-login" />
+          </div>
+          <!-- 软件更新：查和换都是内核的事（src/update），命令行的 speakmore update 走的是同一套、看的是同一份记录 -->
+          <div class="setting update-setting" id="update-row">
+            <div class="setting-text">
+              <p class="setting-title" data-i18n="preferences.update.title">Software update</p>
+              <p class="update-status" id="update-status" role="status" aria-live="polite">
+                <svg class="icon" aria-hidden="true"><use href="#i-check" /></svg><span id="update-status-text"></span>
+              </p>
+            </div>
+            <button type="button" class="button" id="update-action"></button>
           </div>
           <p class="setting-note" id="general-problem" role="alert" hidden></p>
         </section>

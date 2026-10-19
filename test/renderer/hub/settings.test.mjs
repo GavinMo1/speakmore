@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fixTarget } from "../../../src/renderer/hub/settings.mjs";
+import { createTranslator, msg } from "../../../src/i18n/index.mjs";
+import { describeUpdate, fixTarget, updateFlagged } from "../../../src/renderer/hub/settings.mjs";
 
 const setup = (key, permissions = {}, helper = "running") => ({
   key: { state: key },
@@ -29,4 +30,77 @@ test("什么都不缺、权限还没报上来：去设置的第一页", () => {
 
 test("按键监听的小程序停了：去权限那一页，重新检查在那里", () => {
   assert.deepEqual(fixTarget(setup("ready", { listen: null, trusted: null }, "stopped")), { pane: "permissions" });
+});
+
+// ---------- 软件更新那一行 ----------
+
+const zh = createTranslator("zh-CN");
+const IDLE = {
+  fromSource: false,
+  current: "0.10.0",
+  latest: "0.10.0",
+  available: false,
+  other: null,
+  checking: false,
+  checkProblem: null,
+  launchProblem: null,
+  progress: null,
+  justUpdated: null,
+};
+
+test("软件更新：已是最新、从没问到过、刚更新好，按钮都是检查更新", () => {
+  const latest = describeUpdate(IDLE, zh);
+  assert.deepEqual(
+    [latest.text, latest.tone, latest.icon, latest.action, latest.label],
+    ["v0.10.0 · 已是最新版本", "ok", "i-check", "check", "检查更新"],
+  );
+  assert.equal(describeUpdate({ ...IDLE, latest: null }, zh).text, "v0.10.0");
+  assert.equal(describeUpdate({ ...IDLE, justUpdated: "0.10.0" }, zh).text, "已更新到 v0.10.0");
+});
+
+test("软件更新：有新版本，按钮是醒目的“更新到 v…”；只是另一份旧了说是哪一份", () => {
+  const view = describeUpdate({ ...IDLE, latest: "0.10.1", available: true }, zh);
+  assert.deepEqual(
+    [view.text, view.tone, view.action, view.label, view.primary],
+    ["新版本 v0.10.1 可用 · 当前 v0.10.0", "new", "start", "更新到 v0.10.1", true],
+  );
+  const other = describeUpdate(
+    { ...IDLE, current: "0.10.1", latest: "0.10.1", available: true, other: { kind: "home", version: "0.10.0" } },
+    zh,
+  );
+  assert.equal(other.text, "终端安装的 SpeakMore 仍是 v0.10.0，可一并更新到 v0.10.1");
+});
+
+test("软件更新：进行中不给按，说到了哪一步；命令行在更新也说", () => {
+  const running = (progress) => describeUpdate({ ...IDLE, progress: { state: "running", by: "app", ...progress } }, zh);
+  assert.equal(running({ phase: "starting" }).text, "正在检查…");
+  assert.equal(running({ phase: "downloading", version: "0.10.1" }).text, "正在下载 v0.10.1…");
+  assert.equal(running({ phase: "installing", version: "0.10.1" }).text, "正在安装，SpeakMore 将自动重新打开…");
+  assert.equal(running({ by: "cli", version: "0.10.1" }).text, "命令行正在更新到 v0.10.1…");
+  assert.equal(running({ phase: "downloading" }).action, null);
+  assert.equal(running({ phase: "downloading" }).icon, "i-loader-circle");
+  const checking = describeUpdate({ ...IDLE, checking: true }, zh);
+  assert.equal(checking.busy, true);
+});
+
+test("软件更新：没成、没起来、检查失败都照实说；没成和没起来的按钮是重试", () => {
+  const failed = describeUpdate(
+    { ...IDLE, progress: { state: "failed", problem: msg("update.checksum", { file: "a.dmg" }) } },
+    zh,
+  );
+  assert.equal(failed.text, "更新未完成：下载的 a.dmg 与发布的校验值不符，可能在传输中损坏，请重新更新。");
+  assert.deepEqual([failed.tone, failed.action, failed.label], ["problem", "start", "重试"]);
+  assert.equal(describeUpdate({ ...IDLE, launchProblem: "spawn ENOENT" }, zh).text, "未能开始更新：spawn ENOENT");
+  const check = describeUpdate({ ...IDLE, checkProblem: msg("update.unreachable", { url: "u", reason: "r" }) }, zh);
+  assert.deepEqual([check.text, check.action], ["检查失败：无法连接 u：r", "check"]);
+  const source = describeUpdate({ ...IDLE, fromSource: true }, zh);
+  assert.deepEqual([source.text, source.action], ["从源码运行 · 请用 git pull 更新", null]);
+});
+
+test("设置图标上标点：有新版本、上一次没成；正在更新时不标", () => {
+  assert.equal(updateFlagged({ ...IDLE, available: true }), true);
+  assert.equal(updateFlagged({ ...IDLE, progress: { state: "failed" } }), true);
+  assert.equal(updateFlagged({ ...IDLE, available: true, progress: { state: "running" } }), false);
+  assert.equal(updateFlagged(IDLE), false);
+  assert.equal(updateFlagged(undefined), false);
 });

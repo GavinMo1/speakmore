@@ -300,6 +300,7 @@ export default {
     history: "历史记录",
     settings: "设置…",
     version: "版本 {version}",
+    updateAvailable: "新版本 {version} 可用…",
     quit: "退出 SpeakMore",
     fallbackTitle: "听写",
   },
@@ -696,6 +697,24 @@ export default {
     version: "版本",
     dataFolder: "数据目录",
     source: "源代码",
+    update: {
+      title: "软件更新",
+      check: "检查更新",
+      checking: "正在检查…",
+      upToDate: "v{version} · 已是最新版本",
+      available: "新版本 v{latest} 可用 · 当前 v{current}",
+      otherBehind: "{copy} 仍是 v{current}，可一并更新到 v{latest}",
+      updateTo: "更新到 v{version}",
+      downloading: "正在下载 v{version}…",
+      installing: "正在安装，SpeakMore 将自动重新打开…",
+      cliRunning: "命令行正在更新到 v{version}…",
+      updated: "已更新到 v{version}",
+      failed: "更新未完成：{problem}",
+      checkFailed: "检查失败：{problem}",
+      retry: "重试",
+      fromSource: "从源码运行 · 请用 git pull 更新",
+      startFailed: "未能开始更新：{reason}",
+    },
   },
 
   keyPanel: {
@@ -809,6 +828,41 @@ export default {
     skipAll: "跳过引导",
   },
 
+  // 这个家目录里正在运行的那个（src/instance.mjs）：停不掉时说的话
+  instance: {
+    stuckNoPid:
+      "SpeakMore 卡住了不答话，也认不出它的进程号。在“活动监视器”里找到名叫 Electron 或 SpeakMore 的进程，结束它。",
+    cantStop: "SpeakMore 停不掉（进程号 {pid}）。在“活动监视器”里结束它。",
+  },
+
+  // 版本检查和更新（src/update）：命令行和 App 都会说这些
+  update: {
+    fromSource: "这一份是从源码运行的（{dir}），请用 git pull 更新。",
+    unreachable: "无法连接 {url}：{reason}",
+    badVersion: "下载地址返回的版本号无效：{value}",
+    checksum: "下载的 {file} 与发布的校验值不符，可能在传输中损坏，请重新更新。",
+    appMount: "无法打开下载的 {file}：{reason}",
+    appWrongPackage: "下载的 {file} 中不是 {version} 版的 SpeakMore.app，未安装。",
+    appUnsigned: "下载的 SpeakMore.app 签名无效，未安装：{reason}",
+    appOtherDeveloper: "下载的 SpeakMore.app 与已安装的不是同一开发者签名（{found}，已安装的是 {installed}），未安装。",
+    appReplace: "无法替换 {path}：{reason}。可以下载 {url}，手动拖入“应用程序”。",
+    busy: "另一个更新正在进行（进程 {pid}），请等它完成。",
+    installFailed: "安装未完成（安装脚本的退出码是 {code}），原因见它说的话或日志。",
+    recordFailed: "更新记录写不进 {file}（{reason}），设置里显示的进度可能不准。",
+    exitedEarly: "更新进程意外退出（退出码 {code}），经过见日志 {log}。",
+    reopenUnknown: "已换上新版本，但不知道 SpeakMore.app 在哪，请在“应用程序”中打开。",
+    appUnmount: "下载的 {file} 卸载不掉（{reason}），挂在 {mountpoint}，可以在访达里推出。",
+    reopenFailed: "已换上新版本，但未能重新打开 SpeakMore.app（{reason}），请在“应用程序”中打开。",
+    restartFailed: "已换上新版本，但未能重新启动（退出码 {code}）。请在终端运行 speakmore 启动，经过见日志 {log}。",
+    interrupted: "上一次更新未完成就中断了，经过见日志 {log}。可以重新更新。",
+    updating: "更新 SpeakMore：{current} → {latest}",
+    updatingApp: "更新 SpeakMore.app：{current} → {latest}",
+    appDone: "SpeakMore.app 已更新到 {version}。",
+    reopened: "已重新打开 SpeakMore.app。",
+    leftover: "临时文件未能删除：{dir}（{reason}），可以手动删除。",
+    copies: { home: "终端安装的 SpeakMore", bundle: "SpeakMore.app" },
+  },
+
   paths: {
     homeNotAbsolute: "环境变量 SPEAKMORE_HOME 要写绝对路径，现在是 {home}",
     homeTooLong: "SpeakMore 的目录路径太长，控制通道建不起来：{home}\n用环境变量 SPEAKMORE_HOME 换一个短一些的目录。",
@@ -911,21 +965,12 @@ export default {
         "用法：speakmore polish | speakmore polish <厂商>[/<模型>] [--url <地址>] [--params <JSON>] | speakmore polish check [<厂商>[/<模型>] [--url <地址>] [--params <JSON>]]",
     },
     update: {
-      fromSource: "这一份是从源码跑的（{dir}）：用 git pull 更新。",
-      unreachable: "连不上 {url}：{reason}",
-      badVersion: "下载地址给的版本号不对：{value}",
       upToDate: "已经是最新的（{version}）。",
-      updating: "更新 SpeakMore：{current} → {latest}",
-      updatingApp: "更新 SpeakMore.app：{current} → {latest}",
-      appDone: "SpeakMore.app 已经换成 {version}。",
-      reopened: "已经重新打开 SpeakMore.app。",
-      appChecksum: "下载的 {file} 和发布的对不上，可能是路上坏了：再运行一次 speakmore update。",
-      appMount: "打不开下载的 {file}：{reason}",
-      appWrongPackage: "下载的 {file} 里不是 {version} 版的 SpeakMore.app，没有装。",
-      appUnsigned: "下载的 SpeakMore.app 签名不对，没有装：{reason}",
-      appOtherDeveloper: "下载的 SpeakMore.app 和装着的不是同一个开发者签的（{found}，装着的是 {installed}），没有装。",
-      appReplace: "换不掉 {path}：{reason}。可以下载 {url}，自己拖进“应用程序”。",
       available: "有新版本 {latest}（现在是 {current}）：运行 speakmore update。",
+      otherAvailable: "{copy} 还是 {current}，有新版本 {latest}：运行 speakmore update。",
+      startHint: "已经更新到 {version}。运行 speakmore 启动。",
+      inProgress: "正在更新到 {version}…",
+      lastFailed: "上一次更新没有完成：{problem}",
     },
 
     lifecycle: {
@@ -1260,9 +1305,6 @@ speakmore help     全部命令`,
       exitedEarly: "中途退出",
       failed: "SpeakMore 没能启动（{reason}）。日志 {file} 的最后几行：\n{tail}",
       noAnswer: "SpeakMore 启动后 {seconds} 秒没有答话。看看日志：{file}",
-      stuckNoPid:
-        "SpeakMore 卡住了不答话，也认不出它的进程号。在“活动监视器”里找到名叫 Electron 或 SpeakMore 的进程，结束它。",
-      cantStop: "SpeakMore 停不掉（进程号 {pid}）。在“活动监视器”里结束它。",
       needXcode: "编译按键监听的小程序需要 Xcode 命令行工具。先运行：xcode-select --install",
       buildFailed: "按键监听的小程序没有编译成功（没装 Xcode 命令行工具的话先运行 xcode-select --install）：\n{detail}",
       needGo:
@@ -1273,12 +1315,14 @@ speakmore help     全部命令`,
 
   // Windows 上说法不同的那几句，名字照抄通用的（见 src/i18n/index.mjs 开头）。"本机"这类不分系统的不写
   windows: {
+    instance: {
+      stuckNoPid: "SpeakMore 卡住了不答话，也认不出它的进程号。在“任务管理器”的“详细信息”里找到 electron.exe，结束它。",
+      cantStop: "SpeakMore 停不掉（进程号 {pid}）。在“任务管理器”里结束它。",
+    },
+    update: {
+      restartFailed: "已换上新版本，但未能重新启动（退出码 {code}）。请从开始菜单打开 SpeakMore，经过见日志 {log}。",
+    },
     cli: {
-      daemon: {
-        stuckNoPid:
-          "SpeakMore 卡住了不答话，也认不出它的进程号。在“任务管理器”的“详细信息”里找到 electron.exe，结束它。",
-        cantStop: "SpeakMore 停不掉（进程号 {pid}）。在“任务管理器”里结束它。",
-      },
       key: { storage: "它会用 Windows 的数据保护加密后存在这台电脑上，不会发到别处。" },
     },
     permissions: { openSettings: "设置" },

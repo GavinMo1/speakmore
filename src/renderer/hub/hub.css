@@ -845,6 +845,74 @@ code.setting-value {
   user-select: text;
 }
 
+/* 软件更新那一行：左边标题和一行状态，右边一个按钮（检查、更新、重试，进行中不给按） */
+.setting-text {
+  display: grid;
+  flex: 1;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.update-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.update-status .icon {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: 0.1em;
+}
+
+.update-status:not([data-icon]) .icon {
+  display: none;
+}
+
+.update-status[data-tone="ok"] .icon {
+  color: var(--ok);
+}
+
+.update-status[data-tone="new"] {
+  color: var(--ink);
+}
+
+.update-status[data-tone="new"] .icon {
+  color: var(--primary);
+}
+
+.update-status[data-tone="problem"] {
+  color: var(--problem);
+}
+
+/* 有新版本：侧栏的设置图标、设置里"通用"上各一个小点，颜色是主题色；上一次没更新成是红点 */
+.sidebar-foot .icon-button {
+  position: relative;
+}
+
+.icon-dot {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  width: 0.4rem;
+  height: 0.4rem;
+  background: var(--primary);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--surface-solid);
+}
+
+.menu-dot[data-tone="new"] {
+  background: var(--primary);
+}
+
+.icon-dot[data-tone="problem"] {
+  background: var(--problem);
+}
+
 .setting-note {
   margin-top: 0.5rem;
   font-size: var(--text-small);

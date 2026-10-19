@@ -23,6 +23,7 @@ import { migrateLegacyData } from "../storage/legacy.mjs";
 import { resolvePaths } from "../storage/paths.mjs";
 import { resolveSettings } from "../storage/settings.mjs";
 import { THEMES } from "../themes/index.mjs";
+import { createUpdates } from "../update/index.mjs";
 import { askSecret, Cancelled } from "./ask-secret.mjs";
 import { config, settings, theme } from "./commands/config.mjs";
 import { dict } from "./commands/dict.mjs";
@@ -39,7 +40,6 @@ import { usage } from "./commands/usage.mjs";
 import { ConfigError, UsageError } from "./common.mjs";
 import { createDaemon } from "./daemon.mjs";
 import { tailFile } from "./tail.mjs";
-import { createUpdater } from "./updater.mjs";
 import { isOurShortcut, removeAfterExit, removeLoginItem, removePathEntry } from "./windows-system.mjs";
 
 // speakmore 命令：把"装好依赖、编小帮手、起后台应用、填 key、看历史、改设置"收成几个子命令。
@@ -181,6 +181,7 @@ export function createIo({ packageDir, env = process.env }) {
   const t = createTranslator(cliLocale(paths, env));
   const write = (stream) => (text) => stream.write(text.endsWith("\n") ? text : `${text}\n`);
   const manifest = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8"));
+  const daemon = createDaemon({ paths, packageDir, env, locale: t.locale });
   return {
     out: write(process.stdout),
     err: write(process.stderr),
@@ -194,8 +195,17 @@ export function createIo({ packageDir, env = process.env }) {
     t,
     packageDir,
     paths,
-    daemon: createDaemon({ paths, packageDir, env, locale: t.locale }),
-    updater: createUpdater({ env, home: paths.home, progress: Boolean(process.stderr.isTTY) }),
+    daemon,
+    // 版本检查和更新（src/update）：和 App 的"设置 › 通用"共用一套。下载的进度条、安装脚本说的话都接在终端上
+    updates: createUpdates({
+      paths,
+      env,
+      packageDir,
+      version: manifest.version,
+      instance: daemon,
+      progress: Boolean(process.stderr.isTTY),
+      stdio: "inherit",
+    }),
     now: () => new Date(),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     // 后台没在运行时在这个进程里下载、删除本机模型

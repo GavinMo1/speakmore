@@ -16,10 +16,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { pathToFileURL } from "node:url";
-import { compareVersions } from "../../src/cli/commands/update.mjs";
-import { createUpdater, DOWNLOAD_URL, downloadBase } from "../../src/cli/updater.mjs";
 import { createTranslator, LocalizedError } from "../../src/i18n/index.mjs";
+import { bundleOfPackage, createBundles } from "../../src/update/bundle.mjs";
+import { createRelease } from "../../src/update/release.mjs";
 
 const zh = createTranslator("zh-CN");
 
@@ -29,62 +28,11 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-// 安装脚本、App 这几样按系统分：macOS 是 install.sh 和 SpeakMore.app，Windows 是 install.ps1、没有单独的 App
-const macOnly = { skip: process.platform === "win32" && "macOS 的安装脚本和 SpeakMore.app" };
-const windowsOnly = { skip: process.platform !== "win32" && "Windows 的 install.ps1" };
+// SpeakMore.app 只有 macOS 上有：要用系统的 hdiutil、codesign、ditto
+const macOnly = { skip: process.platform !== "darwin" && "macOS 的 SpeakMore.app" };
 
-test("版本号比大小：按数比，不按字比；同一个号的预发版比正式版旧", () => {
-  assert.ok(compareVersions("0.10.0", "0.9.0") > 0);
-  assert.ok(compareVersions("1.0.0", "0.99.99") > 0);
-  assert.ok(compareVersions("0.6.0", "0.6.0-rc.1") > 0);
-  assert.ok(compareVersions("0.6.0-rc.10", "0.6.0-rc.9") > 0);
-  assert.equal(compareVersions("0.6.0", "0.6.0"), 0);
-  assert.ok(compareVersions("0.5.9", "0.6.0") < 0);
-});
-
-test("从哪下载：和安装脚本一样，默认是发布的地址，SPEAKMORE_INSTALL_BASE 可以换成网址或者本机的目录", () => {
-  assert.equal(downloadBase({}), DOWNLOAD_URL);
-  assert.equal(downloadBase({ SPEAKMORE_INSTALL_BASE: "https://example.com/sm" }), "https://example.com/sm");
-  assert.equal(downloadBase({ SPEAKMORE_INSTALL_BASE: "/tmp/release" }), "file:///tmp/release");
-  assert.equal(downloadBase({ SPEAKMORE_INSTALL_BASE: "C:\\dist\\release" }), "file:///C:/dist/release");
-});
-
-test("真的去问、真的跑安装脚本：用本机的一个目录当下载地址", macOnly, async () => {
-  const release = join(dir, "release");
-  const record = join(dir, "record");
-  const home = join(dir, "home");
-  mkdirSync(release);
-  writeFileSync(join(release, "latest"), "v9.9.9\n");
-  // 假的安装脚本：记下装到哪、装哪个版本，按要求的退出码退出
-  writeFileSync(
-    join(release, "install.sh"),
-    `printf '%s|%s|%s\\n' "$SPEAKMORE_HOME" "$SPEAKMORE_VERSION" "$#" > ${JSON.stringify(record)}\nexit "\${FAKE_EXIT:-0}"\n`,
-  );
-  const updater = createUpdater({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: release }, home });
-  assert.equal(await updater.latest(5), "v9.9.9");
-  assert.equal(await updater.install("v9.9.9"), 0);
-  assert.equal(readFileSync(record, "utf8"), `${home}|v9.9.9|0\n`);
-
-  const failing = createUpdater({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: release, FAKE_EXIT: "3" }, home });
-  assert.equal(await failing.install("v9.9.9"), 3);
-});
-
-test("下载地址问不到：报出地址和 curl 说的原因", async () => {
-  const updater = createUpdater({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: join(dir, "nowhere") }, home: dir });
-  for (const attempt of [() => updater.latest(5), () => updater.install("v9.9.9")]) {
-    await assert.rejects(attempt, (error) => {
-      assert.ok(error instanceof LocalizedError);
-      const said = zh.text(error.problem);
-      // 本机目录当下载地址时，Windows 上报的是它的 file:// 网址
-      const where = join(dir, "nowhere");
-      assert.ok(said.includes(where) || said.includes(pathToFileURL(where).href), said);
-      assert.match(said, /curl/);
-      return true;
-    });
-  }
-});
-
-// ---------- App ----------
+/** 照这个下载地址找 App、换 App 的那一套 */
+const bundlesFrom = (env) => createBundles({ env, release: createRelease({ env }) });
 
 const ARCH = process.arch === "arm64" ? "arm64" : "x64";
 
@@ -148,7 +96,7 @@ const versionOf = (app) =>
 test("找 App：SPEAKMORE_APP 指的那个；不是 SpeakMore（应用标识不对）、不存在的都当没装", macOnly, async () => {
   const mine = fakeApp(mkdtempSync(join(dir, "a-")), "0.3.0", { sign: false });
   const other = fakeApp(mkdtempSync(join(dir, "b-")), "1.0.0", { sign: false, bundleId: "com.example.other" });
-  const find = (path) => createUpdater({ env: { ...process.env, SPEAKMORE_APP: path }, home: dir }).findApp(null);
+  const find = (path) => bundlesFrom({ ...process.env, SPEAKMORE_APP: path }).find();
   assert.deepEqual(await find(mine), { path: mine, version: "0.3.0" });
   assert.equal(await find(other), null);
   assert.equal(await find(join(dir, "nowhere", "SpeakMore.app")), null);
@@ -160,14 +108,14 @@ test("找 App：正在跑的那个在哪就是哪（按进程号找到它的应�
   const child = spawn(join(app, "Contents", "MacOS", "SpeakMore"), ["30"], { stdio: "ignore" });
   try {
     const { SPEAKMORE_APP: _ignored, ...env } = process.env;
-    const found = await createUpdater({ env, home: dir }).findApp(child.pid);
+    const found = await bundlesFrom(env).find({ pid: child.pid });
     assert.deepEqual(found, { path: app, version: "0.4.0" });
   } finally {
     child.kill();
   }
 });
 
-test("换 App：下载对应芯片的 dmg、核对校验值和签名，换掉装着的那个，不留下半截的东西", {
+test("换 App：先下好对应芯片的 dmg、核对校验值和签名、拷到旁边（装着的这时不动），换上之后不留下半截的东西", {
   ...macOnly,
   timeout: 60_000,
 }, async () => {
@@ -175,16 +123,26 @@ test("换 App：下载对应芯片的 dmg、核对校验值和签名，换掉装
   const applications = mkdtempSync(join(dir, "Applications-"));
   const installed = fakeApp(applications, "0.1.0");
   publishDmg(release, "v0.2.0", fakeApp(mkdtempSync(join(dir, "new-")), "0.2.0"));
-  const updater = createUpdater({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: release }, home: dir });
+  const bundles = bundlesFrom({ ...process.env, SPEAKMORE_INSTALL_BASE: release });
 
-  await updater.installApp("v0.2.0", installed);
+  const staged = await bundles.stage("0.2.0", installed);
+  // 下好了还没换：装着的照旧，新的藏在旁边（名字带点开头，访达里看不见）
+  assert.equal(versionOf(installed), "0.1.0");
+  assert.deepEqual(readdirSync(applications).sort(), [".SpeakMore.app.new", "SpeakMore.app"]);
+  staged.commit();
   assert.equal(versionOf(installed), "0.2.0");
   execFileSync("codesign", ["--verify", "--deep", "--strict", installed]);
   assert.deepEqual(readdirSync(applications), ["SpeakMore.app"]);
 
+  // 不换了：待换的删掉，装着的不动
+  publishDmg(release, "v0.2.1", fakeApp(mkdtempSync(join(dir, "newer-")), "0.2.1"));
+  (await bundles.stage("0.2.1", installed)).discard();
+  assert.equal(versionOf(installed), "0.2.0");
+  assert.deepEqual(readdirSync(applications), ["SpeakMore.app"]);
+
   // dmg 里的版本和要装的对不上：不装
   cpSync(join(release, "v0.2.0"), join(release, "v0.3.0"), { recursive: true });
-  await assert.rejects(updater.installApp("v0.3.0", installed), (error) => {
+  await assert.rejects(bundles.stage("0.3.0", installed), (error) => {
     assert.ok(error instanceof LocalizedError);
     assert.match(zh.text(error.problem), /0\.3\.0/);
     return true;
@@ -197,18 +155,18 @@ test("换 App：校验值对不上、没签名的，都不装，装着的原样�
   const release = join(dir, "release");
   const applications = mkdtempSync(join(dir, "Applications-"));
   const installed = fakeApp(applications, "0.1.0");
-  const updater = createUpdater({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: release }, home: dir });
+  const bundles = bundlesFrom({ ...process.env, SPEAKMORE_INSTALL_BASE: release });
 
   const dmg = publishDmg(release, "v0.2.0", fakeApp(mkdtempSync(join(dir, "new-")), "0.2.0"));
   writeFileSync(`${dmg}.sha256`, `${"0".repeat(64)}  SpeakMore-${ARCH}.dmg\n`);
-  await assert.rejects(updater.installApp("v0.2.0", installed), (error) => {
+  await assert.rejects(bundles.stage("0.2.0", installed), (error) => {
     assert.ok(error instanceof LocalizedError);
     assert.match(zh.text(error.problem), new RegExp(`SpeakMore-${ARCH}\\.dmg`));
     return true;
   });
 
   publishDmg(release, "v0.2.1", fakeApp(mkdtempSync(join(dir, "unsigned-")), "0.2.1", { sign: false }));
-  await assert.rejects(updater.installApp("v0.2.1", installed), (error) => {
+  await assert.rejects(bundles.stage("0.2.1", installed), (error) => {
     assert.ok(error instanceof LocalizedError);
     assert.match(zh.text(error.problem), /签名/);
     return true;
@@ -216,18 +174,6 @@ test("换 App：校验值对不上、没签名的，都不装，装着的原样�
 
   assert.equal(versionOf(installed), "0.1.0");
   assert.deepEqual(readdirSync(applications), ["SpeakMore.app"]);
-});
-
-test("装完要不要启动：不要时给安装脚本带上 --no-start", macOnly, async () => {
-  const release = join(dir, "release");
-  const record = join(dir, "args");
-  mkdirSync(release);
-  writeFileSync(join(release, "install.sh"), `printf '%s' "$*" > ${JSON.stringify(record)}\n`);
-  const updater = createUpdater({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: release }, home: dir });
-  assert.equal(await updater.install("v9.9.9", { start: false }), 0);
-  assert.equal(readFileSync(record, "utf8"), "--no-start");
-  assert.equal(await updater.install("v9.9.9"), 0);
-  assert.equal(readFileSync(record, "utf8"), "");
 });
 
 test("打开 App：不把命令行自己的 ELECTRON_RUN_AS_NODE 带过去（带过去 App 会当成 Node 跑、一启动就退出）", {
@@ -255,49 +201,25 @@ test("打开 App：不把命令行自己的 ELECTRON_RUN_AS_NODE 带过去（带
       mode: 0o755,
     },
   );
-  const updater = createUpdater({
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", SPEAKMORE_OPEN_TEST: "passed-through" },
-    home: dir,
-  });
-  await updater.openApp(app);
+  const bundles = bundlesFrom({ ...process.env, ELECTRON_RUN_AS_NODE: "1", SPEAKMORE_OPEN_TEST: "passed-through" });
+  await bundles.open(app);
   for (let waited = 0; !existsSync(record) && waited < 20_000; waited += 200) await delay(200);
   const seen = readFileSync(record, "utf8");
   assert.match(seen, /^SPEAKMORE_OPEN_TEST=passed-through$/m, "别的环境变量照样带过去（SPEAKMORE_HOME 这些）");
   assert.doesNotMatch(seen, /^ELECTRON_RUN_AS_NODE=/m);
 });
 
-test(
-  "Windows：真的去问、真的跑 install.ps1（按 UTF-8 读进来再跑）；装哪、装哪个版本、要不要启动都走环境变量",
-  windowsOnly,
-  async () => {
-    const release = join(dir, "release");
-    const record = join(dir, "record");
-    const home = join(dir, "home");
-    mkdirSync(release);
-    writeFileSync(join(release, "latest"), "v9.9.9\n");
-    // 假的安装脚本：记下拿到的几个环境变量（带一句中文：要按 UTF-8 读才对得上），按要求的结果收尾
-    writeFileSync(
-      join(release, "install.ps1"),
-      `& { Set-Content -Encoding UTF8 -Path $env:RECORD -Value "装好了|$($env:SPEAKMORE_HOME)|$($env:SPEAKMORE_VERSION)|$($env:SPEAKMORE_NO_START)"; $global:LASTEXITCODE = [int]$env:FAKE_EXIT }\n`,
-    );
-    const env = { ...process.env, SPEAKMORE_INSTALL_BASE: release, RECORD: record, FAKE_EXIT: "0" };
-    const updater = createUpdater({ env, home });
-    assert.equal(await updater.latest(5), "v9.9.9");
-    assert.equal(await updater.install("v9.9.9"), 0);
-    assert.equal(
-      readFileSync(record, "utf8")
-        .replace(/^\uFEFF/, "")
-        .trim(),
-      `装好了|${home}|v9.9.9|`,
-    );
-    assert.equal(await updater.install("v9.9.9", { start: false }), 0);
-    assert.equal(
-      readFileSync(record, "utf8")
-        .replace(/^\uFEFF/, "")
-        .trim(),
-      `装好了|${home}|v9.9.9|1`,
-    );
-    const failing = createUpdater({ env: { ...env, FAKE_EXIT: "1" }, home });
-    assert.equal(await failing.install("v9.9.9"), 1);
-  },
-);
+test("这份程序在哪个应用包里：…/X.app/Contents/Resources/app 才算，别的（源码目录、家目录里的）不算", () => {
+  assert.equal(bundleOfPackage("/Applications/SpeakMore.app/Contents/Resources/app"), "/Applications/SpeakMore.app");
+  assert.equal(
+    bundleOfPackage("/Users/a/My Apps/SpeakMore.app/Contents/Resources/app/"),
+    "/Users/a/My Apps/SpeakMore.app",
+  );
+  assert.equal(bundleOfPackage("/Users/a/.speakmore/app"), null);
+  assert.equal(bundleOfPackage("/Users/a/code/speakmore"), null);
+});
+
+test("不是 macOS 就没有应用包", async () => {
+  const bundles = createBundles({ env: {}, release: createRelease({ env: {} }), platform: "win32" });
+  assert.equal(await bundles.find({ pid: 1 }), null);
+});
