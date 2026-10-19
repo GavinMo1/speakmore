@@ -31,7 +31,7 @@ bench/_work/
 .tools/
 
 # 各子项目自己装的依赖，靠锁文件还原
-node_modules/
+node_modules
 
 # 打 Windows 安装程序时临时生成的资源文件（scripts/build/windows-setup.mjs 编完就删）
 native/windows-setup/*.syso
