@@ -13,7 +13,7 @@ import { INDENT } from "../render/text.mjs";
 import { currentProvider, hasKeyAlready, keyPrompter, keySource, needsNewKey, submitKey } from "./key.mjs";
 import { offerDownload } from "./local-models.mjs";
 import { chooseProvider } from "./mode.mjs";
-import { newerVersion } from "./update.mjs";
+import { updateNotes } from "./update.mjs";
 
 // 起停和看状态：speakmore（start）、stop、restart、status。
 
@@ -104,12 +104,15 @@ export async function status(args, io) {
   noPositionals(positionals, "status");
   const settings = currentSettings(io);
   const current = await io.daemon.status({ recheck: true });
-  const newVersion = await newerVersion(io);
+  // 顺带看有没有新版本（一天最多问一次下载地址，App 问过的这边也认）和更新进行得怎样：和 App 设置里显示的是同一份
+  const check = await io.updates.check({ runningApp: current?.packaged ? current.pid : null });
+  const progress = io.updates.progress();
   if (values.json) {
+    const newVersion = check.available ? check.latest : null;
     io.out(JSON.stringify({ running: current !== null, status: current, settings, stats: readStats(io), newVersion }));
   } else {
     showStatus(io, current, settings);
-    if (newVersion) io.out(`\n${INDENT}${io.t("cli.update.available", { latest: newVersion, current: io.version })}`);
+    for (const note of updateNotes(io, check, progress)) io.out(`\n${INDENT}${note}`);
   }
   return current?.summary.ready ? 0 : 1;
 }

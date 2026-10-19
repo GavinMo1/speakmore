@@ -21,6 +21,7 @@ import { CHAT_VENDORS } from "../../src/server/chat/vendors.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
 import { keyFile, oldAppKeyFile, resolvePaths } from "../../src/storage/paths.mjs";
 import { HOTKEY_IDS, resolveSettings } from "../../src/storage/settings.mjs";
+import { createUpdates } from "../../src/update/index.mjs";
 import { assertOwnerOnlyDir } from "../helpers/owner-only.mjs";
 
 /** 热键按系统分：默认的是第一个，另挑一个不是默认的；能填哪几个照本机这个系统的写 */
@@ -169,7 +170,10 @@ function harness({
   installerExit = 0,
   packageDir = paths.appDir,
   app = null,
+  /** 下载、核对 App 的安装包时（抛错就是没核对过） */
   appInstall = () => {},
+  /** 换上 App 时（抛错就是没换成） */
+  appCommit = () => {},
   modelDownload = "finish",
   // 卸载时按哪个系统的样子做；Windows 那几处（windows-system.mjs）换成记下来、照 system 给的回答
   platform = "darwin",
@@ -182,10 +186,20 @@ function harness({
   const tails = [];
   const confirmed = [];
   /**
-   * 问下载地址最新版本的次数（带的限时）、让安装脚本装过的版本和装完启不启动（starts）、
-   * 找 App 时给的进程号（lookedFor）、换过的 App（apps：版本、位置、换的时候后台还在不在跑）、重新打开过的 App
+   * 问下载地址最新版本的次数（带的限时）、让安装脚本装过的版本、装完重新启动家目录那一份的次数（starts）、
+   * 找 App 时给的进程号（lookedFor）、下好待换的 App（staged）、换上的 App（apps：版本、位置、换的时候后台还在不在跑）、
+   * 没换就删掉的待换 App（discarded）、重新打开过的 App
    */
-  const updates = { checks: [], installs: [], starts: [], lookedFor: [], apps: [], opened: [] };
+  const updates = {
+    checks: [],
+    installs: [],
+    starts: [],
+    lookedFor: [],
+    staged: [],
+    apps: [],
+    discarded: [],
+    opened: [],
+  };
   /** 后台没在运行时命令行自己下载、删除的本机模型（假的模型库：下载一报进度就下完，或者没下下来） */
   const local = { downloads: [], removed: [], sources: [] };
   /** Windows 上卸载时删过的 Path 项、认过的快捷方式、要等退出后再删的目录 */
@@ -279,33 +293,66 @@ function harness({
     },
     sharedPreferencesFile: join(dir, "com.github.Electron.plist"),
     packageDir,
-    updater: {
+  };
+  // 版本检查和更新走真的内核（src/update），只把下载地址、App、安装脚本这三样换成假的、记下做过什么
+  io.updates = createUpdates({
+    paths,
+    env,
+    packageDir,
+    version: io.version,
+    instance: daemon,
+    platform,
+    now: () => io.now(),
+    pid: 999_999,
+    release: {
       async latest(timeoutSeconds) {
         updates.checks.push(timeoutSeconds);
         const answer = typeof latest === "function" ? latest() : latest;
         if (answer instanceof Error) throw answer;
         return answer;
       },
-      async install(version, { start = true } = {}) {
-        updates.installs.push(version);
-        updates.starts.push(start);
+    },
+    bundles: {
+      async find({ pid }) {
+        updates.lookedFor.push(pid);
+        return app;
+      },
+      async stage(version, path) {
+        updates.staged.push({ version, path, stillRunning: daemon.current !== null });
+        appInstall();
+        return {
+          commit() {
+            updates.apps.push({ version: `v${version}`, path, stillRunning: daemon.current !== null });
+            appCommit();
+          },
+          discard() {
+            updates.discarded.push(path);
+          },
+        };
+      },
+      async open(path) {
+        updates.opened.push(path);
+      },
+    },
+    homes: {
+      // 像是用安装脚本装的：程序在家目录的 app 里，或者 Windows 的 versions 下
+      find: () => (existsSync(paths.appDir) || existsSync(paths.versionsDir) ? { version: io.version } : null),
+      async stage(version) {
+        return { dir: `staged-${version}`, discard() {} };
+      },
+      async install(_staged, version) {
+        updates.installs.push(`v${version}`);
         // 和真的安装脚本一样：先停掉正在运行的
         daemon.current = null;
         return installerExit;
       },
-      async findApp(pid) {
-        updates.lookedFor.push(pid);
-        return app;
-      },
-      async installApp(version, path) {
-        updates.apps.push({ version, path, stillRunning: daemon.current !== null });
-        appInstall();
-      },
-      async openApp(path) {
-        updates.opened.push(path);
+      async start() {
+        updates.starts.push(true);
+        daemon.current = READY;
+        return 0;
       },
     },
-  };
+  });
   return {
     io,
     output,
@@ -698,38 +745,54 @@ test("update：下载地址上有更新的版本，就让安装脚本装上它�
   assert.deepEqual(updates.installs, ["v0.2.0"]);
   assert.match(output.out, /更新 SpeakMore：0\.1\.0 → 0\.2\.0/);
 
-  // 安装脚本没装成：它已经把原因说了，这边只把退出码交出去
+  // 安装脚本没装成：它说的原因已经在终端上了，这边说一句没装成、原来的版本不变，退出码 1
   const failing = harness({ latest: "v0.2.0", installerExit: 1 });
   assert.equal(await failing.speakmore("update"), 1);
+  assert.match(failing.output.err, /安装未完成（安装脚本退出码 1），原来的版本保持不变/);
 });
 
 const APP = "/Applications/SpeakMore.app";
 /** 正在运行的是装在"应用程序"里的那个 */
 const APP_RUNNING = { ...READY, packaged: true, pid: 4242 };
 
-test("update：没装 App 时和原来一样，安装脚本装完就启动", async () => {
+test("update：原来没在运行的，换完不替它启动，提醒一句怎么启动", async () => {
   installed();
-  const { speakmore, updates } = harness({ latest: "v0.2.0" });
+  const { speakmore, output, updates, daemon } = harness({ latest: "v0.2.0" });
   assert.equal(await speakmore("update"), 0);
-  assert.deepEqual(updates.starts, [true]);
+  assert.deepEqual(updates.starts, []);
   assert.deepEqual(updates.lookedFor, [null]);
   assert.deepEqual(updates.apps, []);
+  assert.deepEqual(daemon.calls, []);
+  assert.match(output.out, /已经更新到 0\.2\.0。运行 speakmore 启动/);
 });
 
-test("update：正在跑的是 App：先停掉它再换，命令行那一份只装不启动，最后重新打开 App", async () => {
+test("update：正在跑的是命令行起的这一份：先下好，再停掉它、换上、重新启动", async () => {
+  installed();
+  const daemon = fakeDaemon({ running: READY });
+  const { speakmore, output, updates } = harness({ daemon, latest: "v0.2.0" });
+  assert.equal(await speakmore("update"), 0);
+  assert.deepEqual(daemon.calls, ["stop"]);
+  assert.deepEqual(updates.installs, ["v0.2.0"]);
+  assert.deepEqual(updates.starts, [true]);
+  assert.doesNotMatch(output.out, /运行 speakmore 启动/);
+});
+
+test("update：正在跑的是 App：先把新的下好（这时它还在跑），再停掉它换上，两份都换，最后重新打开 App", async () => {
   installed();
   const daemon = fakeDaemon({ running: APP_RUNNING });
   const { speakmore, output, updates } = harness({ daemon, latest: "v0.2.0", app: { path: APP, version: "0.1.0" } });
   assert.equal(await speakmore("update"), 0);
   // 按正在跑的那个进程去找：用户可能没放在"应用程序"里
   assert.deepEqual(updates.lookedFor, [4242]);
+  assert.deepEqual(updates.staged, [{ version: "0.2.0", path: APP, stillRunning: true }]);
   assert.deepEqual(updates.apps, [{ version: "v0.2.0", path: APP, stillRunning: false }]);
   assert.deepEqual(updates.installs, ["v0.2.0"]);
-  assert.deepEqual(updates.starts, [false]);
+  // 家目录那一份没在跑，不替它启动；停掉的是 App，重新打开 App
+  assert.deepEqual(updates.starts, []);
   assert.deepEqual(updates.opened, [APP]);
   assert.match(output.out, /更新 SpeakMore\.app：0\.1\.0 → 0\.2\.0/);
   assert.match(output.out, /更新 SpeakMore：0\.1\.0 → 0\.2\.0/);
-  assert.match(output.out, /已经重新打开 SpeakMore\.app/);
+  assert.match(output.out, /已重新打开 SpeakMore\.app/);
 });
 
 test("update：只有 App 旧：只换 App；它没在跑就不打开", async () => {
@@ -743,13 +806,23 @@ test("update：只有 App 旧：只换 App；它没在跑就不打开", async ()
   assert.doesNotMatch(output.out, /已经是最新的/);
 });
 
-test("update：装着 App、正在跑的是命令行那一份：App 照换，命令行那一份由安装脚本重新启动", async () => {
+test("update：只有 App 旧、正在跑的是命令行那一份：换的是另一个程序，不碍事，不停它", async () => {
+  installed();
+  const daemon = fakeDaemon({ running: READY });
+  const { speakmore, updates } = harness({ daemon, latest: "v0.1.0", app: { path: APP, version: "0.0.9" } });
+  assert.equal(await speakmore("update"), 0);
+  assert.deepEqual(daemon.calls, []);
+  assert.deepEqual(updates.apps, [{ version: "v0.1.0", path: APP, stillRunning: true }]);
+  assert.deepEqual(updates.starts, []);
+});
+
+test("update：装着 App、正在跑的是命令行那一份：两份都换，停掉的命令行那一份重新启动，App 不打开", async () => {
   installed();
   const daemon = fakeDaemon({ running: READY });
   const { speakmore, updates } = harness({ daemon, latest: "v0.2.0", app: { path: APP, version: "0.1.0" } });
   assert.equal(await speakmore("update"), 0);
-  // 命令行那一份跑着不碍事：换的是另一个程序
-  assert.deepEqual(updates.apps, [{ version: "v0.2.0", path: APP, stillRunning: true }]);
+  assert.equal(updates.apps.length, 1);
+  assert.deepEqual(updates.installs, ["v0.2.0"]);
   assert.deepEqual(updates.starts, [true]);
   assert.deepEqual(updates.opened, []);
 });
@@ -759,7 +832,7 @@ test("update：装着 App、什么都没在跑：两个都换成新的，谁都�
   const { speakmore, updates } = harness({ latest: "v0.2.0", app: { path: APP, version: "0.1.0" } });
   assert.equal(await speakmore("update"), 0);
   assert.equal(updates.apps.length, 1);
-  assert.deepEqual(updates.starts, [false]);
+  assert.deepEqual(updates.starts, []);
   assert.deepEqual(updates.opened, []);
 });
 
@@ -767,12 +840,12 @@ test("update：App 和命令行那一份都是最新的：什么都不做", asyn
   installed();
   const { speakmore, output, updates } = harness({ latest: "v0.1.0", app: { path: APP, version: "0.1.0" } });
   assert.equal(await speakmore("update"), 0);
-  assert.deepEqual(updates.apps, []);
+  assert.deepEqual(updates.staged, []);
   assert.deepEqual(updates.installs, []);
   assert.match(output.out, /已经是最新的（0\.1\.0）/);
 });
 
-test("update：App 没换成：照实说，命令行那一份也不动，停掉的 App 重新打开", async () => {
+test("update：App 的安装包没核对过：什么都不停、不换，照实说", async () => {
   installed();
   const daemon = fakeDaemon({ running: APP_RUNNING });
   const { speakmore, output, updates } = harness({
@@ -780,25 +853,43 @@ test("update：App 没换成：照实说，命令行那一份也不动，停掉�
     latest: "v0.2.0",
     app: { path: APP, version: "0.1.0" },
     appInstall: () => {
-      throw new LocalizedError(msg("cli.update.appChecksum", { file: "SpeakMore-arm64.dmg" }));
+      throw new LocalizedError(msg("update.checksum", { file: "SpeakMore-arm64.dmg" }));
     },
   });
   assert.equal(await speakmore("update"), 1);
-  assert.match(output.err, /SpeakMore-arm64\.dmg/);
+  assert.match(output.err, /SpeakMore-arm64\.dmg 与发布的校验值不符/);
+  assert.deepEqual(daemon.calls, [], "下载、核对都在停之前：没核对过就什么都不停");
+  assert.deepEqual(updates.installs, []);
+  assert.deepEqual(updates.opened, []);
+});
+
+test("update：App 没换成：命令行那一份也不动，停掉的 App 重新打开（原来那个还在）", async () => {
+  installed();
+  const daemon = fakeDaemon({ running: APP_RUNNING });
+  const { speakmore, output, updates } = harness({
+    daemon,
+    latest: "v0.2.0",
+    app: { path: APP, version: "0.1.0" },
+    appCommit: () => {
+      throw new LocalizedError(msg("update.appReplace", { path: APP, reason: "EACCES", url: "https://x/y.dmg" }));
+    },
+  });
+  assert.equal(await speakmore("update"), 1);
+  assert.match(output.err, /无法替换 \/Applications\/SpeakMore\.app：EACCES/);
   assert.deepEqual(updates.installs, []);
   assert.deepEqual(updates.opened, [APP]);
 });
 
-test("update：后台卡住不答话时不知道跑的是哪个，App 按装着的位置找", async () => {
+test("update：后台卡住不答话时不知道跑的是哪个：停掉它，App 按装着的位置找，换完不知道打开谁", async () => {
   installed();
-  const { speakmore, updates } = harness({
-    daemon: fakeDaemon({ hung: true }),
-    latest: "v0.2.0",
-    app: { path: APP, version: "0.1.0" },
-  });
+  const daemon = fakeDaemon({ hung: true });
+  const { speakmore, output, updates } = harness({ daemon, latest: "v0.2.0", app: { path: APP, version: "0.1.0" } });
   assert.equal(await speakmore("update"), 0);
+  assert.deepEqual(daemon.calls, ["stop"]);
   assert.deepEqual(updates.lookedFor, [null]);
   assert.deepEqual(updates.opened, []);
+  assert.deepEqual(updates.starts, []);
+  assert.match(output.out, /运行 speakmore 启动/);
 });
 
 test("update：已经是最新的（或者比下载地址上的还新）就什么都不做", async () => {
@@ -821,7 +912,7 @@ test("update：家目录经过符号链接（比如 /tmp 其实是 /private/tmp�
   assert.deepEqual(updates.installs, ["v0.2.0"]);
 });
 
-test("update：从源码跑的这一份不归安装脚本管，说用 git pull，不去问下载地址", async () => {
+test("update：从源码跑的这一份不归更新管，说用 git pull，不去问下载地址", async () => {
   outside = mkdtempSync(join(tmpdir(), "sm-src-"));
   const { speakmore, output, updates } = harness({ latest: "v0.2.0", packageDir: outside });
   assert.equal(await speakmore("update"), 1);
@@ -846,9 +937,7 @@ test("update（Windows）：程序在家目录 versions 下某个版本里的才
 test("update：问不到最新版本、问到的不像版本号，都照实说，不装", async () => {
   installed();
   const offline = harness({
-    latest: new LocalizedError(
-      msg("cli.update.unreachable", { url: "https://x/latest", reason: "curl: (6) 解析不了" }),
-    ),
+    latest: new LocalizedError(msg("update.unreachable", { url: "https://x/latest", reason: "curl: (6) 解析不了" })),
   });
   assert.equal(await offline.speakmore("update"), 1);
   assert.match(offline.output.err, /https:\/\/x\/latest/);
@@ -861,6 +950,16 @@ test("update：问不到最新版本、问到的不像版本号，都照实说�
   assert.deepEqual(garbled.updates.installs, []);
 
   assert.equal(await harness().speakmore("update", "now"), 2);
+});
+
+test("update：App 那边正在更新（锁被一个还在的进程拿着）：不跟着换，说清楚", async () => {
+  installed();
+  mkdirSync(paths.runDir, { recursive: true });
+  writeFileSync(paths.updateLock, String(process.pid));
+  const { speakmore, output, updates } = harness({ latest: "v0.2.0" });
+  assert.equal(await speakmore("update"), 1);
+  assert.match(output.err, /另一个更新正在进行（进程 \d+）/);
+  assert.deepEqual(updates.checks, []);
 });
 
 test("status：有新版本时提醒一句；一天只问一次下载地址", async () => {
@@ -911,6 +1010,60 @@ test("status --json：带上有没有新版本（newVersion，没有是 null）"
   const same = harness({ daemon: fakeDaemon({ running: READY }) });
   await same.speakmore("status", "--json");
   assert.equal(JSON.parse(same.output.out).newVersion, null);
+});
+
+test("status：和 App 看的是同一份记录。App 问过的一天之内不再问；App 正在更新、上一次没更新成，都提一句", async () => {
+  installed();
+  // App 刚问过：知道有 0.2.0
+  mkdirSync(paths.runDir, { recursive: true });
+  writeFileSync(paths.updateCheckFile, JSON.stringify({ checkedAt: "2026-10-13T06:00:00.000Z", latest: "0.2.0" }));
+  const seen = harness({ daemon: fakeDaemon({ running: READY }), latest: "v9.9.9" });
+  await seen.speakmore("status");
+  assert.deepEqual(seen.updates.checks, []);
+  assert.match(seen.output.out, /有新版本 0\.2\.0（现在是 0\.1\.0）/);
+
+  // App 正在更新（进程还在）：说正在更新，不再提有新版本
+  writeFileSync(
+    paths.updateFile,
+    JSON.stringify({
+      state: "running",
+      phase: "downloading",
+      version: "0.2.0",
+      by: "app",
+      pid: process.pid,
+      startedAt: "2026-10-13T06:59:00.000Z",
+    }),
+  );
+  const busy = harness({ daemon: fakeDaemon({ running: READY }) });
+  await busy.speakmore("status");
+  assert.match(busy.output.out, /正在更新到 0\.2\.0…/);
+  assert.doesNotMatch(busy.output.out, /有新版本/);
+
+  // 上一次没更新成、新版本还没装上：提原因
+  writeFileSync(
+    paths.updateFile,
+    JSON.stringify({
+      state: "failed",
+      version: "0.2.0",
+      by: "app",
+      pid: 1,
+      problem: { key: "update.checksum", params: { file: "x.zip" } },
+    }),
+  );
+  const failed = harness({ daemon: fakeDaemon({ running: READY }) });
+  await failed.speakmore("status");
+  assert.match(failed.output.out, /上一次更新没有完成：下载的 x\.zip 与发布的校验值不符/);
+});
+
+test("status：命令行这一份是新的、只有 App 还是旧的：说是 App 旧了", async () => {
+  installed();
+  const { speakmore, output } = harness({
+    daemon: fakeDaemon({ running: READY }),
+    latest: "v0.1.0",
+    app: { path: APP, version: "0.0.9" },
+  });
+  await speakmore("status");
+  assert.match(output.out, /SpeakMore\.app 还是 0\.0\.9，有新版本 0\.1\.0：运行 speakmore update/);
 });
 
 // ---------- key ----------

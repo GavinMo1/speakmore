@@ -84,8 +84,12 @@ export function resolvePaths(env = process.env, userHome = homedir(), platform =
     controlSocket,
     /** 正在运行的后台应用的进程号。只在它卡住不答话、要强行结束时才用得上 */
     pidFile: join(home, "run", "daemon.pid"),
-    /** 上一次问下载地址最新版本的时间和结果。status 靠它一天只问一次 */
+    /** 上一次问下载地址最新版本的时间和结果。命令行和后台应用共用，各自靠它一天只问一次（src/update） */
     updateCheckFile: join(home, "run", "update-check.json"),
+    /** 正在进行的、或者上一次的更新：进行到哪一步、谁发起的、失败的原因。两边都照它显示（src/update） */
+    updateFile: join(home, "run", "update.json"),
+    /** 更新时拿着的锁（里面是进程号）：命令行和 App 不能同时换程序 */
+    updateLock: join(home, "run", "update.lock"),
     /** 运行环境（Chromium）自己的缓存和状态，和我们的数据分开放。停掉之后可以随时删 */
     cacheDir: join(home, "cache"),
   };
