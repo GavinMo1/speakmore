@@ -45,6 +45,15 @@ contextBridge.exposeInMainWorld("speakmore", {
   onNavigate: (callback) => ipcRenderer.on("hub:navigate", (_event, target) => callback(target)),
   openHomepage: () => ipcRenderer.invoke("app:open-homepage"),
 
+  // 主窗口：词典（只存在本机）。改完由页面自己重读
+  getVocabulary: () => ipcRenderer.invoke("vocabulary:get"),
+  addTerm: (term) => ipcRenderer.invoke("vocabulary:add", term),
+  updateTerm: (previous, term) => ipcRenderer.invoke("vocabulary:update", previous, term),
+  removeTerms: (terms) => ipcRenderer.invoke("vocabulary:remove", terms),
+  // 导入：先选文件、预览（没选是 null），确认了再把预览里的词交回来
+  previewImport: () => ipcRenderer.invoke("vocabulary:preview-import"),
+  importTerms: (terms) => ipcRenderer.invoke("vocabulary:import", terms),
+
   // 主窗口：设置
   getSetup: () => ipcRenderer.invoke("setup:get"),
   onSetupChanged: (callback) => ipcRenderer.on("setup:changed", () => callback()),

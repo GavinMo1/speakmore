@@ -5,20 +5,22 @@ import { createModePicker } from "./mode-picker.mjs";
 import { createModels } from "./models.mjs";
 import { createPresetPicker } from "./preset-picker.mjs";
 import { createSettings, fixTarget } from "./settings.mjs";
+import { createVocabulary } from "./vocabulary.mjs";
 
-// 主窗口：对应原版的 hub.html。左边侧栏切换首页、模型和历史记录，设置是盖在上面的对话框。
+// 主窗口：对应原版的 hub.html。左边侧栏切换首页、模型、历史记录和词典，设置是盖在上面的对话框。
 // 选哪种识别方式在首页标题旁的选单里（mode-picker.mjs），各种方式里用的模型在模型页换：两边能互相跳。
 // 模型页标题旁是推荐组合（preset-picker.mjs）：方式和模型一起换成一套。
 // 数据都在主进程：有新记录、记了新的账时它通知这里重读；能不能用、还差什么变了时也一样。
 
 const $ = (id) => document.getElementById(id);
-const ROUTES = ["home", "models", "history"];
+const ROUTES = ["home", "models", "history", "vocabulary"];
 
 // 页面上写死的字先按界面语言填上，下面各块再画自己的
 localize();
 
 const home = createHome();
 const history = createHistory();
+const vocabulary = createVocabulary();
 const settings = createSettings({ refresh: refreshSetup });
 const models = createModels({
   refresh: refreshSetup,
@@ -56,6 +58,7 @@ function navigate(route) {
   document.querySelector(".content").removeAttribute("data-scrolled");
   if (name === "models") models.shown();
   if (name === "home") home.shown();
+  if (name === "vocabulary") vocabulary.shown();
   // 记在地址里：换语言时页面重新加载，回到的还是这一页。打开时带的 pane 也一并去掉，免得重新加载时设置又弹出来
   window.history.replaceState(null, "", `?route=${name}`);
 }
@@ -91,6 +94,8 @@ async function refreshSetup() {
   models.render(setup);
   modePicker.render(setup);
   presetPicker.render(setup);
+  // 换了识别方式，词典页上"当前方式每一跳收不收"跟着变
+  if (!document.querySelector('.page[data-route="vocabulary"]').hidden) await vocabulary.shown();
   return setup;
 }
 

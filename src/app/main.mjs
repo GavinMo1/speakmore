@@ -1,9 +1,10 @@
-import { existsSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import {
   app,
   BrowserWindow,
   clipboard,
+  dialog,
   ipcMain,
   Menu,
   nativeImage,
@@ -38,12 +39,14 @@ import {
   routeOf,
   saveSetting,
 } from "../storage/settings.mjs";
+import { openVocabulary } from "../storage/vocabulary.mjs";
 import { toHex } from "../themes/color.mjs";
 import { themeCss } from "../themes/contract.mjs";
 import { findTheme, THEMES } from "../themes/index.mjs";
 import { estimateTime } from "../usage/estimate.mjs";
 import { insights } from "../usage/insights.mjs";
 import { usageReport } from "../usage/report.mjs";
+import { MAX_TERM_LENGTH, MAX_TERMS } from "../vocabulary/terms.mjs";
 import { createDelivery } from "./delivery.mjs";
 import { helperPaths, startHelper } from "./helper.mjs";
 import { createKeyManager } from "./keys/key-manager.mjs";
@@ -52,6 +55,7 @@ import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
 import { createModeSwitch } from "./modes.mjs";
 import { startService } from "./service.mjs";
 import { summarizeSetup, summaryAsText } from "./setup-state.mjs";
+import { describeVocabularySupport, vocabularyHops } from "./vocabulary.mjs";
 
 // 后台应用的主进程：两个窗口（悬浮条、主窗口）、菜单栏图标、原生小帮手、内置的听写服务，
 // 以及页面和命令行要它代办的事。窗口用什么颜色由主题定（src/themes），这里负责把它交给每个窗口。
@@ -242,6 +246,8 @@ async function main() {
       localModelChanged();
     },
   });
+  /** 用户的词典：只存在本机。内置服务每次听写读一次（命令行改了文件也读得到），词典页增删改都经这里 */
+  const vocabulary = openVocabulary(PATHS.vocabularyFile);
   // 每次调模型记一笔账，开着的历史窗口跟着更新花费（记账出错由整理流程写日志，不连累听写）
   const service = EXTERNAL_SERVER_URL
     ? null
@@ -256,6 +262,7 @@ async function main() {
         },
         onLocalModel: () => localModelChanged(),
         acceleration,
+        vocabulary: vocabulary.terms,
       });
   const serverUrl = EXTERNAL_SERVER_URL ?? service.url;
   const e2e = process.env.SPEAKMORE_E2E_OUT ? await import("./e2e.mjs") : null;
@@ -607,6 +614,61 @@ async function main() {
     if (typeof text !== "string") throw new TypeError("要复制的不是文字");
     clipboard.writeText(text);
   });
+
+  // ---------- 词典页（renderer/hub/vocabulary.mjs） ----------
+
+  /** 导入的文件最大多少：同原版（一列的 CSV，5 MB） */
+  const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+  const textArg = (value, what) => {
+    if (typeof value !== "string") throw new TypeError(`${what}不是文字`);
+    return value;
+  };
+  const textsArg = (value, what) => {
+    if (!Array.isArray(value) || value.some((each) => typeof each !== "string")) {
+      throw new TypeError(`${what}不是一组文字`);
+    }
+    return value;
+  };
+
+  handle("vocabulary:get", () => {
+    // 文件坏了不抛：页面照实说是哪个文件、为什么，听写照常（不带词典，服务端记一条警告）
+    let terms = [];
+    let problem = null;
+    try {
+      terms = vocabulary.terms();
+    } catch (error) {
+      if (!(error instanceof LocalizedError)) throw error;
+      problem = error.problem;
+    }
+    const route = service?.route ?? ROUTE;
+    return {
+      terms,
+      problem,
+      file: PATHS.vocabularyFile,
+      limits: { maxTerms: MAX_TERMS, maxTermLength: MAX_TERM_LENGTH },
+      support: describeVocabularySupport(),
+      current: { mode: route.mode, hops: vocabularyHops(route) },
+    };
+  });
+  handle("vocabulary:add", (_event, term) => vocabulary.add(textArg(term, "要添加的词")));
+  handle("vocabulary:update", (_event, previous, term) =>
+    vocabulary.update(textArg(previous, "原来的词"), textArg(term, "改成的词")),
+  );
+  handle("vocabulary:remove", (_event, terms) => vocabulary.remove(textsArg(terms, "要删除的词")));
+  // 导入分两步，同原版：先选文件、看一眼能加几个（预览），确认了再加
+  handle("vocabulary:preview-import", async () => {
+    const picked = await dialog.showOpenDialog(hubWindow ?? undefined, {
+      properties: ["openFile"],
+      filters: [{ name: "CSV", extensions: ["csv", "txt"] }],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) return null;
+    const [file] = picked.filePaths;
+    if (statSync(file).size > MAX_IMPORT_BYTES) {
+      throw new LocalizedError(msg("vocabulary.fileTooLarge", { max: MAX_IMPORT_BYTES / 1024 / 1024 }));
+    }
+    return { fileName: basename(file), ...vocabulary.preview(readFileSync(file, "utf8")) };
+  });
+  handle("vocabulary:import", (_event, terms) => vocabulary.importTerms(textsArg(terms, "要导入的词")));
 
   // ---------- 主窗口的设置要主进程代办的事 ----------
 

@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="hub.css" />
     <link rel="stylesheet" href="models.css" />
     <link rel="stylesheet" href="picker.css" />
+    <link rel="stylesheet" href="vocabulary.css" />
   </head>
   <body>
     <!-- 图标：lucide（ISC 许可），线宽 2，跟着字的颜色走 -->
@@ -74,6 +75,12 @@
       <symbol id="i-external-link" viewBox="0 0 24 24"><path d="M15 3h6v6m-11 5L21 3m-3 10v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><g><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></g></symbol>
       <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+      <!-- 词典一页用的几个，同样出自 lucide -->
+      <symbol id="i-book" viewBox="0 0 24 24"><g><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/><path d="m8 13l4-7l4 7m-6.9-2h5.7"/></g></symbol>
+      <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497zM15 5l4 4"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14m-7-7v14"/></symbol>
+      <symbol id="i-file-up" viewBox="0 0 24 24"><g><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5m-8 4v6m3-3l-3-3l-3 3"/></g></symbol>
+      <symbol id="i-feather" viewBox="0 0 24 24"><path d="M14.086 18.412A2 2 0 0 1 12.67 19H5v-7.672a2 2 0 0 1 .586-1.414L11.75 3.75a6 6 0 1 1 8.49 8.49zM16 8L2 22m15.488-7H9"/></symbol>
     </svg>
 
     <div class="app">
@@ -94,6 +101,11 @@
             <li>
               <button type="button" class="nav-item" data-route="history">
                 <svg class="icon" aria-hidden="true"><use href="#i-history" /></svg><span data-i18n="hub.history">History</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="nav-item" data-route="vocabulary">
+                <svg class="icon" aria-hidden="true"><use href="#i-book" /></svg><span data-i18n="hub.vocabulary">Dictionary</span>
               </button>
             </li>
           </ul>
@@ -269,6 +281,86 @@
           <p class="empty-state" id="history-empty" hidden></p>
           <div id="history-days"></div>
         </section>
+
+        <!-- 词典：版式照原版的词典页，标题右边是导入和新词，下面一格一个词（vocabulary.mjs 画）。
+             标题下面一行讲清两件事：词典只存在本机；哪些模型用得上（当前方式每一跳收不收，点开看全部） -->
+        <section class="page" data-route="vocabulary" aria-labelledby="vocabulary-title" hidden>
+          <header class="page-head">
+            <h1 class="page-title" id="vocabulary-title" data-i18n="vocabulary.title">Dictionary</h1>
+            <div class="page-tools">
+              <button type="button" class="button" id="vocabulary-import">
+                <svg class="icon" aria-hidden="true"><use href="#i-file-up" /></svg><span data-i18n="vocabulary.import">Import</span>
+              </button>
+              <button type="button" class="button primary" id="vocabulary-add">
+                <svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg><span data-i18n="vocabulary.add">New word</span>
+              </button>
+            </div>
+          </header>
+          <!-- 两栏：左边词典存在哪（只在本机），右边当前方式一路经过的模型各怎么收词典；最右是全部模型的浮层 -->
+          <div class="vocab-about">
+            <div class="vocab-fact" id="vocabulary-local">
+              <span class="vocab-fact-glyph" data-tone="ok"><svg class="icon" aria-hidden="true"><use href="#i-lock" /></svg></span>
+              <div class="vocab-fact-body">
+                <p class="vocab-fact-title" data-i18n="vocabulary.local">Stored on this device only</p>
+                <p class="vocab-fact-meta" id="vocabulary-local-meta"></p>
+              </div>
+            </div>
+            <div class="vocab-fact vocab-route" id="vocabulary-current"></div>
+            <button type="button" class="picker-trigger" id="vocabulary-support-trigger" popovertarget="vocabulary-support" aria-haspopup="dialog" aria-expanded="false">
+              <span class="picker-glyph"><svg class="icon" aria-hidden="true"><use href="#i-layout-grid" /></svg></span>
+              <span class="picker-trigger-value" data-i18n="vocabulary.supportTrigger">Supported models</span>
+              <svg class="icon chevron" aria-hidden="true"><use href="#i-chevron" /></svg>
+            </button>
+          </div>
+          <div class="picker wide" id="vocabulary-support" popover role="dialog" aria-labelledby="vocabulary-support-title">
+            <header class="picker-head">
+              <h2 class="picker-title" id="vocabulary-support-title" data-i18n="vocabulary.support.title">Supported models</h2>
+              <p class="picker-meta" data-i18n="vocabulary.support.meta">Each model takes the dictionary its own way</p>
+            </header>
+            <div class="vocab-support" id="vocabulary-support-list"></div>
+          </div>
+          <p class="problem load-error" id="vocabulary-error" role="alert" hidden></p>
+          <div class="toolbar vocab-toolbar">
+            <search class="search">
+              <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
+              <input class="input" id="vocabulary-search" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="vocabulary.search" data-i18n-aria-label="vocabulary.search" />
+            </search>
+            <p class="vocab-count" id="vocabulary-count"></p>
+          </div>
+          <!-- 新词：就地输入，回车加一个、接着输下一个，Esc 收起（同时只开一个，不弹对话框） -->
+          <form class="vocab-composer" id="vocabulary-composer" novalidate hidden>
+            <span class="vocab-composer-glyph"><svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg></span>
+            <input class="vocab-composer-input" id="vocabulary-composer-input" type="text" autocomplete="off" spellcheck="false" data-i18n-placeholder="vocabulary.composer.placeholder" data-i18n-aria-label="vocabulary.composer.placeholder" />
+            <span class="vocab-composer-hint" aria-hidden="true"><kbd>↵</kbd><span data-i18n="vocabulary.composer.add">Add</span><kbd>esc</kbd><span data-i18n="vocabulary.composer.close">Close</span></span>
+            <button type="button" class="icon-button" id="vocabulary-composer-close" data-i18n-title="vocabulary.composer.close" data-i18n-aria-label="vocabulary.composer.close">
+              <svg class="icon" aria-hidden="true"><use href="#i-close" /></svg>
+            </button>
+            <p class="problem vocab-composer-problem" id="vocabulary-composer-problem" role="alert" hidden></p>
+          </form>
+          <div class="vocab-selection" id="vocabulary-selection" hidden>
+            <p class="vocab-selection-count" id="vocabulary-selection-count"></p>
+            <button type="button" class="button ghost small" id="vocabulary-select-all" data-i18n="vocabulary.selection.all">Select all</button>
+            <button type="button" class="button ghost small" id="vocabulary-select-clear" data-i18n="vocabulary.selection.clear">Clear selection</button>
+            <button type="button" class="button small" id="vocabulary-select-delete">
+              <svg class="icon" aria-hidden="true"><use href="#i-trash" /></svg><span data-i18n="vocabulary.selection.delete">Delete</span>
+            </button>
+          </div>
+          <!-- 空的时候教怎么用：一句话加两个入口；搜不到时只有一句 -->
+          <div class="vocab-empty" id="vocabulary-empty" hidden>
+            <span class="vocab-empty-glyph"><svg class="icon" aria-hidden="true"><use href="#i-book" /></svg></span>
+            <p class="vocab-empty-title" id="vocabulary-empty-title"></p>
+            <p class="vocab-empty-text" id="vocabulary-empty-text"></p>
+            <div class="vocab-empty-actions" id="vocabulary-empty-actions">
+              <button type="button" class="button" id="vocabulary-empty-import">
+                <svg class="icon" aria-hidden="true"><use href="#i-file-up" /></svg><span data-i18n="vocabulary.import">Import</span>
+              </button>
+              <button type="button" class="button primary" id="vocabulary-empty-add">
+                <svg class="icon" aria-hidden="true"><use href="#i-plus" /></svg><span data-i18n="vocabulary.add">New word</span>
+              </button>
+            </div>
+          </div>
+          <ul class="vocab-grid" id="vocabulary-grid" data-i18n-aria-label="vocabulary.title"></ul>
+        </section>
       </main>
     </div>
 
@@ -393,6 +485,24 @@
           </div>
         </section>
       </div>
+    </dialog>
+
+    <!-- 词典的添加、编辑、删除、导入共用一个对话框（vocabulary.mjs 按要做的事填字） -->
+    <dialog class="vocab-dialog" id="vocabulary-dialog" aria-labelledby="vocabulary-dialog-title">
+      <form method="dialog" class="vocab-dialog-form" id="vocabulary-dialog-form">
+        <header class="vocab-dialog-head">
+          <span class="vocab-fact-glyph" id="vocabulary-dialog-glyph"></span>
+          <h2 class="vocab-dialog-title" id="vocabulary-dialog-title" data-i18n="vocabulary.title">Dictionary</h2>
+        </header>
+        <p class="vocab-dialog-text" id="vocabulary-dialog-text"></p>
+        <ul class="vocab-dialog-preview" id="vocabulary-dialog-preview" hidden></ul>
+        <p class="vocab-dialog-note" id="vocabulary-dialog-note"></p>
+        <p class="problem vocab-dialog-problem" id="vocabulary-dialog-problem" role="alert" hidden></p>
+        <footer class="vocab-dialog-foot">
+          <button type="button" class="button ghost" id="vocabulary-dialog-cancel" data-i18n="vocabulary.dialogs.cancel">Cancel</button>
+          <button type="submit" class="button primary" id="vocabulary-dialog-confirm"></button>
+        </footer>
+      </form>
     </dialog>
 
     <p class="toast" id="toast" role="status" data-hidden></p>
