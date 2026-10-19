@@ -298,7 +298,8 @@ test("词典：清单里每个型号写明收法（不收的不写），2026-10-
     "bailian/qwen3-asr-flash": "context",
     "bailian/qwen-audio-3.1-asr-flash": "hotwords",
     "bailian/qwen-audio-3.0-asr-flash": "hotwords",
-    "bailian/fun-asr-flash-2026-06-15": "context",
+    // 收上下文，但会把它原样写进成品：不送（2026-10-19 作者定的）
+    "bailian/fun-asr-flash-2026-06-15": null,
     "zhipu/glm-asr-2512": "hotwords",
     "minimax/asr-1.0": null,
   });
@@ -327,7 +328,7 @@ test("词典：qwen3-asr-flash 放在最前面的 system 消息里（content 写
   assert.equal(requests[1].body.messages.length, 1);
 });
 
-test("词典：qwen-audio 交热词（parameters.vocabulary，权重照文档建议的 4）；fun-asr 把词放在录音前的一条文字消息里", async () => {
+test("词典：qwen-audio 交热词（parameters.vocabulary，权重照文档建议的 4）；fun-asr 不送，请求里只有录音", async () => {
   const reply = { output: { text: "好" }, usage: { duration: 1 } };
   const audio = fakeFetch(200, reply);
   await createClient({ apiKey: "k", model: "qwen-audio-3.1-asr-flash", fetch: audio.fetch }).transcribe({
@@ -346,9 +347,9 @@ test("词典：qwen-audio 交热词（parameters.vocabulary，权重照文档建
     wav: Buffer.from("RIFF"),
     vocabulary: ["Runzo", "埋点"],
   });
-  const [context, recording] = fun.requests[0].body.input.messages;
-  assert.deepEqual(context, { role: "user", content: [{ type: "input_text", text: "Runzo，埋点" }] });
+  const [recording, ...rest] = fun.requests[0].body.input.messages;
   assert.equal(recording.content[0].type, "input_audio");
+  assert.deepEqual(rest, []);
   assert.deepEqual(fun.requests[0].body.parameters, { format: "wav", sample_rate: "16000" });
 });
 

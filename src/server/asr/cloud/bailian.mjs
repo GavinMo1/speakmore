@@ -13,8 +13,8 @@ import { cloudModelOf, findCloudTranscriber } from "./vendors.mjs";
 //
 // 用户词典：每个型号怎么收写在清单里（vendors.mjs 的 vocabulary），这里按做法把挑好的词放进请求（VOCABULARY）。
 // 2026-10-19 拿真 key 试过：qwen3-asr-flash 的 system 消息 content 要写成数组，写成字符串回 400
-// "The dedicated task `asr` …"；qwen-audio 的热词在 parameters.vocabulary（{ 词: 权重 }）；fun-asr 的上下文是录音前的
-// 一条 input_text 消息。
+// "The dedicated task `asr` …"；qwen-audio 的热词在 parameters.vocabulary（{ 词: 权重 }）。fun-asr 的上下文
+// （录音前的一条 input_text 消息）试过、不用了：它会把这条消息原样写进成品，见 vendors.mjs。
 
 const NAME = "Bailian";
 
@@ -52,7 +52,6 @@ const VOCABULARY = {
     hotwords: (terms) => ({
       parameters: { vocabulary: Object.fromEntries(terms.map((term) => [term, HOTWORD_WEIGHT])) },
     }),
-    context: (terms) => ({ messages: [{ role: "user", content: [{ type: "input_text", text: contextOf(terms) }] }] }),
   },
 };
 

@@ -56,12 +56,13 @@ export const CLOUD_TRANSCRIBERS = Object.freeze([
           wire: "dashscope",
           vocabulary: BAILIAN_HOTWORDS,
         },
-        // 不收即时热词（要先在控制台建热词表），收上下文：一轮最多 400 字，多的被悄悄截掉
+        // 不收即时热词（要先在控制台建热词表）。收上下文（录音前的一条文字消息，一轮最多 400 字），但不送词典：
+        // 2026-10-19 在 127 条真实录音上实测只多认对 5 个词，录音里有停顿时还会把这条消息原样写进成品
+        // （bench/results/vocabulary-2026-10-19.md），作者定了不送
         {
           id: "fun-asr-flash-2026-06-15",
           name: "Fun-ASR Flash",
           wire: "dashscope",
-          vocabulary: vocabularySupport("context", { maxChars: 400 }),
         },
       ].map((model) => Object.freeze({ ...model, maker: "qwen" })),
     ),
