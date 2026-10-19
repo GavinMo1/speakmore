@@ -843,10 +843,14 @@ export default {
   speakmore stop                Stop
   speakmore restart             Restart
   speakmore status [--json]     Status: running or not, key, system permissions, how much you said today and in total
-  speakmore update              Update to the latest version (on a Mac, SpeakMore.app too if you have it). Settings, keys, history, and recordings are kept
+  speakmore update              Update to the latest version (on a Mac, SpeakMore.app too if you have it). Settings, keys, the dictionary, history, and recordings are kept
 
   speakmore history [-n count] [--json]
                                 What you said, grouped by day, newest first (latest {limit} by default)
+  speakmore dict [--json]       The dictionary: names, products and terms you say often, spelled as written. Stored on this device only
+  speakmore dict add|remove <word>…
+                                Add or delete words, several at once (quote words with spaces)
+  speakmore dict import <file>  Import a one-column CSV or a one-word-per-line text file; existing words are skipped
   speakmore usage [--json]      What it cost: spend and tokens today, this month, and in total, model reply times, per model
   speakmore mode                The three recognition modes and what each uses: native sends the recording to the model; local transcribes, then a model polishes it; private transcribes with an on-device model and uploads nothing
   speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url … --params …]
@@ -880,7 +884,7 @@ export default {
   speakmore logs [-n lines] [-f]
                                 Show logs; -f keeps following
   speakmore uninstall [--keep-data] [--yes]
-                                Uninstall: stop it and delete the whole SpeakMore folder. --keep-data keeps settings, keys, history, and recordings
+                                Uninstall: stop it and delete the whole SpeakMore folder. --keep-data keeps settings, keys, the dictionary, history, and recordings
 
   speakmore help                This help
   speakmore --version           Version
@@ -1012,7 +1016,7 @@ export default {
       folder: "Folder",
       settingsFile: "Settings file",
       log: "Log",
-      oneFolder: "The program, settings, keys, history, and recordings all live in this one folder.",
+      oneFolder: "The program, settings, keys, dictionary, history, and recordings all live in this one folder.",
       uninstallHint: "Done with it? speakmore uninstall stops it and deletes the whole folder.",
     },
     source: {
@@ -1217,6 +1221,16 @@ export default {
 speakmore usage    what it cost      speakmore stop    stop it
 speakmore help     all commands`,
     },
+    dict: {
+      usage: "Usage: speakmore dict [--json] | speakmore dict add|remove <word>… | speakmore dict import <file>",
+      empty: "The dictionary is empty. Add words: speakmore dict add <word>…",
+      header: "{count} words in the dictionary ({file}, stored on this device only):",
+      added: "Added: {term}",
+      notAdded: "Didn't add {term}: {reason}",
+      removed: "Deleted {count} words.",
+      imported: "Imported {count} words ({duplicates} already in the dictionary, {invalid} invalid).",
+      unreadable: "Couldn't read {file}: {reason}",
+    },
     history: {
       empty: "No dictations yet. Run {command} to start, then press the hotkey and say something.",
       today: "Today · {date}",
@@ -1252,7 +1266,7 @@ speakmore help     all commands`,
       none: "No logs yet: SpeakMore writes them to {file} once it has started",
     },
     uninstall: {
-      yours: "settings, keys, history, and recordings",
+      yours: "settings, keys, dictionary, history, and recordings",
       needsConfirm: "Uninstalling needs confirmation. Add --yes when not running in a terminal.",
       planKeep: "About to uninstall SpeakMore: delete the program and runtime in {home}, keeping your {yours}.",
       planAll:

@@ -821,10 +821,14 @@ export default {
   speakmore stop                停掉
   speakmore restart             重启
   speakmore status [--json]     看状态：在不在运行、key、系统权限、今天和累计说了多少
-  speakmore update              更新到最新版本（Mac 上装着 SpeakMore.app 的话连它一起）。设置、key、历史和录音不动
+  speakmore update              更新到最新版本（Mac 上装着 SpeakMore.app 的话连它一起）。设置、key、词典、历史和录音不动
 
   speakmore history [-n 条数] [--json]
                                 看说过的话，按天分组，新的在前（默认最近 {limit} 条）
+  speakmore dict [--json]       看词典：常说的人名、产品名和术语，识别时按这里的写法。只存在本机
+  speakmore dict add|remove <词>…
+                                加词、删词，几个词一次给（有空格的词加引号）
+  speakmore dict import <文件>   从一列的 CSV 或一行一个词的文本导入，已有的跳过
   speakmore usage [--json]      看花了多少钱：今天、本月、累计的花费、token，模型多久回话，按型号分开
   speakmore mode                看三种识别模式各用什么：native 录音直接交给模型，local 先转写、再交给模型润色，private 只用本机模型转写、什么都不上传
   speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url … --params …]
@@ -857,7 +861,7 @@ export default {
   speakmore settings            打开设置（去系统设置授权时用）
   speakmore logs [-n 行数] [-f]  看日志，-f 一直跟着
   speakmore uninstall [--keep-data] [--yes]
-                                卸载：停掉后台，把 SpeakMore 的目录整个删掉。--keep-data 留下设置、key、历史和录音
+                                卸载：停掉后台，把 SpeakMore 的目录整个删掉。--keep-data 留下设置、key、词典、历史和录音
 
   speakmore help                这段说明
   speakmore --version           版本号
@@ -976,7 +980,7 @@ export default {
       folder: "目录",
       settingsFile: "设置文件",
       log: "日志",
-      oneFolder: "程序、设置、key、历史、录音都在这一个目录里。",
+      oneFolder: "程序、设置、key、词典、历史、录音都在这一个目录里。",
       uninstallHint: "不想用了：speakmore uninstall 会停掉后台，把它整个删掉。",
     },
     source: {
@@ -1164,6 +1168,16 @@ export default {
 speakmore usage    看花了多少钱   speakmore stop    停掉
 speakmore help     全部命令`,
     },
+    dict: {
+      usage: "用法：speakmore dict [--json] | speakmore dict add|remove <词>… | speakmore dict import <文件>",
+      empty: "词典是空的。加词：speakmore dict add <词>…",
+      header: "词典里有 {count} 个词（{file}，只存在本机）：",
+      added: "已添加：{term}",
+      notAdded: "没加上 {term}：{reason}",
+      removed: "已删除 {count} 个词。",
+      imported: "已导入 {count} 个词（已在词典中 {duplicates} 个，无效 {invalid} 个）。",
+      unreadable: "读不出 {file}：{reason}",
+    },
     history: {
       empty: "还没有听写记录。运行 {command} 启动之后，按一下热键说句话试试。",
       today: "今天 · {date}",
@@ -1198,7 +1212,7 @@ speakmore help     全部命令`,
       none: "还没有日志：SpeakMore 启动过之后会写到 {file}",
     },
     uninstall: {
-      yours: "设置、key、历史和录音",
+      yours: "设置、key、词典、历史和录音",
       needsConfirm: "卸载要先确认。不在终端里运行时加上 --yes。",
       planKeep: "要卸载 SpeakMore：删掉 {home} 里的程序和运行环境，{yours}留着。",
       planAll: "要卸载 SpeakMore：把 {home} 整个删掉，包括程序、运行环境，以及你的{yours}。删了找不回来。",
