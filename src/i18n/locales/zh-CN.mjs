@@ -586,6 +586,19 @@ export default {
     unpriced: "价格不明",
   },
 
+  vocabulary: {
+    problems: {
+      empty: "请输入一个词",
+      tooLong: "一个词最多 {max} 个字",
+    },
+    duplicate: "“{term}”已在词典中",
+    full: "词典最多 {max} 个词，已满",
+    tooMany: "词典最多 {max} 个词，还能添加 {room} 个，这次要添加 {count} 个",
+    notFound: "词典中没有“{term}”",
+    unreadable: "读不出词典文件 {file}：{reason}",
+    malformed: '词典文件 {file} 的格式不对，应为 {"terms": ["词", …]}',
+  },
+
   preferences: {
     title: "设置",
     sections: "设置分类",

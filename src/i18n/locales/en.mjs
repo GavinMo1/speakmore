@@ -595,6 +595,19 @@ export default {
     unpriced: "price unknown",
   },
 
+  vocabulary: {
+    problems: {
+      empty: "Enter a word",
+      tooLong: "A word can have at most {max} characters",
+    },
+    duplicate: "“{term}” is already in the dictionary",
+    full: "The dictionary is full ({max} words)",
+    tooMany: "The dictionary holds {max} words; {room} more can be added, this adds {count}",
+    notFound: "“{term}” isn't in the dictionary",
+    unreadable: "Couldn't read the dictionary file {file}: {reason}",
+    malformed: 'The dictionary file {file} isn\'t in the expected format: {"terms": ["word", …]}',
+  },
+
   preferences: {
     title: "Settings",
     sections: "Settings sections",
