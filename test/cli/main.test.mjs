@@ -2757,11 +2757,12 @@ test("dict add：重复的说清楚、其余照加，有没加上的就以 1 退
   assert.equal(await harness().speakmore("dict", "add"), 2);
 });
 
-test("dict remove：删几个词，说删了几个；都不在就说一句", async () => {
+test("dict remove：删几个词，说删了几个；有不在词典里的照实说、以 1 退出（同 add）", async () => {
   await harness().speakmore("dict", "add", "a", "b", "c");
   const removed = harness();
-  assert.equal(await removed.speakmore("dict", "remove", "A", "c", "zzz"), 0);
+  assert.equal(await removed.speakmore("dict", "remove", "A", "c", "zzz", "yyy"), 1);
   assert.match(removed.output.out, /已删除 2 个词/);
+  assert.match(removed.output.err, /词典中没有“zzz、yyy”/);
   assert.deepEqual(storedTerms(), ["b"]);
   const none = harness();
   assert.equal(await none.speakmore("dict", "remove", "zzz"), 1);
@@ -2774,11 +2775,30 @@ test("dict import：一列的 CSV 或一行一个词，已有的、无效的跳�
   writeFileSync(file, `Runzo\nmultica,备注\n"Hello, World"\n${"x".repeat(60)}\n`);
   const { speakmore, output } = harness();
   assert.equal(await speakmore("dict", "import", file), 0);
-  assert.match(output.out, /已导入 2 个词.*已在词典中 1 个.*无效 1 个/);
+  assert.match(output.out, /已导入 2 个词.*已在词典中 1 个.*文件内重复 0 个.*无效 1 个/);
   assert.deepEqual(storedTerms(), ["multica", "Hello, World", "Runzo"]);
   const missing = harness();
   assert.equal(await missing.speakmore("dict", "import", join(paths.home, "nope.csv")), 1);
   assert.match(missing.output.err, /nope\.csv/);
+});
+
+test("dict import：GBK 存的 CSV（中文 Windows 上 Excel 的默认）照样认；不是文本的文件不导", async () => {
+  const gbk = join(paths.home, "gbk.csv");
+  // "埋点,备注" 的 GBK
+  writeFileSync(gbk, Buffer.from([0xc2, 0xf1, 0xb5, 0xe3, 0x2c, 0xb1, 0xb8, 0xd7, 0xa2]));
+  const { speakmore } = harness();
+  assert.equal(await speakmore("dict", "import", gbk), 0);
+  assert.deepEqual(storedTerms(), ["埋点"]);
+  const binary = join(paths.home, "bin.csv");
+  writeFileSync(binary, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0, 1, 2]));
+  const refused = harness();
+  assert.equal(await refused.speakmore("dict", "import", binary), 1);
+  assert.match(refused.output.err, /不是文本文件/);
+  assert.deepEqual(storedTerms(), ["埋点"]);
+});
+
+test("dict：--json 只给看词典用，加、删、导入带上它是用法错", async () => {
+  assert.equal(await harness().speakmore("dict", "add", "x", "--json"), 2);
 });
 
 test("dict：不认识的子命令是用法错，说怎么用", async () => {

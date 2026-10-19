@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
-import { openVocabulary } from "../../src/storage/vocabulary.mjs";
-import { MAX_TERM_LENGTH, MAX_TERMS } from "../../src/vocabulary/terms.mjs";
+import { openVocabulary, readImportFile } from "../../src/storage/vocabulary.mjs";
+import { MAX_IMPORT_BYTES, MAX_TERM_LENGTH, MAX_TERMS } from "../../src/vocabulary/terms.mjs";
 
 const zh = createTranslator("zh-CN");
 /** 报错里给人看的那句，按中文翻出来对得上 */
@@ -58,10 +67,10 @@ test("改词：位置不变；改成别的已有词算重复；只改大小写�
   assert.throws(() => vocabulary.update("zzz", "y"), said(/zzz/));
 });
 
-test("删词：一次删几个，按大小写不论认，回删了几个；不在的不算", () => {
+test("删词：一次删几个，按大小写不论认，回删了几个、哪些本来就不在（原样）", () => {
   const vocabulary = openVocabulary(file);
   for (const term of ["c", "b", "a"]) vocabulary.add(term);
-  assert.equal(vocabulary.remove(["A", "c", "nope"]), 2);
+  assert.deepEqual(vocabulary.remove(["A", "c", "nope"]), { removed: 2, missing: ["nope"] });
   assert.deepEqual(vocabulary.terms(), ["b"]);
 });
 
@@ -70,7 +79,9 @@ test("导入：先预览（去掉词典里已有的），再按文件里的先�
   vocabulary.add("multica");
   const preview = vocabulary.preview("Runzo\nMultica\nAE-PM\nRunzo\n");
   assert.deepEqual(preview.terms, ["Runzo", "AE-PM"]);
-  assert.equal(preview.duplicates, 2);
+  // 已在词典里的、文件里自己重复的分开数
+  assert.equal(preview.existing, 1);
+  assert.equal(preview.duplicates, 1);
   assert.equal(preview.room, MAX_TERMS - 1);
   assert.equal(vocabulary.importTerms(preview.terms), 2);
   assert.deepEqual(vocabulary.terms(), ["Runzo", "AE-PM", "multica"]);
@@ -98,4 +109,77 @@ test("文件坏了照实报错，说是哪个文件；不当成空词典、也�
   assert.equal(readFileSync(file, "utf8"), "{ not json");
   writeFileSync(file, JSON.stringify({ terms: "a,b" }));
   assert.throws(() => openVocabulary(file).terms(), said(/vocabulary\.json/));
+});
+
+// ---------- 2026-10-19 对抗审查后补的 ----------
+
+test("写是原子的：先写临时文件再换上去，不留临时文件；只有自己读得了", () => {
+  const vocabulary = openVocabulary(file);
+  vocabulary.add("Runzo");
+  assert.deepEqual(readdirSync(dir), ["vocabulary.json"]);
+  if (process.platform !== "win32") assert.equal(statSync(file).mode & 0o777, 0o600);
+});
+
+test("手改的文件开头带 BOM 也认；写坏了的报格式不对，报错里不带文件内容（这句话会进日志）", () => {
+  writeFileSync(file, `\uFEFF${JSON.stringify({ terms: ["埋点"] })}`);
+  assert.deepEqual(openVocabulary(file).terms(), ["埋点"]);
+  writeFileSync(file, '{"terms": ["张三的秘密项目",]}');
+  assert.throws(
+    () => openVocabulary(file).terms(),
+    (error) =>
+      said(/格式不对/)(error) && !JSON.stringify(error.problem).includes("秘密") && !error.message.includes("秘密"),
+  );
+});
+
+test("改词典之前重新读文件，不看缓存：别处在同一时刻改了（修改时间、大小都一样）也不会被冲掉", () => {
+  const app = openVocabulary(file);
+  app.add("abc");
+  assert.deepEqual(app.terms(), ["abc"]);
+  const when = statSync(file).mtime;
+  openVocabulary(file).update("abc", "abd");
+  utimesSync(file, when, when);
+  app.add("xyz");
+  assert.deepEqual(openVocabulary(file).terms(), ["xyz", "abd"]);
+});
+
+test("手改到超过上限：还能加的是 0，不是负数；加词照实说满了", () => {
+  writeFileSync(file, JSON.stringify({ terms: Array.from({ length: MAX_TERMS + 5 }, (_, i) => `t${i}`) }));
+  const vocabulary = openVocabulary(file);
+  assert.equal(vocabulary.preview("new").room, 0);
+  assert.throws(() => vocabulary.add("new"), said(/已满/));
+  assert.throws(() => vocabulary.importTerms(["new"]), said(/还能添加 0 个/));
+});
+
+test("写不进去（没有权限）报成一句人话，说是哪个文件", {
+  skip: process.platform === "win32" || process.getuid?.() === 0,
+}, () => {
+  const vocabulary = openVocabulary(file);
+  vocabulary.add("a");
+  chmodSync(dir, 0o500);
+  try {
+    assert.throws(() => vocabulary.add("b"), said(/写不进词典文件 .*vocabulary\.json：没有权限/));
+  } finally {
+    chmodSync(dir, 0o700);
+  }
+});
+
+test("读要导入的文件：UTF-8、带 BOM 的 UTF-16、GBK 都认；不是文本、太大、读不出都说清是哪个文件", async () => {
+  const at = (name, bytes) => {
+    const path = join(dir, name);
+    writeFileSync(path, bytes);
+    return path;
+  };
+  assert.equal(await readImportFile(at("u8.csv", "埋点\n")), "埋点\n");
+  assert.equal(
+    await readImportFile(at("le.txt", Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("埋点", "utf16le")]))),
+    "埋点",
+  );
+  // "埋点" 的 GBK：C2F1 B5E3
+  assert.equal(await readImportFile(at("gbk.csv", Buffer.from([0xc2, 0xf1, 0xb5, 0xe3]))), "埋点");
+  await assert.rejects(
+    readImportFile(at("bin.csv", Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0, 1]))),
+    said(/不是文本文件/),
+  );
+  await assert.rejects(readImportFile(at("big.csv", Buffer.alloc(MAX_IMPORT_BYTES + 1, 0x61))), said(/文件过大/));
+  await assert.rejects(readImportFile(join(dir, "nope.csv")), said(/读不出 .*nope\.csv：文件不存在/));
 });

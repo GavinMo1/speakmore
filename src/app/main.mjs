@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import {
   app,
@@ -39,7 +39,7 @@ import {
   routeOf,
   saveSetting,
 } from "../storage/settings.mjs";
-import { openVocabulary } from "../storage/vocabulary.mjs";
+import { openVocabulary, readImportFile } from "../storage/vocabulary.mjs";
 import { toHex } from "../themes/color.mjs";
 import { themeCss } from "../themes/contract.mjs";
 import { findTheme, THEMES } from "../themes/index.mjs";
@@ -617,8 +617,6 @@ async function main() {
 
   // ---------- 词典页（renderer/hub/vocabulary.mjs） ----------
 
-  /** 导入的文件最大多少：同原版（一列的 CSV，5 MB） */
-  const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
   const textArg = (value, what) => {
     if (typeof value !== "string") throw new TypeError(`${what}不是文字`);
     return value;
@@ -650,11 +648,42 @@ async function main() {
       current: { mode: route.mode, hops: vocabularyHops(route) },
     };
   });
-  handle("vocabulary:add", (_event, term) => vocabulary.add(textArg(term, "要添加的词")));
-  handle("vocabulary:update", (_event, previous, term) =>
-    vocabulary.update(textArg(previous, "原来的词"), textArg(term, "改成的词")),
+  /**
+   * 改词典的几样都记日志：做了什么、几个词，出错是哪种错。不记词本身（那是用户的内容）
+   * @param {string} action
+   * @param {(...args: any[]) => any} run
+   * @param {(result: any) => number} count 这次动了几个词
+   */
+  const logged =
+    (action, run, count = () => 1) =>
+    async (...args) => {
+      try {
+        const result = await run(...args);
+        log.info("vocabulary_changed", { action, count: count(result) });
+        return result;
+      } catch (error) {
+        log.warn("vocabulary_failed", { action, error: error?.problem?.key ?? error?.code ?? error?.name });
+        throw error;
+      }
+    };
+  handle(
+    "vocabulary:add",
+    logged("add", (_event, term) => vocabulary.add(textArg(term, "要添加的词"))),
   );
-  handle("vocabulary:remove", (_event, terms) => vocabulary.remove(textsArg(terms, "要删除的词")));
+  handle(
+    "vocabulary:update",
+    logged("update", (_event, previous, term) =>
+      vocabulary.update(textArg(previous, "原来的词"), textArg(term, "改成的词")),
+    ),
+  );
+  handle(
+    "vocabulary:remove",
+    logged(
+      "remove",
+      (_event, terms) => vocabulary.remove(textsArg(terms, "要删除的词")).removed,
+      (removed) => removed,
+    ),
+  );
   // 导入分两步，同原版：先选文件、看一眼能加几个（预览），确认了再加
   handle("vocabulary:preview-import", async () => {
     const picked = await dialog.showOpenDialog(hubWindow ?? undefined, {
@@ -663,12 +692,16 @@ async function main() {
     });
     if (picked.canceled || picked.filePaths.length === 0) return null;
     const [file] = picked.filePaths;
-    if (statSync(file).size > MAX_IMPORT_BYTES) {
-      throw new LocalizedError(msg("vocabulary.fileTooLarge", { max: MAX_IMPORT_BYTES / 1024 / 1024 }));
-    }
-    return { fileName: basename(file), ...vocabulary.preview(readFileSync(file, "utf8")) };
+    return { fileName: basename(file), ...vocabulary.preview(await readImportFile(file)) };
   });
-  handle("vocabulary:import", (_event, terms) => vocabulary.importTerms(textsArg(terms, "要导入的词")));
+  handle(
+    "vocabulary:import",
+    logged(
+      "import",
+      (_event, terms) => vocabulary.importTerms(textsArg(terms, "要导入的词")),
+      (added) => added,
+    ),
+  );
 
   // ---------- 主窗口的设置要主进程代办的事 ----------
 

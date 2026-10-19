@@ -1,19 +1,17 @@
-import { readFileSync, statSync } from "node:fs";
-import { LocalizedError, msg, problemOf } from "../../i18n/index.mjs";
-import { openVocabulary } from "../../storage/vocabulary.mjs";
+import { LocalizedError, msg } from "../../i18n/index.mjs";
+import { openVocabulary, readImportFile } from "../../storage/vocabulary.mjs";
 import { parse, say, UsageError } from "../common.mjs";
 
 // speakmore dict：看、加、删、导入词典。词典只是本机的一个文件（storage/vocabulary.mjs），这里直接读写，
 // 不经过后台应用：后台每次听写时重读一次，改完下一句话就用上。
-
-/** 导入的文件最大多少：同词典页（一列的 CSV，5 MB） */
-const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
 const usage = () => new UsageError(msg("cli.dict.usage"));
 
 export async function dict(args, io) {
   const { values, positionals } = parse(args, { json: { type: "boolean", default: false } });
   const [action, ...rest] = positionals;
+  // --json 只给"看"用：加、删、导入的结果是给人看的话
+  if (values.json && action !== undefined) throw usage();
   const vocabulary = openVocabulary(io.paths.vocabularyFile);
 
   if (action === undefined) {
@@ -45,32 +43,26 @@ export async function dict(args, io) {
 
   if (action === "remove") {
     if (rest.length === 0) throw usage();
-    const count = vocabulary.remove(rest);
-    if (count === 0) {
-      io.err(io.t.text(msg("vocabulary.notFound", { term: rest.join("、") })));
-      return 1;
-    }
-    say(io, msg("cli.dict.removed", { count }));
-    return 0;
+    // 同 add：有一个不在词典里就照实说、以 1 退出，在的照删
+    const { removed, missing } = vocabulary.remove(rest);
+    if (removed > 0) say(io, msg("cli.dict.removed", { count: removed }));
+    if (missing.length > 0) io.err(io.t("vocabulary.notFound", { term: io.t.list(missing) }));
+    return missing.length > 0 ? 1 : 0;
   }
 
   if (action === "import") {
     if (rest.length !== 1) throw usage();
-    const [file] = rest;
-    let text;
-    try {
-      if (statSync(file).size > MAX_IMPORT_BYTES) {
-        throw new LocalizedError(msg("vocabulary.fileTooLarge", { max: MAX_IMPORT_BYTES / 1024 / 1024 }));
-      }
-      text = readFileSync(file, "utf8");
-    } catch (error) {
-      throw new LocalizedError(msg("cli.dict.unreadable", { file, reason: io.t.text(problemOf(error)) }), {
-        cause: error,
-      });
-    }
-    const preview = vocabulary.preview(text);
+    const preview = vocabulary.preview(await readImportFile(rest[0]));
     const added = vocabulary.importTerms(preview.terms);
-    say(io, msg("cli.dict.imported", { count: added, duplicates: preview.duplicates, invalid: preview.invalid }));
+    say(
+      io,
+      msg("cli.dict.imported", {
+        count: added,
+        existing: preview.existing,
+        duplicates: preview.duplicates,
+        invalid: preview.invalid,
+      }),
+    );
     return 0;
   }
 

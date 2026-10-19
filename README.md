@@ -338,7 +338,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 - **插件化架构**：各厂商以策略模式实现统一接口。
 - **统一输入输出**：录音统一为 16 kHz 单声道，转写结果统一为 `{ text }`。
 - **跨平台开发**：[`scripts/dev/win-*.sh`](scripts/dev) 经 SSH 同步工作区至 Windows 机器，在远端运行测试、以调试端口从源码重启 App、截取桌面画面。
-- **自动化测试**：1031 个单元测试与 22 个安装测试。
+- **自动化测试**：1046 个单元测试与 22 个安装测试。
 - **门禁**：Biome 代码检查，界面尺寸、字号与文案规范检查；`npm run check` 一次执行全部检查。
 
 ```bash
