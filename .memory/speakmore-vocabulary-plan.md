@@ -1,6 +1,6 @@
 ---
 name: speakmore-vocabulary-plan
-description: "词典功能 10-19 已合并进 main 并推送（acfc33d），还没发版；fun-asr 已按他定的不送词典；剩西里尔形近字归一、评测参照错要不要修待他定"
+description: "词典功能 10-19 已合并推送（acfc33d）；下一步发版：发版 → 本机和游戏电脑（Windows）装好启动验 → 回 issue #9 并关 → 同步官网"
 metadata:
   node_type: memory
   type: project
@@ -28,5 +28,11 @@ metadata:
 10-19 收尾：App 端到端（数据隐私、转写加润色、原生）带词典都写对了，第一次跑查出收法里混了函数、本机模型装不上，已改成纯数据。一轮对抗审查（链路、存储与命令行、界面三路）27 条全改，单测 1046 个全过，界面在真窗口里验过。没做的：跨进程加锁（窗口只有几毫秒，代码注释写了理由）；原生和润色共用一个提示词上限（接小上下文本机大模型可能挤爆，未验证）。
 
 **Why:** 用户早就想做，issue #9 给了契机；他要的是能长期维护的结构和真实验证过的效果。
+
+**发版计划（10-19 他说压缩对话后开始）：**
+1. 发版：版本号、两份 README 的下载链接、打标签推送，`npm run ship` 挂后台（流程见 [[speakmore-release-on-cos]]；公证等由他跑的照 [[cloud-changes-user-runs]]）。版本号先问他（新功能，建议 0.10.0）。
+2. 端到端：正式安装后在这台 Mac 和他的游戏电脑（Windows 开发机）上各启动一遍，验装好的版本没问题（[[acceptance-end-to-end]]、[[speakmore-windows-followups]]）。
+3. 回 issue #9：说词典已支持，然后关掉（操作前跑 check-gh-account.sh；链接后别贴中文标点 [[links-no-cjk-punctuation]]）。
+4. 同步官网：发版后要再部署（[[speakmore-website]]），看要不要把词典写进官网。
 
 **How to apply:** 10-19 他点头合并推送了（acfc33d）；fun-asr 定了不送词典（13dfd00）。还没发版（发版走 COS，见 speakmore-release-on-cos）。待他定：西里尔形近字归一、评测里 4 条参照错和 multicard 判法要不要修再爬一轮。原来的步骤（都做完了）：1. 读 bench/_work/vocabulary/report.md（scripts/dev/eval-vocabulary.mjs，30 条原版录音，各模型带不带词典对比，含"硬塞"计数），效果写进 bench/results/vocabulary-2026-10-19.md，必要时调上限或提示词；2. App 端到端（scripts/dev/e2e.mjs，家目录放 vocabulary.json，native、local、private 各一遍）；3. 文档：docs/development.md、README 中英；4. 一轮对抗审查；5. 合并、推送前问用户。开发窗口用 /tmp/smv 家目录、热键右 Control，驱动脚本在会话 scratchpad/ui/cdp.mjs。相关：[[speakmore-model-plaza]]、[[speakmore-two-pipelines]]、[[desktop-copy-and-look]]
