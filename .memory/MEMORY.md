@@ -44,3 +44,4 @@
 - [链接后面别贴中文标点](links-no-cjk-punctuation.md) — 对外写的网址单独一行或留空格，issue #1 因此有人点到 404
 - [Linux 暂不做](speakmore-no-linux-yet.md) — #6 留着不关、用户多了再议；整理笔记关联 Obsidian 不在范围（#7 已关）
 - [词典功能](speakmore-vocabulary-plan.md) — 已合并推送（acfc33d）；接下来发版 → Mac 和游戏电脑装好验 → 回并关 #9 → 同步官网
+- [Windows 上的系统窗口让他点](windows-gui-user-clicks.md) — 选文件这类系统窗口直接告诉他点哪，不用 SendKeys 或界面自动化；网页部分用 CDP 核对；那台机器的 Defender 是关着的
