@@ -61,10 +61,14 @@ export function createPolisher({
     async polish(transcript, { signal, audioId = null, vocabulary = [] } = {}) {
       // 没转出字（静音、只有噪声）就不必花这一次请求
       if (transcript.trim() === "") return "";
+      const terms = fitTerms(vocabulary, PROMPT_VOCABULARY);
+      if (vocabulary.length > 0) {
+        log.info("vocabulary_fitted", { audio_id: audioId, hop: "polish", sent: terms.length, of: vocabulary.length });
+      }
       try {
         const reply = await metered("dictation", audioId, () =>
           client.complete({
-            system: polishPromptWith(fitTerms(vocabulary, PROMPT_VOCABULARY), prompt),
+            system: polishPromptWith(terms, prompt),
             user: polishInput(transcript),
             signal: withTimeout(signal),
           }),

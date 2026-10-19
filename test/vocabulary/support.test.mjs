@@ -42,3 +42,9 @@ test("大模型的提示词有上限，免得每次听写的提示词无限变�
   const many = Array.from({ length: 2000 }, (_, i) => `term${i}`);
   assert.equal(fitTerms(many, PROMPT_VOCABULARY).length, PROMPT_VOCABULARY.maxTerms);
 });
+
+test("挑词：表情、扩展区汉字一个按 4 个字算（本机 Qwen3 的上限其实是 token，它们一个要切成好几个）", () => {
+  const support = vocabularySupport("hotwords", { maxChars: 9 });
+  // "𠮷野" 算 5，"😀" 算 4：5 + 分隔 1 + 4 = 10 放不下；"ab" 2 → 5 + 1 + 2 = 8 放得下
+  assert.deepEqual(fitTerms(["𠮷野", "😀", "ab"], support), ["𠮷野", "ab"]);
+});

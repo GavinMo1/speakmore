@@ -69,6 +69,16 @@ export async function createCloudTranscriber({
       if (windows.length === 0) return { text: "" };
       // 切开的每一段都带上同一份
       const terms = fitTerms(vocabulary, listed?.vocabulary);
+      // 这一跳送了几个（按这个型号的上限挑掉了几个）：词典"不生效"时先看这里
+      if (vocabulary.length > 0) {
+        log.info("vocabulary_fitted", {
+          audio_id: audioId,
+          hop: "transcribe",
+          model: choice.model,
+          sent: terms.length,
+          of: vocabulary.length,
+        });
+      }
       try {
         // 各段一起发：云端的各段互不相干，挨个等只会更慢。文字按段的顺序接，不按谁先回
         const replies = await Promise.all(

@@ -150,18 +150,21 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor }
     const abort = new AbortController();
     refining.add(abort);
     const startedAt = performance.now();
+    const vocabulary = vocabularyFor(finished.audioId);
     try {
       const refinedText = await refiner.refine(finished.merge(), {
         mimeType: finished.mimeType,
         signal: abort.signal,
         audioId: finished.audioId,
-        vocabulary: vocabularyFor(finished.audioId),
+        vocabulary,
       });
       // 日志只记长度：成品是用户说的话，不该留在日志里
       log.info("refined", {
         ...context,
         refine_ms: Math.round(performance.now() - startedAt),
         text_length: refinedText.length,
+        // 词典里有几个词（每一跳送了几个记在各跳的 vocabulary_fitted）
+        vocabulary_terms: vocabulary.length,
       });
       // 后五项在普通听写里实测都是 null，照原样带上，客户端按同一套字段解析
       send(ServerType.COMPLETED, {

@@ -93,6 +93,10 @@ export function createRefiner({
      */
     async refine(audio, { mimeType, signal, audioId = null, vocabulary = [] }) {
       const systemPrompt = promptFor(vocabulary);
+      if (vocabulary.length > 0) {
+        const sent = fitTerms(vocabulary, PROMPT_VOCABULARY).length;
+        log.info("vocabulary_fitted", { audio_id: audioId, hop: "native", sent, of: vocabulary.length });
+      }
       try {
         // 只换一次：夹着时间戳要重来时用的是同一份
         const input = audioTypes.includes(mimeType)

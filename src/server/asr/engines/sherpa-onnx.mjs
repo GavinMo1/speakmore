@@ -1,5 +1,6 @@
 import { dirname } from "node:path";
 import { SPEECH_SAMPLE_RATE } from "../../audio/pcm.mjs";
+import { placementOf } from "./placement.mjs";
 
 // sherpa-onnx（k2-fsa，Apache-2.0）的适配器：ONNX Runtime 跑在 CPU 上，npm 上有 Mac 两种芯片、Windows、Linux 的预编译包。
 // 接口见 index.mjs。
@@ -35,7 +36,7 @@ export const FAMILIES = Object.freeze({
     }),
     // 流的 hotwords 选项：英文逗号隔开，运行库拆开后用空格连起来放进系统提示词（词里的逗号也被当成分隔，结果一样）。
     // 1.13.8 的源码 offline-recognizer-qwen3-asr-impl.cc 里是这样，2026-10-19 拿真实录音试过
-    vocabulary: (stream, terms) => stream.setOption("hotwords", terms.join(",")),
+    vocabulary: Object.freeze({ hotwords: (stream, terms) => stream.setOption("hotwords", terms.join(",")) }),
     // Qwen3-ASR 判断没有人声时输出 "language None"，sherpa-onnx 只去掉了前缀，剩下一个 None（实测：7.9 秒的纯静音）
     clean: (text) => (text === "None" ? "" : text),
   }),
@@ -52,7 +53,8 @@ export async function version() {
  */
 export async function load({ model, file, options = {} }, { runtime = () => import("sherpa-onnx-node") } = {}) {
   const { default: sherpa } = await runtime();
-  const { clean, vocabulary: place } = FAMILIES[model.family];
+  const { clean } = FAMILIES[model.family];
+  const place = placementOf(model, FAMILIES[model.family], "sherpa-onnx");
   const recognizer = await sherpa.OfflineRecognizer.createAsync({
     featConfig: { sampleRate: SPEECH_SAMPLE_RATE, featureDim: 80 },
     modelConfig: {

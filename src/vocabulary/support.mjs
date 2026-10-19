@@ -21,7 +21,7 @@ export const VOCABULARY_KINDS = Object.freeze(["prompt", "context", "hotwords"])
  * @param {"prompt" | "context" | "hotwords"} kind 做法
  * @param {object} [limits]
  * @param {number} [limits.maxTerms] 最多几个词
- * @param {number} [limits.maxChars] 挑出来的词连起来最多几个字（词之间算一个分隔）
+ * @param {number} [limits.maxChars] 挑出来的词连起来最多几个字（词之间算一个分隔；表情、扩展区汉字一个按 4 个算，见 budgetLength）
  * @param {number} [limits.maxTermWords] 单个词最多几个英文单词（只管纯英文的词，按空格数）
  * @param {number} [limits.maxTermChars] 单个词最多几个字（只管含中文等非英文字符的词）
  * 全是数据、没有函数：装本机模型时整项配置要复制给转写进程，函数复制不过去
@@ -56,6 +56,13 @@ const termFits = (term, support) =>
 export const PROMPT_VOCABULARY = vocabularySupport("prompt", { maxTerms: 300, maxChars: 3_000 });
 
 /**
+ * 一个词占总字数上限的多少：一般的字（含常用汉字）一个算一个；表情、扩展区汉字这类基本平面以外的字，
+ * 按它的 UTF-8 字节数算 4 个。有的模型的上限其实是 token（本机 sherpa 版 Qwen3 的 512 个位置），
+ * 这类字一个就要切成好几个 token，按字数算会悄悄挤掉录音（2026-10-19 对抗审查实测）
+ */
+const budgetLength = (term) => [...term].reduce((sum, char) => sum + (char.codePointAt(0) > 0xffff ? 4 : 1), 0);
+
+/**
  * 按这个模型的上限，从词典里挑出这一次要送的词。按词典的先后挑：排在前面的先进；
  * 这一家不收的、放不下的跳过，后面短的还放得下就接着放
  * @param {readonly string[]} terms 词典里的词，规整过、不重复
@@ -69,7 +76,7 @@ export function fitTerms(terms, support) {
   for (const term of terms) {
     if (picked.length >= support.maxTerms) break;
     if (!termFits(term, support)) continue;
-    const added = termLength(term) + (picked.length > 0 ? 1 : 0);
+    const added = budgetLength(term) + (picked.length > 0 ? 1 : 0);
     if (chars + added > support.maxChars) continue;
     picked.push(term);
     chars += added;

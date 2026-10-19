@@ -124,7 +124,10 @@ const tcRuntime = (runs) => async () => ({
 test("transcribe.cpp：Qwen3-ASR 的词表交给 run 的 vocabulary；没有词、SenseVoice 都不带", async () => {
   const { load } = await import("../../../src/server/asr/engines/transcribe-cpp.mjs");
   const runs = [];
-  const qwen = await load({ model: { family: "qwen3-asr" }, file: () => "m.gguf" }, { runtime: tcRuntime(runs) });
+  const qwen = await load(
+    { model: { family: "qwen3-asr", vocabulary: vocabularySupport("hotwords") }, file: () => "m.gguf" },
+    { runtime: tcRuntime(runs) },
+  );
   await qwen.transcribe(tone(1), { vocabulary: ["Runzo", "埋点"] });
   await qwen.transcribe(tone(1), { vocabulary: [] });
   const sense = await load({ model: { family: "sense-voice" }, file: () => "m.gguf" }, { runtime: tcRuntime(runs) });
@@ -156,10 +159,31 @@ test("sherpa-onnx：Qwen3-ASR 的词表设成这个流的 hotwords（英文逗�
   const { load } = await import("../../../src/server/asr/engines/sherpa-onnx.mjs");
   const file = (role) => `/m/${role}`;
   const options = [];
-  const qwen = await load({ model: { family: "qwen3-asr" }, file }, { runtime: sherpaRuntime(options) });
+  const qwen = await load(
+    { model: { family: "qwen3-asr", vocabulary: vocabularySupport("hotwords") }, file },
+    { runtime: sherpaRuntime(options) },
+  );
   await qwen.transcribe(tone(1), { vocabulary: ["Runzo", "Claude Code"] });
   await qwen.transcribe(tone(1), { vocabulary: [] });
   const sense = await load({ model: { family: "sense-voice" }, file }, { runtime: sherpaRuntime(options) });
   await sense.transcribe(tone(1), { vocabulary: ["Runzo"] });
   assert.deepEqual(options, [{ hotwords: "Runzo,Claude Code" }, {}, {}]);
+});
+
+test("清单里声明的做法，运行库这一族不会放就装不上，照实说（不悄悄换成别的放法）", async () => {
+  const { load } = await import("../../../src/server/asr/engines/transcribe-cpp.mjs");
+  await assert.rejects(
+    load(
+      { model: { id: "q", family: "qwen3-asr", vocabulary: vocabularySupport("context") }, file: () => "m.gguf" },
+      { runtime: tcRuntime([]) },
+    ),
+    /transcribe\.cpp 的 qwen3-asr 不会放 context 这种词表（q）/,
+  );
+  await assert.rejects(
+    load(
+      { model: { id: "s", family: "sense-voice", vocabulary: vocabularySupport("hotwords") }, file: () => "m.gguf" },
+      { runtime: tcRuntime([]) },
+    ),
+    /不会放 hotwords/,
+  );
 });

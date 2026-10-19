@@ -1,5 +1,6 @@
 import { fork } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { fitTerms } from "../../vocabulary/support.mjs";
 import { SPEECH_SAMPLE_RATE } from "../audio/pcm.mjs";
 
 // 转写进程：本地模型装在单独的子进程里跑（另一头是 worker.mjs），接口和 loadTranscriber 装出来的一样。
@@ -14,6 +15,9 @@ const WORKER = fileURLToPath(new URL("./worker.mjs", import.meta.url));
 const STDERR_LINES = 20;
 /** 一次转写最多等多久：录音时长再加 30 秒。只用 CPU 时也有十几倍实时（第一轮评测），等这么久还没回就是卡死了 */
 const defaultTimeout = (samples) => 30_000 + Math.round((samples.length / SPEECH_SAMPLE_RATE) * 1000);
+
+/** 运行库在 stderr 上说位置不够了（sherpa-onnx 的 Qwen3："max_total_len (512) caps prompt + audio … Reduce hotwords"） */
+const OVERFLOW = /max_total_len|Reduce hotwords/;
 
 /** 开一个子进程跑 worker。advanced 序列化：Float32Array 原样传过去，不用先转成数组 */
 function forkWorker(workerPath) {
@@ -56,8 +60,13 @@ export async function spawnTranscriber({
     const stderr = [];
     child.stderr?.setEncoding("utf8");
     child.stderr?.on("data", (chunk) => {
-      stderr.push(...chunk.split("\n").filter(Boolean));
+      const lines = chunk.split("\n").filter(Boolean);
+      stderr.push(...lines);
       stderr.splice(0, Math.max(0, stderr.length - STDERR_LINES));
+      // 运行库说提示词（词表）挤占了录音的位置：录音会被截掉，平时不退出就看不到，单独记一条
+      for (const line of lines.filter((each) => OVERFLOW.test(each))) {
+        log.warn("transcriber_overflow", { model: model.id, said: line.slice(0, 300) });
+      }
     });
     /** 等着回话的转写：id → { resolve, reject, timer } */
     const pending = new Map();
@@ -120,6 +129,11 @@ export async function spawnTranscriber({
     /** vocabulary：用户词典，按先后，随这一次交给子进程（收多少由那边按模型挑） */
     async transcribe(samples, { vocabulary = [] } = {}) {
       if (disposed) throw new Error("转写进程已经关了");
+      // 子进程里按模型的上限挑词（engines/index.mjs 的 windowed），这里按同样的规矩数一下，记进日志
+      if (vocabulary.length > 0) {
+        const sent = fitTerms(vocabulary, model.vocabulary).length;
+        log.info("vocabulary_fitted", { hop: "transcribe", model: model.id, sent, of: vocabulary.length });
+      }
       const state = await ready();
       const id = nextId++;
       return new Promise((resolve, reject) => {

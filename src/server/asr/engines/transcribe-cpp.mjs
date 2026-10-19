@@ -1,14 +1,20 @@
+import { placementOf } from "./placement.mjs";
+
 // transcribe.cpp（Handy 的引擎，MIT，基于 ggml）的适配器：读 GGUF，Apple 芯片上自动走 Metal，Windows 走 Vulkan，
 // 别处退回 CPU；npm 上有 Mac 两种芯片（Intel 只有 CPU）、Windows、Linux 的预编译包。接口见 index.mjs。
 
 /**
  * 认得的模型族。每一族都是一个 GGUF 文件，清单里叫 gguf；输出是干净的文字，没有要去掉的标记。
- * vocabulary：收用户词典的族才写，挑好的词怎么并进 run 的参数（运行库按族排进提示词，超出预算的从后往前丢）
+ * vocabulary：收用户词典的族才写，按做法（清单里模型声明的 kind）查：挑好的词怎么并进 run 的参数
+ * （运行库按族排进提示词，超出预算的从后往前丢）
  */
 const singleGguf = (file) => file("gguf");
 
 export const FAMILIES = Object.freeze({
-  "qwen3-asr": Object.freeze({ config: singleGguf, vocabulary: (terms) => ({ vocabulary: terms }) }),
+  "qwen3-asr": Object.freeze({
+    config: singleGguf,
+    vocabulary: Object.freeze({ hotwords: (terms) => ({ vocabulary: terms }) }),
+  }),
   "sense-voice": Object.freeze({ config: singleGguf }),
 });
 
@@ -48,6 +54,7 @@ export async function version() {
 export async function load({ model, file, options = {} }, { runtime = () => import("transcribe-cpp") } = {}) {
   const { TranscribeModel } = await runtime();
   const family = FAMILIES[model.family];
+  const place = placementOf(model, family, "transcribe.cpp");
   const loaded = await TranscribeModel.load(family.config(file), {
     backend: options.backend ?? "auto",
   });
@@ -64,7 +71,7 @@ export async function load({ model, file, options = {} }, { runtime = () => impo
     /** @param {{ vocabulary?: readonly string[] }} [options] 挑好的词（index.mjs 的 windowed） */
     async transcribe(samples, { vocabulary = [] } = {}) {
       // 只要文字，不要时间戳：时间戳要多算一遍对齐
-      const words = family.vocabulary && vocabulary.length > 0 ? family.vocabulary(vocabulary) : {};
+      const words = place && vocabulary.length > 0 ? place(vocabulary) : {};
       const result = await session.run(samples, { timestamps: "none", ...words });
       return { text: String(result.text ?? "").trim() };
     },

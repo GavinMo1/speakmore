@@ -45,6 +45,24 @@ test("配置表里的模型整项交给子进程装：带着词典的收法也�
   transcriber.dispose();
 });
 
+test("日志：带词典时记这一跳按模型的上限送了几个词；运行库说位置不够（会截掉录音）单独记一条警告", async () => {
+  const log = recordingLog();
+  const model = MODELS.find((each) => each.vocabulary);
+  const transcriber = await spawn({ model, log });
+  await transcriber.transcribe(new Float32Array(4), { vocabulary: ["Runzo", "埋点"] });
+  // stderr 和回话走两条路，回话先到也不奇怪：等 stderr 跟上
+  for (let i = 0; i < 50 && !log.events.some((e) => e.event === "transcriber_overflow"); i += 1) {
+    await new Promise((done) => setTimeout(done, 20));
+  }
+  transcriber.dispose();
+  assert.ok(
+    log.events.some((e) => e.event === "vocabulary_fitted" && e.sent === 2 && e.of === 2 && e.model === model.id),
+  );
+  const overflow = log.events.find((e) => e.event === "transcriber_overflow");
+  assert.equal(overflow?.level, "warn");
+  assert.match(overflow.said, /Reduce hotwords/);
+});
+
 test("装不上模型：直接报错，说是哪个模型", async () => {
   await assert.rejects(spawn({ options: { failLoad: true } }), /装不上模型 fake-model：.*模型文件坏了/s);
 });
