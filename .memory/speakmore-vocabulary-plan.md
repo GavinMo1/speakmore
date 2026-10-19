@@ -1,6 +1,6 @@
 ---
 name: speakmore-vocabulary-plan
-description: "词典功能 10-19 已合并推送（acfc33d）；下一步发版：发版 → 本机和游戏电脑（Windows）装好启动验 → 回 issue #9 并关 → 同步官网"
+description: "词典功能 10-19 随 0.10.0 发布，#9 已关，官网已加；还待他定：西里尔形近字归一、评测参照错 4 条和 multicard 判法"
 metadata:
   node_type: memory
   type: project
@@ -29,10 +29,6 @@ metadata:
 
 **Why:** 用户早就想做，issue #9 给了契机；他要的是能长期维护的结构和真实验证过的效果。
 
-**发版计划（10-19 他说压缩对话后开始）：**
-1. 发版：版本号、两份 README 的下载链接、打标签推送，`npm run ship` 挂后台（流程见 [[speakmore-release-on-cos]]；公证等由他跑的照 [[cloud-changes-user-runs]]）。版本号先问他（新功能，建议 0.10.0）。
-2. 端到端：正式安装后在这台 Mac 和他的游戏电脑（Windows 开发机）上各启动一遍，验装好的版本没问题（[[acceptance-end-to-end]]、[[speakmore-windows-followups]]）。
-3. 回 issue #9：说词典已支持，然后关掉（操作前跑 check-gh-account.sh；链接后别贴中文标点 [[links-no-cjk-punctuation]]）。
-4. 同步官网：发版后要再部署（[[speakmore-website]]），看要不要把词典写进官网。
+**10-19 发布（0.10.0）：** 发版前在游戏电脑上补测了一轮（单测、两种本地运行库带词典听写、GBK/UTF-16 导入、词典页、原生选文件窗口），查出 Windows 上词典文件被别的程序开着时换不上，加了最多半秒的重试再发。两台电脑正式装好启动过，#9 已回复并关闭，官网"更多特性"加了词典。
 
-**How to apply:** 10-19 他点头合并推送了（acfc33d）；fun-asr 定了不送词典（13dfd00）。还没发版（发版走 COS，见 speakmore-release-on-cos）。待他定：西里尔形近字归一、评测里 4 条参照错和 multicard 判法要不要修再爬一轮。原来的步骤（都做完了）：1. 读 bench/_work/vocabulary/report.md（scripts/dev/eval-vocabulary.mjs，30 条原版录音，各模型带不带词典对比，含"硬塞"计数），效果写进 bench/results/vocabulary-2026-10-19.md，必要时调上限或提示词；2. App 端到端（scripts/dev/e2e.mjs，家目录放 vocabulary.json，native、local、private 各一遍）；3. 文档：docs/development.md、README 中英；4. 一轮对抗审查；5. 合并、推送前问用户。开发窗口用 /tmp/smv 家目录、热键右 Control，驱动脚本在会话 scratchpad/ui/cdp.mjs。相关：[[speakmore-model-plaza]]、[[speakmore-two-pipelines]]、[[desktop-copy-and-look]]
+**How to apply:** 已随 0.10.0 发布；fun-asr 定了不送词典（13dfd00）。待他定：西里尔形近字归一、评测里 4 条参照错和 multicard 判法要不要修再爬一轮。原来的步骤（都做完了）：1. 读 bench/_work/vocabulary/report.md（scripts/dev/eval-vocabulary.mjs，30 条原版录音，各模型带不带词典对比，含"硬塞"计数），效果写进 bench/results/vocabulary-2026-10-19.md，必要时调上限或提示词；2. App 端到端（scripts/dev/e2e.mjs，家目录放 vocabulary.json，native、local、private 各一遍）；3. 文档：docs/development.md、README 中英；4. 一轮对抗审查；5. 合并、推送前问用户。开发窗口用 /tmp/smv 家目录、热键右 Control，驱动脚本在会话 scratchpad/ui/cdp.mjs。相关：[[speakmore-model-plaza]]、[[speakmore-two-pipelines]]、[[desktop-copy-and-look]]
