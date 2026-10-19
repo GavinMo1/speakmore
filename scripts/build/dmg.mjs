@@ -29,18 +29,51 @@ export function makeDmg({ appPath, dmgPath, signing }) {
   run("spctl", ["--assess", "--type", "open", "--context", "context:primary-signature", "--verbose", dmgPath]);
 }
 
-/** 交给苹果公证，等结果。没通过时把苹果给的问题清单打出来，再报错 */
-function notarize(file, profile) {
-  const output = execFileSync(
-    "xcrun",
-    ["notarytool", "submit", file, "--keychain-profile", profile, "--wait", "--output-format", "json"],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
-  );
-  const result = JSON.parse(output);
+/** 最多交几次、两次之间隔多久：只在没拿到苹果的结论时重交（0.9.4 发版时连苹果超时，整个 ship 断在最后一个包上） */
+const NOTARIZE_ATTEMPTS = 3;
+const NOTARIZE_RETRY_MS = 30_000;
+
+/** 同步地等 ms 毫秒：打包这一路都是同步的 */
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/** notarytool 的标准输出里有没有苹果的结论（带编号的 JSON）；连不上苹果时是空的 */
+function verdictOf(output) {
+  try {
+    const result = JSON.parse(output);
+    return typeof result?.id === "string" ? result : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 交给苹果公证，等结果。没通过时把苹果给的问题清单打出来，再报错。
+ * 没拿到结论的失败（连不上、超时）隔一会儿重交；苹果给了不通过的结论就不重交，重交也是一样的结果。
+ * @param {{ exec?: typeof execFileSync, wait?: (ms: number) => void, log?: (line: string) => void }} [deps] 测试时换掉
+ */
+export function notarize(file, profile, { exec = execFileSync, wait = sleep, log = console.log } = {}) {
+  const submit = ["notarytool", "submit", file, "--keychain-profile", profile, "--wait", "--output-format", "json"];
+  let result = null;
+  for (let attempt = 1; result === null; attempt += 1) {
+    try {
+      const output = exec("xcrun", submit, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
+      result = JSON.parse(output);
+    } catch (error) {
+      // 不通过时 notarytool 也可能非零退出，结论照样在标准输出里
+      result = verdictOf(error.stdout);
+      if (result !== null) break;
+      if (attempt >= NOTARIZE_ATTEMPTS) throw error;
+      const reason = error.message.split("\n").filter(Boolean).at(-1);
+      log(
+        `交给苹果公证没拿到结果（第 ${attempt} 次，共 ${NOTARIZE_ATTEMPTS} 次）：${reason}。${NOTARIZE_RETRY_MS / 1000} 秒后重交`,
+      );
+      wait(NOTARIZE_RETRY_MS);
+    }
+  }
   if (result.status === "Accepted") {
-    console.log(`公证通过：${basename(file)}（${result.id}）`);
+    log(`公证通过：${basename(file)}（${result.id}）`);
     return;
   }
-  execFileSync("xcrun", ["notarytool", "log", result.id, "--keychain-profile", profile], { stdio: "inherit" });
+  exec("xcrun", ["notarytool", "log", result.id, "--keychain-profile", profile], { stdio: "inherit" });
   throw new Error(`${basename(file)} 没过公证：${result.status} ${result.message ?? ""}（编号 ${result.id}）`);
 }
