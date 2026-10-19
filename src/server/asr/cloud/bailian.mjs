@@ -33,8 +33,8 @@ const usage = (model, { seconds, inputTokens = 0, audioTokens = 0, outputTokens 
   costUsd: costOf(model, { seconds, inputTokens, outputTokens }),
 });
 
-/** 背景文本：词连成一句，用中文逗号隔开 */
-const contextOf = (terms) => terms.join("，");
+/** 背景文本：词连成一句，用中文逗号隔开（导出给词典评测的爬山脚本记下实际发了什么） */
+export const contextOf = (terms) => terms.join("，");
 
 /** 热词的权重：文档建议从 4 起（1–5） */
 const HOTWORD_WEIGHT = 4;
