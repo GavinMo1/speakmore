@@ -187,6 +187,7 @@ export default {
     items: [
       { icon: "translate", title: "English and Chinese", text: "Follows the system language" },
       { icon: "palette", title: "Three themes", text: "Light and dark, automatic" },
+      { icon: "dictionary", title: "Dictionary", text: "Names and terms, spelled as listed" },
       { icon: "history", title: "History and spend", text: "Kept locally, always at hand" },
       { icon: "erase", title: "Clean uninstall", text: "One folder, removed in one command" },
     ],
@@ -204,7 +205,7 @@ export default {
         title: "Cross-platform development",
         text: "Sync to Windows over SSH, then test, restart and capture the screen remotely.",
       },
-      { title: "Plugin architecture", text: "Every provider implements one interface. Over 900 unit tests." },
+      { title: "Plugin architecture", text: "Every provider implements one interface. Over 1,000 unit tests." },
     ],
     source: "View source on GitHub",
     terminal: { label: "Terminal demo", tabs: { cli: "Command line", windows: "Windows development" } },
@@ -229,7 +230,7 @@ export default {
         {
           comment: "Sync, then run every unit test on Windows",
           command: "scripts/dev/win-test.sh",
-          output: ["ℹ tests 920 ℹ pass 904 ℹ fail 0 ℹ skipped 16"],
+          output: ["ℹ tests 1047 ℹ pass 1030 ℹ fail 0 ℹ skipped 17"],
         },
         {
           comment: "Restart the app from source, with a debug port",

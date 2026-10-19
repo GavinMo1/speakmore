@@ -32,6 +32,7 @@ const ICONS = {
   account: "ri:user-forbid-line",
   key: "ri:key-2-line",
   history: "ri:history-line",
+  dictionary: "ri:book-marked-line",
   translate: "ri:translate-2",
   palette: "ri:palette-line",
   erase: "ri:delete-bin-line",
