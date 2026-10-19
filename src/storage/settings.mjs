@@ -3,7 +3,13 @@ import { dirname } from "node:path";
 import { findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
 import { DEFAULT_SOURCE, DEFAULT_TRANSCRIBER, MODELS, SOURCES } from "../models/catalog.mjs";
 import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../server/asr/cloud/vendors.mjs";
-import { formatChatChoice, normalizeBaseUrl, parseChatChoice } from "../server/chat/vendors.mjs";
+import {
+  formatChatChoice,
+  formatCustomParams,
+  normalizeBaseUrl,
+  parseChatChoice,
+  parseCustomParams,
+} from "../server/chat/vendors.mjs";
 import { DEFAULT_MODE, DEFAULT_POLISH, MODES, parseMode } from "../server/modes.mjs";
 import {
   DEFAULT_MODEL_CHOICE,
@@ -67,7 +73,7 @@ const oneOf = (choices) => new LocalizedError(msg("settings.oneOf", { choices: c
  * legacyEnv 可有可无：改名之前的环境变量，env 没设时照样认（README 里写过，用的人可能还在用）。
  * store 可有可无：规整后的值写进文件时换成什么样子（默认原样）。
  * ofMode 可有可无：这一项属于哪种识别模式（server/modes.mjs），只在那种模式里能换（app/modes.mjs）。
- *   local 的两跳各有各的：transcriber 是第一跳（本机模型或云端模型），polish 和 customUrl 是第二跳。
+ *   local 的两跳各有各的：transcriber 是第一跳（本机模型或云端模型），polish、customUrl、customParams 是第二跳。
  *   private（数据隐私）只有一跳：privateTranscriber，只能是本机模型；和 local 的第一跳分开存，各换各的。
  */
 export const SETTINGS = {
@@ -163,6 +169,14 @@ export const SETTINGS = {
     default: "",
     choices: null,
     parse: (value) => (value.trim() === "" ? "" : normalizeBaseUrl(value)),
+  },
+  customParams: {
+    ofMode: "local",
+    env: "SPEAKMORE_CUSTOM_PARAMS",
+    // 发给自定义服务的额外参数，一段 JSON 对象（GitHub issue #8）。设置都存成字符串，存的是去掉空白的那一行；空的是没填
+    default: "",
+    choices: null,
+    parse: (value) => formatCustomParams(parseCustomParams(value)),
   },
   modelSource: {
     // 本地模型没下载过时先从哪下，哪种模式里都能改（切到 local 之前先选好）。选的那个下不动会换另一个，只影响快慢
@@ -356,6 +370,7 @@ const ROUTES = {
     transcriber: settings.transcriber.value,
     polish: parseChatChoice(settings.polish.value),
     customUrl: settings.customUrl.value || null,
+    customParams: settings.customParams.value ? parseCustomParams(settings.customParams.value) : null,
   }),
   private: (settings) => ({ mode: "private", transcriber: settings.privateTranscriber.value }),
 };

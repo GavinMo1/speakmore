@@ -141,6 +141,36 @@ test("createChatPolisher：按选的厂商装上它的协议、地址、参数�
   assert.deepEqual(requests[0].body.thinking, { type: "disabled" });
 });
 
+test("createChatPolisher：自定义服务的额外参数，验证和润色都带上，和清单里的参数一样合进请求（issue #8）", async () => {
+  const requests = [];
+  const fetch = async (url, init) => {
+    requests.push({ url, body: JSON.parse(init.body) });
+    return Response.json({
+      model: "gpt-5-mini",
+      choices: [{ finish_reason: "stop", message: { content: "好的。" } }],
+      usage: { prompt_tokens: 10, completion_tokens: 2 },
+    });
+  };
+  const polisher = await createChatPolisher({
+    choice: { vendor: "custom", model: "gpt-5-mini" },
+    customUrl: "https://router.example/v1",
+    customParams: { max_completion_tokens: 1024, reasoning_effort: "minimal" },
+    apiKey: "sk-test",
+    log: quiet,
+    fetch,
+  });
+  await polisher.warmUp();
+  assert.equal(await polisher.polish("好的", {}), "好的");
+  assert.equal(requests.length, 2);
+  for (const { url, body } of requests) {
+    assert.equal(url, "https://router.example/v1/chat/completions");
+    assert.equal(body.model, "gpt-5-mini");
+    assert.equal(body.max_completion_tokens, 1024);
+    assert.equal(body.reasoning_effort, "minimal");
+    assert.equal("max_tokens" in body, false);
+  }
+});
+
 test("createChatPolisher：自定义的用设置里的地址，报错时称呼它的主机名；没填地址直接报错", async () => {
   const fetch = async () => new Response("<html>nope</html>", { status: 404 });
   const polisher = await createChatPolisher({

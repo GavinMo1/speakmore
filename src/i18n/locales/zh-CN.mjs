@@ -92,6 +92,8 @@ export default {
       privateTranscriber: "private 那条路上用哪个本机模型转文字，只能是本机模型，要先下载好",
       polish: "local 那条路上把文字交给哪一家的哪个模型润色，写成 厂商/模型；自定义服务写 custom/模型名",
       customUrl: "自定义润色服务的地址（兼容 OpenAI 接口的那种），比如 https://api.example.com/v1",
+      customParams:
+        '发给自定义服务的额外请求参数，一段 JSON 对象，比如 {"max_completion_tokens": 1024}；验证和润色都带上，不能写 model、messages、stream',
       modelSource:
         "本机模型从哪下载：cn 是 SpeakMore 的国内源，original 是 Hugging Face 原始地址。选的那个下不动会自动换另一个",
       acceleration:
@@ -192,6 +194,9 @@ export default {
     urlQuery: "地址里不能有 ? 或 #",
     urlMissing: "还没填自定义服务的地址（customUrl）",
     endpointNotFound: "{provider} 的这个地址上没有对话接口（HTTP 404）：检查地址是否写全，多数以 /v1 结尾",
+    paramsNotJson: '额外参数不是有效的 JSON：键名和字符串都要用英文双引号，比如 {"max_completion_tokens": 1024}',
+    paramsNotObject: '额外参数要是一个 JSON 对象，用大括号括起来，比如 {"max_completion_tokens": 1024}',
+    paramsReserved: "额外参数里不能写 {name}：{names} 由 SpeakMore 发送",
   },
 
   setup: {

@@ -41,6 +41,7 @@ export const settings = {
   privateTranscriber: { value: "qwen3-asr-0.6b-q8", source: "default" },
   polish: { value: "deepseek/deepseek-flash", source: "default" },
   customUrl: { value: "", source: "default" },
+  customParams: { value: "", source: "default" },
   modelSource: { value: "cn", source: "default" },
   acceleration: { value: "auto", source: "default" },
   barHint: { value: "on", source: "default" },

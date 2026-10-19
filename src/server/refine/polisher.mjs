@@ -75,11 +75,22 @@ export function createPolisher({
  * @param {object} options
  * @param {{ vendor: string, model: string }} options.choice
  * @param {string | null} [options.customUrl] 自定义服务的地址（设置里的 customUrl）
+ * @param {Record<string, unknown> | null} [options.customParams] 自定义服务的额外参数（设置里的 customParams）
  * @param {string} options.apiKey
  * @param {typeof fetch} [options.fetch] 测试时换成假的
  * @param {string} [options.prompt] 见 createPolisher
  */
-export async function createChatPolisher({ choice, customUrl = null, apiKey, timeoutMs, log, onCall, fetch, prompt }) {
+export async function createChatPolisher({
+  choice,
+  customUrl = null,
+  customParams = null,
+  apiKey,
+  timeoutMs,
+  log,
+  onCall,
+  fetch,
+  prompt,
+}) {
   const vendor = findChatVendor(choice.vendor);
   if (!vendor) throw new LocalizedError(msg("key.unknownProvider", { id: choice.vendor }));
   const { baseUrl, name } = chatEndpoint(vendor, { customUrl });
@@ -90,7 +101,7 @@ export async function createChatPolisher({ choice, customUrl = null, apiKey, tim
     apiKey,
     model: choice.model,
     name,
-    request: requestFor(vendor, choice.model),
+    request: requestFor(vendor, choice.model, { customParams }),
     costOf,
     ...(fetch ? { fetch } : {}),
   });

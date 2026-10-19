@@ -97,6 +97,8 @@ export default {
       polish:
         "On the local path, which provider and model polishes the text, as provider/model; for a custom service write custom/<model>",
       customUrl: "Address of your custom polishing service (OpenAI-compatible), e.g. https://api.example.com/v1",
+      customParams:
+        'Extra request parameters for the custom service, as one JSON object, e.g. {"max_completion_tokens": 1024}; sent with checks and polishing alike. model, messages, and stream can\'t be set',
       modelSource:
         "Where on-device models download from: cn is SpeakMore's mirror in China, original is Hugging Face. If the chosen one stalls, the other is tried",
       acceleration:
@@ -199,6 +201,10 @@ export default {
     urlMissing: "no address set for the custom service (customUrl)",
     endpointNotFound:
       "{provider} has no chat API at this address (HTTP 404). Check the address is complete; most end in /v1",
+    paramsNotJson:
+      'the extra parameters aren\'t valid JSON: keys and strings need straight double quotes, e.g. {"max_completion_tokens": 1024}',
+    paramsNotObject: 'the extra parameters must be one JSON object in braces, e.g. {"max_completion_tokens": 1024}',
+    paramsReserved: "the extra parameters can't set {name}: SpeakMore sends {names} itself",
   },
 
   setup: {

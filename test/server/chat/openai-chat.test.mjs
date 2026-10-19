@@ -120,8 +120,8 @@ test("被截断、被内容审核拦下、明说拒绝的：不给半截文字�
   }
 });
 
-test("验证：只要 1 个 token，回 length 不算失败", async () => {
-  const { fetch, requests } = fakeFetch(200, completion("你", "length"));
+test("验证：请求和润色的一样，只带模型、消息和这一家的参数，不限 token（推理模型不认 max_tokens，限小了又回不完）", async () => {
+  const { fetch, requests } = fakeFetch(200, completion("1"));
   const client = createClient({
     baseUrl: BASE,
     apiKey: "k",
@@ -131,8 +131,11 @@ test("验证：只要 1 个 token，回 length 不算失败", async () => {
   });
   const { usage } = await client.ping({});
   assert.equal(usage.model, "deepseek-flash");
-  assert.equal(requests[0].body.max_tokens, 1);
-  assert.deepEqual(requests[0].body.thinking, { type: "disabled" });
+  assert.deepEqual(requests[0].body, {
+    model: "deepseek-flash",
+    thinking: { type: "disabled" },
+    messages: [{ role: "user", content: "1" }],
+  });
 });
 
 test("列模型：GET /models，回 id 的列表", async () => {

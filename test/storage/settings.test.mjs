@@ -44,6 +44,7 @@ test("没有文件也没有环境变量时全用默认值", () => {
     privateTranscriber: { value: "qwen3-asr-0.6b-q8", source: "default" },
     polish: { value: "deepseek/deepseek-flash", source: "default" },
     customUrl: { value: "", source: "default" },
+    customParams: { value: "", source: "default" },
     modelSource: { value: "cn", source: "default" },
     acceleration: { value: "auto", source: "default" },
     barHint: { value: "on", source: "default" },
@@ -237,6 +238,7 @@ test("识别链路：默认是原生的；改成 local 后，路线里是本地�
     transcriber: "qwen3-asr-0.6b-q8",
     polish: { vendor: "custom", model: "Qwen/Qwen3-8B" },
     customUrl: "https://api.siliconflow.cn/v1",
+    customParams: null,
   });
   // 环境变量也能换，和单独启动服务端时同名
   const env = {
@@ -260,6 +262,7 @@ test("每种模式的路线只看它自己那几项：可以拼出不是正在�
     transcriber: "qwen3-asr-0.6b-q8",
     polish: { vendor: "deepseek", model: "deepseek-v4-pro" },
     customUrl: null,
+    customParams: null,
   });
   assert.deepEqual(routeOf(settings, "native").model, { provider: "openai", model: "gpt-audio-mini" });
 });
@@ -267,9 +270,32 @@ test("每种模式的路线只看它自己那几项：可以拼出不是正在�
 test("每种模式自己的那几项：native 是模型和思考档位，local 是两跳的，private 是它自己的本机模型", () => {
   assert.deepEqual(MODE_SETTINGS, {
     native: ["model", "thinking"],
-    local: ["transcriber", "polish", "customUrl"],
+    local: ["transcriber", "polish", "customUrl", "customParams"],
     private: ["privateTranscriber"],
   });
+});
+
+test("自定义服务的额外参数：存成紧凑的 JSON，路线里是对象；没填、{} 是 null；写错了拒绝保存，说哪里不对", () => {
+  saveSetting(file, "mode", "local");
+  saveSetting(file, "polish", "custom/gpt-5-mini");
+  saveSetting(file, "customUrl", "https://router.example/v1");
+  assert.equal(
+    saveSetting(file, "customParams", ' {\n  "max_completion_tokens": 1024,\n  "reasoning_effort": "minimal"\n} '),
+    '{"max_completion_tokens":1024,"reasoning_effort":"minimal"}',
+  );
+  const settings = resolveSettings({ file, env: {} });
+  assert.deepEqual(settings.customParams, {
+    value: '{"max_completion_tokens":1024,"reasoning_effort":"minimal"}',
+    source: "file",
+  });
+  assert.deepEqual(routeOf(settings).customParams, { max_completion_tokens: 1024, reasoning_effort: "minimal" });
+  // 环境变量也能写，和单独启动服务端时同名
+  const fromEnv = resolveSettings({ file, env: { SPEAKMORE_CUSTOM_PARAMS: '{"temperature": 0.2}' } });
+  assert.deepEqual(routeOf(fromEnv).customParams, { temperature: 0.2 });
+  assert.equal(saveSetting(file, "customParams", "{}"), "");
+  assert.equal(routeOf(resolveSettings({ file, env: {} })).customParams, null);
+  assert.throws(() => saveSetting(file, "customParams", "{max_tokens: 1}"), said(/customParams.*JSON/));
+  assert.throws(() => saveSetting(file, "customParams", '{"model": "x"}'), said(/model/));
 });
 
 test("数据隐私模式的本机模型：和 local 的第一跳分开存，只认本机模型的 id，云端的拒绝", () => {

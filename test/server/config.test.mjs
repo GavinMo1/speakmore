@@ -81,6 +81,7 @@ test("SPEAKMORE_MODE=local：本地模型和润色那家用默认的，key 从�
       transcriber: "qwen3-asr-0.6b-q8",
       polish: { vendor: "deepseek", model: "deepseek-flash" },
       customUrl: null,
+      customParams: null,
     },
     apiKey: "sk-d",
     keys: { deepseek: "sk-d" },
@@ -89,12 +90,13 @@ test("SPEAKMORE_MODE=local：本地模型和润色那家用默认的，key 从�
   assert.throws(() => loadConfig({ SPEAKMORE_MODE: "local", GEMINI_API_KEY: "k" }), /DEEPSEEK_API_KEY/);
 });
 
-test("本地转写链路：换模型、换润色的那家；自定义服务要给地址", () => {
+test("本地转写链路：换模型、换润色的那家；自定义服务要给地址，可以带额外参数", () => {
   const config = loadConfig({
     SPEAKMORE_MODE: "local",
     SPEAKMORE_TRANSCRIBER: "sensevoice-small-q8",
     SPEAKMORE_POLISH: "custom/qwen3:8b",
     SPEAKMORE_CUSTOM_URL: "http://127.0.0.1:11434/v1/",
+    SPEAKMORE_CUSTOM_PARAMS: '{"think": false}',
     SPEAKMORE_CUSTOM_API_KEY: "ollama",
   });
   assert.deepEqual(config.route, {
@@ -102,11 +104,23 @@ test("本地转写链路：换模型、换润色的那家；自定义服务要�
     transcriber: "sensevoice-small-q8",
     polish: { vendor: "custom", model: "qwen3:8b" },
     customUrl: "http://127.0.0.1:11434/v1",
+    customParams: { think: false },
   });
   assert.equal(config.apiKey, "ollama");
   assert.throws(
     () => loadConfig({ SPEAKMORE_MODE: "local", SPEAKMORE_POLISH: "custom/m", SPEAKMORE_CUSTOM_API_KEY: "k" }),
     /SPEAKMORE_CUSTOM_URL/,
+  );
+  assert.throws(
+    () =>
+      loadConfig({
+        SPEAKMORE_MODE: "local",
+        SPEAKMORE_POLISH: "custom/m",
+        SPEAKMORE_CUSTOM_URL: "https://x.example/v1",
+        SPEAKMORE_CUSTOM_PARAMS: "{think: false}",
+        SPEAKMORE_CUSTOM_API_KEY: "k",
+      }),
+    /SPEAKMORE_CUSTOM_PARAMS/,
   );
 });
 

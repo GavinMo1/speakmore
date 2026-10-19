@@ -20,7 +20,8 @@ import { createModelRefiner } from "./refine/refiner.mjs";
 //
 // "路线"（route）写清这一条要用哪些东西，由设置或环境变量拼出来：
 //   { mode: "native", model: { provider, model }, thinkingLevel }
-//   { mode: "local", transcriber: 本地模型的 id 或 云端的 厂商/模型, polish: { vendor, model }, customUrl }
+//   { mode: "local", transcriber: 本地模型的 id 或 云端的 厂商/模型, polish: { vendor, model }, customUrl, customParams }
+//   （customUrl、customParams 是自定义服务的地址和额外参数，没填是 null）
 //   { mode: "private", transcriber: 本地模型的 id }
 // 第一跳是本机模型时，转写器（装着模型的子进程，asr/host.mjs）由调用方装好交进来：它的去留跟着模型走，
 // 换一把 key、换一家润色都不该把模型重装一遍。第一跳是云端模型时，这里按路线装（asr/cloud/transcriber.mjs）。
@@ -64,6 +65,7 @@ export const MODES = Object.freeze([
       const polisher = await createChatPolisher({
         choice: route.polish,
         customUrl: route.customUrl,
+        customParams: route.customParams,
         apiKey: keys[route.polish.vendor],
         log,
         onCall,

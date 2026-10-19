@@ -160,7 +160,8 @@ export const CHAT_VENDORS = Object.freeze([
     /** 用户填，没有默认的 */
     defaultModel: null,
     models: models([]),
-    // 不知道对面是谁，不多带任何参数：多带了不认识的参数，有的服务会回 400
+    // 不知道对面是谁，不多带任何参数：多带了不认识的参数，有的服务会回 400。
+    // 对面要什么参数由用户自己填（设置里的 customParams，GitHub issue #8），见 requestFor
     request: Object.freeze({}),
     // 不知道价，花费记成空
     prices: null,
@@ -173,11 +174,48 @@ export function findChatVendor(id) {
   return CHAT_VENDORS.find((vendor) => vendor.id === wanted) ?? null;
 }
 
-/** 发给这一家的这个模型要多带的参数：这一家都带的，加上清单里这个模型自己的（同名的以模型的为准） */
-export function requestFor(vendor, model) {
+/**
+ * 发给这一家的这个模型要多带的参数：这一家都带的，加上清单里这个模型自己的（同名的以模型的为准）。
+ * 自定义服务再加上用户填的额外参数（同名的以用户的为准）。清单里的厂商不加：它们的参数逐个实测调过
+ * @param {{ customParams?: Record<string, unknown> | null }} [settings]
+ */
+export function requestFor(vendor, model, { customParams = null } = {}) {
   const entry = vendor.models.find(({ id }) => id === model);
-  return { ...vendor.request, ...entry?.request };
+  const extra = vendor.id === "custom" ? customParams : null;
+  return { ...vendor.request, ...entry?.request, ...extra };
 }
+
+/**
+ * 额外参数里不许写的几项：模型名、提示词由 SpeakMore 发，回话按整段 JSON 读（openai-chat.mjs），
+ * 改了它们成品就乱了，不如当场说清
+ */
+const RESERVED_PARAMS = Object.freeze(["model", "messages", "stream"]);
+
+/**
+ * 用户写的额外参数（一段 JSON 对象）→ 对象。空的当作没填，是 {}。写错了就抛 LocalizedError，说清哪里不对
+ * @returns {Record<string, unknown>}
+ */
+export function parseCustomParams(value) {
+  const text = String(value ?? "").trim();
+  if (text === "") return {};
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new LocalizedError(msg("chat.paramsNotJson"));
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new LocalizedError(msg("chat.paramsNotObject"));
+  }
+  const reserved = RESERVED_PARAMS.find((name) => Object.hasOwn(parsed, name));
+  if (reserved) {
+    throw new LocalizedError(msg("chat.paramsReserved", { name: reserved, names: RESERVED_PARAMS.join(" / ") }));
+  }
+  return parsed;
+}
+
+/** 存进设置里的样子：去掉空白的一行 JSON；没有参数时是空字符串（和没填一样） */
+export const formatCustomParams = (params) => (Object.keys(params).length === 0 ? "" : JSON.stringify(params));
 
 /**
  * 模型名。比原生链路的宽：别家的模型名常带斜杠（OpenRouter 的 deepseek/deepseek-chat、

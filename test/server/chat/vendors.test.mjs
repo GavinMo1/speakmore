@@ -6,9 +6,11 @@ import {
   chatEndpoint,
   findChatVendor,
   formatChatChoice,
+  formatCustomParams,
   normalizeBaseUrl,
   PROTOCOLS,
   parseChatChoice,
+  parseCustomParams,
   requestFor,
 } from "../../../src/server/chat/vendors.mjs";
 
@@ -75,6 +77,40 @@ test("接口地址：登记了的用登记的；自定义的用用户填的，�
     name: "api.siliconflow.cn",
   });
   says(() => chatEndpoint(findChatVendor("custom"), {}), /地址/);
+});
+
+test("额外参数：一段 JSON 对象；空的、{} 都是没填；不是对象、写坏了、改了不许改的几项都说清哪里不对", () => {
+  assert.deepEqual(parseCustomParams(""), {});
+  assert.deepEqual(parseCustomParams("  "), {});
+  assert.deepEqual(parseCustomParams("{}"), {});
+  assert.deepEqual(parseCustomParams(' { "max_completion_tokens": 1024, "thinking": { "type": "disabled" } } '), {
+    max_completion_tokens: 1024,
+    thinking: { type: "disabled" },
+  });
+  says(() => parseCustomParams("{max_completion_tokens: 1024}"), /JSON/);
+  says(() => parseCustomParams("[1, 2]"), /对象/);
+  says(() => parseCustomParams("1024"), /对象/);
+  says(() => parseCustomParams("null"), /对象/);
+  // 模型名、提示词、整段回话的读法由 SpeakMore 管，改了会把成品弄乱
+  says(() => parseCustomParams('{"model": "x"}'), /model/);
+  says(() => parseCustomParams('{"messages": []}'), /messages/);
+  says(() => parseCustomParams('{"stream": true}'), /stream/);
+});
+
+test("额外参数存下来的样子：去掉空白、没填是空字符串，读回来还是同一个对象", () => {
+  assert.equal(formatCustomParams({}), "");
+  const text = formatCustomParams({ reasoning_effort: "minimal", max_completion_tokens: 1024 });
+  assert.equal(text, '{"reasoning_effort":"minimal","max_completion_tokens":1024}');
+  assert.deepEqual(parseCustomParams(text), { reasoning_effort: "minimal", max_completion_tokens: 1024 });
+});
+
+test("额外参数只给自定义服务，盖过它默认带的；清单里的厂商不带（它们的参数按实测调过）", () => {
+  const params = { max_completion_tokens: 1024, enable_thinking: true };
+  assert.deepEqual(requestFor(findChatVendor("custom"), "gpt-5-mini", { customParams: params }), params);
+  assert.deepEqual(requestFor(findChatVendor("custom"), "gpt-5-mini"), {});
+  assert.deepEqual(requestFor(findChatVendor("bailian"), "qwen3.8-flash", { customParams: params }), {
+    enable_thinking: false,
+  });
 });
 
 test("清单里的模型一项一个：id 不重复，有名字和出自哪家；默认模型在清单里", () => {

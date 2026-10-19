@@ -84,6 +84,7 @@ test("切模式：按设置里那种模式自己的几项拼出路线，当场�
         transcriber: "qwen3-asr-0.6b-q8",
         polish: { vendor: "deepseek", model: "deepseek-v4-pro" },
         customUrl: null,
+        customParams: null,
       },
     },
   ]);
