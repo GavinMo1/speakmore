@@ -8,8 +8,8 @@ import { runToEnd } from "./exec.mjs";
 import { homeTarget } from "./layout.mjs";
 import { parseVersion } from "./versions.mjs";
 
-/** macOS 上拼新版本的目录名的开头（在家目录里）。install.sh 认它：只肯从家目录里的这种目录装 */
-const STAGING_PREFIX = ".update-";
+/** macOS 上拼新版本的目录名的开头（在家目录里）。install.sh 认它：只肯从家目录里的这种目录装；卸载（留数据）时也删它 */
+export const STAGING_PREFIX = ".update-";
 
 // 装在家目录里的那一份：安装脚本（install.sh、install.ps1）装的。Mac 上是终端安装，Windows 上两种安装都是它。
 // 换成新版本：先照清单拼好新版本（只下本机缺的块），再让新版本自带的安装脚本把它换上（怎么装是新版本说了算）。
@@ -117,6 +117,23 @@ export function createHomes({
       return version ? { version } : null;
     },
 
+    /**
+     * 清掉上次被打断（进程被杀、关机）时拼了一半的（macOS 家目录里 .update- 开头的）。同一时间只有一个更新（state.mjs 的锁）。
+     * Windows 上拼在 versions 下，install.ps1 装下一个版本时会清。删不掉的交回在哪、为什么
+     */
+    clean() {
+      if (windows || !existsSync(paths.home)) return null;
+      for (const name of readdirSync(paths.home)) {
+        if (!name.startsWith(STAGING_PREFIX)) continue;
+        try {
+          rmSync(join(paths.home, name), { recursive: true, force: true });
+        } catch (error) {
+          return { dir: join(paths.home, name), reason: error.code ?? error.message };
+        }
+      }
+      return null;
+    },
+
     /** 本机装着的这一份在哪几个目录：拼新版本时当种子（没变的块从这里拷） */
     seeds() {
       if (!windows) return [paths.appDir, paths.runtimeDir];
@@ -144,10 +161,6 @@ export function createHomes({
         // 和 install.ps1 的 versions 目录名同一种：<版本>-<8 位编号>
         dir = join(paths.versionsDir, `${channel.version}-${suffix}`);
       } else {
-        // 上次中断留下的（进程被杀了没来得及删）先清掉：同一时间只有一个更新（state.mjs 的锁）
-        for (const name of existsSync(paths.home) ? readdirSync(paths.home) : []) {
-          if (name.startsWith(STAGING_PREFIX)) rmSync(join(paths.home, name), { recursive: true, force: true });
-        }
         dir = join(paths.home, `${STAGING_PREFIX}${channel.version}-${suffix}`);
       }
       // 删不掉（Windows 上杀毒软件正扫着刚写的文件）不算出错：交回留在了哪、为什么，由更新那一层说一声
@@ -171,7 +184,11 @@ export function createHomes({
         return { dir, discard, downloadedBytes: stats.downloadedBytes, reusedBytes: stats.reusedBytes };
       } catch (error) {
         discard();
-        throw error;
+        if (error instanceof LocalizedError) throw error;
+        // 磁盘满了、没有权限这些：说清是在哪拼的、系统怎么说的
+        throw new LocalizedError(msg("update.prepareFailed", { dir, reason: error.code ?? error.message }), {
+          cause: error,
+        });
       }
     },
 

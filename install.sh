@@ -10,7 +10,7 @@
 #
 # 可以用环境变量调整：
 #   SPEAKMORE_HOME          装到哪（默认 ~/.speakmore）
-#   SPEAKMORE_VERSION       装哪个版本，比如 v0.2.0（默认最新的）
+#   SPEAKMORE_VERSION       装哪个版本，比如 v0.11.0（默认最新的；0.11.0 以前的包是 tar.gz，这个脚本不装）
 #   SPEAKMORE_INSTALL_BASE  从哪下载：一个网址前缀，或者本机的一个目录（npm run release 打出来的 dist/release）
 #   SPEAKMORE_BIN_DIR       命令的链接建在哪个目录（默认 ~/.local/bin）
 #   SPEAKMORE_INSTALL_FROM  不下载，装一棵已经准备好的树（里面是 app/ 和 runtime/）：speakmore update 拼在家目录里
@@ -29,6 +29,9 @@ DOWNLOAD_URL="https://dl.zephyrxiang.com/speakmore"
 # 能用的几家模型（名字和地址成对），整理文字要连其中一家。和 src/server/providers/index.mjs 里登记的一致
 MODEL_HOSTS=("Gemini" "generativelanguage.googleapis.com" "OpenAI" "api.openai.com" "Bailian" "dashscope.aliyuncs.com")
 MIN_MACOS_MAJOR=12
+# 从这个版本起包是 tar.xz（摆法见 src/update/layout.mjs）；更早的只有 tar.gz，这个脚本不装它们。
+# 0.10.0 及以前的 speakmore update 会下这个脚本、指定装 v0.10.1：到这里说清楚怎么办，而不是报"连不上"
+MIN_VERSION="0.11.0"
 # 下载的包约 95 MB，解开约 390 MB；升级时旧的要等新的放好才删
 NEEDED_MB=1000
 # macOS 上 Unix 套接字的路径最长 103 个字节，控制通道在 <目录>/run/control.sock
@@ -112,11 +115,16 @@ check_home() {
   # 里面会有录音和 key，只让自己进得去
   chmod 700 "$HOME_DIR"
 
-  local free_mb
-  free_mb="$(df -Pk "$HOME_DIR" | awk 'NR == 2 { printf "%d", $4 / 1024 }')"
-  [ "$free_mb" -ge "$NEEDED_MB" ] 2>/dev/null ||
-    fail "Not enough disk space: ${free_mb} MB free" "About ${NEEDED_MB} MB is needed. Free up some space and run again."
-  ok "Installing to $(pretty "$HOME_DIR") ($((free_mb / 1024)) GB free)"
+  if [ -n "${SPEAKMORE_INSTALL_FROM:-}" ]; then
+    # 从拼好的树装只是改名换上，不再占新的地方（拼的时候已经占过了）
+    ok "Installing to $(pretty "$HOME_DIR")"
+  else
+    local free_mb
+    free_mb="$(df -Pk "$HOME_DIR" | awk 'NR == 2 { printf "%d", $4 / 1024 }')"
+    [ "$free_mb" -ge "$NEEDED_MB" ] 2>/dev/null ||
+      fail "Not enough disk space: ${free_mb} MB free" "About ${NEEDED_MB} MB is needed. Free up some space and run again."
+    ok "Installing to $(pretty "$HOME_DIR") ($((free_mb / 1024)) GB free)"
+  fi
 
   INSTALLED_VERSION=""
   if [ -f "$HOME_DIR/app/package.json" ]; then
@@ -141,7 +149,25 @@ resolve_version() {
     [ -n "${SPEAKMORE_VERSION:-}" ] && fail "SPEAKMORE_VERSION doesn't look like a version: $SPEAKMORE_VERSION" "Write it like v0.2.0."
     fail "The download server returned a bad version number" "URL: $DOWNLOAD_BASE/channel.json" "Try again in a bit. If it keeps happening, please open an issue at $REPO_URL/issues."
   fi
+  if older_than "${version#v}" "$MIN_VERSION"; then
+    fail "This installer can't install $version" "Versions before v$MIN_VERSION are packaged differently." \
+      "Run it again without SPEAKMORE_VERSION to install the latest, or download that version's installer:" \
+      "$DOWNLOAD_BASE/$version/SpeakMore-$ARCH.dmg"
+  fi
   BASE_URL="$DOWNLOAD_BASE/$version"
+}
+
+# 两个 x.y.z 比大小（不管预发版的后缀）：$1 比 $2 旧时成立
+older_than() {
+  local IFS=. i
+  local -a a b
+  read -r -a a <<<"${1%%[-+]*}"
+  read -r -a b <<<"${2%%[-+]*}"
+  for i in 0 1 2; do
+    [ "${a[i]:-0}" -lt "${b[i]:-0}" ] && return 0
+    [ "${a[i]:-0}" -gt "${b[i]:-0}" ] && return 1
+  done
+  return 1
 }
 
 check_network() {
@@ -224,19 +250,28 @@ swap_in() {
   local name
   for name in app runtime; do
     rm -rf "$HOME_DIR/$name.old"
-    [ ! -e "$HOME_DIR/$name" ] || mv "$HOME_DIR/$name" "$HOME_DIR/$name.old" ||
+    if [ -e "$HOME_DIR/$name" ] && ! mv "$HOME_DIR/$name" "$HOME_DIR/$name.old"; then
+      # app 已经挪开、runtime 挪不动：把 app 放回去，不然 speakmore 命令就坏了
+      put_back
       fail "Can't move $(pretty "$HOME_DIR/$name")" "Check the folder's permissions."
+    fi
   done
   if mv "$TMP_DIR/app" "$HOME_DIR/app" && mv "$TMP_DIR/runtime" "$HOME_DIR/runtime"; then
     rm -rf "$HOME_DIR/app.old" "$HOME_DIR/runtime.old"
     return
   fi
+  put_back
+  fail "Couldn't put the new version into $(pretty "$HOME_DIR")" "Check the folder's permissions. SpeakMore was stopped; run speakmore to start it again."
+}
+
+# 把挪开的旧版放回原处（换到一半出错时）
+put_back() {
+  local name
   for name in app runtime; do
     [ -e "$HOME_DIR/$name.old" ] || continue
     rm -rf "$HOME_DIR/$name"
     mv "$HOME_DIR/$name.old" "$HOME_DIR/$name"
   done
-  fail "Couldn't put the new version into $(pretty "$HOME_DIR")" "Check the folder's permissions. SpeakMore was stopped; run speakmore to start it again."
 }
 
 install_files() {

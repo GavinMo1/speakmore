@@ -26,7 +26,7 @@ export async function publishTrees(root, version, trees) {
     targets[target] = sha256(encoded);
     put(targets[target], encoded);
   }
-  const channel = { version, electron: "44.0.0", targets };
+  const channel = { format: 1, version, electron: "44.0.0", targets };
   writeFileSync(join(root, CHANNEL), JSON.stringify(channel));
   return channel;
 }

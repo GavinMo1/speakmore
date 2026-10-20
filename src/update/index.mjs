@@ -27,13 +27,15 @@ const ACTIVE_TIMEOUT_SECONDS = 20;
 /** 标着"正在更新"、可已经过了这么久的，进程号多半被别的程序用上了：算中断 */
 const RUN_AT_MOST_MS = 2 * 60 * 60 * 1000;
 
-/** 多大，给人看：十进制，和下载工具、访达一样；10 MB 以下带一位小数（更新常常只有一两兆） */
+/** 多大，给人看：十进制，和下载工具、访达一样；更新常常只有几百 KB、一两兆，小的照实写 */
 const sizeText = (bytes) =>
-  bytes < 10_000_000
-    ? `${(bytes / 1_000_000).toFixed(1)} MB`
-    : bytes < 1_000_000_000
-      ? `${Math.round(bytes / 1_000_000)} MB`
-      : `${(bytes / 1_000_000_000).toFixed(1)} GB`;
+  bytes < 100_000
+    ? `${Math.round(bytes / 1_000)} KB`
+    : bytes < 10_000_000
+      ? `${(bytes / 1_000_000).toFixed(1)} MB`
+      : bytes < 1_000_000_000
+        ? `${Math.round(bytes / 1_000_000)} MB`
+        : `${(bytes / 1_000_000_000).toFixed(1)} GB`;
 
 /**
  * @param {object} options
@@ -72,13 +74,13 @@ export function createUpdates({
     ...copies.filter((copy) => copy.kind === "bundle").map((copy) => copy.path),
   ];
 
-  /** 拼的进度：命令行在终端里时每过两成说一次（App 那边只看 update.json 的阶段） */
+  /** 拼一份的进度：命令行在终端里时每过两成说一次（App 那边只看 update.json 的阶段）。每拼一份新起一个 */
   function progressReporter(report) {
     if (!progress) return undefined;
     let said = -1;
     return ({ downloadedChunks, totalChunks }) => {
       if (totalChunks === 0) return;
-      const step = Math.floor((downloadedChunks / totalChunks) * 5);
+      const step = Math.min(5, Math.floor((downloadedChunks / totalChunks) * 5));
       if (step > said) {
         said = step;
         report(msg("update.downloading", { percent: step * 20 }));
@@ -98,6 +100,15 @@ export function createUpdates({
     const bundle = await bundles.find({ pid: runningApp, self: selfBundle });
     if (bundle) copies.push({ kind: "bundle", version: bundle.version, path: bundle.path });
     return copies;
+  }
+
+  /** 下到的块用不着了（换成了，或者已经是最新的）：删不掉不算更新失败，说一声留在了哪 */
+  function dropCache(report) {
+    try {
+      rmSync(paths.updateCacheDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch (error) {
+      report(msg("update.leftover", { dir: paths.updateCacheDir, reason: error.code ?? error.message }));
+    }
   }
 
   /** 正在运行的那个；卡住不答话的是 "hung"（不知道是哪一份） */
@@ -213,7 +224,7 @@ export function createUpdates({
           recordProblem ??= error.code ?? error.message;
         }
       };
-      /** 下好了、还没换上的：没走到换那一步就出错时删掉 */
+      /** 拼好了、还没交出去换上的：没走到换那一步就出错时删掉 */
       let stagedBundle = null;
       let stagedHome = null;
       try {
@@ -225,8 +236,17 @@ export function createUpdates({
           running === null || running === "hung" ? null : running.packaged ? "bundle" : "home";
         const before = await runningNow();
         const copies = await installed(kindOf(before) === "bundle" ? before.pid : null);
+        // 上次被打断（进程被杀、关机）留下的半截：拿着锁，不会有别的更新正在用它们
+        for (const left of [
+          homes.clean(),
+          ...copies.filter((c) => c.kind === "bundle").map((c) => bundles.clean(c.path)),
+        ]) {
+          if (left) report(msg("update.leftover", left));
+        }
         const behind = copies.filter((copy) => compareVersions(latest, copy.version) > 0);
         if (behind.length === 0) {
+          // 上次没换成留下的块：已经是最新的（比如用户重装过）就用不着了
+          dropCache(report);
           save({ state: "current", phase: null, version: latest, finishedAt: now().toISOString() });
           return { updated: false, latest, restarted: null, running: kindOf(before) !== null };
         }
@@ -237,14 +257,14 @@ export function createUpdates({
           version: latest,
           from: Object.fromEntries(behind.map((c) => [c.kind, c.version])),
         });
-        // 两份都要换的话共用下到的块：后拼的那份不再下前一份下过的
-        const staging = {
+        // 两份都要换的话共用下到的块：后拼的那份不再下前一份下过的。进度各报各的
+        const staging = () => ({
           seeds: seedsOf(copies),
           cacheDir: paths.updateCacheDir,
           onProgress: progressReporter(report),
-        };
-        if (bundle) stagedBundle = await bundles.stage(channel, bundle.path, staging);
-        if (home) stagedHome = await homes.stage(channel, staging);
+        });
+        if (bundle) stagedBundle = await bundles.stage(channel, bundle.path, staging());
+        if (home) stagedHome = await homes.stage(channel, staging());
         const downloaded = (stagedBundle?.downloadedBytes ?? 0) + (stagedHome?.downloadedBytes ?? 0);
         const reused = (stagedBundle?.reusedBytes ?? 0) + (stagedHome?.reusedBytes ?? 0);
         report(msg("update.delta", { download: sizeText(downloaded), reused: sizeText(reused) }));
@@ -277,7 +297,11 @@ export function createUpdates({
           }
           if (stagedHome) {
             report(msg("update.updating", { current: home.version, latest }));
-            const code = await homes.install(stagedHome);
+            // 交给安装脚本以后就归它管了：换成了的话这个目录就是装好的新版本（Windows 原地用 versions 下拼好的那个），
+            // 没换成它自己会删。这里再删，删掉的就是刚装好的那一份
+            const staged = stagedHome;
+            stagedHome = null;
+            const code = await homes.install(staged);
             if (code !== 0) throw new LocalizedError(msg("update.installFailed", { code }));
           }
         } catch (error) {
@@ -292,8 +316,6 @@ export function createUpdates({
               : { state: "done", phase: null, finishedAt: now().toISOString() },
           );
         finish(failure);
-        // 换成了，下到的块就用不着了；没换成的留着，下次只补剩下的
-        if (!failure) rmSync(paths.updateCacheDir, { recursive: true, force: true, maxRetries: 3 });
         try {
           await reopen(stopped, bundlePath, report);
         } catch (error) {
@@ -301,6 +323,8 @@ export function createUpdates({
           finish(failure);
         }
         if (failure) throw failure;
+        // 换成了，下到的块就用不着了；没换成的留着，下次只补剩下的。放在重新打开之后：删不掉也不耽误打开
+        dropCache(report);
         // running：换完以后还有没有一个在运行（没停的那个，或者重新打开的那个）
         return { updated: true, latest, restarted: stopped, running: runningKind !== null };
       } catch (error) {
@@ -309,7 +333,7 @@ export function createUpdates({
         }
         throw error;
       } finally {
-        // 下好了没换上的、临时目录：删不掉不算更新失败，说一声留在了哪
+        // 拼好了没换上的：删不掉不算更新失败，说一声留在了哪
         for (const staged of [stagedBundle, stagedHome]) {
           const left = staged?.discard();
           if (left) report(msg("update.leftover", left));

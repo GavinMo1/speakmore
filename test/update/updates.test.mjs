@@ -1,14 +1,16 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { TimeoutError } from "../../src/control.mjs";
 import { createTranslator, LocalizedError, msg } from "../../src/i18n/index.mjs";
 import { resolvePaths } from "../../src/storage/paths.mjs";
+import { createHomes } from "../../src/update/home.mjs";
 import { createUpdates } from "../../src/update/index.mjs";
-import { parseChannel } from "../../src/update/release.mjs";
+import { createRelease, parseChannel } from "../../src/update/release.mjs";
 import { acquireLock, readProgress } from "../../src/update/state.mjs";
+import { publishTrees } from "../helpers/release.mjs";
 
 // 内核里的版本检查和更新（src/update/index.mjs）：下载地址、App、安装脚本、正在运行的那个都换成假的，
 // 记下按什么顺序做了什么。命令行那边的说法另在 test/cli/main.test.mjs 里测（它也走这里，用的是同一套假的）。
@@ -92,7 +94,7 @@ function setup({
       async channel() {
         steps.push("channel");
         if (latest instanceof Error) throw latest;
-        return parseChannel(JSON.stringify({ version: latest, electron: "44.0.0", targets: {} }));
+        return parseChannel(JSON.stringify({ format: 1, version: latest, electron: "44.0.0", targets: {} }));
       },
     },
     bundles: {
@@ -100,6 +102,7 @@ function setup({
         steps.push(`find-app:${pid}`);
         return app;
       },
+      clean: () => null,
       async stage(channel, _path, staging) {
         steps.push(`stage-app:${channel.version}`);
         stagings.push(staging);
@@ -126,6 +129,7 @@ function setup({
     },
     homes: {
       find: () => home,
+      clean: () => null,
       seeds: () => [paths.appDir, paths.runtimeDir],
       async stage(channel, staging) {
         steps.push(`stage-home:${channel.version}`);
@@ -246,7 +250,6 @@ test("更新：先把两份都下好（这时 App 还在跑），再停、换、
     "commit-app",
     "install-home:staged",
     `open-app:${APP.path}`,
-    "discard-home",
   ]);
   assert.deepEqual(phases, ["downloading", "installing", "installing", "reopen:done"]);
   const record = readProgress(paths);
@@ -292,7 +295,8 @@ test("更新：安装脚本没装成：原来在跑的照样重新打开，记�
   const { updates, steps, phases } = setup({ running: HOME_RUNNING, installCode: 2 });
   await assert.rejects(updates.run({ by: "cli" }), (error) => /退出码是 2/.test(zh.text(error.problem)));
   assert.equal(phases.at(-1), "reopen:failed");
-  assert.deepEqual(steps.slice(-3), ["install-home:staged", "start-home", "discard-home"]);
+  assert.deepEqual(steps.slice(-2), ["install-home:staged", "start-home"]);
+  assert.ok(!steps.includes("discard-home"), "交给安装脚本以后归它管，这里不删");
   assert.equal(readProgress(paths).state, "failed");
 });
 
@@ -389,37 +393,28 @@ test("更新好了告诉过用户之后记一笔，下次启动不再说；写�
   assert.equal(updates.progress(), null);
 });
 
-test("更新：临时目录删不掉不算失败，说一声留在了哪", async () => {
-  const said = [];
-  // 临时目录删不掉的一套
-  const kernel = createUpdates({
-    paths,
-    env: {},
-    packageDir: paths.appDir,
-    version: "0.1.0",
-    instance: { status: async () => null, stop: async () => "not-running" },
-    platform: "darwin",
-    now: () => NOW,
-    pid: 999_999,
-    release: { channel: async () => ({ version: "0.2.0", electron: "44.0.0", targets: {} }) },
-    bundles: { find: async () => null },
-    homes: {
-      find: () => ({ version: "0.1.0" }),
-      seeds: () => [],
-      stage: async () => ({
-        dir: "staged",
-        downloadedBytes: 0,
-        reusedBytes: 0,
-        discard: () => ({ dir: "/tmp/x", reason: "EBUSY" }),
-      }),
-      install: async () => 0,
-      start: async () => 0,
-    },
-  });
-  const result = await kernel.run({ by: "cli", report: (message) => said.push(zh.text(message)) });
-  assert.equal(result.updated, true);
-  assert.ok(said.includes("临时文件未能删除：/tmp/x（EBUSY），可以手动删除。"), said.join("\n"));
-  assert.equal(readProgress(paths).state, "done");
+test("更新：换成了、下到的块却删不掉：照样算换成、照样重新打开，说一声留在了哪", async () => {
+  // 缓存目录里有个删不掉的东西
+  const lines = [];
+  const kit = setup({ running: HOME_RUNNING });
+  const locked = join(paths.updateCacheDir, "locked");
+  mkdirSync(locked, { recursive: true });
+  writeFileSync(join(locked, "x"), "占着");
+  chmodSync(locked, 0o555);
+  try {
+    const result = await kit.updates.run({ by: "cli", report: (message) => lines.push(zh.text(message)) });
+    assert.equal(result.updated, true);
+    assert.equal(kit.steps.at(-1), "start-home", "删缓存放在重新打开之后");
+    assert.equal(readProgress(paths).state, "done");
+    if (process.platform !== "win32") {
+      assert.ok(
+        lines.some((line) => line.startsWith(`临时文件未能删除：${paths.updateCacheDir}`)),
+        lines.join("\n"),
+      );
+    }
+  } finally {
+    chmodSync(locked, 0o755);
+  }
 });
 
 test("更新：下载期间用户打开了 App（之前什么都没在跑）：换之前看出来，停掉它、换上、重新打开", async () => {
@@ -462,7 +457,8 @@ test("更新：记录写不进去（被占着、磁盘满）不耽误换程序�
   mkdirSync(paths.updateFile, { recursive: true });
   const result = await updates.run({ by: "cli", report: (message) => said.push(zh.text(message)) });
   assert.equal(result.updated, true);
-  assert.deepEqual(steps.slice(-3), ["install-home:staged", "start-home", "discard-home"]);
+  assert.deepEqual(steps.slice(-2), ["install-home:staged", "start-home"]);
+  assert.ok(!steps.includes("discard-home"), "交给安装脚本以后归它管，这里不删");
   assert.ok(
     said.some((line) => line.startsWith("更新记录写不进")),
     said.join("\n"),
@@ -525,7 +521,7 @@ test("更新：拼新版本时本机装着的几份都当种子，下到的块�
     assert.equal(staging.onProgress, undefined, "不在终端里时不报进度");
   }
   // 两份加起来：下 1.2 + 0.1 MB，拷 300 + 400 MB
-  assert.ok(said.includes("需下载 1.3 MB，其余 700 MB 取自本机已有的文件。"), said.join("\n"));
+  assert.ok(said.includes("已下载 1.3 MB，其余 700 MB 取自本机已有的文件。"), said.join("\n"));
   assert.equal(existsSync(paths.updateCacheDir), false, "换成了，缓存删掉");
 
   const failing = setup({ running: null, home: { version: "0.1.0" }, installCode: 1 });
@@ -550,5 +546,53 @@ test("更新：在终端里时按两成一档说下载进度，每档只说一�
   assert.deepEqual(
     said.filter((line) => line.startsWith("下载更新")),
     ["下载更新：0%", "下载更新：20%", "下载更新：40%", "下载更新：60%", "下载更新：80%", "下载更新：100%"],
+  );
+});
+
+test("更新（Windows）：install.ps1 原地切到拼好的那个版本以后，它就是装好的那一份，不能当成没换上的删掉", async () => {
+  // 路径用这台机器的写法（在 Mac 上跑时用 Windows 的写法会写出带反斜杠的文件名），装法照 Windows 的走
+  const winPaths = resolvePaths({ SPEAKMORE_HOME: join(dir, "win") }, undefined, process.platform);
+  const oldDir = join(winPaths.versionsDir, "0.1.0-aaaaaaaa");
+  mkdirSync(join(oldDir, "app"), { recursive: true });
+  writeFileSync(join(oldDir, "app", "package.json"), JSON.stringify({ version: "0.1.0" }));
+  writeFileSync(winPaths.currentFile, "0.1.0-aaaaaaaa");
+  const tree = mkdtempSync(join(dir, "tree-"));
+  mkdirSync(join(tree, "app"));
+  mkdirSync(join(tree, "runtime"));
+  writeFileSync(join(tree, "app", "package.json"), JSON.stringify({ version: "0.2.0" }));
+  writeFileSync(join(tree, "runtime", "electron.exe"), "exe");
+  const base = join(dir, "release");
+  await publishTrees(base, "0.2.0", { "win32-x64": tree });
+  const env = { ...process.env, SPEAKMORE_INSTALL_BASE: base };
+  const release = createRelease({ env });
+  const real = createHomes({ paths: winPaths, env, release, stdio: "ignore", platform: "win32", arch: "x64" });
+  const homes = {
+    ...real,
+    // 像 install.ps1 那样：versions 下拼好的原地用，current 指过去
+    install: async (staged) => {
+      writeFileSync(winPaths.currentFile, basename(staged.dir));
+      return 0;
+    },
+  };
+  const updates = createUpdates({
+    paths: winPaths,
+    env,
+    packageDir: join(oldDir, "app"),
+    version: "0.1.0",
+    instance: { status: async () => null, stop: async () => "not-running" },
+    platform: "win32",
+    arch: "x64",
+    now: () => NOW,
+    pid: 999_999,
+    release,
+    homes,
+  });
+  assert.equal((await updates.run({ by: "cli" })).updated, true);
+  const current = readFileSync(winPaths.currentFile, "utf8");
+  assert.match(current, /^0\.2\.0-[0-9a-f]{8}$/);
+  assert.equal(
+    JSON.parse(readFileSync(join(winPaths.versionsDir, current, "app", "package.json"), "utf8")).version,
+    "0.2.0",
+    "current 指着的新版本还在",
   );
 });

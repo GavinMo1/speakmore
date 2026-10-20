@@ -154,6 +154,28 @@ test("路径里带 .asar 的文件当普通文件原样拼（Electron 当 Node �
   assert.ok(result.reusedBytes >= asar.length, `reused ${result.reusedBytes}`);
 });
 
+test("进度：每取好一块报一次（一批几十上千块，等整批取完才报的话只有 0 和 100）", async () => {
+  const source = makeTree(join(dir, "v1"));
+  const store = makeStore();
+  const manifest = await publishTree(source, store);
+  const seen = [];
+  const result = await assembleTree({
+    manifest,
+    dest: join(dir, "out"),
+    seeds: [],
+    fetchObjects: store.fetchObjects,
+    cacheDir: join(dir, "cache"),
+    onProgress: ({ downloadedChunks, totalChunks }) => seen.push([downloadedChunks, totalChunks]),
+  });
+  const total = result.downloadedChunks;
+  assert.ok(total > 5, `${total} 块`);
+  assert.deepEqual(
+    [...new Set(seen.map(([done]) => done))],
+    Array.from({ length: total + 1 }, (_, i) => i),
+  );
+  assert.ok(seen.every(([, of]) => of === total));
+});
+
 test("本机装着上一版：只下变了的块，没变的从本机那份拷", async () => {
   const big = pseudoRandom(3 * 1024 * 1024, 11);
   const old = makeTree(join(dir, "v1"), { big, version: "1.0.0" });
@@ -244,7 +266,7 @@ test("拼到的目录已经有东西：不往里写，免得混进别的文件",
   );
 });
 
-test("清单：越出目录的路径、绝对路径、反斜杠、指到外面的链接、重名的路径、不认识的切法都拒收", async () => {
+test("清单：越出目录的路径、绝对路径、反斜杠、指到外面的链接、重名的路径、不认识的格式都拒收", async () => {
   const good = { format: 1, chunking: "fastcdc-gear32-v1", entries: [{ path: "a", type: "dir" }] };
   const sha = "a".repeat(64);
   const bad = [
@@ -270,7 +292,6 @@ test("清单：越出目录的路径、绝对路径、反斜杠、指到外面�
     () => parseManifest(Buffer.from(JSON.stringify({ ...good, entries: [good.entries[0], good.entries[0]] }))),
     /重名/,
   );
-  assert.throws(() => parseManifest(Buffer.from(JSON.stringify({ ...good, chunking: "other" }))), /切法/);
   assert.throws(() => parseManifest(Buffer.from(JSON.stringify({ ...good, format: 2 }))), /格式/);
 });
 
@@ -292,6 +313,23 @@ test("清单：链接下面不许再有东西（不然顺着链接能写到目�
   // macOS、Windows 的文件系统默认不分大小写：App 是链接时 app/x 也是顺着它写
   assert.throws(() => parse([{ path: "App", type: "link", target: "b" }, dir("b"), dir("app/x")]), /在链接 App 下面/);
   assert.throws(() => parse([dir("app"), dir("App")]), /重名/);
+  // 链接的目标里 .. 只能在最前面：d/e/b → ../x，l → d/e/b/../../../secret 按字面在里面，系统顺着 b 走就出去了
+  assert.throws(
+    () =>
+      parse([
+        dir("d"),
+        dir("d/e"),
+        { path: "d/e/b", type: "link", target: "../x" },
+        dir("d/x"),
+        { path: "l", type: "link", target: "d/e/b/../../../secret" },
+      ]),
+    /l 指到了目录外面/,
+  );
+  // 切法不一样只是认得出的块少了，不拦：不然调一次切块参数，装着的老版本全都更新不了
+  assert.equal(
+    parseManifest(Buffer.from(JSON.stringify({ ...good, chunking: "fastcdc-gear32-v2", entries: [] }))).entries.length,
+    0,
+  );
   assert.throws(() => parse([dir("caf\u00e9"), dir("cafe\u0301")]), /重名/);
   for (const name of ["a:b", "x?", "CON", "nul.txt", "com1", "trailing.", "space ", "tab\tname"]) {
     assert.throws(() => parse([dir(name)]), /路径不对/, name);

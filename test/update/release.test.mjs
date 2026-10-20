@@ -55,28 +55,32 @@ const objectOf = (text) => {
   return [sha256(data), packObject(data)];
 };
 
-test("channel.json：版本号像版本号、每种装法对着一个 sha256 才收；不收的说出问到的是什么", () => {
+test("channel.json：格式号对、版本号像版本号、每种装法对着一个 sha256 才收；不收的说是哪里不对", () => {
   const sha = "a".repeat(64);
-  assert.deepEqual(
-    parseChannel(JSON.stringify({ version: "1.2.3", electron: "44.0.0", targets: { "win32-x64": sha } })),
-    {
-      version: "1.2.3",
-      electron: "44.0.0",
-      targets: { "win32-x64": sha },
-    },
+  const channel = { format: 1, version: "1.2.3", electron: "44.0.0", targets: { "win32-x64": sha } };
+  assert.deepEqual(parseChannel(JSON.stringify(channel)), {
+    version: "1.2.3",
+    electron: "44.0.0",
+    targets: { "win32-x64": sha },
+  });
+  const said = (text) => {
+    try {
+      parseChannel(text);
+    } catch (error) {
+      assert.ok(error instanceof LocalizedError);
+      return zh.text(error.problem);
+    }
+    assert.fail(`收下了 ${text}`);
+  };
+  assert.match(said("<html>502</html>"), /channel\.json 无效/);
+  assert.match(said(JSON.stringify({ ...channel, format: undefined })), /channel\.json 无效/);
+  assert.match(
+    said(JSON.stringify({ ...channel, targets: { "win32-x64": "../../etc/passwd" } })),
+    /channel\.json 无效/,
   );
-  for (const bad of [
-    "<html>502</html>",
-    JSON.stringify({ version: "latest", targets: {} }),
-    JSON.stringify({ version: "1.2.3" }),
-    JSON.stringify({ version: "1.2.3", targets: { "win32-x64": "../../etc/passwd" } }),
-  ]) {
-    assert.throws(
-      () => parseChannel(bad),
-      (error) => error instanceof LocalizedError && /下载地址返回的版本号无效/.test(zh.text(error.problem)),
-      bad,
-    );
-  }
+  assert.match(said(JSON.stringify({ ...channel, version: "latest" })), /版本号无效："latest"/);
+  // 以后的格式这一版看不懂：请用户重装一次，不报成无效、也不当成没有新版本
+  assert.match(said(JSON.stringify({ ...channel, format: 2, version: "2.0.0" })), /2\.0\.0 需要重新安装才能升级/);
 });
 
 test("真的去问、真的下载：用本机的一个目录当下载地址；对象解开核对过才留下，名字就是 sha256", async () => {
@@ -89,7 +93,7 @@ test("真的去问、真的下载：用本机的一个目录当下载地址；�
       [a, packedA],
       [b, packedB],
     ],
-    { version: "9.9.9", electron: "44.0.0", targets: { "win32-x64": a } },
+    { format: 1, version: "9.9.9", electron: "44.0.0", targets: { "win32-x64": a } },
   );
   const server = createRelease({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: root } });
   assert.equal((await server.channel(5)).version, "9.9.9");
@@ -138,7 +142,9 @@ test("清单：取回来核对过再解析；不是清单的（坏了的发布�
   const server = createRelease({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: root } });
   assert.deepEqual(await server.manifest(good), manifest);
   await assert.rejects(server.manifest(bad), (error) => {
-    assert.match(zh.text(error.problem), /更新清单无效：路径不对/);
+    assert.match(zh.text(error.problem), new RegExp(`更新清单（${bad.slice(0, 12)}）无效`));
+    // 哪里不对给排查的人看，跟着 cause 走
+    assert.match(error.cause.message, /路径不对/);
     return true;
   });
 });

@@ -71,6 +71,17 @@ function isSafePath(path) {
   return path.split("/").every(isPlainName);
 }
 
+/**
+ * 链接的目标：相对路径，.. 只能在最前面（先往上走几层，再往下走普通的名字）。
+ * a/b/../c 这种不收：按字面 b/.. 抵消了，系统却是先顺着 b 走（b 要是个链接，就走到别处去了）
+ */
+function isPlainTarget(target) {
+  if (typeof target !== "string" || target === "" || target.startsWith("/") || target.includes("\\")) return false;
+  const parts = target.split("/");
+  const up = parts.findIndex((part) => part !== "..");
+  return up !== -1 && parts.slice(up).every(isPlainName);
+}
+
 /** 按文件系统认的那样比名字：macOS、Windows 默认不分大小写，macOS 也不分 Unicode 的两种写法（é 和 e + ´） */
 const folded = (path) => path.normalize("NFC").toLowerCase();
 
@@ -90,8 +101,9 @@ export function parseManifest(data) {
     throw bad("不是 JSON");
   }
   if (manifest?.format !== MANIFEST_FORMAT) throw bad(`格式是 ${manifest?.format}，这一版只认 ${MANIFEST_FORMAT}`);
-  if (manifest.chunking !== CHUNKING.algorithm)
-    throw bad(`切法是 ${manifest.chunking}，这一版只认 ${CHUNKING.algorithm}`);
+  // 切法只是记一笔、不拦：拼的时候本机的种子按这一版自己的切法切，每块按 sha256 认，切法不一样只是认得出的块少了。
+  // 拦了的话，以后调一次切块的参数，所有装着的老版本都更新不了（更新是装着的那个版本的代码在跑）
+  if (typeof manifest.chunking !== "string") throw bad("没有 chunking");
   if (!Array.isArray(manifest.entries)) throw bad("没有 entries");
   const seen = new Map();
   for (const entry of manifest.entries) {
@@ -115,8 +127,8 @@ export function parseManifest(data) {
   for (const entry of manifest.entries) {
     if (entry.type === "dir") continue;
     if (entry.type === "link") {
-      const resolved = posix.normalize(posix.join(posix.dirname(entry.path), String(entry.target)));
-      if (typeof entry.target !== "string" || entry.target.startsWith("/") || !isSafePath(resolved)) {
+      const resolved = isPlainTarget(entry.target) && posix.join(posix.dirname(entry.path), entry.target);
+      if (!resolved || !isSafePath(resolved)) {
         throw bad(`${entry.path} 指到了目录外面：${JSON.stringify(entry.target)}`);
       }
       continue;

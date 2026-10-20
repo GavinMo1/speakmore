@@ -1,6 +1,6 @@
 // 下载地址上的东西怎么摆。打包发布（scripts/release）、更新（这个目录）、安装脚本（install.sh、install.ps1）共用这一份：
 //
-//   channel.json                    最新的发布：版本号、用哪个 Electron，每种装法（TARGETS）用哪份清单。只缓存一分钟
+//   channel.json                    最新的发布：格式号、版本号、用哪个 Electron，每种装法（TARGETS）用哪份清单。只缓存一分钟
 //   store/<sha256>                  对象：块和清单，名字是原始内容的 sha256，存的是 zstd 压过的（objects.mjs）。
 //                                   按内容存，同一块只存一份，传上去就不再变。更新只取本机缺的块（assemble.mjs）
 //   install.sh、install.ps1         安装脚本
@@ -13,6 +13,11 @@
 //   SpeakMore-Setup-x64.exe          Windows 直接下载的安装程序：身上带着同一棵树（zstd 压的），双击就装
 
 export const CHANNEL = "channel.json";
+/**
+ * channel.json 的格式号。改了清单的格式、下载地址的摆法这类装着的老版本看不懂的东西，就加一：
+ * 老版本看到更新的格式号，会请用户重装一次，而不是报错或者一直以为自己是最新的
+ */
+export const CHANNEL_FORMAT = 1;
 export const objectPath = (sha) => `store/${sha}`;
 export const versionDir = (version) => `v${version}`;
 

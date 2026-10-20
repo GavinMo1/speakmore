@@ -127,6 +127,9 @@ test(
     // 上次被杀掉留下的
     mkdirSync(join(paths.home, ".update-9.9.8-deadbeef"), { recursive: true });
 
+    // 更新那一层拿到锁以后先清上次留下的
+    assert.equal(homes.clean(), null);
+    assert.equal(existsSync(join(paths.home, ".update-9.9.8-deadbeef")), false);
     const staged = await homes.stage(channel, { seeds: homes.seeds(), cacheDir });
     assert.match(staged.dir, /\.update-9\.9\.9-[0-9a-f]{8}$/);
     assert.equal(join(staged.dir, ".."), paths.home);

@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalizedError, msg } from "../i18n/index.mjs";
 import { run } from "./exec.mjs";
-import { CHANNEL, objectPath } from "./layout.mjs";
+import { CHANNEL, CHANNEL_FORMAT, objectPath } from "./layout.mjs";
 import { parseManifest } from "./manifest.mjs";
 import { unpackObject } from "./objects.mjs";
 import { parseVersion } from "./versions.mjs";
@@ -48,25 +48,39 @@ async function canParallel(env) {
 }
 
 /**
- * 核对 channel.json：版本号像版本号，每种装法对着一份清单的 sha256
+ * 核对 channel.json：格式是这一版认得的，版本号像版本号，每种装法对着一份清单的 sha256。
+ * 格式号比这一版认得的新：以后改了清单的格式或摆法，装着的老版本拼不出来，只能请用户重装一次
+ * （0.10.1 就是这样卡在了不再更新的 latest 上），所以说清楚怎么办，不报成"无效"
  * @returns {{ version: string, electron: string, targets: Record<string, string> }}
  */
 export function parseChannel(text) {
+  const shown = JSON.stringify(String(text).slice(0, 80));
   let channel;
   try {
     channel = JSON.parse(text);
   } catch {
-    throw new LocalizedError(msg("update.badVersion", { value: JSON.stringify(String(text).slice(0, 80)) }));
+    throw new LocalizedError(msg("update.badChannel", { value: shown }));
   }
   const version = parseVersion(channel?.version);
-  const targets = channel?.targets;
+  if (Number.isInteger(channel?.format) && channel.format > CHANNEL_FORMAT) {
+    throw new LocalizedError(msg("update.reinstall", { version: version ?? String(channel.version) }));
+  }
+  if (channel?.format !== CHANNEL_FORMAT) throw new LocalizedError(msg("update.badChannel", { value: shown }));
+  if (version === null) throw new LocalizedError(msg("update.badVersion", { value: JSON.stringify(channel.version) }));
+  const targets = channel.targets;
   const valid =
-    version !== null &&
-    typeof targets === "object" &&
-    targets !== null &&
-    Object.values(targets).every((sha) => SHA256.test(sha));
-  if (!valid) throw new LocalizedError(msg("update.badVersion", { value: JSON.stringify(String(text).slice(0, 80)) }));
+    typeof targets === "object" && targets !== null && Object.values(targets).every((sha) => SHA256.test(sha));
+  if (!valid) throw new LocalizedError(msg("update.badChannel", { value: shown }));
   return { version, electron: String(channel.electron ?? ""), targets };
+}
+
+/** 删不掉不碍事的临时文件：删不掉（Windows 上杀毒软件正扫着刚写的文件）就留着，缓存目录换成了会整个删 */
+function removeQuietly(path, options = {}) {
+  try {
+    rmSync(path, { force: true, ...options });
+  } catch {
+    // 留着：只占一点地方，不影响结果
+  }
 }
 
 /**
@@ -102,6 +116,8 @@ export function createRelease({ env }) {
     parallel ??= await canParallel(env);
     for (let start = 0; start < shas.length; start += BATCH) {
       const batch = shas.slice(start, start + BATCH);
+      // 上次被打断时留下的半截：curl 这次要是连上都没连上，它们会被当成这次取到的
+      for (const sha of batch) removeQuietly(join(into, `${sha}.part`));
       const config = join(into, `.curl-${process.pid}-${start}.txt`);
       writeFileSync(
         config,
@@ -127,7 +143,7 @@ export function createRelease({ env }) {
         "-K",
         config,
       ]);
-      rmSync(config, { force: true });
+      removeQuietly(config);
       const missing = [];
       let corrupt = null;
       for (const sha of batch) {
@@ -140,11 +156,15 @@ export function createRelease({ env }) {
         try {
           unpackObject(packed, sha);
         } catch (error) {
-          rmSync(part, { force: true });
-          corrupt ??= { sha, error };
+          removeQuietly(part);
+          // curl 说了没下完（断了、卡住了）：是没取到，不是取到了坏的
+          if (code !== 0) missing.push(sha);
+          else corrupt ??= { sha, error };
           continue;
         }
-        renameSync(part, join(into, sha));
+        // 核对过的内容另写一份到正式的名字，不改名：Windows 上刚写出来的文件常被杀毒软件占着，改名会失败
+        writeFileSync(join(into, sha), packed);
+        removeQuietly(part);
         onBytes?.(packed.length);
       }
       if (missing.length > 0) {
@@ -190,10 +210,11 @@ export function createRelease({ env }) {
         try {
           return parseManifest(unpackObject(readFileSync(join(dir, sha)), sha));
         } catch (error) {
-          throw new LocalizedError(msg("update.badManifest", { reason: error.message }), { cause: error });
+          // 哪里不对（error.message）是给排查的人看的，跟着 cause 进日志；给用户的话只说是哪份清单
+          throw new LocalizedError(msg("update.badManifest", { manifest: sha.slice(0, 12) }), { cause: error });
         }
       } finally {
-        rmSync(dir, { recursive: true, force: true });
+        removeQuietly(dir, { recursive: true });
       }
     },
   };

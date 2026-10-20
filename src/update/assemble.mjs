@@ -41,6 +41,18 @@ function filesUnder(root) {
 }
 
 /**
+ * 写满为止：writeSync 碰上磁盘满、文件大小上限时可能只写进一部分而不报错（返回写了多少），
+ * 不接着写的话拼出来的文件是截断的，到核对签名时才以"签名无效"冒出来
+ */
+function writeAll(fd, data) {
+  for (let offset = 0; offset < data.length; ) {
+    const written = writeSync(fd, data, offset);
+    if (written <= 0) throw new Error(`写不进去（只写了 ${offset} / ${data.length} 字节）`);
+    offset += written;
+  }
+}
+
+/**
  * 把本机的种子切块，记下清单要的块在哪个文件的哪个位置
  * @param {string[]} seeds 本机装着的几份（目录）。不存在的跳过
  * @returns {Promise<Map<string, { file: string, offset: number, size: number }>>}
@@ -93,15 +105,25 @@ async function assemble({ manifest, dest, seeds = [], seedIndex, fetchObjects, c
   let downloadedChunks = 0;
   let downloadedBytes = 0;
   let reusedBytes = 0;
-  const fetchSome = async (shas) => {
+  /** 要下几块：本机缺的，加上后来发现本机那份对不上、缓存里坏了要重下的 */
+  let totalChunks = missing.length;
+  /** 这一次下的：拼的时候从缓存里取它们不算"取自本机"（缓存里上次就有的算） */
+  const fetchedNow = new Set();
+  const report = () => onProgress?.({ downloadedChunks, totalChunks, downloadedBytes });
+  const fetchSome = async (shas, { extra = false } = {}) => {
+    if (extra) {
+      totalChunks += shas.length;
+      report();
+    }
+    // 每取好一个对象报一次：一批几十上千个，等整批取完再报的话进度只有 0 和 100
     await fetchObjects(shas, cacheDir, (bytes) => {
+      downloadedChunks += 1;
       downloadedBytes += bytes;
-      onProgress?.({ downloadedChunks, totalChunks: missing.length, downloadedBytes });
+      report();
     });
-    downloadedChunks += shas.length;
-    onProgress?.({ downloadedChunks, totalChunks: missing.length, downloadedBytes });
+    for (const sha of shas) fetchedNow.add(sha);
   };
-  onProgress?.({ downloadedChunks, totalChunks: missing.length, downloadedBytes });
+  report();
   if (missing.length > 0) await fetchSome(missing);
   signal?.throwIfAborted();
 
@@ -126,12 +148,14 @@ async function assemble({ manifest, dest, seeds = [], seedIndex, fetchObjects, c
         return data;
       }
     }
-    if (!existsSync(cachedPath(sha))) await fetchSome([sha]);
+    if (!existsSync(cachedPath(sha))) await fetchSome([sha], { extra: true });
     try {
-      return unpackObject(readFileSync(cachedPath(sha)), sha);
+      const data = unpackObject(readFileSync(cachedPath(sha)), sha);
+      if (!fetchedNow.has(sha)) reusedBytes += size;
+      return data;
     } catch {
       rmSync(cachedPath(sha), { force: true });
-      await fetchSome([sha]);
+      await fetchSome([sha], { extra: true });
       try {
         return unpackObject(readFileSync(cachedPath(sha)), sha);
       } catch (error) {
@@ -157,7 +181,7 @@ async function assemble({ manifest, dest, seeds = [], seedIndex, fetchObjects, c
       const mode = entry.exec ? 0o755 : 0o644;
       const fd = openSync(target, "wx", mode);
       try {
-        for (const [sha, size] of entry.chunks) writeSync(fd, await chunkData(sha, size));
+        for (const [sha, size] of entry.chunks) writeAll(fd, await chunkData(sha, size));
       } finally {
         closeSync(fd);
       }

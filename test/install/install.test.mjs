@@ -398,6 +398,26 @@ test("从拼好的树装：家目录写成 a//b、末尾带 /、经过符号链�
   assert.equal(installedVersion(), "10.0.0");
 });
 
+test("0.11.0 以前的版本（包是 tar.gz）不装：说清楚怎么办；0.10.0 及以前的 speakmore update 就是这么指定 v0.10.1 的", () => {
+  const result = install({ env: { SPEAKMORE_VERSION: "v0.10.1" } });
+  assertRefused(result, /can't install v0\.10\.1[\s\S]*packaged differently[\s\S]*v0\.10\.1\/SpeakMore-arm64\.dmg/);
+  assert.equal(existsSync(join(home(), "app")), false);
+});
+
+test("从拼好的树装：只是改名换上，磁盘剩得不多也装（拼的时候已经占过地方了）", () => {
+  assert.equal(install().code, 0);
+  const prepared = join(home(), ".update-10.0.0-0badf00d");
+  execFileSync("mv", [makeTree("10.0.0"), prepared]);
+  const { code, out } = install({
+    env: { SPEAKMORE_INSTALL_FROM: prepared, FAKE_FREE_KB: String(300 * 1024) },
+    args: ["--no-start"],
+  });
+  assert.equal(code, 0, out);
+  assert.equal(installedVersion(), "10.0.0");
+  // 下载安装照旧要查
+  assertRefused(install({ env: { FAKE_FREE_KB: String(300 * 1024) } }), /Not enough disk space/);
+});
+
 test("不认识的参数：不装", () => {
   assertRefused(install({ args: ["--force"] }), /Unknown option: --force/);
   assert.equal(existsSync(home()), false);

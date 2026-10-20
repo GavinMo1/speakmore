@@ -310,7 +310,7 @@ function harness({
         updates.checks.push(timeoutSeconds);
         const answer = typeof latest === "function" ? latest() : latest;
         if (answer instanceof Error) throw answer;
-        return parseChannel(JSON.stringify({ version: answer, electron: "44.0.0", targets: {} }));
+        return parseChannel(JSON.stringify({ format: 1, version: answer, electron: "44.0.0", targets: {} }));
       },
     },
     bundles: {
@@ -318,6 +318,7 @@ function harness({
         updates.lookedFor.push(pid);
         return app;
       },
+      clean: () => null,
       async stage({ version }, path) {
         updates.staged.push({ version, path, stillRunning: daemon.current !== null });
         appInstall();
@@ -340,6 +341,7 @@ function harness({
     homes: {
       // 像是用安装脚本装的：程序在家目录的 app 里，或者 Windows 的 versions 下
       find: () => (existsSync(paths.appDir) || existsSync(paths.versionsDir) ? { version: io.version } : null),
+      clean: () => null,
       seeds: () => [],
       async stage({ version }) {
         return { dir: `staged-${version}`, version, downloadedBytes: 0, reusedBytes: 0, discard() {} };

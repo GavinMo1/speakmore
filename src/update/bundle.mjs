@@ -70,7 +70,7 @@ async function teamOf(app) {
  * @param {Record<string, string | undefined>} options.env SPEAKMORE_APP 指定 App 在哪（测试用）；打开 App 时交给它
  * @param {ReturnType<import("./release.mjs").createRelease>} options.release
  * @param {NodeJS.Platform} [options.platform]
- * @param {string} [options.arch] 下哪种芯片的安装包：和装着的这一份一样
+ * @param {string} [options.arch] 拼哪种芯片的 App：和装着的这一份一样
  */
 export function createBundles({ env, release, platform = process.platform, arch = process.arch }) {
   return {
@@ -96,6 +96,20 @@ export function createBundles({ env, release, platform = process.platform, arch 
         if (info?.id === APP_BUNDLE_ID) return { path, version: info.version };
       }
       return null;
+    },
+
+    /**
+     * 清掉上次被打断时在 app 旁边拼了一半的 .SpeakMore.app.new（.old 不碰：对调到一半被打断时，装着的那个可能就在它那里）。
+     * 删不掉的交回在哪、为什么
+     */
+    clean(app) {
+      const staged = join(dirname(app), `.${basename(app)}.new`);
+      try {
+        rmSync(staged, { recursive: true, force: true });
+        return null;
+      } catch (error) {
+        return { dir: staged, reason: error.code ?? error.message };
+      }
     },
 
     /**
