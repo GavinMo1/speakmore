@@ -13,7 +13,7 @@ import { classifyHome, copyHome, measureHome, verifyCopy } from "./copy.mjs";
 import { canRehome, installerIn, rehome } from "./installer.mjs";
 import { probeTarget } from "./probe.mjs";
 import { readMoveRecord, stillMoving, writeMoveRecord } from "./state.mjs";
-import { checkTarget } from "./target.mjs";
+import { canonicalDir, checkTarget } from "./target.mjs";
 
 // 把整个家目录搬到别处（speakmore move、App 设置里的"存储位置"）。命令行和 App 都只调这里。按这个顺序：
 //   1. 检查新位置（target.mjs）、本机每一份 SpeakMore 都认得换家（家目录里的程序、Mac 上"应用程序"里的 App）
@@ -60,10 +60,13 @@ function removeOurs(paths, home) {
   return rest;
 }
 
-/** 记下 SpeakMore 在哪：默认位置不要定位文件，别处就写 */
+/** 两个写法是不是同一个家目录（经过符号链接、大小写不同的也认，见 target.mjs 的 canonicalDir） */
+const sameDir = (a, b, platform) => sameHome(canonicalDir(a, platform), canonicalDir(b, platform), platform);
+
+/** 记下 SpeakMore 在哪：默认位置不要定位文件，别处就写（按正式写法） */
 function commitLocation(paths, home, defaultHome, platform) {
-  if (sameHome(home, defaultHome, platform)) removeLocation(paths.locationFile);
-  else writeLocation(paths.locationFile, { home });
+  if (sameDir(home, defaultHome, platform)) removeLocation(paths.locationFile);
+  else writeLocation(paths.locationFile, { home: canonicalDir(home, platform) });
 }
 
 /**
@@ -102,10 +105,10 @@ export async function settleMove({
   if (Number.isInteger(moving.pid) && moving.pid !== pid && alive(moving.pid)) {
     throw new LocalizedError(msg("move.inProgress", { home: location.home, to: moving.to }));
   }
-  if (sameHome(moving.to, paths.home, platform)) {
+  if (sameDir(moving.to, paths.home, platform)) {
     throw new LocalizedError(msg("move.unfinishedCopy", { home: paths.home, from: location.home }));
   }
-  if (!sameHome(location.home, paths.home, platform)) return;
+  if (!sameDir(location.home, paths.home, platform)) return;
   const from = paths.home;
   if (existsSync(moving.to) && installerIn(from, platform) !== null) {
     const code = await runRehome({ home: from, previous: moving.to, env, stdio, platform });
@@ -202,8 +205,7 @@ export function createMove({
    */
   function checkRecorded() {
     const recorded = readLocationRecord(paths.locationFile, platform)?.home ?? defaultHome;
-    if (!sameHome(recorded, from, platform))
-      throw new LocalizedError(msg("move.notRecorded", { home: from, recorded }));
+    if (!sameDir(recorded, from, platform)) throw new LocalizedError(msg("move.notRecorded", { home: from, recorded }));
   }
 
   /** 检查新位置、本机的每一份、盘够不够。交回新家目录、要搬的、要拷多少 */
@@ -272,7 +274,10 @@ export function createMove({
       touched = true;
       record.to = to;
       writeMoveRecord(paths, record);
-      writeLocation(paths.locationFile, { home: from, moving: { to, pid, startedAt: record.startedAt } });
+      writeLocation(paths.locationFile, {
+        home: canonicalDir(from, platform),
+        moving: { to, pid, startedAt: record.startedAt },
+      });
 
       if (prepared.running !== null) {
         if (prepared.running !== "hung") stopped = prepared.running.packaged ? "bundle" : "home";

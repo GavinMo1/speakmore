@@ -2,7 +2,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { msg, problemOf } from "../i18n/index.mjs";
 import { probeTarget } from "../move/probe.mjs";
-import { checkLength, homeIn } from "../move/target.mjs";
+import { canonicalDir, checkLength, homeIn } from "../move/target.mjs";
 import { locationFileOf, writeLocation } from "../storage/location.mjs";
 import { legacyDataDir } from "../storage/paths.mjs";
 
@@ -74,8 +74,8 @@ export async function chooseHome({
       properties: ["openDirectory", "createDirectory"],
     });
     if (picked.canceled || picked.filePaths.length === 0) continue;
-    const home = homeIn(picked.filePaths[0], platform);
-    if (home === defaultHome) return defaultHome;
+    const home = canonicalDir(homeIn(picked.filePaths[0], platform), platform);
+    if (home === canonicalDir(defaultHome, platform)) return defaultHome;
     try {
       checkLength(home, platform);
       if (existsSync(home) && readdirSync(home).length > 0) {

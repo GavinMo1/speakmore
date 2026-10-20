@@ -349,3 +349,46 @@ test("搬家的那个还在：不启动；从拷了一半的那一份启动：�
   await settle(paths, false);
   assert.deepEqual(readLocationRecord(paths.locationFile, "darwin"), { home: from, moving: null });
 });
+
+test(
+  "用户目录经过符号链接（/tmp 其实是 /private/tmp）：启动脚本报的真实路径和用户目录算出来的默认位置认作同一个",
+  posixOnly,
+  async (t) => {
+    // 不解开链接的写法当用户目录，启动脚本（pwd -P）交给程序的是解开后的
+    const linked = mkdtempSync("/tmp/sm-l-");
+    t.after(() => rmSync(linked, { recursive: true, force: true }));
+    const real = realpathSync(linked);
+    assert.notEqual(linked, real);
+    put(join(real, ".speakmore", "settings.json"), "{}");
+    const paths = resolvePaths({ SPEAKMORE_HOME: join(real, ".speakmore") }, linked, "darwin");
+    const disk = join(real, "disk");
+    mkdirSync(disk);
+    const move = createMove({
+      paths,
+      env: {},
+      instance: fakeInstance(),
+      platform: "darwin",
+      userHome: linked,
+      bundles: { find: async () => null },
+    });
+    const plan = await move.plan(join(linked, "disk"));
+    assert.equal(plan.to, join(real, "disk", ".speakmore"));
+    await move.run({ folder: join(linked, "disk"), by: "cli" });
+    assert.deepEqual(readLocationRecord(paths.locationFile, "darwin"), {
+      home: join(real, "disk", ".speakmore"),
+      moving: null,
+    });
+    // 搬回默认位置（用不解开的写法给）：定位文件删掉
+    const back = createMove({
+      paths: resolvePaths({ SPEAKMORE_HOME: join(real, "disk", ".speakmore") }, linked, "darwin"),
+      env: {},
+      instance: fakeInstance(),
+      platform: "darwin",
+      userHome: linked,
+      bundles: { find: async () => null },
+    });
+    await back.run({ folder: linked, by: "cli" });
+    assert.equal(existsSync(paths.locationFile), false);
+    assert.equal(existsSync(join(real, ".speakmore", "settings.json")), true);
+  },
+);
