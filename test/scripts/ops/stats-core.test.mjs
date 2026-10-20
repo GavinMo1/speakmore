@@ -7,6 +7,7 @@ import {
   findSelf,
   hashIp,
   hourlyCap,
+  knownSizes,
   missAlerts,
   objectMissAlerts,
   packageKind,
@@ -335,4 +336,20 @@ test("更新要的块真用户拿到 404：报出来；自测的、早于 since 
   assert.equal(alerts.length, 1);
   assert.match(alerts[0].text, /404 了 2 次（2 个真用户，最近一次 10-19 11:00）/);
   assert.deepEqual(objectMissAlerts(rows.slice(2), { self, domain: "dl.example", since: "20261018000000" }), []);
+});
+
+test("包的大小：发过的一直记着（桶里删了旧版本，它们的下载照样折算得出来）；块不记；新列出来的为准", () => {
+  const before = { "speakmore/v0.10.1/SpeakMore-arm64.dmg": 100, "speakmore/install.sh": 10 };
+  const listed = {
+    "speakmore/v0.11.0/SpeakMore-arm64.dmg": 105,
+    "speakmore/install.sh": 18,
+    "speakmore/store/abc": 5,
+    "other/x": 1,
+  };
+  assert.deepEqual(knownSizes(before, listed, "speakmore"), {
+    "speakmore/v0.10.1/SpeakMore-arm64.dmg": 100,
+    "speakmore/install.sh": 18,
+    "speakmore/v0.11.0/SpeakMore-arm64.dmg": 105,
+  });
+  assert.deepEqual(knownSizes(null, { "speakmore/a": 1 }, "speakmore"), { "speakmore/a": 1 });
 });

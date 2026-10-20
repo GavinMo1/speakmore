@@ -105,6 +105,21 @@ const round2 = (x) => Math.round(x * 100) / 100;
 const PHONE = /iPhone|iPad|Android|Mobile/;
 
 /**
+ * 下载地址上每个文件多大（折算下载次数用）：在上次记的基础上，用这次从桶里列出来的盖上去。
+ * 发过的包一直记着：旧版本从桶里删了，日志里它们的下载照样折算得出来，也不会被当成点到了不存在的文件。
+ * 更新的块（store/ 下）成千上万、不算下载量，不记
+ * @param {Record<string, number> | null} before 上次记的
+ * @param {Record<string, number>} listed 这次从桶里列出来的（对象名 → 字节）
+ * @param {string} prefix 发布包在桶里的前缀
+ */
+export function knownSizes(before, listed, prefix) {
+  const fresh = Object.entries(listed).filter(
+    ([key]) => key.startsWith(`${prefix}/`) && !key.startsWith(`${prefix}/store/`),
+  );
+  return { ...(before ?? {}), ...Object.fromEntries(fresh) };
+}
+
+/**
  * 折算下载量。sizes：Map<路径, 字节数>（路径带开头的 /）；self：findSelf 的结果。
  * 只算 GET 且 2xx 的；每个包按字节折算，自测的单独记。
  */

@@ -25,14 +25,12 @@ fail() {
 
 [ -f "$config" ] || fail "没有本机配置 $config"
 # 环境里已经给了的以环境为准，配置只补没给的
-bucket="${COS_BUCKET:-}" region="${COS_REGION:-}" media="${SITE_MEDIA_BUCKET:-}" models="${MODELS_BUCKET:-}"
+bucket="${COS_BUCKET:-}" region="${COS_REGION:-}" media="${SITE_MEDIA_BUCKET:-}"
 # shellcheck source=/dev/null
 . "$config"
 export COS_BUCKET="${bucket:-${COS_BUCKET:-}}" COS_REGION="${region:-${COS_REGION:-}}"
 # 官网图片的桶（website/scripts/upload-media.mjs），没配也不影响发布
 export SITE_MEDIA_BUCKET="${media:-${SITE_MEDIA_BUCKET:-}}"
-# 本地模型老的国内源：只有 npm run stats 还看它的下载量，没配也不影响发布
-export MODELS_BUCKET="${models:-${MODELS_BUCKET:-}}"
 [ -n "$COS_BUCKET" ] && [ -n "$COS_REGION" ] || fail "$config 里的 COS_BUCKET 或 COS_REGION 是空的"
 
 if [ -n "${TENCENTCLOUD_SECRET_ID:-}" ] && [ -n "${TENCENTCLOUD_SECRET_KEY:-}" ]; then exec "$@"; fi

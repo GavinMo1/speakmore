@@ -26,6 +26,7 @@ import {
   findSelf,
   gb,
   hashIp,
+  knownSizes,
   missAlerts,
   objectMissAlerts,
   parseLogLine,
@@ -49,8 +50,6 @@ const download = new URL(site.downloadBase);
 // 域名和各自的桶：桶名在 .machine.env，with-cos-key.sh 导进环境
 const DOMAINS = [
   { name: download.host, role: "发布包", bucket: process.env.COS_BUCKET },
-  // 老的模型国内源：模型已经改从魔搭下，这个域名和桶等老版本的下载停下来、下线后从这里删掉
-  { name: "models.speakmore.zephyrxiang.com", role: "老的模型国内源", bucket: process.env.MODELS_BUCKET },
   { name: new URL(site.mediaBase).host, role: "官网与 README 的图", bucket: process.env.SITE_MEDIA_BUCKET },
 ];
 const PREFIX = download.pathname.replace(/^\/+|\/+$/g, ""); // 发布包在桶里的前缀，speakmore
@@ -238,11 +237,7 @@ async function main() {
       });
       if (d.name === download.host) {
         mkdirSync(CACHE, { recursive: true });
-        writeFileSync(
-          SIZES,
-          // 更新的块（store/ 下）成千上万、不算下载量，不记大小
-          `${JSON.stringify(Object.fromEntries(Object.entries(files).filter(([k]) => k.startsWith(`${PREFIX}/`) && !k.startsWith(`${PREFIX}/store/`))))}\n`,
-        );
+        writeFileSync(SIZES, `${JSON.stringify(knownSizes(readJson(SIZES, null), files, PREFIX))}\n`);
       }
     }
     progress("同步访问日志…");
