@@ -982,6 +982,9 @@ export default {
   speakmore theme <名字>         换一套（{themes}），当场生效不用重启
   speakmore settings            打开设置（去系统设置授权时用）
   speakmore logs [-n 行数] [-f]  看日志，-f 一直跟着
+  speakmore move [<文件夹>] [--yes]
+                                搬家：把 SpeakMore 的目录（程序、本机模型、录音、设置）整个搬进那个文件夹里的 .speakmore，
+                                比如搬到另一块磁盘。speakmore move ~ 搬回默认位置。不写文件夹就看现在在哪
   speakmore uninstall [--keep-data] [--yes]
                                 卸载：停掉后台，把 SpeakMore 的目录整个删掉。--keep-data 留下设置、key、词典、历史和录音
 
@@ -1010,6 +1013,7 @@ export default {
       logs: "speakmore logs [-n 行数] [-f]",
       settings: "speakmore settings",
       uninstall: "speakmore uninstall [--keep-data] [--yes]",
+      move: "speakmore move [<文件夹>] [--yes]",
       config: "用法：speakmore config | speakmore config set <名字> <值> | speakmore config unset <名字>",
       theme: "用法：speakmore theme | speakmore theme <名字>",
       model: "用法：speakmore model | speakmore model <厂商>[/<模型>] | speakmore model check [<厂商>[/<模型>]]",
@@ -1323,6 +1327,20 @@ speakmore help     全部命令`,
     logs: {
       none: "还没有日志：SpeakMore 启动过之后会写到 {file}",
     },
+    move: {
+      where: "SpeakMore 现在在 {home}。",
+      how: "要搬到别处（比如另一块磁盘）：speakmore move <文件夹>，会搬进那个文件夹里的 .speakmore。搬回默认位置：speakmore move ~",
+      needsConfirm: "搬家要先确认。不在终端里运行时加上 --yes。",
+      plan: "要把 SpeakMore 从 {from} 搬到 {to}：拷 {size}（{count} 个文件），程序、本机模型、录音和设置都在里面。\n搬的时候 SpeakMore 会先停下，搬完自动重新打开；没搬成的话一切照旧。",
+      unknown: "旧目录里不是 SpeakMore 的东西不搬，也不删：{items}",
+      confirm: "确定搬吗？输入 y 再按回车：",
+      aborted: "没有动。",
+      progress: "已拷 {percent}%（{done} / {total}）",
+      done: "SpeakMore 已经搬到 {to}（{count} 个文件，{size}）。",
+      removed: "旧目录 {dir} 已经删掉。",
+      later: "旧目录 {dir} 正被这条命令用着，等它退出后几秒内删掉。",
+      left: "旧目录 {dir} 里还留着不是 SpeakMore 的东西，没有动：{items}",
+    },
     uninstall: {
       yours: "设置、key、词典、历史和录音",
       needsConfirm: "卸载要先确认。不在终端里运行时加上 --yes。",
@@ -1334,6 +1352,7 @@ speakmore help     全部命令`,
       keychainItem: "钥匙串里用来加密 key 的那一条",
       keychainFailed: "钥匙串里用来加密 key 的那一条没删掉（{reason}）：可以在“钥匙串访问”里搜 SpeakMore 手动删",
       removedAll: "{home}（程序、运行环境，以及你的{yours}）",
+      locationFile: "记着 SpeakMore 装在哪的定位文件 {file}",
       // Windows：install.ps1 在用户 Path 里加的那一项、App 设置里开过的开机启动
       pathEntry: "用户 Path 里的 {entry}",
       loginItem: "开机启动",

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -143,6 +143,19 @@ test("带 BOM 的也认（PowerShell 5.1 写 UTF-8 常带）；removeLocation �
   removeLocation(file);
   removeLocation(file);
   assert.equal(readLocation(file, "win32"), null);
+});
+
+test("removeLocation：所在的目录空了一起删，不空就留着", (t) => {
+  const dir = join(tempDir(t), "com.zephyrxiang.speakmore");
+  const file = join(dir, "location.json");
+  writeLocation(file, { home: "/a/.speakmore" });
+  removeLocation(file);
+  assert.equal(existsSync(dir), false);
+  writeLocation(file, { home: "/a/.speakmore" });
+  writeFileSync(join(dir, "other"), "x");
+  removeLocation(file);
+  assert.equal(existsSync(file), false);
+  assert.equal(existsSync(join(dir, "other")), true);
 });
 
 test("forgetLocation：定位文件坏了时不删（不知道它指着哪）", (t) => {

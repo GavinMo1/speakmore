@@ -1,4 +1,14 @@
-import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
+import {
+  closeSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmdirSync,
+  rmSync,
+  writeSync,
+} from "node:fs";
 import { posix, win32 } from "node:path";
 import { LocalizedError, msg } from "../i18n/index.mjs";
 
@@ -129,9 +139,15 @@ export function writeLocation(file, record) {
   }
 }
 
-/** 删掉定位文件（搬回默认位置时）。本来就没有不算错 */
+/** 删掉定位文件（搬回默认位置、卸载时）。本来就没有不算错 */
 export function removeLocation(file) {
   rmSync(file, { force: true });
+  // 它所在的目录只放它一个：空了也删掉，不留空目录。删不掉（不空、没权限）只是多一个空目录，不影响什么，不报
+  try {
+    rmdirSync(pathModuleOfFile(file).dirname(file));
+  } catch (error) {
+    if (!error.code) throw error;
+  }
 }
 
 /**

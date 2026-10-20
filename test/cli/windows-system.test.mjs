@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
-import { isOurShortcut, removeLoginItem, removePathEntry } from "../../src/cli/windows-system.mjs";
+import { clearUserHome, isOurShortcut, removeLoginItem, removePathEntry } from "../../src/cli/windows-system.mjs";
 
 const windowsOnly = { skip: process.platform !== "win32" && "要在 Windows 上起 PowerShell" };
 
@@ -27,6 +27,37 @@ test("退出后再删：叫它的进程马上就退出，那几个目录照样�
   // 起两次 PowerShell 加上等的那一下，真机上两秒左右；整个文件只有 5 秒（--test-timeout）
   for (let waited = 0; existsSync(doomed) && waited < 4000; waited += 100) await delay(100);
   assert.equal(existsSync(doomed), false, "叫它的进程退出 4 秒后目录还在");
+});
+
+test("搬家后删旧目录：等叫它的进程退出，只删我们的；还有别人的东西就留着它们和 MOVED.json", windowsOnly, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sm-winsys-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const homes = { clean: join(dir, "clean"), mixed: join(dir, "mixed [1]") };
+  for (const home of Object.values(homes)) {
+    mkdirSync(join(home, "versions", "0.12.0"), { recursive: true });
+    writeFileSync(join(home, "versions", "0.12.0", "electron.exe"), "");
+    writeFileSync(join(home, "settings.json"), "{}");
+    writeFileSync(join(home, "MOVED.json"), "{}");
+  }
+  writeFileSync(join(homes.mixed, "notes.txt"), "用户自己的");
+  const script = join(dir, "caller.mjs");
+  const module = pathToFileURL(join(import.meta.dirname, "../../src/cli/windows-system.mjs")).href;
+  writeFileSync(
+    script,
+    `import { removeHomeAfterExit } from ${JSON.stringify(module)};
+for (const home of process.argv.slice(2)) removeHomeAfterExit(home, ["versions", "settings.json"], [process.pid]);
+`,
+  );
+  execFileSync(process.execPath, [script, homes.clean, homes.mixed]);
+  for (let waited = 0; existsSync(homes.clean) && waited < 4000; waited += 100) await delay(100);
+  assert.equal(existsSync(homes.clean), false, "只有我们的东西的旧目录 4 秒后还在");
+  assert.equal(existsSync(join(homes.mixed, "versions")), false);
+  assert.equal(existsSync(join(homes.mixed, "notes.txt")), true);
+  assert.equal(existsSync(join(homes.mixed, "MOVED.json")), true);
+});
+
+test("用户环境变量 SPEAKMORE_HOME 不是指着这个目录的：不动", windowsOnly, () => {
+  assert.equal(clearUserHome(join(tmpdir(), "sm-winsys-nowhere", ".speakmore")), false);
 });
 
 test("没有那一项时如实说没有，不报错：开机启动、Path 里都没有这个家目录的", windowsOnly, () => {

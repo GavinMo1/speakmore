@@ -6,6 +6,7 @@ import { ALREADY_RUNNING_EXIT_CODE } from "../control.mjs";
 import { LocalizedError, msg } from "../i18n/index.mjs";
 import { createInstance } from "../instance.mjs";
 import { rotateIfLarge } from "../log.mjs";
+import { settleMove } from "../move/index.mjs";
 import { ensureHome } from "../storage/paths.mjs";
 import { ensureHelper as defaultEnsureHelper } from "./native-helper.mjs";
 
@@ -79,6 +80,8 @@ export function createDaemon({
   // 第一次启动要等用户点麦克风的授权框，所以给得宽
   readyTimeoutMs = 90_000,
   quitTimeoutMs = 5_000,
+  // 起之前看一眼有没有搬到一半的（src/move）：正在搬就不起，上次断在半路的先收拾好
+  settle = (report) => settleMove({ paths, env, report }),
 }) {
   // 问状态、请它退出是这个家目录里正在运行的那个的事，命令行和更新共用（src/instance.mjs）
   const instance = createInstance({ paths, locale, kill, commandOf, pollMs, statusTimeoutMs, quitTimeoutMs });
@@ -95,6 +98,7 @@ export function createDaemon({
      * @returns {Promise<object>} 启动后的状态；等得太久时 starting 仍是 true
      */
     async start({ onProgress }) {
+      await settle(onProgress);
       ensureHelper(packageDir, { onBuild: () => onProgress(msg("cli.daemon.building")) });
       const electron = resolveElectron(onProgress);
 

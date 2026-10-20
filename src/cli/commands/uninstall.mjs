@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, rmSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { msg } from "../../i18n/index.mjs";
+import { forgetLocation } from "../../storage/location.mjs";
 import { STAGING_PREFIX } from "../../update/home.mjs";
 import { noPositionals, parse, UsageError } from "../common.mjs";
 
@@ -128,6 +129,10 @@ export async function uninstall(args, io) {
       remove(paths.home);
     }
     removed.push(t("cli.uninstall.removedAll", named));
+    // 装在默认位置以外的，还有一个记着它在哪的定位文件（storage/location.mjs）。--keep-data 时留着：重装后照它找回数据
+    if (forgetLocation(paths.locationFile, paths.home, io.platform)) {
+      removed.push(t("cli.uninstall.locationFile", { file: paths.locationFile }));
+    }
   }
   if (later.length > 0) io.system.removeAfterExit(later);
 

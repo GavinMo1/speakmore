@@ -15,6 +15,7 @@ import {
 } from "../i18n/index.mjs";
 import { log } from "../log.mjs";
 import { createLocalModels } from "../models/library.mjs";
+import { createMove } from "../move/index.mjs";
 import { CHAT_VENDORS } from "../server/chat/vendors.mjs";
 import { PROVIDERS } from "../server/providers/index.mjs";
 import { adoptAppKeys } from "../storage/app-keys.mjs";
@@ -34,13 +35,21 @@ import { polish, transcriber } from "./commands/local.mjs";
 import { logs } from "./commands/logs.mjs";
 import { mode } from "./commands/mode.mjs";
 import { model } from "./commands/model.mjs";
+import { move } from "./commands/move.mjs";
 import { uninstall } from "./commands/uninstall.mjs";
 import { update } from "./commands/update.mjs";
 import { usage } from "./commands/usage.mjs";
 import { ConfigError, UsageError } from "./common.mjs";
 import { createDaemon } from "./daemon.mjs";
 import { tailFile } from "./tail.mjs";
-import { isOurShortcut, removeAfterExit, removeLoginItem, removePathEntry } from "./windows-system.mjs";
+import {
+  clearUserHome,
+  isOurShortcut,
+  removeAfterExit,
+  removeHomeAfterExit,
+  removeLoginItem,
+  removePathEntry,
+} from "./windows-system.mjs";
 
 // speakmore 命令：把"装好依赖、编小帮手、起后台应用、填 key、看历史、改设置"收成几个子命令。
 // 真正干活的是后台应用（src/app），这里通过控制通道指挥它；历史和设置文件则直接读写。
@@ -74,6 +83,7 @@ const COMMANDS = {
   usage,
   logs,
   settings,
+  move,
   uninstall,
 };
 
@@ -222,7 +232,17 @@ export function createIo({ packageDir, env = process.env }) {
     ask,
     confirm,
     platform: process.platform,
-    // Windows 上卸载时要动的几处（windows-system.mjs）
+    cwd: () => process.cwd(),
+    // 搬家（src/move）：和 App 设置里的"存储位置"共用一套。安装脚本说的话接在终端上
+    mover: () =>
+      createMove({
+        paths,
+        env,
+        instance: daemon,
+        stdio: "inherit",
+        system: process.platform === "win32" ? { clearUserHome, removeHomeAfterExit } : null,
+      }),
+    // Windows 上卸载、搬家时要动的几处（windows-system.mjs）
     system: { removePathEntry, isOurShortcut, removeLoginItem, removeAfterExit },
     // 钥匙串里那一条的名字是 Electron 按应用名起的
     removeKeychainKey: () => removeKeychainKey(manifest.productName),

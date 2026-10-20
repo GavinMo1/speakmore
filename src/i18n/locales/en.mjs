@@ -1023,6 +1023,10 @@ export default {
   speakmore settings            Open Settings (to grant macOS permissions)
   speakmore logs [-n lines] [-f]
                                 Show logs; -f keeps following
+  speakmore move [<folder>] [--yes]
+                                Move SpeakMore's folder (program, on-device models, recordings, settings) into .speakmore
+                                inside that folder, e.g. on another disk. speakmore move ~ moves it back to the default
+                                place. Without a folder, shows where it is now
   speakmore uninstall [--keep-data] [--yes]
                                 Uninstall: stop it and delete the whole SpeakMore folder. --keep-data keeps settings, keys, the dictionary, history, and recordings
 
@@ -1052,6 +1056,7 @@ export default {
       logs: "speakmore logs [-n lines] [-f]",
       settings: "speakmore settings",
       uninstall: "speakmore uninstall [--keep-data] [--yes]",
+      move: "speakmore move [<folder>] [--yes]",
       config: "Usage: speakmore config | speakmore config set <name> <value> | speakmore config unset <name>",
       theme: "Usage: speakmore theme | speakmore theme <name>",
       model:
@@ -1400,6 +1405,20 @@ speakmore help     all commands`,
     logs: {
       none: "No logs yet: SpeakMore writes them to {file} once it has started",
     },
+    move: {
+      where: "SpeakMore is in {home}.",
+      how: "To move it elsewhere (another disk, say): speakmore move <folder>; it goes into .speakmore inside that folder. To move it back to the default place: speakmore move ~",
+      needsConfirm: "Moving needs a confirmation. Add --yes when not running in a terminal.",
+      plan: "About to move SpeakMore from {from} to {to}: {size} to copy ({count} files), with the program, on-device models, recordings and settings.\nSpeakMore stops while it moves and reopens when done; if the move fails, everything stays as it was.",
+      unknown: "Things in the old folder that aren't SpeakMore's are neither moved nor deleted: {items}",
+      confirm: "Move it? Type y and press Enter: ",
+      aborted: "Nothing changed.",
+      progress: "Copied {percent}% ({done} / {total})",
+      done: "SpeakMore has moved to {to} ({count} files, {size}).",
+      removed: "Deleted the old folder {dir}.",
+      later: "The old folder {dir} is in use by this command; it will be deleted a few seconds after it exits.",
+      left: "The old folder {dir} still has things that aren't SpeakMore's; they were left alone: {items}",
+    },
     uninstall: {
       yours: "settings, keys, dictionary, history, and recordings",
       needsConfirm: "Uninstalling needs confirmation. Add --yes when not running in a terminal.",
@@ -1416,6 +1435,7 @@ speakmore help     all commands`,
       loginItem: "Open at login",
       afterExit: "The program files are in use by this command; they're removed a few seconds after it exits",
       removedAll: "{home} (the program, runtime, and your {yours})",
+      locationFile: "SpeakMore's location file {file}",
       done: "SpeakMore uninstalled.",
       removed: "Deleted: {item}",
       kept: "Kept: your {yours} in {home}. Reinstall to pick up where you left off; delete the folder if you don't need them",

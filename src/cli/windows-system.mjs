@@ -80,22 +80,78 @@ export function removeLoginItem(home) {
 }
 
 /**
- * 等这个进程退出之后再把这几个目录删掉。Windows 上正在跑的程序删不掉，而卸载、升级时正在跑的就是这条命令自己
- * （装好的那份 Electron）：交给一个隐藏的 PowerShell，等它退出、稍等一下再删，不留窗口。
- * 要隔一层起：Node 在 Windows 上把直接起的子进程放进一个"自己退出就全部结束"的作业对象，这条命令一退出它就没了；
- * 加 detached 能躲开，可那样起的 PowerShell 没有控制台，一行都不跑就以 0 退出（真机上都试过）。
- * 所以先同步跑一个 PowerShell，由它 Start-Process 干活的那个：孙进程不在那个作业对象里
+ * 隔一层起一个隐藏的 PowerShell 跑 cleanup（要用的值走环境变量）。Node 在 Windows 上把直接起的子进程放进一个
+ * "自己退出就全部结束"的作业对象，这条命令一退出它就没了；加 detached 能躲开，可那样起的 PowerShell 没有控制台，
+ * 一行都不跑就以 0 退出（真机上都试过）。所以先同步跑一个 PowerShell，由它 Start-Process 干活的那个：孙进程不在那个作业对象里
  */
-export function removeAfterExit(dirs, pid = process.pid) {
-  const cleanup = `Wait-Process -Id $env:SPEAKMORE_WAIT_PID -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 800
-foreach ($dir in $env:SPEAKMORE_REMOVE.Split([char]10)) { if ($dir) { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue } }`;
+function runDetached(cleanup, env) {
   powershell(
     "Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand',$env:SPEAKMORE_CLEANUP",
-    {
-      SPEAKMORE_WAIT_PID: String(pid),
-      SPEAKMORE_REMOVE: dirs.join("\n"),
-      SPEAKMORE_CLEANUP: Buffer.from(cleanup, "utf16le").toString("base64"),
-    },
+    { ...env, SPEAKMORE_CLEANUP: Buffer.from(cleanup, "utf16le").toString("base64") },
   );
+}
+
+/** 等这几个进程都退出；再稍等一下（杀毒软件扫完刚关的文件、句柄放干净） */
+const WAIT_FOR_PIDS = `foreach ($id in $env:SPEAKMORE_WAIT_PIDS.Split(',')) { if ($id) { Wait-Process -Id ([int]$id) -Timeout 600 -ErrorAction SilentlyContinue } }
+Start-Sleep -Milliseconds 800`;
+
+/** 删掉 $targets 里的每一项，删不掉的隔一秒再试，最多十次 */
+const REMOVE_WITH_RETRIES = `for ($try = 0; $try -lt 10; $try++) {
+  $left = @($targets | Where-Object { Test-Path -LiteralPath $_ })
+  if ($left.Count -eq 0) { break }
+  foreach ($target in $left) { Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction SilentlyContinue }
+  Start-Sleep -Seconds 1
+}`;
+
+/**
+ * 等这个进程退出之后再把这几个目录删掉。Windows 上正在跑的程序删不掉，而卸载、升级时正在跑的就是这条命令自己
+ * （装好的那份 Electron）：交给一个隐藏的 PowerShell，等它退出再删，不留窗口
+ */
+export function removeAfterExit(dirs, pid = process.pid) {
+  runDetached(
+    `${WAIT_FOR_PIDS}
+$targets = @($env:SPEAKMORE_REMOVE.Split([char]10) | Where-Object { $_ })
+${REMOVE_WITH_RETRIES}`,
+    { SPEAKMORE_WAIT_PIDS: String(pid), SPEAKMORE_REMOVE: dirs.join("\n") },
+  );
+}
+
+/**
+ * 搬家后删旧目录（move/index.mjs）：等这几个进程（搬家的这条命令、起它的 speakmore.cmd——cmd 跑完一行还要回去读批处理文件）
+ * 都退出，删掉目录里我们的那几项；只剩 MOVED.json（或者什么都不剩）就连目录一起删，还有用户自己的东西就留着它们和 MOVED.json
+ */
+export function removeHomeAfterExit(home, names, pids) {
+  runDetached(
+    `${WAIT_FOR_PIDS}
+$dir = $env:SPEAKMORE_OLD_HOME
+$targets = @($env:SPEAKMORE_REMOVE.Split([char]10) | Where-Object { $_ } | ForEach-Object { [IO.Path]::Combine($dir, $_) })
+${REMOVE_WITH_RETRIES}
+$rest = @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'MOVED.json' })
+if ($rest.Count -eq 0) { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }`,
+    { SPEAKMORE_WAIT_PIDS: pids.join(","), SPEAKMORE_OLD_HOME: home, SPEAKMORE_REMOVE: names.join("\n") },
+  );
+}
+
+/**
+ * 用户环境变量里的 SPEAKMORE_HOME 指着这个（搬走了的）目录就删掉它：不然以后跑安装程序、从源码启动都还会用旧位置。
+ * 0.11.0 及以前想换位置只能设它。指着别处的不动
+ * @returns {boolean} 删了没有
+ */
+export function clearUserHome(home) {
+  const output = powershell(
+    `$key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+     $raw = [string]$key.GetValue('SPEAKMORE_HOME', '')
+     if ($raw) {
+       $full = [IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($raw)).TrimEnd('\\')
+       if ($full -ieq $env:SPEAKMORE_OLD_HOME.TrimEnd('\\')) {
+         $key.DeleteValue('SPEAKMORE_HOME')
+         [Environment]::SetEnvironmentVariable('SPEAKMORE_PATH_CHANGED', '1', 'User')
+         [Environment]::SetEnvironmentVariable('SPEAKMORE_PATH_CHANGED', $null, 'User')
+         'removed'
+       }
+     }
+     $key.Dispose()`,
+    { SPEAKMORE_OLD_HOME: home },
+  );
+  return output.trim() === "removed";
 }
