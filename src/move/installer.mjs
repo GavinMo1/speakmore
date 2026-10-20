@@ -59,10 +59,12 @@ export function rehome({ home, previous, env, stdio, platform = process.platform
     installerEnv.SPEAKMORE_INSTALL_SCRIPT = script;
     const command =
       "& ([scriptblock]::Create([IO.File]::ReadAllText($env:SPEAKMORE_INSTALL_SCRIPT, [Text.Encoding]::UTF8))); exit $LASTEXITCODE";
+    // 在要换到的那个家目录里跑：它起的后台进程（删旧版本的）不占着别的目录
     return runToEnd("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command], {
       env: installerEnv,
       stdio,
+      cwd: home,
     });
   }
-  return runToEnd("/bin/bash", [script, "--no-start"], { env: installerEnv, stdio });
+  return runToEnd("/bin/bash", [script, "--no-start"], { env: installerEnv, stdio, cwd: home });
 }

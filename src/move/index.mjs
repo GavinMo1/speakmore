@@ -301,7 +301,10 @@ export function createMove({
     return { to, running, app, contents, size, created };
   }
 
-  /** 把停掉的那个重新打开：家目录里那一份用它的启动命令，Mac 的 App 用 open。打不开照实交回原因 */
+  /**
+   * 把停掉的那个重新打开：家目录里那一份用它的启动命令，Mac 的 App 用 open。打不开照实交回原因。
+   * 在它自己的家目录里起：Windows 上工作目录是哪个文件夹，那个文件夹就删不掉，不能让它占着旧目录
+   */
   async function reopen(stopped, appPath, home, report) {
     if (stopped === "bundle" && appPath) {
       await openApp(appPath, home);
@@ -315,8 +318,9 @@ export function createMove({
               env: startEnv,
               stdio,
               shell: true,
+              cwd: home,
             })
-          : await runToEnd(path.join(home, "bin", "speakmore"), ["start"], { env: startEnv, stdio });
+          : await runToEnd(path.join(home, "bin", "speakmore"), ["start"], { env: startEnv, stdio, cwd: home });
       if (code !== 0) throw new LocalizedError(msg("move.restartFailed", { code }));
     }
   }

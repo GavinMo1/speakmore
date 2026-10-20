@@ -179,14 +179,21 @@ test(
     const record = join(dir, "record");
     // 假的安装脚本：记下拿到的参数和几个环境变量，按要求的退出码退出
     const channel = await publish(release, "9.9.9", {
-      script: `printf '%s|%s|%s|%s|%s|%s\\n' "$*" "$SPEAKMORE_HOME" "\${SPEAKMORE_VERSION:-}" "\${SPEAKMORE_INSTALL_BASE:-}" "\${ELECTRON_RUN_AS_NODE:-}" "$SPEAKMORE_INSTALL_FROM" > ${JSON.stringify(record)}\nexit "\${FAKE_EXIT:-0}"\n`,
+      script: `printf '%s|%s|%s|%s|%s|%s|%s|%s\\n' "$*" "$SPEAKMORE_HOME" "\${SPEAKMORE_VERSION:-}" "\${SPEAKMORE_INSTALL_BASE:-}" "\${ELECTRON_RUN_AS_NODE:-}" "$SPEAKMORE_INSTALL_FROM" "\${SPEAKMORE_INSTALL_DIR:-}" "\${SPEAKMORE_PREVIOUS_HOME:-}" > ${JSON.stringify(record)}\nexit "\${FAKE_EXIT:-0}"\n`,
       scriptName: "install.sh",
       target: "darwin-arm64",
     });
-    const homes = homesFor(release, { env: { ELECTRON_RUN_AS_NODE: "1", SPEAKMORE_VERSION: "v1.0.0" } });
+    // 第一次安装时设的 SPEAKMORE_INSTALL_DIR 会一路带进命令行和 App：不带给更新，不然安装脚本说它和 SPEAKMORE_HOME 不能同时设
+    const env = {
+      ELECTRON_RUN_AS_NODE: "1",
+      SPEAKMORE_VERSION: "v1.0.0",
+      SPEAKMORE_INSTALL_DIR: "/Volumes/Data",
+      SPEAKMORE_PREVIOUS_HOME: "/old/.speakmore",
+    };
+    const homes = homesFor(release, { env });
     const staged = await homes.stage(channel, { seeds: [], cacheDir: paths.updateCacheDir });
     assert.equal(await homes.install(staged), 0);
-    assert.equal(readFileSync(record, "utf8"), `--no-start|${paths.home}||||${staged.dir}\n`);
+    assert.equal(readFileSync(record, "utf8"), `--no-start|${paths.home}||||${staged.dir}||\n`);
 
     const failing = homesFor(release, { env: { FAKE_EXIT: "3" } });
     assert.equal(await failing.install(staged), 3);

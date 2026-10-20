@@ -110,8 +110,11 @@ export function createDaemon({
       const { ELECTRON_RUN_AS_NODE: _dropped, ...childEnv } = env;
       /** 我们启动的那个进程是怎么结束的；还在运行时是 null */
       let ended = null;
+      // 在家目录里起：Windows 上工作目录是哪个文件夹，那个文件夹就删不掉。起它的命令可能正跑在
+      // 要删的旧目录里（搬家后重新打开）、或者用户随便哪个目录，都不该被 App 占着
       const child = spawn(electron, [packageDir], {
         detached: true,
+        cwd: paths.home,
         windowsHide: true,
         stdio: ["ignore", logFd, logFd],
         env: { ...childEnv, SPEAKMORE_CLI: "1" },

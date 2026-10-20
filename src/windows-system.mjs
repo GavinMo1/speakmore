@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 // 在 Windows 上要动系统的那几处：install.ps1 在家目录以外留下的（用户 Path 里的一项、开始菜单的快捷方式）、
 // App 里开过的开机启动，卸载时照着删；搬家后删旧目录、清掉指着旧目录的环境变量；还有删不掉正在跑的程序这件事。
@@ -10,12 +11,13 @@ import { existsSync } from "node:fs";
  * 跑一段 PowerShell，交出它的标准输出。出错就停、以非零退出（execFileSync 抛出来）；正常跑完明确以 0 退出：
  * 不然 -Command 的退出码看最后一条命令，"没找到那一项"这种早料到的情况也会变成 1
  */
-function powershell(script, env = {}) {
+function powershell(script, env = {}, { cwd } = {}) {
   const wrapped = `$ErrorActionPreference = 'Stop'\n${script}\nexit 0`;
   return execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", wrapped], {
     encoding: "utf8",
     windowsHide: true,
     env: { ...process.env, ...env },
+    cwd,
   });
 }
 
@@ -83,17 +85,24 @@ export function removeLoginItem(home) {
 /**
  * 隔一层起一个隐藏的 PowerShell 跑 cleanup（要用的值走环境变量）。Node 在 Windows 上把直接起的子进程放进一个
  * "自己退出就全部结束"的作业对象，这条命令一退出它就没了；加 detached 能躲开，可那样起的 PowerShell 没有控制台，
- * 一行都不跑就以 0 退出（真机上都试过）。所以先同步跑一个 PowerShell，由它 Start-Process 干活的那个：孙进程不在那个作业对象里
+ * 一行都不跑就以 0 退出（真机上都试过）。所以先同步跑一个 PowerShell，由它 Start-Process 干活的那个：孙进程不在那个作业对象里。
+ * 两个都在临时目录里跑：工作目录是哪个文件夹，那个文件夹就删不掉（这个进程可能就是在要删的旧目录里起的）
  */
 function runDetached(cleanup, env) {
   powershell(
-    "Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand',$env:SPEAKMORE_CLEANUP",
+    "Start-Process powershell -WindowStyle Hidden -WorkingDirectory $env:TEMP -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand',$env:SPEAKMORE_CLEANUP",
     { ...env, SPEAKMORE_CLEANUP: Buffer.from(cleanup, "utf16le").toString("base64") },
+    { cwd: tmpdir() },
   );
 }
 
-/** 等这几个进程都退出；再稍等一下（杀毒软件扫完刚关的文件、句柄放干净） */
-const WAIT_FOR_PIDS = `foreach ($id in $env:SPEAKMORE_WAIT_PIDS.Split(',')) { if ($id) { Wait-Process -Id ([int]$id) -Timeout 600 -ErrorAction SilentlyContinue } }
+/**
+ * 等第一个进程退出（最多十分钟），后面的只再等一小会儿；再稍等一下（杀毒软件扫完刚关的文件、句柄放干净）。
+ * 后面的是起它的 cmd：从 PowerShell 敲的命令，那是跑完就退的 cmd /c；在 cmd 窗口里敲的，那就是这个窗口本身，
+ * 不会退，等它读完批处理文件的最后一行就行
+ */
+const WAIT_FOR_PIDS = `$timeout = 600
+foreach ($id in $env:SPEAKMORE_WAIT_PIDS.Split(',')) { if ($id) { Wait-Process -Id ([int]$id) -Timeout $timeout -ErrorAction SilentlyContinue; $timeout = 10 } }
 Start-Sleep -Milliseconds 800`;
 
 /** 删掉 $targets 里的每一项，删不掉的隔一秒再试，最多十次 */
@@ -128,7 +137,10 @@ $dir = $env:SPEAKMORE_OLD_HOME
 $targets = @($env:SPEAKMORE_REMOVE.Split([char]10) | Where-Object { $_ } | ForEach-Object { [IO.Path]::Combine($dir, $_) })
 ${REMOVE_WITH_RETRIES}
 $rest = @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'MOVED.json' })
-if ($rest.Count -eq 0) { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }`,
+if ($rest.Count -eq 0) {
+  $targets = @($dir)
+  ${REMOVE_WITH_RETRIES}
+}`,
     { SPEAKMORE_WAIT_PIDS: pids.join(","), SPEAKMORE_OLD_HOME: home, SPEAKMORE_REMOVE: names.join("\n") },
   );
 }

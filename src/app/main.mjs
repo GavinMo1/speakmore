@@ -215,9 +215,11 @@ function launchUpdate() {
  */
 function launchMove(folder) {
   const { ELECTRON_RUN_AS_NODE: _asNode, SPEAKMORE_CLI: _byCli, ...env } = process.env;
+  // 在临时目录里起：从开始菜单打开的 App 工作目录就是家目录，进度窗口要是跟着继承，旧目录就删不掉
   const child = spawn(process.execPath, app.isPackaged ? [] : [app.getAppPath()], {
     detached: true,
     stdio: "ignore",
+    cwd: tmpdir(),
     env: { ...env, SPEAKMORE_HOME: PATHS.home, SPEAKMORE_MOVE_TO: folder },
   });
   child.unref();
