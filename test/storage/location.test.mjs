@@ -41,7 +41,7 @@ test("没有定位文件是 null：老版本装的、还没装过的，都用默
 test("写进去的读得回来：建好上一级目录，路径里有空格、中文、引号也行", (t) => {
   const dir = tempDir(t);
   const file = join(dir, "config", "speakmore", "location.json");
-  const home = process.platform === "win32" ? "D:\\我的 \"盘\"\\.speakmore" : "/Volumes/我的 \"盘\"/.speakmore";
+  const home = process.platform === "win32" ? 'D:\\我的 "盘"\\.speakmore' : '/Volumes/我的 "盘"/.speakmore';
   writeLocation(file, home);
   assert.equal(readLocation(file, process.platform), home);
   // 是一份给人也看得懂的 JSON，以后要加别的项往里加
@@ -60,7 +60,15 @@ test("读回来的家目录规范成完整写法：末尾的分隔符、. 和 ..
 test("定位文件坏了就明确报错，不悄悄退回默认位置（那样会在默认位置新建一个空的，看起来像数据丢了）", (t) => {
   const dir = tempDir(t);
   const file = join(dir, "location.json");
-  for (const text of ["{ 坏了", "[]", "null", '{"home": 1}', '{"home": ""}', '{"home": "relative/path"}', '{"other": "/x"}']) {
+  for (const text of [
+    "{ 坏了",
+    "[]",
+    "null",
+    '{"home": 1}',
+    '{"home": ""}',
+    '{"home": "relative/path"}',
+    '{"other": "/x"}',
+  ]) {
     writeFileSync(file, text);
     assert.throws(() => readLocation(file, "darwin"), said(/location\.json/), text);
   }
@@ -84,10 +92,9 @@ test("写的时候不留半截：先写到旁边再改名换上", (t) => {
   const file = join(dir, "location.json");
   writeLocation(file, process.platform === "win32" ? "D:\\a\\.speakmore" : "/a/.speakmore");
   writeLocation(file, process.platform === "win32" ? "E:\\b\\.speakmore" : "/b/.speakmore");
-  assert.deepEqual(
-    readFileSync(file, "utf8").length > 0 && JSON.parse(readFileSync(file, "utf8")),
-    { home: process.platform === "win32" ? "E:\\b\\.speakmore" : "/b/.speakmore" },
-  );
+  assert.deepEqual(readFileSync(file, "utf8").length > 0 && JSON.parse(readFileSync(file, "utf8")), {
+    home: process.platform === "win32" ? "E:\\b\\.speakmore" : "/b/.speakmore",
+  });
 });
 
 test("forgetLocation：只删指着这个家目录的那份（Windows 上不分大小写），指着别处的不动", (t) => {

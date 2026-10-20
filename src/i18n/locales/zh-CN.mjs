@@ -872,7 +872,8 @@ export default {
   paths: {
     homeNotAbsolute: "环境变量 SPEAKMORE_HOME 要写绝对路径，现在是 {home}",
     homeTooLong: "SpeakMore 的目录路径太长，控制通道建不起来：{home}\n用环境变量 SPEAKMORE_HOME 换一个短一些的目录。",
-    homeParentMissing: "找不到 SpeakMore 的目录 {home}：它所在的 {parent} 不存在。装在移动硬盘或别的盘上的话，先把那块盘接上。",
+    homeParentMissing:
+      "找不到 SpeakMore 的目录 {home}：它所在的 {parent} 不存在。装在移动硬盘或别的盘上的话，先把那块盘接上。",
   },
 
   location: {

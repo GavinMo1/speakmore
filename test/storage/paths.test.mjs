@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
+import { writeLocation } from "../../src/storage/location.mjs";
 import {
   ensureHome,
   installedHomeOf,
@@ -12,7 +13,6 @@ import {
   oldAppKeyFile,
   resolvePaths,
 } from "../../src/storage/paths.mjs";
-import { writeLocation } from "../../src/storage/location.mjs";
 import { assertOwnerOnlyDir } from "../helpers/owner-only.mjs";
 
 const zh = createTranslator("zh-CN");

@@ -71,7 +71,8 @@ export function readLocation(file, platform) {
     home = undefined;
   }
   // 控制字符（换行这些）不会出现在正经的路径里，安装脚本也读不对它
-  const valid = typeof home === "string" && isFullPath(home, platform) && !/[\u0000-\u001f]/.test(home);
+  const valid =
+    typeof home === "string" && isFullPath(home, platform) && ![...home].some((char) => char.charCodeAt(0) < 0x20);
   if (!valid) throw new LocalizedError(msg("location.invalid", { file }));
   return normalized(home, platform);
 }
