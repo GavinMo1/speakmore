@@ -108,11 +108,9 @@ test("拷过去：内容、修改时间原样；不认识的、半截的、run �
   assert.equal(existsSync(join(to, "cache", "SingletonCookie")), false);
   assert.equal(existsSync(join(to, "run")), false);
   assert.equal(existsSync(join(to, "notes.txt")), false);
-  // 修改时间原样（精确到毫秒：utimes 只给到这么细）
-  assert.equal(
-    Math.floor(statSync(join(to, "settings.json")).mtimeMs),
-    Math.floor(statSync(join(home, "settings.json")).mtimeMs),
-  );
+  // 修改时间原样（utimes 只精确到毫秒，取整可能差 1）
+  const drift = statSync(join(to, "settings.json")).mtimeMs - statSync(join(home, "settings.json")).mtimeMs;
+  assert.ok(Math.abs(drift) < 2, `差了 ${drift} 毫秒`);
   assert.deepEqual(stats, { files: 3, bytes: Buffer.byteLength('{"hotkey":"fn"}录音钥匙') });
 });
 
