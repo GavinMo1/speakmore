@@ -887,6 +887,35 @@ export default {
     notEmpty: "{home} 里已经有东西了。SpeakMore 只搬到空的位置：换一个文件夹，或者先把它清空。",
     tooLongBytes: "路径太长了：{home}\n最长 {max} 个字节（中文一个字算三个），换一个短一些的位置。",
     tooLongChars: "路径太长了：{home}\n最长 {max} 个字符，换一个短一些的位置。",
+    inProgress: "SpeakMore 正在从 {home} 搬到 {to}，搬完会自动重新打开。",
+    unfinishedCopy:
+      "这里（{home}）是一次没搬完的搬家拷出来的，SpeakMore 仍在 {from}。从那里打开 SpeakMore，会顺带把这次没搬完的收拾掉。",
+    interrupted: "搬到一半中断了（进程意外退出）",
+    notRecorded:
+      "这一次用的目录 {home} 是环境变量 SPEAKMORE_HOME 临时指定的，SpeakMore 记着的位置是 {recorded}。只能搬记着的那一个。",
+    homeTooOld: "{home} 里的程序是旧版本，还不支持搬家。先运行 speakmore update 更新，再搬。",
+    appTooOld: "{app} 还是 {version} 版，不认识新位置。先运行 speakmore update 把它一起更新，再搬。",
+    noSpace: "{folder} 所在的磁盘空间不足：需要 {need}，只剩 {free}。",
+    recovered: "上次搬到 {to} 没有完成，已经收拾好：SpeakMore 仍在 {home}。",
+    copying: "正在拷到 {to}…",
+    switching: "正在切换到新位置…",
+    rehomeFailed: "新位置的程序没能接上（安装脚本退出码 {code}）。",
+    copyBroken: "拷过去的文件不完整：{reason}",
+    cleanupProblem: "恢复原状时出了问题：{problem}",
+    recordFailed: "搬家记录未能写入（{reason}），不影响使用。",
+    leftover: "{dir} 未能删干净（{reason}），可以手动删除。",
+    clearedEnv: "已删除指向旧位置的环境变量 SPEAKMORE_HOME。",
+    reopened: "已重新打开 SpeakMore。",
+    reopenFailed: "SpeakMore 未能自动重新打开（{reason}），请手动打开。",
+    restartFailed: "启动命令退出码 {code}",
+    unsupportedDrive:
+      "{home} 所在的磁盘不支持 SpeakMore：{what}（{reason}）。U 盘、移动硬盘常用的 exFAT、FAT32 格式不支持，请换一块 APFS 或 Mac OS 扩展格式的磁盘。",
+    probe: {
+      create: "无法新建文件夹",
+      restrict: "无法设为仅本人可访问",
+      symlink: "无法建立符号链接",
+      socket: "无法建立本机通信用的套接字",
+    },
   },
 
   location: {
@@ -1347,6 +1376,10 @@ speakmore help     全部命令`,
     },
     update: {
       restartFailed: "已换上新版本，但未能重新启动（退出码 {code}）。请从开始菜单打开 SpeakMore，经过见日志 {log}。",
+    },
+    move: {
+      unsupportedDrive:
+        "{home} 所在的磁盘不支持 SpeakMore：{what}（{reason}）。U 盘、移动硬盘常用的 exFAT、FAT32 格式不支持，请换一块 NTFS 格式的磁盘。",
     },
     cli: {
       key: { storage: "它会用 Windows 的数据保护加密后存在这台电脑上，不会发到别处。" },

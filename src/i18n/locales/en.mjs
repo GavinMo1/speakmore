@@ -918,9 +918,40 @@ export default {
     noFolder: "{folder} doesn't exist or isn't a folder. Create it first, then choose it again.",
     sameHome: "SpeakMore is already in {home}; nothing to move.",
     insideHome: "SpeakMore can't move into its own folder ({home}). Choose another folder.",
-    notEmpty: "{home} isn't empty. SpeakMore only moves into an empty place: choose another folder, or empty that one first.",
+    notEmpty:
+      "{home} isn't empty. SpeakMore only moves into an empty place: choose another folder, or empty that one first.",
     tooLongBytes: "That path is too long: {home}\nIt can be at most {max} bytes. Choose a shorter place.",
     tooLongChars: "That path is too long: {home}\nIt can be at most {max} characters. Choose a shorter place.",
+    inProgress: "SpeakMore is moving from {home} to {to}; it will reopen when the move is done.",
+    unfinishedCopy:
+      "This folder ({home}) was copied by a move that didn't finish; SpeakMore is still in {from}. Open SpeakMore from there and it will clean up the unfinished move.",
+    interrupted: "The move stopped halfway (the process quit unexpectedly)",
+    notRecorded:
+      "The folder in use, {home}, was set just for this run by SPEAKMORE_HOME; SpeakMore's recorded place is {recorded}. Only the recorded one can be moved.",
+    homeTooOld: "The SpeakMore program in {home} is too old to move. Run speakmore update first, then move.",
+    appTooOld:
+      "{app} is still version {version} and won't find the new place. Run speakmore update to update it too, then move.",
+    noSpace: "Not enough space on the disk of {folder}: {need} needed, {free} free.",
+    recovered: "The last move to {to} didn't finish and has been cleaned up: SpeakMore is still in {home}.",
+    copying: "Copying to {to}…",
+    switching: "Switching to the new place…",
+    rehomeFailed: "The program in the new place couldn't be set up (installer exit code {code}).",
+    copyBroken: "The copied files are incomplete: {reason}",
+    cleanupProblem: "Something went wrong while putting things back: {problem}",
+    recordFailed: "Couldn't write the move record ({reason}); SpeakMore works as usual.",
+    leftover: "Couldn't fully delete {dir} ({reason}); you can delete it yourself.",
+    clearedEnv: "Removed the SPEAKMORE_HOME environment variable that pointed to the old place.",
+    reopened: "Reopened SpeakMore.",
+    reopenFailed: "SpeakMore didn't reopen by itself ({reason}); please open it.",
+    restartFailed: "the start command exited with code {code}",
+    unsupportedDrive:
+      "The disk of {home} can't hold SpeakMore: {what} ({reason}). exFAT and FAT32, common on USB sticks and external drives, aren't supported; choose a disk formatted as APFS or Mac OS Extended.",
+    probe: {
+      create: "can't create a folder",
+      restrict: "can't make it private to you",
+      symlink: "can't create symbolic links",
+      socket: "can't create the local socket SpeakMore talks through",
+    },
   },
 
   location: {
@@ -1428,6 +1459,10 @@ speakmore help     all commands`,
     update: {
       restartFailed:
         "The new version is installed, but SpeakMore couldn't be restarted (exit code {code}). Open SpeakMore from the Start menu; details are in {log}.",
+    },
+    move: {
+      unsupportedDrive:
+        "The disk of {home} can't hold SpeakMore: {what} ({reason}). exFAT and FAT32, common on USB sticks and external drives, aren't supported; choose a disk formatted as NTFS.",
     },
     cli: {
       key: { storage: "It's encrypted with Windows data protection and stays on this PC." },

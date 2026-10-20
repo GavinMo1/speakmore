@@ -16,7 +16,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { classifyHome, copyHome, verifyCopy } from "../../src/move/copy.mjs";
+import { classifyHome, copyHome, measureHome, verifyCopy } from "../../src/move/copy.mjs";
 import { resolvePaths } from "../../src/storage/paths.mjs";
 
 const posixOnly = { skip: process.platform === "win32" && "符号链接、权限位是 macOS 的事" };
@@ -76,7 +76,7 @@ test("分清哪些是 SpeakMore 的、要搬；哪些是半截的、不搬但删
   assert.deepEqual(unknown.sort(), ["Backups", "notes.txt"]);
 });
 
-test("Windows 的摆法：versions、current 要搬，versions 里只搬 current 指着的那一个", (t) => {
+test("Windows 的摆法：versions、current 要搬，versions 里只搬 current 指着的那一个", async (t) => {
   const { root, home, paths } = setup(t);
   put(join(home, "current"), "0.12.0-1a2b3c4d");
   put(join(home, "versions", "0.12.0-1a2b3c4d", "app", "package.json"));
@@ -85,13 +85,14 @@ test("Windows 的摆法：versions、current 要搬，versions 里只搬 current
   const plan = classifyHome(paths);
   assert.deepEqual(plan.move.sort(), ["current", "settings.json", "versions"]);
   const to = join(root, "new", ".speakmore");
-  copyHome({ from: home, to, plan });
+  assert.deepEqual(measureHome({ from: home, plan }), { files: 3, bytes: Buffer.byteLength("0.12.0-1a2b3c4d") + 2 });
+  await copyHome({ from: home, to, plan });
   assert.equal(existsSync(join(to, "versions", "0.12.0-1a2b3c4d", "app", "package.json")), true);
   assert.equal(existsSync(join(to, "versions", "0.11.0-99999999")), false);
   assert.equal(readFileSync(join(to, "current"), "utf8"), "0.12.0-1a2b3c4d");
 });
 
-test("拷过去：内容、修改时间原样；不认识的、半截的、run 都不拷；缓存里 Chromium 的单实例锁不拷", (t) => {
+test("拷过去：内容、修改时间原样；不认识的、半截的、run 都不拷；缓存里 Chromium 的单实例锁不拷；一个文件报一次进度", async (t) => {
   const { root, home, paths } = setup(t);
   put(join(home, "settings.json"), '{"hotkey":"fn"}');
   put(join(home, "data", "Recordings", "a.webm"), "录音");
@@ -101,7 +102,8 @@ test("拷过去：内容、修改时间原样；不认识的、半截的、run �
   put(join(home, "notes.txt"));
   const to = join(root, "new", ".speakmore");
   const plan = classifyHome(paths);
-  const stats = copyHome({ from: home, to, plan });
+  const progress = [];
+  const stats = await copyHome({ from: home, to, plan, onProgress: (done) => progress.push(done) });
   assert.equal(readFileSync(join(to, "settings.json"), "utf8"), '{"hotkey":"fn"}');
   assert.equal(readFileSync(join(to, "data", "Recordings", "a.webm"), "utf8"), "录音");
   assert.equal(readFileSync(join(to, "cache", "Local State"), "utf8"), "钥匙");
@@ -112,12 +114,18 @@ test("拷过去：内容、修改时间原样；不认识的、半截的、run �
   const drift = statSync(join(to, "settings.json")).mtimeMs - statSync(join(home, "settings.json")).mtimeMs;
   assert.ok(Math.abs(drift) < 2, `差了 ${drift} 毫秒`);
   assert.deepEqual(stats, { files: 3, bytes: Buffer.byteLength('{"hotkey":"fn"}录音钥匙') });
+  assert.deepEqual(measureHome({ from: home, plan }), stats);
+  assert.deepEqual(
+    progress.map((done) => done.files),
+    [1, 2, 3],
+  );
+  assert.deepEqual(progress.at(-1), stats);
 });
 
 test(
   "符号链接原样拷（Electron 框架里的相对链接拷成指向旧目录的绝对路径的话，旧目录一删程序就起不来）；可执行的还是可执行",
   posixOnly,
-  (t) => {
+  async (t) => {
     const { root, home, paths } = setup(t);
     const versions = join(home, "runtime", "Electron.app", "Contents", "Frameworks", "E.framework", "Versions");
     put(join(versions, "A", "E"), "库");
@@ -131,7 +139,7 @@ test(
     symlinkSync("host-123", join(home, "cache", "SingletonLock"));
 
     const to = join(root, "new", ".speakmore");
-    copyHome({ from: home, to, plan: classifyHome(paths) });
+    await copyHome({ from: home, to, plan: classifyHome(paths) });
     const copied = join(to, "runtime", "Electron.app", "Contents", "Frameworks", "E.framework");
     assert.equal(readlinkSync(join(copied, "Versions", "Current")), "A");
     assert.equal(readlinkSync(join(copied, "E")), "Versions/Current/E");
@@ -155,11 +163,11 @@ test("核对拷好的：有绝对路径的链接、指出新目录的链接都�
   assert.throws(() => verifyCopy({ from: root, to }), /escape/);
 });
 
-test("拷的时候目标已经有同名的：报错，不覆盖", (t) => {
+test("拷的时候目标已经有同名的：报错，不覆盖", async (t) => {
   const { root, home, paths } = setup(t);
   put(join(home, "settings.json"), "旧");
   const to = join(root, "new", ".speakmore");
   put(join(to, "settings.json"), "别人的");
-  assert.throws(() => copyHome({ from: home, to, plan: classifyHome(paths) }));
+  await assert.rejects(copyHome({ from: home, to, plan: classifyHome(paths) }), { code: "ERR_FS_CP_EEXIST" });
   assert.equal(readFileSync(join(to, "settings.json"), "utf8"), "别人的");
 });

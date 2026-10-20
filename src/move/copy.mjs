@@ -1,4 +1,5 @@
-import { constants, cpSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
+import { constants, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
+import { cp } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 // 搬家时拷什么、怎么拷。只认 SpeakMore 自己的东西（照 storage/paths.mjs 的摆法算出来的那几样，加上每家的 key）：
@@ -7,6 +8,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 //   unknown    不认识的（0.11.0 时 SPEAKMORE_HOME 可能指到了一个本来就有别的东西的目录）：不搬，也不删，搬完说出来
 // 拷的时候符号链接原样拷（Electron 框架里是相对链接；Node 默认会改写成指向旧目录的绝对路径，旧目录一删程序就起不来），
 // APFS 上用克隆（不多占空间），修改时间原样；目标已经有同名的就报错，不覆盖。
+// 拷是异步的（App 里的进度窗口要能一边拷一边更新），一个文件一个文件地报进度。
 
 /** 更新、安装被打断留下的半截（update/home.mjs 的 .update-、install.sh 的 .install.、换下来的 app.old 这些） */
 const LEFTOVER = /^\.update-|^\.install\.|^(app|runtime)\.old(\..+)?$/;
@@ -54,29 +56,62 @@ export function classifyHome(paths) {
   return plan;
 }
 
+/** 拷不拷这一项：缓存里 Chromium 的单实例锁不拷；versions 下只拷 current 指着的那个（别的是换下来、还没删掉的旧版本） */
+function keeper(from, plan) {
+  const cache = join(from, "cache");
+  const versions = join(from, "versions");
+  return (source) => {
+    const parent = dirname(source);
+    const name = basename(source);
+    if (parent === cache && CHROMIUM_SINGLETON.test(name)) return false;
+    if (parent === versions && name !== plan.current) return false;
+    return true;
+  };
+}
+
+/**
+ * 要拷的有多少：给"要拷多少、盘够不够"和进度用，和 copyHome 拷的是同一些（不顺着符号链接）
+ * @returns {{ files: number, bytes: number }}
+ */
+export function measureHome({ from, plan }) {
+  const keep = keeper(from, plan);
+  const total = { files: 0, bytes: 0 };
+  const walk = (path) => {
+    if (!keep(path)) return;
+    const info = lstatSync(path);
+    if (info.isDirectory()) {
+      for (const name of readdirSync(path)) walk(join(path, name));
+    } else if (info.isFile()) {
+      total.files++;
+      total.bytes += info.size;
+    }
+  };
+  for (const name of plan.move) walk(join(from, name));
+  return total;
+}
+
 /**
  * 把要搬的拷到新家目录
- * @param {{ from: string, to: string, plan: ReturnType<typeof classifyHome> }} options
- * @returns {{ files: number, bytes: number }} 拷了多少个文件、多少字节
+ * @param {{ from: string, to: string, plan: ReturnType<typeof classifyHome>,
+ *   onProgress?: (done: { files: number, bytes: number }) => void }} options onProgress：每开始拷一个文件报一次拷到哪了
+ * @returns {Promise<{ files: number, bytes: number }>} 拷了多少个文件、多少字节
  */
-export function copyHome({ from, to, plan }) {
+export async function copyHome({ from, to, plan, onProgress = () => {} }) {
   mkdirSync(to, { recursive: true });
   const stats = { files: 0, bytes: 0 };
-  const versions = join(from, "versions");
+  const keep = keeper(from, plan);
   const filter = (source) => {
-    const name = basename(source);
-    if (dirname(source) === join(from, "cache") && CHROMIUM_SINGLETON.test(name)) return false;
-    // versions 下只拷 current 指着的那个：别的是换下来、还没删掉的旧版本
-    if (dirname(source) === versions && name !== plan.current) return false;
+    if (!keep(source)) return false;
     const info = lstatSync(source);
     if (info.isFile()) {
       stats.files++;
       stats.bytes += info.size;
+      onProgress({ ...stats });
     }
     return true;
   };
   for (const name of plan.move) {
-    cpSync(join(from, name), join(to, name), {
+    await cp(join(from, name), join(to, name), {
       recursive: true,
       verbatimSymlinks: true,
       errorOnExist: true,
