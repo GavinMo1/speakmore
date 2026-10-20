@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -12,25 +12,28 @@ import {
   oldAppKeyFile,
   resolvePaths,
 } from "../../src/storage/paths.mjs";
+import { writeLocation } from "../../src/storage/location.mjs";
 import { assertOwnerOnlyDir } from "../helpers/owner-only.mjs";
 
 const zh = createTranslator("zh-CN");
 /** 报错里给人看的那句，按中文翻出来对得上 */
 const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
 
-test("所有东西都在家目录下的 .speakmore 这一个目录里", () => {
+/** 家目录里的那些：除了定位文件，都在家目录里 */
+const inside = (paths) => Object.entries(paths).filter(([name]) => name !== "locationFile");
+
+test("所有东西都在家目录下的 .speakmore 这一个目录里；目录以外只有一个定位文件", () => {
   const paths = resolvePaths({}, "/Users/someone", "darwin");
   assert.equal(paths.home, "/Users/someone/.speakmore");
-  for (const [name, path] of Object.entries(paths)) {
+  for (const [name, path] of inside(paths)) {
     assert.ok(path === paths.home || path.startsWith("/Users/someone/.speakmore/"), `${name}: ${path}`);
   }
+  assert.equal(paths.locationFile, "/Users/someone/.config/speakmore/location.json");
 });
 
 test("程序、你的东西、运行时产生的，各在各的位置", () => {
   const paths = resolvePaths({}, "/Users/someone", "darwin");
-  const inHome = Object.fromEntries(
-    Object.entries(paths).map(([name, path]) => [name, path.slice(paths.home.length + 1)]),
-  );
+  const inHome = Object.fromEntries(inside(paths).map(([name, path]) => [name, path.slice(paths.home.length + 1)]));
   assert.deepEqual(inHome, {
     home: "",
     // 程序本身：安装时放进去，升级时整个换掉
@@ -75,7 +78,46 @@ test("每家模型一把 key，App 和命令行共用一个文件；Gemini 的�
 
 test("SPEAKMORE_HOME 把整个目录换到别处", () => {
   const paths = resolvePaths({ SPEAKMORE_HOME: "/tmp/elsewhere" }, "/Users/someone", "darwin");
-  for (const path of Object.values(paths)) assert.ok(path.startsWith("/tmp/elsewhere"), path);
+  for (const [, path] of inside(paths)) assert.ok(path.startsWith("/tmp/elsewhere"), path);
+});
+
+test("家目录装在别处时照定位文件找；SPEAKMORE_HOME 优先于定位文件，都没有才是默认位置", (t) => {
+  const user = mkdtempSync(join(tmpdir(), "sm-user-"));
+  t.after(() => rmSync(user, { recursive: true, force: true }));
+  assert.equal(resolvePaths({}, user, "darwin").home, join(user, ".speakmore"));
+  writeLocation(join(user, ".config", "speakmore", "location.json"), "/Volumes/Data/.speakmore");
+  const paths = resolvePaths({}, user, "darwin");
+  assert.equal(paths.home, "/Volumes/Data/.speakmore");
+  assert.equal(paths.historyDb, "/Volumes/Data/.speakmore/data/history.db");
+  assert.equal(paths.locationFile, join(user, ".config", "speakmore", "location.json"));
+  assert.equal(resolvePaths({ SPEAKMORE_HOME: "/tmp/sm" }, user, "darwin").home, "/tmp/sm");
+});
+
+// 要真的读一个 Windows 路径上的文件，只在 Windows 上跑
+const windowsOnly = { skip: process.platform !== "win32" && "只在 Windows 上跑" };
+
+test("Windows 上的定位文件在 LOCALAPPDATA 下；照它找到的家目录，控制通道也跟着换", windowsOnly, (t) => {
+  const local = mkdtempSync(join(tmpdir(), "sm-local-"));
+  t.after(() => rmSync(local, { recursive: true, force: true }));
+  const env = { LOCALAPPDATA: local };
+  const defaults = resolvePaths(env, "C:\\Users\\someone", "win32");
+  assert.equal(defaults.home, "C:\\Users\\someone\\.speakmore");
+  mkdirSync(join(local, "SpeakMore"));
+  writeFileSync(join(local, "SpeakMore", "location.json"), JSON.stringify({ home: "D:\\Apps\\.speakmore" }));
+  const moved = resolvePaths(env, "C:\\Users\\someone", "win32");
+  assert.equal(moved.home, "D:\\Apps\\.speakmore");
+  assert.equal(moved.versionsDir, "D:\\Apps\\.speakmore\\versions");
+  assert.notEqual(moved.controlSocket, defaults.controlSocket);
+});
+
+test("定位文件坏了：明确报错，不退回默认位置", (t) => {
+  const user = mkdtempSync(join(tmpdir(), "sm-user-"));
+  t.after(() => rmSync(user, { recursive: true, force: true }));
+  mkdirSync(join(user, ".config", "speakmore"), { recursive: true });
+  writeFileSync(join(user, ".config", "speakmore", "location.json"), "{ 坏了");
+  assert.throws(() => resolvePaths({}, user, "darwin"), said(/定位文件/));
+  // 设了 SPEAKMORE_HOME 的不看定位文件（测试、开发用的不受它影响）
+  assert.equal(resolvePaths({ SPEAKMORE_HOME: "/tmp/sm" }, user, "darwin").home, "/tmp/sm");
 });
 
 test("SPEAKMORE_HOME 是空字符串时当作没设，不把文件写到当前目录", () => {
@@ -92,6 +134,9 @@ test("SPEAKMORE_HOME 要是绝对路径：相对路径会随着在哪个目录�
     assert.throws(() => resolvePaths({ SPEAKMORE_HOME: relative }, "/Users/someone", "darwin"), said(/绝对路径/));
     assert.throws(() => resolvePaths({ SPEAKMORE_HOME: relative }, "C:\\Users\\someone", "win32"), said(/绝对路径/));
   }
+  // Windows 上 \ 开头的指的是当前那个盘的根，也随在哪运行而变
+  assert.throws(() => resolvePaths({ SPEAKMORE_HOME: "\\data" }, "C:\\Users\\someone", "win32"), said(/绝对路径/));
+  assert.doesNotThrow(() => resolvePaths({ SPEAKMORE_HOME: "\\\\server\\share\\sm" }, "C:\\Users\\someone", "win32"));
 });
 
 test("ensureHome：把目录建出来，只有自己进得去（里面有录音和 key）", (t) => {
@@ -106,10 +151,18 @@ test("ensureHome：把目录建出来，只有自己进得去（里面有录音�
   assertOwnerOnlyDir(paths.home);
 });
 
+test("ensureHome：家目录所在的那一层不存在（移动硬盘没接、盘符没了）就报错，不在别处新建", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sm-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const paths = resolvePaths({ SPEAKMORE_HOME: join(dir, "unplugged", ".speakmore") });
+  assert.throws(() => ensureHome(paths), said(/先把那块盘接上/));
+  assert.throws(() => statSync(join(dir, "unplugged")));
+});
+
 test("Windows 上同样是用户目录下的 .speakmore 一个目录；控制通道是按家目录取名的 named pipe，不在磁盘上", () => {
   const paths = resolvePaths({}, "C:\\Users\\someone", "win32");
   assert.equal(paths.home, "C:\\Users\\someone\\.speakmore");
-  for (const [name, path] of Object.entries(paths)) {
+  for (const [name, path] of inside(paths)) {
     if (name === "controlSocket") continue;
     assert.ok(path === paths.home || path.startsWith("C:\\Users\\someone\\.speakmore\\"), `${name}: ${path}`);
   }

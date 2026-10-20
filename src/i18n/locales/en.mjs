@@ -905,6 +905,14 @@ export default {
     homeNotAbsolute: "The SPEAKMORE_HOME env var must be an absolute path; it's {home}",
     homeTooLong:
       "The SpeakMore folder path is too long for the control socket: {home}\nUse the SPEAKMORE_HOME env var to pick a shorter one.",
+    homeParentMissing:
+      "Can't find the SpeakMore folder {home}: {parent} doesn't exist. If it's on an external or another drive, connect that drive first.",
+  },
+
+  location: {
+    invalid:
+      "SpeakMore's location file is invalid: {file}\nIt should hold the full path of the SpeakMore folder. Deleting it makes SpeakMore use the default location.",
+    unreadable: "Can't read SpeakMore's location file {file} ({reason})",
   },
 
   control: {

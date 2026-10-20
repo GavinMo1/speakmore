@@ -1,14 +1,20 @@
 import { createHash } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
 import { LocalizedError, msg } from "../i18n/index.mjs";
+import { isFullPath, locationFileOf, readLocation } from "./location.mjs";
 import { restrictToOwner } from "./owner-only.mjs";
 
 // SpeakMore 的家：程序、运行环境、设置、key、历史、录音、日志，全在这一个目录里。
-// 装的时候往里放，删的时候删掉它就干净了。命令行和后台应用是两个进程，靠这一份约定找到同一批文件。
+// 装的时候往里放，删的时候删掉它就干净了，搬的时候整个带走（speakmore move）。命令行和后台应用是两个进程，靠这一份约定找到同一批文件。
+// 它可以装在任何地方，装在哪记在定位文件里（location.mjs）：那是目录以外唯一的一个文件。找它的顺序：
+//   1. 环境变量 SPEAKMORE_HOME：装在家目录里的程序（启动脚本、Windows 开始菜单起的 App）用它告诉程序"我是哪个家目录的"；
+//      开发、测试、安装脚本指定装到哪也用它
+//   2. 定位文件
+//   3. 默认位置：用户目录下的 .speakmore（0.11.0 及以前都装在这里，没有定位文件）
 //
-//   ~/.speakmore/
+//   <家目录>/                       默认是 ~/.speakmore
 //     bin/ app/ runtime/           程序本身：安装时放进去，升级时整个换掉（macOS）
 //     bin\ versions\ current       Windows：每个版本装进 versions 下自己的目录，current 记着现在用哪个
 //     settings.json vocabulary.json <厂商>-key.bin data/    你的东西（词典；每家模型一把 key：gemini-key.bin、openai-key.bin）
@@ -40,10 +46,11 @@ function controlEndpoint(home, path, platform) {
 export function resolvePaths(env = process.env, userHome = homedir(), platform = process.platform) {
   const path = platform === "win32" ? win32 : posix;
   const join = path.join;
-  // SPEAKMORE_HOME：把整个目录换到别处。测试用它指到临时目录，不碰真实的历史
-  const home = env.SPEAKMORE_HOME || join(userHome, ".speakmore");
+  const locationFile = locationFileOf(env, userHome, platform);
+  // SPEAKMORE_HOME 在前：测试用它指到临时目录，不碰真实的历史，也不受这台机器上的定位文件影响
+  const home = env.SPEAKMORE_HOME || readLocation(locationFile, platform) || join(userHome, ".speakmore");
   // 相对路径会随着"在哪个目录运行命令"而变：换个目录就找不到正在运行的那个，还会再起一个
-  if (!path.isAbsolute(home)) {
+  if (!isFullPath(home, platform)) {
     throw new LocalizedError(msg("paths.homeNotAbsolute", { home: JSON.stringify(home) }));
   }
   const controlSocket = controlEndpoint(home, path, platform);
@@ -52,6 +59,8 @@ export function resolvePaths(env = process.env, userHome = homedir(), platform =
   }
   return {
     home,
+    /** 定位文件：记着家目录装在哪，家目录以外唯一的一个文件（location.mjs） */
+    locationFile,
 
     /** speakmore 命令（一个启动脚本）。PATH 里的那个是指向它的链接 */
     binDir: join(home, "bin"),
@@ -145,6 +154,11 @@ function checkedVendorId(provider) {
  * @param {ReturnType<typeof resolvePaths>} paths
  */
 export function ensureHome(paths, { restrict = restrictToOwner } = {}) {
+  // 家目录所在的那一层没有（装在移动硬盘上没接、盘符没了）：照实说，不顺着建出一串目录、在别处新起一个空的
+  const parent = pathModuleOf(paths).dirname(paths.home);
+  if (!existsSync(paths.home) && !existsSync(parent)) {
+    throw new LocalizedError(msg("paths.homeParentMissing", { home: paths.home, parent }));
+  }
   mkdirSync(paths.home, { recursive: true, mode: 0o700 });
   // 目录早就在的话 mkdir 不会改它的权限；Windows 上 mode 不起作用，靠这一步
   restrict(paths.home);
