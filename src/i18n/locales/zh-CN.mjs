@@ -695,8 +695,21 @@ export default {
     barHintFailed: "操作提示未能更改：{reason}",
     recheck: "重新检查",
     version: "版本",
-    dataFolder: "数据目录",
     source: "源代码",
+    storage: {
+      title: "存储位置",
+      change: "更改…",
+      pickTitle: "选择新的存储位置",
+      pickMessage: "SpeakMore 会移到所选文件夹中的 .speakmore",
+      pickButton: "选择",
+      confirm: "移动到 {to}？",
+      confirmDetail:
+        "将复制 {size}（{count} 个文件），包括程序、本机模型、录音和设置。移动期间 SpeakMore 会暂时退出，完成后自动重新打开；未能完成时一切照旧。",
+      unknown: "原位置中不属于 SpeakMore 的文件不会移动，也不会删除：{items}",
+      move: "移动",
+      cancel: "取消",
+      failed: "未能更改：{reason}",
+    },
     update: {
       title: "软件更新",
       check: "检查更新",
@@ -715,6 +728,48 @@ export default {
       fromSource: "从源码运行 · 请用 git pull 更新",
       startFailed: "未能开始更新：{reason}",
     },
+  },
+
+  // App 第一次打开时选存储位置（src/app/first-run.mjs），用系统的对话框
+  firstRun: {
+    title: "选择存储位置",
+    detail:
+      "SpeakMore 的程序数据、本机模型、录音和设置都保存在同一个文件夹中。\n\n默认位置：{home}\n\n本机模型每个约 0.2–1.6 GB。如需保存到其他磁盘，可以现在选择；以后也可在 设置 › 通用 › 存储位置 中更改。",
+    useDefault: "使用默认位置",
+    choose: "选择其他位置…",
+    pickTitle: "选择存储位置",
+    pickMessage: "SpeakMore 会保存在所选文件夹中的 .speakmore",
+    pickButton: "选择",
+    existing: "{home} 中已有 SpeakMore 的数据",
+    existingDetail: "将直接使用其中的设置、历史和录音。",
+    reuse: "使用",
+    again: "重新选择",
+    unusable: "此位置不可用",
+  },
+
+  // 搬家的进度窗口（src/app/move-window.mjs、src/renderer/move）
+  moveWindow: {
+    title: {
+      preparing: "正在移动存储位置",
+      copying: "正在移动存储位置",
+      switching: "正在移动存储位置",
+      done: "存储位置已更改",
+      failed: "存储位置未能更改",
+    },
+    from: "原位置",
+    to: "新位置",
+    step: {
+      preparing: "正在准备，SpeakMore 会暂时退出…",
+      switching: "正在切换到新位置…",
+      done: "所有文件已移到新位置。",
+    },
+    copying: "正在复制 {done} / {total}（{percent}%）· 完成前请勿断开磁盘",
+    removed: "原位置的文件已删除。",
+    later: "原位置的文件将在此窗口关闭后删除。",
+    left: "原位置中不属于 SpeakMore 的文件保留未动：{items}",
+    unchanged: "SpeakMore 仍在原位置，一切照旧。",
+    done: "完成",
+    close: "关闭",
   },
 
   keyPanel: {
@@ -871,7 +926,60 @@ export default {
 
   paths: {
     homeNotAbsolute: "环境变量 SPEAKMORE_HOME 要写绝对路径，现在是 {home}",
-    homeTooLong: "SpeakMore 的目录路径太长，控制通道建不起来：{home}\n用环境变量 SPEAKMORE_HOME 换一个短一些的目录。",
+    homeTooLong:
+      "SpeakMore 的目录路径太长，控制通道建不起来：{home}\n把这个文件夹挪到路径短一些的地方，再运行安装命令、选它所在的文件夹。",
+    homeParentMissing:
+      "找不到 SpeakMore 的目录 {home}：它所在的 {parent} 不存在。装在移动硬盘或别的盘上的话，先把那块盘接上。",
+    homeMoved: "SpeakMore 已经搬到 {to} 了，这里（{home}）是还没删完的旧目录。从新位置打开 SpeakMore。",
+    homeMissing:
+      "找不到 SpeakMore 的目录 {home}（定位文件 {file} 记着它在那里）。\n装在移动硬盘或别的盘上的话，先把那块盘接上；不再用那个位置的话，删掉定位文件就改用默认位置。",
+  },
+
+  move: {
+    notFull: "要写完整路径，比如 {example}：{folder}",
+    noFolder: "{folder} 不存在，或者不是文件夹。先建好它，再选一次。",
+    sameHome: "SpeakMore 已经在 {home} 了，不用搬。",
+    insideHome: "不能搬到 SpeakMore 现在的目录（{home}）里面，换一个文件夹。",
+    notEmpty: "{home} 里已经有东西了。SpeakMore 只搬到空的位置：换一个文件夹，或者先把它清空。",
+    tooLongBytes: "路径太长了：{home}\n最长 {max} 个字节（中文一个字算三个），换一个短一些的位置。",
+    tooLongChars: "路径太长了：{home}\n最长 {max} 个字符，换一个短一些的位置。",
+    inProgress: "SpeakMore 正在从 {home} 搬到 {to}，搬完会自动重新打开。",
+    unfinishedCopy:
+      "这里（{home}）是一次没搬完的搬家拷出来的，SpeakMore 仍在 {from}。从那里打开 SpeakMore，会顺带把这次没搬完的收拾掉。",
+    interrupted: "搬到一半中断了（进程意外退出）",
+    notRecorded:
+      "这一次用的目录 {home} 是环境变量 SPEAKMORE_HOME 临时指定的，SpeakMore 记着的位置是 {recorded}。只能搬记着的那一个。",
+    homeTooOld: "{home} 里的程序是旧版本，还不支持搬家。先更新它（speakmore update，不行就重新运行安装命令），再搬。",
+    appTooOld: "{app} 还是 {version} 版，不认识新位置。先运行 speakmore update 把它一起更新，再搬。",
+    noSpace: "{folder} 所在的磁盘空间不足：需要 {need}，只剩 {free}。",
+    recovered: "上次搬到 {to} 没有完成，已经收拾好：SpeakMore 仍在 {home}。",
+    copying: "正在拷到 {to}…",
+    switching: "正在切换到新位置…",
+    rehomeFailed: "新位置的程序没能接上（安装脚本退出码 {code}）。",
+    restoreFailed: "没能把 SpeakMore 的入口换回 {home}（安装脚本退出码 {code}）。",
+    putBack: "上次搬到 {home} 没有完成，SpeakMore 已经换回 {from}。请再打开一次 SpeakMore。",
+    notOurCopy: "{to} 里的东西不是这次搬家拷过去的，没有动它。",
+    copyBroken: "拷过去的文件不完整：{reason}",
+    cleanupProblem: "恢复原状时出了问题：{problem}",
+    recordFailed: "搬家记录未能写入（{reason}），不影响使用。",
+    leftover: "{dir} 未能删干净（{reason}），可以手动删除。",
+    clearedEnv: "已删除指向旧位置的环境变量 SPEAKMORE_HOME。",
+    reopened: "已重新打开 SpeakMore。",
+    reopenFailed: "SpeakMore 未能自动重新打开（{reason}），请手动打开。",
+    restartFailed: "启动命令退出码 {code}",
+    unsupportedDrive:
+      "{home} 所在的磁盘不支持 SpeakMore：{what}（{reason}）。U 盘、移动硬盘常用的 exFAT、FAT32 格式不支持，请换一块 APFS 或 Mac OS 扩展格式的磁盘。",
+    probe: {
+      create: "无法新建文件夹",
+      restrict: "无法设为仅本人可访问",
+      symlink: "无法建立符号链接",
+      socket: "无法建立本机通信用的套接字",
+    },
+  },
+
+  location: {
+    invalid: "SpeakMore 的定位文件内容不对：{file}\n它应该写着 SpeakMore 目录的完整路径。删掉这个文件会改用默认位置。",
+    unreadable: "读不了 SpeakMore 的定位文件 {file}（{reason}）",
   },
 
   control: {
@@ -933,6 +1041,9 @@ export default {
   speakmore theme <名字>         换一套（{themes}），当场生效不用重启
   speakmore settings            打开设置（去系统设置授权时用）
   speakmore logs [-n 行数] [-f]  看日志，-f 一直跟着
+  speakmore move [<文件夹>] [--yes]
+                                搬家：把 SpeakMore 的目录（程序、本机模型、录音、设置）整个搬进那个文件夹里的 .speakmore，
+                                比如搬到另一块磁盘。speakmore move ~ 搬回默认位置。不写文件夹就看现在在哪
   speakmore uninstall [--keep-data] [--yes]
                                 卸载：停掉后台，把 SpeakMore 的目录整个删掉。--keep-data 留下设置、key、词典、历史和录音
 
@@ -961,6 +1072,7 @@ export default {
       logs: "speakmore logs [-n 行数] [-f]",
       settings: "speakmore settings",
       uninstall: "speakmore uninstall [--keep-data] [--yes]",
+      move: "speakmore move [<文件夹>] [--yes]",
       config: "用法：speakmore config | speakmore config set <名字> <值> | speakmore config unset <名字>",
       theme: "用法：speakmore theme | speakmore theme <名字>",
       model: "用法：speakmore model | speakmore model <厂商>[/<模型>] | speakmore model check [<厂商>[/<模型>]]",
@@ -1274,6 +1386,20 @@ speakmore help     全部命令`,
     logs: {
       none: "还没有日志：SpeakMore 启动过之后会写到 {file}",
     },
+    move: {
+      where: "SpeakMore 现在在 {home}。",
+      how: "要搬到别处（比如另一块磁盘）：speakmore move <文件夹>，会搬进那个文件夹里的 .speakmore。搬回默认位置：speakmore move ~",
+      needsConfirm: "搬家要先确认。不在终端里运行时加上 --yes。",
+      plan: "要把 SpeakMore 从 {from} 搬到 {to}：拷 {size}（{count} 个文件），程序、本机模型、录音和设置都在里面。\n搬的时候 SpeakMore 会先停下，搬完自动重新打开；没搬成的话一切照旧。",
+      unknown: "旧目录里不是 SpeakMore 的东西不搬，也不删：{items}",
+      confirm: "确定搬吗？输入 y 再按回车：",
+      aborted: "没有动。",
+      progress: "已拷 {percent}%（{done} / {total}）",
+      done: "SpeakMore 已经搬到 {to}（{count} 个文件，{size}）。",
+      removed: "旧目录 {dir} 已经删掉。",
+      later: "旧目录 {dir} 正被这条命令用着，等它退出后几秒内删掉。",
+      left: "旧目录 {dir} 里还留着不是 SpeakMore 的东西，没有动：{items}",
+    },
     uninstall: {
       yours: "设置、key、词典、历史和录音",
       needsConfirm: "卸载要先确认。不在终端里运行时加上 --yes。",
@@ -1285,6 +1411,9 @@ speakmore help     全部命令`,
       keychainItem: "钥匙串里用来加密 key 的那一条",
       keychainFailed: "钥匙串里用来加密 key 的那一条没删掉（{reason}）：可以在“钥匙串访问”里搜 SpeakMore 手动删",
       removedAll: "{home}（程序、运行环境，以及你的{yours}）",
+      locationFile: "记着 SpeakMore 装在哪的定位文件 {file}",
+      locationUnreadable: "定位文件 {file} 读不出来（{reason}），没有删：不要了可以手动删掉",
+      halfCopy: "{dir}（上次没搬完时拷过去的一份）",
       // Windows：install.ps1 在用户 Path 里加的那一项、App 设置里开过的开机启动
       pathEntry: "用户 Path 里的 {entry}",
       loginItem: "开机启动",
@@ -1327,6 +1456,10 @@ speakmore help     全部命令`,
     },
     update: {
       restartFailed: "已换上新版本，但未能重新启动（退出码 {code}）。请从开始菜单打开 SpeakMore，经过见日志 {log}。",
+    },
+    move: {
+      unsupportedDrive:
+        "{home} 所在的磁盘不支持 SpeakMore：{what}（{reason}）。U 盘、移动硬盘常用的 exFAT、FAT32 格式不支持，请换一块 NTFS 格式的磁盘。",
     },
     cli: {
       key: { storage: "它会用 Windows 的数据保护加密后存在这台电脑上，不会发到别处。" },

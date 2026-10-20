@@ -15,6 +15,8 @@ import {
 } from "../i18n/index.mjs";
 import { log } from "../log.mjs";
 import { createLocalModels } from "../models/library.mjs";
+import { createMove } from "../move/index.mjs";
+import { readMoveRecord, stillMoving } from "../move/state.mjs";
 import { CHAT_VENDORS } from "../server/chat/vendors.mjs";
 import { PROVIDERS } from "../server/providers/index.mjs";
 import { adoptAppKeys } from "../storage/app-keys.mjs";
@@ -24,6 +26,14 @@ import { resolvePaths } from "../storage/paths.mjs";
 import { resolveSettings } from "../storage/settings.mjs";
 import { THEMES } from "../themes/index.mjs";
 import { createUpdates } from "../update/index.mjs";
+import {
+  clearUserHome,
+  isOurShortcut,
+  removeAfterExit,
+  removeHomeAfterExit,
+  removeLoginItem,
+  removePathEntry,
+} from "../windows-system.mjs";
 import { askSecret, Cancelled } from "./ask-secret.mjs";
 import { config, settings, theme } from "./commands/config.mjs";
 import { dict } from "./commands/dict.mjs";
@@ -34,13 +44,13 @@ import { polish, transcriber } from "./commands/local.mjs";
 import { logs } from "./commands/logs.mjs";
 import { mode } from "./commands/mode.mjs";
 import { model } from "./commands/model.mjs";
+import { move } from "./commands/move.mjs";
 import { uninstall } from "./commands/uninstall.mjs";
 import { update } from "./commands/update.mjs";
 import { usage } from "./commands/usage.mjs";
 import { ConfigError, UsageError } from "./common.mjs";
 import { createDaemon } from "./daemon.mjs";
 import { tailFile } from "./tail.mjs";
-import { isOurShortcut, removeAfterExit, removeLoginItem, removePathEntry } from "./windows-system.mjs";
 
 // speakmore 命令：把"装好依赖、编小帮手、起后台应用、填 key、看历史、改设置"收成几个子命令。
 // 真正干活的是后台应用（src/app），这里通过控制通道指挥它；历史和设置文件则直接读写。
@@ -74,8 +84,39 @@ const COMMANDS = {
   usage,
   logs,
   settings,
+  move,
   uninstall,
 };
+
+/**
+ * 直接改家目录里文件的命令（设置、词典、key、历史、模型、卸载）：正在搬家时不做。后台没在跑时它们直接写文件，
+ * 写进的是正在被拷走的旧目录，拷完就跟着旧目录一起删了。stop、status 这些不挡：换家时安装脚本自己要用 stop
+ */
+const WRITES_HOME = new Set([
+  "key",
+  "mode",
+  "model",
+  "transcriber",
+  "polish",
+  "config",
+  "theme",
+  "dict",
+  "history",
+  "uninstall",
+]);
+
+function refuseWhileMoving(io) {
+  let record = null;
+  try {
+    record = readMoveRecord(io.paths);
+  } catch {
+    // 记录读不出来（权限这类）：不因为它挡住命令
+    return;
+  }
+  if (stillMoving(record, io.moverAlive ? { alive: io.moverAlive } : {})) {
+    throw new LocalizedError(msg("move.inProgress", { home: io.paths.home, to: record.to ?? "?" }));
+  }
+}
 
 /**
  * 执行一条命令。
@@ -95,6 +136,7 @@ export async function run(argv, io) {
     }
     const [name = "start", ...rest] = argv;
     if (!Object.hasOwn(COMMANDS, name)) throw new UsageError(msg("cli.unknownCommand", { name }));
+    if (WRITES_HOME.has(name)) refuseWhileMoving(io);
     return await COMMANDS[name](rest, io);
   } catch (error) {
     const said = () => io.err(io.t.text(problemOf(error)));
@@ -222,7 +264,17 @@ export function createIo({ packageDir, env = process.env }) {
     ask,
     confirm,
     platform: process.platform,
-    // Windows 上卸载时要动的几处（windows-system.mjs）
+    cwd: () => process.cwd(),
+    // 搬家（src/move）：和 App 设置里的"存储位置"共用一套。安装脚本说的话接在终端上
+    mover: () =>
+      createMove({
+        paths,
+        env,
+        instance: daemon,
+        stdio: "inherit",
+        system: process.platform === "win32" ? { clearUserHome, removeHomeAfterExit } : null,
+      }),
+    // Windows 上卸载、搬家时要动的几处（windows-system.mjs）
     system: { removePathEntry, isOurShortcut, removeLoginItem, removeAfterExit },
     // 钥匙串里那一条的名字是 Electron 按应用名起的
     removeKeychainKey: () => removeKeychainKey(manifest.productName),

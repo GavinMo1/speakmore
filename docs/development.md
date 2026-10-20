@@ -26,7 +26,11 @@ npm run release               # 打发布：dist/release/ 下是更新用的块�
 
 **更新**只下本机缺的块：照新版本的清单拼出整棵树，本机装着的几份里有的块直接拷，每块写进去前核对 sha256，拼出来的和发布的逐字节相同，所以拼完照旧核对 App 的签名和开发者、照旧让安装脚本试跑。0.10.0 → 0.10.1 实测要下的：Mac App 1.31 MB、Windows 0.25 MB、Mac 终端 0.13 MB（整包是一两百兆）。换 Electron 的那一版要多下 Electron 里变了的部分。0.10.1 及以前的版本读的是已经不再更新的 `latest`，看不到之后的版本，要用一行命令或安装包重新装一次。
 
-从源码跑的和装好的用的是同一个 `~/.speakmore`，想分开就设 `SPEAKMORE_HOME`。
+从源码跑的和装好的用的是同一个家目录（定位文件说的那个，没有定位文件就是 `~/.speakmore`），想分开就设 `SPEAKMORE_HOME`：它只管这一次，从不改定位文件。
+
+**家目录放在哪、搬家**：程序、模型、数据全在一个家目录里，它可以在任何地方，在哪记在家目录以外唯一的一个文件里——定位文件（`src/storage/location.mjs`：Mac 是 `~/Library/Application Support/com.zephyrxiang.speakmore/location.json`，Windows 是 `%LOCALAPPDATA%\SpeakMore\location.json`）。只有装在默认位置以外才有它，只在明确选了位置时写：第一次安装时选的（Mac App 第一次打开的对话框 `src/app/first-run.mjs`、Windows 安装程序的对话框、安装脚本在终端里问的、`SPEAKMORE_INSTALL_DIR`）、搬家（`src/move/`）。找家目录的顺序是 `SPEAKMORE_HOME` → 定位文件 → 默认位置；定位文件说的目录不在（移动硬盘没接）就报错，不新建空的。装好的程序自己认得自己在哪：Mac 的启动脚本按自己所在的目录，Windows 的 App 按自己所在的 `versions\`，所以里面没有写死的路径。搬家（命令行 `speakmore move`、App 设置里的"存储位置"，同一套）：先检查新位置、试盘（exFAT 这类建不了套接字、符号链接、只给自己的权限），停掉正在运行的，只拷 SpeakMore 自己的东西，再交给新位置自带的安装脚本"换家"（`SPEAKMORE_PREVIOUS_HOME`：试跑、改命令链接、Path、开始菜单、开机启动、定位文件），最后旧目录放下 `MOVED.json`、只删我们的。提交之前任何一步出错都换回旧目录；断在半路的，下次启动时 `settleMove` 收拾好：从旧目录启动的把入口换回来、删掉拷了一半的（只认新位置 `run/move.json` 里同一次搬家的记号），从拷了一半的那一份启动的先把入口换回旧目录、说再打开一次；启动时换不回来不挡启动（旧目录完好），下次再收拾。搬家进行中，直接改家目录里文件的命令（`dict`、`config`、`key` 这些）不做。App 里搬家时另起一个自己的进程开进度窗口（`src/app/move-window.mjs`）。
+
+要试搬家、第一次安装这些会写定位文件的，把 `HOME` 换成临时目录（Windows 是 `USERPROFILE`、`LOCALAPPDATA`）：定位文件、默认位置都跟着它走，不碰这台电脑上真的。这时用 Electron 本体起（`node_modules/electron/dist/Electron.app/Contents/MacOS/Electron .`）：`node_modules/.bin/electron` 换了 `HOME` 会卡住不动。只搬"记着的那一个"：`SPEAKMORE_HOME` 临时指到别处的家目录不让搬，免得定位文件被改指到它。例外是 0.11.0 及以前用 `SPEAKMORE_HOME` 装到别处的：没有定位文件、默认位置没装过、那里装着会换家的程序时认它。
 
 要真调模型的命令需要环境里有那一家的 key（`GEMINI_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、阿里云百炼的 `BAILIAN_API_KEY`、Kimi 的 `MOONSHOT_API_KEY`、智谱的 `ZHIPU_API_KEY`、MiniMax 的 `MINIMAX_API_KEY`）。`scripts/dev/with-key.sh <厂商>` 可以按你自己机器上的配置把它只喂给一条命令，见 `.machine.env.example`。用哪家哪个模型由 `SPEAKMORE_MODEL` 定，默认 Gemini：
 
@@ -66,7 +70,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 
 | 目录 | 内容 |
 | --- | --- |
-| `install.sh`、`install.ps1` | 安装脚本（macOS、Windows）：预检查、下载、校验、装进 `~/.speakmore`（Windows 是 `%USERPROFILE%\.speakmore`）、启动。设了 `SPEAKMORE_INSTALL_FROM`（一棵准备好的程序树：`speakmore update` 拼好的、Windows 安装程序解出来的）就不下载，直接装它。输出只有英文，不跟界面语言 |
+| `install.sh`、`install.ps1` | 安装脚本（macOS、Windows）：预检查、下载、校验、装进家目录（默认 `~/.speakmore`，Windows 是 `%USERPROFILE%\.speakmore`；第一次安装在终端里时先问装在哪）、启动。设了 `SPEAKMORE_INSTALL_FROM`（一棵准备好的程序树：`speakmore update` 拼好的、Windows 安装程序解出来的）就不下载，直接装它。输出只有英文，不跟界面语言 |
 | `bin/`、`src/cli/` | `speakmore` 命令 |
 | `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、主窗口、首次引导；`keys/` 是 key 的保存和启用 |
 | `src/renderer/`、`src/preload/` | 各个窗口的页面，一个窗口一个目录：`bar/`（悬浮条：状态机、录音、听写协议的客户端、画面）、`hub/`（主窗口：首页、历史记录、设置对话框）、`onboarding/`（首次引导：选识别方式、准备模型和密钥，判断在 `plan.mjs`、`steps.mjs`），共用的样式、拼节点的小工具在 `shared/` |
@@ -77,7 +81,8 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `src/usage/` | 用量报表（今天、本月、累计、按型号）、首页的统计（字数、语速、连续天数、热力图）和数字的写法，命令和主窗口共用；`estimate.mjs` 估推荐组合的月成本 |
 | `native/` | 听热键、贴字、说话时截住 `esc` 和悬浮条上点击的小程序：macOS 的是 Swift，`windows/` 是 Go（只用标准库，在 Mac 上交叉编译） |
 | `assets/` | 图标：`icon.svg` 是那方印，`tray.svg` 是菜单栏上的五道；`.icns`、Windows 用的 `icon.ico` 和 `trayTemplate*.png` 由 `scripts/build/make-icon.sh` 从它们生成 |
-| `src/storage/` | `~/.speakmore` 里的东西：放在哪、设置、历史库、词典、旧数据的迁移。命令和后台应用共用 |
+| `src/storage/` | 家目录里的东西：放在哪（`paths.mjs`、定位文件 `location.mjs`）、设置、历史库、词典、旧数据的迁移。命令和后台应用共用 |
+| `src/move/` | 搬家：检查新位置（`target.mjs`）、试盘（`probe.mjs`）、只拷我们的（`copy.mjs`）、交给安装脚本换家（`installer.mjs`）、整个流程和断在半路的收拾（`index.mjs`）。命令行 `speakmore move` 和 App 的"存储位置"只调这里 |
 | `src/vocabulary/` | 词典：词怎么规整、导入怎么解析，各模型收词的三种做法和挑词（`fitTerms`） |
 | `src/update/` | 版本检查和更新，命令行（`speakmore status`、`update`）和 App（设置 › 通用 › 软件更新）只调这里，壳里不写更新的逻辑。查新版本一天最多问一次下载地址，记在 `run/update-check.json`，两边共用；更新进行到哪、失败原因记在 `run/update.json`，`run/update.lock` 不让两边同时换。更新把本机装着的每一份都换成最新：家目录里的那一份（`home.mjs`，拼好后交给新版本自带的安装脚本装），Mac 上还有 SpeakMore.app（`bundle.mjs`，拼在旁边，核对签名和开发者后对调）。拼（`assemble.mjs`）只下本机缺的块，下到的块放在 `run/update-cache`，换成了才删。下载和核对都在停掉正在运行的那个之前做完，停着的只有换程序那几秒；换完只重新打开原来在运行的那个。App 点了更新另起一个进程（`background.mjs`，借 App 自己的 Electron 当 Node 跑）：它要让 App 退出、换掉、再打开。下载地址上的摆法在 `layout.mjs`，打包和更新共用 |
 | `src/control.mjs`、`src/instance.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道；问正在运行的那个的状态、请它退出（命令行和更新共用）；日志 |
@@ -106,7 +111,7 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 
 ## Windows
 
-Windows 版和 Mac 版是同一份代码，差别关在几处：听热键、贴字的小帮手是 `native/windows/`（Go，只用标准库，协议和 Swift 那个一字不差）；控制通道是 named pipe；家目录的权限用访问控制表只给本人和 SYSTEM；key 用 DPAPI 加密（Electron 的 safeStorage）；系统朗读用 System.Speech；安装、升级、卸载是 `install.ps1` 和 `src/cli/windows-system.mjs`。文案里按系统说的话写在各语言文案的 `windows` 一节，名字照抄通用的那句（`test/i18n/` 会查盖的那句存在、参数一样）。
+Windows 版和 Mac 版是同一份代码，差别关在几处：听热键、贴字的小帮手是 `native/windows/`（Go，只用标准库，协议和 Swift 那个一字不差）；控制通道是 named pipe；家目录的权限用访问控制表只给本人和 SYSTEM；key 用 DPAPI 加密（Electron 的 safeStorage）；系统朗读用 System.Speech；安装、升级、卸载是 `install.ps1` 和 `src/windows-system.mjs`。文案里按系统说的话写在各语言文案的 `windows` 一节，名字照抄通用的那句（`test/i18n/` 会查盖的那句存在、参数一样）。
 
 装好的样子和 Mac 一样全在 `%USERPROFILE%\.speakmore` 里，只是程序按版本放：`versions\<版本>-<编号>\` 里是 `app\` 和 `runtime\`（原版 Electron），`current` 一行字记着现在用哪个，`bin\speakmore.cmd` 照它找程序；数据、日志、模型和 Mac 一样。装新版本是解进一个新目录、试过能跑再改 `current`，不挪、不覆盖任何已有的文件，换下来的旧版本没人用了再删（0.9.2 及以前直接放在 `app\`、`runtime\`，升级时一并删掉），现在删不掉的交给一个隐藏的 PowerShell 隔几秒再试。同一个家目录同时只装一个（按家目录取名的系统互斥量）。0.9.3 以前的版本不认这种放法，install.ps1 不装它们。家目录以外只动两处、都记在 `bin\links`：用户 Path 里的 `%USERPROFILE%\.speakmore\bin`，开始菜单的 SpeakMore 快捷方式；App 设置里开了开机启动的话还有注册表 Run 里的一条。`speakmore uninstall` 照着删。升级时开机启动那一条、用户固定到任务栏或发送到桌面的快捷方式副本，凡是指着这个家目录里旧版本的，都改指到新版本。
 
@@ -284,5 +289,14 @@ README 里的图不进仓库，和官网的截图放在同一个 COS 图片桶�
   - 实测大小：Mac 终端包 tar.xz 91.7 MB（Apple 芯片）、99.8 MB（Intel）；Windows zip 171.9 MB、安装程序 124.9 MB；dmg 改成 ULMO 后约 99–103 MB（不签名的测试包量的）。
   - 也看到的：install.ps1 的输出经管道转进日志时，中文路径和 ✓ 是乱码（PowerShell 往管道写的是系统编码），只是日志里的样子，在终端里直接跑是对的。
   - **没验证的**：签了名、过了公证的正式包之间的更新（要等 0.11.1）；Intel 的 Mac；下载到一半断网再接着下（只有单测）；下载地址被刷到按小时封顶时的样子。
+- 存储位置可以放在任何地方、一键搬家、第一次安装时选（2026-10-20，0.12.0 发版前，issue #10）：
+  - 单测 1233 条：Mac 上 1226 过、7 条 Windows 专用的跳过；Windows 开发机上 1170 过、63 条跳过（这个分支早先加的测试头一遍在 Windows 上有 10 条没过：9 条是测试按 macOS 的路径写的，1 条是家目录在到不了的网络路径上时被说成"已经搬走了"，都改了）。安装脚本 53 条：Mac 上 50 过、3 条 Windows 专用的跳过，那 4 条（含新加的"改写已有的定位文件"）在 Windows 上全过。Go 测试和 vet（含 `GOOS=windows`）过。
+  - 对抗性审查一轮（六个角度、43 条，去重约 30 条），修了 26 条，每条先写出能复现的测试。最重的三条：Mac App 第一次打开选默认位置会一直重新启动；Windows 上改写已有的定位文件必失败（PowerShell 把 `$null` 当空字符串传给 `File.Replace`），搬到默认位置以外的都搬不成；断电后进程号被别的程序占了，App 和 `speakmore start` 一直说"正在搬"。有意不修的四条低危：新旧版本混着用时 0.11 读 0.12 写的历史只见录音的文件名；放在"应用程序"以外的 0.11 App 搬家时找不到；`~/.speakmore` 软链到超长路径的老用户升级不了（只改了提示）；外接盘默认忽略所有权，"只让自己进"在那里不起作用（key 仍由钥匙串加密）。
+  - 测法：本机打的 0.12.0（App 用 Developer ID 签名、不公证）当下载地址。Mac 把 `HOME` 换成临时目录（定位文件、默认位置跟着走），钉住 `SPEAKMORE_BIN_DIR`、`SPEAKMORE_APP`，"外接盘"是 2 GB 的 APFS 内存盘；起 App 时连 `CFFIXED_USER_HOME` 一起换，不和正式的共用偏好设置。Windows 把 `USERPROFILE`、`LOCALAPPDATA`、`APPDATA` 换成临时目录并先建好"开始菜单\程序"和"桌面"（`GetFolderPath` 照 `%USERPROFILE%` 展开，目录在才交回），快捷方式落在假目录里；用户 Path 事先备份、测完还原。
+  - Mac：从真的下载地址装 0.11.0 → `speakmore update` 到 0.12.0（没写定位文件，启动脚本里没有写死的路径）→ `speakmore move` 到内存盘（1,134 个文件 387 MB：换家、改链接、写定位文件、删旧目录）→ 往回搬时第 100 毫秒 `kill -9`，再 `speakmore start`：拷了一半的删了、定位文件去掉了 moving、链接没动 → 后台开着时搬回默认位置（旧目录里放了 `.DS_Store`，也整个删了；后台从新位置重新起来）→ 再搬过去、卸载，定位文件删了 → 全新安装时在终端里（expect）选内存盘，记进定位文件，卸载删掉。App 第一次打开（作者点的）：选别处（内存盘）写了定位文件、重新启动后在那里起来；选默认位置只问一次、建好只让自己进的默认目录、不写定位文件。
+  - Windows（作者的游戏电脑，桌面会话）：照 `irm | iex` 装 0.11.0 → `update` 到 0.12.0 → `move` 到 D:（定位文件已在时改写、Path 和开始菜单改指、旧目录 2.5 秒内删干净）→ 后台开着时搬回默认位置（App 从新位置重新起来、D: 上的旧目录删干净、定位文件删了）→ 再搬到 D:、卸载（Path、快捷方式、家目录、定位文件都删了）→ `SPEAKMORE_INSTALL_DIR` 全新安装到 D:，同一个窗口里 `update` 没被挡，卸载。安装程序（作者点的）：中文对话框，选"选择其他位置…"、在文件夹选择框里选 D:\smsetup，装进去、记进定位文件、装完打开 App；在 App 的设置里"更改…"搬到 D:\smmove2，8 秒搬完，旧目录整个删了，App 从新位置重新起来。真的开始菜单快捷方式前后一样。
+  - 端到端发现并修掉的：命令行、App 的搬家窗口都跑在 Electron 上，它把 `.asar` 文件当压缩包读，拷运行环境里的 `default_app.asar` 报 "Invalid package"，装着程序的家目录一个都搬不成（会照常回滚）；之前开发版 App 试搬的家目录里没有运行环境，没碰到。拷、量、核对时设 `process.noAsar`，加了用真 Electron 跑的测试。
+  - 也看到的：测试起的 App 用的是假的用户目录，搜狗输入法往里写日志并一直开着，测试目录要等它退出才删得掉。测试脚本的两个坑：写给 Windows PowerShell 5.1 的脚本要带 BOM（不然中文注释吞掉换行，下一行跟着成了注释）；照 `irm | iex` 在同一作用域里跑 install.ps1，它的 `$script:Base` 会盖掉脚本里不分大小写同名的 `$base`。
+  - **没验证的**：打好的 Mac App 里从设置"更改…"搬家（最后要 `open -n` 重新打开，在这台机器上会碰到正式装的那份，只在开发版里走过）；install.ps1 在 PowerShell 窗口里问装在哪（交互提问只在 install.sh 上用 expect 测过）；签了名、过了公证的正式包；Intel 的 Mac。
 - 只有自动测试、没在真机上试的：启动时断网、从 0.1 版搬数据、重新检查权限时不再反复弹系统授权框。
 

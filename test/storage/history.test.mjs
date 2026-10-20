@@ -23,7 +23,7 @@ const entry = (overrides = {}) => ({
   refinedText: "我们后天开会。",
   error: null,
   duration: 4.2,
-  audioLocalPath: "/tmp/a1.webm",
+  audioFile: "a1.webm",
   createdAt: "2026-10-13T08:00:00.000Z",
   ...overrides,
 });
@@ -56,6 +56,32 @@ test("存进去的记录能原样读出来，新的在前；目录不存在会�
   ]);
   assert.equal(history.list({ limit: 1 }).length, 1);
   history.close();
+});
+
+test("录音只记文件名：家目录搬了家也对得上；老版本记的完整路径（macOS、Windows 两种写法）读出来也只取文件名", () => {
+  const path = join(dir, "history.db");
+  const history = openHistory(path);
+  history.add(entry({ id: "new" }));
+  history.add(entry({ id: "none", audioFile: null, createdAt: "2026-10-13T07:00:00.000Z" }));
+  history.close();
+  const db = new DatabaseSync(path);
+  const old = db.prepare(
+    "INSERT INTO history (id, status, refined_text, duration, audio_local_path, created_at) VALUES (?, 'completed', '', 1, ?, ?)",
+  );
+  old.run("mac", "/Users/someone/.speakmore/data/Recordings/mac.webm", "2026-10-12T00:00:00.000Z");
+  old.run("win", "C:\\Users\\someone\\.speakmore\\data\\Recordings\\win.webm", "2026-10-11T00:00:00.000Z");
+  db.close();
+  const reopened = openHistory(path, { readOnly: true });
+  assert.deepEqual(
+    reopened.list().map(({ id, audioFile }) => [id, audioFile]),
+    [
+      ["new", "a1.webm"],
+      ["none", null],
+      ["mac", "mac.webm"],
+      ["win", "win.webm"],
+    ],
+  );
+  reopened.close();
 });
 
 test("关掉再打开，记录还在，不会重复建表", () => {

@@ -26,17 +26,18 @@ export function createDelivery({ recordingsDir, history, paste, writeClipboard, 
   const record = (payload, fields) => {
     checkRecording(payload);
     mkdirSync(recordingsDir, { recursive: true });
-    const audioLocalPath = join(recordingsDir, `${payload.audioId}.webm`);
+    // 历史里只记文件名，不记完整路径：家目录整个搬了家也对得上
+    const audioFile = `${payload.audioId}.webm`;
     const { audio } = payload;
     // 视图可能只是底层缓冲区的一段，只写它自己那一段
     const bytes = ArrayBuffer.isView(audio)
       ? new Uint8Array(audio.buffer, audio.byteOffset, audio.byteLength)
       : new Uint8Array(audio);
-    writeFileSync(audioLocalPath, bytes);
+    writeFileSync(join(recordingsDir, audioFile), bytes);
     history.add({
       id: payload.audioId,
       duration: payload.durationSeconds,
-      audioLocalPath,
+      audioFile,
       createdAt: now().toISOString(),
       ...fields,
     });

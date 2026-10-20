@@ -46,9 +46,9 @@
 ## 🚀 Installation
 
 <p align="center">
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.11.0/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Apple%20silicon-111?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac with Apple silicon" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.11.0/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Intel Mac" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.11.0/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/Download-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.12.0/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Apple%20silicon-111?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac with Apple silicon" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.12.0/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Intel Mac" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.12.0/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/Download-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>
 </p>
 
 **macOS**
@@ -77,6 +77,13 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 ```
 
 - Append `.sha256` to any download link to obtain its checksum.
+
+**Storage location**
+
+- The program, on-device models, settings, history and recordings are kept in one folder, by default `~/.speakmore` (`%USERPROFILE%\.speakmore` on Windows).
+- A different place, such as another disk, can be chosen on first install: the Mac app asks when it first opens, the Windows installer asks before installing, and the terminal installation asks in the terminal. SpeakMore is kept in `.speakmore` inside the chosen folder.
+- To change it later, use Settings › General › Storage location, or run `speakmore move <folder>`; everything is moved together and SpeakMore reopens when done.
+- The disk must be formatted as APFS, Mac OS Extended or NTFS; exFAT and FAT32 USB sticks and external drives are not supported.
 
 <details>
 <summary><b>Installer and terminal installation compared</b></summary>
@@ -324,7 +331,7 @@ Comparison with every Typeless plan (heavy use, 100 dictations a day):
 
 - **Open source**: MIT-licensed; all code that handles voice data is public.
 - **No account**: no registration or sign-in.
-- **Single directory**: data, settings, keys, models and logs are stored in `~/.speakmore` (`%USERPROFILE%\.speakmore` on Windows).
+- **Single directory**: data, settings, keys, models and logs are stored in one folder, by default `~/.speakmore` (`%USERPROFILE%\.speakmore` on Windows), which can be moved to another disk.
 - **Complete removal**: `speakmore uninstall` deletes everything.
 - **Signed and notarized**: the Mac app carries a Developer ID signature and Apple notarization.
 - **Verifiable**: every package has a SHA-256 checksum.
@@ -396,6 +403,7 @@ flowchart LR
 | `speakmore theme [name]` | Show or switch the theme |
 | `speakmore settings` | Open settings |
 | `speakmore logs [-n lines] [-f]` | Show logs |
+| `speakmore move [<folder>]` | Move everything into `.speakmore` inside the folder (`~` is the default place); without a folder, show the current place |
 | `speakmore uninstall [--keep-data]` | Uninstall, after confirmation |
 
 - `update` also updates SpeakMore.app; settings, keys, history, recordings and the dictionary are preserved.
@@ -481,12 +489,13 @@ flowchart LR
 | `models/` | On-device models |
 | `bin/`, `app/`, `runtime/` | Program files of the terminal installation |
 
-- All files are stored in `~/.speakmore/` (`%USERPROFILE%\.speakmore\` on Windows) and are readable only by the current user.
+- All files are stored in the storage location (by default `~/.speakmore/`, `%USERPROFILE%\.speakmore\` on Windows) and are readable only by the current user.
 - The key decryption secret is held in the Keychain (bound to the account by DPAPI on Windows); a copied key file cannot be decrypted.
 - Logs contain lengths, timings and usage only; dictated content and keys are never logged.
 - On-device models are downloaded on request and verified against SHA-256.
 - Outside this directory: the Keychain entry, granted system permissions, and SpeakMore in Applications.
 - On Windows, also the Start menu shortcut, a Path entry and the open-at-login entry.
+- When the storage location is not the default, a location file records it: `~/Library/Application Support/com.zephyrxiang.speakmore/location.json` (`%LOCALAPPDATA%\SpeakMore\location.json` on Windows).
 
 </details>
 
@@ -500,6 +509,7 @@ flowchart LR
 | The hotkey has no effect | Run `speakmore status`, then `speakmore restart` |
 | A command times out | Run `speakmore stop`, then `speakmore` |
 | No menu bar icon | Run `speakmore settings` |
+| SpeakMore's folder can't be found | If the storage location is on an external drive, connect it first |
 
 - "Not verified" means the vendor was unreachable at startup and the stored key is in use.
 - A failed check is usually caused by an incorrect model name or thinking level; `speakmore config unset model` restores the default.
@@ -513,7 +523,8 @@ flowchart LR
 - **Update**: in the app, Settings › General › Software update checks for and installs new versions; `speakmore update` in a terminal does the same. Both use one update process: download and verify in the background first, then replace the terminal installation and SpeakMore.app, and reopen whichever was running. SpeakMore stops only while the files are being replaced. Updates download only what changed, usually a few MB.
 - **0.10.1 and earlier**: these versions cannot detect later releases; reinstall once. On a Mac, download the new dmg and install it over the existing copy, or run the terminal install command again; on Windows, run the installer or the install command again.
 - **Preserved on update**: settings, keys, history, recordings and the dictionary.
-- **Uninstall**: `speakmore uninstall` stops SpeakMore and removes the entire directory, the command and the Keychain entry.
+- **Downgrading to 0.11.0 or earlier**: older versions only know the default place; run `speakmore move ~` first to move back to it.
+- **Uninstall**: `speakmore uninstall` stops SpeakMore and removes the entire directory, the command, the location file and the Keychain entry.
 - **Uninstall on Windows**: also removes the Path entry, Start menu shortcut and open-at-login entry.
 - **Keep data**: add `--keep-data` to preserve settings, keys, history, recordings and the dictionary.
 - **Uninstall, app only**: quit it from the menu bar and move it to the Trash.

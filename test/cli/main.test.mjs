@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { Cancelled } from "../../src/cli/ask-secret.mjs";
 import { run } from "../../src/cli/main.mjs";
@@ -78,15 +78,19 @@ const NO_PERMISSIONS = {
 };
 
 let dir;
+let userDir;
 let paths;
 /** 有的测试要在家目录以外放东西 */
 let outside = null;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "sm-"));
-  paths = resolvePaths({ SPEAKMORE_HOME: dir });
+  // 定位文件放在另一个临时目录里（当成用户目录），不碰这台电脑上真的那个
+  userDir = mkdtempSync(join(tmpdir(), "sm-user-"));
+  paths = resolvePaths({ SPEAKMORE_HOME: dir }, userDir);
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
+  rmSync(userDir, { recursive: true, force: true });
   if (outside) rmSync(outside, { recursive: true, force: true });
   outside = null;
 });
@@ -179,6 +183,10 @@ function harness({
   // 卸载时按哪个系统的样子做；Windows 那几处（windows-system.mjs）换成记下来、照 system 给的回答
   platform = "darwin",
   system = {},
+  /** 搬家（src/move）：假的，记下问过、搬过哪里 */
+  mover = fakeMover(),
+  /** 记着的搬家进程还在不在 */
+  moverAlive = () => false,
 } = {}) {
   const output = { out: "", err: "" };
   const asked = [];
@@ -294,6 +302,9 @@ function harness({
     },
     sharedPreferencesFile: join(dir, "com.github.Electron.plist"),
     packageDir,
+    cwd: () => "/work",
+    mover: () => mover,
+    moverAlive,
   };
   // 版本检查和更新走真的内核（src/update），只把下载地址、App、安装脚本这三样换成假的、记下做过什么
   io.updates = createUpdates({
@@ -371,6 +382,37 @@ function harness({
     local,
     windows,
     speakmore: (...argv) => run(argv, io),
+  };
+}
+
+/**
+ * 假的搬家：plan 交回要拷多少（或者抛 problem），run 照 progress 报进度、交回 result（或者抛 failure）。calls 记下做过什么
+ */
+function fakeMover({ problem = null, failure = null, progress = [], unknown = [], result = {} } = {}) {
+  const calls = [];
+  return {
+    calls,
+    async plan(folder) {
+      calls.push(["plan", folder]);
+      if (problem) throw new LocalizedError(problem);
+      return { from: paths.home, to: `${folder}/.speakmore`, files: 1234, bytes: 1_200_000_000, unknown };
+    },
+    async run({ folder, by, report, onProgress }) {
+      calls.push(["run", folder, by]);
+      report(msg("move.copying", { to: `${folder}/.speakmore` }));
+      for (const bytes of progress) onProgress({ files: 1, bytes, total: { files: 1234, bytes: 1_200_000_000 } });
+      if (failure) throw new LocalizedError(failure);
+      return {
+        from: paths.home,
+        to: `${folder}/.speakmore`,
+        files: 1234,
+        bytes: 1_200_000_000,
+        unknown,
+        left: [],
+        later: false,
+        ...result,
+      };
+    },
   };
 }
 
@@ -1459,7 +1501,7 @@ function seedHistory() {
     refinedText,
     error: null,
     duration: 4,
-    audioLocalPath: null,
+    audioFile: null,
     createdAt,
   });
   history.add(entry("a", "2026-10-12T01:05:00.000Z", "昨天说的"));
@@ -1495,6 +1537,25 @@ test("history --json：原样给出记录", async () => {
     JSON.parse(output.out).map((entry) => entry.refinedText),
     ["今天说的", "昨天说的"],
   );
+});
+
+test("history --json：录音给完整路径，按现在的家目录拼（历史里只记文件名，搬过家也对）", async () => {
+  const history = openHistory(paths.historyDb);
+  history.add({
+    id: "a",
+    status: "failed",
+    refinedText: "",
+    error: "超时",
+    duration: 3,
+    audioFile: "a.webm",
+    createdAt: "2026-10-13T06:32:00.000Z",
+  });
+  history.close();
+  const { speakmore, output } = harness();
+  await speakmore("history", "--json");
+  const [row] = JSON.parse(output.out);
+  assert.equal(row.audioLocalPath, join(paths.recordingsDir, "a.webm"));
+  assert.equal("audioFile" in row, false);
 });
 
 test("history -n 要是正整数", async () => {
@@ -1577,6 +1638,79 @@ test("usage 不收别的参数", async () => {
   assert.match(output.err, /speakmore usage/);
 });
 
+// ---------- 搬家 ----------
+
+// 这几条按 macOS 的路径写（/Volumes/T7、正斜杠）；Windows 上的走法在真机端到端里验
+const posixOnly = { skip: process.platform === "win32" && "按 macOS 的路径写" };
+
+test("move：不写文件夹就说现在在哪、怎么搬", posixOnly, async () => {
+  const { speakmore, output, io } = harness();
+  assert.equal(await speakmore("move"), 0);
+  assert.match(output.out, new RegExp(`SpeakMore 现在在 ${paths.home}`));
+  assert.match(output.out, /speakmore move ~/);
+  assert.deepEqual(io.mover().calls, []);
+});
+
+test("move：先说清楚搬到哪、拷多少、旧目录里别人的东西不动，再问一句；不答应就什么都不动", posixOnly, async () => {
+  const mover = fakeMover({ unknown: ["notes.txt", "Backups"] });
+  const declined = harness({ mover, confirms: [false] });
+  assert.equal(await declined.speakmore("move", "/Volumes/T7"), 1);
+  assert.match(declined.output.out, /从 .* 搬到 \/Volumes\/T7\/\.speakmore：拷 1\.2 GB（1,234 个文件）/);
+  assert.match(declined.output.out, /不搬，也不删：notes\.txt、Backups/);
+  assert.match(declined.output.out, /没有动/);
+  assert.deepEqual(mover.calls, [["plan", "/Volumes/T7"]]);
+
+  const agreed = harness({ mover: fakeMover(), confirms: [true], interactive: true });
+  assert.equal(await agreed.speakmore("move", "/Volumes/T7"), 0);
+  assert.deepEqual(agreed.io.mover().calls, [
+    ["plan", "/Volumes/T7"],
+    ["run", "/Volumes/T7", "cli"],
+  ]);
+  assert.match(agreed.output.out, /正在拷到 \/Volumes\/T7\/\.speakmore…/);
+  assert.match(agreed.output.out, /已经搬到 \/Volumes\/T7\/\.speakmore（1,234 个文件，1\.2 GB）/);
+  assert.match(agreed.output.out, /旧目录 .* 已经删掉/);
+});
+
+test("move：相对路径按当前目录，~ 是用户目录", posixOnly, async () => {
+  const { homedir } = await import("node:os");
+  const relative = harness({ confirms: [true] });
+  await relative.speakmore("move", "disk", "--yes");
+  assert.deepEqual(relative.io.mover().calls[0], ["plan", "/work/disk"]);
+  const home = harness();
+  await home.speakmore("move", "~", "--yes");
+  assert.deepEqual(home.io.mover().calls[0], ["plan", homedir()]);
+});
+
+test("move：拷的时候每过两成说一次；Windows 上旧目录等退出后再删、留着的别人的东西说出来", async () => {
+  const mover = fakeMover({ progress: [100_000_000, 300_000_000, 500_000_000, 750_000_000, 1_200_000_000] });
+  const { speakmore, output } = harness({ mover });
+  assert.equal(await speakmore("move", "/d", "--yes"), 0);
+  assert.deepEqual(output.out.match(/已拷 \d+%/g), ["已拷 20%", "已拷 40%", "已拷 60%", "已拷 100%"]);
+
+  const later = harness({ mover: fakeMover({ result: { later: true } }) });
+  await later.speakmore("move", "/d", "--yes");
+  assert.match(later.output.out, /等它退出后几秒内删掉/);
+  const left = harness({ mover: fakeMover({ result: { left: ["notes.txt"] } }) });
+  await left.speakmore("move", "/d", "--yes");
+  assert.match(left.output.out, /还留着不是 SpeakMore 的东西，没有动：notes\.txt/);
+});
+
+test("move：不在终端里又没给 --yes 时不动手；去不了的在问之前就说，搬不成照实说、退出码 1", async () => {
+  const quiet = harness({ interactive: false });
+  assert.equal(await quiet.speakmore("move", "/d"), 2);
+  assert.match(quiet.output.err, /--yes/);
+
+  const refused = harness({ mover: fakeMover({ problem: msg("move.notEmpty", { home: "/d/.speakmore" }) }) });
+  assert.equal(await refused.speakmore("move", "/d"), 1);
+  assert.match(refused.output.err, /\/d\/\.speakmore 里已经有东西了/);
+  assert.deepEqual(refused.confirmed, []);
+
+  const failed = harness({ mover: fakeMover({ failure: msg("move.rehomeFailed", { code: 3 }) }) });
+  assert.equal(await failed.speakmore("move", "/d", "--yes"), 1);
+  assert.match(failed.output.err, /安装脚本退出码 3/);
+  assert.doesNotMatch(failed.output.out, /已经搬到/);
+});
+
 // ---------- 卸载 ----------
 
 /** 摆出装好并用过之后的样子，外加家目录以外的一个命令链接 */
@@ -1628,6 +1762,62 @@ test("uninstall --yes：停掉后台，整个目录、家目录以外的命令�
   // 删不了的也照实说
   assert.match(output.out, /权限/);
   assert.doesNotMatch(output.out, /com\.github\.Electron/);
+});
+
+test("uninstall：装在默认位置以外的，定位文件一起删；--keep-data 时留着（重装后照它找回数据）", posixOnly, async () => {
+  const { writeLocation } = await import("../../src/storage/location.mjs");
+  seedInstalled();
+  writeLocation(paths.locationFile, { home: paths.home });
+  const kept = harness({ daemon: fakeDaemon({ running: null }) });
+  assert.equal(await kept.speakmore("uninstall", "--keep-data", "--yes"), 0);
+  assert.equal(existsSync(paths.locationFile), true);
+
+  const all = harness({ daemon: fakeDaemon({ running: null }) });
+  assert.equal(await all.speakmore("uninstall", "--yes"), 0);
+  assert.equal(existsSync(paths.locationFile), false);
+  assert.match(all.output.out, /定位文件/);
+});
+
+test("正在搬家时不改家目录里的东西（写进旧目录的会跟着它一起删掉）；搬完了照常", async () => {
+  const { writeMoveRecord } = await import("../../src/move/state.mjs");
+  writeMoveRecord(paths, {
+    state: "running",
+    pid: 4242,
+    to: "/Volumes/T7/.speakmore",
+    startedAt: new Date().toISOString(),
+  });
+  const moving = harness({ moverAlive: () => true });
+  assert.equal(await moving.speakmore("dict", "add", "GitHub"), 1);
+  assert.match(moving.output.err, /正在从 .* 搬到 \/Volumes\/T7\/\.speakmore/);
+  assert.equal(await moving.speakmore("config", "set", "hotkey", "fn"), 1);
+  // 搬家的进程没了（断了）：不挡
+  assert.equal(await harness({ moverAlive: () => false }).speakmore("dict", "add", "GitHub"), 0);
+});
+
+test("uninstall：定位文件坏了也照常卸完，说一声它没删", posixOnly, async () => {
+  seedInstalled();
+  mkdirSync(dirname(paths.locationFile), { recursive: true });
+  writeFileSync(paths.locationFile, "{ 坏了");
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: null }) });
+  assert.equal(await speakmore("uninstall", "--yes"), 0);
+  assert.equal(existsSync(paths.home), false);
+  assert.match(output.out, /定位文件 .* 读不出来/);
+});
+
+test("uninstall：上次搬到一半断了，拷过去的那一份一起删（只认这次搬家的记号）", posixOnly, async () => {
+  const { writeLocation } = await import("../../src/storage/location.mjs");
+  seedInstalled();
+  const half = join(userDir, "disk", ".speakmore");
+  const startedAt = new Date().toISOString();
+  mkdirSync(join(half, "run"), { recursive: true });
+  writeFileSync(join(half, "settings.json"), "{}");
+  writeFileSync(join(half, "run", "move.json"), JSON.stringify({ state: "running", startedAt, from: paths.home }));
+  writeLocation(paths.locationFile, { home: paths.home, moving: { to: half, pid: 2 ** 30, startedAt } });
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: null }) });
+  assert.equal(await speakmore("uninstall", "--yes"), 0);
+  assert.equal(existsSync(half), false);
+  assert.equal(existsSync(paths.locationFile), false);
+  assert.match(output.out, /没搬完/);
 });
 
 test("uninstall（Windows）：用户 Path 里的那一项、开始菜单的快捷方式、开机启动一起删；不是我们的快捷方式不碰；不提终端的权限", async () => {
@@ -2167,7 +2357,7 @@ test("英文时每个命令的输出里都没有漏翻的中文（用户自己�
     refinedText: "Let's meet at 9:30.",
     error: null,
     duration: 4,
-    audioLocalPath: null,
+    audioFile: null,
     createdAt: "2026-10-13T06:32:00.000Z",
   });
   history.add({
@@ -2176,7 +2366,7 @@ test("英文时每个命令的输出里都没有漏翻的中文（用户自己�
     refinedText: "",
     error: null,
     duration: 75,
-    audioLocalPath: null,
+    audioFile: null,
     createdAt: "2026-10-12T06:32:00.000Z",
   });
   history.addCall({
@@ -2223,6 +2413,8 @@ test("英文时每个命令的输出里都没有漏翻的中文（用户自己�
     [["settings"], null],
     [["key", "--forget", "openai"], READY],
     [["uninstall"], null],
+    [["move"], null],
+    [["move", "/d"], null],
     [["model", "nope"], READY],
     [["model", "deepseek"], READY],
     [["mode"], READY],

@@ -12,7 +12,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * 这个进程号现在跑的是什么命令；没有这个进程（或者查不了）时是 null。
  * Windows 没有 ps：问 PowerShell 它的可执行文件在哪（一次几百毫秒，只在它卡住不答话、要强行结束时才用得上）
  */
-function commandOfProcess(pid) {
+export function commandOfProcess(pid) {
   try {
     if (process.platform === "win32") {
       const script = `(Get-Process -Id ${Number(pid)} -ErrorAction Stop).Path`;

@@ -19,13 +19,14 @@ export function run(command, args, { env } = {}) {
  * @param {{ env: object, stdio: "inherit" | "forward", shell?: boolean }} options
  * @returns {Promise<number>} 退出码；被信号打断、没有退出码的算 1
  */
-export function runToEnd(command, args, { env, stdio, shell = false }) {
+export function runToEnd(command, args, { env, stdio, shell = false, cwd }) {
   return new Promise((resolve, reject) => {
     const forward = stdio === "forward";
     const child = spawn(command, args, {
       stdio: forward ? ["ignore", "pipe", "pipe"] : stdio,
       env,
       shell,
+      cwd,
       windowsHide: true,
     });
     if (forward) {

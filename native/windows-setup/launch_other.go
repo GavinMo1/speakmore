@@ -9,3 +9,5 @@ import "errors"
 func openApp(string) error { return errors.New("only on Windows") }
 
 func setTitle(string) {}
+
+func stdinIsConsole() bool { return false }

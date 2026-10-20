@@ -1,24 +1,33 @@
-# SpeakMore 的 Windows 安装脚本：检查环境、下载、校验、装进 %USERPROFILE%\.speakmore，然后启动。
+# SpeakMore 的 Windows 安装脚本：检查环境、下载、校验、装进 SpeakMore 的目录，然后启动。
 #
 #   irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 #
-# 和 install.sh 是同一件事：程序、运行环境，以及之后的设置、key、历史和录音全在 .speakmore 这一个目录里。
+# 和 install.sh 是同一件事：程序、运行环境，以及之后的设置、key、历史和录音全在一个目录里，默认是 %USERPROFILE%\.speakmore，
+# 可以装在别处（比如 D 盘）。装在默认位置以外时，装在哪记在定位文件 %LOCALAPPDATA%\SpeakMore\location.json 里
+# （src/storage/location.mjs），下次安装、安装程序打开 App 都照它找。
 # 程序按版本放：versions\<版本>-<编号>\ 里是 app\ 和 runtime\，current 记着现在用哪个，bin\speakmore.cmd 照它找程序。
 # 装新版本是解进一个新目录、试过能跑再把 current 指过去，不挪、不覆盖已有的任何文件（为什么见下面"安装"一节开头）。
-# 这个脚本也随程序一起装进 app\ 里：speakmore update 拼好新版本后，用新版本自带的这一份把它换上（SPEAKMORE_INSTALL_FROM）。
-# 目录以外只加两样，都记在 bin\links 里，speakmore uninstall 照着删：
-#   - 用户的 Path 里加上 .speakmore\bin（新开的终端里敲 speakmore 就找得到）
+# 这个脚本也随程序一起装进 app\ 里：speakmore update 拼好新版本后，用新版本自带的这一份把它换上（SPEAKMORE_INSTALL_FROM）；
+# speakmore move 把整个目录拷到新位置后，用那里的这一份把系统里的入口和定位文件改指过去（SPEAKMORE_PREVIOUS_HOME）。
+# 目录以外加的两样记在 bin\links 里，speakmore uninstall 照着删：
+#   - 用户的 Path 里加上 <目录>\bin（新开的终端里敲 speakmore 就找得到）
 #   - 开始菜单里一个"SpeakMore"快捷方式
 # 升级时另外把指着旧版本的改指到新版本：开机启动那一项，固定到任务栏、发送到桌面的快捷方式副本。
-# 不需要 Node、npm、管理员权限。已经装过的话再运行一次就是升级：程序换成新的，你的东西不动。
+# 不需要 Node、npm、管理员权限。第一次安装、在 PowerShell 窗口里运行时，先说默认装在哪，回车就装在那里，也可以输入另一个文件夹。
+# 已经装过的话再运行一次就是升级：程序换成新的，你的东西不动，装在哪照定位文件。
 #
 # 可以用环境变量调整（irm | iex 传不了参数，所以都走环境变量）：
-#   SPEAKMORE_HOME          装到哪（默认 %USERPROFILE%\.speakmore）
+#   SPEAKMORE_INSTALL_DIR   装在哪个文件夹下（装进它里面的 .speakmore，记进定位文件）。只用于第一次安装（安装程序问的就是它）；
+#                           已经装在别处的，用 speakmore move 搬
+#   SPEAKMORE_HOME          这一次用哪个目录，原样不改定位文件（开发、测试用；speakmore update、安装程序也这样告诉它装在哪）
 #   SPEAKMORE_VERSION       装哪个版本，比如 v0.9.3（默认最新的；0.9.3 以前的放法不同，这个脚本不装）
 #   SPEAKMORE_INSTALL_BASE  从哪下载：一个网址前缀，或者本机的一个目录（npm run release 打出来的 dist\release）
 #   SPEAKMORE_NO_START=1    只装不启动
 #   SPEAKMORE_INSTALL_FROM  不下载，装一棵已经准备好的树（里面是 app\ 和 runtime\）：speakmore update 拼在 versions 下的，
 #                           原地用；安装程序（SpeakMore-Setup-x64.exe）解在临时目录里的，拷进 versions 下一个新目录
+#   SPEAKMORE_PREVIOUS_HOME 换家：SPEAKMORE_HOME 里已经是从这个旧目录整个拷过来的一份（speakmore move 拷的）。
+#                           不下载、不换程序，试跑 current 指着的那个版本，把 Path、开始菜单、固定的快捷方式、
+#                           开机启动、定位文件从旧目录改指到这里
 #
 # 写法要能在 Windows 自带的 PowerShell 5.1 上跑，这些坑都踩过（见 docs/development.md 的 Windows 一节）：
 #   - 整段包在一个脚本块里，出错时不 exit：irm | iex 跑在用户自己的窗口里，exit 关掉的是他的窗口
@@ -44,6 +53,9 @@
   $MinVersion = [version]'0.9.3'
   # versions 下的目录名：<版本>-<8 位编号>。只认、只删长这样的（SPEAKMORE_HOME 指到了别处时，不碰那里本来的东西）
   $VersionNamePattern = '^\d+\.\d+\.\d+([-+.][0-9A-Za-z.-]+)?-[0-9a-f]{8}$'
+  # 家目录最长多少个字符：包里最深的文件在 versions\<版本>-<编号>\ 下还有约 95 个字符，PowerShell 5.1 解包、拷贝
+  # 和快捷方式都受 260 个字符的限制（src/move/ 用同一个数）
+  $MaxHomeChars = 120
 
   function Ok($text) { Write-Host "  " -NoNewline; Write-Host ([char]0x2713) -ForegroundColor Green -NoNewline; Write-Host " $text" }
   function Warn($text) { Write-Host "  ! " -ForegroundColor Yellow -NoNewline; Write-Host $text }
@@ -98,15 +110,116 @@
     if ($result.Code -ne 0) { Fail "Couldn't restrict access to $(Pretty $dir)" $result.Output }
   }
 
+  # 定位文件说的家目录（没有这个文件时是空的）。读坏了就停：不悄悄装到默认位置去，那样数据还在原处、看着却像丢了
+  function Read-Location {
+    if (-not (Test-Path -LiteralPath $script:LocationFile)) { return '' }
+    # 不叫 $home：PowerShell 的变量名不分大小写，那是只读的 $HOME
+    $recorded = $null
+    try { $recorded = ([IO.File]::ReadAllText($script:LocationFile, [Text.Encoding]::UTF8) | ConvertFrom-Json).home } catch { $recorded = $null }
+    $valid = ($recorded -is [string]) -and ($recorded -match '^[A-Za-z]:[\\/]|^[\\/]{2}[^\\/]+[\\/][^\\/]+') -and ($recorded -notmatch '[\x00-\x1f]')
+    if (-not $valid) {
+      Fail "SpeakMore's location file is invalid: $(Pretty $script:LocationFile)" "It should hold the full path of the SpeakMore folder. Delete it to use the default place ($(Pretty $script:DefaultHome))."
+    }
+    return Get-FullHome $recorded
+  }
+
+  # 规范成完整写法（/ 换成 \、去掉 ..、末尾的 \）：写进 Path、快捷方式、定位文件的，和程序按自己位置算出来的是同一个字符串
+  function Get-FullHome($path) {
+    $full = [IO.Path]::GetFullPath($path)
+    if ($full.Length -gt 3) { $full = $full.TrimEnd('\') }
+    return $full
+  }
+
+  # 这个目录里有没有东西（装过、用过）
+  function Test-HasContents($dir) {
+    (Test-Path -LiteralPath $dir -PathType Container) -and @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue).Count -gt 0
+  }
+
+  # 这个目录 SpeakMore 用过（重装系统前放在别的盘上的那种）：选到它时沿用里面的东西
+  function Test-UsedBefore($dir) {
+    foreach ($name in @('settings.json', 'data', 'models', 'versions')) {
+      if (Test-Path -LiteralPath (Join-Path $dir $name)) { return $true }
+    }
+    return $false
+  }
+
+  # 选的文件夹能不能装（第一次安装时问到的、SPEAKMORE_INSTALL_DIR 给的）：能装交回 @{ Home; Folder }（Home 是文件夹里的
+  # .speakmore，选的本身就叫 .speakmore 就是它），不能交回 @{ Problem = 为什么 }
+  function Test-Place([string]$folder) {
+    if ($folder -notmatch '^[A-Za-z]:[\\/]|^[\\/]{2}[^\\/]+[\\/][^\\/]+') { return @{ Problem = 'Use a full path, like D:\Apps' } }
+    if (-not (Test-Path -LiteralPath $folder -PathType Container)) { return @{ Problem = "No such folder: $folder (create it first, or pick another one)" } }
+    $folder = Get-FullHome $folder
+    $target = if ((Split-Path -Leaf $folder) -ieq '.speakmore') { $folder } else { Join-Path $folder '.speakmore' }
+    if ((Test-HasContents $target) -and -not (Test-UsedBefore $target)) { return @{ Problem = "$target already has other things in it; pick another folder" } }
+    if ($target.Length -gt $MaxHomeChars) { return @{ Problem = "That path is too long ($($target.Length) characters, at most $MaxHomeChars); pick a shorter place" } }
+    # 家目录要能设成只有自己能进（访问控制表）：FAT32、exFAT（U 盘、移动硬盘常见）没有这个。网络路径问不到格式，不拦
+    $format = $null
+    try { $format = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($target)).DriveFormat } catch { $format = $null }
+    if ($format -and $format -notin @('NTFS', 'ReFS')) { return @{ Problem = "$folder is on a disk formatted as $format; SpeakMore needs NTFS" } }
+    # 写得进去（Program Files 这类要管理员权限的地方写不进）
+    $probe = Join-Path $folder ".speakmore-probe-$PID"
+    try { [IO.File]::Create($probe).Dispose(); [IO.File]::Delete($probe) } catch { return @{ Problem = "Can't write to $folder; pick a folder of your own, like D:\Apps" } }
+    return @{ Home = $target; Folder = $folder }
+  }
+
+  # 选了装在哪个文件夹下（SPEAKMORE_INSTALL_DIR，安装程序问的就是它）：只用于第一次安装。别处已经有一份的话停下，
+  # 不然会多出一个空的目录。已经装了的用 speakmore move 搬
+  function Resolve-InstallDir($located) {
+    $place = Test-Place $env:SPEAKMORE_INSTALL_DIR
+    if ($place.Problem) { Fail "Can't install into SPEAKMORE_INSTALL_DIR: $($place.Problem)" }
+    $target = $place.Home
+    foreach ($other in @($located, $script:DefaultHome)) {
+      if (-not $other -or $other -ieq $target -or -not (Test-HasContents $other)) { continue }
+      Fail "SpeakMore is already set up in $(Pretty $other)" "To keep using it there, run this again without SPEAKMORE_INSTALL_DIR." "To move it to $target, run: speakmore move `"$($place.Folder)`""
+    }
+    return $target
+  }
+
+  # 第一次安装、在 PowerShell 窗口里时问一句装在哪：回车是默认位置，也可以输入一个文件夹（资源管理器"复制为路径"带的引号去掉）。
+  # 选了别处就和 SPEAKMORE_INSTALL_DIR 一样：装进它里面的 .speakmore、记进定位文件
+  function Read-Place {
+    Heading "Where to install"
+    Note "SpeakMore keeps everything in one folder: the program, on-device models (0.2-1.6 GB each),"
+    Note "and your settings, history and recordings. You can move it later with: speakmore move"
+    Write-Host "  Press Enter to use $(Pretty $script:DefaultHome), or type a folder (for example D:\Apps)"
+    Write-Host "  to install into .speakmore inside it."
+    while ($true) {
+      $answer = "$(Read-Host '  Folder')".Trim().Trim('"').Trim()
+      if (-not $answer) { return }
+      if ($answer -eq '~') { $answer = $env:USERPROFILE } elseif ($answer -match '^~[\\/]') { $answer = Join-Path $env:USERPROFILE $answer.Substring(2) }
+      $place = Test-Place $answer
+      if ($place.Problem) { Warn $place.Problem; continue }
+      if ($place.Home -ieq $script:DefaultHome) { return }
+      $script:HomeDir = $place.Home; $script:HomeFrom = 'chosen'
+      if (Test-UsedBefore $place.Home) { Note "Found SpeakMore data there; it will be used as it is." }
+      return
+    }
+  }
+
   function Test-Home {
-    try { New-Item -ItemType Directory -Force -Path $script:HomeDir | Out-Null } catch {
-      Fail "Can't create $(Pretty $script:HomeDir)" "Check its permissions, or pick another place with SPEAKMORE_HOME."
+    # 只拦新选的、还不存在的位置：已经装在那里的（0.11.0 起装进去的）照常升级，不因为这条规矩突然升不了
+    if ($script:HomeDir.Length -gt $MaxHomeChars -and ($script:HomeFrom -eq 'chosen' -or -not (Test-Path -LiteralPath $script:HomeDir))) {
+      Fail "Install path is too long: $($script:HomeDir)" "Pick a place at most $MaxHomeChars characters long and run again."
+    }
+    # 定位文件说装在一个现在不在的地方（移动硬盘没接、盘符被另一块盘占了）：不在那里新建一个空的，也不改装到默认位置
+    if ($script:HomeFrom -eq 'location' -and -not (Test-Path -LiteralPath $script:HomeDir -PathType Container)) {
+      Fail "Can't find the SpeakMore folder: $($script:HomeDir)" "If it's on an external drive, connect the drive and run this again." "If you no longer use that place, delete $(Pretty $script:LocationFile) to install to the default one."
+    }
+    try { [IO.Directory]::CreateDirectory($script:HomeDir) | Out-Null } catch {
+      Fail "Can't create $(Pretty $script:HomeDir)" "Check its permissions, or install somewhere else with SPEAKMORE_INSTALL_DIR." "($($_.Exception.Message))"
     }
     Protect-Home $script:HomeDir
-    $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($script:HomeDir))
-    $freeMB = [int]($drive.AvailableFreeSpace / 1MB)
-    if ($freeMB -lt $NeededMB) { Fail "Not enough disk space: $freeMB MB free" "About $NeededMB MB is needed. Free up some space and run again." }
-    Ok "Installing to $(Pretty $script:HomeDir) ($([int]($freeMB / 1024)) GB free)"
+    if ($script:PreviousHome) {
+      # 换家：程序已经整个拷过来了，不再占新的地方
+      Ok "Moving to $(Pretty $script:HomeDir)"
+    } else {
+      # 网络路径（\\server\share）问不到剩余空间，不拦
+      $freeMB = $null
+      try { $freeMB = [int]([IO.DriveInfo]::new([IO.Path]::GetPathRoot($script:HomeDir)).AvailableFreeSpace / 1MB) } catch { $freeMB = $null }
+      if ($null -ne $freeMB -and $freeMB -lt $NeededMB) { Fail "Not enough disk space: $freeMB MB free" "About $NeededMB MB is needed. Free up some space and run again." }
+      $free = if ($null -ne $freeMB) { " ($([int]($freeMB / 1024)) GB free)" } else { '' }
+      Ok "Installing to $(Pretty $script:HomeDir)$free"
+    }
 
     # 已经装着的是哪个版本：current 指着的那个；0.9.2 及以前没有 current，程序直接在 app 里。
     # current 读不出来或者是坏的（比如写到一半断了电），就当作没装：这次装好会重写它，所以再装一次就修好了
@@ -228,8 +341,11 @@
   # 建出来了才记下它（出错时要删的就是它）：万一撞上已有的目录，New-Item 报错，不会把那个删了
   function New-VersionDir([string]$version) {
     $name = "$version-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-    New-Item -ItemType Directory -Force -Path $script:VersionsDir | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $script:VersionsDir $name) | Out-Null
+    # 不用 New-Item -Path：路径里的 [ ] 会被当成通配符
+    [IO.Directory]::CreateDirectory($script:VersionsDir) | Out-Null
+    $dir = Join-Path $script:VersionsDir $name
+    if (Test-Path -LiteralPath $dir) { throw "$dir already exists" }
+    [IO.Directory]::CreateDirectory($dir) | Out-Null
     $script:VersionName = $name
     $script:VersionDir = Join-Path $script:VersionsDir $name
   }
@@ -259,15 +375,30 @@
     Test-NewCopy 'Prepared'
   }
 
-  # 切过去之前先在原地跑一下：这台机器上跑不起来的话现在就知道，装着的那一份照常用
+  # 换家：用拷到新目录里、current 指着的那个版本，原地用。出错时绝不删它：换回去（对旧目录再换一次家）时它就是装着的那一份
+  function Use-Copied {
+    $name = ''
+    try { $name = [IO.File]::ReadAllText($script:CurrentFile).Trim() } catch { $name = '' }
+    if ($name -notmatch $VersionNamePattern -or -not (Test-Path -LiteralPath (Join-Path $script:VersionsDir "$name\app\bin\speakmore.mjs"))) {
+      Fail "$(Pretty $script:HomeDir) has no copy of SpeakMore to move to"
+    }
+    $script:VersionName = $name
+    $script:VersionDir = Join-Path $script:VersionsDir $name
+    $script:InPlace = $true
+    $script:KeepVersionDir = $true
+    Test-NewCopy 'Copied'
+  }
+
+  # 切过去之前先在原地跑一下：这台机器上跑不起来的话现在就知道，装着的那一份照常用。
+  # 换家时跑的是拷过去的那一份：新位置的盘不让执行、权限不对的话，在这里就发现
   function Test-NewCopy([string]$verb) {
     $script:NewElectron = Join-Path $script:VersionDir 'runtime\electron.exe'
     $script:NewApp = Join-Path $script:VersionDir 'app'
-    if (-not (Test-Path (Join-Path $script:NewApp 'bin\speakmore.mjs')) -or -not (Test-Path $script:NewElectron)) {
+    if (-not (Test-Path -LiteralPath (Join-Path $script:NewApp 'bin\speakmore.mjs')) -or -not (Test-Path -LiteralPath $script:NewElectron)) {
       Fail "The package is incomplete" "That's a problem with the release. Please open an issue at $RepoUrl/issues."
     }
     $result = Invoke-NewCopy @('--version')
-    if ($result.Code -ne 0) { Fail "The downloaded app won't run on this PC" $result.Output "Please open an issue at $RepoUrl/issues with your Windows version." }
+    if ($result.Code -ne 0) { Fail "The new copy of SpeakMore won't run on this PC" $result.Output "Please open an issue at $RepoUrl/issues with your Windows version." }
     $script:NewVersion = $result.Output.Trim()
     Ok "$verb SpeakMore $($script:NewVersion)"
   }
@@ -279,14 +410,15 @@
     }
   }
 
-  # 启动脚本：照 current 找程序，只用相对它自己的路径（路径里有中文也不用管 cmd 按什么编码读）。内容不随版本变，平常不用改写。
-  # 从 0.9.2 及以前升上来时要改写，而那时它可能正跑着（speakmore update 就是它起的）：cmd 等程序退出后，从原来读到的
-  # 那个字节位置接着读这个文件。所以新内容不能比旧的长，读到的就是文件末尾。以后改这几行也守着这条：
-  # 不比发出去过的任何一版长，现在最短的是这一版（0.9.3 起）的 303 字节（test/install/install-ps1.test.mjs 查）
+  # 启动脚本：照 current 找程序，只用相对它自己的路径（路径里有中文也不用管 cmd 按什么编码读），整个目录搬到别处照样能用。
+  # 家目录总是它自己所在的那个，不沿用外面传进来的 SPEAKMORE_HOME：程序和数据永远是同一个目录里的，搬家后残留的旧变量也带不偏。
+  # 内容不随版本变，平常不用改写。从旧版本升上来时要改写，而那时它可能正跑着（speakmore update 就是它起的）：cmd 等程序退出后，
+  # 从原来读到的那个字节位置接着读这个文件。所以新内容不能比旧的长，读到的就是文件末尾。以后改这几行也守着这条：
+  # 不比发出去过的任何一版长（test/install/install-ps1.test.mjs 查）
   $LauncherText = @(
     '@echo off',
     'setlocal',
-    'if not defined SPEAKMORE_HOME for %%I in ("%~dp0..") do set "SPEAKMORE_HOME=%%~fI"',
+    'for %%I in ("%~dp0..") do set "SPEAKMORE_HOME=%%~fI"',
     'set /p SPEAKMORE_CURRENT=<"%~dp0..\current"',
     'set ELECTRON_RUN_AS_NODE=1',
     '"%~dp0..\versions\%SPEAKMORE_CURRENT%\runtime\electron.exe" "%~dp0..\versions\%SPEAKMORE_CURRENT%\app\bin\speakmore.mjs" %*'
@@ -305,12 +437,12 @@
     $script:Switched = $true
 
     $binDir = Join-Path $script:HomeDir 'bin'
-    New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+    [IO.Directory]::CreateDirectory($binDir) | Out-Null
     $script:Launcher = Join-Path $binDir 'speakmore.cmd'
-    if (-not (Test-Path $script:Launcher) -or (Get-Content -Raw $script:Launcher) -ne "$LauncherText`r`n") {
+    if (-not (Test-Path -LiteralPath $script:Launcher) -or [IO.File]::ReadAllText($script:Launcher) -ne "$LauncherText`r`n") {
       [IO.File]::WriteAllText($script:Launcher, "$LauncherText`r`n", [Text.Encoding]::ASCII)
     }
-    Ok "Installed to $(Pretty $script:HomeDir)"
+    if ($script:PreviousHome) { Ok "Moved to $(Pretty $script:HomeDir)" } else { Ok "Installed to $(Pretty $script:HomeDir)" }
   }
 
   # 现在删不掉的目录交给一个隐藏的 PowerShell 慢慢删，这个窗口不用等：给了进程就先等它们退出，然后每隔 3 秒试一次，试一分钟
@@ -372,21 +504,43 @@
     if ($left.Count -gt 0) { Note "Another program still has files open in $(($left | ForEach-Object { Pretty $_ }) -join ', '); they'll be removed once it lets go." }
   }
 
-  # 记下在家目录以外动了什么，卸载时照着删（src/cli/commands/uninstall.mjs）
-  function Add-Link($line) {
+  # 记下在家目录以外动了什么，卸载时照着删（src/cli/commands/uninstall.mjs）。按 UTF-8 读写，不经 Get-Content 那一套：
+  # 路径里的 [ ] 会被当成通配符
+  function Get-Links {
     $file = Join-Path $script:HomeDir 'bin\links'
-    $lines = @()
-    if (Test-Path $file) { $lines = @(Get-Content -Encoding UTF8 $file) }
-    if ($lines -notcontains $line) { Add-Content -Encoding UTF8 -Path $file -Value $line }
+    if (-not (Test-Path -LiteralPath $file)) { return @() }
+    return @([IO.File]::ReadAllText($file, [Text.Encoding]::UTF8) -split "`r?`n" | Where-Object { $_ })
+  }
+  function Set-Links($lines) {
+    $text = if (@($lines).Count -gt 0) { (@($lines) -join "`r`n") + "`r`n" } else { '' }
+    [IO.File]::WriteAllText((Join-Path $script:HomeDir 'bin\links'), $text, [Text.UTF8Encoding]::new($false))
+  }
+  function Add-Link($line) {
+    $lines = Get-Links
+    if ($lines -notcontains $line) { Set-Links (@($lines) + $line) }
   }
 
-  # 用户的 Path 里加上 bin。按原样读写：读的时候不展开 %USERPROFILE% 这种写法，写回去还是可展开的那一种
+  # 用户的 Path 里加上 bin。按原样读写：读的时候不展开 %USERPROFILE% 这种写法，写回去还是可展开的那一种。
+  # 换家时先去掉指着旧目录 bin 的那一项（bin\links 里的记录一起去掉），再加新的
   function Add-ToPath {
     $binDir = Join-Path $script:HomeDir 'bin'
     $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
     try {
       $raw = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
       $entries = @($raw -split ';' | Where-Object { $_ })
+      if ($script:PreviousHome) {
+        $oldBin = (Join-Path $script:PreviousHome 'bin').TrimEnd('\')
+        $isOld = { param($entry) [Environment]::ExpandEnvironmentVariables($entry).TrimEnd('\') -ieq $oldBin }
+        $gone = @($entries | Where-Object { & $isOld $_ })
+        if ($gone.Count -gt 0) {
+          $entries = @($entries | Where-Object { -not (& $isOld $_) })
+          $key.SetValue('Path', ($entries -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)
+          [Environment]::SetEnvironmentVariable('SPEAKMORE_PATH_CHANGED', '1', 'User')
+          [Environment]::SetEnvironmentVariable('SPEAKMORE_PATH_CHANGED', $null, 'User')
+          Ok "Removed $(Pretty $oldBin) from your Path"
+        }
+        Set-Links @(Get-Links | Where-Object { -not ($_ -like 'path *' -and (& $isOld $_.Substring(5))) })
+      }
       $present = $entries | Where-Object { [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\') -ieq $binDir.TrimEnd('\') }
       # 默认的位置写成 %USERPROFILE%\.speakmore\bin：换了用户名、挪了用户目录也对
       $entry = $binDir
@@ -426,8 +580,17 @@
     Ok "Start menu: SpeakMore"
   }
 
+  # 认哪些家目录里的程序是"我们的"：这个家目录；换家时还有旧的那个（指着它的都要改指过来）
+  function Get-HomePrefixes {
+    @($script:HomeDir, $script:PreviousHome) | Where-Object { $_ } | ForEach-Object { "$($_.TrimEnd('\'))\" }
+  }
+  function Test-InOurHomes([string]$path) {
+    foreach ($prefix in Get-HomePrefixes) { if ($path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return $true } }
+    return $false
+  }
+
   # 固定到任务栏、发送到桌面的是开始菜单那个快捷方式的副本，还指着换下来的版本，旧版本删掉后就打不开了。
-  # 指着这个家目录里的 Electron（versions 下的，或者 0.9.2 及以前的 runtime 里的）的，改指到新版本。
+  # 指着这个家目录（换家时还有旧目录）里的 Electron（versions 下的，或者 0.9.2 及以前的 runtime 里的）的，改指到新版本。
   # Squirrel 那一类按版本放程序的安装程序也这么修固定的图标
   function Update-ShortcutCopies {
     $places = @(
@@ -435,7 +598,6 @@
       @{ Dir = [Environment]::GetFolderPath('Desktop'); Recurse = $false }
     )
     $shell = New-Object -ComObject WScript.Shell
-    $prefix = "$($script:HomeDir.TrimEnd('\'))\"
     $updated = 0
     foreach ($place in $places) {
       if (-not $place.Dir -or -not (Test-Path -LiteralPath $place.Dir)) { continue }
@@ -443,7 +605,7 @@
         try {
           $shortcut = $shell.CreateShortcut($file.FullName)
           $target = $shortcut.TargetPath
-          if (-not $target.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -or -not $target.EndsWith('\runtime\electron.exe', [StringComparison]::OrdinalIgnoreCase)) { continue }
+          if (-not (Test-InOurHomes $target) -or -not $target.EndsWith('\runtime\electron.exe', [StringComparison]::OrdinalIgnoreCase)) { continue }
           if ($target -ieq $script:NewElectron) { continue }
           Set-Shortcut $shortcut
           $updated++
@@ -454,15 +616,42 @@
   }
 
   # App 设置里开了开机启动的话，Run 里那一项指着旧版本的程序：改指到新版本，写法和 Electron 一样（程序、参数各加引号）。
-  # Electron 读回来认开没开只比程序路径；任务管理器里停用与否另记在 StartupApproved 里，这里不动。只认程序在这个家目录里的
+  # Electron 读回来认开没开只比程序路径；任务管理器里停用与否另记在 StartupApproved 里，这里不动。
+  # 只认程序在这个家目录（换家时还有旧目录）里的
   function Update-LoginItem {
     $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
     $value = (Get-ItemProperty -Path $key -Name 'SpeakMore' -ErrorAction SilentlyContinue).SpeakMore
     if (-not $value) { return }
     $program = if ($value.StartsWith('"')) { $value.Substring(1).Split('"')[0] } else { $value.Split(' ')[0] }
-    if (-not $program.StartsWith("$($script:HomeDir.TrimEnd('\'))\", [StringComparison]::OrdinalIgnoreCase)) { return }
+    if (-not (Test-InOurHomes $program)) { return }
     Set-ItemProperty -Path $key -Name 'SpeakMore' -Value ('"{0}" "{1}"' -f $script:NewElectron, $script:NewApp)
     Ok "Start at login: SpeakMore $($script:NewVersion)"
+  }
+
+  # 记下 SpeakMore 装在哪（定位文件）：只在明确选了位置时（SPEAKMORE_INSTALL_DIR、speakmore move 换家）。
+  # 在默认位置就不要定位文件（有就删掉）；在别处就写（UTF-8 不带 BOM，先写到旁边、落了盘再换上）。写不了就照实报错：
+  # 不然安装程序打开 App、下次安装都找不到它
+  function Update-Location {
+    try {
+      if ($script:HomeDir -ieq $script:DefaultHome) {
+        if (Test-Path -LiteralPath $script:LocationFile) { [IO.File]::Delete($script:LocationFile) }
+        return
+      }
+      [IO.Directory]::CreateDirectory((Split-Path -Parent $script:LocationFile)) | Out-Null
+      $temporary = "$($script:LocationFile).$PID.tmp"
+      $json = "{`r`n  `"home`": $(ConvertTo-Json $script:HomeDir)`r`n}`r`n"
+      $stream = [IO.File]::Open($temporary, [IO.FileMode]::Create, [IO.FileAccess]::Write)
+      try {
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes($json)
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+      } finally { $stream.Dispose() }
+      # 不留备份：第三个参数要真的 null，PowerShell 把 $null 当成空字符串传给 .NET，Replace 就报"路径是空的"
+      if (Test-Path -LiteralPath $script:LocationFile) { [IO.File]::Replace($temporary, $script:LocationFile, [NullString]::Value) } else { [IO.File]::Move($temporary, $script:LocationFile) }
+      Ok "Recorded where SpeakMore is: $(Pretty $script:LocationFile)"
+    } catch {
+      Fail "Couldn't write $(Pretty $script:LocationFile)" "SpeakMore needs it to find $($script:HomeDir). Check that folder's permissions." "($($_.Exception.Message))"
+    }
   }
 
   # ---------- 入口 ----------
@@ -470,40 +659,74 @@
   try {
     # irm | iex 时这些记在用户窗口的全局作用域里：同一个窗口再跑一次，不能接着用上一次的
     $script:VersionDir = $null; $script:Stopped = $false; $script:Switched = $false; $script:InstallLock = $null; $script:LockHeld = $false
-    $script:PreviousName = ''; $script:InPlace = $false
+    $script:PreviousName = ''; $script:InPlace = $false; $script:KeepVersionDir = $false; $script:PreviousHome = $null
     $script:Base = if ($env:SPEAKMORE_INSTALL_BASE) { $env:SPEAKMORE_INSTALL_BASE.TrimEnd('/', '\') } else { $DownloadUrl }
     # 本机的一个目录也可以当下载地址
     $script:LocalBase = $script:Base -notmatch '^[a-z]+://'
 
     Write-Host ""
     Write-Host "  SpeakMore installer"
-    $requested = if ($env:SPEAKMORE_HOME) { $env:SPEAKMORE_HOME } else { Join-Path $env:USERPROFILE '.speakmore' }
-    if (-not [IO.Path]::IsPathRooted($requested)) { Fail "SPEAKMORE_HOME must be an absolute path, not $requested" }
-    # 规范成完整的写法（/ 换成 \、去掉 ..）：下面要拿它和开机启动、快捷方式里记的路径比前缀
-    $script:HomeDir = [IO.Path]::GetFullPath($requested)
-    $script:VersionsDir = Join-Path $script:HomeDir 'versions'
-    $script:CurrentFile = Join-Path $script:HomeDir 'current'
+    # 和 src/storage/location.mjs 的 locationFileOf 是同一个位置（test/storage/location-everywhere.test.mjs 核对）
+    $local = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $env:USERPROFILE 'AppData\Local' }
+    $script:LocationFile = Join-Path $local 'SpeakMore\location.json'
+    $script:DefaultHome = Join-Path $env:USERPROFILE '.speakmore'
+    # 装到哪：这一次指定了目录（SPEAKMORE_HOME）就用它；第一次安装选了文件夹（SPEAKMORE_INSTALL_DIR）就装进它里面；
+    # 否则照定位文件（装在别处、搬过的在那里），都没有是默认位置
+    if ($env:SPEAKMORE_HOME -and $env:SPEAKMORE_INSTALL_DIR) { Fail "Set SPEAKMORE_INSTALL_DIR or SPEAKMORE_HOME, not both" }
+    if ($env:SPEAKMORE_HOME) {
+      if ($env:SPEAKMORE_HOME -notmatch '^[A-Za-z]:[\\/]|^[\\/]{2}[^\\/]+[\\/][^\\/]+') { Fail "SPEAKMORE_HOME must be a full path like D:\SpeakMore, not $($env:SPEAKMORE_HOME)" }
+      $script:HomeDir = Get-FullHome $env:SPEAKMORE_HOME; $script:HomeFrom = 'env'
+    } else {
+      $located = Read-Location
+      if ($env:SPEAKMORE_INSTALL_DIR) {
+        $script:HomeDir = Resolve-InstallDir $located; $script:HomeFrom = 'chosen'
+      } elseif ($located) {
+        $script:HomeDir = $located; $script:HomeFrom = 'location'
+      } else {
+        $script:HomeDir = $script:DefaultHome; $script:HomeFrom = 'default'
+      }
+    }
+    if ($env:SPEAKMORE_PREVIOUS_HOME) {
+      if ($script:HomeFrom -ne 'env' -or $env:SPEAKMORE_INSTALL_FROM) {
+        Fail "SPEAKMORE_PREVIOUS_HOME goes with SPEAKMORE_HOME (where SpeakMore was copied to), not with SPEAKMORE_INSTALL_FROM"
+      }
+      $script:PreviousHome = Get-FullHome $env:SPEAKMORE_PREVIOUS_HOME
+    }
+    # 第一次安装（没有定位文件、默认位置还空着）、在 PowerShell 窗口里运行（不是脚本、安装程序调的）：先问一句装在哪
+    $interactive = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected -and $Host.Name -eq 'ConsoleHost'
+    if ($script:HomeFrom -eq 'default' -and $interactive -and -not $env:SPEAKMORE_INSTALL_FROM -and -not (Test-HasContents $script:HomeDir)) {
+      Read-Place
+    }
+    # 不用 Join-Path：定位文件说的盘没接上时它直接报"找不到驱动器"，走不到 Test-Home 里"接上移动硬盘"的那句
+    $script:VersionsDir = [IO.Path]::Combine($script:HomeDir, 'versions')
+    $script:CurrentFile = [IO.Path]::Combine($script:HomeDir, 'current')
     Enter-Install
 
     Heading "Checks"
     Test-System
-    # 先定版本再建目录：版本不对、问不到最新的，磁盘上什么都没动。从准备好的树装时版本写在树里，不用问
-    if (-not $env:SPEAKMORE_INSTALL_FROM) { Resolve-Version }
+    # 先定版本再建目录：版本不对、问不到最新的，磁盘上什么都没动。从准备好的树装、换家时版本写在树里，不用问
+    if (-not $env:SPEAKMORE_INSTALL_FROM -and -not $script:PreviousHome) { Resolve-Version }
     Test-Home
 
     Heading "Install"
-    if ($env:SPEAKMORE_INSTALL_FROM) { Use-Tree } else { Get-Package }
+    if ($script:PreviousHome) { Use-Copied } elseif ($env:SPEAKMORE_INSTALL_FROM) { Use-Tree } else { Get-Package }
     Use-Version
     Add-ToPath
     Add-Shortcut
     Update-ShortcutCopies
     Update-LoginItem
     Remove-Old
+    # 明确选了位置的才动定位文件；SPEAKMORE_HOME 只管这一次（开发、测试装进临时目录，不能把正式的也指过去）
+    if ($script:PreviousHome -or $script:HomeFrom -eq 'chosen') { Update-Location }
     # 装完了：下面启动的 speakmore 可能一直开着（问 key、前台跑），不占着锁
     Exit-Install
 
     Write-Host ""
-    if ($script:InstalledVersion -and $script:InstalledVersion -ne $script:NewVersion) {
+    if ($script:PreviousHome) {
+      Write-Host "  Moved SpeakMore $($script:NewVersion) to $(Pretty $script:HomeDir)"
+      Write-Host ""
+      return
+    } elseif ($script:InstalledVersion -and $script:InstalledVersion -ne $script:NewVersion) {
       Write-Host "  Upgraded: $($script:InstalledVersion) -> $($script:NewVersion)"
     } else {
       Write-Host "  Installed SpeakMore $($script:NewVersion)"
@@ -520,8 +743,9 @@
     }
   } catch {
     $failure = $_
-    # 还没切过去的话，解了一半（或者跑不起来）的新版本没人会用，删掉；现在删不掉的交给 Remove-Later
-    if (-not $script:Switched -and $script:VersionDir -and (Test-Path -LiteralPath $script:VersionDir)) {
+    # 还没切过去的话，解了一半（或者跑不起来）的新版本没人会用，删掉；现在删不掉的交给 Remove-Later。
+    # 换家时用的是目录里本来就有的那一份，绝不删：换回去时它就是装着的那一份
+    if (-not $script:Switched -and -not $script:KeepVersionDir -and $script:VersionDir -and (Test-Path -LiteralPath $script:VersionDir)) {
       Remove-Item -LiteralPath $script:VersionDir -Recurse -Force -ErrorAction SilentlyContinue
       if (Test-Path -LiteralPath $script:VersionDir) {
         try { Remove-Later @() @($script:VersionDir) } catch { Note "Couldn't remove $(Pretty $script:VersionDir); it's safe to delete it yourself." }

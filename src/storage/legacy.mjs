@@ -1,12 +1,11 @@
-import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { NotRunningError, requestControl } from "../control.mjs";
 import { LocalizedError, msg } from "../i18n/index.mjs";
 import { ensureHome, keyFile, legacyDataDir, oldAppKeyFile } from "./paths.mjs";
 
 // 0.1 版把数据放在 ~/Library/Application Support/SpeakMore。那里还有东西的话，第一次运行时搬进现在的家目录。
-// 想退回 0.1：把这几样搬回原处即可（历史里记的录音位置会指着新地方，只影响"录音留在哪"那句话）。
+// 想退回 0.1：把这几样搬回原处即可。历史里的录音只按文件名认（history.mjs），不用跟着改。
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -20,6 +19,28 @@ const moves = (paths) => [
   // 装成应用的那份照旧名字搬，之后由 app-keys.mjs 并进共用的文件
   ["gemini-key.app.bin", oldAppKeyFile(paths, "gemini")],
 ];
+
+/**
+ * 搬一样东西：同一块盘上改名；家目录装在别的盘上时改名做不到（EXDEV），拷过去再删掉原来的。
+ * 拷到一半出错就删掉拷了一半的，原来的不动
+ */
+export function moveItem(from, to, rename = renameSync) {
+  try {
+    rename(from, to);
+    return;
+  } catch (error) {
+    if (error.code !== "EXDEV") throw error;
+  }
+  // 那边已经有的不碰（下面拷坏了要删的只能是这里拷过去的）
+  if (existsSync(to)) throw Object.assign(new Error(`${to} already exists`), { code: "EEXIST" });
+  try {
+    cpSync(from, to, { recursive: true, errorOnExist: true, force: false, preserveTimestamps: true });
+  } catch (error) {
+    rmSync(to, { recursive: true, force: true });
+    throw error;
+  }
+  rmSync(from, { recursive: true, force: true });
+}
 
 /** 旧版本的后台应用还在不在：它在旧目录里听着同一种控制通道 */
 async function isRunning(socket) {
@@ -41,19 +62,6 @@ async function quitOldDaemon(socket, timeoutMs) {
     if (!(await isRunning(socket))) return true;
   }
   return false;
-}
-
-/** 历史里记的是录音的绝对路径，录音搬了家，这些路径跟着改 */
-function repointRecordings(historyDb, from, to) {
-  const db = new DatabaseSync(historyDb);
-  try {
-    db.prepare(
-      `UPDATE history SET audio_local_path = :to || substr(audio_local_path, length(:from) + 1)
-       WHERE substr(audio_local_path, 1, length(:from)) = :from`,
-    ).run({ from: `${from}/`, to: `${to}/` });
-  } finally {
-    db.close();
-  }
 }
 
 /**
@@ -83,11 +91,8 @@ export async function migrateLegacyData({ paths, legacyDir = legacyDataDir(), lo
       continue;
     }
     mkdirSync(dirname(to), { recursive: true });
-    renameSync(from, to);
+    moveItem(from, to);
     moved.push(name);
-  }
-  if (moved.includes("history.db")) {
-    repointRecordings(paths.historyDb, join(legacyDir, "Recordings"), paths.recordingsDir);
   }
 
   if (kept.length > 0) {

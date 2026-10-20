@@ -200,9 +200,17 @@ export function createHomes({
      */
     install(staged) {
       const installerEnv = { ...env, SPEAKMORE_HOME: paths.home, SPEAKMORE_INSTALL_FROM: staged.dir };
-      // 它自己用拼好的那份 Electron 当 Node 跑命令，不要把这边的带过去；也不要被这边的版本、下载地址带偏
-      for (const name of ["ELECTRON_RUN_AS_NODE", "SPEAKMORE_VERSION", "SPEAKMORE_INSTALL_BASE"])
-        delete installerEnv[name];
+      // 它自己用拼好的那份 Electron 当 Node 跑命令，不要把这边的带过去；也不要被这边的版本、下载地址带偏。
+      // 第一次安装时设的 SPEAKMORE_INSTALL_DIR（同一个终端、或者一路带进了 App）和换家用的 SPEAKMORE_PREVIOUS_HOME
+      // 也不带：更新只换这个家目录里的程序，安装脚本见到它们会以为要装到别处、换家
+      const installOnly = [
+        "ELECTRON_RUN_AS_NODE",
+        "SPEAKMORE_VERSION",
+        "SPEAKMORE_INSTALL_BASE",
+        "SPEAKMORE_INSTALL_DIR",
+        "SPEAKMORE_PREVIOUS_HOME",
+      ];
+      for (const name of installOnly) delete installerEnv[name];
       if (windows) {
         // install.ps1 从 irm | iex 跑时传不了参数，只认环境变量。按 UTF-8 读进来再当脚本块跑：存成文件直接 -File 的话，
         // 5.1 把没有 BOM 的脚本当成系统编码（GBK）读；也绕开了执行策略（只允许跑文件这一层管着的那种）

@@ -4,16 +4,19 @@
 // （SPEAKMORE_INSTALL_FROM，它拷进 versions 下的新目录）：怎么装只有 install.ps1 这一份，和 PowerShell 里
 // irm | iex 那一行装出来的一模一样，装的时候也不用联网。
 // 控制台程序：安装的进度就是 install.ps1 打的那几行。出错时停住等按回车，免得窗口一闪就没了，看不到原因。
-// 除了解 zstd 的 klauspost/compress 只用标准库；图标、版本信息和清单（asInvoker：不要管理员权限，不然名字里带 Setup 会被 Windows 自动要求提权）
+// 第一次安装时用系统的对话框问装在哪（ask_windows.go）。依赖只有解 zstd 的 klauspost/compress、弹系统对话框的
+// ncruces/zenity（MIT，纯 Go 调 Win32）和它用的 golang.org/x/sys；图标、版本信息和清单（asInvoker：不要管理员权限，不然名字里带 Setup 会被 Windows 自动要求提权）
 // 由 scripts/build/windows-setup.mjs 编译时用 go-winres 生成。
 package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -32,6 +35,16 @@ func main() {
 }
 
 func install() int {
+	// 先定好装在哪（home.go）：第一次安装要问一句，问完再花时间解包
+	choice, err := resolveHome(os.Getenv, askWhere)
+	if errors.Is(err, errCanceled) {
+		fmt.Printf("\n  %s\n", uiWords().cancelled)
+		return 0
+	}
+	if err != nil {
+		fmt.Printf("\n  x %v\n", err)
+		return 1
+	}
 	dir, err := unpack()
 	if dir != "" {
 		defer removeTemp(dir)
@@ -46,12 +59,19 @@ func install() int {
 		return 1
 	}
 	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", runInstall)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(withoutHome(os.Environ()),
 		"SPEAKMORE_INSTALL_SCRIPT="+script,
 		"SPEAKMORE_INSTALL_FROM="+dir,
 		// 装完由这里打开 App；install.ps1 自己启动的是命令行那一份，会在终端里问 key
 		"SPEAKMORE_NO_START=1",
 	)
+	// 装在哪明确告诉 install.ps1，装完打开的就是同一个：第一次安装选了别处的交给 SPEAKMORE_INSTALL_DIR（它记进定位文件），
+	// 别的就是这一次用的目录
+	if choice.installDir != "" {
+		cmd.Env = append(cmd.Env, "SPEAKMORE_INSTALL_DIR="+choice.installDir)
+	} else {
+		cmd.Env = append(cmd.Env, "SPEAKMORE_HOME="+choice.home)
+	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		if exit, ok := err.(*exec.ExitError); ok {
@@ -61,11 +81,7 @@ func install() int {
 		return 1
 	}
 
-	home := os.Getenv("SPEAKMORE_HOME")
-	if home == "" {
-		home = filepath.Join(os.Getenv("USERPROFILE"), ".speakmore")
-	}
-	if err := openApp(home); err != nil {
+	if err := openApp(choice.home); err != nil {
 		fmt.Printf("  Couldn't open SpeakMore (%v). Open it from the Start menu.\n", err)
 		return 0
 	}
@@ -73,6 +89,49 @@ func install() int {
 	// 留一会儿让人看见装好了，再关窗口
 	time.Sleep(3 * time.Second)
 	return 0
+}
+
+// withoutHome 去掉环境里的 SPEAKMORE_HOME、SPEAKMORE_INSTALL_DIR：由 resolveHome 定下的那一个交给 install.ps1
+func withoutHome(env []string) []string {
+	kept := env[:0:0]
+	for _, entry := range env {
+		name := strings.ToUpper(strings.SplitN(entry, "=", 2)[0])
+		if name == "SPEAKMORE_HOME" || name == "SPEAKMORE_INSTALL_DIR" {
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
+}
+
+// errCanceled 第一次安装时问装在哪，点了"取消"
+var errCanceled = errors.New("canceled")
+
+// askInConsole 在控制台里问装在哪个文件夹下：回车就是默认位置。不是在控制台里跑的（脚本调的）不问，用默认位置。
+// 对话框弹不出来时（ask_windows.go）退到这里
+func askInConsole(defaultHome string, w words) (string, error) {
+	if !stdinIsConsole() {
+		return "", nil
+	}
+	fmt.Println()
+	fmt.Println("  " + w.consoleIntro)
+	fmt.Printf("  "+w.consoleEnter+"\n", defaultHome)
+	fmt.Print("  " + w.consoleType)
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		line, err := reader.ReadString('\n')
+		if strings.TrimSpace(line) == "" {
+			return "", nil
+		}
+		folder, problem := checkFolderAnswer(line, w)
+		if problem == "" {
+			return folder, nil
+		}
+		if err != nil {
+			return "", fmt.Errorf("%s", problem)
+		}
+		fmt.Printf("  %s\n  %s", problem, w.consoleFolder)
+	}
 }
 
 // removeTemp 删掉解包用的临时目录。里面刚写出来的程序杀毒软件可能还在扫，扫完之前删不掉：

@@ -207,11 +207,12 @@ export function createBundles({ env, release, platform = process.platform, arch 
     /**
      * 打开 App（换完之后把原来在跑的那个重新打开）。open 会把自己的环境变量交给打开的 App，
      * 而更新是借 Electron 当 Node 跑的（ELECTRON_RUN_AS_NODE=1）：带过去的话 App 也当成 Node 跑，一启动就退出。
-     * 别的照样带过去，SPEAKMORE_HOME 这些和这边一致
+     * 别的照样带过去，SPEAKMORE_HOME 这些和这边一致。
+     * fresh：另开一个，不管同一个应用包是不是已经有进程在跑（搬家的进度窗口就是这个应用包，不加的话 open 只会把它叫到前面）
      */
-    async open(app) {
+    async open(app, { fresh = false } = {}) {
       const { ELECTRON_RUN_AS_NODE: _asNode, ...appEnv } = env;
-      await run("open", [app], { env: appEnv });
+      await run("open", fresh ? ["-n", app] : [app], { env: appEnv });
     },
   };
 }

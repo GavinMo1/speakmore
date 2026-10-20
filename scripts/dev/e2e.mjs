@@ -96,10 +96,14 @@ child.on("exit", (code) => {
     const [row] = result.history;
     if (result.history.length !== 1 || row?.status !== "completed" || row?.refinedText !== result.delivered) {
       problems.push("历史里应该正好有一条完成的记录，内容等于成品");
-    } else if (!existsSync(row.audioLocalPath) || statSync(row.audioLocalPath).size === 0) {
-      problems.push("录音文件没有存下来");
     } else {
-      console.log(`录音 ${row.duration.toFixed(1)} 秒，文件 ${statSync(row.audioLocalPath).size} 字节`);
+      // 历史里只记录音的文件名，录音在家目录的 data/Recordings 下（storage/paths.mjs 的 recordingsDir）
+      const recording = row.audioFile && join(home, "data", "Recordings", row.audioFile);
+      if (!recording || !existsSync(recording) || statSync(recording).size === 0) {
+        problems.push("录音文件没有存下来");
+      } else {
+        console.log(`录音 ${row.duration.toFixed(1)} 秒，文件 ${statSync(recording).size} 字节`);
+      }
     }
     // 记账：这一次听写调模型的账对得上这条历史。数据隐私模式只有本机转写那一笔：没有 token、不花钱
     const { usage } = row ?? {};

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { startControlServer } from "../../src/control.mjs";
 import { createTranslator } from "../../src/i18n/index.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
-import { migrateLegacyData } from "../../src/storage/legacy.mjs";
+import { migrateLegacyData, moveItem } from "../../src/storage/legacy.mjs";
 import { keyFile, resolvePaths } from "../../src/storage/paths.mjs";
 
 const zh = createTranslator("zh-CN");
@@ -45,7 +45,8 @@ function seedLegacy() {
     refinedText: "以前说的话",
     error: null,
     duration: 3,
-    audioLocalPath: audio,
+    // 0.1 版记的是录音的完整路径
+    audioFile: audio,
     createdAt: "2026-10-12T01:00:00.000Z",
   });
   history.close();
@@ -76,8 +77,8 @@ test("旧目录里的历史、录音、设置、key 搬进新的家目录；历�
   const [row] = history.list();
   history.close();
   assert.equal(row.refinedText, "以前说的话");
-  assert.equal(row.audioLocalPath, join(paths.recordingsDir, "a.webm"));
-  assert.equal(readFileSync(row.audioLocalPath, "utf8"), "录音");
+  assert.equal(row.audioFile, "a.webm");
+  assert.equal(readFileSync(join(paths.recordingsDir, row.audioFile), "utf8"), "录音");
 
   // 剩下的只有运行环境的缓存，整个删掉，不留一个没人管的目录
   assert.equal(existsSync(legacyDir), false);
@@ -122,4 +123,32 @@ test("旧版本的后台应用请不走：不搬（它还开着那个库），�
   } finally {
     await app.close();
   }
+});
+
+test("家目录在别的盘上（改名做不到，EXDEV）：拷过去再删原来的；拷到一半出错就删掉拷了一半的，原来的不动", () => {
+  const crossDisk = () => {
+    throw Object.assign(new Error("cross-device link not permitted"), { code: "EXDEV" });
+  };
+  const from = join(dir, "Recordings");
+  mkdirSync(from);
+  writeFileSync(join(from, "a.webm"), "录音");
+  const to = join(dir, "moved");
+  moveItem(from, to, crossDisk);
+  assert.equal(readFileSync(join(to, "a.webm"), "utf8"), "录音");
+  assert.equal(existsSync(from), false);
+
+  // 目标已经有同名的：不拷，两边都不动
+  mkdirSync(from);
+  writeFileSync(join(from, "a.webm"), "录音");
+  assert.throws(() => moveItem(from, join(to, "a.webm"), crossDisk), { code: "EEXIST" });
+  assert.equal(readFileSync(join(from, "a.webm"), "utf8"), "录音");
+  assert.equal(readFileSync(join(to, "a.webm"), "utf8"), "录音");
+  // 别的错误照原样报
+  assert.throws(
+    () =>
+      moveItem(from, join(dir, "x"), () => {
+        throw Object.assign(new Error("no"), { code: "EACCES" });
+      }),
+    { code: "EACCES" },
+  );
 });

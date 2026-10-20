@@ -722,8 +722,21 @@ export default {
     barHintFailed: "Hint setting not changed: {reason}",
     recheck: "Check again",
     version: "Version",
-    dataFolder: "Data folder",
     source: "Source code",
+    storage: {
+      title: "Storage location",
+      change: "Change…",
+      pickTitle: "Choose a new storage location",
+      pickMessage: "SpeakMore moves into .speakmore inside the folder you choose",
+      pickButton: "Choose",
+      confirm: "Move to {to}?",
+      confirmDetail:
+        "{size} ({count} files) will be copied, including the program, on-device models, recordings, and settings. SpeakMore quits while it moves and reopens when done; if the move fails, everything stays as it was.",
+      unknown: "Files in the current location that aren't SpeakMore's are neither moved nor deleted: {items}",
+      move: "Move",
+      cancel: "Cancel",
+      failed: "Couldn't change it: {reason}",
+    },
     update: {
       title: "Software update",
       check: "Check for updates",
@@ -742,6 +755,48 @@ export default {
       fromSource: "Running from source · Update with git pull",
       startFailed: "Couldn't start the update: {reason}",
     },
+  },
+
+  // Choosing the storage location the first time the app opens (src/app/first-run.mjs), in system dialogs
+  firstRun: {
+    title: "Choose a storage location",
+    detail:
+      "SpeakMore keeps its program data, on-device models, recordings, and settings in one folder.\n\nDefault location: {home}\n\nEach on-device model is about 0.2–1.6 GB. To keep them on another disk, choose a location now; you can also change it later in Settings › General › Storage location.",
+    useDefault: "Use Default Location",
+    choose: "Choose Another Location…",
+    pickTitle: "Choose a storage location",
+    pickMessage: "SpeakMore is saved in .speakmore inside the folder you choose",
+    pickButton: "Choose",
+    existing: "{home} already has SpeakMore data",
+    existingDetail: "Its settings, history, and recordings will be used as they are.",
+    reuse: "Use It",
+    again: "Choose Again",
+    unusable: "This location can't be used",
+  },
+
+  // The progress window while moving the storage location (src/app/move-window.mjs, src/renderer/move)
+  moveWindow: {
+    title: {
+      preparing: "Moving the storage location",
+      copying: "Moving the storage location",
+      switching: "Moving the storage location",
+      done: "Storage location changed",
+      failed: "Storage location not changed",
+    },
+    from: "From",
+    to: "To",
+    step: {
+      preparing: "Getting ready; SpeakMore quits for a moment…",
+      switching: "Switching to the new location…",
+      done: "All files are in the new location.",
+    },
+    copying: "Copying {done} / {total} ({percent}%) · keep the disk connected until it's done",
+    removed: "The files in the old location were deleted.",
+    later: "The files in the old location will be deleted after this window closes.",
+    left: "Files in the old location that aren't SpeakMore's were left alone: {items}",
+    unchanged: "SpeakMore is still in its old location; nothing changed.",
+    done: "Done",
+    close: "Close",
   },
 
   keyPanel: {
@@ -904,7 +959,64 @@ export default {
   paths: {
     homeNotAbsolute: "The SPEAKMORE_HOME env var must be an absolute path; it's {home}",
     homeTooLong:
-      "The SpeakMore folder path is too long for the control socket: {home}\nUse the SPEAKMORE_HOME env var to pick a shorter one.",
+      "The SpeakMore folder path is too long for the control socket: {home}\nMove this folder somewhere with a shorter path, then run the install command and choose the folder that holds it.",
+    homeParentMissing:
+      "Can't find the SpeakMore folder {home}: {parent} doesn't exist. If it's on an external or another drive, connect that drive first.",
+    homeMoved:
+      "SpeakMore has moved to {to}; this ({home}) is the old folder that hasn't been fully removed yet. Open SpeakMore from its new place.",
+    homeMissing:
+      "Can't find the SpeakMore folder {home} (the location file {file} says it's there).\nIf it's on an external or another drive, connect that drive. If you no longer use that place, delete the location file to use the default one.",
+  },
+
+  move: {
+    notFull: "Use a full path, like {example}: {folder}",
+    noFolder: "{folder} doesn't exist or isn't a folder. Create it first, then choose it again.",
+    sameHome: "SpeakMore is already in {home}; nothing to move.",
+    insideHome: "SpeakMore can't move into its own folder ({home}). Choose another folder.",
+    notEmpty:
+      "{home} isn't empty. SpeakMore only moves into an empty place: choose another folder, or empty that one first.",
+    tooLongBytes: "That path is too long: {home}\nIt can be at most {max} bytes. Choose a shorter place.",
+    tooLongChars: "That path is too long: {home}\nIt can be at most {max} characters. Choose a shorter place.",
+    inProgress: "SpeakMore is moving from {home} to {to}; it will reopen when the move is done.",
+    unfinishedCopy:
+      "This folder ({home}) was copied by a move that didn't finish; SpeakMore is still in {from}. Open SpeakMore from there and it will clean up the unfinished move.",
+    interrupted: "The move stopped halfway (the process quit unexpectedly)",
+    notRecorded:
+      "The folder in use, {home}, was set just for this run by SPEAKMORE_HOME; SpeakMore's recorded place is {recorded}. Only the recorded one can be moved.",
+    homeTooOld:
+      "The SpeakMore program in {home} is too old to move. Update it first (speakmore update, or run the install command again), then move.",
+    appTooOld:
+      "{app} is still version {version} and won't find the new place. Run speakmore update to update it too, then move.",
+    noSpace: "Not enough space on the disk of {folder}: {need} needed, {free} free.",
+    recovered: "The last move to {to} didn't finish and has been cleaned up: SpeakMore is still in {home}.",
+    copying: "Copying to {to}…",
+    switching: "Switching to the new place…",
+    rehomeFailed: "The program in the new place couldn't be set up (installer exit code {code}).",
+    restoreFailed: "Couldn't point SpeakMore back to {home} (installer exit code {code}).",
+    putBack: "The move to {home} didn't finish; SpeakMore has been put back in {from}. Open SpeakMore again.",
+    notOurCopy: "{to} doesn't hold this move's copy, so it was left alone.",
+    copyBroken: "The copied files are incomplete: {reason}",
+    cleanupProblem: "Something went wrong while putting things back: {problem}",
+    recordFailed: "Couldn't write the move record ({reason}); SpeakMore works as usual.",
+    leftover: "Couldn't fully delete {dir} ({reason}); you can delete it yourself.",
+    clearedEnv: "Removed the SPEAKMORE_HOME environment variable that pointed to the old place.",
+    reopened: "Reopened SpeakMore.",
+    reopenFailed: "SpeakMore didn't reopen by itself ({reason}); please open it.",
+    restartFailed: "the start command exited with code {code}",
+    unsupportedDrive:
+      "The disk of {home} can't hold SpeakMore: {what} ({reason}). exFAT and FAT32, common on USB sticks and external drives, aren't supported; choose a disk formatted as APFS or Mac OS Extended.",
+    probe: {
+      create: "can't create a folder",
+      restrict: "can't make it private to you",
+      symlink: "can't create symbolic links",
+      socket: "can't create the local socket SpeakMore talks through",
+    },
+  },
+
+  location: {
+    invalid:
+      "SpeakMore's location file is invalid: {file}\nIt should hold the full path of the SpeakMore folder. Deleting it makes SpeakMore use the default location.",
+    unreadable: "Can't read SpeakMore's location file {file} ({reason})",
   },
 
   control: {
@@ -970,6 +1082,10 @@ export default {
   speakmore settings            Open Settings (to grant macOS permissions)
   speakmore logs [-n lines] [-f]
                                 Show logs; -f keeps following
+  speakmore move [<folder>] [--yes]
+                                Move SpeakMore's folder (program, on-device models, recordings, settings) into .speakmore
+                                inside that folder, e.g. on another disk. speakmore move ~ moves it back to the default
+                                place. Without a folder, shows where it is now
   speakmore uninstall [--keep-data] [--yes]
                                 Uninstall: stop it and delete the whole SpeakMore folder. --keep-data keeps settings, keys, the dictionary, history, and recordings
 
@@ -999,6 +1115,7 @@ export default {
       logs: "speakmore logs [-n lines] [-f]",
       settings: "speakmore settings",
       uninstall: "speakmore uninstall [--keep-data] [--yes]",
+      move: "speakmore move [<folder>] [--yes]",
       config: "Usage: speakmore config | speakmore config set <name> <value> | speakmore config unset <name>",
       theme: "Usage: speakmore theme | speakmore theme <name>",
       model:
@@ -1347,6 +1464,20 @@ speakmore help     all commands`,
     logs: {
       none: "No logs yet: SpeakMore writes them to {file} once it has started",
     },
+    move: {
+      where: "SpeakMore is in {home}.",
+      how: "To move it elsewhere (another disk, say): speakmore move <folder>; it goes into .speakmore inside that folder. To move it back to the default place: speakmore move ~",
+      needsConfirm: "Moving needs a confirmation. Add --yes when not running in a terminal.",
+      plan: "About to move SpeakMore from {from} to {to}: {size} to copy ({count} files), with the program, on-device models, recordings and settings.\nSpeakMore stops while it moves and reopens when done; if the move fails, everything stays as it was.",
+      unknown: "Things in the old folder that aren't SpeakMore's are neither moved nor deleted: {items}",
+      confirm: "Move it? Type y and press Enter: ",
+      aborted: "Nothing changed.",
+      progress: "Copied {percent}% ({done} / {total})",
+      done: "SpeakMore has moved to {to} ({count} files, {size}).",
+      removed: "Deleted the old folder {dir}.",
+      later: "The old folder {dir} is in use by this command; it will be deleted a few seconds after it exits.",
+      left: "The old folder {dir} still has things that aren't SpeakMore's; they were left alone: {items}",
+    },
     uninstall: {
       yours: "settings, keys, dictionary, history, and recordings",
       needsConfirm: "Uninstalling needs confirmation. Add --yes when not running in a terminal.",
@@ -1363,6 +1494,10 @@ speakmore help     all commands`,
       loginItem: "Open at login",
       afterExit: "The program files are in use by this command; they're removed a few seconds after it exits",
       removedAll: "{home} (the program, runtime, and your {yours})",
+      locationFile: "SpeakMore's location file {file}",
+      locationUnreadable:
+        "The location file {file} couldn't be read ({reason}) and wasn't deleted; you can delete it yourself",
+      halfCopy: "{dir} (a copy left by a move that didn't finish)",
       done: "SpeakMore uninstalled.",
       removed: "Deleted: {item}",
       kept: "Kept: your {yours} in {home}. Reinstall to pick up where you left off; delete the folder if you don't need them",
@@ -1406,6 +1541,10 @@ speakmore help     all commands`,
     update: {
       restartFailed:
         "The new version is installed, but SpeakMore couldn't be restarted (exit code {code}). Open SpeakMore from the Start menu; details are in {log}.",
+    },
+    move: {
+      unsupportedDrive:
+        "The disk of {home} can't hold SpeakMore: {what} ({reason}). exFAT and FAT32, common on USB sticks and external drives, aren't supported; choose a disk formatted as NTFS.",
     },
     cli: {
       key: { storage: "It's encrypted with Windows data protection and stays on this PC." },

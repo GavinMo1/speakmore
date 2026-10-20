@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
-import { isOurShortcut, removeLoginItem, removePathEntry } from "../../src/cli/windows-system.mjs";
+import { clearUserHome, isOurShortcut, removeLoginItem, removePathEntry } from "../src/windows-system.mjs";
 
 const windowsOnly = { skip: process.platform !== "win32" && "要在 Windows 上起 PowerShell" };
 
@@ -18,7 +18,7 @@ test("退出后再删：叫它的进程马上就退出，那几个目录照样�
   writeFileSync(join(doomed, "electron.exe"), "");
   // 和 speakmore uninstall、update 一样：交代完马上退出。Node 在 Windows 上会把直接起的子进程跟着自己一起收掉
   const script = join(dir, "caller.mjs");
-  const module = pathToFileURL(join(import.meta.dirname, "../../src/cli/windows-system.mjs")).href;
+  const module = pathToFileURL(join(import.meta.dirname, "../src/windows-system.mjs")).href;
   writeFileSync(
     script,
     `import { removeAfterExit } from ${JSON.stringify(module)};\nremoveAfterExit([process.argv[2]]);\n`,
@@ -27,6 +27,10 @@ test("退出后再删：叫它的进程马上就退出，那几个目录照样�
   // 起两次 PowerShell 加上等的那一下，真机上两秒左右；整个文件只有 5 秒（--test-timeout）
   for (let waited = 0; existsSync(doomed) && waited < 4000; waited += 100) await delay(100);
   assert.equal(existsSync(doomed), false, "叫它的进程退出 4 秒后目录还在");
+});
+
+test("用户环境变量 SPEAKMORE_HOME 不是指着这个目录的：不动", windowsOnly, () => {
+  assert.equal(clearUserHome(join(tmpdir(), "sm-winsys-nowhere", ".speakmore")), false);
 });
 
 test("没有那一项时如实说没有，不报错：开机启动、Path 里都没有这个家目录的", windowsOnly, () => {

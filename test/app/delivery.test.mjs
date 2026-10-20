@@ -48,8 +48,8 @@ test("成品：存录音、记历史、贴出去", async () => {
   const { delivery, rows, pasted } = setup();
   assert.deepEqual(await delivery.completed(payload()), { notice: null });
 
-  const audioLocalPath = join(dir, "Recordings", `${AUDIO_ID}.webm`);
-  assert.deepEqual([...readFileSync(audioLocalPath)], [0x1a, 0x45, 0xdf, 0xa3, 7]);
+  // 历史里只记文件名：家目录搬了家也对得上
+  assert.deepEqual([...readFileSync(join(dir, "Recordings", `${AUDIO_ID}.webm`))], [0x1a, 0x45, 0xdf, 0xa3, 7]);
   assert.deepEqual(rows, [
     {
       id: AUDIO_ID,
@@ -57,7 +57,7 @@ test("成品：存录音、记历史、贴出去", async () => {
       refinedText: "我们后天开会。",
       error: null,
       duration: 4.2,
-      audioLocalPath,
+      audioFile: `${AUDIO_ID}.webm`,
       createdAt: "2026-10-13T08:00:00.000Z",
     },
   ]);
@@ -119,7 +119,7 @@ test("失败的听写：录音和原因都留下", () => {
   assert.equal(rows[0].status, "failed");
   assert.equal(rows[0].refinedText, "");
   assert.equal(rows[0].error, "等了 20 秒没有等到成品");
-  assert.ok(existsSync(rows[0].audioLocalPath));
+  assert.ok(existsSync(join(dir, "Recordings", rows[0].audioFile)));
   assert.deepEqual(pasted, []);
 });
 
@@ -127,7 +127,7 @@ test("录音是某个缓冲区里的一段时，只存那一段", async () => {
   const { delivery, rows } = setup();
   const whole = Uint8Array.from([9, 9, 0x1a, 0x45, 9]);
   await delivery.completed(payload({ audio: whole.subarray(2, 4) }));
-  assert.deepEqual([...readFileSync(rows[0].audioLocalPath)], [0x1a, 0x45]);
+  assert.deepEqual([...readFileSync(join(dir, "Recordings", rows[0].audioFile))], [0x1a, 0x45]);
 });
 
 test("来自页面的参数不合格时拒绝，不落任何文件", async () => {

@@ -288,6 +288,21 @@ export function createSettings({ refresh }) {
     await refresh();
   });
 
+  // ---------- 通用：存储位置 ----------
+
+  $("storage-change").addEventListener("click", async () => {
+    showNote("storage-note", null);
+    $("storage-change").disabled = true;
+    try {
+      // 确认了的话主进程起搬家的进度窗口，这个 App 随后会退出
+      await window.speakmore.changeStorage();
+    } catch (error) {
+      showNote("storage-note", t("preferences.storage.failed", { reason: describeError(error) }), "problem");
+    } finally {
+      $("storage-change").disabled = false;
+    }
+  });
+
   // ---------- 权限 ----------
 
   function renderPermissions(setup) {
@@ -341,7 +356,8 @@ export function createSettings({ refresh }) {
       renderGeneral(setup);
       renderPermissions(setup);
       $("about-version").textContent = `v${setup.version}`;
-      $("about-home").textContent = setup.home;
+      $("storage-path").textContent = setup.home;
+      $("storage-path").title = setup.home;
       renderUpdate(setup.update);
       // 菜单上标个点：权限这一页有东西要补（红点），通用这一页有更新的事（见下），侧栏的设置图标上也标
       const update = updateFlagged(setup.update);
