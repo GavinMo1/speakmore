@@ -240,8 +240,8 @@ The **Models** page lists every model by role:
 - **Local data**: history, recordings and the dictionary remain on the local machine.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/download-speed-dark.en.8b4db543.webp" />
-  <img src="https://media.speakmore.zephyrxiang.com/readme/download-speed-light.en.44f92b14.webp" width="720" alt="Download time for the 850 MB on-device model: SpeakMore China mirror at 9.3 MB/s, about 1.5 minutes; hf-mirror.com about 15 minutes; Hugging Face about 20 minutes" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/download-speed-dark.en.53211f05.webp" />
+  <img src="https://media.speakmore.zephyrxiang.com/readme/download-speed-light.en.4f6c3453.webp" width="720" alt="Download time for the 850 MB on-device model: China mirror (ModelScope) at 9.8 MB/s, about 1.4 minutes; hf-mirror.com about 9 minutes; Hugging Face about 20 minutes" />
 </picture>
 
 ## 💸 Cost freedom

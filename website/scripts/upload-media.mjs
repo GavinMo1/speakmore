@@ -8,7 +8,7 @@
 // 对象名带内容的指纹（home-light-ink.en.3f2a9c1b.webp）：图变了名字就变，CDN 和浏览器可以放心缓存一年，
 // 不用去刷新缓存。传过的同名对象跳过。
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,7 +47,8 @@ async function exists(Key) {
 }
 
 const shots = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
-const media = {};
+// 合进原来的清单：这次只重画了几张（比如只有测速图）时，别的条目照旧
+const media = existsSync(manifestFile) ? JSON.parse(readFileSync(manifestFile, "utf8")) : {};
 for (const [name, { file, width, height }] of Object.entries(shots)) {
   const body = readFileSync(join(dir, file));
   const hash = createHash("sha256").update(body).digest("hex").slice(0, 8);
@@ -69,4 +70,4 @@ for (const [name, { file, width, height }] of Object.entries(shots)) {
 }
 
 writeFileSync(manifestFile, `${JSON.stringify(media, null, 2)}\n`);
-console.log(`写好了 ${manifestFile}：${Object.keys(media).length} 张`);
+console.log(`写好了 ${manifestFile}：这次 ${Object.keys(shots).length} 张，清单里共 ${Object.keys(media).length} 张`);

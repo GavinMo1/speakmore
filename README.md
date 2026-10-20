@@ -240,8 +240,8 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 - **数据留存本机**：历史记录、录音与词典仅保存在本机。
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/download-speed-dark.zh-CN.170a9ced.webp" />
-  <img src="https://media.speakmore.zephyrxiang.com/readme/download-speed-light.zh-CN.c710e7f4.webp?v=3" width="720" alt="下载 850 MB 本机模型的耗时：SpeakMore 国内源 9.3 MB/s，约 1.5 分钟；hf-mirror.com 约 15 分钟；Hugging Face 约 20 分钟" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/download-speed-dark.zh-CN.64649557.webp" />
+  <img src="https://media.speakmore.zephyrxiang.com/readme/download-speed-light.zh-CN.a196c1b6.webp" width="720" alt="下载 850 MB 本机模型的耗时：国内源（魔搭）9.8 MB/s，约 1.4 分钟；hf-mirror.com 约 9 分钟；Hugging Face 约 20 分钟" />
 </picture>
 
 ## 💸 费用自由

@@ -139,8 +139,8 @@ export default {
     ],
     mirror: {
       title: "国内源下载\n快十余倍",
-      text: "本机模型从国内源下载，850 MB 约一分半钟。",
-      alt: "下载速度对比：国内源约 9.7 MB/s，Hugging Face 约 0.7 MB/s",
+      text: "本机模型从国内源（魔搭）下载，850 MB 约一分半钟。",
+      alt: "下载速度对比：国内源（魔搭）约 9.8 MB/s，Hugging Face 约 0.7 MB/s",
     },
   },
   cost: {

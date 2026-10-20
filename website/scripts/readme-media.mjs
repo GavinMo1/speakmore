@@ -132,30 +132,32 @@ const COLORS = {
 };
 const FONT = `-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif`;
 
-// 2026-10-17 在作者的网络（国内、直连）上实测：同一个 850 MB 的文件，每个源用 curl 下 40 秒、两轮，取平均（字节/秒 ÷ 10^6）
+// 在作者的网络（国内）上实测：同一个 850 MB 的文件，每个源用 curl 下 40 秒、两轮，取平均（字节/秒 ÷ 10^6）。
+// 魔搭、hf-mirror 是 2026-10-20 量的（同一时间老的 COS 国内源是 8.45、8.73）；Hugging Face 那天走了代理，
+// 不代表国内直连，沿用 2026-10-17 直连量的
 const SPEED = [
-  { id: "cn", mbps: (9.670795 + 8.924335) / 2 },
-  { id: "hfmirror", mbps: (0.636425 + 1.236865) / 2 },
+  { id: "cn", mbps: (9.94 + 9.76) / 2 },
+  { id: "hfmirror", mbps: (1.61 + 1.6) / 2 },
   { id: "hf", mbps: (0.675294 + 0.721621) / 2 },
 ];
 const SPEED_TEXT = {
   en: {
     title: "Downloading the on-device model",
     sub: "Qwen3-ASR 0.6B · 850 MB",
-    cn: "SpeakMore China mirror",
+    cn: "China mirror (ModelScope)",
     hfmirror: "hf-mirror.com",
     hf: "Hugging Face",
     min: (m) => (m < 2 ? `${m.toFixed(1)} min` : `${Math.round(m)} min`),
-    note: "Measured 2026-10-17 from mainland China, direct connection, two 40-second runs per source",
+    note: "Measured from mainland China, two 40-second runs per source (October 2026)",
   },
   zh: {
     title: "下载本机模型",
     sub: "Qwen3-ASR 0.6B · 850 MB",
-    cn: "SpeakMore 国内源",
+    cn: "国内源（魔搭）",
     hfmirror: "hf-mirror.com",
     hf: "Hugging Face",
     min: (m) => (m < 2 ? `${m.toFixed(1)} 分钟` : `${Math.round(m)} 分钟`),
-    note: "2026-10-17 在国内直连实测，每个源下 40 秒、测两轮取平均",
+    note: "2026 年 10 月在国内实测，每个源下 40 秒、测两轮取平均",
   },
 };
 
@@ -226,6 +228,9 @@ function logosHtml(lang, scheme) {
 }
 
 app.dock?.hide();
+// 窗口一个个开了又关：Electron 默认在最后一个窗口关掉时退出，只画测速图和标志墙（截图目录是空的）时，
+// 画完一张关掉、转码的窗口还没开，就会在中间退出、后面的加载全失败。最后由这里自己 app.quit()
+app.on("window-all-closed", () => {});
 app.whenReady().then(async () => {
   mkdirSync(out, { recursive: true });
   for (const file of readdirSync(shotsDir)

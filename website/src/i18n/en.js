@@ -155,8 +155,8 @@ export default {
     ],
     mirror: {
       title: "China mirror.\nOver 10× faster.",
-      text: "Download the on-device model from the China mirror: 850 MB in about a minute and a half.",
-      alt: "Download speed: China mirror about 9.7 MB/s, Hugging Face about 0.7 MB/s",
+      text: "Download the on-device model from the China mirror (ModelScope): 850 MB in about a minute and a half.",
+      alt: "Download speed: China mirror (ModelScope) about 9.8 MB/s, Hugging Face about 0.7 MB/s",
     },
   },
   cost: {
