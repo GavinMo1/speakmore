@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { msg, problemOf } from "../i18n/index.mjs";
 import { probeTarget } from "../move/probe.mjs";
@@ -29,7 +29,9 @@ export function needsHomeChoice({ env, platform, packaged, launchedByCli, userHo
 }
 
 /**
- * 问存储位置放哪，直到选定。选了默认位置什么都不写；选了别处：检查路径、试一下那块盘（exFAT 这类不行），记进定位文件
+ * 问存储位置放哪，直到选定。选了默认位置：不写定位文件，只把默认位置的空目录建出来（只让自己进），重新启动后
+ * needsHomeChoice 看到它就不再问，不然每次打开都问、App 一直起不来。
+ * 选了别处：检查路径、试一下那块盘（exFAT 这类不行），记进定位文件
  * @param {object} options
  * @param {Electron.Dialog} options.dialog
  * @param {(key: string, params?: object) => string} options.t 按系统语言翻（这时还没有设置）
@@ -45,6 +47,10 @@ export async function chooseHome({
   write = writeLocation,
 }) {
   const defaultHome = join(userHome, ".speakmore");
+  const useDefault = () => {
+    mkdirSync(defaultHome, { recursive: true, mode: 0o700 });
+    return defaultHome;
+  };
   const shown = (path) => (path.startsWith(`${userHome}/`) ? `~${path.slice(userHome.length)}` : path);
   const warn = async (problem) => {
     await dialog.showMessageBox({
@@ -64,7 +70,7 @@ export async function chooseHome({
       cancelId: 0,
       noLink: true,
     });
-    if (response === 0) return defaultHome;
+    if (response === 0) return useDefault();
 
     const picked = await dialog.showOpenDialog({
       title: t("firstRun.pickTitle"),
@@ -75,7 +81,7 @@ export async function chooseHome({
     });
     if (picked.canceled || picked.filePaths.length === 0) continue;
     const home = canonicalDir(homeIn(picked.filePaths[0], platform), platform);
-    if (home === canonicalDir(defaultHome, platform)) return defaultHome;
+    if (home === canonicalDir(defaultHome, platform)) return useDefault();
     try {
       checkLength(home, platform);
       if (existsSync(home) && readdirSync(home).length > 0) {

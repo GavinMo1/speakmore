@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { chooseHome, needsHomeChoice } from "../../src/app/first-run.mjs";
@@ -56,13 +56,15 @@ test("什么时候问：Mac 上打成应用、从程序坞打开、什么都还�
   assert.equal(needsHomeChoice({ ...base, exists: (path) => path === locationFileOf({}, userHome, "darwin") }), false);
 });
 
-test("选默认位置：什么都不写", posixOnly, async (t) => {
+test("选默认位置：不写定位文件，建好默认位置的空目录（只让自己进），重新启动后不再问", posixOnly, async (t) => {
   const userHome = scratch(t);
   const dialog = fakeDialog({ boxes: [0] });
   assert.equal(await choose(userHome, dialog), join(userHome, ".speakmore"));
   assert.equal(existsSync(locationFileOf({}, userHome, "darwin")), false);
-  assert.equal(existsSync(join(userHome, ".speakmore")), false);
+  assert.equal(statSync(join(userHome, ".speakmore")).mode & 0o777, 0o700);
   assert.match(dialog.shown[0], /选择存储位置/);
+  const next = { env: {}, platform: "darwin", packaged: true, launchedByCli: false, userHome };
+  assert.equal(needsHomeChoice(next), false, "不然每次打开都问、App 一直起不来");
 });
 
 test("选了别处：建好那里的 .speakmore（只让自己进），记进定位文件", posixOnly, async (t) => {
