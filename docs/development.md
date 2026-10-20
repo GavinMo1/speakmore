@@ -39,7 +39,8 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 加一个本地转写模型：
 1. 在 `src/models/catalog.mjs` 加一项：原始地址钉在某一次提交上，每个文件写上大小和 sha256，注明许可（原文地址）和原作者的仓库。它用的运行库要在 `src/server/asr/engines/` 登记过。
 2. 在 `bench/lib/candidates.mjs` 加一个候选，跑一轮评测（[说明](../bench/README.md)），把实测数字和标签填回配置表的 `measured`、`tags`。标签按实测打，`test/models/` 会查"标了适合哪类芯片，就要有在那类芯片上的实测"。
-3. 传到国内源：`scripts/release/with-cos-key.sh npm run sync-models -- --from <本机模型仓> --download`。它逐个核对 sha256、带上 LICENSE 和 NOTICE 传进模型桶（`.machine.env` 的 `MODELS_BUCKET`），从 CDN `models.speakmore.zephyrxiang.com` 逐个查一遍，再让 CDN 预热这次新传的文件。不预热的话第一个下载的人要等回源，实测慢 3 倍左右。
+3. 传到国内源（魔搭 ModelScope 上配置表 `MODELSCOPE_OWNER` 名下的仓库，一个模型一个，仓库名就是模型 id）：`scripts/release/with-modelscope-key.sh npm run sync-models -- --from <本机模型仓> --download`。它逐个核对 sha256，带上 README.md（模型卡）、LICENSE 和 NOTICE 传上去，从魔搭上逐个核对大小和 sha256、照下载地址真取一次，最后报出每个模型该钉的提交，填进配置表那一项的 `mirror.revision`（地址钉在提交上，内容永远不变）。`npm run sync-models -- --check` 不用令牌，只核对配置表钉的提交都下得到、都对。
+   - 传文件用魔搭的 Python SDK：`scripts/release/modelscope-sdk.sh` 第一次跑时用 uv 装进 `.tools/modelscope/venv`，版本钉在 `scripts/release/modelscope-requirements.txt`；登录态和缓存也放在那里，不写 `~/.modelscope`。令牌在魔搭的账号设置 › 访问令牌里拿，放进按需加载器，凭据名写进 `.machine.env` 的 `MODELSCOPE_CREDENTIAL`。
 
 加一种界面语言：照着 `src/i18n/locales/en.mjs` 写一个文件，在 `src/i18n/index.mjs` 的 `LOCALES` 里登记一行（并列几样时不想用 `Intl` 的写法，比如中文全用顿号，登记时给 `separator`）。缺了哪句、参数对不上、单复数写法这种语言没有，`test/i18n/` 会指出来；设置、菜单栏、窗口、命令行都从这份清单里取，不用再改别处。只管界面：提示词和整理出来的文字不跟着变。
 

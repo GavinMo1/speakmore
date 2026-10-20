@@ -1,0 +1,14 @@
+certifi==2026.10.19
+cffi==2.1.1
+charset-normalizer==3.5.2
+cryptography==50.0.2
+filelock==4.2.4
+idna==3.20
+modelscope==1.40.2
+modelscope-hub==0.4.6
+packaging==26.3
+pycparser==3.11
+requests==2.34.2
+setuptools==84.2.0
+tqdm==4.70.1
+urllib3==2.8.0

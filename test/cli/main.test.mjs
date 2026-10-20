@@ -2610,7 +2610,7 @@ test("transcriber <模型>：要换的还没下载时先问；答是就交给后
   assert.equal(await speakmore("transcriber", "sensevoice-small-q8"), 0);
   assert.match(
     confirmed[0],
-    /SenseVoice Small \(Q8_0\) 还没下载（253 MB，从国内源（SpeakMore 的 CDN）下）。现在下载吗/,
+    /SenseVoice Small \(Q8_0\) 还没下载（253 MB，从国内源（魔搭）下）。现在下载吗/,
   );
   assert.match(output.out, /交给后台下了：按 Ctrl-C 只是不看进度/);
   assert.match(output.out, /下载中 50%/);
@@ -2639,7 +2639,7 @@ test("transcriber download：用户自己点的，不再问；后台没在运行
   assert.equal(await idle.speakmore("transcriber", "download", "qwen3-asr-0.6b-q8"), 0);
   assert.deepEqual(idle.local.downloads, ["qwen3-asr-0.6b-q8"]);
   assert.deepEqual(idle.local.sources, ["cn"]);
-  assert.match(idle.output.out, /下载 Qwen3-ASR 0\.6B \(Q8_0\)（850 MB，从国内源（SpeakMore 的 CDN））/);
+  assert.match(idle.output.out, /下载 Qwen3-ASR 0\.6B \(Q8_0\)（850 MB，从国内源（魔搭））/);
   assert.match(idle.output.out, /下好了/);
   assert.equal(idle.confirmed.length, 0);
 

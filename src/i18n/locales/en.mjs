@@ -100,7 +100,7 @@ export default {
       customParams:
         'Extra request parameters for the custom service, as one JSON object, e.g. {"reasoning_effort": "minimal"}; sent with checks and polishing alike. model, messages, and stream can\'t be set',
       modelSource:
-        "Where on-device models download from: cn is SpeakMore's mirror in China, original is Hugging Face. If the chosen one stalls, the other is tried",
+        "Where on-device models download from: cn is the mirror in China (ModelScope), original is Hugging Face. If the chosen one stalls, the other is tried, picking up where the download stopped",
       acceleration:
         "Whether on-device models use the GPU: auto uses it when there is one and falls back to the CPU if it fails; cpu uses only the CPU (for GPU driver trouble, or to leave the GPU to other programs)",
       barHint: "Whether the hint line above the voice bar (press … to finish · esc to cancel) shows: on or off",
@@ -149,7 +149,7 @@ export default {
     transcribeFailed: "Local transcription failed: {reason}",
   },
   modelSources: {
-    cn: "China mirror (SpeakMore CDN)",
+    cn: "China mirror (ModelScope)",
     original: "Original (Hugging Face)",
   },
   accelerations: {

@@ -5,22 +5,30 @@
 //
 // 一项是"一个模型在一个运行库里用的一份文件"：同一个 Qwen3-ASR，sherpa-onnx 用 ONNX、transcribe.cpp 用 GGUF，是两项。
 // 模型文件本身不进仓库：用到时下载到用户的机器上。原始地址钉在 Hugging Face 的某一次提交上，内容不会再变；
-// 国内源是同一批文件的副本。每个文件下载完都按 sha256 校验，所以从哪个源下的都一样。
+// 国内源是魔搭（ModelScope）上同一批文件的副本，也钉在一次提交上。每个文件下载完都按 sha256 校验，所以从哪个源下的都一样。
 // files 按用途起名（encoder、tokens…），运行库的适配器按这些名字把文件填进它的配置（server/asr/engines/*.mjs 的 FAMILIES）。
 // maxSeconds 是一次最多吃多少秒的音频，有上限的才写：更长的录音由 server/asr/segment.mjs 切开逐段转写。
 // vocabulary 是收不收用户词典、收多少（vocabulary/support.mjs），不收的不写；放进哪里由运行库的适配器管。
 //
 // 加一个模型 = 在 MODELS 里加一项（它用的运行库要在 server/asr/engines/index.mjs 登记过，family 要是那个运行库认得的），
-// 再跑一次 scripts/release/sync-models.mjs 把文件传到国内源。标签和实测数字跑过评测再补。
+// 再跑一次 scripts/release/sync-models.mjs 把文件传到魔搭，把它报的提交填进这一项的 mirror。标签和实测数字跑过评测再补。
 import { vocabularySupport } from "../vocabulary/support.mjs";
 
 // ---------- 下载源 ----------
 
-/** 国内源：SpeakMore 自己的 COS 桶，前面是 CDN（全球加速，在国外也能用）。scripts/release/sync-models.mjs 往上传 */
-export const CN_BASE = "https://models.speakmore.zephyrxiang.com";
+/**
+ * 国内源：魔搭（ModelScope）上这个账号名下的模型仓库，一个模型一个仓库，仓库名就是模型 id。
+ * 魔搭对下载不收钱、在国内有自己的 CDN，也认 Range（断点续传）。scripts/release/sync-models.mjs 往上传。
+ * 魔搭建组织要人工审核，先放在作者的个人账号下；换到组织名下时重传一遍、改这里和各项的 mirror.revision 就行
+ */
+export const MODELSCOPE_OWNER = "ardsfsw";
 
-/** 国内源上的对象名：<模型 id>/<原始地址钉住的提交>/<文件路径>。换了提交就是新地址，CDN 可以一直缓存 */
-export const mirrorKey = (model, path) => `${model.id}/${model.origin.revision}/${path}`;
+/** 一个模型在魔搭上的仓库 */
+export const mirrorRepo = (model) => `${MODELSCOPE_OWNER}/${model.id}`;
+
+/** 国内源：魔搭上钉在那次提交（mirror.revision）的文件。换了提交就是新地址，内容不会再变 */
+const modelScope = (model, file) =>
+  `https://modelscope.cn/models/${mirrorRepo(model)}/resolve/${model.mirror.revision}/${file.path}`;
 
 /** 原始地址：Hugging Face 上钉在那次提交的文件 */
 const huggingFace = (model, file) =>
@@ -36,7 +44,7 @@ const hfMirror = (model, file) =>
  * urls 是这个源里依次试的地址
  */
 export const SOURCES = Object.freeze([
-  Object.freeze({ id: "cn", urls: Object.freeze([(model, file) => `${CN_BASE}/${mirrorKey(model, file.path)}`]) }),
+  Object.freeze({ id: "cn", urls: Object.freeze([modelScope]) }),
   Object.freeze({ id: "original", urls: Object.freeze([huggingFace, hfMirror]) }),
 ]);
 
@@ -113,6 +121,7 @@ const freeze = (model) =>
   Object.freeze({
     ...model,
     origin: Object.freeze(model.origin),
+    mirror: Object.freeze(model.mirror),
     files: Object.freeze(model.files),
     tags: Object.freeze(model.tags),
     measured: Object.freeze(model.measured.map((entry) => Object.freeze({ run: ROUND1, ...entry }))),
@@ -124,6 +133,7 @@ const freeze = (model) =>
  *   license   许可的名字和原文地址
  *   author    原作者发布这个模型的仓库（Hugging Face）。FunASR 的许可要求注明来源和作者、保留模型名
  *   origin    原始地址：下载的这一份在哪个仓库、钉在哪次提交；notice 是那个仓库里随文件分发的声明（可有可无）
+ *   mirror    国内源：魔搭上那个仓库（mirrorRepo）钉在哪次提交（sync-models.mjs 传完报出来的）
  *   files     要下载的文件：相对路径、字节数、sha256
  *   tags      标签（TAGS）
  *   measured  实测：在哪类芯片（chip）、用什么跑（backend），判官均分（0–5）、每条录音转写耗时的中位数、
@@ -148,6 +158,7 @@ export const MODELS = Object.freeze(
         revision: "7e7c69a577fa2725dfedbe34b5e999336e30a19b",
         notice: "NOTICE",
       },
+      mirror: { revision: "275debc0a82a6d29ed40d72cc0be5bd66bc43e26" },
       files: {
         gguf: {
           path: "Qwen3-ASR-0.6B-Q8_0.gguf",
@@ -215,6 +226,7 @@ export const MODELS = Object.freeze(
         revision: "ff8f085a8fa2e5ccae0e849ef19ebc6dc18e608b",
         notice: "NOTICE",
       },
+      mirror: { revision: "b569f1bc9765ce41d43d90fca5d997060861733f" },
       files: {
         gguf: {
           path: "SenseVoiceSmall-Q8_0.gguf",
@@ -276,6 +288,7 @@ export const MODELS = Object.freeze(
         repo: "csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
         revision: "68818b2313fe77bd06f6a7c5068ff3ef59d02b8a",
       },
+      mirror: { revision: "0d32a807e2af129074fb0bf6766fd9080c64141d" },
       files: {
         convFrontend: {
           path: "conv_frontend.onnx",
@@ -344,6 +357,7 @@ export const MODELS = Object.freeze(
         repo: "csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09",
         revision: "355f4d4884d8afd08aef04b9007a8556d7b463b2",
       },
+      mirror: { revision: "d706ce3dbf2c6b046c9f5d589354d9844e29dff0" },
       files: {
         model: {
           path: "model.int8.onnx",

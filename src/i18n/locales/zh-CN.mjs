@@ -95,7 +95,7 @@ export default {
       customParams:
         '发给自定义服务的额外请求参数，一段 JSON 对象，比如 {"reasoning_effort": "minimal"}；验证和润色都带上，不能写 model、messages、stream',
       modelSource:
-        "本机模型从哪下载：cn 是 SpeakMore 的国内源，original 是 Hugging Face 原始地址。选的那个下不动会自动换另一个",
+        "本机模型从哪下载：cn 是国内源（魔搭 ModelScope），original 是 Hugging Face 原始地址。选的那个下不动会自动换另一个，下了一截的接着下",
       acceleration:
         "本机模型用不用显卡：auto 有显卡就用，出问题自动退回 CPU；cpu 只用 CPU（显卡驱动有问题、或者想把显卡让给别的程序时）",
       barHint: "悬浮条上方那行操作提示（再按一下 … 完成 · esc 取消）显示不显示：on 显示，off 不显示",
@@ -143,7 +143,7 @@ export default {
     transcribeFailed: "本地转写失败：{reason}",
   },
   modelSources: {
-    cn: "国内源（SpeakMore 的 CDN）",
+    cn: "国内源（魔搭）",
     original: "原始地址（Hugging Face）",
   },
   accelerations: {
