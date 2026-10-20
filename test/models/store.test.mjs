@@ -55,8 +55,10 @@ test("默认先走国内源：它连不上、回错误码就换原始地址接�
   const tried = [CN_HOST, "huggingface.co", "hf-mirror.com"];
   assert.deepEqual(hosts, [...tried, ...tried]);
 
+  const failingDir = mkdtempSync(join(tmpdir(), "speakmore-models-"));
+  dirs.push(failingDir);
   const failing = createModelStore({
-    dir: mkdtempSync(join(tmpdir(), "speakmore-models-")),
+    dir: failingDir,
     fetch: async (url) =>
       new URL(url).host === "huggingface.co"
         ? Promise.reject(new TypeError("fetch failed"))

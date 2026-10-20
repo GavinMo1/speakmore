@@ -45,7 +45,8 @@ test(
   windowsOnly,
   (t) => {
     const dir = mkdtempSync(join(tmpdir(), "sm-快捷方式-"));
-    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    // 刚建完快捷方式，系统还占着这个目录一小会儿：删不掉就隔一会儿再删，不留空目录
+    t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
     const home = join(dir, "用户", ".speakmore");
     const targets = {
       "ours.lnk": join(home, "versions", "0.9.3-1a2b3c4d", "runtime", "electron.exe"),
