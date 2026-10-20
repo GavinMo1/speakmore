@@ -1459,7 +1459,7 @@ function seedHistory() {
     refinedText,
     error: null,
     duration: 4,
-    audioLocalPath: null,
+    audioFile: null,
     createdAt,
   });
   history.add(entry("a", "2026-10-12T01:05:00.000Z", "昨天说的"));
@@ -1495,6 +1495,25 @@ test("history --json：原样给出记录", async () => {
     JSON.parse(output.out).map((entry) => entry.refinedText),
     ["今天说的", "昨天说的"],
   );
+});
+
+test("history --json：录音给完整路径，按现在的家目录拼（历史里只记文件名，搬过家也对）", async () => {
+  const history = openHistory(paths.historyDb);
+  history.add({
+    id: "a",
+    status: "failed",
+    refinedText: "",
+    error: "超时",
+    duration: 3,
+    audioFile: "a.webm",
+    createdAt: "2026-10-13T06:32:00.000Z",
+  });
+  history.close();
+  const { speakmore, output } = harness();
+  await speakmore("history", "--json");
+  const [row] = JSON.parse(output.out);
+  assert.equal(row.audioLocalPath, join(paths.recordingsDir, "a.webm"));
+  assert.equal("audioFile" in row, false);
 });
 
 test("history -n 要是正整数", async () => {
@@ -2167,7 +2186,7 @@ test("英文时每个命令的输出里都没有漏翻的中文（用户自己�
     refinedText: "Let's meet at 9:30.",
     error: null,
     duration: 4,
-    audioLocalPath: null,
+    audioFile: null,
     createdAt: "2026-10-13T06:32:00.000Z",
   });
   history.add({
@@ -2176,7 +2195,7 @@ test("英文时每个命令的输出里都没有漏翻的中文（用户自己�
     refinedText: "",
     error: null,
     duration: 75,
-    audioLocalPath: null,
+    audioFile: null,
     createdAt: "2026-10-12T06:32:00.000Z",
   });
   history.addCall({

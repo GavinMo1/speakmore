@@ -25,7 +25,7 @@ test("输出接到 head 这类只读开头就关掉的程序上：安静地结�
       refinedText: "一句不短的话。".repeat(60),
       error: null,
       duration: 3,
-      audioLocalPath: null,
+      audioFile: null,
       createdAt: new Date(Date.UTC(2026, 9, 1, 0, index)).toISOString(),
     });
   }

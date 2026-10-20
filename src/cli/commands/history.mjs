@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { noPositionals, parse, positiveInteger, renderOptions } from "../common.mjs";
 import { renderHistory } from "../render/history.mjs";
 
@@ -18,7 +19,11 @@ export async function history(args, io) {
   const db = io.openHistory(io.paths.historyDb, { readOnly: true });
   if (db !== null) {
     try {
-      rows = db.list({ limit });
+      // 历史里只记录音的文件名，给人看、给程序读的都是完整路径：按现在的录音目录拼
+      rows = db.list({ limit }).map(({ audioFile, ...row }) => ({
+        ...row,
+        audioLocalPath: audioFile === null ? null : join(io.paths.recordingsDir, audioFile),
+      }));
       const { dictations, failed } = db.stats();
       total = dictations + failed;
     } finally {

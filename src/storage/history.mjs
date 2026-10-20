@@ -21,7 +21,7 @@ const MIGRATIONS = [
      refined_text     TEXT NOT NULL,      -- 失败时是空字符串
      error            TEXT,               -- 失败原因，成功时为空
      duration         REAL NOT NULL,      -- 录音时长，秒
-     audio_local_path TEXT,               -- 录音文件；失败的记录留着它，话不会白说
+     audio_local_path TEXT,               -- 录音文件；失败的记录留着它，话不会白说。0.12.0 起只记文件名（见 fileNameOf）
      created_at       TEXT NOT NULL       -- ISO 8601
    );
    CREATE INDEX history_created_at ON history (created_at DESC);`,
@@ -64,6 +64,13 @@ function migrate(db) {
   }
 }
 
+/**
+ * 录音在录音目录里叫什么。0.12.0 起历史里只记文件名，读的人按现在的录音目录拼完整路径：家目录整个搬了家也对得上。
+ * 更早的版本记的是完整路径（macOS 的 / 或 Windows 的 \），只取最后的文件名。不改表结构：
+ * Mac 上 App 和命令行可能是不同版本、共用这一个库，版本号一变，旧的那一份就起不来了
+ */
+const fileNameOf = (stored) => (stored === null ? null : stored.split(/[\\/]/).at(-1));
+
 /** 只读着看的那一方不能替库升级，版本对不上时列可能不一样，所以不读 */
 function openReadOnly(dbPath) {
   const db = new DatabaseSync(dbPath, { readOnly: true });
@@ -101,7 +108,7 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
 
   const insert = db.prepare(
     `INSERT INTO history (id, status, refined_text, error, duration, audio_local_path, created_at)
-     VALUES (:id, :status, :refinedText, :error, :duration, :audioLocalPath, :createdAt)`,
+     VALUES (:id, :status, :refinedText, :error, :duration, :audioFile, :createdAt)`,
   );
   const insertCall = db.prepare(
     `INSERT INTO model_calls (audio_id, purpose, provider, model, input_tokens, audio_tokens, cached_tokens,
@@ -116,7 +123,7 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
        SELECT * FROM history ORDER BY created_at DESC LIMIT :limit
      )
      SELECT recent.id, recent.status, recent.refined_text AS refinedText, recent.error, recent.duration,
-            recent.audio_local_path AS audioLocalPath, recent.created_at AS createdAt,
+            recent.audio_local_path AS audioFile, recent.created_at AS createdAt,
             count(call.id) AS calls,
             sum(call.input_tokens) AS inputTokens,
             sum(call.output_tokens) AS outputTokens,
@@ -170,17 +177,22 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
   );
 
   return {
-    /** @param {{ id: string, status: "completed" | "failed", refinedText: string, error: string | null, duration: number, audioLocalPath: string | null, createdAt: string }} entry */
+    /**
+     * @param {{ id: string, status: "completed" | "failed", refinedText: string, error: string | null, duration: number, audioFile: string | null, createdAt: string }} entry
+     *   audioFile：录音在录音目录（paths.recordingsDir）里的文件名，没存录音是 null
+     */
     add(entry) {
       insert.run(entry);
     },
     /**
      * 最近的记录，新的在前。每一条带上它的用量 usage：{ calls, inputTokens, outputTokens, costUsd, latencyMs }，
-     * 夹着时间戳重来过的几次加在一起；没记过账的（没调到模型就失败了，或者记账之前的版本存的）是 null
+     * 夹着时间戳重来过的几次加在一起；没记过账的（没调到模型就失败了，或者记账之前的版本存的）是 null。
+     * 录音是 audioFile：录音目录里的文件名
      */
     list({ limit = 200 } = {}) {
       return select.all({ limit }).map(({ calls, inputTokens, outputTokens, costUsd, latencyMs, ...row }) => ({
         ...row,
+        audioFile: fileNameOf(row.audioFile),
         usage: calls === 0 ? null : { calls, inputTokens, outputTokens, costUsd, latencyMs },
       }));
     },

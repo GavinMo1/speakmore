@@ -1,12 +1,11 @@
 import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { NotRunningError, requestControl } from "../control.mjs";
 import { LocalizedError, msg } from "../i18n/index.mjs";
 import { ensureHome, keyFile, legacyDataDir, oldAppKeyFile } from "./paths.mjs";
 
 // 0.1 版把数据放在 ~/Library/Application Support/SpeakMore。那里还有东西的话，第一次运行时搬进现在的家目录。
-// 想退回 0.1：把这几样搬回原处即可（历史里记的录音位置会指着新地方，只影响"录音留在哪"那句话）。
+// 想退回 0.1：把这几样搬回原处即可。历史里的录音只按文件名认（history.mjs），不用跟着改。
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -43,19 +42,6 @@ async function quitOldDaemon(socket, timeoutMs) {
   return false;
 }
 
-/** 历史里记的是录音的绝对路径，录音搬了家，这些路径跟着改 */
-function repointRecordings(historyDb, from, to) {
-  const db = new DatabaseSync(historyDb);
-  try {
-    db.prepare(
-      `UPDATE history SET audio_local_path = :to || substr(audio_local_path, length(:from) + 1)
-       WHERE substr(audio_local_path, 1, length(:from)) = :from`,
-    ).run({ from: `${from}/`, to: `${to}/` });
-  } finally {
-    db.close();
-  }
-}
-
 /**
  * @param {object} options
  * @param {ReturnType<import("./paths.mjs").resolvePaths>} options.paths
@@ -85,9 +71,6 @@ export async function migrateLegacyData({ paths, legacyDir = legacyDataDir(), lo
     mkdirSync(dirname(to), { recursive: true });
     renameSync(from, to);
     moved.push(name);
-  }
-  if (moved.includes("history.db")) {
-    repointRecordings(paths.historyDb, join(legacyDir, "Recordings"), paths.recordingsDir);
   }
 
   if (kept.length > 0) {

@@ -45,7 +45,8 @@ function seedLegacy() {
     refinedText: "以前说的话",
     error: null,
     duration: 3,
-    audioLocalPath: audio,
+    // 0.1 版记的是录音的完整路径
+    audioFile: audio,
     createdAt: "2026-10-12T01:00:00.000Z",
   });
   history.close();
@@ -76,8 +77,8 @@ test("旧目录里的历史、录音、设置、key 搬进新的家目录；历�
   const [row] = history.list();
   history.close();
   assert.equal(row.refinedText, "以前说的话");
-  assert.equal(row.audioLocalPath, join(paths.recordingsDir, "a.webm"));
-  assert.equal(readFileSync(row.audioLocalPath, "utf8"), "录音");
+  assert.equal(row.audioFile, "a.webm");
+  assert.equal(readFileSync(join(paths.recordingsDir, row.audioFile), "utf8"), "录音");
 
   // 剩下的只有运行环境的缓存，整个删掉，不留一个没人管的目录
   assert.equal(existsSync(legacyDir), false);
