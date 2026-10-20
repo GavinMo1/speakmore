@@ -1,18 +1,21 @@
 ---
 name: speakmore-model-mirror
-description: 本地模型的配置表只有一份（src/models/catalog.mjs）；国内源是单独的 COS 桶加 models.speakmore 子域名，传完必须预热；证书 2027-01-14 到期要续
+description: 本地模型的配置表只有一份（src/models/catalog.mjs）；10-20 起国内源是魔搭（他个人账号 ardsfsw 下一个模型一个仓库，钉提交）；老的 COS 国内源 models.speakmore 还开着，下线前问他
 metadata:
+  node_type: memory
   type: project
+  originSessionId: c790f439-dd17-4af4-a34b-18711867efb4
+  modified: 2026-10-20T04:47:15.088Z
 ---
 
-2026-10-16 用户定的：用的人几乎都在国内，模型要能不翻墙下；原来的地址保留叫 original，另传一份到 COS 的隔离桶当国内源，用户可以选；模型会越来越多，配置要全局只有一份，不能散开（原话："要用单例模式的思维去统一管理，全部从一个 config 里面出"）。
+2026-10-16 用户定的：用的人几乎都在国内，模型要能不翻墙下；原来的地址保留叫 original，另放一份当国内源，用户可以选；配置要全局只有一份（原话："要用单例模式的思维去统一管理，全部从一个 config 里面出"）。
 
-- **配置表**：`src/models/catalog.mjs`。下载源（SOURCES：cn、original）、每个模型的文件和 sha256、许可、原作者、标签（TAGS）和实测数字（measured，出自 bench/results/）都在这里。下载、App、命令行、评测、上传脚本都读它。标签按实测打，测试会查"标了 apple-silicon 就要有在 Apple 芯片上的实测"。
-- **选源**：设置项 `modelSource`（`SPEAKMORE_MODEL_SOURCE`），默认 cn。选的源先试，下不动、超了流量就换另一个，都按 sha256 校验。改了当场生效（`speakmore config set modelSource original`、App 设置里的"下载源"），正在下载的从新的源接着下。
-- **国内源**：私有 COS 桶（桶名在 `.machine.env` 的 `MODELS_BUCKET`），前面是 CDN 域名 `models.speakmore.zephyrxiang.com`：全球加速，只让 CDN 读，防盗链只放行官网、localhost、127.0.0.1 和空来源，每天 50 GB 封顶（超了回 404，客户端自动改从 Hugging Face 下），强制 https。对象名是 `<模型 id>/<原始提交>/<文件>`，每个模型目录里带 LICENSE 和 NOTICE（FunASR 许可要求注明来源作者，Apache-2.0 要求附原文）。
-- **加模型或换提交**：改配置表，然后 `scripts/release/with-cos-key.sh npm run sync-models -- --from <本机模型仓> [--download]`。脚本会上传、从 CDN 核对，再预热这次新传的文件（只推大陆节点）。
-- **传完必须预热**（2026-10-16 用户说的："之后记得预热就好"）。实测：CDN 刚上线、没预热时，本机第一次从国内源下 253 MB，用了 75 秒，约 3.3 MB/s；同一台机器从 Hugging Face 下只有 0.6–1 MB/s。用户据此认为 COS 加速有效。预热失败用 `--warm-all` 重来。
-- **证书要续**：`models.speakmore.zephyrxiang.com` 也是 90 天的免费证书，2027-01-14 到期。和 dl、media 那两张一样，到期前重新申请并在 CDN 上换绑。
+- **配置表**：`src/models/catalog.mjs`。下载源（SOURCES：cn 是魔搭；original 是 Hugging Face 加 hf-mirror）、每个模型的文件和 sha256、许可、原作者、`mirror.revision`（魔搭上钉的提交）、标签和实测数字都在这里。下载、App、命令行、评测、上传脚本都读它。
+- **选源**：设置项 `modelSource`，默认 cn。选的源先试，下不动、卡住就换下一个，都按 sha256 校验；断了的 `.part` 留着，换源或下次带 Range 接着下（10-20 加的，两台电脑真网络上掐断续传都验过）。
+- **国内源 = 魔搭**（10-20 换的）：四个模型在他个人账号 `ardsfsw` 下（建组织要人工审核，他选先用个人账号；以后换组织就重传、改 `MODELSCOPE_OWNER` 和各项 `mirror.revision`）。地址 `modelscope.cn/models/<owner>/<id>/resolve/<提交>/<文件>`，大文件跳到魔搭自己的 CDN、认 Range；小文件不认 Range。魔搭不收下载费。
+- **加模型或换文件**：改配置表，`scripts/release/with-modelscope-key.sh npm run sync-models -- --from <本机模型仓> --download`，把它报的提交填进 `mirror.revision`。令牌经按需加载器给（凭据名在 `.machine.env` 的 `MODELSCOPE_CREDENTIAL`），SDK 装在 `.tools/modelscope/venv`。`npm run sync-models -- --check` 不用令牌。
+- **实测速度**：Windows 游戏电脑直连，魔搭 9.7–11.3 MB/s，和老国内源、hf-mirror 差不多（那条线本身跑满了），Hugging Face 连不上。Mac 要关掉代理再量：`node scripts/dev/model-speed.mjs`（开着代理的虚拟网卡时它不量）。README 和官网的速度图照它的结果改。
+- **老国内源**：COS 隔离桶（`.machine.env` 的 `MODELS_BUCKET`）加 CDN `models.speakmore.zephyrxiang.com`，0.10.1 及以前的版本还从它下。他定的：魔搭端到端过了之前不下线；删桶、下线域名前问他。证书 2027-01-14 到期，下线了就不用续。
 
-**Why:** 国内用户直连 Hugging Face 很慢（这台机器 850 MB 下了 24 分钟）；模型一多，散在各处的地址和标签会对不上。
-**How to apply:** 模型的任何信息只加在配置表里。云上的证书、CDN、解析改动按 [[cloud-changes-user-runs]] 交给用户跑。相关：[[speakmore-release-on-cos]]、[[speakmore-model-plaza]]、[[speakmore-two-pipelines]]。
+**Why:** 国内用户直连 Hugging Face 很慢；模型下载是自己 CDN 流量费的大头，也会被刷，换到魔搭不花自己的流量。
+**How to apply:** 模型的任何信息只加在配置表里。云上的改动按 [[cloud-changes-user-runs]] 交给他跑。相关：[[speakmore-distribution-rework]]、[[speakmore-release-on-cos]]、[[speakmore-model-plaza]]。

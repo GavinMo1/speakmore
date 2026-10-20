@@ -231,8 +231,8 @@ The **Models** page lists every model by role:
 
 - **No uploads in Data Privacy mode**: speech is transcribed by an on-device model.
 - **No API key or account required.**
-- **One-click download**: on-device models are served from SpeakMore's mirror in mainland China.
-- **Automatic fallback**: Hugging Face is used if the mirror is unavailable.
+- **One-click download**: on-device models are served from ModelScope, a mirror in mainland China.
+- **Automatic fallback**: Hugging Face is used if the mirror is unavailable; interrupted downloads resume where they stopped.
 - **Integrity check**: every download is verified against SHA-256.
 - **No intermediary servers**: audio or text goes directly to the selected vendor with the user's own key.
 - **No analytics.**
@@ -510,8 +510,8 @@ flowchart LR
 <details>
 <summary><b>🔄 Updating and uninstalling</b></summary>
 
-- **Update**: in the app, Settings › General › Software update checks for and installs new versions; `speakmore update` in a terminal does the same. Both use one update process: download and verify in the background first, then replace the terminal installation and SpeakMore.app, and reopen whichever was running. SpeakMore stops only while the files are being replaced.
-- **0.10.0 and earlier**: the app has no update button yet. On a Mac, download the new dmg and install it over the existing copy; on Windows, run `speakmore update` or the installer again.
+- **Update**: in the app, Settings › General › Software update checks for and installs new versions; `speakmore update` in a terminal does the same. Both use one update process: download and verify in the background first, then replace the terminal installation and SpeakMore.app, and reopen whichever was running. SpeakMore stops only while the files are being replaced. Updates download only what changed, usually a few MB.
+- **0.10.1 and earlier**: these versions cannot detect later releases; reinstall once. On a Mac, download the new dmg and install it over the existing copy, or run the terminal install command again; on Windows, run the installer or the install command again.
 - **Preserved on update**: settings, keys, history, recordings and the dictionary.
 - **Uninstall**: `speakmore uninstall` stops SpeakMore and removes the entire directory, the command and the Keychain entry.
 - **Uninstall on Windows**: also removes the Path entry, Start menu shortcut and open-at-login entry.

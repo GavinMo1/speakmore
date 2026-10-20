@@ -166,18 +166,18 @@ async function daily(call, request) {
   return out;
 }
 
-/** 用量封顶：只认"按天累计流量"那一档能直接对照；别的档照原样报出来 */
+/** 用量封顶：累计流量那一档（按天或按小时，scripts/ops/cdn-cap.mjs 设的）；按天的才能和每天的流量直接对照 */
 function capOf(alert) {
-  const perDay = (alert?.StatisticItems ?? []).find(
-    (i) => i.Switch === "on" && i.Metric === "flux" && i.Cycle === 1440,
+  const total = (alert?.StatisticItems ?? []).find(
+    (i) => i.Switch === "on" && i.Metric === "flux" && (i.Cycle === 1440 || i.Cycle === 60),
   );
-  const on = alert?.Switch === "on" || Boolean(perDay);
+  const on = alert?.Switch === "on" || Boolean(total);
   return {
     on,
-    metric: perDay ? "flux" : alert?.Metric,
-    cycle: perDay ? 1440 : null,
-    threshold: perDay?.BpsThreshold ?? alert?.BpsThreshold ?? null,
-    counterMeasure: perDay?.CounterMeasure ?? alert?.CounterMeasure ?? null,
+    metric: total ? "flux" : alert?.Metric,
+    cycle: total?.Cycle ?? null,
+    threshold: total?.BpsThreshold ?? alert?.BpsThreshold ?? null,
+    counterMeasure: total?.CounterMeasure ?? alert?.CounterMeasure ?? null,
     lastTrigger: { mainland: alert?.LastTriggerTime ?? null, overseas: alert?.LastTriggerTimeOverseas ?? null },
   };
 }
@@ -326,7 +326,9 @@ function render(r) {
         ? "没开封顶"
         : cap.cycle === 1440
           ? `封顶每天 ${gb(cap.threshold)} GB（境内、境外各算）`
-          : `封顶 ${cap.metric ?? "?"} ${cap.threshold ?? "?"}（不是按天累计流量，没对照）`;
+          : cap.cycle === 60
+            ? `封顶每小时 ${gb(cap.threshold)} GB（境内、境外各算，到下一个小时恢复；这里只有按天的数，没对照）`
+            : `封顶 ${cap.metric ?? "?"} ${cap.threshold ?? "?"}（不是按天累计流量，没对照）`;
       line(`  ${t.name}（${t.role}）· ${capText}`);
       line(
         `    ${pad("日期", 8)}${pad("境内GB", 9)}${pad("境外GB", 9)}${pad("请求", 9)}${pad("4xx", 7)}${pad("5xx", 6)}${pad("回源GB", 9)}回源失败`,

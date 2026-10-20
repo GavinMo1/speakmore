@@ -33,7 +33,7 @@
 - [模型广场不替用户选](speakmore-model-plaza.md) — 有什么加什么、尽量全；跑通不打标签、评测过才打已评测、没调过的打未验证；按角色分原生/转写/润色，侧栏单独一页；选识别方式在首页选单；10-17 进度、还剩哪些在里面
 - [判官是 Claude 自己](bench-judge-is-claude.md) — 评测打分由 Claude 来，不调 Gemini 等接口；Gemini 3.6 Flash MINIMAL 的成品只当参照，参照听错时不扣分
 - [统一输入输出、策略模式](architecture-unified-io-strategy.md) — 插件化、可热插拔；录音先统一成 16 kHz 单声道，转写统一成 transcribe → { text }；不打补丁，从分层上根治
-- [本地模型的配置表和国内源](speakmore-model-mirror.md) — 全局只有 src/models/catalog.mjs 一份；国内源是隔离桶加 models.speakmore 子域名，传完必须预热；证书 2027-01-14 到期要续
+- [本地模型的配置表和国内源](speakmore-model-mirror.md) — 全局只有 src/models/catalog.mjs 一份；10-20 起国内源是魔搭（ardsfsw 个人账号，钉提交、可续传）；老的 COS 国内源还开着，下线前问他
 - [云上改动交给用户跑](cloud-changes-user-runs.md) — 证书、CDN、解析、发版公证由用户跑：写成自己挂后台的脚本或一行命令，放在回复最后
 - [长任务挂后台](long-runs-in-background.md) — 评测、批量调模型等几分钟的活用后台跑，不占着对话，用户要边等边讨论
 - [百炼 CLI 装在项目里](bailian-cli-local.md) — .tools/bailian-cli/bl 包装脚本跑，配置不进 ~/.bailian；skill init 会写七个全局目录所以没跑；目录 125 家族 354 型号

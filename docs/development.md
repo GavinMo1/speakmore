@@ -12,10 +12,19 @@ cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
 npm run check                 # 代码检查 + 全部测试（不联网、不开窗口）
-npm run release               # 打发布包：dist/release/ 下两种芯片各一个压缩包和一个安装包（dmg），外加 install.sh，摆成下载地址上的样子
+npm run release               # 打发布：dist/release/ 下是更新用的块和清单、首次安装用的包和两个安装脚本，摆成下载地址上的样子
 ```
 
-**发布新版本**：改 `package.json` 里的版本号和两份 README（中文 README.md、英文 README.en.md）里安装包的下载链接（测试会核对它们对得上）并提交，打一个同名的标签推上去（比如 `git tag -a v0.4.1 -m "…" && git push origin main v0.4.1`），然后在本机运行 `npm run ship`。它先核对工作区干净、当前提交就是那个标签、标签已经推上去，再跑全部检查、打包（安装包要签名、公证，本机没配就不往下走，每个包等苹果公证几分钟），传到下载地址 `dl.zephyrxiang.com/speakmore/`（腾讯云 COS + CDN），最后从下载地址核对版本号和校验值。桶和密钥从哪来写在 `.machine.env` 里。发布包只放在 COS 这一处；发布过的版本号不会被覆盖，要改就升版本号。传到一半断了，不要重新打包，再运行一次 `scripts/release/with-cos-key.sh npm run publish-release`，传好的会跳过。安装包交给苹果公证时连不上、超时（没拿到苹果的结论），隔 30 秒重交，最多三次；苹果判了不通过的不重交。应用本身那次公证由 @electron/packager 做，不重试。发完再部署一次官网（`cd website && npm run deploy`，见[官网说明](../website/README.md#上线)），官网上的下载链接才指向新版本。
+**发布新版本**：改 `package.json` 里的版本号和两份 README（中文 README.md、英文 README.en.md）里安装包的下载链接（测试会核对它们对得上）并提交，打一个同名的标签推上去（比如 `git tag -a v0.4.1 -m "…" && git push origin main v0.4.1`），然后在本机运行 `npm run ship`。它先核对工作区干净、当前提交就是那个标签、标签已经推上去，再跑全部检查、打包（安装包要签名、公证，本机没配就不往下走，每个包等苹果公证几分钟），先和下载地址上现在的版本比一遍每种装法要下多少（`scripts/release/delta-report.mjs`：Electron 没换、却有哪种装法要下 20 MB 以上，多半是打包出了问题，拦下来），再传到下载地址 `dl.zephyrxiang.com/speakmore/`（腾讯云 COS + CDN），最后从下载地址核对 channel.json、各个包的校验值、两个安装脚本和五份更新清单。桶和密钥从哪来写在 `.machine.env` 里。发布包只放在 COS 这一处；发布过的版本号不会被覆盖，要改就升版本号。传到一半断了，不要重新打包，再运行一次 `scripts/release/with-cos-key.sh npm run publish-release`，传好的会跳过。安装包交给苹果公证时连不上、超时（没拿到苹果的结论），隔 30 秒重交，最多三次；苹果判了不通过的不重交。应用本身那次公证由 @electron/packager 做，不重试。发完再部署一次官网（`cd website && npm run deploy`，见[官网说明](../website/README.md#上线)），官网上的下载链接才指向新版本。
+
+**下载地址上的摆法**（`src/update/layout.mjs`，打包、上传、更新、安装脚本共用）：
+
+- `channel.json`：最新的版本号、用哪个 Electron，每种装法用哪份更新清单。装法有五种：两种芯片的 Mac 终端安装、两种芯片的 SpeakMore.app、Windows。只缓存一分钟，传的时候最后传。
+- `store/<sha256>`：块和清单，名字是原始内容的 sha256，存的是 zstd 压过的，传上去就不再变。打包时每棵目录树按内容切成平均 128 KiB 的块（FastCDC，`src/update/chunker.mjs`），同一块只存一份。
+- `v<版本>/`：首次安装用的包和同名的 `.sha256`：Mac 终端安装的 `speakmore-darwin-<芯片>.tar.xz`、Mac 的 `SpeakMore-<芯片>.dmg`（ULMO）、Windows 一行命令装的 `speakmore-win32-x64.zip`、Windows 的安装程序 `SpeakMore-Setup-x64.exe`（身上带着 zstd 压的同一棵树）。
+- `install.sh`、`install.ps1`：安装脚本。
+
+**更新**只下本机缺的块：照新版本的清单拼出整棵树，本机装着的几份里有的块直接拷，每块写进去前核对 sha256，拼出来的和发布的逐字节相同，所以拼完照旧核对 App 的签名和开发者、照旧让安装脚本试跑。0.10.0 → 0.10.1 实测要下的：Mac App 1.31 MB、Windows 0.25 MB、Mac 终端 0.13 MB（整包是一两百兆）。换 Electron 的那一版要多下 Electron 里变了的部分。0.10.1 及以前的版本读的是已经不再更新的 `latest`，看不到之后的版本，要用一行命令或安装包重新装一次。
 
 从源码跑的和装好的用的是同一个 `~/.speakmore`，想分开就设 `SPEAKMORE_HOME`。
 
@@ -70,7 +79,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `assets/` | 图标：`icon.svg` 是那方印，`tray.svg` 是菜单栏上的五道；`.icns`、Windows 用的 `icon.ico` 和 `trayTemplate*.png` 由 `scripts/build/make-icon.sh` 从它们生成 |
 | `src/storage/` | `~/.speakmore` 里的东西：放在哪、设置、历史库、词典、旧数据的迁移。命令和后台应用共用 |
 | `src/vocabulary/` | 词典：词怎么规整、导入怎么解析，各模型收词的三种做法和挑词（`fitTerms`） |
-| `src/update/` | 版本检查和更新，命令行（`speakmore status`、`update`）和 App（设置 › 通用 › 软件更新）只调这里，壳里不写更新的逻辑。查新版本一天最多问一次下载地址，记在 `run/update-check.json`，两边共用；更新进行到哪、失败原因记在 `run/update.json`，`run/update.lock` 不让两边同时换。更新把本机装着的每一份都换成最新：家目录里的那一份（`home.mjs`，用新版本自己的安装脚本装），Mac 上还有 SpeakMore.app（`bundle.mjs`，核对校验值、签名和开发者后对调）。下载和核对都在停掉正在运行的那个之前做完，停着的只有换程序那几秒；换完只重新打开原来在运行的那个。App 点了更新另起一个进程（`background.mjs`，借 App 自己的 Electron 当 Node 跑）：它要让 App 退出、换掉、再打开。发布包的名字在 `layout.mjs`，打包和更新共用 |
+| `src/update/` | 版本检查和更新，命令行（`speakmore status`、`update`）和 App（设置 › 通用 › 软件更新）只调这里，壳里不写更新的逻辑。查新版本一天最多问一次下载地址，记在 `run/update-check.json`，两边共用；更新进行到哪、失败原因记在 `run/update.json`，`run/update.lock` 不让两边同时换。更新把本机装着的每一份都换成最新：家目录里的那一份（`home.mjs`，拼好后交给新版本自带的安装脚本装），Mac 上还有 SpeakMore.app（`bundle.mjs`，拼在旁边，核对签名和开发者后对调）。拼（`assemble.mjs`）只下本机缺的块，下到的块放在 `run/update-cache`，换成了才删。下载和核对都在停掉正在运行的那个之前做完，停着的只有换程序那几秒；换完只重新打开原来在运行的那个。App 点了更新另起一个进程（`background.mjs`，借 App 自己的 Electron 当 Node 跑）：它要让 App 退出、换掉、再打开。下载地址上的摆法在 `layout.mjs`，打包和更新共用 |
 | `src/control.mjs`、`src/instance.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道；问正在运行的那个的状态、请它退出（命令行和更新共用）；日志 |
 | `test/` | 自动测试，目录和 `src/` 对应 |
 | `scripts/` | 开发用的脚本，按用途分四组：`build/` 编译小程序、打 .app；`release/` 发新版本（`ship.sh`：把关、打包、上传、核对）、把本地模型传到国内源（`sync-models.mjs`）；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key、在 Windows 开发机上跑（`win-*.sh`，见上面的 Windows 一节）；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
@@ -111,7 +120,7 @@ scripts/dev/win-desktop.sh '<PowerShell>'     # 在桌面会话里跑（热键�
 scripts/dev/win-app.sh [stop]                 # 从源码起 App（家目录 speakmore-dev\home，调试端口 9333），或者停掉
 scripts/dev/win-screenshot.sh 截图.png         # 截开发机的整个主屏
 node scripts/build/build-native.mjs --windows # 交叉编译小帮手 build/key-helper.exe；Go 由 scripts/build/go.sh 钉版本、核对校验值后装进 .tools/
-node scripts/release/release.mjs windows      # 只打 Windows 的包（speakmore-win32-x64.zip），连同 install.ps1 摆进 dist/release
+node scripts/release/release.mjs windows      # 只打 Windows 的（更新清单、zip 和 Setup.exe），连同 install.ps1 摆进 dist/release
 ```
 
 不发布也可以在开发机上试安装：把 `dist/release` 传过去，`$env:SPEAKMORE_INSTALL_BASE = '<那个目录>'` 后照 README 那一行跑（`SPEAKMORE_NO_START=1` 只装不启动，`SPEAKMORE_VERSION` 指定版本）。小帮手的真机检查是 `native/windows/e2e.ps1`（要在桌面会话里跑）。
@@ -143,10 +152,10 @@ README 里的图不进仓库，和官网的截图放在同一个 COS 图片桶�
 
 `scripts/release/with-cos-key.sh npm run stats` 一次出齐（只读，不改云上任何配置）：
 
-- **下载量**：从下载地址的 CDN 访问日志算，按"传出去的字节 ÷ 包的大小"折算成完整下载次数，分段下载、下到一半断掉、安全软件预扫都不会把数撑大。自测的下载会被扣掉，单独列出来；另外报按天、按包的数字，真实来源 IP 有多少，有多少次是在手机上点的，以及真用户拿到的 404。
-- **流量**：三个 CDN 域名（发布包、本机模型国内源、图片）最近 14 天每天的境内和境外流量、请求数、4xx、5xx、回源流量、回源失败，以及用量封顶的配置。还会报三个 COS 桶的文件数和存储量。GB 和腾讯云控制台一样按 1024 算。
+- **下载量**：从下载地址的 CDN 访问日志算，按"传出去的字节 ÷ 包的大小"折算成完整下载次数，分段下载、下到一半断掉、安全软件预扫都不会把数撑大。自测的下载会被扣掉，单独列出来；另外报按天、按包的数字，真实来源 IP 有多少，有多少次是在手机上点的，以及真用户拿到的 404。更新按块下（`store/`），只按字节加起来、报来自几个 IP，不折算次数。0.10.1 及以前更新也是整包下 `tar.gz` 和 `zip`，那时的"终端安装"里含着更新。
+- **流量**：三个 CDN 域名（发布包、老的本机模型国内源、图片）最近 14 天每天的境内和境外流量、请求数、4xx、5xx、回源流量、回源失败，以及用量封顶的配置。还会报三个 COS 桶的文件数和存储量。GB 和腾讯云控制台一样按 1024 算。本机模型现在从魔搭下，老的国内源等它下线后从统计里删掉。
 - **告警**：
-  - 今天的流量到了每天封顶的七成会提醒，到顶会告警（封顶按境内、境外分别算，到顶后返回 404）。
+  - 封顶按天时，今天的流量到了每天封顶的七成会提醒，到顶会告警（封顶按境内、境外分别算，到顶后返回 404）。下载地址现在是按小时封顶（`scripts/ops/cdn-cap.mjs`：每小时 4 GB，到下一个小时自动恢复），按天的流量对照不了，只报最近触发过没有。
   - 没开封顶会提醒，最近触发过封顶会告警。
   - 出现 5xx 会提醒；回源失败平时也有零星几次，某天至少失败 10 次、失败率到 5% 才提醒。
   - 同一个不存在的文件有两个以上真用户点到，而且昨天以来还有人点到，会提醒，多半是哪里的链接写坏了。报告里会列出它最近一次被点到的时间，改好之后看这个时间不再往后走就行。
