@@ -64,14 +64,15 @@ test("拼法：程序在前，接着是整棵树打成的 tar 再用 zstd 压过
   // 解开压过的那段，再用 tar 列出来：就是那棵树，没有 Mac 的 ._ 文件
   const archive = join(dir, "payload.tar");
   writeFileSync(archive, zstdDecompressSync(bytes.subarray(program.length, program.length + payloadLength)));
+  // Windows 自带的 tar 按 CRLF 换行
   const listed = execFileSync("tar", ["-tf", archive], { encoding: "utf8" })
-    .split("\n")
+    .split(/\r?\n/)
     .filter((name) => name && !name.endsWith("/"))
     .sort();
   assert.deepEqual(listed, ["app/bin/speakmore.mjs", "app/install.ps1", "runtime/electron.exe"]);
   // 发出去的包里没有这台机器的用户名、编号
   const owners = execFileSync("tar", ["-tvf", archive], { encoding: "utf8" })
-    .split("\n")
+    .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => line.split(/\s+/).slice(2, 4).join(" "));
   assert.deepEqual([...new Set(owners)], ["0 0"]);

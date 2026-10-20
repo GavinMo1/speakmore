@@ -413,7 +413,8 @@ test("更新：换成了、下到的块却删不掉：照样算换成、照样�
       );
     }
   } finally {
-    chmodSync(locked, 0o755);
+    // Windows 上只读挡不住删目录，那边已经删掉了
+    if (existsSync(locked)) chmodSync(locked, 0o755);
   }
 });
 
