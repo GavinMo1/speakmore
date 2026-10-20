@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
@@ -8,6 +17,7 @@ import { test } from "node:test";
 // install.ps1 写的启动脚本 bin\speakmore.cmd。它照 current 找 versions 下的程序；从旧版本升上来、启动脚本变了时，
 // 旧的那份可能正跑着（speakmore update 就是它起的）就被改写，cmd 等程序退出后从原来的字节位置接着读。
 // 后两条要在 Windows 上真的起 cmd，"程序"是改名成 electron.exe 的 node。
+// 最后一条把 install.ps1 里写定位文件的那几个函数原样拿出来，在 Windows PowerShell 里跑。
 
 const INSTALLER = resolve(import.meta.dirname, "..", "..", "install.ps1");
 const windowsOnly = { skip: process.platform !== "win32" && "要在 Windows 上起 cmd" };
@@ -127,3 +137,42 @@ test(
     assert.notEqual(`${longer.stdout}${longer.stderr}`.replace("updated", "").trim(), "");
   },
 );
+
+/** install.ps1 里一个函数的原文：一行写完的就是那一行，否则到下面第一个缩进两格的 "}" */
+function functionText(name) {
+  const source = readFileSync(INSTALLER, "utf8");
+  const found = new RegExp(`^  function ${name}\\b[^\\n]*(?:\\}|\\{\\r?\\n[\\s\\S]*?^  \\})\\r?$`, "m").exec(source);
+  assert.ok(found, `install.ps1 里找不到 ${name}`);
+  return found[0];
+}
+
+test("定位文件已经在（搬家时记着 moving、换到别处）：改写成新位置，不留临时文件", windowsOnly, (t) => {
+  const root = mkdtempSync(join(tmpdir(), "sm-loc-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const dir = join(root, "SpeakMore");
+  const file = join(dir, "location.json");
+  mkdirSync(dir);
+  writeFileSync(file, JSON.stringify({ home: "C:\\Old\\.speakmore", moving: { to: "D:\\New\\.speakmore", pid: 1 } }));
+  const script = join(root, "update-location.ps1");
+  const body = [
+    ...["Ok", "Note", "Fail", "Pretty", "Update-Location"].map(functionText),
+    "$ErrorActionPreference = 'Stop'",
+    `$script:LocationFile = '${file}'`,
+    `$script:DefaultHome = '${join(root, ".speakmore")}'`,
+    "$script:HomeDir = 'D:\\New\\.speakmore'",
+    "Update-Location",
+  ].join("\r\n");
+  // 带 BOM：Windows PowerShell 5.1 才按 UTF-8 读（函数里有中文注释）
+  writeFileSync(script, `\ufeff${body}\r\n`);
+  const run = spawnSync(
+    "powershell",
+    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script],
+    {
+      encoding: "utf8",
+      windowsHide: true,
+    },
+  );
+  assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { home: "D:\\New\\.speakmore" });
+  assert.deepEqual(readdirSync(dir), ["location.json"]);
+});

@@ -646,7 +646,8 @@
         $stream.Write($bytes, 0, $bytes.Length)
         $stream.Flush($true)
       } finally { $stream.Dispose() }
-      if (Test-Path -LiteralPath $script:LocationFile) { [IO.File]::Replace($temporary, $script:LocationFile, $null) } else { [IO.File]::Move($temporary, $script:LocationFile) }
+      # 不留备份：第三个参数要真的 null，PowerShell 把 $null 当成空字符串传给 .NET，Replace 就报"路径是空的"
+      if (Test-Path -LiteralPath $script:LocationFile) { [IO.File]::Replace($temporary, $script:LocationFile, [NullString]::Value) } else { [IO.File]::Move($temporary, $script:LocationFile) }
       Ok "Recorded where SpeakMore is: $(Pretty $script:LocationFile)"
     } catch {
       Fail "Couldn't write $(Pretty $script:LocationFile)" "SpeakMore needs it to find $($script:HomeDir). Check that folder's permissions." "($($_.Exception.Message))"
@@ -696,8 +697,9 @@
     if ($script:HomeFrom -eq 'default' -and $interactive -and -not $env:SPEAKMORE_INSTALL_FROM -and -not (Test-HasContents $script:HomeDir)) {
       Read-Place
     }
-    $script:VersionsDir = Join-Path $script:HomeDir 'versions'
-    $script:CurrentFile = Join-Path $script:HomeDir 'current'
+    # 不用 Join-Path：定位文件说的盘没接上时它直接报"找不到驱动器"，走不到 Test-Home 里"接上移动硬盘"的那句
+    $script:VersionsDir = [IO.Path]::Combine($script:HomeDir, 'versions')
+    $script:CurrentFile = [IO.Path]::Combine($script:HomeDir, 'current')
     Enter-Install
 
     Heading "Checks"
