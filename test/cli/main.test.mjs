@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { Cancelled } from "../../src/cli/ask-secret.mjs";
 import { run } from "../../src/cli/main.mjs";
@@ -1773,6 +1773,32 @@ test("uninstall：装在默认位置以外的，定位文件一起删；--keep-d
   assert.equal(await all.speakmore("uninstall", "--yes"), 0);
   assert.equal(existsSync(paths.locationFile), false);
   assert.match(all.output.out, /定位文件/);
+});
+
+test("uninstall：定位文件坏了也照常卸完，说一声它没删", posixOnly, async () => {
+  seedInstalled();
+  mkdirSync(dirname(paths.locationFile), { recursive: true });
+  writeFileSync(paths.locationFile, "{ 坏了");
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: null }) });
+  assert.equal(await speakmore("uninstall", "--yes"), 0);
+  assert.equal(existsSync(paths.home), false);
+  assert.match(output.out, /定位文件 .* 读不出来/);
+});
+
+test("uninstall：上次搬到一半断了，拷过去的那一份一起删（只认这次搬家的记号）", posixOnly, async () => {
+  const { writeLocation } = await import("../../src/storage/location.mjs");
+  seedInstalled();
+  const half = join(userDir, "disk", ".speakmore");
+  const startedAt = new Date().toISOString();
+  mkdirSync(join(half, "run"), { recursive: true });
+  writeFileSync(join(half, "settings.json"), "{}");
+  writeFileSync(join(half, "run", "move.json"), JSON.stringify({ state: "running", startedAt, from: paths.home }));
+  writeLocation(paths.locationFile, { home: paths.home, moving: { to: half, pid: 2 ** 30, startedAt } });
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: null }) });
+  assert.equal(await speakmore("uninstall", "--yes"), 0);
+  assert.equal(existsSync(half), false);
+  assert.equal(existsSync(paths.locationFile), false);
+  assert.match(output.out, /没搬完/);
 });
 
 test("uninstall（Windows）：用户 Path 里的那一项、开始菜单的快捷方式、开机启动一起删；不是我们的快捷方式不碰；不提终端的权限", async () => {

@@ -1412,6 +1412,8 @@ speakmore help     全部命令`,
       keychainFailed: "钥匙串里用来加密 key 的那一条没删掉（{reason}）：可以在“钥匙串访问”里搜 SpeakMore 手动删",
       removedAll: "{home}（程序、运行环境，以及你的{yours}）",
       locationFile: "记着 SpeakMore 装在哪的定位文件 {file}",
+      locationUnreadable: "定位文件 {file} 读不出来（{reason}），没有删：不要了可以手动删掉",
+      halfCopy: "{dir}（上次没搬完时拷过去的一份）",
       // Windows：install.ps1 在用户 Path 里加的那一项、App 设置里开过的开机启动
       pathEntry: "用户 Path 里的 {entry}",
       loginItem: "开机启动",

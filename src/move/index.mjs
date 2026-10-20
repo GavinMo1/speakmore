@@ -109,6 +109,19 @@ function discardInterrupted(paths, moving) {
 }
 
 /**
+ * 卸载时用：上次从这个家目录搬到一半断了的话，删掉拷过去的那一份（只认这次搬家的记号）。
+ * 不然录音、历史、key 留在新位置上，定位文件随着卸载一删，就没人知道它在那里了
+ * @returns {string | null} 删掉的那一份在哪；没有、还在搬、不是这次拷的都是 null
+ */
+export function discardInterruptedMove({ paths, platform = process.platform, alive = moverAlive, now }) {
+  const location = readLocationRecord(paths.locationFile, platform);
+  const moving = location?.moving;
+  if (!moving || !sameDir(location.home, paths.home, platform) || !existsSync(moving.to)) return null;
+  if (stillRunning(moving, { alive, now })) return null;
+  return discardInterrupted(paths, moving) ? moving.to : null;
+}
+
+/**
  * 从拷了一半的那一份启动、搬家的进程已经没了：入口（Windows 的开始菜单、Path，Mac 上命令的链接）可能已经改指到这里。
  * 让旧目录的安装脚本把入口换回旧目录，定位文件照旧记着 moving（从旧目录启动时照它删掉这一份），说再打开一次。
  * 这一份正在用，不删。总是抛出
