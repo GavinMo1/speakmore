@@ -12,19 +12,20 @@ import { acquireLock, isAlive } from "../update/state.mjs";
 import { classifyHome, copyHome, measureHome, verifyCopy } from "./copy.mjs";
 import { canRehome, installerIn, rehome } from "./installer.mjs";
 import { probeTarget } from "./probe.mjs";
-import { readMoveRecord, stillMoving, writeMoveRecord } from "./state.mjs";
+import { moverAlive, readMoveRecord, stillMoving, stillRunning, writeMoveRecord } from "./state.mjs";
 import { canonicalDir, checkTarget } from "./target.mjs";
 
 // 把整个家目录搬到别处（speakmore move、App 设置里的"存储位置"）。命令行和 App 都只调这里。按这个顺序：
 //   1. 检查新位置（target.mjs）、本机每一份 SpeakMore 都认得换家（家目录里的程序、Mac 上"应用程序"里的 App）
 //   2. 拿锁（和更新共用 update.lock），旧目录 run/move.json 记"正在搬"（这时 App、后台都不在这里启动），
-//      定位文件记上 moving（断了电下次认得出新位置那一份是半成品）
+//      定位文件记上 moving（断了电下次认得出新位置那一份是半成品），新位置的 run/move.json 记下同一次搬家（收拾时只认它）
 //   3. 在新位置试盘（probe.mjs）；停掉正在运行的；只拷 SpeakMore 自己的东西（copy.mjs），核对符号链接
 //   4. 提交：新位置的安装脚本换家（试跑、改系统入口、写定位文件；installer.mjs）。没装程序的（Mac 上只装了 dmg 的）直接写定位文件
 //   5. 旧目录放下 MOVED.json（从残留的旧入口启动会被告知搬去了哪），原来在运行的从新位置重新打开，删旧目录
 //      （只删我们的；Windows 上这个进程自己就跑在旧目录的程序上，等它退出再删）
 // 提交之前任何一步出错：旧目录原样在用，改过的入口换回去（对旧目录再换一次家），定位文件换回去，拷了一半的删掉，照实报。
-// 搬到一半进程没了（断电、被结束）：下次从旧目录启动或再搬一次时 settleMove 照定位文件里的 moving 收拾好。
+// 搬到一半进程没了（断电、被结束）：下次启动、再搬一次时 settleMove 照定位文件里的 moving 收拾好；
+// 从拷了一半的那一份启动的（入口已经改指过去了），先把入口换回旧目录。
 
 /** 新位置的剩余空间至少多留这么多：日志、更新时下的块还要地方 */
 const SPARE_BYTES = 200 * 1024 * 1024;
@@ -69,13 +70,60 @@ function commitLocation(paths, home, defaultHome, platform) {
   else writeLocation(paths.locationFile, { home: canonicalDir(home, platform) });
 }
 
+/** 这个家目录里有会换家的安装脚本（0.12.0 起的） */
+function rehomeable(home, platform) {
+  const script = existsSync(home) ? installerIn(home, platform) : null;
+  return script !== null && canRehome(script);
+}
+
+/**
+ * 删掉搬到一半拷过去的那一份。只认这次搬家自己的记号：拷之前在新位置的 run/move.json 记下了同一次的开始时间。
+ * 对不上的（定位文件被改过、同一个盘符换成了另一块盘）不碰；还空着的（刚建好就断了）删掉空目录
+ * @returns {boolean} 收拾掉了，或者本来就没有
+ */
+function discardInterrupted(paths, moving) {
+  const to = moving.to;
+  if (!existsSync(to)) return true;
+  let marker = null;
+  try {
+    marker = readMoveRecord(pathsFor(paths, to));
+  } catch {
+    marker = null;
+  }
+  if (typeof moving.startedAt === "string" && marker?.startedAt === moving.startedAt) {
+    removeOurs(paths, to);
+    return true;
+  }
+  if (readdirSync(to).length > 0) return false;
+  rmdirSync(to);
+  return true;
+}
+
+/**
+ * 从拷了一半的那一份启动、搬家的进程已经没了：入口（Windows 的开始菜单、Path，Mac 上命令的链接）可能已经改指到这里。
+ * 让旧目录的安装脚本把入口换回旧目录，定位文件照旧记着 moving（从旧目录启动时照它删掉这一份），说再打开一次。
+ * 这一份正在用，不删。总是抛出
+ */
+async function putBack({ paths, location, env, stdio, platform, runRehome }) {
+  const { home: from, moving } = location;
+  if (!rehomeable(from, platform)) {
+    throw new LocalizedError(msg("move.unfinishedCopy", { home: paths.home, from }));
+  }
+  const code = await runRehome({ home: from, previous: paths.home, env, stdio, platform });
+  // 安装脚本换家时把定位文件写成了 { home: 旧目录 }：moving 写回去
+  writeLocation(paths.locationFile, { home: from, moving });
+  if (code !== 0) throw new LocalizedError(msg("move.restoreFailed", { home: from, code }));
+  throw new LocalizedError(msg("move.putBack", { home: paths.home, from }));
+}
+
 /**
  * 启动之前、搬家之前看一眼有没有搬到一半的：
  *   - 正在搬（搬的那个进程还在）：不在这里启动，照实说
  *   - 上次搬到一半那个进程没了：旧目录照常在用。从旧目录启动的，把改指了一半的系统入口换回来（对旧目录再换一次家）、
- *     删掉新位置上拷了一半的、定位文件去掉 moving；从拷了一半的那一份启动的，不在它上面启动，说回旧目录去
- * App 启动、命令行起后台、speakmore move 都先调它。什么事都没有时什么都不做
- * @throws {LocalizedError} move.inProgress / move.unfinishedCopy
+ *     删掉新位置上拷了一半的、定位文件去掉 moving；从拷了一半的那一份启动的，把入口换回旧目录，说再打开一次
+ * App 启动、命令行起后台、speakmore move 都先调它。什么事都没有时什么都不做。
+ * 启动时（atStartup）入口换不回来：旧目录完好，照常起来，说一声；拷了一半的留着（入口可能还指着它），下次再收拾
+ * @throws {LocalizedError} move.inProgress / move.putBack / move.unfinishedCopy / move.restoreFailed
  */
 export async function settleMove({
   paths,
@@ -85,8 +133,9 @@ export async function settleMove({
   userHome = homedir(),
   runRehome = rehome,
   pid = process.pid,
-  alive = isAlive,
+  alive = moverAlive,
   now,
+  atStartup = false,
   report = () => {},
 }) {
   const record = readMoveRecord(paths);
@@ -102,19 +151,24 @@ export async function settleMove({
   }
   const moving = location?.moving;
   if (!moving) return;
-  if (Number.isInteger(moving.pid) && moving.pid !== pid && alive(moving.pid)) {
+  if (moving.pid !== pid && stillRunning(moving, { alive, now })) {
     throw new LocalizedError(msg("move.inProgress", { home: location.home, to: moving.to }));
   }
   if (sameDir(moving.to, paths.home, platform)) {
-    throw new LocalizedError(msg("move.unfinishedCopy", { home: paths.home, from: location.home }));
+    await putBack({ paths, location, env, stdio, platform, runRehome });
   }
   if (!sameDir(location.home, paths.home, platform)) return;
   const from = paths.home;
-  if (existsSync(moving.to) && installerIn(from, platform) !== null) {
+  if (existsSync(moving.to) && rehomeable(from, platform)) {
     const code = await runRehome({ home: from, previous: moving.to, env, stdio, platform });
-    if (code !== 0) throw new LocalizedError(msg("move.rehomeFailed", { code }));
+    if (code !== 0) {
+      const problem = msg("move.restoreFailed", { home: from, code });
+      if (!atStartup) throw new LocalizedError(problem);
+      report(problem);
+      return;
+    }
   }
-  removeOurs(paths, moving.to);
+  if (!discardInterrupted(paths, moving)) report(msg("move.notOurCopy", { to: moving.to }));
   commitLocation(paths, from, pathModule(platform).join(userHome, ".speakmore"), platform);
   if (record?.state === "running") {
     writeMoveRecord(paths, {
@@ -155,11 +209,16 @@ export function createMove({
   pid = process.pid,
   ppid = process.ppid,
   alive = isAlive,
+  moverAlive: isMoverAlive = moverAlive,
   now = () => new Date(),
 }) {
   const path = pathModule(platform);
   const defaultHome = path.join(userHome, ".speakmore");
   const from = paths.home;
+
+  /** 先收拾上一次搬到一半的（settleMove） */
+  const settle = (report = () => {}) =>
+    settleMove({ paths, env, platform, stdio, userHome, runRehome, pid, alive: isMoverAlive, now, report });
 
   /** 正在运行的那个；卡住不答话的是 "hung" */
   async function runningNow() {
@@ -267,7 +326,7 @@ export function createMove({
     let contents = null;
     let stats = null;
     try {
-      await settleMove({ paths, env, platform, stdio, userHome, runRehome, pid, alive, now, report });
+      await settle(report);
       const prepared = await prepare(folder, { keep: true });
       to = prepared.to;
       created = prepared.created;
@@ -278,6 +337,8 @@ export function createMove({
         home: canonicalDir(from, platform),
         moving: { to, pid, startedAt: record.startedAt },
       });
+      // 新位置也记一份：断了以后收拾时，认得出那里是这次拷的（run/ 不拷，不会和拷过去的撞上）
+      writeMoveRecord(pathsFor(paths, to), record);
 
       if (prepared.running !== null) {
         if (prepared.running !== "hung") stopped = prepared.running.packaged ? "bundle" : "home";
@@ -316,11 +377,12 @@ export function createMove({
       if (copied && installerIn(from, platform) !== null) {
         await attempt(async () => {
           const code = await runRehome({ home: from, previous: to, env, stdio, platform });
-          if (code !== 0) throw new LocalizedError(msg("move.rehomeFailed", { code }));
+          if (code !== 0) throw new LocalizedError(msg("move.restoreFailed", { home: from, code }));
         });
       }
-      if (record.to !== null) await attempt(() => commitLocation(paths, from, defaultHome, platform));
+      // 先删拷过去的、再去掉定位文件里的 moving：两步之间断了的话，下次照 moving 接着删
       if (touched) await attempt(() => discardCopy(to, created));
+      if (record.to !== null) await attempt(() => commitLocation(paths, from, defaultHome, platform));
       if (record.to !== null) {
         await attempt(() =>
           writeMoveRecord(paths, {
@@ -396,6 +458,8 @@ export function createMove({
      * @returns {Promise<{ from: string, to: string, files: number, bytes: number, unknown: string[] }>}
      */
     async plan(folder) {
+      // 上次搬到一半断了的先收拾：不然再选同一个地方会被当成"不是空的"，让用户自己去删
+      await settle();
       const { to, contents, size } = await prepare(folder, { keep: false });
       return { from, to, files: size.files, bytes: size.bytes, unknown: contents.unknown };
     },

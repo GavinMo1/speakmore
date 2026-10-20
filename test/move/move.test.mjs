@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { LocalizedError } from "../../src/i18n/index.mjs";
 import { createMove, settleMove } from "../../src/move/index.mjs";
-import { readMoveRecord } from "../../src/move/state.mjs";
+import { moverAlive, readMoveRecord, writeMoveRecord } from "../../src/move/state.mjs";
 import { readLocationRecord, writeLocation } from "../../src/storage/location.mjs";
 import { resolvePaths } from "../../src/storage/paths.mjs";
 
@@ -94,10 +94,22 @@ function mover({ paths, root, instance = fakeInstance(), rehome, ...rest }) {
     platform: "darwin",
     userHome: root,
     bundles: { find: async () => null },
+    moverAlive: () => false,
     runRehome: rehome?.run ?? (async () => assert.fail("不该换家")),
     openApp: async () => assert.fail("不该打开 App"),
     ...rest,
   });
+}
+
+const hoursAgo = (hours) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+/** 搬到一半断了：定位文件记着 moving，旧目录的 run/move.json 记着正在搬，新位置拷了一些、带着这次搬家的记号 */
+function interrupted({ paths, from, to, pid = 4242, startedAt = new Date().toISOString() }) {
+  writeLocation(paths.locationFile, { home: from, moving: { to, pid, startedAt } });
+  const record = { state: "running", by: "cli", pid, from, to, startedAt };
+  writeMoveRecord(paths, record);
+  put(join(to, "settings.json"), "拷了一半");
+  put(join(to, "run", "move.json"), JSON.stringify(record));
 }
 
 test("搬过去：我们的拷过去、旧目录里只删我们的，用户自己的留着；定位文件记下新位置", posixOnly, async (t) => {
@@ -313,10 +325,7 @@ test("同时只有一个在搬（和更新共用一把锁）", posixOnly, async 
 
 test("搬到一半进程没了：从旧目录启动时换回入口、删掉拷了一半的、定位文件去掉 moving", posixOnly, async (t) => {
   const { root, from, paths, to } = setup(t, { installer: true, located: true });
-  put(join(to, "settings.json"), "拷了一半");
-  writeLocation(paths.locationFile, { home: from, moving: { to, pid: 4242, startedAt: new Date().toISOString() } });
-  const { writeMoveRecord } = await import("../../src/move/state.mjs");
-  writeMoveRecord(paths, { state: "running", pid: 4242, from, to, startedAt: new Date().toISOString() });
+  interrupted({ paths, from, to });
   const rehome = fakeRehome({ paths, root });
   const reports = [];
   await settleMove({
@@ -333,6 +342,118 @@ test("搬到一半进程没了：从旧目录启动时换回入口、删掉拷�
   assert.deepEqual(readLocationRecord(paths.locationFile, "darwin"), { home: from, moving: null });
   assert.equal(readMoveRecord(paths).state, "failed");
   assert.deepEqual(reports, ["move.recovered"]);
+});
+
+test("搬家的进程号过了六小时还在（断电重启后分给了别的程序）：不算在搬，照常收拾", posixOnly, async (t) => {
+  const { root, from, paths, to } = setup(t, { installer: true, located: true });
+  interrupted({ paths, from, to, startedAt: hoursAgo(36) });
+  const rehome = fakeRehome({ paths, root });
+  await settleMove({ paths, env: {}, platform: "darwin", userHome: root, runRehome: rehome.run, alive: () => true });
+  assert.equal(existsSync(to), false);
+  assert.deepEqual(readLocationRecord(paths.locationFile, "darwin"), { home: from, moving: null });
+});
+
+test("进程号在、跑的却不是 SpeakMore：不算在搬", () => {
+  const running = (command) => moverAlive(4242, { alive: () => true, commandOf: () => command });
+  assert.equal(running("/usr/sbin/syslogd"), false);
+  assert.equal(running(null), false);
+  assert.equal(running("/Applications/SpeakMore.app/Contents/MacOS/SpeakMore"), true);
+  assert.equal(
+    running(
+      "/Users/u/.speakmore/runtime/Electron.app/Contents/MacOS/Electron /Users/u/.speakmore/app/bin/speakmore.mjs move /x",
+    ),
+    true,
+  );
+  assert.equal(running("C:\\Users\\u\\.speakmore\\versions\\0.12.0-1\\runtime\\electron.exe"), true);
+  assert.equal(running("node bin/speakmore.mjs move /tmp/x"), true);
+  assert.equal(moverAlive(4242, { alive: () => false, commandOf: () => assert.fail("进程不在就不用问") }), false);
+});
+
+test(
+  "从拷了一半的那一份启动、搬家的进程已经没了：入口换回旧目录，说再打开一次；从旧目录启动时删掉这一份",
+  posixOnly,
+  async (t) => {
+    const { root, from, paths, to } = setup(t, { installer: true, located: true });
+    interrupted({ paths, from, to });
+    const rehome = fakeRehome({ paths, root });
+    const settle = (where) =>
+      settleMove({
+        paths: where,
+        env: {},
+        platform: "darwin",
+        userHome: root,
+        runRehome: rehome.run,
+        alive: () => false,
+      });
+    const half = resolvePaths({ SPEAKMORE_HOME: to }, root, "darwin");
+    await assert.rejects(settle(half), (error) => error.problem?.key === "move.putBack");
+    assert.deepEqual(rehome.calls, [{ home: from, previous: to }]);
+    assert.equal(existsSync(to), true, "正跑在它上面，不删");
+    assert.equal(readLocationRecord(paths.locationFile, "darwin").moving.to, to, "从旧目录启动时照它删掉这一份");
+    await settle(paths);
+    assert.equal(existsSync(to), false);
+    assert.deepEqual(readLocationRecord(paths.locationFile, "darwin"), { home: from, moving: null });
+  },
+);
+
+test(
+  "从旧目录启动、入口换不回来：启动照常（旧目录完好）、记下原因，下次再收拾；搬家时不往下搬",
+  posixOnly,
+  async (t) => {
+    const { root, from, paths, to, disk } = setup(t, { installer: true, located: true });
+    interrupted({ paths, from, to });
+    const rehome = fakeRehome({ paths, root, codes: [1, 1] });
+    const reports = [];
+    await settleMove({
+      paths,
+      env: {},
+      platform: "darwin",
+      userHome: root,
+      runRehome: rehome.run,
+      alive: () => false,
+      atStartup: true,
+      report: (message) => reports.push(message.key),
+    });
+    assert.deepEqual(reports, ["move.restoreFailed"]);
+    assert.equal(existsSync(join(to, "settings.json")), true, "入口可能还指着它，不删");
+    assert.equal(readLocationRecord(paths.locationFile, "darwin").moving.to, to);
+    await assert.rejects(
+      mover({ paths, root, rehome }).run({ folder: disk, by: "cli" }),
+      (error) => error.problem?.key === "move.restoreFailed",
+    );
+  },
+);
+
+test(
+  "定位文件说搬去的地方不是这次拷的（另一份 SpeakMore、别的文件夹）：不碰它，只去掉 moving",
+  posixOnly,
+  async (t) => {
+    const { root, from, paths, to } = setup(t, { installer: true, located: true });
+    writeLocation(paths.locationFile, { home: from, moving: { to, pid: 4242, startedAt: new Date().toISOString() } });
+    put(join(to, "settings.json"), "另一份");
+    put(join(to, "run", "move.json"), JSON.stringify({ state: "done", from: "/elsewhere", startedAt: hoursAgo(100) }));
+    const reports = [];
+    await settleMove({
+      paths,
+      env: {},
+      platform: "darwin",
+      userHome: root,
+      runRehome: fakeRehome({ paths, root }).run,
+      alive: () => false,
+      report: (message) => reports.push(message.key),
+    });
+    assert.equal(readFileSync(join(to, "settings.json"), "utf8"), "另一份");
+    assert.deepEqual(readLocationRecord(paths.locationFile, "darwin"), { home: from, moving: null });
+    assert.deepEqual(reports, ["move.notOurCopy", "move.recovered"]);
+  },
+);
+
+test("搬到一半断了以后再搬到同一个地方：先收拾上次的，不让用户自己去清空", posixOnly, async (t) => {
+  const { root, from, paths, to, disk } = setup(t, { installer: true, located: true });
+  interrupted({ paths, from, to });
+  const plan = await mover({ paths, root, rehome: fakeRehome({ paths, root }) }).plan(disk);
+  assert.equal(plan.to, to);
+  assert.deepEqual(readLocationRecord(paths.locationFile, "darwin"), { home: from, moving: null });
 });
 
 test("搬家的那个还在：不启动；从拷了一半的那一份启动：不在它上面启动，说回旧目录", posixOnly, async (t) => {

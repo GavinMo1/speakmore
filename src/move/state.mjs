@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { commandOfProcess } from "../instance.mjs";
 import { isAlive } from "../update/state.mjs";
 
 // 搬家的记录：家目录 run/move.json。搬的时候写在旧目录里（也是"正在搬，别在这里启动"的记号，index.mjs 的 settleMove 认它），
@@ -25,12 +26,23 @@ export function writeMoveRecord(paths, record) {
   writeFileSync(paths.moveFile, JSON.stringify(record));
 }
 
+/** 搬家的进程跑的可执行文件：命令行（自带的 Electron 当 Node 用）、App、从源码跑的（node …/speakmore.mjs） */
+const MOVER = /\/MacOS\/(Electron|SpeakMore)( |$)|\\(electron|node)\.exe$|speakmore\.mjs/i;
+
+/**
+ * 这个进程号上跑的还是搬家的那个 SpeakMore。断电、重启以后进程号会分给别的程序：只看在不在，
+ * 会一直挡着启动（定位文件里的 moving、run/move.json 都记着进程号）
+ */
+export function moverAlive(pid, { alive = isAlive, commandOf = commandOfProcess } = {}) {
+  return alive(pid) && MOVER.test(commandOf(pid) ?? "");
+}
+
+/** 记着的那个搬家进程（进程号、开始时间）还在搬：进程在，也没超过一次搬家最多花的时间 */
+export function stillRunning({ pid, startedAt }, { alive = moverAlive, now = () => new Date() } = {}) {
+  return Number.isInteger(pid) && alive(pid) && now() - Date.parse(startedAt) < MOVE_AT_MOST_MS;
+}
+
 /** 记录里的那个搬家进程还在搬 */
-export function stillMoving(record, { alive = isAlive, now = () => new Date() } = {}) {
-  return (
-    record?.state === "running" &&
-    Number.isInteger(record.pid) &&
-    alive(record.pid) &&
-    now() - Date.parse(record.startedAt) < MOVE_AT_MOST_MS
-  );
+export function stillMoving(record, options = {}) {
+  return record?.state === "running" && stillRunning(record, options);
 }

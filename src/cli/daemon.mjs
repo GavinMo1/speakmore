@@ -81,7 +81,7 @@ export function createDaemon({
   readyTimeoutMs = 90_000,
   quitTimeoutMs = 5_000,
   // 起之前看一眼有没有搬到一半的（src/move）：正在搬就不起，上次断在半路的先收拾好
-  settle = (report) => settleMove({ paths, env, report }),
+  settle = (report) => settleMove({ paths, env, report, atStartup: true }),
 }) {
   // 问状态、请它退出是这个家目录里正在运行的那个的事，命令行和更新共用（src/instance.mjs）
   const instance = createInstance({ paths, locale, kill, commandOf, pollMs, statusTimeoutMs, quitTimeoutMs });

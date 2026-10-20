@@ -356,6 +356,7 @@ async function main() {
     paths: PATHS,
     env: process.env,
     stdio: "forward",
+    atStartup: true,
     report: (message) => log.info("move_settled", { step: message.key, ...message.params }),
   });
   ensureHome(PATHS);
