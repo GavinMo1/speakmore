@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -164,6 +165,28 @@ func TestCheckFolderAnswer(t *testing.T) {
 		if _, problem := checkFolderAnswer(typed, english); !strings.Contains(problem, want) {
 			t.Fatalf("%q: want %q, got %q", typed, want, problem)
 		}
+	}
+}
+
+// 长度按字符数算（和 install.ps1、speakmore move 一样）：中文一个字三个字节，按字节算会多拦
+func TestCheckFolderAnswerCountsCharacters(t *testing.T) {
+	// t.TempDir() 带着测试名，太长；放在短一些的临时目录里
+	short := os.TempDir()
+	if runtime.GOOS != "windows" {
+		short = "/tmp"
+	}
+	base, err := os.MkdirTemp(short, "sm-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(base) })
+	room := maxHomeChars - len([]rune(base)) - len([]rune(`\.speakmore`)) - 1
+	folder := filepath.Join(base, strings.Repeat("语", room))
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if got, problem := checkFolderAnswer(folder, english); problem != "" || got != folder {
+		t.Fatalf("%d 个字符（%d 个字节）的文件夹被拦了：%q", len([]rune(homeIn(folder))), len(homeIn(folder)), problem)
 	}
 }
 

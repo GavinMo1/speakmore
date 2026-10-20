@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf16"
 )
 
 // 装在哪：和 install.ps1 同一个顺序，先在这里定好，再明确交给它（装完打开的也就是同一个）。
@@ -124,7 +125,8 @@ func checkFolderAnswer(typed string, w words) (string, string) {
 	}
 	folder = filepath.Clean(folder)
 	home := homeIn(folder)
-	if len(home) > maxHomeChars {
+	// 按字符数（UTF-16）算，和 install.ps1 的 .Length、speakmore move 一样：len 是字节数，中文一个字算三个
+	if len(utf16.Encode([]rune(home))) > maxHomeChars {
 		return "", fmt.Sprintf(w.tooLong, maxHomeChars-len(`\.speakmore`))
 	}
 	if info, err := os.Stat(folder); err != nil || !info.IsDir() {
