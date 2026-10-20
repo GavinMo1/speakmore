@@ -16,7 +16,8 @@ export function makeDmg({ appPath, dmgPath, signing }) {
     // ditto 原样拷贝应用包，保留签名、票据和里面的符号链接
     run("ditto", [appPath, join(stage, basename(appPath))]);
     symlinkSync("/Applications", join(stage, "Applications"));
-    run("hdiutil", ["create", "-volname", "SpeakMore", "-srcfolder", stage, "-format", "UDZO", "-ov", dmgPath]);
+    // ULMO（LZMA）比默认的 UDZO（zlib）小三成（0.10.1 的 App 实测 179 → 125 MB），macOS 10.15 起都打得开（SpeakMore 要 12 起）
+    run("hdiutil", ["create", "-volname", "SpeakMore", "-srcfolder", stage, "-format", "ULMO", "-ov", dmgPath]);
   } finally {
     rmSync(stage, { recursive: true, force: true });
   }

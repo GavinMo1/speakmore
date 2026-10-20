@@ -4,6 +4,7 @@
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { pruneDevFiles } from "./slim.mjs";
 
 const NPM_FLAGS = ["--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"];
 
@@ -117,7 +118,9 @@ export function stageApp(packageDir, stagingDir, entries, arch, platform = "darw
   // （这里也要 --omit=dev：不带的话 uninstall 会顺手把开发依赖全装回来）
   npm(["uninstall", "electron"]);
   pruneUnused(stagingDir);
-  // 卸掉之后会剩下几个空目录（node_modules/@electron 之类）
+  // 源码映射、类型声明、C/C++ 源码这些只在开发时用（slim.mjs）
+  pruneDevFiles(stagingDir);
+  // 卸掉、删掉之后会剩下几个空目录（node_modules/@electron 之类）
   execFileSync("find", [join(stagingDir, "node_modules"), "-type", "d", "-empty", "-delete"]);
   const copyleft = findCopyleft(join(stagingDir, "node_modules"));
   if (copyleft.length > 0) {

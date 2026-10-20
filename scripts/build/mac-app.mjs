@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { packager } from "@electron/packager";
 import { osxSignOptions } from "./signing.mjs";
+import { trimMacLocales } from "./slim.mjs";
 import { APP_ENTRIES, MAC_APP_IGNORE, stageApp } from "./stage-app.mjs";
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
@@ -45,6 +46,8 @@ export async function packageMacApp({ packageDir, arch, out, signing }) {
       // 依赖在上面已经只装了运行时的那部分
       prune: false,
       ignore: MAC_APP_IGNORE,
+      // 原版 Electron 刚解开、还没改名和签名时，把用不到的界面语言删掉（slim.mjs）；之后整个应用一起签
+      afterExtract: [({ buildPath }) => trimMacLocales(join(buildPath, "Electron.app"))],
       ...(existsSync(join(packageDir, "assets", "icon.icns")) ? { icon: join(packageDir, "assets", "icon.icns") } : {}),
       extendInfo: {
         // 只待在菜单栏，不占程序坞
