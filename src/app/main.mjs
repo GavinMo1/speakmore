@@ -17,7 +17,7 @@ import {
   Tray,
 } from "electron";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
-import { createTranslator, LocalizedError, msg, problemOf, resolveLocale } from "../i18n/index.mjs";
+import { createTranslator, LocalizedError, msg, problemOf, resolveLocale, SYSTEM_LOCALE } from "../i18n/index.mjs";
 import { createInstance } from "../instance.mjs";
 import { alsoLogTo, log } from "../log.mjs";
 import { chipOf, downloadSize, MODELS, makerOf, measuredOn, SOURCES, tagsOn } from "../models/catalog.mjs";
@@ -77,8 +77,27 @@ let SETTINGS;
 let ROUTE;
 /** 本机模型用不用显卡（设置里的 acceleration）。在设置里换了当场生效（service.setAcceleration） */
 let acceleration;
-// Windows 上从开始菜单、开机启动起的没有 SPEAKMORE_HOME：家目录照程序装在哪找回来（装在默认位置时两者一样）
-if (process.platform === "win32" && !process.env.SPEAKMORE_HOME) {
+/**
+ * 启动时就出错了（家目录找不到、定位文件坏了、设置读不出）：照实说出来再退出，不留一个按了热键没反应的进程。
+ * 写在标准错误上的，speakmore 命令起的会在终端里转述（它接着日志）；从程序坞、开始菜单、开机启动起的没有终端，
+ * 另外弹系统的错误框（ready 之前也能弹），不然只是闪一下就没了，用户不知道为什么打不开。设置可能还没读出来，按系统的语言说
+ */
+function reportStartupProblem(error) {
+  console.error(String(error?.stack ?? error));
+  if (LAUNCHED_BY_CLI) return;
+  let text = String(error?.message ?? error);
+  try {
+    const t = createTranslator(resolveLocale(SYSTEM_LOCALE, app.getPreferredSystemLanguages()));
+    text = t.text(problemOf(error));
+  } catch {
+    // 翻不出来就用它自己的英文
+  }
+  dialog.showErrorBox("SpeakMore", text);
+}
+
+// Windows 上装好的那一份（开始菜单、开机启动、命令行起的都是它）：家目录就是程序所在的那个，外面传进来的 SPEAKMORE_HOME
+// 不算数。程序和数据永远是同一个目录里的：搬过家以后环境里残留的旧位置带不偏它
+if (process.platform === "win32") {
   const home = installedHomeOf(process.execPath, existsSync);
   if (home) process.env.SPEAKMORE_HOME = home;
 }
@@ -89,8 +108,7 @@ try {
   ROUTE = routeOf(SETTINGS);
   acceleration = SETTINGS.acceleration.value;
 } catch (error) {
-  // 路径或设置写错是使用上的问题，说一句人话就退出，不留一个按了热键没反应的进程
-  console.error(error.message);
+  reportStartupProblem(error);
   process.exit(2);
 }
 /** 现在用哪个键。设置里可以当场换（setup:set-hotkey），换的时候重启小帮手 */
@@ -229,8 +247,9 @@ if (isOnlyInstance) {
     .whenReady()
     .then(main)
     .catch((error) => {
-      // 启动失败时没有窗口可以报错，记下来并以非零码退出，不留一个什么都不干的进程
+      // 启动失败：记下来、说出来，以非零码退出，不留一个什么都不干的进程
       log.error("startup_failed", { error: String(error?.stack ?? error) });
+      reportStartupProblem(error);
       app.exit(1);
     });
 }
