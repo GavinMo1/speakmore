@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
 import { LocalizedError, msg } from "../i18n/index.mjs";
@@ -55,6 +55,9 @@ export function resolvePaths(env = process.env, userHome = homedir(), platform =
   if (located !== null && !existsSync(located)) {
     throw new LocalizedError(msg("paths.homeMissing", { home: located, file: locationFile }));
   }
+  // 搬走了的旧目录（speakmore move 删它之前先放下这个记号）：从残留的旧入口启动时说清楚搬去了哪，不在半个旧目录上跑起来
+  const moved = movedTo(join(home, MOVED_FILE));
+  if (moved !== undefined) throw new LocalizedError(msg("paths.homeMoved", { home, to: moved ?? "?" }));
   // 相对路径会随着"在哪个目录运行命令"而变：换个目录就找不到正在运行的那个，还会再起一个
   if (!isFullPath(home, platform)) {
     throw new LocalizedError(msg("paths.homeNotAbsolute", { home: JSON.stringify(home) }));
@@ -105,11 +108,33 @@ export function resolvePaths(env = process.env, userHome = homedir(), platform =
     updateFile: join(home, "run", "update.json"),
     /** 更新时拿着的锁（里面是进程号）：命令行和 App 不能同时换程序 */
     updateLock: join(home, "run", "update.lock"),
+    /** 正在进行的、或者上一次的搬家（src/move）：进行到哪、谁发起的、搬去哪；进行中时也是"别在这里启动"的记号 */
+    moveFile: join(home, "run", "move.json"),
     /** 更新时下到的块（src/update/assemble.mjs）：中途断了留着，下次只补剩下的；换成了就删 */
     updateCacheDir: join(home, "run", "update-cache"),
     /** 运行环境（Chromium）自己的缓存和状态，和我们的数据分开放。停掉之后可以随时删 */
     cacheDir: join(home, "cache"),
   };
+}
+
+/** 搬家删旧目录之前在里面放下的记号：{ "to": "<新家目录>" } */
+export const MOVED_FILE = "MOVED.json";
+
+/** 这个记号说搬去了哪；没有记号是 undefined，有记号但读不出是 null */
+function movedTo(file) {
+  let text;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return undefined;
+    return null;
+  }
+  try {
+    const to = JSON.parse(text).to;
+    return typeof to === "string" ? to : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

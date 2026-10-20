@@ -907,8 +907,20 @@ export default {
       "The SpeakMore folder path is too long for the control socket: {home}\nUse the SPEAKMORE_HOME env var to pick a shorter one.",
     homeParentMissing:
       "Can't find the SpeakMore folder {home}: {parent} doesn't exist. If it's on an external or another drive, connect that drive first.",
+    homeMoved:
+      "SpeakMore has moved to {to}; this ({home}) is the old folder that hasn't been fully removed yet. Open SpeakMore from its new place.",
     homeMissing:
       "Can't find the SpeakMore folder {home} (the location file {file} says it's there).\nIf it's on an external or another drive, connect that drive. If you no longer use that place, delete the location file to use the default one.",
+  },
+
+  move: {
+    notFull: "Use a full path, like {example}: {folder}",
+    noFolder: "{folder} doesn't exist or isn't a folder. Create it first, then choose it again.",
+    sameHome: "SpeakMore is already in {home}; nothing to move.",
+    insideHome: "SpeakMore can't move into its own folder ({home}). Choose another folder.",
+    notEmpty: "{home} isn't empty. SpeakMore only moves into an empty place: choose another folder, or empty that one first.",
+    tooLongBytes: "That path is too long: {home}\nIt can be at most {max} bytes. Choose a shorter place.",
+    tooLongChars: "That path is too long: {home}\nIt can be at most {max} characters. Choose a shorter place.",
   },
 
   location: {

@@ -62,6 +62,7 @@ test("程序、你的东西、运行时产生的，各在各的位置", () => {
     updateCheckFile: "run/update-check.json",
     updateFile: "run/update.json",
     updateLock: "run/update.lock",
+    moveFile: "run/move.json",
     updateCacheDir: "run/update-cache",
     cacheDir: "cache",
   });
@@ -168,6 +169,15 @@ test("定位文件说的家目录不在（移动硬盘没接、盘符被别的�
   assert.throws(() => resolvePaths({}, user, "darwin"), said(/找不到 SpeakMore 的目录/));
   assert.equal(statSync(join(user, "Data")).isDirectory(), true);
   assert.throws(() => statSync(missing));
+});
+
+test("搬走了的旧目录（里面有 MOVED.json）：说搬去了哪，不在半个旧目录上跑起来", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sm-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, "MOVED.json"), JSON.stringify({ to: "/Volumes/Data/.speakmore" }));
+  assert.throws(() => resolvePaths({ SPEAKMORE_HOME: dir }), said(/已经搬到 \/Volumes\/Data\/\.speakmore/));
+  writeFileSync(join(dir, "MOVED.json"), "{ 坏了");
+  assert.throws(() => resolvePaths({ SPEAKMORE_HOME: dir }), said(/已经搬到 \?/));
 });
 
 test("ensureHome：家目录所在的那一层不存在（移动硬盘没接、盘符没了）就报错，不在别处新建", (t) => {

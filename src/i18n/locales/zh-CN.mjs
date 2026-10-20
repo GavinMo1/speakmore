@@ -874,8 +874,19 @@ export default {
     homeTooLong: "SpeakMore 的目录路径太长，控制通道建不起来：{home}\n用环境变量 SPEAKMORE_HOME 换一个短一些的目录。",
     homeParentMissing:
       "找不到 SpeakMore 的目录 {home}：它所在的 {parent} 不存在。装在移动硬盘或别的盘上的话，先把那块盘接上。",
+    homeMoved: "SpeakMore 已经搬到 {to} 了，这里（{home}）是还没删完的旧目录。从新位置打开 SpeakMore。",
     homeMissing:
       "找不到 SpeakMore 的目录 {home}（定位文件 {file} 记着它在那里）。\n装在移动硬盘或别的盘上的话，先把那块盘接上；不再用那个位置的话，删掉定位文件就改用默认位置。",
+  },
+
+  move: {
+    notFull: "要写完整路径，比如 {example}：{folder}",
+    noFolder: "{folder} 不存在，或者不是文件夹。先建好它，再选一次。",
+    sameHome: "SpeakMore 已经在 {home} 了，不用搬。",
+    insideHome: "不能搬到 SpeakMore 现在的目录（{home}）里面，换一个文件夹。",
+    notEmpty: "{home} 里已经有东西了。SpeakMore 只搬到空的位置：换一个文件夹，或者先把它清空。",
+    tooLongBytes: "路径太长了：{home}\n最长 {max} 个字节（中文一个字算三个），换一个短一些的位置。",
+    tooLongChars: "路径太长了：{home}\n最长 {max} 个字符，换一个短一些的位置。",
   },
 
   location: {
