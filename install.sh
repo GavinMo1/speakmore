@@ -7,6 +7,7 @@
 # 目录以外只建一个指向命令的链接；装在默认位置以外时，另有一个记着目录在哪的定位文件
 # ~/Library/Application Support/com.zephyrxiang.speakmore/location.json（src/storage/location.mjs：从"应用程序"打开的 App、
 # 下次安装都靠它找到目录）。不需要 Node、npm、Xcode，也不需要 sudo。
+# 第一次安装、在终端里运行时，先说默认装在哪，回车就装在那里，也可以输入（或从访达拖进来）另一个文件夹。
 # 已经装过的话再运行一次就是升级：程序换成新的，你的东西不动，装在哪照定位文件。卸载用 speakmore uninstall。
 # 0.11.0 及以前装的（启动脚本里写死了路径）升级时一样处理：启动脚本换成新的。
 # 这个脚本也随程序一起装进 app/ 里：speakmore update 拼好新版本后，用新版本自带的这一份把它换上（SPEAKMORE_INSTALL_FROM）；
@@ -154,21 +155,92 @@ read_location() {
 # 这个目录里有没有东西（装过、用过）
 has_contents() { [ -d "$1" ] && [ -n "$(ls -A "$1" 2>/dev/null)" ]; }
 
+# 这个目录 SpeakMore 用过（重装系统前放在移动硬盘上的那种）：选到它时沿用里面的东西
+used_before() {
+  local name
+  for name in settings.json data models app; do [ -e "$1/$name" ] && return 0; done
+  return 1
+}
+
+# 这个文件夹所在的那块盘是什么格式（apfs、hfs、exfat、msdos…），看不出来是空的
+filesystem_of() {
+  local point
+  point="$(df -P "$1" 2>/dev/null | awk 'NR == 2 { for (i = 6; i <= NF; i++) printf "%s%s", $i, (i < NF ? " " : "") }')"
+  [ -n "$point" ] || return 0
+  mount | awk -v on=" on $point (" 'index($0, on) { rest = substr($0, index($0, on) + length(on)); sub(/[,)].*/, "", rest); print rest; exit }'
+}
+
+# 选的文件夹能不能装（第一次安装时问到的、SPEAKMORE_INSTALL_DIR 给的）。能装的话 PLACE_HOME 是要装进的目录
+# （文件夹里的 .speakmore；选的本身就叫 .speakmore 就是它），不能的话 PLACE_PROBLEM 说为什么。不在子 shell 里调
+check_place() {
+  local folder=$1 home bytes fs
+  PLACE_HOME="" PLACE_PROBLEM=""
+  case "$folder" in /*) ;; *) PLACE_PROBLEM="Use a full path, like /Volumes/Data" && return ;; esac
+  [ -d "$folder" ] || { PLACE_PROBLEM="No such folder: $folder (create it first, or pick another one)" && return; }
+  folder="$(CDPATH="" cd -- "$folder" 2>/dev/null && pwd -P)" || { PLACE_PROBLEM="Can't open $1" && return; }
+  case "$folder" in */.speakmore) home="$folder" ;; *) home="${folder%/}/.speakmore" ;; esac
+  if has_contents "$home" && ! used_before "$home"; then
+    PLACE_PROBLEM="$(pretty "$home") already has other things in it; pick another folder" && return
+  fi
+  bytes="$(printf '%s' "$home" | wc -c | tr -d ' ')"
+  [ "$bytes" -le "$MAX_HOME_BYTES" ] ||
+    { PLACE_PROBLEM="That path is too long ($bytes bytes, at most $MAX_HOME_BYTES); pick a shorter place" && return; }
+  [ -w "$folder" ] || [ -w "$home" ] || { PLACE_PROBLEM="Can't write to $(pretty "$folder")" && return; }
+  # 控制通道是一个 Unix 套接字、运行环境里有符号链接：exFAT、FAT32（U 盘、移动硬盘常见）、网络盘上都建不了
+  fs="$(filesystem_of "$folder")"
+  case "$fs" in
+    apfs | hfs | "") ;;
+    *)
+      case "$fs" in exfat) fs=exFAT ;; msdos) fs=FAT32 ;; ntfs) fs=NTFS ;; smbfs | afpfs | nfs | webdav) fs="a network share" ;; esac
+      PLACE_PROBLEM="$(pretty "$folder") is on a disk formatted as $fs; SpeakMore needs APFS or Mac OS Extended" && return
+      ;;
+  esac
+  PLACE_HOME="$home"
+}
+
 # 指定了装在哪个文件夹下（SPEAKMORE_INSTALL_DIR）：只用于第一次安装。别处已经有一份的话停下，
 # 不然会多出一个空的目录，"应用程序"里的 App 跟着定位文件换过去，看着像数据丢了。已经装了的用 speakmore move 搬
 check_install_dir() {
-  local folder="$SPEAKMORE_INSTALL_DIR" other
-  case "$folder" in /*) ;; *) fail "SPEAKMORE_INSTALL_DIR must be an absolute path, not $folder" ;; esac
-  [ -d "$folder" ] || fail "No such folder: $folder" "SPEAKMORE_INSTALL_DIR names the folder to install into; create it first."
-  folder="$(CDPATH="" cd -- "$folder" && pwd -P)" || fail "Can't open $SPEAKMORE_INSTALL_DIR"
-  # 选的就是一个 .speakmore 的话就用它本身，不再套一层
-  case "$folder" in */.speakmore) HOME_DIR="$folder" ;; *) HOME_DIR="$folder/.speakmore" ;; esac
+  local other
+  check_place "$SPEAKMORE_INSTALL_DIR"
+  [ -z "$PLACE_PROBLEM" ] || fail "Can't install into SPEAKMORE_INSTALL_DIR: $PLACE_PROBLEM"
+  HOME_DIR="$PLACE_HOME"
   for other in "$LOCATION_HOME" "$HOME/.speakmore"; do
     [ -n "$other" ] && has_contents "$other" || continue
     [ "$(CDPATH="" cd -- "$other" && pwd -P)" = "$HOME_DIR" ] && continue
     fail "SpeakMore is already set up in $(pretty "$other")" \
       "To keep using it there, run this again without SPEAKMORE_INSTALL_DIR." \
-      "To move it to $(pretty "$HOME_DIR"), run: speakmore move $(pretty "$folder")"
+      "To move it to $(pretty "$HOME_DIR"), run: speakmore move $(pretty "${HOME_DIR%/.speakmore}")"
+  done
+}
+
+# 第一次安装、在终端里时问一句装在哪：回车是默认位置，也可以输入或从访达拖进来一个文件夹（拖进来的路径空格前带 \，
+# read 不加 -r 正好去掉）。选了别处就和 SPEAKMORE_INSTALL_DIR 一样：装进它里面的 .speakmore、记进定位文件
+ask_place() {
+  local answer
+  heading "Where to install"
+  note "SpeakMore keeps everything in one folder: the program, on-device models (0.2-1.6 GB each),"
+  note "and your settings, history and recordings. You can move it later with: speakmore move"
+  printf '  Press Enter to use %s%s%s, or type a folder (or drag one here from Finder)
+' "$BOLD" "$(pretty "$HOME_DIR")" "$RESET"
+  printf '  to install into .speakmore inside it.
+'
+  while :; do
+    answer=""
+    read -e -p "  Folder: " answer </dev/tty || answer=""
+    # 复制来的路径常带引号
+    case "$answer" in \"*\") answer="${answer#\"}" answer="${answer%\"}" ;; \'*\') answer="${answer#\'}" answer="${answer%\'}" ;; esac
+    case "$answer" in "~") answer="$HOME" ;; "~/"*) answer="$HOME/${answer#"~/"}" ;; esac
+    [ -n "$answer" ] || return 0
+    check_place "$answer"
+    if [ -n "$PLACE_PROBLEM" ]; then
+      warn "$PLACE_PROBLEM"
+      continue
+    fi
+    [ "$PLACE_HOME" = "$(CDPATH="" cd -- "$HOME" && pwd -P)/.speakmore" ] && return 0
+    HOME_DIR="$PLACE_HOME" HOME_FROM=chosen
+    used_before "$HOME_DIR" && note "Found SpeakMore data there; it will be used as it is."
+    return 0
   done
 }
 
@@ -526,6 +598,11 @@ main() {
   if [ -n "$PREVIOUS_HOME" ]; then
     [ "$HOME_FROM" = env ] && [ -z "${SPEAKMORE_INSTALL_FROM:-}" ] ||
       fail "SPEAKMORE_PREVIOUS_HOME goes with SPEAKMORE_HOME (where SpeakMore was copied to), not with SPEAKMORE_INSTALL_FROM"
+  fi
+
+  # 第一次安装（没有定位文件、默认位置还空着）、在终端里运行：先问一句装在哪
+  if [ "$HOME_FROM" = default ] && ! has_contents "$HOME_DIR" && [ -t 1 ] && (: </dev/tty) 2>/dev/null; then
+    ask_place
   fi
 
   heading "Checks"

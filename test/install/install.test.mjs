@@ -53,6 +53,8 @@ const SHIMS = {
   uname: `#!/bin/sh\ncase "$1" in -s) echo "\${FAKE_OS:-Darwin}" ;; -m) echo "\${FAKE_ARCH:-arm64}" ;; *) exec /usr/bin/uname "$@" ;; esac\n`,
   id: `#!/bin/sh\n[ "$1" = "-u" ] && [ -n "$FAKE_UID" ] && { echo "$FAKE_UID"; exit 0; }\nexec /usr/bin/id "$@"\n`,
   df: `#!/bin/sh\n[ -n "$FAKE_FREE_KB" ] && { echo "Filesystem 1024-blocks Used Available Capacity Mounted on"; echo "/dev/x 9 9 $FAKE_FREE_KB 1% /"; exit 0; }\nexec /bin/df "$@"\n`,
+  // 装样子说所有的盘都是 FAKE_FS 格式（比如 exfat）
+  mount: `#!/bin/sh\n[ -n "$FAKE_FS" ] && { /sbin/mount | sed "s/ (apfs/ ($FAKE_FS/"; exit 0; }\nexec /sbin/mount "$@"\n`,
   // 只有问各家模型连不连得上的那几次是假的；下载用的 file:// 照常交给真的 curl
   curl: `#!/bin/sh\ncase "$*" in *generativelanguage.googleapis.com*) exit "\${FAKE_GEMINI_EXIT:-0}" ;; *api.openai.com*) exit "\${FAKE_OPENAI_EXIT:-0}" ;; *dashscope.aliyuncs.com*) exit "\${FAKE_BAILIAN_EXIT:-0}" ;; esac\nexec /usr/bin/curl "$@"\n`,
 };
@@ -375,6 +377,105 @@ test("第一次安装选了文件夹（SPEAKMORE_INSTALL_DIR）：装进它里�
   assert.match(out, /Found 9\.9\.9/);
   assert.equal(installedVersion(custom), "10.0.0");
   assert.equal(existsSync(home()), false);
+});
+
+/**
+ * 在终端里跑一次：expect 给它一个伪终端，每看到一次"Folder:"的提问敲进一个回答（answers 按顺序）。
+ * 回答用 Tcl 的花括号原样送（里面的反斜杠、空格不转义），所以回答里不能有花括号
+ */
+function installInTerminal(answers, { env = {} } = {}) {
+  const lines = ["set timeout 60", `spawn /bin/bash {${INSTALLER}} --no-start`];
+  for (const answer of answers) {
+    assert.doesNotMatch(answer, /[{}]/);
+    lines.push('expect "Folder: "', `send -- {${answer}}`, 'send "\\r"');
+  }
+  lines.push("expect eof", "lassign [wait] pid spawnid os code", "exit $code");
+  const script = join(root, "answers.exp");
+  writeFileSync(script, `${lines.join("\n")}\n`);
+  const result = spawnSync("/usr/bin/expect", [script], {
+    encoding: "utf8",
+    env: {
+      HOME: userHome,
+      PATH: `${shims}:/usr/bin:/bin:/usr/sbin:/sbin`,
+      SPEAKMORE_INSTALL_BASE: release,
+      FAKE_CALL_LOG: callLog,
+      NO_COLOR: "1",
+      TERM: "dumb",
+      ...env,
+    },
+  });
+  return { code: result.status, all: result.stdout + result.stderr };
+}
+
+test("第一次安装、在终端里：先说默认装在哪，回车就装在那里，不多出定位文件", () => {
+  const { code, all } = installInTerminal([""]);
+  assert.equal(code, 0, all);
+  assert.match(all, /Where to install[\s\S]*Press Enter to use ~\/\.speakmore/);
+  assert.equal(installedVersion(), "9.9.9");
+  assert.equal(recorded(), null);
+});
+
+test("第一次安装、在终端里：输入（或从访达拖进来）一个文件夹就装进它里面的 .speakmore、记进定位文件；不能装的说清楚再问", () => {
+  const disk = join(root, "My Disk");
+  mkdirSync(disk);
+  // 拖进终端的路径：空格前带反斜杠，末尾一个空格
+  const dragged = `${disk.replaceAll(" ", "\\ ")} `;
+  const { code, all } = installInTerminal([join(root, "nowhere"), "relative/dir", dragged]);
+  assert.equal(code, 0, all);
+  assert.match(all, /No such folder/);
+  assert.match(all, /Use a full path/);
+  const custom = join(disk, ".speakmore");
+  assert.equal(installedVersion(custom), "9.9.9");
+  assert.equal(recorded(), custom);
+  assert.equal(existsSync(home()), false);
+  // 再装一次（升级）不再问
+  makeArchive("arm64", "10.0.0");
+  const again = installInTerminal([]);
+  assert.equal(again.code, 0, again.all);
+  assert.doesNotMatch(again.all, /Where to install/);
+  assert.equal(installedVersion(custom), "10.0.0");
+});
+
+test("第一次安装、在终端里：选的地方已经有别的东西不装；有一份 SpeakMore 的就沿用；输入 ~ 是默认位置", () => {
+  const taken = join(root, "Taken");
+  mkdirSync(join(taken, ".speakmore"), { recursive: true });
+  writeFileSync(join(taken, ".speakmore", "notes.txt"), "别人的");
+  const reused = join(root, "Old");
+  mkdirSync(join(reused, ".speakmore"), { recursive: true });
+  writeFileSync(join(reused, ".speakmore", "settings.json"), '{"hotkey":"fn"}');
+  const { code, all } = installInTerminal([taken, `"${reused}"`]);
+  assert.equal(code, 0, all);
+  assert.match(all, /already has other things in it/);
+  assert.match(all, /Found SpeakMore data there/);
+  assert.equal(recorded(), join(reused, ".speakmore"));
+  assert.equal(readFileSync(join(reused, ".speakmore", "settings.json"), "utf8"), '{"hotkey":"fn"}');
+
+  rmSync(locationFile());
+  rmSync(reused, { recursive: true });
+  const tilde = installInTerminal(["~"]);
+  assert.equal(tilde.code, 0, tilde.all);
+  assert.equal(installedVersion(), "9.9.9");
+  assert.equal(recorded(), null);
+});
+
+test("选的文件夹在 exFAT、FAT32 这类盘上（套接字、符号链接建不了）：不装，说要哪种格式；问的时候说完再问", () => {
+  const folder = join(root, "Stick");
+  mkdirSync(folder);
+  assertRefused(
+    install({ env: { SPEAKMORE_INSTALL_DIR: folder, FAKE_FS: "exfat" } }),
+    /is on a disk formatted as exFAT; SpeakMore needs APFS or Mac OS Extended/,
+  );
+  assert.equal(existsSync(join(folder, ".speakmore")), false);
+  const asked = installInTerminal([folder, ""], { env: { FAKE_FS: "exfat" } });
+  assert.equal(asked.code, 0, asked.all);
+  assert.match(asked.all, /formatted as exFAT/);
+  assert.equal(installedVersion(), "9.9.9");
+});
+
+test("不在终端里（脚本、CI 调的）：不问，装在默认位置", () => {
+  const { code, all } = install();
+  assert.equal(code, 0, all);
+  assert.doesNotMatch(all, /Where to install/);
 });
 
 test("选文件夹：文件夹要已经在；选的就是一个 .speakmore 时用它本身，不再套一层", () => {
