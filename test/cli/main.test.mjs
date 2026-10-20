@@ -22,6 +22,7 @@ import { openHistory } from "../../src/storage/history.mjs";
 import { keyFile, oldAppKeyFile, resolvePaths } from "../../src/storage/paths.mjs";
 import { HOTKEY_IDS, resolveSettings } from "../../src/storage/settings.mjs";
 import { createUpdates } from "../../src/update/index.mjs";
+import { parseChannel } from "../../src/update/release.mjs";
 import { assertOwnerOnlyDir } from "../helpers/owner-only.mjs";
 
 /** 热键按系统分：默认的是第一个，另挑一个不是默认的；能填哪几个照本机这个系统的写 */
@@ -305,11 +306,11 @@ function harness({
     now: () => io.now(),
     pid: 999_999,
     release: {
-      async latest(timeoutSeconds) {
+      async channel(timeoutSeconds) {
         updates.checks.push(timeoutSeconds);
         const answer = typeof latest === "function" ? latest() : latest;
         if (answer instanceof Error) throw answer;
-        return answer;
+        return parseChannel(JSON.stringify({ version: answer, electron: "44.0.0", targets: {} }));
       },
     },
     bundles: {
@@ -317,10 +318,12 @@ function harness({
         updates.lookedFor.push(pid);
         return app;
       },
-      async stage(version, path) {
+      async stage({ version }, path) {
         updates.staged.push({ version, path, stillRunning: daemon.current !== null });
         appInstall();
         return {
+          downloadedBytes: 1_000_000,
+          reusedBytes: 300_000_000,
           commit() {
             updates.apps.push({ version: `v${version}`, path, stillRunning: daemon.current !== null });
             appCommit();
@@ -337,11 +340,12 @@ function harness({
     homes: {
       // 像是用安装脚本装的：程序在家目录的 app 里，或者 Windows 的 versions 下
       find: () => (existsSync(paths.appDir) || existsSync(paths.versionsDir) ? { version: io.version } : null),
-      async stage(version) {
-        return { dir: `staged-${version}`, discard() {} };
+      seeds: () => [],
+      async stage({ version }) {
+        return { dir: `staged-${version}`, version, downloadedBytes: 0, reusedBytes: 0, discard() {} };
       },
-      async install(_staged, version) {
-        updates.installs.push(`v${version}`);
+      async install(staged) {
+        updates.installs.push(`v${staged.version}`);
         // 和真的安装脚本一样：先停掉正在运行的
         daemon.current = null;
         return installerExit;
@@ -845,7 +849,7 @@ test("update：App 和命令行那一份都是最新的：什么都不做", asyn
   assert.match(output.out, /已经是最新的（0\.1\.0）/);
 });
 
-test("update：App 的安装包没核对过：什么都不停、不换，照实说", async () => {
+test("update：App 下到的更新数据没核对过：什么都不停、不换，照实说", async () => {
   installed();
   const daemon = fakeDaemon({ running: APP_RUNNING });
   const { speakmore, output, updates } = harness({
@@ -853,11 +857,11 @@ test("update：App 的安装包没核对过：什么都不停、不换，照实�
     latest: "v0.2.0",
     app: { path: APP, version: "0.1.0" },
     appInstall: () => {
-      throw new LocalizedError(msg("update.checksum", { file: "SpeakMore-arm64.dmg" }));
+      throw new LocalizedError(msg("update.checksum", { object: "0123456789ab" }));
     },
   });
   assert.equal(await speakmore("update"), 1);
-  assert.match(output.err, /SpeakMore-arm64\.dmg 与发布的校验值不符/);
+  assert.match(output.err, /下载的更新数据（0123456789ab）与发布的不符/);
   assert.deepEqual(daemon.calls, [], "下载、核对都在停之前：没核对过就什么都不停");
   assert.deepEqual(updates.installs, []);
   assert.deepEqual(updates.opened, []);
@@ -1047,12 +1051,12 @@ test("status：和 App 看的是同一份记录。App 问过的一天之内不�
       version: "0.2.0",
       by: "app",
       pid: 1,
-      problem: { key: "update.checksum", params: { file: "x.zip" } },
+      problem: { key: "update.checksum", params: { object: "0123456789ab" } },
     }),
   );
   const failed = harness({ daemon: fakeDaemon({ running: READY }) });
   await failed.speakmore("status");
-  assert.match(failed.output.out, /上一次更新没有完成：下载的 x\.zip 与发布的校验值不符/);
+  assert.match(failed.output.out, /上一次更新没有完成：下载的更新数据（0123456789ab）与发布的不符/);
 });
 
 test("status：命令行这一份是新的、只有 App 还是旧的：说是 App 旧了", async () => {
@@ -2608,10 +2612,7 @@ test("transcriber <模型>：要换的还没下载时先问；答是就交给后
   const daemon = modelDaemon();
   const { speakmore, output, confirmed } = harness({ daemon, confirms: [true] });
   assert.equal(await speakmore("transcriber", "sensevoice-small-q8"), 0);
-  assert.match(
-    confirmed[0],
-    /SenseVoice Small \(Q8_0\) 还没下载（253 MB，从国内源（魔搭）下）。现在下载吗/,
-  );
+  assert.match(confirmed[0], /SenseVoice Small \(Q8_0\) 还没下载（253 MB，从国内源（魔搭）下）。现在下载吗/);
   assert.match(output.out, /交给后台下了：按 Ctrl-C 只是不看进度/);
   assert.match(output.out, /下载中 50%/);
   assert.match(output.out, /SenseVoice Small \(Q8_0\) 下好了/);

@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { pathToFileURL } from "node:url";
 import { createTranslator, LocalizedError } from "../../src/i18n/index.mjs";
-import { createRelease, DOWNLOAD_URL, downloadBase } from "../../src/update/release.mjs";
+import { CHUNKING, sha256 } from "../../src/update/chunker.mjs";
+import { CHANNEL, objectPath } from "../../src/update/layout.mjs";
+import { MANIFEST_FORMAT } from "../../src/update/manifest.mjs";
+import { packObject } from "../../src/update/objects.mjs";
+import { createRelease, DOWNLOAD_URL, downloadBase, parseChannel } from "../../src/update/release.mjs";
 import { compareVersions, parseVersion } from "../../src/update/versions.mjs";
 
 const zh = createTranslator("zh-CN");
@@ -39,38 +43,110 @@ test("从哪下载：和安装脚本一样，默认是发布的地址，SPEAKMOR
   assert.equal(downloadBase({ SPEAKMORE_INSTALL_BASE: "C:\\dist\\release" }), "file:///C:/dist/release");
 });
 
-test("真的去问、真的下载：用本机的一个目录当下载地址；包和校验值对得上才算下好", async () => {
-  const release = join(dir, "release");
-  mkdirSync(join(release, "v9.9.9"), { recursive: true });
-  writeFileSync(join(release, "latest"), "v9.9.9\n");
-  writeFileSync(join(release, "install.sh"), "echo hi\n");
-  writeFileSync(join(release, "v9.9.9", "pkg.zip"), "包");
-  // "包" 的 UTF-8 的 sha256
-  writeFileSync(
-    join(release, "v9.9.9", "pkg.zip.sha256"),
-    "e8e0f9cbc0e2b47f3a3e3a0e0e1cbf1eac7c7de7e1e5e4d6b5d9b1d8b8a8f1c0  pkg.zip\n",
-  );
-  const server = createRelease({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: release } });
-  assert.equal(await server.latest(5), "v9.9.9");
-  await server.fetch("install.sh", join(dir, "install.sh"));
+/** 摆一个本机的下载地址：channel.json 和 store/ 里的对象（压好的） */
+function makeRelease(root, objects, channel) {
+  mkdirSync(join(root, "store"), { recursive: true });
+  for (const [sha, packed] of objects) writeFileSync(join(root, objectPath(sha)), packed);
+  if (channel) writeFileSync(join(root, CHANNEL), JSON.stringify(channel));
+}
 
-  // 校验值对不上：说是哪个文件
-  await assert.rejects(server.fetchVerified("v9.9.9/pkg.zip", join(dir, "pkg.zip")), (error) => {
+const objectOf = (text) => {
+  const data = Buffer.from(text);
+  return [sha256(data), packObject(data)];
+};
+
+test("channel.json：版本号像版本号、每种装法对着一个 sha256 才收；不收的说出问到的是什么", () => {
+  const sha = "a".repeat(64);
+  assert.deepEqual(
+    parseChannel(JSON.stringify({ version: "1.2.3", electron: "44.0.0", targets: { "win32-x64": sha } })),
+    {
+      version: "1.2.3",
+      electron: "44.0.0",
+      targets: { "win32-x64": sha },
+    },
+  );
+  for (const bad of [
+    "<html>502</html>",
+    JSON.stringify({ version: "latest", targets: {} }),
+    JSON.stringify({ version: "1.2.3" }),
+    JSON.stringify({ version: "1.2.3", targets: { "win32-x64": "../../etc/passwd" } }),
+  ]) {
+    assert.throws(
+      () => parseChannel(bad),
+      (error) => error instanceof LocalizedError && /下载地址返回的版本号无效/.test(zh.text(error.problem)),
+      bad,
+    );
+  }
+});
+
+test("真的去问、真的下载：用本机的一个目录当下载地址；对象解开核对过才留下，名字就是 sha256", async () => {
+  const root = join(dir, "release");
+  const [a, packedA] = objectOf("第一块");
+  const [b, packedB] = objectOf("第二块");
+  makeRelease(
+    root,
+    [
+      [a, packedA],
+      [b, packedB],
+    ],
+    { version: "9.9.9", electron: "44.0.0", targets: { "win32-x64": a } },
+  );
+  const server = createRelease({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: root } });
+  assert.equal((await server.channel(5)).version, "9.9.9");
+
+  const into = join(dir, "cache");
+  mkdirSync(into);
+  const got = [];
+  await server.fetchObjects([a, b], into, (bytes) => got.push(bytes));
+  assert.deepEqual(readdirSync(into).sort(), [a, b].sort());
+  assert.deepEqual(got.sort(), [packedA.length, packedB.length].sort());
+  // 自己换不了时告诉用户去哪下：和下载用的是同一个地址（Windows 上是 file:///C:/… 的写法）
+  assert.equal(server.url("v9.9.9/x.dmg"), `${downloadBase({ SPEAKMORE_INSTALL_BASE: root })}/v9.9.9/x.dmg`);
+});
+
+test("取到的对象内容不对（被换了、坏了）：不留下，说是哪个对象坏了；没取到的说取不到", async () => {
+  const root = join(dir, "release");
+  const [a] = objectOf("要的那块");
+  const [, packedOther] = objectOf("别的内容");
+  makeRelease(root, [[a, packedOther]]);
+  const server = createRelease({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: root } });
+  const into = join(dir, "cache");
+  mkdirSync(into);
+  await assert.rejects(server.fetchObjects([a], into), (error) => {
     assert.ok(error instanceof LocalizedError);
-    assert.match(zh.text(error.problem), /下载的 pkg\.zip 与发布的校验值不符/);
+    assert.match(zh.text(error.problem), new RegExp(`更新数据（${a.slice(0, 12)}）与发布的不符`));
     return true;
   });
-  const { createHash } = await import("node:crypto");
-  const hash = createHash("sha256").update("包").digest("hex");
-  writeFileSync(join(release, "v9.9.9", "pkg.zip.sha256"), `${hash}  pkg.zip\n`);
-  await server.fetchVerified("v9.9.9/pkg.zip", join(dir, "pkg.zip"));
-  // 自己换不了时告诉用户去哪下：和下载用的是同一个地址（Windows 上是 file:///C:/… 的写法）
-  assert.equal(server.url("v9.9.9/pkg.zip"), `${downloadBase({ SPEAKMORE_INSTALL_BASE: release })}/v9.9.9/pkg.zip`);
+  assert.deepEqual(readdirSync(into), []);
+
+  const absent = "b".repeat(64);
+  await assert.rejects(server.fetchObjects([absent], into), (error) => {
+    assert.match(zh.text(error.problem), new RegExp(`无法连接 .*${objectPath(absent)}`));
+    return true;
+  });
+});
+
+test("清单：取回来核对过再解析；不是清单的（坏了的发布）报清单无效", async () => {
+  const root = join(dir, "release");
+  const manifest = { format: MANIFEST_FORMAT, chunking: CHUNKING.algorithm, entries: [{ path: "app", type: "dir" }] };
+  const [good, packedGood] = objectOf(JSON.stringify(manifest));
+  const [bad, packedBad] = objectOf(JSON.stringify({ ...manifest, entries: [{ path: "../x", type: "dir" }] }));
+  makeRelease(root, [
+    [good, packedGood],
+    [bad, packedBad],
+  ]);
+  const server = createRelease({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: root } });
+  assert.deepEqual(await server.manifest(good), manifest);
+  await assert.rejects(server.manifest(bad), (error) => {
+    assert.match(zh.text(error.problem), /更新清单无效：路径不对/);
+    return true;
+  });
 });
 
 test("下载地址问不到：报出地址和 curl 说的原因", async () => {
   const server = createRelease({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: join(dir, "nowhere") } });
-  for (const attempt of [() => server.latest(5), () => server.fetch("install.sh", join(dir, "x"))]) {
+  mkdirSync(join(dir, "cache"));
+  for (const attempt of [() => server.channel(5), () => server.fetchObjects(["c".repeat(64)], join(dir, "cache"))]) {
     await assert.rejects(attempt, (error) => {
       assert.ok(error instanceof LocalizedError);
       const said = zh.text(error.problem);

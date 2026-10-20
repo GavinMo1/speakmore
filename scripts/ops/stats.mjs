@@ -302,6 +302,8 @@ function render(r) {
   for (const k of d.kinds) line(`  ${pad(k.label, 26)}真实 ${pad(n(k.real), 7)}自测 ${n(k.self)}`);
   line(`  ${pad("合计", 26)}真实 ${pad(n(d.real), 7)}自测 ${n(d.self)}`);
   line(`  真实来源 IP ${d.realIps} 个（至少下完半个包）；其中 ${n(d.phone)} 次是在手机上点的`);
+  const mb = (bytes) => (bytes / 1e6).toFixed(1);
+  line(`  更新（按块下）：真实 ${mb(d.updates.bytes)} MB，来自 ${d.updates.ips} 个 IP；自测 ${mb(d.updates.self)} MB`);
   const reasons = Object.entries(r.self.reasons)
     .map(([k, v]) => `${REASON[k] ?? k} ${v}`)
     .join("、");

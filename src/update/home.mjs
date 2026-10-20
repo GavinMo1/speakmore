@@ -1,14 +1,19 @@
 import { execFileSync } from "node:child_process";
-import { lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { randomBytes } from "node:crypto";
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { LocalizedError, msg } from "../i18n/index.mjs";
+import { assembleTree } from "./assemble.mjs";
 import { runToEnd } from "./exec.mjs";
-import { homePackage, versionDir } from "./layout.mjs";
+import { homeTarget } from "./layout.mjs";
 import { parseVersion } from "./versions.mjs";
 
+/** macOS 上拼新版本的目录名的开头（在家目录里）。install.sh 认它：只肯从家目录里的这种目录装 */
+const STAGING_PREFIX = ".update-";
+
 // 装在家目录里的那一份：安装脚本（install.sh、install.ps1）装的。Mac 上是终端安装，Windows 上两种安装都是它。
-// 换成新版本用新版本自己的安装脚本（怎么装是新版本说了算）。先把安装脚本和包下到一个临时目录、摆成下载地址的样子，
-// 再让安装脚本从那里装：下载在停掉正在运行的那个之前就做完了，停着的只有换程序的那十几秒，下载失败也什么都没动。
+// 换成新版本：先照清单拼好新版本（只下本机缺的块），再让新版本自带的安装脚本把它换上（怎么装是新版本说了算）。
+// 拼在停掉正在运行的那个之前就做完了，停着的只有换程序的那十几秒，下载失败也什么都没动。
 
 /** 一个程序目录里 package.json 写的版本；没有、读不出、不像版本号的是 null */
 function versionIn(appDir) {
@@ -112,15 +117,40 @@ export function createHomes({
       return version ? { version } : null;
     },
 
+    /** 本机装着的这一份在哪几个目录：拼新版本时当种子（没变的块从这里拷） */
+    seeds() {
+      if (!windows) return [paths.appDir, paths.runtimeDir];
+      const appDir = homeAppDir(paths, platform);
+      return appDir ? [dirname(appDir)] : [];
+    },
+
     /**
-     * 把这个版本的安装脚本和包（连同校验值）下到一个临时目录，摆成下载地址的样子，核对好校验值
-     * @param {string} version 不带 v
-     * @returns {Promise<{ dir: string, discard: () => { dir: string, reason: string } | null }>} discard 交回删不掉的
+     * 把这个版本拼好（只下本机缺的块，assemble.mjs），交给它自带的安装脚本去换。
+     * 拼在哪：Windows 直接拼进 versions 下一个新目录（install.ps1 原地用它，不挪：刚写出来的文件杀毒软件正扫着，挪不动）；
+     * macOS 拼在家目录里一个 .update- 开头的目录（同一块盘，install.sh 改名就换上）
+     * @param {{ version: string, targets: Record<string, string> }} channel release.channel() 问到的
+     * @param {{ seeds: string[], cacheDir: string, onProgress?: Function }} options
+     * @returns {Promise<{ dir: string, discard: () => { dir: string, reason: string } | null,
+     *   downloadedBytes: number, reusedBytes: number }>} discard 交回删不掉的
      */
-    async stage(version) {
-      const { archive, script } = homePackage(platform, homeArch(platform, arch, translated));
-      const dir = mkdtempSync(join(tmpdir(), "speakmore-update-"));
-      // 删不掉（Windows 上杀毒软件正扫着刚下的包）不算出错：交回留在了哪、为什么，由更新那一层说一声
+    async stage(channel, { seeds, cacheDir, onProgress }) {
+      const target = homeTarget(platform, homeArch(platform, arch, translated));
+      if (!channel.targets[target])
+        throw new LocalizedError(msg("update.noTarget", { target, version: channel.version }));
+      const manifest = await release.manifest(channel.targets[target]);
+      const suffix = randomBytes(4).toString("hex");
+      let dir;
+      if (windows) {
+        // 和 install.ps1 的 versions 目录名同一种：<版本>-<8 位编号>
+        dir = join(paths.versionsDir, `${channel.version}-${suffix}`);
+      } else {
+        // 上次中断留下的（进程被杀了没来得及删）先清掉：同一时间只有一个更新（state.mjs 的锁）
+        for (const name of existsSync(paths.home) ? readdirSync(paths.home) : []) {
+          if (name.startsWith(STAGING_PREFIX)) rmSync(join(paths.home, name), { recursive: true, force: true });
+        }
+        dir = join(paths.home, `${STAGING_PREFIX}${channel.version}-${suffix}`);
+      }
+      // 删不掉（Windows 上杀毒软件正扫着刚写的文件）不算出错：交回留在了哪、为什么，由更新那一层说一声
       const discard = () => {
         try {
           rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
@@ -130,42 +160,36 @@ export function createHomes({
         }
       };
       try {
-        mkdirSync(join(dir, versionDir(version)));
-        await release.fetch(script, join(dir, script));
-        await release.fetchVerified(`${versionDir(version)}/${archive}`, join(dir, versionDir(version), archive));
-        // 安装脚本指定了版本就不问 latest；照样写上，和下载地址一模一样
-        writeFileSync(join(dir, "latest"), `${versionDir(version)}\n`);
+        const stats = await assembleTree({
+          manifest,
+          dest: dir,
+          seeds,
+          fetchObjects: release.fetchObjects,
+          cacheDir,
+          onProgress,
+        });
+        return { dir, discard, downloadedBytes: stats.downloadedBytes, reusedBytes: stats.reusedBytes };
       } catch (error) {
         discard();
         throw error;
       }
-      return { dir, discard };
     },
 
     /**
-     * 让下好的安装脚本从临时目录装上这个版本，只装不启动（谁原来在跑、装完重新打开谁，由更新那一层管）。
-     * 它说的话照 stdio 接
+     * 让拼好的这个版本自带的安装脚本（app 里的 install.sh、install.ps1）把它换上：怎么装是新版本说了算。
+     * 只装不启动（谁原来在跑、装完重新打开谁，由更新那一层管）。它说的话照 stdio 接
      * @returns {Promise<number>} 安装脚本的退出码
      */
-    install(staged, version) {
-      const installerEnv = {
-        ...env,
-        SPEAKMORE_HOME: paths.home,
-        SPEAKMORE_VERSION: versionDir(version),
-        SPEAKMORE_INSTALL_BASE: staged.dir,
-      };
-      // 它自己用装好的那份 Electron 当 Node 跑命令，不要把这边的带过去
-      delete installerEnv.ELECTRON_RUN_AS_NODE;
-      // 命令的链接放在原来那个地方：从 App 起的进程拿到的是系统给的精简 PATH，安装脚本按 PATH 挑的话会另挑一处
-      if (!windows && !installerEnv.SPEAKMORE_BIN_DIR) {
-        const linkDir = existingLinkDir(paths);
-        if (linkDir) installerEnv.SPEAKMORE_BIN_DIR = linkDir;
-      }
+    install(staged) {
+      const installerEnv = { ...env, SPEAKMORE_HOME: paths.home, SPEAKMORE_INSTALL_FROM: staged.dir };
+      // 它自己用拼好的那份 Electron 当 Node 跑命令，不要把这边的带过去；也不要被这边的版本、下载地址带偏
+      for (const name of ["ELECTRON_RUN_AS_NODE", "SPEAKMORE_VERSION", "SPEAKMORE_INSTALL_BASE"])
+        delete installerEnv[name];
       if (windows) {
         // install.ps1 从 irm | iex 跑时传不了参数，只认环境变量。按 UTF-8 读进来再当脚本块跑：存成文件直接 -File 的话，
         // 5.1 把没有 BOM 的脚本当成系统编码（GBK）读；也绕开了执行策略（只允许跑文件这一层管着的那种）
         installerEnv.SPEAKMORE_NO_START = "1";
-        installerEnv.SPEAKMORE_INSTALL_SCRIPT = join(staged.dir, "install.ps1");
+        installerEnv.SPEAKMORE_INSTALL_SCRIPT = join(staged.dir, "app", "install.ps1");
         const command =
           "& ([scriptblock]::Create([IO.File]::ReadAllText($env:SPEAKMORE_INSTALL_SCRIPT, [Text.Encoding]::UTF8))); exit $LASTEXITCODE";
         return runToEnd("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command], {
@@ -173,7 +197,12 @@ export function createHomes({
           stdio,
         });
       }
-      return runToEnd("/bin/bash", [join(staged.dir, "install.sh"), "--no-start"], { env: installerEnv, stdio });
+      // 命令的链接放在原来那个地方：从 App 起的进程拿到的是系统给的精简 PATH，安装脚本按 PATH 挑的话会另挑一处
+      if (!installerEnv.SPEAKMORE_BIN_DIR) {
+        const linkDir = existingLinkDir(paths);
+        if (linkDir) installerEnv.SPEAKMORE_BIN_DIR = linkDir;
+      }
+      return runToEnd("/bin/bash", [join(staged.dir, "app", "install.sh"), "--no-start"], { env: installerEnv, stdio });
     },
 
     /**

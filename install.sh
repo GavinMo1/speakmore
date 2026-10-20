@@ -6,12 +6,15 @@
 # 所有东西都装在 ~/.speakmore 这一个目录里（程序、运行环境，以及之后的设置、key、历史和录音），
 # 目录以外只建一个指向命令的链接。不需要 Node、npm、Xcode，也不需要 sudo。
 # 已经装过的话再运行一次就是升级：程序换成新的，你的东西不动。卸载用 speakmore uninstall。
+# 这个脚本也随程序一起装进 app/ 里：speakmore update 拼好新版本后，用新版本自带的这一份把它换上（SPEAKMORE_INSTALL_FROM）。
 #
 # 可以用环境变量调整：
 #   SPEAKMORE_HOME          装到哪（默认 ~/.speakmore）
 #   SPEAKMORE_VERSION       装哪个版本，比如 v0.2.0（默认最新的）
 #   SPEAKMORE_INSTALL_BASE  从哪下载：一个网址前缀，或者本机的一个目录（npm run release 打出来的 dist/release）
 #   SPEAKMORE_BIN_DIR       命令的链接建在哪个目录（默认 ~/.local/bin）
+#   SPEAKMORE_INSTALL_FROM  不下载，装一棵已经准备好的树（里面是 app/ 和 runtime/）：speakmore update 拼在家目录里
+#                           .update- 开头的目录里，只认那里的
 # 加 --no-start 只装不启动：curl … | bash -s -- --no-start
 #
 # 写法要能在 macOS 自带的 bash 3.2 上跑。全部逻辑都在函数里、最后一行才调用：
@@ -20,13 +23,13 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/zephyr4123/speakmore"
-# 发布包放在这里。根上是这个脚本和 latest（一行，最新的版本号），每个版本的包在各自的目录里：
-# <版本号>/speakmore-darwin-<芯片>.tar.gz 和同名的 .sha256
+# 发布包放在这里。根上是这个脚本和 channel.json（最新的版本号在它的 version 里），每个版本的包在各自的目录里：
+# <版本号>/speakmore-darwin-<芯片>.tar.xz 和同名的 .sha256（摆法见 src/update/layout.mjs）
 DOWNLOAD_URL="https://dl.zephyrxiang.com/speakmore"
 # 能用的几家模型（名字和地址成对），整理文字要连其中一家。和 src/server/providers/index.mjs 里登记的一致
 MODEL_HOSTS=("Gemini" "generativelanguage.googleapis.com" "OpenAI" "api.openai.com" "Bailian" "dashscope.aliyuncs.com")
 MIN_MACOS_MAJOR=12
-# 下载的包约 120 MB，解开约 350 MB；升级时旧的要等新的放好才删
+# 下载的包约 95 MB，解开约 390 MB；升级时旧的要等新的放好才删
 NEEDED_MB=1000
 # macOS 上 Unix 套接字的路径最长 103 个字节，控制通道在 <目录>/run/control.sock
 MAX_HOME_BYTES=86
@@ -122,19 +125,21 @@ check_home() {
   fi
 }
 
-# 定下装哪个版本：指定了就用指定的，没指定就问下载地址最新的是哪个
+# 定下装哪个版本：指定了就用指定的，没指定就问下载地址最新的是哪个（channel.json 里的 version）
 resolve_version() {
   local version="${SPEAKMORE_VERSION:-}"
   if [ -n "$version" ]; then
     case "$version" in v*) ;; *) version="v$version" ;; esac
   else
-    version="$(curl -fsSL --max-time 20 "$DOWNLOAD_BASE/latest" 2>/dev/null | head -n 1 | tr -d '[:space:]')" || version=""
-    [ -n "$version" ] || fail "Couldn't find the latest version" "URL: $DOWNLOAD_BASE/latest" "Check your network and try again in a bit."
+    version="$(curl -fsSL --max-time 20 "$DOWNLOAD_BASE/channel.json" 2>/dev/null |
+      sed -n 's/.*"version" *: *"\([^"]*\)".*/\1/p' | head -n 1)" || version=""
+    [ -n "$version" ] || fail "Couldn't find the latest version" "URL: $DOWNLOAD_BASE/channel.json" "Check your network and try again in a bit."
+    version="v$version"
   fi
   # 版本号要拼进下载地址：不像版本号的不往下走（比如问到的其实是一个报错的网页）
   if ! [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.-]+)?$ ]]; then
     [ -n "${SPEAKMORE_VERSION:-}" ] && fail "SPEAKMORE_VERSION doesn't look like a version: $SPEAKMORE_VERSION" "Write it like v0.2.0."
-    fail "The download server returned a bad version number" "URL: $DOWNLOAD_BASE/latest" "Try again in a bit. If it keeps happening, please open an issue at $REPO_URL/issues."
+    fail "The download server returned a bad version number" "URL: $DOWNLOAD_BASE/channel.json" "Try again in a bit. If it keeps happening, please open an issue at $REPO_URL/issues."
   fi
   BASE_URL="$DOWNLOAD_BASE/$version"
 }
@@ -181,14 +186,28 @@ download() {
     fail "Checksum mismatch: the download differs from the release" "It was probably damaged on the way. Run it again." "Expected $expected" "Got      $actual"
   ok "Checksum OK"
 
-  tar -xzf "$TMP_DIR/$ARCHIVE" -C "$TMP_DIR" || fail "Couldn't unpack the package" "Run it again."
+  tar -xJf "$TMP_DIR/$ARCHIVE" -C "$TMP_DIR" || fail "Couldn't unpack the package" "Run it again."
+  try_new "Unpacked"
+}
+
+# 从一棵已经准备好的树装（SPEAKMORE_INSTALL_FROM）：只认家目录里 .update- 开头的目录，和要换上的在同一块盘上，改名就换上
+use_tree() {
+  case "$SPEAKMORE_INSTALL_FROM" in
+    "$HOME_DIR"/.update-*) ;;
+    *) fail "SPEAKMORE_INSTALL_FROM must be a .update- folder inside $(pretty "$HOME_DIR")" "Got $SPEAKMORE_INSTALL_FROM" ;;
+  esac
+  [ -d "$SPEAKMORE_INSTALL_FROM" ] || fail "No such folder: $SPEAKMORE_INSTALL_FROM"
+  TMP_DIR="$SPEAKMORE_INSTALL_FROM"
+  try_new "Prepared"
+}
+
+# 换掉旧的之前先在原地跑一下：这台机器上跑不起来的话现在就知道，不至于换完才发现
+try_new() {
   NEW_ELECTRON="$TMP_DIR/runtime/Electron.app/Contents/MacOS/Electron"
   [ -f "$TMP_DIR/app/bin/speakmore.mjs" ] && [ -x "$NEW_ELECTRON" ] || fail "The package is incomplete" "That's a problem with the release. Please open an issue at $REPO_URL/issues."
-
-  # 换掉旧的之前先在原地跑一下：这台机器上跑不起来的话现在就知道，不至于换完才发现
   NEW_VERSION="$(run_new --version 2>/dev/null)" ||
     fail "The downloaded app won't run on this Mac" "Please open an issue at $REPO_URL/issues with your macOS version and chip."
-  ok "Unpacked SpeakMore $NEW_VERSION"
+  ok "$1 SpeakMore $NEW_VERSION"
 }
 
 # 用刚下到的那一份程序跑一条命令
@@ -304,12 +323,13 @@ main() {
 
   heading "Checks"
   check_system
-  ARCHIVE="speakmore-darwin-$ARCH.tar.gz"
+  ARCHIVE="speakmore-darwin-$ARCH.tar.xz"
   check_home
-  check_network
+  # 从准备好的树装（speakmore update）不用联网
+  [ -n "${SPEAKMORE_INSTALL_FROM:-}" ] || check_network
 
   heading "Install"
-  download
+  if [ -n "${SPEAKMORE_INSTALL_FROM:-}" ]; then use_tree; else download; fi
   install_files
   link_command
 

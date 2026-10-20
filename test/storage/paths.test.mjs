@@ -56,6 +56,7 @@ test("程序、你的东西、运行时产生的，各在各的位置", () => {
     updateCheckFile: "run/update-check.json",
     updateFile: "run/update.json",
     updateLock: "run/update.lock",
+    updateCacheDir: "run/update-cache",
     cacheDir: "cache",
   });
 });

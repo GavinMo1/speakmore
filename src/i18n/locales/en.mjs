@@ -867,9 +867,11 @@ export default {
     fromSource: "This copy runs from source ({dir}): update it with git pull.",
     unreachable: "Couldn't reach {url}: {reason}",
     badVersion: "The download server returned a bad version number: {value}",
-    checksum: "The downloaded {file} doesn't match the release; it was probably damaged in transit. Update again.",
-    appMount: "Couldn't open the downloaded {file}: {reason}",
-    appWrongPackage: "The downloaded {file} doesn't contain SpeakMore.app {version}, so nothing was installed.",
+    checksum:
+      "Downloaded update data ({object}) doesn't match the release; it was probably damaged in transit. Update again.",
+    badManifest: "The update manifest on the download server is invalid: {reason}",
+    noTarget: "The {version} release has no update for this computer ({target}).",
+    appWrongPackage: "What was put together isn't SpeakMore.app {version}, so nothing was installed.",
     appUnsigned: "The downloaded SpeakMore.app isn't properly signed, so it wasn't installed: {reason}",
     appOtherDeveloper:
       "The downloaded SpeakMore.app is signed by a different developer ({found}; the installed one is {installed}), so it wasn't installed.",
@@ -879,13 +881,13 @@ export default {
     recordFailed: "Couldn't write the update record to {file} ({reason}); the progress shown in Settings may be off.",
     exitedEarly: "The update process quit unexpectedly (exit code {code}); details are in {log}.",
     reopenUnknown: "The new version is installed, but SpeakMore.app's location is unknown. Open it from Applications.",
-    appUnmount:
-      "Couldn't unmount the downloaded {file} ({reason}); it's still mounted at {mountpoint}. Eject it in Finder.",
     reopenFailed:
       "The new version is installed, but SpeakMore.app couldn't be reopened ({reason}). Open it from Applications.",
     restartFailed:
       "The new version is installed, but SpeakMore couldn't be restarted (exit code {code}). Run speakmore in a terminal to start it; details are in {log}.",
     interrupted: "The last update was interrupted; details are in {log}. You can update again.",
+    downloading: "Downloading the update: {percent}%",
+    delta: "Downloading {download}; the other {reused} comes from files already on this computer.",
     updating: "Updating SpeakMore {current} → {latest}",
     updatingApp: "Updating SpeakMore.app {current} → {latest}",
     appDone: "SpeakMore.app is now {version}.",

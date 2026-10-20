@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -16,7 +15,9 @@ import { afterEach, beforeEach, test } from "node:test";
 import { createTranslator, LocalizedError } from "../../src/i18n/index.mjs";
 import { resolvePaths } from "../../src/storage/paths.mjs";
 import { createHomes, homeArch, isHomeCopy } from "../../src/update/home.mjs";
+import { packObject } from "../../src/update/objects.mjs";
 import { createRelease } from "../../src/update/release.mjs";
+import { publishTrees } from "../helpers/release.mjs";
 
 const zh = createTranslator("zh-CN");
 // 安装脚本按系统分：macOS 是 install.sh，Windows 是 install.ps1
@@ -31,15 +32,22 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-const sha256 = (text) => createHash("sha256").update(text).digest("hex");
-
-/** 在 release 下摆一个假的发布：安装脚本和这个版本的包（带校验值） */
-function publish(release, version, { script, scriptName, archive }) {
-  mkdirSync(join(release, `v${version}`), { recursive: true });
-  writeFileSync(join(release, scriptName), script);
-  writeFileSync(join(release, `v${version}`, archive), `包 ${version}`);
-  writeFileSync(join(release, `v${version}`, `${archive}.sha256`), `${sha256(`包 ${version}`)}  ${archive}\n`);
+/**
+ * 在 release 下摆一个假的发布：一棵家目录的树（app 里带着安装脚本和 package.json，runtime 里一个大一点的文件），
+ * 切块放到下载地址上
+ */
+async function publish(release, version, { script, scriptName, target }) {
+  const tree = mkdtempSync(join(dir, "tree-"));
+  mkdirSync(join(tree, "app"));
+  mkdirSync(join(tree, "runtime"));
+  writeFileSync(join(tree, "app", scriptName), script);
+  writeFileSync(join(tree, "app", "package.json"), JSON.stringify({ version }));
+  writeFileSync(join(tree, "runtime", "electron"), RUNTIME);
+  return publishTrees(release, version, { [target]: tree });
 }
+
+/** 运行环境：几块大小，各版本一样（更新时从本机拷） */
+const RUNTIME = Buffer.from(Array.from({ length: 300_000 }, (_, i) => (i * 7919) % 251));
 
 const homesFor = (release, options = {}) => {
   const env = { ...process.env, SPEAKMORE_INSTALL_BASE: release, ...options.env };
@@ -101,49 +109,83 @@ test("按什么芯片取包：和 install.sh 一样，Apple 芯片上转译跑�
   assert.equal(homeArch("win32", "x64"), "x64");
 });
 
-test("先下好：安装脚本和包摆成下载地址的样子放进临时目录；校验值对不上的不留下", macOnly, async () => {
-  const release = join(dir, "release");
-  publish(release, "9.9.9", { script: "exit 0\n", scriptName: "install.sh", archive: "speakmore-darwin-arm64.tar.gz" });
-  const homes = homesFor(release);
-  const staged = await homes.stage("9.9.9");
-  assert.deepEqual(readdirSync(staged.dir).sort(), ["install.sh", "latest", "v9.9.9"]);
-  assert.equal(readFileSync(join(staged.dir, "latest"), "utf8"), "v9.9.9\n");
-  assert.deepEqual(readdirSync(join(staged.dir, "v9.9.9")).sort(), [
-    "speakmore-darwin-arm64.tar.gz",
-    "speakmore-darwin-arm64.tar.gz.sha256",
-  ]);
-  staged.discard();
-  assert.equal(existsSync(staged.dir), false);
+test(
+  "先拼好：照清单拼进家目录里一个 .update- 开头的目录，本机有的块拷、缺的才下；上次留下的先清掉，坏了的不留下",
+  macOnly,
+  async () => {
+    const release = join(dir, "release");
+    const channel = await publish(release, "9.9.9", {
+      script: "exit 0\n",
+      scriptName: "install.sh",
+      target: "darwin-arm64",
+    });
+    const homes = homesFor(release);
+    const cacheDir = paths.updateCacheDir;
+    // 装着的那一份：运行环境一样
+    mkdirSync(paths.runtimeDir, { recursive: true });
+    writeFileSync(join(paths.runtimeDir, "electron"), RUNTIME);
+    // 上次被杀掉留下的
+    mkdirSync(join(paths.home, ".update-9.9.8-deadbeef"), { recursive: true });
 
-  writeFileSync(join(release, "v9.9.9", "speakmore-darwin-arm64.tar.gz"), "路上坏了");
-  const before = readdirSync(tmpdir()).filter((name) => name.startsWith("speakmore-update-")).length;
-  await assert.rejects(homes.stage("9.9.9"), (error) => {
-    assert.ok(error instanceof LocalizedError);
-    assert.match(zh.text(error.problem), /speakmore-darwin-arm64\.tar\.gz 与发布的校验值不符/);
-    return true;
-  });
-  const after = readdirSync(tmpdir()).filter((name) => name.startsWith("speakmore-update-")).length;
-  assert.equal(after, before, "核对不过的临时目录删掉了");
-});
+    const staged = await homes.stage(channel, { seeds: homes.seeds(), cacheDir });
+    assert.match(staged.dir, /\.update-9\.9\.9-[0-9a-f]{8}$/);
+    assert.equal(join(staged.dir, ".."), paths.home);
+    assert.deepEqual(readdirSync(staged.dir).sort(), ["app", "runtime"]);
+    assert.deepEqual(readFileSync(join(staged.dir, "runtime", "electron")), RUNTIME);
+    assert.equal(staged.reusedBytes, RUNTIME.length);
+    assert.ok(staged.downloadedBytes > 0 && staged.downloadedBytes < 2000, `downloaded ${staged.downloadedBytes}`);
+    assert.equal(existsSync(join(paths.home, ".update-9.9.8-deadbeef")), false);
+    staged.discard();
+    assert.equal(existsSync(staged.dir), false);
 
-test("装：让下好的安装脚本从临时目录装（不再联网），指定装到哪、装哪个版本、只装不启动", macOnly, async () => {
-  const release = join(dir, "release");
-  const record = join(dir, "record");
-  // 假的安装脚本：记下拿到的参数和几个环境变量，按要求的退出码退出
-  publish(release, "9.9.9", {
-    script: `printf '%s|%s|%s|%s|%s\\n' "$*" "$SPEAKMORE_HOME" "$SPEAKMORE_VERSION" "$SPEAKMORE_INSTALL_BASE" "\${ELECTRON_RUN_AS_NODE:-}" > ${JSON.stringify(record)}\nexit "\${FAKE_EXIT:-0}"\n`,
-    scriptName: "install.sh",
-    archive: "speakmore-darwin-arm64.tar.gz",
-  });
-  const homes = homesFor(release, { env: { ELECTRON_RUN_AS_NODE: "1" } });
-  const staged = await homes.stage("9.9.9");
-  assert.equal(await homes.install(staged, "9.9.9"), 0);
-  assert.equal(readFileSync(record, "utf8"), `--no-start|${paths.home}|v9.9.9|${staged.dir}|\n`);
+    // 下载地址上的块坏了：报哪个对象坏了，拼了一半的不留下
+    rmSync(cacheDir, { recursive: true, force: true });
+    rmSync(paths.runtimeDir, { recursive: true });
+    const manifestSha = channel.targets["darwin-arm64"];
+    for (const name of readdirSync(join(release, "store"))) {
+      if (name !== manifestSha) writeFileSync(join(release, "store", name), packObject(Buffer.from(`坏的 ${name}`)));
+    }
+    await assert.rejects(homes.stage(channel, { seeds: homes.seeds(), cacheDir }), (error) => {
+      assert.ok(error instanceof LocalizedError);
+      assert.match(zh.text(error.problem), /下载的更新数据（[0-9a-f]{12}）与发布的不符/);
+      return true;
+    });
+    assert.deepEqual(
+      readdirSync(paths.home).filter((name) => name.startsWith(".update-")),
+      [],
+      "拼了一半的删掉了",
+    );
 
-  const failing = homesFor(release, { env: { FAKE_EXIT: "3" } });
-  assert.equal(await failing.install(staged, "9.9.9"), 3);
-  staged.discard();
-});
+    // 发布里没有这种芯片的
+    await assert.rejects(homes.stage({ ...channel, targets: {} }, { seeds: [], cacheDir }), (error) => {
+      assert.match(zh.text(error.problem), /9\.9\.9 的发布中没有这台电脑用的更新（darwin-arm64）/);
+      return true;
+    });
+  },
+);
+
+test(
+  "装：让拼好的那一份自带的安装脚本从它装（不再联网），指定装到哪、只装不启动，不带版本和下载地址",
+  macOnly,
+  async () => {
+    const release = join(dir, "release");
+    const record = join(dir, "record");
+    // 假的安装脚本：记下拿到的参数和几个环境变量，按要求的退出码退出
+    const channel = await publish(release, "9.9.9", {
+      script: `printf '%s|%s|%s|%s|%s|%s\\n' "$*" "$SPEAKMORE_HOME" "\${SPEAKMORE_VERSION:-}" "\${SPEAKMORE_INSTALL_BASE:-}" "\${ELECTRON_RUN_AS_NODE:-}" "$SPEAKMORE_INSTALL_FROM" > ${JSON.stringify(record)}\nexit "\${FAKE_EXIT:-0}"\n`,
+      scriptName: "install.sh",
+      target: "darwin-arm64",
+    });
+    const homes = homesFor(release, { env: { ELECTRON_RUN_AS_NODE: "1", SPEAKMORE_VERSION: "v1.0.0" } });
+    const staged = await homes.stage(channel, { seeds: [], cacheDir: paths.updateCacheDir });
+    assert.equal(await homes.install(staged), 0);
+    assert.equal(readFileSync(record, "utf8"), `--no-start|${paths.home}||||${staged.dir}\n`);
+
+    const failing = homesFor(release, { env: { FAKE_EXIT: "3" } });
+    assert.equal(await failing.install(staged), 3);
+    staged.discard();
+  },
+);
 
 test(
   "装：命令的链接原来建在哪，这次还建在那里（从 App 起时 PATH 是精简的，安装脚本自己挑会挑到别处）",
@@ -151,10 +193,10 @@ test(
   async () => {
     const release = join(dir, "release");
     const record = join(dir, "bin-record");
-    publish(release, "9.9.9", {
+    const channel = await publish(release, "9.9.9", {
       script: `printf '%s' "\${SPEAKMORE_BIN_DIR:-}" > ${JSON.stringify(record)}\n`,
       scriptName: "install.sh",
-      archive: "speakmore-darwin-arm64.tar.gz",
+      target: "darwin-arm64",
     });
     const linkDir = join(dir, "usr-local-bin");
     mkdirSync(linkDir);
@@ -169,8 +211,8 @@ test(
       stdio: ["ignore", "ignore", "ignore"],
       arch: "arm64",
     });
-    const staged = await homes.stage("9.9.9");
-    assert.equal(await homes.install(staged, "9.9.9"), 0);
+    const staged = await homes.stage(channel, { seeds: [], cacheDir: paths.updateCacheDir });
+    assert.equal(await homes.install(staged), 0);
     assert.equal(readFileSync(record, "utf8"), linkDir);
     staged.discard();
   },
@@ -196,18 +238,23 @@ test(
     const release = join(dir, "release");
     const record = join(dir, "record");
     // 假的安装脚本：记下拿到的几个环境变量（带一句中文：要按 UTF-8 读才对得上），按要求的结果收尾
-    publish(release, "9.9.9", {
-      script: `& { Set-Content -Encoding UTF8 -Path $env:RECORD -Value "装好了|$($env:SPEAKMORE_HOME)|$($env:SPEAKMORE_VERSION)|$($env:SPEAKMORE_NO_START)|$($env:SPEAKMORE_INSTALL_BASE)"; $global:LASTEXITCODE = [int]$env:FAKE_EXIT }\n`,
+    const channel = await publish(release, "9.9.9", {
+      script: `& { Set-Content -Encoding UTF8 -Path $env:RECORD -Value "装好了|$($env:SPEAKMORE_HOME)|$($env:SPEAKMORE_VERSION)|$($env:SPEAKMORE_NO_START)|$($env:SPEAKMORE_INSTALL_BASE)|$($env:SPEAKMORE_INSTALL_FROM)"; $global:LASTEXITCODE = [int]$env:FAKE_EXIT }\n`,
       scriptName: "install.ps1",
-      archive: "speakmore-win32-x64.zip",
+      target: "win32-x64",
     });
     const homes = homesFor(release, { platform: "win32", arch: "x64", env: { RECORD: record, FAKE_EXIT: "0" } });
-    const staged = await homes.stage("9.9.9");
-    assert.equal(await homes.install(staged, "9.9.9"), 0);
-    const said = readFileSync(record, "utf8").replace(/^﻿/, "").trim();
-    assert.equal(said, `装好了|${paths.home}|v9.9.9|1|${staged.dir}`);
+    const staged = await homes.stage(channel, { seeds: [], cacheDir: paths.updateCacheDir });
+    // 直接拼进 versions 下一个新目录，名字和 install.ps1 起的同一种
+    assert.equal(join(staged.dir, ".."), paths.versionsDir);
+    assert.match(staged.dir, /9\.9\.9-[0-9a-f]{8}$/);
+    assert.equal(await homes.install(staged), 0);
+    const said = readFileSync(record, "utf8")
+      .replace(/^\uFEFF/, "")
+      .trim();
+    assert.equal(said, `装好了|${paths.home}||1||${staged.dir}`);
     const failing = homesFor(release, { platform: "win32", arch: "x64", env: { RECORD: record, FAKE_EXIT: "1" } });
-    assert.equal(await failing.install(staged, "9.9.9"), 1);
+    assert.equal(await failing.install(staged), 1);
     staged.discard();
 
     // 启动：家目录的路径里带空格也跑得起来；说的话经管道转出来（App 起的更新进程用的那种）

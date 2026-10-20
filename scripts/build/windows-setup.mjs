@@ -1,31 +1,32 @@
-// 打 Windows 直接下载的安装程序 SpeakMore-Setup-x64.exe：native/windows-setup 编出来的那段程序，后面接一个
-// 只存不压的 zip（这个版本的程序包和它的校验值、install.ps1、latest，摆成下载地址上的样子），最后 16 个字节是
-// 记号和 zip 的长度。格式和 native/windows-setup/payload.go 读的一致。
-// 双击后它把 zip 解到临时目录，当成下载地址跑 install.ps1：怎么装还是只有 install.ps1 一份。
-// 由 scripts/release/release.mjs 在打完 Windows 的包之后调用。
-import { execFileSync } from "node:child_process";
+// 打 Windows 直接下载的安装程序 SpeakMore-Setup-x64.exe：native/windows-setup 编出来的那段程序，后面接
+// 整棵程序（app\ 和 runtime\）打成的 tar、再用 zstd 压过，最后 16 个字节是记号和压过的那段的长度。
+// 格式和 native/windows-setup/payload.go 读的一致。
+// 双击后它把树解到临时目录，让树里自带的 install.ps1 从那里装（SPEAKMORE_INSTALL_FROM）：怎么装还是只有 install.ps1 一份。
+// 由 scripts/release/release.mjs 在摆好 Windows 的树之后调用。
+import { execFileSync, spawn } from "node:child_process";
 import {
   appendFileSync,
   copyFileSync,
-  mkdirSync,
+  createReadStream,
+  createWriteStream,
   mkdtempSync,
-  readFileSync,
   rmSync,
   statSync,
-  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { pipeline } from "node:stream/promises";
+import { constants, createZstdCompress } from "node:zlib";
 import { goCommand } from "../../src/cli/native-helper.mjs";
 
-export const SETUP_MAGIC = "SMSETUP1";
+export const SETUP_MAGIC = "SMSETUP2";
 /**
  * 给 exe 加图标、版本信息和清单的工具，只在编译时用。钉住版本，下载的内容由 Go 的校验和数据库核对。
  * 清单里写明不要管理员权限（asInvoker）：名字里带 Setup 又没有清单的 exe，Windows 会自动要求提权
  */
 const GO_WINRES = "github.com/tc-hib/go-winres@v0.3.3";
 
-/** 尾巴：记号 8 字节，加 zip 的长度（8 字节，小端） */
+/** 尾巴：记号 8 字节，加压过的那段的长度（8 字节，小端） */
 export function setupTrailer(payloadBytes) {
   const trailer = Buffer.alloc(16);
   trailer.write(SETUP_MAGIC, 0, "ascii");
@@ -37,14 +38,46 @@ export function setupTrailer(payloadBytes) {
 export const fileVersion = (version) => `${/^\d+\.\d+\.\d+/.exec(version)[0]}.0`;
 
 /**
+ * 把一棵树（里面是 app 和 runtime）打成 tar、用 zstd 压，写到 out。
+ * 压得狠（19 档、远距离匹配）：打一次、下很多次。实测 Windows 的树 430 MB 压到约 120 MB，同一棵树的 zip 是 170 MB
+ */
+export async function packTree(tree, out) {
+  // macOS 的 tar 会把扩展属性存成 ._ 开头的文件、或者 pax 头里的 Mac 元数据：都不要，Windows 上用不着
+  const args = [
+    "-cf",
+    "-",
+    "-C",
+    tree,
+    ...(process.platform === "darwin" ? ["--no-mac-metadata"] : []),
+    "app",
+    "runtime",
+  ];
+  const tar = spawn("tar", args, {
+    stdio: ["ignore", "pipe", "inherit"],
+    env: { ...process.env, COPYFILE_DISABLE: "1" },
+  });
+  const exited = new Promise((resolve, reject) => {
+    tar.on("error", reject);
+    tar.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`tar 退出码 ${code}`))));
+  });
+  const zstd = createZstdCompress({
+    params: {
+      [constants.ZSTD_c_compressionLevel]: 19,
+      [constants.ZSTD_c_enableLongDistanceMatching]: 1,
+      [constants.ZSTD_c_windowLog]: 27,
+    },
+  });
+  await Promise.all([pipeline(tar.stdout, zstd, createWriteStream(out)), exited]);
+}
+
+/**
  * @param {object} options
  * @param {string} options.packageDir 仓库根
  * @param {string} options.version 版本号（package.json 的，不带 v）
- * @param {string} options.versionDir 下载地址上这个版本的目录名（release-layout.mjs 的 versionDir）
- * @param {string} options.archive 打好的 Windows 程序包（旁边要有它的 .sha256）
+ * @param {string} options.tree 摆好的 Windows 程序（里面是 app 和 runtime，app 里带着 install.ps1）
  * @param {string} options.out 安装程序写到哪
  */
-export function buildWindowsSetup({ packageDir, version, versionDir, archive, out, run = execFileSync }) {
+export async function buildWindowsSetup({ packageDir, version, tree, out, run = execFileSync, pack = packTree }) {
   const source = join(packageDir, "native", "windows-setup");
   const go = goCommand(packageDir, process.platform);
   const work = mkdtempSync(join(tmpdir(), "speakmore-setup-"));
@@ -91,18 +124,11 @@ export function buildWindowsSetup({ packageDir, version, versionDir, archive, ou
       rmSync(join(source, "rsrc_windows_amd64.syso"), { force: true });
     }
 
-    const stage = join(work, "payload");
-    mkdirSync(join(stage, versionDir), { recursive: true });
-    copyFileSync(archive, join(stage, versionDir, basename(archive)));
-    copyFileSync(`${archive}.sha256`, join(stage, versionDir, `${basename(archive)}.sha256`));
-    copyFileSync(join(packageDir, "install.ps1"), join(stage, "install.ps1"));
-    writeFileSync(join(stage, "latest"), `${versionDir}\n`);
-    const payload = join(work, "payload.zip");
-    // 只存不压：程序包本来就压过了，再压一遍只是白费时间
-    run("zip", ["-0", "-q", "-r", "-X", payload, "."], { cwd: stage });
+    const payload = join(work, "payload.tar.zst");
+    await pack(tree, payload);
 
     copyFileSync(program, out);
-    appendFileSync(out, readFileSync(payload));
+    await pipeline(createReadStream(payload), createWriteStream(out, { flags: "a" }));
     appendFileSync(out, setupTrailer(statSync(payload).size));
   } finally {
     rmSync(work, { recursive: true, force: true });

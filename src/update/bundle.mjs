@@ -1,14 +1,15 @@
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { existsSync, renameSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { LocalizedError, msg } from "../i18n/index.mjs";
+import { assembleTree } from "./assemble.mjs";
 import { run } from "./exec.mjs";
-import { dmgName, versionDir } from "./layout.mjs";
+import { appTarget, dmgName, versionDir } from "./layout.mjs";
 
 // Mac 上的 SpeakMore.app（拖进"应用程序"的那个）：在哪、是哪个版本，换成新版本，重新打开。
-// 换的时候先把新的下好、核对好、拷到它旁边（这时它还可以照常运行），等它退出了再两次改名对调：
-// 换到一半出了错，装着的那个原样留着。Windows 上没有单独的应用包。
+// 换的时候先在它旁边拼好新的、核对好（这时它还可以照常运行；只下本机缺的块，见 assemble.mjs），
+// 等它退出了再两次改名对调：换到一半出了错，装着的那个原样留着。Windows 上没有单独的应用包。
 
 /** 打包时写进 App 的应用标识（scripts/build/mac-app.mjs）：名字叫 SpeakMore.app 的不一定是我们的 */
 const APP_BUNDLE_ID = "com.zephyrxiang.speakmore";
@@ -98,84 +99,65 @@ export function createBundles({ env, release, platform = process.platform, arch 
     },
 
     /**
-     * 把这个版本的安装包下好、核对好，里面的 SpeakMore.app 拷到 app 旁边待换。这一步不碰装着的那个，它可以照常运行。
-     * 核对的是：校验值和发布的一样、里面确实是这个版本的 SpeakMore、签名完好，而且和装着的出自同一个开发者
-     * （校验值和安装包放在同一个地方，只防得住路上坏了；同一个开发者才防得住被人换了）
-     * @param {string} version 不带 v
+     * 把这个版本的 SpeakMore.app 拼好、核对好，放在 app 旁边待换。这一步不碰装着的那个，它可以照常运行。
+     * 拼：照清单只下本机缺的块，没变的从装着的几份里拷（assemble.mjs）。
+     * 核对：拼出来的确实是这个版本的 SpeakMore、签名完好，而且和装着的出自同一个开发者
+     * （块按 sha256 认，只防得住路上坏了；同一个开发者才防得住被人换了）
+     * @param {{ version: string, targets: Record<string, string> }} channel release.channel() 问到的
      * @param {string} app 装着的 App
-     * @returns {Promise<{ commit: () => void, discard: () => { dir: string, reason: string } | null }>}
-     *   commit 换上（调用前 App 要已经退出），discard 不换了、删掉待换的
+     * @param {{ seeds: string[], cacheDir: string, onProgress?: Function }} options seeds：本机装着的几份；cacheDir：下到的块放哪
+     * @returns {Promise<{ commit: () => void, discard: () => { dir: string, reason: string } | null,
+     *   downloadedBytes: number, reusedBytes: number }>} commit 换上（调用前 App 要已经退出），discard 不换了、删掉待换的
      */
-    async stage(version, app) {
-      const name = dmgName(arch === "arm64" ? "arm64" : "x64");
-      const path = `${versionDir(version)}/${name}`;
-      const dir = mkdtempSync(join(tmpdir(), "speakmore-app-update-"));
-      const mountpoint = join(dir, "mnt");
-      let mounted = false;
+    async stage(channel, app, { seeds, cacheDir, onProgress }) {
+      const { version } = channel;
+      const target = appTarget(arch === "arm64" ? "arm64" : "x64");
       // 新旧两个都放在 App 旁边：同一个磁盘上改名是一步到位的。名字带点开头，访达里看不见
       const staged = join(dirname(app), `.${basename(app)}.new`);
       const old = join(dirname(app), `.${basename(app)}.old`);
+      const dmgUrl = release.url(`${versionDir(version)}/${dmgName(arch === "arm64" ? "arm64" : "x64")}`);
       const cannotReplace = (error, reason = error.message) =>
-        new LocalizedError(msg("update.appReplace", { path: app, reason, url: release.url(path) }), { cause: error });
-      /** 新的已经拷好放在旁边、可以换了 */
-      let ready = false;
-      let failure = null;
+        new LocalizedError(msg("update.appReplace", { path: app, reason, url: dmgUrl }), { cause: error });
+      let stats;
       try {
-        const dmg = join(dir, name);
-        await release.fetchVerified(path, dmg);
-        mkdirSync(mountpoint);
+        if (!channel.targets[target]) throw new LocalizedError(msg("update.noTarget", { target, version }));
+        const manifest = await release.manifest(channel.targets[target]);
+        // 上次没拼完留下的：拼之前清掉（同一时间只有一个更新，见 state.mjs 的锁）
+        rmSync(staged, { recursive: true, force: true });
         try {
-          await run("hdiutil", ["attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mountpoint, dmg]);
+          stats = await assembleTree({
+            manifest,
+            dest: staged,
+            // 装着的这个一定在里面（更新那一层交来的种子里通常已经有它）
+            seeds: [...new Set([app, ...seeds])],
+            fetchObjects: release.fetchObjects,
+            cacheDir,
+            onProgress,
+          });
         } catch (error) {
-          throw new LocalizedError(msg("update.appMount", { file: name, reason: error.said }), { cause: error });
+          if (error instanceof LocalizedError) throw error;
+          throw cannotReplace(error);
         }
-        mounted = true;
-        const source = join(mountpoint, APP_NAME);
-        const info = await bundleInfo(source);
+        const info = await bundleInfo(staged);
         if (info?.id !== APP_BUNDLE_ID || info.version !== version) {
-          throw new LocalizedError(msg("update.appWrongPackage", { file: name, version }));
+          throw new LocalizedError(msg("update.appWrongPackage", { version }));
         }
-        await verifySignature(source);
-        const [incoming, current] = [await teamOf(source), await teamOf(app)];
+        await verifySignature(staged);
+        const [incoming, current] = [await teamOf(staged), await teamOf(app)];
         if (incoming !== current) {
           throw new LocalizedError(
             msg("update.appOtherDeveloper", { found: incoming ?? "-", installed: current ?? "-" }),
           );
         }
-        rmSync(staged, { recursive: true, force: true });
-        try {
-          // ditto 原样拷贝应用包，保留签名和里面的符号链接
-          await run("ditto", [source, staged]);
-        } catch (error) {
-          throw cannotReplace(error, error.said);
-        }
-        ready = true;
       } catch (error) {
-        failure = error;
-      }
-      // 卸下下载的安装包：卸不掉就强制卸
-      let unmountError = null;
-      if (mounted) {
-        await run("hdiutil", ["detach", "-quiet", mountpoint])
-          .catch(() => run("hdiutil", ["detach", "-force", "-quiet", mountpoint]))
-          .catch((error) => {
-            unmountError = error;
-          });
-      }
-      // 没走到可以换的那一步（出错了），或者要报卸不下来：不在 App 旁边留下拷了一半、或者拷好了的几百兆
-      if (!ready || unmountError) rmSync(staged, { recursive: true, force: true });
-      // 卸不下来时目录还挂着，不能连目录一起删（会去删只读盘上的文件）
-      if (!unmountError) rmSync(dir, { recursive: true, force: true });
-      // 前面已经出错的报前面那个，那个更说明问题
-      if (failure) throw failure;
-      if (unmountError) {
-        throw new LocalizedError(
-          msg("update.appUnmount", { file: name, mountpoint, reason: unmountError.said ?? unmountError.message }),
-          { cause: unmountError },
-        );
+        // 没走到可以换的那一步：不在 App 旁边留下拼了一半、或者拼好了的几百兆
+        rmSync(staged, { recursive: true, force: true });
+        throw error;
       }
 
       return {
+        downloadedBytes: stats.downloadedBytes,
+        reusedBytes: stats.reusedBytes,
         commit() {
           rmSync(old, { recursive: true, force: true });
           try {

@@ -90,6 +90,8 @@ export function resolvePaths(env = process.env, userHome = homedir(), platform =
     updateFile: join(home, "run", "update.json"),
     /** 更新时拿着的锁（里面是进程号）：命令行和 App 不能同时换程序 */
     updateLock: join(home, "run", "update.lock"),
+    /** 更新时下到的块（src/update/assemble.mjs）：中途断了留着，下次只补剩下的；换成了就删 */
+    updateCacheDir: join(home, "run", "update-cache"),
     /** 运行环境（Chromium）自己的缓存和状态，和我们的数据分开放。停掉之后可以随时删 */
     cacheDir: join(home, "cache"),
   };

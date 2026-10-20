@@ -5,6 +5,7 @@
 # 和 install.sh 是同一件事：程序、运行环境，以及之后的设置、key、历史和录音全在 .speakmore 这一个目录里。
 # 程序按版本放：versions\<版本>-<编号>\ 里是 app\ 和 runtime\，current 记着现在用哪个，bin\speakmore.cmd 照它找程序。
 # 装新版本是解进一个新目录、试过能跑再把 current 指过去，不挪、不覆盖已有的任何文件（为什么见下面"安装"一节开头）。
+# 这个脚本也随程序一起装进 app\ 里：speakmore update 拼好新版本后，用新版本自带的这一份把它换上（SPEAKMORE_INSTALL_FROM）。
 # 目录以外只加两样，都记在 bin\links 里，speakmore uninstall 照着删：
 #   - 用户的 Path 里加上 .speakmore\bin（新开的终端里敲 speakmore 就找得到）
 #   - 开始菜单里一个"SpeakMore"快捷方式
@@ -16,6 +17,8 @@
 #   SPEAKMORE_VERSION       装哪个版本，比如 v0.9.3（默认最新的；0.9.3 以前的放法不同，这个脚本不装）
 #   SPEAKMORE_INSTALL_BASE  从哪下载：一个网址前缀，或者本机的一个目录（npm run release 打出来的 dist\release）
 #   SPEAKMORE_NO_START=1    只装不启动
+#   SPEAKMORE_INSTALL_FROM  不下载，装一棵已经准备好的树（里面是 app\ 和 runtime\）：speakmore update 拼在 versions 下的，
+#                           原地用；安装程序（SpeakMore-Setup-x64.exe）解在临时目录里的，拷进 versions 下一个新目录
 #
 # 写法要能在 Windows 自带的 PowerShell 5.1 上跑，这些坑都踩过（见 docs/development.md 的 Windows 一节）：
 #   - 整段包在一个脚本块里，出错时不 exit：irm | iex 跑在用户自己的窗口里，exit 关掉的是他的窗口
@@ -34,7 +37,7 @@
   $Archive = 'speakmore-win32-x64.zip'
   # Electron 44 要 Windows 10 1809（内部版本 17763）以上
   $MinBuild = 17763
-  # 解开约 500 MB（下载的包约 200 MB，只在内存里）；升级时旧版本要等新的装好才删
+  # 解开约 430 MB（下载的包约 170 MB，只在内存里）；升级时旧版本要等新的装好才删
   $NeededMB = 1200
   # 从这个版本起程序按版本放（versions\、current）。更早的版本不认这种放法：从开始菜单打开时把版本目录当成家目录，
   # 看不到 key 和历史，写下的东西下次升级时跟着版本目录一起删掉。所以不往这种放法里装更早的版本
@@ -163,20 +166,20 @@
   }
   function Get-RemoteText($name) { [Text.Encoding]::UTF8.GetString((Get-Remote $name).ToArray()) }
 
-  # 定下装哪个版本：指定了就用指定的，没指定就问下载地址最新的是哪个
+  # 定下装哪个版本：指定了就用指定的，没指定就问下载地址最新的是哪个（channel.json 里的 version）
   function Resolve-Version {
     $version = $env:SPEAKMORE_VERSION
     if ($version) {
       if (-not $version.StartsWith('v')) { $version = "v$version" }
     } else {
-      try { $version = (Get-RemoteText 'latest').Trim() } catch {
-        Fail "Couldn't find the latest version" "URL: $($script:Base)/latest" "Check your network and try again in a bit." "($($_.Exception.Message))"
+      try { $version = 'v' + [string](Get-RemoteText 'channel.json' | ConvertFrom-Json).version } catch {
+        Fail "Couldn't find the latest version" "URL: $($script:Base)/channel.json" "Check your network and try again in a bit." "($($_.Exception.Message))"
       }
     }
     # 版本号要拼进下载地址：不像版本号的不往下走（比如问到的其实是一个报错的网页）
     if ($version -notmatch '^v\d+\.\d+\.\d+([-+.][0-9A-Za-z.-]+)?$') {
       if ($env:SPEAKMORE_VERSION) { Fail "SPEAKMORE_VERSION doesn't look like a version: $($env:SPEAKMORE_VERSION)" "Write it like v0.9.0." }
-      Fail "The download server returned a bad version number" "URL: $($script:Base)/latest" "Try again in a bit. If it keeps happening, please open an issue at $RepoUrl/issues."
+      Fail "The download server returned a bad version number" "URL: $($script:Base)/channel.json" "Try again in a bit. If it keeps happening, please open an issue at $RepoUrl/issues."
     }
     if ([version]($version.Substring(1) -replace '[-+].*$', '') -lt $MinVersion) {
       Fail "This installer can't install $version" "Versions before v$MinVersion are laid out differently." "To go back to one, first run: speakmore uninstall --keep-data" "then run that version's setup: $DownloadUrl/$version/SpeakMore-Setup-x64.exe"
@@ -210,30 +213,60 @@
     }
     Ok "Checksum OK"
 
-    # 名字是版本号加这次的编号：重装同一个版本也是一个新目录，碰不到正在用的那一份。
-    # 建出来了才记下它（出错时要删的就是它）：万一撞上已有的目录，New-Item 报错，不会把那个删了
-    $name = "$($script:Version.Substring(1))-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-    New-Item -ItemType Directory -Force -Path $script:VersionsDir | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $script:VersionsDir $name) | Out-Null
-    $script:VersionName = $name
-    $script:VersionDir = Join-Path $script:VersionsDir $name
+    New-VersionDir $script:Version.Substring(1)
     Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
     try {
       $package.Position = 0
       $archive = [IO.Compression.ZipArchive]::new($package)
       try { [IO.Compression.ZipFileExtensions]::ExtractToDirectory($archive, $script:VersionDir) } finally { $archive.Dispose() }
     } catch { Fail "Couldn't unpack the package" "Run it again." "($($_.Exception.Message))" }
+    Test-NewCopy 'Unpacked'
+  }
+
+  # 名字是版本号加这次的编号：重装同一个版本也是一个新目录，碰不到正在用的那一份。
+  # 建出来了才记下它（出错时要删的就是它）：万一撞上已有的目录，New-Item 报错，不会把那个删了
+  function New-VersionDir([string]$version) {
+    $name = "$version-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    New-Item -ItemType Directory -Force -Path $script:VersionsDir | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $script:VersionsDir $name) | Out-Null
+    $script:VersionName = $name
+    $script:VersionDir = Join-Path $script:VersionsDir $name
+  }
+
+  # 从一棵已经准备好的树装（SPEAKMORE_INSTALL_FROM）：speakmore update 拼在 versions 下一个新目录里的，原地用，不挪；
+  # 别处的（安装程序解在临时目录里的）拷进 versions 下一个新目录。拷而不挪：刚解出来的文件杀毒软件正扫着，挪不动
+  function Use-Tree {
+    $from = [IO.Path]::GetFullPath($env:SPEAKMORE_INSTALL_FROM).TrimEnd('\')
+    if (-not (Test-Path -LiteralPath (Join-Path $from 'app\bin\speakmore.mjs')) -or -not (Test-Path -LiteralPath (Join-Path $from 'runtime\electron.exe'))) {
+      Fail "The prepared copy is incomplete: $from" "Please open an issue at $RepoUrl/issues."
+    }
+    $name = Split-Path -Leaf $from
+    if ((Split-Path -Parent $from) -ieq $script:VersionsDir -and $name -match $VersionNamePattern) {
+      $script:VersionName = $name
+      $script:VersionDir = $from
+    } else {
+      $version = ''
+      try { $version = [string](Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $from 'app\package.json') | ConvertFrom-Json).version } catch { $version = '' }
+      if ($version -notmatch '^\d+\.\d+\.\d+([-+.][0-9A-Za-z.-]+)?$') { Fail "The prepared copy has no valid version: $from" "Please open an issue at $RepoUrl/issues." }
+      New-VersionDir $version
+      try { Copy-Item -Path (Join-Path $from '*') -Destination $script:VersionDir -Recurse -Force } catch {
+        Fail "Couldn't copy the new version into $(Pretty $script:VersionsDir)" "Check the free space and run it again." "($($_.Exception.Message))"
+      }
+    }
+    Test-NewCopy 'Prepared'
+  }
+
+  # 切过去之前先在原地跑一下：这台机器上跑不起来的话现在就知道，装着的那一份照常用
+  function Test-NewCopy([string]$verb) {
     $script:NewElectron = Join-Path $script:VersionDir 'runtime\electron.exe'
     $script:NewApp = Join-Path $script:VersionDir 'app'
     if (-not (Test-Path (Join-Path $script:NewApp 'bin\speakmore.mjs')) -or -not (Test-Path $script:NewElectron)) {
       Fail "The package is incomplete" "That's a problem with the release. Please open an issue at $RepoUrl/issues."
     }
-
-    # 切过去之前先在原地跑一下：这台机器上跑不起来的话现在就知道，装着的那一份照常用
     $result = Invoke-NewCopy @('--version')
     if ($result.Code -ne 0) { Fail "The downloaded app won't run on this PC" $result.Output "Please open an issue at $RepoUrl/issues with your Windows version." }
     $script:NewVersion = $result.Output.Trim()
-    Ok "Unpacked SpeakMore $($script:NewVersion)"
+    Ok "$verb SpeakMore $($script:NewVersion)"
   }
 
   # 用刚下到的那一份程序跑一条命令。让它说英文：下面要靠它说的话判断停没停
@@ -432,12 +465,12 @@
 
     Heading "Checks"
     Test-System
-    # 先定版本再建目录：版本不对、问不到最新的，磁盘上什么都没动
-    Resolve-Version
+    # 先定版本再建目录：版本不对、问不到最新的，磁盘上什么都没动。从准备好的树装时版本写在树里，不用问
+    if (-not $env:SPEAKMORE_INSTALL_FROM) { Resolve-Version }
     Test-Home
 
     Heading "Install"
-    Get-Package
+    if ($env:SPEAKMORE_INSTALL_FROM) { Use-Tree } else { Get-Package }
     Use-Version
     Add-ToPath
     Add-Shortcut

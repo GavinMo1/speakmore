@@ -5,16 +5,21 @@
 // 自己的下载（发版核对、验收、自己升级）靠下面几条特征认出来源 IP，整段时间里这个 IP 都算自己的。
 
 import { createHash } from "node:crypto";
-import { archiveName, dmgName, WINDOWS_ARCHIVE, WINDOWS_SETUP } from "../release/release-layout.mjs";
+import { ARCHS, archiveName, dmgName, WINDOWS_ARCHIVE, WINDOWS_SETUP } from "../release/release-layout.mjs";
 
+// 0.10.1 及以前：终端安装的包是 tar.gz，更新也是整包下这些包（所以那时的"终端安装"里含着更新）。
+// 之后更新改成按块下（store/ 下的对象），单独算流量。缓存的日志里老名字还在，照样认
+const MAC_CLI = { key: "mac-cli", label: "Mac 终端安装", platform: "mac" };
 const PACKAGES = new Map([
   [dmgName("arm64"), { key: "mac-dmg-arm64", label: "Mac 安装包（Apple 芯片）", platform: "mac" }],
   [dmgName("x64"), { key: "mac-dmg-x64", label: "Mac 安装包（Intel）", platform: "mac" }],
-  [archiveName("arm64"), { key: "mac-cli", label: "Mac 终端安装与更新", platform: "mac" }],
-  [archiveName("x64"), { key: "mac-cli", label: "Mac 终端安装与更新", platform: "mac" }],
+  ...ARCHS.flatMap((arch) => [archiveName(arch), `speakmore-darwin-${arch}.tar.gz`]).map((name) => [name, MAC_CLI]),
   [WINDOWS_SETUP, { key: "win-setup", label: "Windows 安装程序", platform: "win" }],
-  [WINDOWS_ARCHIVE, { key: "win-cli", label: "Windows 终端安装与更新", platform: "win" }],
+  [WINDOWS_ARCHIVE, { key: "win-cli", label: "Windows 终端安装", platform: "win" }],
 ]);
+
+/** 更新按块下的对象：/<前缀>/store/<sha256> */
+const isObject = (path) => /^\/[^/]+\/store\/[0-9a-f]{64}$/.test(path);
 const KINDS = [...new Map([...PACKAGES.values()].map((kind) => [kind.key, kind])).values()];
 
 // 腾讯云 CDN 访问日志一行：时间 IP 域名 路径 字节 省份 运营商 状态码 来源 耗时 "UA" "Range" 方法 ……
@@ -37,7 +42,7 @@ export function parseLogLine(line) {
   };
 }
 
-/** 路径是哪一种安装包；校验值、脚本、latest 都不是包，返回 null */
+/** 路径是哪一种安装包；校验值、脚本、channel.json、更新的对象都不是包，返回 null */
 export const packageKind = (path) => PACKAGES.get(path.split("/").pop()) ?? null;
 
 /** 发布包路径里的版本目录：/<前缀>/v1.2.3[-rc.1]/<文件> 里的 v1.2.3；扫描器探的 /api/v1/.env 之类不算 */
@@ -108,8 +113,18 @@ export function summarizeDownloads(rows, { sizes, self }) {
   const days = new Map();
   const perIp = new Map();
   let phone = 0;
+  const updates = { bytes: 0, self: 0, ips: new Set() };
   for (const row of rows) {
     if (!days.has(row.day)) days.set(row.day, { day: row.day, mac: 0, win: 0 });
+    if (isObject(row.path)) {
+      if (row.method !== "GET" || !isOk(row)) continue;
+      if (self.has(row.ip)) updates.self += row.bytes;
+      else {
+        updates.bytes += row.bytes;
+        updates.ips.add(row.ip);
+      }
+      continue;
+    }
     const kind = packageKind(row.path);
     const size = sizes.get(row.path);
     if (!kind || !size || row.method !== "GET" || !isOk(row)) continue;
@@ -142,6 +157,8 @@ export function summarizeDownloads(rows, { sizes, self }) {
     // 至少下完半个包的真实来源 IP：比次数更接近人数（换网络会多算、共用出口会少算）
     realIps: [...perIp.values()].filter((n) => n >= 0.5).length,
     phone: round2(phone),
+    // 更新按块下的流量（字节，不折算次数：每台机器缺的块不一样多）；ips 约等于更新了的机器数
+    updates: { bytes: updates.bytes, self: updates.self, ips: updates.ips.size },
     range: { from: times[0] ?? null, to: times.at(-1) ?? null },
   };
 }

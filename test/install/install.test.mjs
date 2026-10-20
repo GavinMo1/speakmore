@@ -56,7 +56,8 @@ const SHIMS = {
   curl: `#!/bin/sh\ncase "$*" in *generativelanguage.googleapis.com*) exit "\${FAKE_GEMINI_EXIT:-0}" ;; *api.openai.com*) exit "\${FAKE_OPENAI_EXIT:-0}" ;; *dashscope.aliyuncs.com*) exit "\${FAKE_BAILIAN_EXIT:-0}" ;; esac\nexec /usr/bin/curl "$@"\n`,
 };
 
-function makeArchive(arch, version = "9.9.9") {
+/** 摆一棵和包里一样的树（app/ 和 runtime/）：假的 Electron 报这个版本 */
+function makeTree(version) {
   const staging = mkdtempSync(join(root, "pkg-"));
   const electron = join(staging, "runtime", "Electron.app", "Contents", "MacOS", "Electron");
   mkdirSync(join(electron, ".."), { recursive: true });
@@ -65,13 +66,19 @@ function makeArchive(arch, version = "9.9.9") {
   mkdirSync(join(staging, "app", "bin"), { recursive: true });
   writeFileSync(join(staging, "app", "bin", "speakmore.mjs"), "// 假的\n");
   writeFileSync(join(staging, "app", "package.json"), `{\n  "name": "speakmore",\n  "version": "${version}"\n}\n`);
-  // 和真的下载地址一个样子：每个版本的包在各自的目录里，根上的 latest 记着最新的是哪个
+  return staging;
+}
+
+function makeArchive(arch, version = "9.9.9") {
+  const staging = makeTree(version);
+  // 和真的下载地址一个样子：每个版本的包在各自的目录里，根上的 channel.json 记着最新的是哪个（release.mjs 写的那种）
   mkdirSync(join(release, `v${version}`), { recursive: true });
-  const archive = join(release, `v${version}`, `speakmore-darwin-${arch}.tar.gz`);
-  execFileSync("tar", ["-czf", archive, "-C", staging, "app", "runtime"]);
+  const archive = join(release, `v${version}`, `speakmore-darwin-${arch}.tar.xz`);
+  execFileSync("tar", ["-cJf", archive, "-C", staging, "app", "runtime"]);
   const digest = createHash("sha256").update(readFileSync(archive)).digest("hex");
-  writeFileSync(`${archive}.sha256`, `${digest}  speakmore-darwin-${arch}.tar.gz\n`);
-  writeFileSync(join(release, "latest"), `v${version}\n`);
+  writeFileSync(`${archive}.sha256`, `${digest}  speakmore-darwin-${arch}.tar.xz\n`);
+  const channel = { version, electron: "44.0.0", targets: { [`darwin-${arch}`]: "a".repeat(64) } };
+  writeFileSync(join(release, "channel.json"), `${JSON.stringify(channel, null, 2)}\n`);
   rmSync(staging, { recursive: true });
 }
 
@@ -215,7 +222,7 @@ test("预检查不过就不往下走：不是 macOS、系统太旧、用了 sudo
 test("Intel 芯片下的是 x64 的包；这个版本没有那种包时在下载之前就说清楚", () => {
   const result = install({ env: { FAKE_ARCH: "x86_64" } });
   assertRefused(result, /Couldn't reach the release package/);
-  assert.match(result.err, /speakmore-darwin-x64\.tar\.gz/);
+  assert.match(result.err, /speakmore-darwin-x64\.tar\.xz/);
   assert.equal(existsSync(home()), false);
 
   makeArchive("x64", "9.9.9");
@@ -234,10 +241,12 @@ test("默认装下载地址上标着最新的那个版本；SPEAKMORE_VERSION �
 });
 
 test("问不到最新版本、问到的不像版本号、指定的版本不存在：都在下载之前说清楚，不装", () => {
-  writeFileSync(join(release, "latest"), "<html>出错了</html>\n");
+  writeFileSync(join(release, "channel.json"), '{ "version": "<html>出错了</html>" }\n');
   assertRefused(install(), /returned a bad version number/);
+  writeFileSync(join(release, "channel.json"), "<html>出错了</html>\n");
+  assertRefused(install(), /Couldn't find the latest version/);
 
-  rmSync(join(release, "latest"));
+  rmSync(join(release, "channel.json"));
   assertRefused(install(), /Couldn't find the latest version/);
 
   assertRefused(install({ env: { SPEAKMORE_VERSION: "v1.2.3" } }), /Couldn't reach the release package[\s\S]*v1\.2\.3/);
@@ -280,7 +289,7 @@ test("能用的几家模型都查一遍连不连得上：连得上的打勾，�
 test("下到的包和发布时的不一样（校验不过）：不装，已经装着的那一份不动", () => {
   assert.equal(install().code, 0);
   makeArchive("arm64", "10.0.0");
-  writeFileSync(join(release, "v10.0.0", "speakmore-darwin-arm64.tar.gz.sha256"), `${"0".repeat(64)}  x\n`);
+  writeFileSync(join(release, "v10.0.0", "speakmore-darwin-arm64.tar.xz.sha256"), `${"0".repeat(64)}  x\n`);
   assertRefused(install(), /Checksum mismatch/);
   assert.equal(installedVersion(), "9.9.9");
   assert.deepEqual(readdirSync(home()).sort(), ["app", "bin", "runtime"]);
@@ -330,6 +339,40 @@ test("装到别处（SPEAKMORE_HOME），路径里有空格和引号也行；链
   assert.equal(existsSync(home()), false);
   execFileSync(join(bin, "speakmore"), ["status"], { env: { PATH: "/usr/bin:/bin", FAKE_CALL_LOG: callLog } });
   assert.equal(calls().at(-1), `1|${custom}|2|${join(custom, "app", "bin", "speakmore.mjs")} status`);
+});
+
+test("从拼好的树装（speakmore update）：不联网，家目录里 .update- 开头的那个改名换上，原来的东西不动", () => {
+  assert.equal(install().code, 0);
+  writeFileSync(join(home(), "settings.json"), '{"hotkey":"fn"}');
+  const tree = makeTree("10.0.0");
+  const prepared = join(home(), ".update-10.0.0-0badf00d");
+  execFileSync("mv", [tree, prepared]);
+  // 下载地址指到一个不存在的地方：从拼好的树装不该去问
+  const { code, out } = install({
+    env: { SPEAKMORE_INSTALL_FROM: prepared, SPEAKMORE_INSTALL_BASE: join(root, "nowhere") },
+    args: ["--no-start"],
+  });
+  assert.equal(code, 0, out);
+  assert.match(out, /Prepared SpeakMore 10\.0\.0/);
+  assert.doesNotMatch(out, /Download server reachable/);
+  assert.equal(installedVersion(), "10.0.0");
+  assert.equal(readFileSync(join(home(), "settings.json"), "utf8"), '{"hotkey":"fn"}');
+  assert.deepEqual(
+    readdirSync(home()).sort(),
+    ["app", "bin", "runtime", "settings.json"],
+    "拼好的那个目录换进去以后不留",
+  );
+});
+
+test("从拼好的树装：只认家目录里 .update- 开头的目录；别处的、不存在的、跑不起来的都不装", () => {
+  assert.equal(install().code, 0);
+  const elsewhere = makeTree("10.0.0");
+  assertRefused(install({ env: { SPEAKMORE_INSTALL_FROM: elsewhere } }), /must be a \.update- folder inside/);
+  assertRefused(install({ env: { SPEAKMORE_INSTALL_FROM: join(home(), ".update-10.0.0-missing") } }), /No such folder/);
+  const prepared = join(home(), ".update-10.0.0-0badf00d");
+  execFileSync("mv", [elsewhere, prepared]);
+  assertRefused(install({ env: { SPEAKMORE_INSTALL_FROM: prepared, FAKE_BROKEN: "1" } }), /won't run on this Mac/);
+  assert.equal(installedVersion(), "9.9.9");
 });
 
 test("不认识的参数：不装", () => {

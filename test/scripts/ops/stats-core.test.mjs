@@ -45,14 +45,24 @@ test("日志行：拆出时间、日期、IP、路径（去掉查询串）、字
   assert.equal(parseLogLine("garbage line"), null);
 });
 
-test("安装包按文件名归类，校验值、脚本、latest 不算包", () => {
+test("安装包按文件名归类（0.10.1 以前的 tar.gz 也认），校验值、脚本、channel.json、更新的块不算包", () => {
   assert.deepEqual(packageKind(DMG), { key: "mac-dmg-arm64", label: "Mac 安装包（Apple 芯片）", platform: "mac" });
   assert.equal(packageKind("/speakmore/v0.9.3/SpeakMore-x64.dmg").key, "mac-dmg-x64");
   assert.equal(packageKind("/speakmore/v0.9.3/speakmore-darwin-arm64.tar.gz").key, "mac-cli");
   assert.equal(packageKind("/speakmore/v0.9.3/speakmore-darwin-x64.tar.gz").key, "mac-cli");
+  assert.equal(packageKind("/speakmore/v0.11.0/speakmore-darwin-arm64.tar.xz").key, "mac-cli");
+  assert.equal(packageKind("/speakmore/v0.11.0/speakmore-darwin-x64.tar.xz").key, "mac-cli");
   assert.equal(packageKind(SETUP).key, "win-setup");
   assert.equal(packageKind("/speakmore/v0.9.3/speakmore-win32-x64.zip").key, "win-cli");
-  for (const path of [`${DMG}.sha256`, "/speakmore/latest", "/speakmore/install.sh", "/speakmore/install.ps1", "/"]) {
+  for (const path of [
+    `${DMG}.sha256`,
+    "/speakmore/latest",
+    "/speakmore/channel.json",
+    `/speakmore/store/${"a".repeat(64)}`,
+    "/speakmore/install.sh",
+    "/speakmore/install.ps1",
+    "/",
+  ]) {
     assert.equal(packageKind(path), null, path);
   }
 });
@@ -144,6 +154,23 @@ test("下载量：按流量折算成完整下载（分段下载拼起来算一�
   assert.equal(s.realIps, 2);
   assert.equal(s.phone, 1);
   assert.deepEqual(s.range, { from: "20261017100000", to: "20261018100100" });
+  assert.deepEqual(s.updates, { bytes: 0, self: 0, ips: 0 });
+});
+
+test("更新的流量：store/ 下的块按字节加起来（不折算次数），自测的单独记；HEAD、404 不算", () => {
+  const object = (n) => `/speakmore/store/${String(n).repeat(64)}`;
+  const rows = rowsOf(
+    { ip: "203.0.113.40", path: object(1), bytes: 30_000 },
+    { ip: "203.0.113.40", path: object(2), bytes: 20_000 },
+    { ip: "203.0.113.41", path: object(1), bytes: 30_000 },
+    { ip: "203.0.113.42", path: object(3), bytes: 9_000, method: "HEAD" },
+    { ip: "203.0.113.42", path: object(4), bytes: 500, status: 404 },
+    { ip: "198.51.100.1", path: object(1), bytes: 30_000 },
+  );
+  const self = new Map([["198.51.100.1", new Set(["known"])]]);
+  const s = summarizeDownloads(rows, { sizes: new Map(), self });
+  assert.deepEqual(s.updates, { bytes: 80_000, self: 30_000, ips: 2 });
+  assert.equal(s.real, 0, "块不算安装包的下载");
 });
 
 test("真用户拿到的 404：桶里现在有的文件记成 early（当时还没传上去），桶里没有的按路径记成 missing；扫描器和自测的不算", () => {

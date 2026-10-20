@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   copyFileSync,
-  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -18,7 +16,10 @@ import { afterEach, beforeEach, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { createTranslator, LocalizedError } from "../../src/i18n/index.mjs";
 import { bundleOfPackage, createBundles } from "../../src/update/bundle.mjs";
+import { appTarget } from "../../src/update/layout.mjs";
+import { packObject } from "../../src/update/objects.mjs";
 import { createRelease } from "../../src/update/release.mjs";
+import { publishTrees } from "../helpers/release.mjs";
 
 const zh = createTranslator("zh-CN");
 
@@ -28,7 +29,7 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-// SpeakMore.app 只有 macOS 上有：要用系统的 hdiutil、codesign、ditto
+// SpeakMore.app 只有 macOS 上有：要用系统的 codesign、PlistBuddy
 const macOnly = { skip: process.platform !== "darwin" && "macOS 的 SpeakMore.app" };
 
 /** 照这个下载地址找 App、换 App 的那一套 */
@@ -60,29 +61,8 @@ function fakeApp(parent, version, { sign = true, bundleId = "com.zephyrxiang.spe
   return app;
 }
 
-/** 照发布的样子把一个 App 装进 dmg，放到 release/<version>/，配上校验值 */
-function publishDmg(release, version, app) {
-  const stage = mkdtempSync(join(dir, "stage-"));
-  execFileSync("ditto", [app, join(stage, "SpeakMore.app")]);
-  const folder = join(release, version);
-  mkdirSync(folder, { recursive: true });
-  const dmg = join(folder, `SpeakMore-${ARCH}.dmg`);
-  execFileSync("hdiutil", [
-    "create",
-    "-quiet",
-    "-volname",
-    "SpeakMore",
-    "-srcfolder",
-    stage,
-    "-format",
-    "UDZO",
-    "-ov",
-    dmg,
-  ]);
-  const hash = createHash("sha256").update(readFileSync(dmg)).digest("hex");
-  writeFileSync(`${dmg}.sha256`, `${hash}  SpeakMore-${ARCH}.dmg\n`);
-  return dmg;
-}
+/** 照发布的样子把一个 App 切块放到下载地址上（channel.json 只写这一种装法） */
+const publishApp = (release, version, app) => publishTrees(release, version, { [appTarget(ARCH)]: app });
 
 const versionOf = (app) =>
   execFileSync(
@@ -115,60 +95,81 @@ test("找 App：正在跑的那个在哪就是哪（按进程号找到它的应�
   }
 });
 
-test("换 App：先下好对应芯片的 dmg、核对校验值和签名、拷到旁边（装着的这时不动），换上之后不留下半截的东西", {
+test("换 App：照清单拼好、核对签名，放在旁边（装着的这时不动）；没变的块从本机拷，换上之后不留下半截的东西", {
   ...macOnly,
   timeout: 60_000,
 }, async () => {
   const release = join(dir, "release");
   const applications = mkdtempSync(join(dir, "Applications-"));
   const installed = fakeApp(applications, "0.1.0");
-  publishDmg(release, "v0.2.0", fakeApp(mkdtempSync(join(dir, "new-")), "0.2.0"));
+  const cacheDir = join(dir, "cache");
   const bundles = bundlesFrom({ ...process.env, SPEAKMORE_INSTALL_BASE: release });
 
-  const staged = await bundles.stage("0.2.0", installed);
-  // 下好了还没换：装着的照旧，新的藏在旁边（名字带点开头，访达里看不见）
+  const channel = await publishApp(release, "0.2.0", fakeApp(mkdtempSync(join(dir, "new-")), "0.2.0"));
+  const staged = await bundles.stage(channel, installed, { seeds: [], cacheDir });
+  // 拼好了还没换：装着的照旧，新的藏在旁边（名字带点开头，访达里看不见）
   assert.equal(versionOf(installed), "0.1.0");
   assert.deepEqual(readdirSync(applications).sort(), [".SpeakMore.app.new", "SpeakMore.app"]);
+  // 程序没变的那几块是从装着的那个里拷的
+  assert.ok(staged.reusedBytes > 0, `reused ${staged.reusedBytes}`);
+  assert.ok(staged.downloadedBytes > 0, `downloaded ${staged.downloadedBytes}`);
   staged.commit();
   assert.equal(versionOf(installed), "0.2.0");
   execFileSync("codesign", ["--verify", "--deep", "--strict", installed]);
   assert.deepEqual(readdirSync(applications), ["SpeakMore.app"]);
 
   // 不换了：待换的删掉，装着的不动
-  publishDmg(release, "v0.2.1", fakeApp(mkdtempSync(join(dir, "newer-")), "0.2.1"));
-  (await bundles.stage("0.2.1", installed)).discard();
+  const newer = await publishApp(release, "0.2.1", fakeApp(mkdtempSync(join(dir, "newer-")), "0.2.1"));
+  (await bundles.stage(newer, installed, { seeds: [], cacheDir })).discard();
   assert.equal(versionOf(installed), "0.2.0");
   assert.deepEqual(readdirSync(applications), ["SpeakMore.app"]);
 
-  // dmg 里的版本和要装的对不上：不装
-  cpSync(join(release, "v0.2.0"), join(release, "v0.3.0"), { recursive: true });
-  await assert.rejects(bundles.stage("0.3.0", installed), (error) => {
+  // 拼出来的版本和 channel.json 说的对不上：不装
+  await assert.rejects(bundles.stage({ ...channel, version: "0.3.0" }, installed, { seeds: [], cacheDir }), (error) => {
     assert.ok(error instanceof LocalizedError);
-    assert.match(zh.text(error.problem), /0\.3\.0/);
+    assert.match(zh.text(error.problem), /不是 0\.3\.0 版的 SpeakMore\.app/);
     return true;
   });
   assert.equal(versionOf(installed), "0.2.0");
   assert.deepEqual(readdirSync(applications), ["SpeakMore.app"]);
 });
 
-test("换 App：校验值对不上、没签名的，都不装，装着的原样留着", { ...macOnly, timeout: 60_000 }, async () => {
+test("换 App：下到的块不对、没签名的、发布里没有这种芯片的，都不装，装着的原样留着", {
+  ...macOnly,
+  timeout: 60_000,
+}, async () => {
   const release = join(dir, "release");
   const applications = mkdtempSync(join(dir, "Applications-"));
   const installed = fakeApp(applications, "0.1.0");
+  const cacheDir = join(dir, "cache");
   const bundles = bundlesFrom({ ...process.env, SPEAKMORE_INSTALL_BASE: release });
 
-  const dmg = publishDmg(release, "v0.2.0", fakeApp(mkdtempSync(join(dir, "new-")), "0.2.0"));
-  writeFileSync(`${dmg}.sha256`, `${"0".repeat(64)}  SpeakMore-${ARCH}.dmg\n`);
-  await assert.rejects(bundles.stage("0.2.0", installed), (error) => {
+  // 下载地址上的块全换成别的内容（压法照旧，解得开，但 sha256 对不上）
+  const channel = await publishApp(release, "0.2.0", fakeApp(mkdtempSync(join(dir, "new-")), "0.2.0"));
+  const manifestSha = channel.targets[appTarget(ARCH)];
+  for (const name of readdirSync(join(release, "store"))) {
+    if (name !== manifestSha) writeFileSync(join(release, "store", name), packObject(Buffer.from(`被换掉的 ${name}`)));
+  }
+  await assert.rejects(bundles.stage(channel, installed, { seeds: [], cacheDir }), (error) => {
     assert.ok(error instanceof LocalizedError);
-    assert.match(zh.text(error.problem), new RegExp(`SpeakMore-${ARCH}\\.dmg`));
+    assert.match(zh.text(error.problem), /下载的更新数据（[0-9a-f]{12}）与发布的不符/);
     return true;
   });
 
-  publishDmg(release, "v0.2.1", fakeApp(mkdtempSync(join(dir, "unsigned-")), "0.2.1", { sign: false }));
-  await assert.rejects(bundles.stage("0.2.1", installed), (error) => {
+  const unsigned = await publishApp(
+    join(dir, "release-unsigned"),
+    "0.2.1",
+    fakeApp(mkdtempSync(join(dir, "unsigned-")), "0.2.1", { sign: false }),
+  );
+  const fromUnsigned = bundlesFrom({ ...process.env, SPEAKMORE_INSTALL_BASE: join(dir, "release-unsigned") });
+  await assert.rejects(fromUnsigned.stage(unsigned, installed, { seeds: [], cacheDir }), (error) => {
     assert.ok(error instanceof LocalizedError);
     assert.match(zh.text(error.problem), /签名/);
+    return true;
+  });
+
+  await assert.rejects(bundles.stage({ ...channel, targets: {} }, installed, { seeds: [], cacheDir }), (error) => {
+    assert.match(zh.text(error.problem), new RegExp(`0\\.2\\.0 的发布中没有这台电脑用的更新（darwin-${ARCH}-app）`));
     return true;
   });
 

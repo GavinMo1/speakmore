@@ -1,25 +1,34 @@
-// 下载地址上每个版本的包叫什么。打包发布（scripts/release/release-layout.mjs）和更新（这个目录）共用这一份，
-// 安装脚本里写的名字也要和它一致：
-//   latest                                       一行：最新的版本号，比如 v0.2.0
-//   install.sh、install.ps1                      安装脚本
-//   v0.2.0/speakmore-darwin-<芯片>.tar.gz         终端安装的包（install.sh 装），和同名的 .sha256
-//   v0.2.0/SpeakMore-<芯片>.dmg                   Mac 的安装包：签了名、过了公证的 SpeakMore.app，和同名的 .sha256
-//   v0.2.0/speakmore-win32-x64.zip               Windows 的包（install.ps1 装），和同名的 .sha256
+// 下载地址上的东西怎么摆。打包发布（scripts/release）、更新（这个目录）、安装脚本（install.sh、install.ps1）共用这一份：
+//
+//   channel.json                    最新的发布：版本号、用哪个 Electron，每种装法（TARGETS）用哪份清单。只缓存一分钟
+//   store/<sha256>                  对象：块和清单，名字是原始内容的 sha256，存的是 zstd 压过的（objects.mjs）。
+//                                   按内容存，同一块只存一份，传上去就不再变。更新只取本机缺的块（assemble.mjs）
+//   install.sh、install.ps1         安装脚本
+//   v<版本>/<首次安装用的包>          完整的包和同名的 .sha256：没有可以拿来拼的旧版本时才用得上（官网下载、一行命令安装）
+//
+// 首次安装用的包：
+//   speakmore-darwin-<芯片>.tar.xz   终端安装（install.sh）：解开是 app/ 和 runtime/，就是家目录里的样子
+//   SpeakMore-<芯片>.dmg             Mac 的安装包：签了名、过了公证的 SpeakMore.app
+//   speakmore-win32-x64.zip          Windows 的终端安装（irm … | iex）：解开是 app\ 和 runtime\
+//   SpeakMore-Setup-x64.exe          Windows 直接下载的安装程序：身上带着同一棵树（zstd 压的），双击就装
 
-export const archiveName = (arch) => `speakmore-darwin-${arch}.tar.gz`;
+export const CHANNEL = "channel.json";
+export const objectPath = (sha) => `store/${sha}`;
+export const versionDir = (version) => `v${version}`;
+
+export const archiveName = (arch) => `speakmore-darwin-${arch}.tar.xz`;
 export const dmgName = (arch) => `SpeakMore-${arch}.dmg`;
 /** Windows 只出 x64 的一个（Windows on ARM 靠系统自带的转译跑它） */
 export const WINDOWS_ARCHIVE = "speakmore-win32-x64.zip";
 /** Windows 直接下载的安装程序（scripts/build/windows-setup.mjs 打的） */
 export const WINDOWS_SETUP = "SpeakMore-Setup-x64.exe";
-export const versionDir = (version) => `v${version}`;
 
 /**
- * 装在家目录里的那一份（安装脚本装的）用哪个包、哪个安装脚本。
- * @param {NodeJS.Platform} platform
- * @param {"arm64" | "x64"} arch Mac 上的芯片，按安装脚本的认法（见 home.mjs 的 homeArch）
+ * 更新用的几种装法，每种一棵树、一份清单：
+ *   darwin-<芯片>        Mac 终端安装的家目录：app/ 和 runtime/
+ *   darwin-<芯片>-app    Mac 的 SpeakMore.app
+ *   win32-x64            Windows：versions\<版本> 里的 app\ 和 runtime\
  */
-export function homePackage(platform, arch) {
-  if (platform === "win32") return { archive: WINDOWS_ARCHIVE, script: "install.ps1" };
-  return { archive: archiveName(arch), script: "install.sh" };
-}
+export const homeTarget = (platform, arch) => (platform === "win32" ? "win32-x64" : `darwin-${arch}`);
+export const appTarget = (arch) => `darwin-${arch}-app`;
+export const TARGETS = ["darwin-arm64", "darwin-x64", "darwin-arm64-app", "darwin-x64-app", "win32-x64"];

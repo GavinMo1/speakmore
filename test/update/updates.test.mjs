@@ -7,6 +7,7 @@ import { TimeoutError } from "../../src/control.mjs";
 import { createTranslator, LocalizedError, msg } from "../../src/i18n/index.mjs";
 import { resolvePaths } from "../../src/storage/paths.mjs";
 import { createUpdates } from "../../src/update/index.mjs";
+import { parseChannel } from "../../src/update/release.mjs";
 import { acquireLock, readProgress } from "../../src/update/state.mjs";
 
 // 内核里的版本检查和更新（src/update/index.mjs）：下载地址、App、安装脚本、正在运行的那个都换成假的，
@@ -43,9 +44,12 @@ function setup({
   startCode = 0,
   packageDir = paths.appDir,
   now = () => NOW,
+  progress = false,
 } = {}) {
   const steps = [];
   const phases = [];
+  /** 拼新版本时交下去的：种子、块缓存放哪、报进度的 */
+  const stagings = [];
   /** update.json 里现在记的 state；读不了（测试里故意弄坏的）是 unreadable */
   const stateNow = () => {
     try {
@@ -83,11 +87,12 @@ function setup({
     platform: "darwin",
     now,
     pid: 999_999,
+    progress,
     release: {
-      async latest() {
-        steps.push("latest");
+      async channel() {
+        steps.push("channel");
         if (latest instanceof Error) throw latest;
-        return latest;
+        return parseChannel(JSON.stringify({ version: latest, electron: "44.0.0", targets: {} }));
       },
     },
     bundles: {
@@ -95,11 +100,14 @@ function setup({
         steps.push(`find-app:${pid}`);
         return app;
       },
-      async stage(version, _path) {
-        steps.push(`stage-app:${version}`);
+      async stage(channel, _path, staging) {
+        steps.push(`stage-app:${channel.version}`);
+        stagings.push(staging);
         phase();
         stageApp();
         return {
+          downloadedBytes: 1_200_000,
+          reusedBytes: 300_000_000,
           commit() {
             steps.push("commit-app");
             commitApp();
@@ -118,18 +126,22 @@ function setup({
     },
     homes: {
       find: () => home,
-      async stage(version) {
-        steps.push(`stage-home:${version}`);
+      seeds: () => [paths.appDir, paths.runtimeDir],
+      async stage(channel, staging) {
+        steps.push(`stage-home:${channel.version}`);
+        stagings.push(staging);
         stageHome();
         return {
           dir: "staged",
+          downloadedBytes: 100_000,
+          reusedBytes: 400_000_000,
           discard() {
             steps.push("discard-home");
           },
         };
       },
-      async install(_staged, version) {
-        steps.push(`install-home:${version}`);
+      async install(staged) {
+        steps.push(`install-home:${staged.dir}`);
         phase();
         return installCode;
       },
@@ -144,6 +156,7 @@ function setup({
     updates,
     steps,
     phases,
+    stagings,
     /** 改成另一个在跑（模拟下载期间用户打开、退出了 SpeakMore） */
     setRunning: (value) => {
       current = value;
@@ -167,16 +180,16 @@ test("检查：一天最多问一次下载地址，结果记在家目录里两�
     latest: "0.2.0",
   });
   await updates.check();
-  assert.equal(steps.filter((step) => step === "latest").length, 1, "一天之内不再问");
+  assert.equal(steps.filter((step) => step === "channel").length, 1, "一天之内不再问");
   await updates.check({ force: true });
-  assert.equal(steps.filter((step) => step === "latest").length, 2);
+  assert.equal(steps.filter((step) => step === "channel").length, 2);
 
   // 过了一天：顺带的检查也再问
   const later = setup({ now: () => new Date(NOW.getTime() + 24 * 60 * 60 * 1000) });
   await later.updates.check();
   assert.deepEqual(
-    later.steps.filter((step) => step === "latest"),
-    ["latest"],
+    later.steps.filter((step) => step === "channel"),
+    ["channel"],
   );
 });
 
@@ -198,7 +211,7 @@ test("检查：问不到不抛，说原因；之前知道的最新版本留着�
 });
 
 test("检查：两份都看，App 旧了也算有更新；正在跑的 App 按进程号找", async () => {
-  const { updates, steps } = setup({ latest: "v0.1.0", app: { ...APP, version: "0.0.9" } });
+  const { updates, steps } = setup({ latest: "0.1.0", app: { ...APP, version: "0.0.9" } });
   const result = await updates.check({ runningApp: 4242 });
   assert.deepEqual(result.behind, [{ kind: "bundle", version: "0.0.9", path: APP.path }]);
   assert.ok(steps.includes("find-app:4242"));
@@ -224,14 +237,14 @@ test("更新：先把两份都下好（这时 App 还在跑），再停、换、
   const result = await updates.run({ by: "app" });
   assert.deepEqual(result, { updated: true, latest: "0.2.0", restarted: "bundle", running: true });
   assert.deepEqual(steps, [
-    "latest",
+    "channel",
     "find-app:4242",
     "stage-app:0.2.0",
     "stage-home:0.2.0",
     "find-app:4242",
     "stop",
     "commit-app",
-    "install-home:0.2.0",
+    "install-home:staged",
     `open-app:${APP.path}`,
     "discard-home",
   ]);
@@ -246,7 +259,7 @@ test("更新：先把两份都下好（这时 App 还在跑），再停、换、
 });
 
 test("更新：已经是最新的什么都不做，记成 current（App 不会当成刚更新过）", async () => {
-  const { updates, steps } = setup({ latest: "v0.1.0", running: HOME_RUNNING });
+  const { updates, steps } = setup({ latest: "0.1.0", running: HOME_RUNNING });
   assert.deepEqual(await updates.run({ by: "cli" }), {
     updated: false,
     latest: "0.1.0",
@@ -258,7 +271,7 @@ test("更新：已经是最新的什么都不做，记成 current（App 不会�
 });
 
 test("更新：下载、核对失败：什么都不停，记下原因，下好的删掉，锁放掉", async () => {
-  const broken = new LocalizedError(msg("update.checksum", { file: "speakmore-darwin-arm64.tar.gz" }));
+  const broken = new LocalizedError(msg("update.checksum", { object: "0123456789ab" }));
   const { updates, steps } = setup({
     running: APP_RUNNING,
     app: APP,
@@ -271,7 +284,7 @@ test("更新：下载、核对失败：什么都不停，记下原因，下好�
   assert.ok(steps.includes("discard-app"), "已经下好的 App 删掉");
   const record = readProgress(paths);
   assert.equal(record.state, "failed");
-  assert.match(zh.text(record.problem), /speakmore-darwin-arm64\.tar\.gz 与发布的校验值不符/);
+  assert.match(zh.text(record.problem), /下载的更新数据（0123456789ab）与发布的不符/);
   assert.equal(existsSync(paths.updateLock), false);
 });
 
@@ -279,7 +292,7 @@ test("更新：安装脚本没装成：原来在跑的照样重新打开，记�
   const { updates, steps, phases } = setup({ running: HOME_RUNNING, installCode: 2 });
   await assert.rejects(updates.run({ by: "cli" }), (error) => /退出码是 2/.test(zh.text(error.problem)));
   assert.equal(phases.at(-1), "reopen:failed");
-  assert.deepEqual(steps.slice(-3), ["install-home:0.2.0", "start-home", "discard-home"]);
+  assert.deepEqual(steps.slice(-3), ["install-home:staged", "start-home", "discard-home"]);
   assert.equal(readProgress(paths).state, "failed");
 });
 
@@ -304,7 +317,7 @@ test("更新：换上了但没重新打开：照实说，记成没完成", async
 });
 
 test("更新：只换 App、在跑的是家目录那一份：不停它；卡住的不知道是哪一份：停掉，换完不打开", async () => {
-  const other = setup({ latest: "v0.1.0", running: HOME_RUNNING, app: { ...APP, version: "0.0.9" } });
+  const other = setup({ latest: "0.1.0", running: HOME_RUNNING, app: { ...APP, version: "0.0.9" } });
   assert.deepEqual(await other.updates.run({ by: "cli" }), {
     updated: true,
     latest: "0.1.0",
@@ -388,11 +401,17 @@ test("更新：临时目录删不掉不算失败，说一声留在了哪", async
     platform: "darwin",
     now: () => NOW,
     pid: 999_999,
-    release: { latest: async () => "v0.2.0" },
+    release: { channel: async () => ({ version: "0.2.0", electron: "44.0.0", targets: {} }) },
     bundles: { find: async () => null },
     homes: {
       find: () => ({ version: "0.1.0" }),
-      stage: async () => ({ dir: "staged", discard: () => ({ dir: "/tmp/x", reason: "EBUSY" }) }),
+      seeds: () => [],
+      stage: async () => ({
+        dir: "staged",
+        downloadedBytes: 0,
+        reusedBytes: 0,
+        discard: () => ({ dir: "/tmp/x", reason: "EBUSY" }),
+      }),
       install: async () => 0,
       start: async () => 0,
     },
@@ -432,7 +451,7 @@ test("更新：在跑的是打包的 App、可找不到它的应用包：照样�
   await assert.rejects(updates.run({ by: "cli" }), (error) =>
     /不知道 SpeakMore\.app 在哪/.test(zh.text(error.problem)),
   );
-  assert.ok(steps.includes("install-home:0.2.0"));
+  assert.ok(steps.includes("install-home:staged"));
   assert.equal(readProgress(paths).state, "failed");
 });
 
@@ -443,7 +462,7 @@ test("更新：记录写不进去（被占着、磁盘满）不耽误换程序�
   mkdirSync(paths.updateFile, { recursive: true });
   const result = await updates.run({ by: "cli", report: (message) => said.push(zh.text(message)) });
   assert.equal(result.updated, true);
-  assert.deepEqual(steps.slice(-3), ["install-home:0.2.0", "start-home", "discard-home"]);
+  assert.deepEqual(steps.slice(-3), ["install-home:staged", "start-home", "discard-home"]);
   assert.ok(
     said.some((line) => line.startsWith("更新记录写不进")),
     said.join("\n"),
@@ -459,7 +478,7 @@ test("检查：上一次没问到的，一小时后就再问，不等一天", as
   assert.deepEqual(soon.steps, [], "半小时内不再问");
   const later = setup({ now: () => new Date(NOW.getTime() + 61 * 60 * 1000) });
   await later.updates.check();
-  assert.ok(later.steps.includes("latest"));
+  assert.ok(later.steps.includes("channel"));
   assert.equal(JSON.parse(readFileSync(paths.updateCheckFile, "utf8")).failed, undefined, "问到了就不再标没问到");
 });
 
@@ -491,4 +510,45 @@ test("锁：拿了两小时还没放的不算（进程号可能被别的程序�
   utimesSync(paths.updateLock, old, old);
   assert.doesNotThrow(() => acquireLock(paths, { pid: 444, alive: () => true }));
   assert.equal(readFileSync(paths.updateLock, "utf8"), "444");
+});
+
+test("更新：拼新版本时本机装着的几份都当种子，下到的块放在家目录的缓存里；换成了删掉缓存，没换成的留着下次接着用", async () => {
+  const said = [];
+  const { updates, stagings } = setup({ running: null, app: APP });
+  mkdirSync(paths.updateCacheDir, { recursive: true });
+  writeFileSync(join(paths.updateCacheDir, "a".repeat(64)), "上次下到的块");
+  await updates.run({ by: "cli", report: (message) => said.push(zh.text(message)) });
+  assert.equal(stagings.length, 2);
+  for (const staging of stagings) {
+    assert.deepEqual(staging.seeds, [paths.appDir, paths.runtimeDir, APP.path]);
+    assert.equal(staging.cacheDir, paths.updateCacheDir);
+    assert.equal(staging.onProgress, undefined, "不在终端里时不报进度");
+  }
+  // 两份加起来：下 1.2 + 0.1 MB，拷 300 + 400 MB
+  assert.ok(said.includes("需下载 1.3 MB，其余 700 MB 取自本机已有的文件。"), said.join("\n"));
+  assert.equal(existsSync(paths.updateCacheDir), false, "换成了，缓存删掉");
+
+  const failing = setup({ running: null, home: { version: "0.1.0" }, installCode: 1 });
+  mkdirSync(paths.updateCacheDir, { recursive: true });
+  writeFileSync(join(paths.updateCacheDir, "b".repeat(64)), "这次下到的块");
+  await assert.rejects(failing.updates.run({ by: "cli" }));
+  assert.ok(existsSync(join(paths.updateCacheDir, "b".repeat(64))), "没换成，缓存留着");
+});
+
+test("更新：在终端里时按两成一档说下载进度，每档只说一次；没有要下的不说", async () => {
+  const said = [];
+  const { updates, stagings } = setup({
+    running: null,
+    progress: true,
+    stageHome: () => {
+      const { onProgress } = stagings.at(-1);
+      onProgress({ downloadedChunks: 0, totalChunks: 0 });
+      for (const done of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) onProgress({ downloadedChunks: done, totalChunks: 10 });
+    },
+  });
+  await updates.run({ by: "cli", report: (message) => said.push(zh.text(message)) });
+  assert.deepEqual(
+    said.filter((line) => line.startsWith("下载更新")),
+    ["下载更新：0%", "下载更新：20%", "下载更新：40%", "下载更新：60%", "下载更新：80%", "下载更新：100%"],
+  );
 });

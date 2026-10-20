@@ -1,28 +1,31 @@
 package main
 
 import (
-	"archive/zip"
+	"archive/tar"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/klauspost/compress/zstd"
 )
 
-// 安装程序身上带的东西：exe 本身后面接一个 zip（只存不压），最后 16 个字节是记号和 zip 的长度。
+// 安装程序身上带的东西：exe 本身后面接一个 zstd 压过的 tar，里面就是要装的那棵树（app\ 和 runtime\，
+// 和 versions\<版本> 里的样子一样），最后 16 个字节是记号和它的长度。
 // 在 exe 后面接数据是自解压安装包的老办法，Windows 照常只运行前面那段程序。
-// 拼的那一边是 scripts/build/windows-setup.mjs，两边的格式要一致。
+// 拼的那一边是 scripts/build/windows-setup.mjs，两边的格式要一致。用 zstd 而不是 zip：小三成多，解得也快。
 
 const (
-	magic       = "SMSETUP1"
+	magic       = "SMSETUP2"
 	trailerSize = 16
 )
 
 var errNoPayload = errors.New("this setup file is incomplete (no package inside); download it again")
 
-// openPayload 找到 exe 后面接的那个 zip
-func openPayload(f *os.File) (*zip.Reader, error) {
+// openPayload 找到 exe 后面接的那一段（压着的）
+func openPayload(f *os.File) (io.Reader, error) {
 	info, err := f.Stat()
 	if err != nil {
 		return nil, err
@@ -42,39 +45,49 @@ func openPayload(f *os.File) (*zip.Reader, error) {
 	if n <= 0 || n > size-trailerSize {
 		return nil, fmt.Errorf("this setup file is damaged (package size %d of %d); download it again", n, size)
 	}
-	return zip.NewReader(io.NewSectionReader(f, size-trailerSize-n, n), n)
+	return io.NewSectionReader(f, size-trailerSize-n, n), nil
 }
 
-// extract 把 zip 里的东西解到 dir。只认 dir 里面的相对路径：包是自己打的，但坏了的包不该写到别处去
-func extract(r *zip.Reader, dir string) error {
-	for _, entry := range r.File {
-		name := filepath.FromSlash(entry.Name)
-		if !filepath.IsLocal(name) {
-			return fmt.Errorf("unexpected path in the package: %s", entry.Name)
-		}
-		target := filepath.Join(dir, name)
-		if entry.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, 0o755); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
-		if err := extractFile(entry, target); err != nil {
-			return fmt.Errorf("unpacking %s: %w", entry.Name, err)
-		}
-	}
-	return nil
-}
-
-func extractFile(entry *zip.File, target string) error {
-	in, err := entry.Open()
+// extract 把那一段解到 dir。只认 dir 里面的相对路径，只认目录和普通文件：包是自己打的，但坏了的包不该写到别处去
+func extract(r io.Reader, dir string) error {
+	dec, err := zstd.NewReader(r)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer dec.Close()
+	tr := tar.NewReader(dec)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("this setup file is damaged (%v); download it again", err)
+		}
+		name := filepath.FromSlash(header.Name)
+		if !filepath.IsLocal(name) {
+			return fmt.Errorf("unexpected path in the package: %s", header.Name)
+		}
+		target := filepath.Join(dir, name)
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			if err := extractFile(tr, target); err != nil {
+				return fmt.Errorf("unpacking %s: %w", header.Name, err)
+			}
+		default:
+			return fmt.Errorf("unexpected entry in the package: %s", header.Name)
+		}
+	}
+}
+
+func extractFile(in io.Reader, target string) error {
 	out, err := os.Create(target)
 	if err != nil {
 		return err

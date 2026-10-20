@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 把打好的发布包（dist/release/）传到腾讯云 COS。安装脚本和官网的下载链接都从那里取。
+// 把打好的发布（dist/release/）传到腾讯云 COS。更新、安装脚本和官网的下载链接都从那里取。
 // 发新版本用 npm run ship（scripts/release/ship.sh），它会先把关、打包，再调这里。单独用：
 //   scripts/release/with-cos-key.sh npm run publish-release       密钥和桶从本机配置里带上；传到一半断了就再跑一次
 //   npm run publish-release -- --dry-run                         只列出要传什么，不联网
@@ -24,9 +24,11 @@ if (unknown.length > 0) {
 }
 
 try {
-  const items = planUpload(releaseDir);
+  const plan = planUpload(releaseDir);
   if (args.includes("--dry-run")) {
-    for (const item of items) console.log(`${item.key}  ${item.size} 字节  ${item.cacheControl}`);
+    const bytes = plan.objects.reduce((sum, item) => sum + item.size, 0);
+    console.log(`对象 ${plan.objects.length} 个，共 ${bytes} 字节（上面已经有的不传）`);
+    for (const item of plan.files) console.log(`${item.key}  ${item.size} 字节  ${item.cacheControl}`);
     process.exit(0);
   }
 
@@ -49,8 +51,8 @@ try {
     );
   }
 
-  await publish(items, cosStore(env), console.log);
-  console.log(`\n发布好了：${items.length} 个文件都在上面。`);
+  await publish(plan, cosStore(env), console.log);
+  console.log(`\n发布好了：${plan.version} 的 ${plan.objects.length} 个对象和 ${plan.files.length} 个文件都在上面。`);
 } catch (error) {
   console.error(`没有发布成：${error.message}`);
   process.exit(1);

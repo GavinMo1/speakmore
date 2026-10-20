@@ -85,10 +85,10 @@ test("软件更新：进行中不给按，说到了哪一步；命令行在更�
 
 test("软件更新：没成、没起来、检查失败都照实说；没成和没起来的按钮是重试", () => {
   const failed = describeUpdate(
-    { ...IDLE, progress: { state: "failed", problem: msg("update.checksum", { file: "a.dmg" }) } },
+    { ...IDLE, progress: { state: "failed", problem: msg("update.checksum", { object: "0123456789ab" }) } },
     zh,
   );
-  assert.equal(failed.text, "更新未完成：下载的 a.dmg 与发布的校验值不符，可能在传输中损坏，请重新更新。");
+  assert.equal(failed.text, "更新未完成：下载的更新数据（0123456789ab）与发布的不符，可能在传输中损坏，请重新更新。");
   assert.deepEqual([failed.tone, failed.action, failed.label], ["problem", "start", "重试"]);
   assert.equal(describeUpdate({ ...IDLE, launchProblem: "spawn ENOENT" }, zh).text, "未能开始更新：spawn ENOENT");
   const check = describeUpdate({ ...IDLE, checkProblem: msg("update.unreachable", { url: "u", reason: "r" }) }, zh);

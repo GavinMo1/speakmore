@@ -1,3 +1,4 @@
+import { rmSync } from "node:fs";
 import { TimeoutError } from "../control.mjs";
 import { LocalizedError, msg, problemOf } from "../i18n/index.mjs";
 import { bundleOfPackage, createBundles } from "./bundle.mjs";
@@ -9,8 +10,9 @@ import { compareVersions, parseVersion } from "./versions.mjs";
 // 版本检查和更新。命令行（speakmore status、update）和 App（设置 › 通用）都只调这里，看到的是同一份状态（state.mjs）。
 // 更新把这台电脑上装着的每一份 SpeakMore 都换成最新的：家目录里的那一份（安装脚本装的，home.mjs），
 // Mac 上还有 SpeakMore.app（bundle.mjs）。两份共用设置和数据，版本要跟上。按这个顺序：
-//   1. 拿锁（命令行和 App 不能同时换），问最新版本
-//   2. 把要换的都下好、核对好：这时正在运行的那个照常用，下载失败也什么都没动
+//   1. 拿锁（命令行和 App 不能同时换），问最新的发布（channel.json）
+//   2. 把要换的都拼好、核对好：只下本机缺的块，没变的从装着的几份里拷（assemble.mjs）。
+//      这时正在运行的那个照常用，下载失败也什么都没动
 //   3. 要换的程序正在运行的话请它退出，换上
 //   4. 原来在运行的重新打开：换成了就是新的，没换成就是原来的
 // App 发起的更新跑在另一个进程里（background.mjs）：App 在第 3 步退出、第 4 步被重新打开，照 update.json 显示结果。
@@ -25,6 +27,14 @@ const ACTIVE_TIMEOUT_SECONDS = 20;
 /** 标着"正在更新"、可已经过了这么久的，进程号多半被别的程序用上了：算中断 */
 const RUN_AT_MOST_MS = 2 * 60 * 60 * 1000;
 
+/** 多大，给人看：十进制，和下载工具、访达一样；10 MB 以下带一位小数（更新常常只有一两兆） */
+const sizeText = (bytes) =>
+  bytes < 10_000_000
+    ? `${(bytes / 1_000_000).toFixed(1)} MB`
+    : bytes < 1_000_000_000
+      ? `${Math.round(bytes / 1_000_000)} MB`
+      : `${(bytes / 1_000_000_000).toFixed(1)} GB`;
+
 /**
  * @param {object} options
  * @param {ReturnType<import("../storage/paths.mjs").resolvePaths>} options.paths
@@ -32,7 +42,7 @@ const RUN_AT_MOST_MS = 2 * 60 * 60 * 1000;
  * @param {string} options.packageDir 这份程序的目录：据此认出它是家目录里的、应用包里的，还是从源码跑的
  * @param {string} options.version 这份程序的版本
  * @param {ReturnType<import("../instance.mjs").createInstance>} options.instance 正在运行的那个：问状态、请它退出
- * @param {boolean} [options.progress] 下载时在终端上显示进度条
+ * @param {boolean} [options.progress] 下载时把进度说出来（命令行在终端里时）
  * @param {"inherit" | "forward"} [options.stdio] 安装脚本、启动命令说的话接到哪（exec.mjs 的 runToEnd）
  */
 export function createUpdates({
@@ -45,7 +55,7 @@ export function createUpdates({
   arch = process.arch,
   progress = false,
   stdio = "inherit",
-  release = createRelease({ env, progress }),
+  release = createRelease({ env }),
   bundles = createBundles({ env, release, platform, arch }),
   homes = createHomes({ paths, env, release, stdio, platform, arch }),
   now = () => new Date(),
@@ -56,12 +66,24 @@ export function createUpdates({
   /** 这份程序是哪一份：家目录里的（home）、Mac 的应用包（bundle）。从源码跑的是 null，不归更新管（用 git pull） */
   const self = isHomeCopy(packageDir, paths, platform) ? "home" : selfBundle ? "bundle" : null;
 
-  /** 下载地址说的最新版本（不带 v）。不像版本号的（比如问到的其实是一个报错的网页）不往下用 */
-  async function latestVersion(timeoutSeconds) {
-    const answer = await release.latest(timeoutSeconds);
-    const latest = parseVersion(answer);
-    if (latest === null) throw new LocalizedError(msg("update.badVersion", { value: JSON.stringify(answer) }));
-    return latest;
+  /** 本机装着的几份（installed 找到的）在哪几个目录：拼新版本时当种子，没变的块从这里拷 */
+  const seedsOf = (copies) => [
+    ...(copies.some((copy) => copy.kind === "home") ? homes.seeds() : []),
+    ...copies.filter((copy) => copy.kind === "bundle").map((copy) => copy.path),
+  ];
+
+  /** 拼的进度：命令行在终端里时每过两成说一次（App 那边只看 update.json 的阶段） */
+  function progressReporter(report) {
+    if (!progress) return undefined;
+    let said = -1;
+    return ({ downloadedChunks, totalChunks }) => {
+      if (totalChunks === 0) return;
+      const step = Math.floor((downloadedChunks / totalChunks) * 5);
+      if (step > said) {
+        said = step;
+        report(msg("update.downloading", { percent: step * 20 }));
+      }
+    };
   }
 
   /**
@@ -138,7 +160,7 @@ export function createUpdates({
       const every = last?.failed ? RETRY_FAILED_MS : CHECK_EVERY_MS;
       if (force || last === null || now() - Date.parse(last.checkedAt) >= every) {
         try {
-          result.latest = await latestVersion(force ? ACTIVE_TIMEOUT_SECONDS : PASSIVE_TIMEOUT_SECONDS);
+          result.latest = (await release.channel(force ? ACTIVE_TIMEOUT_SECONDS : PASSIVE_TIMEOUT_SECONDS)).version;
         } catch (error) {
           result.problem = problemOf(error);
         }
@@ -196,7 +218,8 @@ export function createUpdates({
       let stagedHome = null;
       try {
         save({});
-        const latest = await latestVersion(ACTIVE_TIMEOUT_SECONDS);
+        const channel = await release.channel(ACTIVE_TIMEOUT_SECONDS);
+        const latest = channel.version;
         writeCheck(paths, { checkedAt: now().toISOString(), latest });
         const kindOf = (running) =>
           running === null || running === "hung" ? null : running.packaged ? "bundle" : "home";
@@ -214,8 +237,17 @@ export function createUpdates({
           version: latest,
           from: Object.fromEntries(behind.map((c) => [c.kind, c.version])),
         });
-        if (bundle) stagedBundle = await bundles.stage(latest, bundle.path);
-        if (home) stagedHome = await homes.stage(latest);
+        // 两份都要换的话共用下到的块：后拼的那份不再下前一份下过的
+        const staging = {
+          seeds: seedsOf(copies),
+          cacheDir: paths.updateCacheDir,
+          onProgress: progressReporter(report),
+        };
+        if (bundle) stagedBundle = await bundles.stage(channel, bundle.path, staging);
+        if (home) stagedHome = await homes.stage(channel, staging);
+        const downloaded = (stagedBundle?.downloadedBytes ?? 0) + (stagedHome?.downloadedBytes ?? 0);
+        const reused = (stagedBundle?.reusedBytes ?? 0) + (stagedHome?.reusedBytes ?? 0);
+        report(msg("update.delta", { download: sizeText(downloaded), reused: sizeText(reused) }));
 
         // 下载可能要好几分钟，这期间用户可能打开或退出了 SpeakMore：停谁、换完开谁，按现在在跑的那个定。
         // 要换的程序正在运行就请它退出。安装脚本换家目录里那一份之前，不管在跑的是哪一份都会先停掉它，所以这时都停；
@@ -245,7 +277,7 @@ export function createUpdates({
           }
           if (stagedHome) {
             report(msg("update.updating", { current: home.version, latest }));
-            const code = await homes.install(stagedHome, latest);
+            const code = await homes.install(stagedHome);
             if (code !== 0) throw new LocalizedError(msg("update.installFailed", { code }));
           }
         } catch (error) {
@@ -260,6 +292,8 @@ export function createUpdates({
               : { state: "done", phase: null, finishedAt: now().toISOString() },
           );
         finish(failure);
+        // 换成了，下到的块就用不着了；没换成的留着，下次只补剩下的
+        if (!failure) rmSync(paths.updateCacheDir, { recursive: true, force: true, maxRetries: 3 });
         try {
           await reopen(stopped, bundlePath, report);
         } catch (error) {
