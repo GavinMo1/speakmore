@@ -12,7 +12,7 @@
 //   win32-x64           Windows：一样是 app\（带 install.ps1）和 runtime\（原版的 Electron）。也在这台 Mac 上打：
 //                       小帮手用项目自带的 Go 交叉编译（scripts/build/go.sh），运行库按 win32-x64 装（npm 的 --os、--cpu）
 //   darwin-<芯片>-app   签了名、过了公证的 SpeakMore.app。要本机配好签名和公证（.machine.env 的 MAC_SIGNING_IDENTITY、
-//                       MAC_NOTARY_PROFILE），没配就不打，发布时会因为缺它传不上去
+//                       MAC_NOTARY_PROFILE）；没配也打（临时签名或只签名、不公证）、也记清单，好在本机试更新，只是不打 dmg、发不出去
 // 树里的文件按内容切块（chunker.mjs），每块压好存成 store/<sha256>，同一块只存一份；更新只下本机缺的块。
 // 首次安装用的包：Mac 终端安装的 tar.xz、Mac 的 dmg、Windows 的 zip（irm … | iex）和安装程序 Setup.exe。
 // Windows 上的都没签名：暂时不签。
@@ -33,12 +33,14 @@ import { packageMacApp } from "../build/mac-app.mjs";
 import { signingConfig } from "../build/signing.mjs";
 import { trimWindowsLocales } from "../build/slim.mjs";
 import { APP_ENTRIES, stageApp } from "../build/stage-app.mjs";
+import { TAR_ANONYMOUS } from "../build/tar.mjs";
 import { buildWindowsSetup } from "../build/windows-setup.mjs";
 import {
   ARCHS,
   appTarget,
   archiveName,
   CHANNEL,
+  CHANNEL_FORMAT,
   dmgName,
   homeTarget,
   objectPath,
@@ -101,8 +103,12 @@ function putObject(sha, data) {
   if (!existsSync(path)) writeFileSync(path, packObject(data));
 }
 
-/** 每种装法用哪份清单，最后写进 channel.json */
+/**
+ * 每种装法用哪份清单，最后写进 channel.json。每打好一份就落到 targets.json（不上传）：后面哪一步断了
+ * （比如 dmg 公证连不上苹果），只补那一步、再照它写 channel.json 就行，不用整个重打（见 ship.sh 开头）
+ */
 const targets = {};
+const TARGETS_FILE = "targets.json";
 
 /**
  * 一棵树切块进对象仓库，清单也存成一个对象
@@ -116,10 +122,11 @@ async function publishTree(root, target, { links = true } = {}) {
   const sha = sha256Of(encoded);
   putObject(sha, encoded);
   targets[target] = sha;
+  writeFileSync(join(outDir, TARGETS_FILE), `${JSON.stringify(targets, null, 2)}\n`);
   const chunks = chunksIn(manifest);
   const bytes = [...chunks.values()].reduce((sum, size) => sum + size, 0);
   const files = manifest.entries.filter((entry) => entry.type === "file").length;
-  console.log(`清单 ${target}：${files} 个文件，${chunks.size} 块，共 ${megabytes(bytes)}（清单 ${sha.slice(0, 12)}）`);
+  console.log(`清单 ${target}：${files} 个文件，${chunks.size} 块，共 ${megabytes(bytes)}（清单 ${sha}）`);
 }
 
 /** 在后台跑一个命令：几个包同时压（xz、zip 都只用一个核） */
@@ -163,9 +170,19 @@ try {
     await publishTree(tree, homeTarget("darwin", arch));
 
     const archive = join(outDir, versionDir(version), archiveName(arch));
-    // xz 比 gzip 小三成多，macOS 自带的 tar 就解得开。不让它把扩展属性存成一堆 ._ 开头的文件
+    // xz 比 gzip 小三成多，macOS 自带的 tar 就解得开。不留本机的用户名、扩展属性这些（tar.mjs）
     const env = { ...process.env, COPYFILE_DISABLE: "1" };
-    const args = ["--options", "xz:compression-level=9", "-cJf", archive, "-C", tree, "app", "runtime"];
+    const args = [
+      ...TAR_ANONYMOUS,
+      "--options",
+      "xz:compression-level=9",
+      "-cJf",
+      archive,
+      "-C",
+      tree,
+      "app",
+      "runtime",
+    ];
     inBackground(runInBackground("tar", args, { env }).then(() => writeChecksum(archive)));
   }
 
@@ -188,20 +205,22 @@ try {
     inBackground(buildWindowsSetup({ packageDir, version, tree, out: setup }).then(() => writeChecksum(setup)));
   }
 
-  // 没公证过的 dmg 下回来系统不让开，所以签名和公证都配了才打。公证要排队，压包的同时做
-  if (signing?.notaryProfile) {
-    const appsDir = join(staging, "apps");
-    for (const arch of archs) {
-      const appPath = await packageMacApp({ packageDir, arch, out: appsDir, signing });
-      // 清单照着签好名、钉好票据的这一份记：更新拼出来的和它逐字节相同，签名照样验得过
-      await publishTree(appPath, appTarget(arch));
-      const dmg = join(outDir, versionDir(version), dmgName(arch));
-      makeDmg({ appPath, dmgPath: dmg, signing });
-      writeChecksum(dmg);
-    }
-  } else {
+  // App 总是打、总是记清单：本机试更新（SPEAKMORE_INSTALL_BASE=dist/release）也有 App 这种装法。
+  // 没配签名就是本机的临时签名，配了签名没配公证就只签名（mac-app.mjs）。
+  // dmg 只在签名和公证都配了时打：没公证过的 dmg 下回来系统不让开。公证要排队，压包的同时做
+  const appsDir = join(staging, "apps");
+  for (const arch of archs) {
+    const appPath = await packageMacApp({ packageDir, arch, out: appsDir, signing });
+    // 清单照着签好名、钉好票据的这一份记：更新拼出来的和它逐字节相同，签名照样验得过
+    await publishTree(appPath, appTarget(arch));
+    if (!signing?.notaryProfile) continue;
+    const dmg = join(outDir, versionDir(version), dmgName(arch));
+    makeDmg({ appPath, dmgPath: dmg, signing });
+    writeChecksum(dmg);
+  }
+  if (!signing?.notaryProfile) {
     console.warn(
-      "没配签名和公证（.machine.env 的 MAC_SIGNING_IDENTITY、MAC_NOTARY_PROFILE），不打 App 和安装包；发布时缺了它们传不上去",
+      "没配签名和公证（.machine.env 的 MAC_SIGNING_IDENTITY、MAC_NOTARY_PROFILE），不打安装包（dmg），App 也没公证；只能本机试，发布时传不上去",
     );
   }
   await Promise.all(packing);
@@ -214,5 +233,6 @@ try {
 // 安装脚本和发布包放在一起：下载地址上的和仓库里的是同一份
 cpSync(join(packageDir, "install.sh"), join(outDir, "install.sh"));
 cpSync(join(packageDir, "install.ps1"), join(outDir, "install.ps1"));
-writeFileSync(join(outDir, CHANNEL), `${JSON.stringify({ version, electron: electronVersion, targets }, null, 2)}\n`);
+const channel = { format: CHANNEL_FORMAT, version, electron: electronVersion, targets };
+writeFileSync(join(outDir, CHANNEL), `${JSON.stringify(channel, null, 2)}\n`);
 console.log(`\nSpeakMore ${version}（Electron ${electronVersion}）的发布在 ${outDir}`);

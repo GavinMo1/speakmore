@@ -25,7 +25,7 @@ test("文件版本只认四段数字：预发版本号取前三段", () => {
   assert.equal(fileVersion("0.9.0-rc.1"), "0.9.0.0");
 });
 
-test("拼法：程序在前，接着是整棵树打成的 tar 再用 zstd 压过，最后是尾巴；编译时生成的资源文件不留", async () => {
+test("拼法：程序在前，接着是整棵树打成的 tar 再用 zstd 压过，最后是尾巴；tar 里不留本机用户名，编译时生成的资源文件不留", async () => {
   const packageDir = join(dir, "repo");
   const source = join(packageDir, "native", "windows-setup");
   mkdirSync(source, { recursive: true });
@@ -69,5 +69,11 @@ test("拼法：程序在前，接着是整棵树打成的 tar 再用 zstd 压过
     .filter((name) => name && !name.endsWith("/"))
     .sort();
   assert.deepEqual(listed, ["app/bin/speakmore.mjs", "app/install.ps1", "runtime/electron.exe"]);
+  // 发出去的包里没有这台机器的用户名、编号
+  const owners = execFileSync("tar", ["-tvf", archive], { encoding: "utf8" })
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => line.split(/\s+/).slice(2, 4).join(" "));
+  assert.deepEqual([...new Set(owners)], ["0 0"]);
   assert.equal(existsSync(join(source, "rsrc_windows_amd64.syso")), false);
 });

@@ -10,8 +10,10 @@
 // 被刷时每小时最多 4 GB，一天最多约 96 GB，按境内 0.21 元/GB 约 20 元；真用户最多等到下一个小时。
 // 境内、境外各算各的（腾讯云的封顶按区域分别触发）。
 
+import { setTimeout as delay } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { cdn } from "tencentcloud-sdk-nodejs-cdn";
+import { capMismatches, hourlyCap } from "./stats-core.mjs";
 
 const DOMAIN = "dl.zephyrxiang.com";
 
@@ -28,29 +30,7 @@ if (!secretId || !secretKey) {
   process.exit(2);
 }
 
-/** 和控制台一样按 1024 算：填 4 GB 就是 4 × 1024³ 字节 */
-const threshold = Math.round(gb * 2 ** 30);
-const item = {
-  Type: "total",
-  Switch: "on",
-  Metric: "flux",
-  // 统计周期和自动解封都是分钟
-  Cycle: 60,
-  UnBlockTime: 60,
-  BpsThreshold: threshold,
-  CounterMeasure: "RETURN_404",
-  AlertSwitch: "on",
-  AlertPercentage: 80,
-};
-const wanted = {
-  Switch: "on",
-  Metric: "flux",
-  BpsThreshold: threshold,
-  CounterMeasure: "RETURN_404",
-  AlertSwitch: "on",
-  AlertPercentage: 80,
-  StatisticItems: [item],
-};
+const wanted = hourlyCap(gb);
 
 const client = new cdn.v20180606.Client({ credential: { secretId, secretKey }, region: "" });
 const describe = async () => {
@@ -78,12 +58,21 @@ try {
     process.exit(0);
   }
   await client.UpdateDomainConfig({ Domain: DOMAIN, BandwidthAlert: wanted });
-  // 配置下发要一两分钟，读回来核对写进去的是不是这样
-  const now = await describe();
-  const applied = now?.StatisticItems?.find((it) => it.Type === "total");
-  const ok = applied && applied.Cycle === 60 && applied.UnBlockTime === 60 && applied.BpsThreshold === threshold;
+  // 读回来逐项核对写进去的是不是这样（顶层和按小时那一档都比）。配置下发可能要一会儿，对不上的隔 10 秒再读，最多一分钟
+  let now;
+  let wrong = [];
+  for (let attempt = 0; attempt < 7; attempt += 1) {
+    if (attempt > 0) await delay(10_000);
+    now = await describe();
+    wrong = capMismatches(wanted, now);
+    if (wrong.length === 0) break;
+  }
   console.log(`\n改完读回来：${summary(now)}`);
-  if (!ok) throw new Error("读回来的和要改的不一样，去控制台看一眼（CDN › 域名管理 › 访问控制 › 用量封顶）");
+  if (wrong.length > 0) {
+    throw new Error(
+      `读回来这几项和要改的不一样：${wrong.join("、")}。去控制台看一眼（CDN › 域名管理 › 访问控制 › 用量封顶）`,
+    );
+  }
   console.log("改好了。");
 } catch (error) {
   console.error(`没改成：${error.message}`);

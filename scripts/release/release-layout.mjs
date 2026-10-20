@@ -15,6 +15,7 @@ import {
   appTarget,
   archiveName,
   CHANNEL,
+  CHANNEL_FORMAT,
   dmgName,
   homeTarget,
   objectPath,
@@ -27,12 +28,23 @@ import { chunksIn, parseManifest } from "../../src/update/manifest.mjs";
 import { unpackObject } from "../../src/update/objects.mjs";
 import { parseChannel } from "../../src/update/release.mjs";
 
-export { appTarget, archiveName, CHANNEL, dmgName, homeTarget, objectPath, versionDir, WINDOWS_ARCHIVE, WINDOWS_SETUP };
+export {
+  appTarget,
+  archiveName,
+  CHANNEL,
+  CHANNEL_FORMAT,
+  dmgName,
+  homeTarget,
+  objectPath,
+  versionDir,
+  WINDOWS_ARCHIVE,
+  WINDOWS_SETUP,
+};
 
 export const ARCHS = ["arm64", "x64"];
 
 /** 下载地址上，这个产品的东西都在这个前缀下面 */
-export const KEY_PREFIX = "speakmore/";
+const KEY_PREFIX = "speakmore/";
 /** 传上去就不再变的：各处可以放心长期缓存 */
 const IMMUTABLE = "public, max-age=31536000, immutable";
 /** 每次发布都会换的：只缓存一小会儿，新版本一分钟内人人看得到 */
@@ -80,10 +92,11 @@ export function planUpload(releaseDir) {
   if (missingTargets.length > 0)
     throw new Error(`${CHANNEL} 里少了这几种装法的清单：${missingTargets.join("、")}。${RERUN}`);
 
-  // 清单和它们用到的块：一个对象可能被好几份清单用到，只列一次
+  // 清单和它们用到的块：一个对象可能被好几份清单用到（两种装法的树一模一样时清单也是同一份），只列一次
   const objects = new Map();
+  const contents = new Map();
   const object = (sha) => {
-    if (objects.has(sha)) return objects.get(sha);
+    if (contents.has(sha)) return contents.get(sha);
     const path = join(releaseDir, objectPath(sha));
     if (!existsSync(path)) throw new Error(`发布目录里少了对象 ${objectPath(sha)}。${RERUN}`);
     const packed = readFileSync(path);
@@ -100,6 +113,7 @@ export function planUpload(releaseDir) {
       cacheControl: IMMUTABLE,
       contentType: OBJECT,
     });
+    contents.set(sha, data);
     return data;
   };
   for (const target of TARGETS) {

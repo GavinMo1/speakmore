@@ -21,11 +21,13 @@ import COS from "cos-nodejs-sdk-v5";
 import { cdn } from "tencentcloud-sdk-nodejs-cdn";
 import {
   at,
+  capOf,
   earlyMisses,
   findSelf,
   gb,
   hashIp,
   missAlerts,
+  objectMissAlerts,
   parseLogLine,
   summarizeDownloads,
   trafficAlerts,
@@ -80,7 +82,8 @@ async function listBucket(cos, bucket) {
     const res = await cos.getBucket({ Bucket: bucket, Region: process.env.COS_REGION, Marker: marker, MaxKeys: 1000 });
     for (const c of res.Contents) out[c.Key] = Number(c.Size);
     if (res.IsTruncated !== "true") return out;
-    marker = res.NextMarker;
+    // 不带分隔符时 COS 可能不给 NextMarker：接着最后一个往下列，不然会从头无限循环
+    marker = res.NextMarker || res.Contents.at(-1).Key;
   }
 }
 
@@ -166,22 +169,6 @@ async function daily(call, request) {
   return out;
 }
 
-/** 用量封顶：累计流量那一档（按天或按小时，scripts/ops/cdn-cap.mjs 设的）；按天的才能和每天的流量直接对照 */
-function capOf(alert) {
-  const total = (alert?.StatisticItems ?? []).find(
-    (i) => i.Switch === "on" && i.Metric === "flux" && (i.Cycle === 1440 || i.Cycle === 60),
-  );
-  const on = alert?.Switch === "on" || Boolean(total);
-  return {
-    on,
-    metric: total ? "flux" : alert?.Metric,
-    cycle: total?.Cycle ?? null,
-    threshold: total?.BpsThreshold ?? alert?.BpsThreshold ?? null,
-    counterMeasure: total?.CounterMeasure ?? alert?.CounterMeasure ?? null,
-    lastTrigger: { mainland: alert?.LastTriggerTime ?? null, overseas: alert?.LastTriggerTimeOverseas ?? null },
-  };
-}
-
 async function traffic(client) {
   const config = await client.DescribeDomainsConfig({
     Filters: [{ Name: "domain", Value: DOMAINS.map((d) => d.name) }],
@@ -253,7 +240,8 @@ async function main() {
         mkdirSync(CACHE, { recursive: true });
         writeFileSync(
           SIZES,
-          `${JSON.stringify(Object.fromEntries(Object.entries(files).filter(([k]) => k.startsWith(`${PREFIX}/`))))}\n`,
+          // 更新的块（store/ 下）成千上万、不算下载量，不记大小
+          `${JSON.stringify(Object.fromEntries(Object.entries(files).filter(([k]) => k.startsWith(`${PREFIX}/`) && !k.startsWith(`${PREFIX}/store/`))))}\n`,
         );
       }
     }
@@ -277,6 +265,7 @@ async function main() {
     ...(report.traffic ? trafficAlerts(report.traffic) : []),
     // 坏链接只在昨天以来还有人点到时报
     ...missAlerts(report.misses, download.host, `${beijing(-1).replaceAll("-", "")}000000`),
+    ...objectMissAlerts(rows, { self, domain: download.host, since: `${beijing(-1).replaceAll("-", "")}000000` }),
   ];
 
   if (args.json) console.log(JSON.stringify(report, null, 2));

@@ -267,3 +267,78 @@ export function trafficAlerts(domains) {
   }
   return alerts;
 }
+
+/**
+ * 用量封顶：累计流量那一档（按天或按小时，scripts/ops/cdn-cap.mjs 设的）；按天的才能和每天的流量直接对照。
+ * alert 是腾讯云 CDN 域名配置里的 BandwidthAlert
+ */
+export function capOf(alert) {
+  const total = (alert?.StatisticItems ?? []).find(
+    (i) => i.Switch === "on" && i.Metric === "flux" && (i.Cycle === 1440 || i.Cycle === 60),
+  );
+  return {
+    on: alert?.Switch === "on" || Boolean(total),
+    metric: total ? "flux" : alert?.Metric,
+    cycle: total?.Cycle ?? null,
+    threshold: total?.BpsThreshold ?? alert?.BpsThreshold ?? null,
+    counterMeasure: total?.CounterMeasure ?? alert?.CounterMeasure ?? null,
+    lastTrigger: { mainland: alert?.LastTriggerTime ?? null, overseas: alert?.LastTriggerTimeOverseas ?? null },
+  };
+}
+
+/**
+ * 按小时封顶的配置（cdn-cap.mjs 写进去的那份）：累计流量每小时 gb GB（按 1024 算，和控制台一样），超了全部 404，
+ * 一小时后自动恢复，到八成提醒。Cycle 和 UnBlockTime 都是分钟
+ */
+export function hourlyCap(gb) {
+  const threshold = Math.round(gb * 2 ** 30);
+  const common = { BpsThreshold: threshold, CounterMeasure: "RETURN_404", AlertSwitch: "on", AlertPercentage: 80 };
+  return {
+    Switch: "on",
+    Metric: "flux",
+    ...common,
+    StatisticItems: [{ Type: "total", Switch: "on", Metric: "flux", Cycle: 60, UnBlockTime: 60, ...common }],
+  };
+}
+
+/** 封顶配置里要和 hourlyCap 对得上的那几项：读回来逐项比 */
+export function capMismatches(wanted, actual) {
+  const item = (alert) => alert?.StatisticItems?.find((it) => it.Type === "total") ?? {};
+  const top = ["Switch", "Metric", "CounterMeasure"];
+  const inner = [
+    "Switch",
+    "Metric",
+    "Cycle",
+    "UnBlockTime",
+    "BpsThreshold",
+    "CounterMeasure",
+    "AlertSwitch",
+    "AlertPercentage",
+  ];
+  return [
+    ...top.filter((key) => actual?.[key] !== wanted[key]).map((key) => key),
+    ...inner.filter((key) => item(actual)[key] !== item(wanted)[key]).map((key) => `StatisticItems.${key}`),
+  ];
+}
+
+/**
+ * 更新要的块（store/ 下）真用户拿到 404：块没传上去、或者被删了，装着的那份更新不了。since 之后还有人碰到才报
+ * （封顶时一切都 404，那种另有封顶的告警）
+ */
+export function objectMissAlerts(rows, { self, domain, since }) {
+  const hits = rows.filter((row) => isObject(row.path) && row.status === 404 && !self.has(row.ip) && row.time >= since);
+  if (hits.length === 0) return [];
+  const ips = new Set(hits.map((row) => row.ip)).size;
+  return [
+    {
+      level: "warn",
+      domain,
+      text: `更新要的块 404 了 ${hits.length} 次（${ips} 个真用户，最近一次 ${at(
+        hits
+          .map((row) => row.time)
+          .sort()
+          .at(-1),
+      )}）：查 store/ 里是不是少了对象`,
+    },
+  ];
+}

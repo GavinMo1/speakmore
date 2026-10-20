@@ -14,7 +14,8 @@ export function describeCosError(error) {
 const SLICE_SIZE = 8 * 1024 * 1024;
 
 export function cosStore({ bucket, region, secretId, secretKey }) {
-  const cos = new COS({ SecretId: secretId, SecretKey: secretKey, UploadCheckContentMd5: true });
+  // Timeout：SDK 默认不超时，一万多个小对象并行传时有一条连接半死不活，整个发布就一直挂着；超时了 SDK 会重试
+  const cos = new COS({ SecretId: secretId, SecretKey: secretKey, UploadCheckContentMd5: true, Timeout: 120_000 });
   const target = { Bucket: bucket, Region: region };
   return {
     /** 这个前缀下有哪些对象：名字 → 大小。一次最多列一千个，接着上次的往下列 */

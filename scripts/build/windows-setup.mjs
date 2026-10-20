@@ -16,7 +16,6 @@ import {
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { constants, createZstdCompress } from "node:zlib";
 import { goCommand } from "../../src/cli/native-helper.mjs";
 
 export const SETUP_MAGIC = "SMSETUP2";
@@ -37,37 +36,17 @@ export function setupTrailer(payloadBytes) {
 /** exe 的文件版本只认四段数字：0.9.0-rc.1 记成 0.9.0.0（完整的版本号写在产品版本里） */
 export const fileVersion = (version) => `${/^\d+\.\d+\.\d+/.exec(version)[0]}.0`;
 
-/**
- * 把一棵树（里面是 app 和 runtime）打成 tar、用 zstd 压，写到 out。
- * 压得狠（19 档、远距离匹配）：打一次、下很多次。实测 Windows 的树 430 MB 压到约 120 MB，同一棵树的 zip 是 170 MB
- */
-export async function packTree(tree, out) {
-  // macOS 的 tar 会把扩展属性存成 ._ 开头的文件、或者 pax 头里的 Mac 元数据：都不要，Windows 上用不着
-  const args = [
-    "-cf",
-    "-",
-    "-C",
-    tree,
-    ...(process.platform === "darwin" ? ["--no-mac-metadata"] : []),
-    "app",
-    "runtime",
-  ];
-  const tar = spawn("tar", args, {
-    stdio: ["ignore", "pipe", "inherit"],
-    env: { ...process.env, COPYFILE_DISABLE: "1" },
+/** 把一棵树打成 zstd 压的 tar，写到 out：另起一个进程跑（pack-tree.mjs 里说了为什么） */
+function packTree(tree, out) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [join(import.meta.dirname, "pack-tree.mjs"), tree, out], {
+      stdio: "inherit",
+    });
+    child.on("error", reject);
+    child.on("exit", (code) =>
+      code === 0 ? resolve() : reject(new Error(`压 ${basename(out)} 失败（退出码 ${code}）`)),
+    );
   });
-  const exited = new Promise((resolve, reject) => {
-    tar.on("error", reject);
-    tar.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`tar 退出码 ${code}`))));
-  });
-  const zstd = createZstdCompress({
-    params: {
-      [constants.ZSTD_c_compressionLevel]: 19,
-      [constants.ZSTD_c_enableLongDistanceMatching]: 1,
-      [constants.ZSTD_c_windowLog]: 27,
-    },
-  });
-  await Promise.all([pipeline(tar.stdout, zstd, createWriteStream(out)), exited]);
 }
 
 /**
@@ -77,7 +56,7 @@ export async function packTree(tree, out) {
  * @param {string} options.tree 摆好的 Windows 程序（里面是 app 和 runtime，app 里带着 install.ps1）
  * @param {string} options.out 安装程序写到哪
  */
-export async function buildWindowsSetup({ packageDir, version, tree, out, run = execFileSync, pack = packTree }) {
+export async function buildWindowsSetup({ packageDir, version, tree, out, run = execFileSync }) {
   const source = join(packageDir, "native", "windows-setup");
   const go = goCommand(packageDir, process.platform);
   const work = mkdtempSync(join(tmpdir(), "speakmore-setup-"));
@@ -125,7 +104,7 @@ export async function buildWindowsSetup({ packageDir, version, tree, out, run = 
     }
 
     const payload = join(work, "payload.tar.zst");
-    await pack(tree, payload);
+    await packTree(tree, payload);
 
     copyFileSync(program, out);
     await pipeline(createReadStream(payload), createWriteStream(out, { flags: "a" }));

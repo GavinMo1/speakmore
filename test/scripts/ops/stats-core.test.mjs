@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  capMismatches,
+  capOf,
   earlyMisses,
   findSelf,
   hashIp,
+  hourlyCap,
   missAlerts,
+  objectMissAlerts,
   packageKind,
   parseLogLine,
   summarizeDownloads,
@@ -278,4 +282,57 @@ test("流量告警：没开封顶、窗口内触发过封顶、出现 5xx、某�
       ["warn", "回源失败率 5.0%（2026-10-18，300 次回源失败 15 次）"],
     ],
   );
+});
+
+test("封顶：按天、按小时的累计流量那一档都认得出；没开的说没开", () => {
+  const daily = {
+    Switch: "on",
+    StatisticItems: [{ Switch: "on", Metric: "flux", Cycle: 1440, BpsThreshold: 50 * 2 ** 30 }],
+  };
+  assert.deepEqual([capOf(daily).on, capOf(daily).cycle, capOf(daily).threshold], [true, 1440, 50 * 2 ** 30]);
+  const hourly = hourlyCap(4);
+  assert.deepEqual([capOf(hourly).cycle, capOf(hourly).threshold], [60, 4 * 2 ** 30]);
+  assert.equal(capOf({ Switch: "off", StatisticItems: [] }).on, false);
+});
+
+test("按小时封顶：每小时 4 GB（按 1024 算）、超了 404、一小时后恢复、八成提醒；读回来逐项比，哪项不一样说哪项", () => {
+  const wanted = hourlyCap(4);
+  const [item] = wanted.StatisticItems;
+  assert.deepEqual(
+    [
+      item.Type,
+      item.Metric,
+      item.Cycle,
+      item.UnBlockTime,
+      item.BpsThreshold,
+      item.CounterMeasure,
+      item.AlertPercentage,
+    ],
+    ["total", "flux", 60, 60, 4294967296, "RETURN_404", 80],
+  );
+  assert.deepEqual(capMismatches(wanted, structuredClone(wanted)), []);
+  // 读回来的会多几项（OpenAt、LastTriggerTime 这些），不算不一样
+  const actual = structuredClone(wanted);
+  actual.LastTriggerTime = null;
+  actual.StatisticItems[0].OpenAt = 1;
+  assert.deepEqual(capMismatches(wanted, actual), []);
+  actual.StatisticItems[0].Cycle = 1440;
+  actual.Switch = "off";
+  assert.deepEqual(capMismatches(wanted, actual), ["Switch", "StatisticItems.Cycle"]);
+});
+
+test("更新要的块真用户拿到 404：报出来；自测的、早于 since 的不算", () => {
+  const object = `/speakmore/store/${"a".repeat(64)}`;
+  const rows = rowsOf(
+    { ip: "203.0.113.50", t: "20261019100000", path: object, status: 404 },
+    { ip: "203.0.113.51", t: "20261019110000", path: object, status: 404 },
+    { ip: "203.0.113.52", t: "20261017100000", path: object, status: 404 },
+    { ip: "198.51.100.1", t: "20261019120000", path: object, status: 404 },
+    { ip: "203.0.113.53", t: "20261019120000", path: object, status: 200 },
+  );
+  const self = new Map([["198.51.100.1", new Set(["known"])]]);
+  const alerts = objectMissAlerts(rows, { self, domain: "dl.example", since: "20261018000000" });
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0].text, /404 了 2 次（2 个真用户，最近一次 10-19 11:00）/);
+  assert.deepEqual(objectMissAlerts(rows.slice(2), { self, domain: "dl.example", since: "20261018000000" }), []);
 });
