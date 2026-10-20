@@ -223,5 +223,12 @@ console.log(JSON.stringify({ measured, copied }));
   const { measured, copied } = JSON.parse(run.stdout);
   assert.equal(measured.files, 1);
   assert.equal(copied.files, 1);
-  assert.equal(readFileSync(join(to, "runtime", "default_app.asar"), "utf8"), "不是压缩包，照原样拷");
+  // 这里自己读也要按普通文件读：发版前的检查用 Electron 自带的 Node 跑这些测试，它同样会把 .asar 当压缩包
+  const before = process.noAsar;
+  process.noAsar = true;
+  try {
+    assert.equal(readFileSync(join(to, "runtime", "default_app.asar"), "utf8"), "不是压缩包，照原样拷");
+  } finally {
+    process.noAsar = before;
+  }
 });
