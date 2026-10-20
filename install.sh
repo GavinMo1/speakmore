@@ -1,20 +1,25 @@
 #!/bin/bash
-# SpeakMore 的安装脚本：检查环境、下载、校验、装进 ~/.speakmore，然后启动。
+# SpeakMore 的安装脚本：检查环境、下载、校验、装进 SpeakMore 的目录，然后启动。
 #
 #   curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 #
-# 所有东西都装在 ~/.speakmore 这一个目录里（程序、运行环境，以及之后的设置、key、历史和录音），
-# 目录以外只建一个指向命令的链接。不需要 Node、npm、Xcode，也不需要 sudo。
-# 已经装过的话再运行一次就是升级：程序换成新的，你的东西不动。卸载用 speakmore uninstall。
-# 这个脚本也随程序一起装进 app/ 里：speakmore update 拼好新版本后，用新版本自带的这一份把它换上（SPEAKMORE_INSTALL_FROM）。
+# 所有东西都装在一个目录里（程序、运行环境，以及之后的设置、key、历史和录音），默认是 ~/.speakmore，可以装在别处。
+# 目录以外只有两样：一个指向命令的链接，和记着目录在哪的定位文件 ~/.config/speakmore/location.json
+# （src/storage/location.mjs；从"应用程序"打开的 App、下次安装都靠它找到目录）。不需要 Node、npm、Xcode，也不需要 sudo。
+# 已经装过的话再运行一次就是升级：程序换成新的，你的东西不动，装在哪照定位文件。卸载用 speakmore uninstall。
+# 0.11.0 及以前装的（没有定位文件、启动脚本里写死了路径）升级时一样处理：启动脚本换成新的，定位文件补上。
+# 这个脚本也随程序一起装进 app/ 里：speakmore update 拼好新版本后，用新版本自带的这一份把它换上（SPEAKMORE_INSTALL_FROM）；
+# speakmore move 把整个目录拷到新位置后，用那里的这一份把命令的链接和定位文件改指过去（SPEAKMORE_PREVIOUS_HOME）。
 #
 # 可以用环境变量调整：
-#   SPEAKMORE_HOME          装到哪（默认 ~/.speakmore）
+#   SPEAKMORE_HOME          装到哪（默认照定位文件，没有定位文件是 ~/.speakmore）
 #   SPEAKMORE_VERSION       装哪个版本，比如 v0.11.0（默认最新的；0.11.0 以前的包是 tar.gz，这个脚本不装）
 #   SPEAKMORE_INSTALL_BASE  从哪下载：一个网址前缀，或者本机的一个目录（npm run release 打出来的 dist/release）
 #   SPEAKMORE_BIN_DIR       命令的链接建在哪个目录（默认 ~/.local/bin）
 #   SPEAKMORE_INSTALL_FROM  不下载，装一棵已经准备好的树（里面是 app/ 和 runtime/）：speakmore update 拼在家目录里
 #                           .update- 开头的目录里，只认那里的
+#   SPEAKMORE_PREVIOUS_HOME 换家：SPEAKMORE_HOME 里已经是从这个旧目录整个拷过来的一份（speakmore move 拷的）。
+#                           不下载、不换程序，只试跑、重写启动脚本，把指着旧目录的命令链接、定位文件改指到这里
 # 加 --no-start 只装不启动：curl … | bash -s -- --no-start
 #
 # 写法要能在 macOS 自带的 bash 3.2 上跑。全部逻辑都在函数里、最后一行才调用：
@@ -36,8 +41,23 @@ MIN_VERSION="0.11.0"
 NEEDED_MB=1000
 # macOS 上 Unix 套接字的路径最长 103 个字节，控制通道在 <目录>/run/control.sock
 MAX_HOME_BYTES=86
+# 读定位文件（JSON）：bash 读不了 JSON，交给系统自带的 osascript（JavaScript），每个版本的 macOS 都有。
+# 不是 JSON、没有 home 这一项的交回空的，由 read_location 认作坏了
+READ_LOCATION_JS='function run(argv) {
+  ObjC.import("Foundation");
+  const text = $.NSString.stringWithContentsOfFileEncodingError(argv[0], $.NSUTF8StringEncoding, null);
+  if (text.isNil()) throw new Error("unreadable");
+  try {
+    const home = JSON.parse(text.js.replace(/^﻿/, "")).home;
+    return typeof home === "string" ? home : "";
+  } catch (error) {
+    return "";
+  }
+}'
 
 TMP_DIR=""
+# 新版本换上了没有：之后才出错的（只剩记下装在哪），不能再说"什么都没装"
+SWAPPED=0
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   GREEN=$'\033[32m' YELLOW=$'\033[33m' RED=$'\033[31m' BOLD=$'\033[1m' DIM=$'\033[2m' RESET=$'\033[0m'
@@ -49,19 +69,28 @@ heading() { printf '\n  %s%s%s\n' "$BOLD" "$1" "$RESET"; }
 ok() { printf '  %s✓%s %s\n' "$GREEN" "$RESET" "$1"; }
 warn() { printf '  %s!%s %s\n' "$YELLOW" "$RESET" "$1"; }
 note() { printf '    %s%s%s\n' "$DIM" "$1" "$RESET"; }
-# 说清楚哪里不行、怎么办，然后退出。到这一步为止没有换掉任何已经装好的东西
+# 说清楚哪里不行、怎么办，然后退出。新版本换上之前出错的什么都没动；换上之后才出错的照实说装好了什么
 fail() {
   printf '  %s✗%s %s\n' "$RED" "$RESET" "$1" >&2
   shift
   for line in "$@"; do printf '    %s\n' "$line" >&2; done
-  printf '\n  Nothing was installed; what you had is untouched.\n' >&2
+  if [ "$SWAPPED" = 1 ]; then
+    printf '\n  SpeakMore %s is in %s; fix the above and run this again.\n' "$NEW_VERSION" "$(pretty "$HOME_DIR")" >&2
+  else
+    printf '\n  Nothing was installed; what you had is untouched.\n' >&2
+  fi
   exit 1
 }
 
 # 给人看的路径：家目录写成 ~
 pretty() { case "$1" in "$HOME"/*) printf '~%s' "${1#"$HOME"}" ;; *) printf '%s' "$1" ;; esac; }
-# 把一段文字写成 sh 里的单引号字面量，路径里有空格、引号也不会出错
-quoted() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+# 把一段文字写成 JSON 的字符串：路径里的 \ 和 " 转义。控制字符在 check_home 就挡掉了
+json_string() {
+  local text=$1
+  text=${text//\\/\\\\}
+  text=${text//\"/\\\"}
+  printf '"%s"' "$text"
+}
 on_path() { case ":$PATH:" in *":$1:"*) return 0 ;; *) return 1 ;; esac; }
 cleanup() {
   [ -z "$TMP_DIR" ] || rm -rf "$TMP_DIR"
@@ -103,19 +132,48 @@ check_system() {
   ok "System tools found"
 }
 
+# 定位文件说的家目录（没有这个文件时是空的），放进 LOCATION_HOME。读坏了就停：不悄悄装到默认位置去，
+# 那样数据还在原处、看着却像丢了。不在子 shell 里调：fail 要能让整个脚本停下
+read_location() {
+  LOCATION_HOME=""
+  [ -e "$LOCATION_FILE" ] || return 0
+  local home
+  home="$(osascript -l JavaScript -e "$READ_LOCATION_JS" "$LOCATION_FILE" 2>/dev/null)" ||
+    fail "Can't read SpeakMore's location file: $(pretty "$LOCATION_FILE")" "Check its permissions."
+  case "$home" in
+    /*) ;;
+    *) fail "SpeakMore's location file is invalid: $(pretty "$LOCATION_FILE")" \
+      "It should hold the full path of the SpeakMore folder. Delete it to use the default place ($(pretty "$HOME/.speakmore"))." ;;
+  esac
+  LOCATION_HOME="$home"
+}
+
 check_home() {
   local bytes
-  bytes="$(printf '%s' "$HOME_DIR" | wc -c | tr -d ' ')"
-  [ "$bytes" -le "$MAX_HOME_BYTES" ] ||
-    fail "Install path is too long: $HOME_DIR" "Pick a shorter one with SPEAKMORE_HOME=/a/short/path and run again."
   case "$HOME_DIR" in /*) ;; *) fail "SPEAKMORE_HOME must be an absolute path, not $HOME_DIR" ;; esac
+  case "$HOME_DIR" in *[[:cntrl:]]*) fail "The install path has a line break or another control character in it" ;; esac
+  # 定位文件说装在一个现在不在的地方（移动硬盘没接、改了名）：不在那里新建一个空的，也不改装到默认位置
+  if [ "$HOME_FROM" = location ] && [ ! -d "$HOME_DIR" ] && [ ! -d "$(dirname "$HOME_DIR")" ]; then
+    fail "Can't find the SpeakMore folder: $(pretty "$HOME_DIR")" \
+      "The folder it's in isn't there. If it's on an external drive, connect the drive and run this again." \
+      "To install to the default place instead, delete $(pretty "$LOCATION_FILE") first."
+  fi
 
   mkdir -p "$HOME_DIR" 2>/dev/null && [ -w "$HOME_DIR" ] ||
     fail "Can't create or write to $(pretty "$HOME_DIR")" "Check its permissions, or pick another place with SPEAKMORE_HOME."
+  # 规范成完整写法（a//b、末尾的 /、.. 这些去掉，符号链接不解开）：记进定位文件的和程序算出来的是同一个
+  HOME_DIR="$(CDPATH="" cd -- "$HOME_DIR" && pwd)" || fail "Can't open $HOME_DIR"
+  bytes="$(printf '%s' "$HOME_DIR" | wc -c | tr -d ' ')"
+  [ "$bytes" -le "$MAX_HOME_BYTES" ] ||
+    fail "Install path is too long: $HOME_DIR" "Pick a shorter one with SPEAKMORE_HOME=/a/short/path and run again."
   # 里面会有录音和 key，只让自己进得去
   chmod 700 "$HOME_DIR"
 
-  if [ -n "${SPEAKMORE_INSTALL_FROM:-}" ]; then
+  if [ -n "$PREVIOUS_HOME" ]; then
+    # 换家：程序已经整个拷过来了，不再占新的地方
+    [ -f "$HOME_DIR/app/bin/speakmore.mjs" ] || fail "$(pretty "$HOME_DIR") has no copy of SpeakMore to move to"
+    ok "Moving to $(pretty "$HOME_DIR")"
+  elif [ -n "${SPEAKMORE_INSTALL_FROM:-}" ]; then
     # 从拼好的树装只是改名换上，不再占新的地方（拼的时候已经占过了）
     ok "Installing to $(pretty "$HOME_DIR")"
   else
@@ -213,6 +271,7 @@ download() {
   ok "Checksum OK"
 
   tar -xJf "$TMP_DIR/$ARCHIVE" -C "$TMP_DIR" || fail "Couldn't unpack the package" "Run it again."
+  NEW_DIR="$TMP_DIR"
   try_new "Unpacked"
 }
 
@@ -228,21 +287,29 @@ use_tree() {
   [ -n "$from" ] && [ "$(dirname "$from")" = "$home" ] ||
     fail "SPEAKMORE_INSTALL_FROM must be a .update- folder inside $(pretty "$HOME_DIR")" "Got $SPEAKMORE_INSTALL_FROM"
   TMP_DIR="$from"
+  NEW_DIR="$from"
   try_new "Prepared"
 }
 
-# 换掉旧的之前先在原地跑一下：这台机器上跑不起来的话现在就知道，不至于换完才发现
+# 换家：用拷到新目录里的那一份（不进 TMP_DIR：出错时 TMP_DIR 会被整个删掉，这里是用户的整个目录）
+use_copied() {
+  NEW_DIR="$HOME_DIR"
+  try_new "Copied"
+}
+
+# 换掉旧的之前先在原地跑一下：这台机器上跑不起来的话现在就知道，不至于换完才发现。
+# 换家时跑的是拷过去的那一份：新位置的盘不认符号链接、不让执行（有的移动硬盘是这样）的话，在这里就发现
 try_new() {
-  NEW_ELECTRON="$TMP_DIR/runtime/Electron.app/Contents/MacOS/Electron"
-  [ -f "$TMP_DIR/app/bin/speakmore.mjs" ] && [ -x "$NEW_ELECTRON" ] || fail "The package is incomplete" "That's a problem with the release. Please open an issue at $REPO_URL/issues."
+  NEW_ELECTRON="$NEW_DIR/runtime/Electron.app/Contents/MacOS/Electron"
+  [ -f "$NEW_DIR/app/bin/speakmore.mjs" ] && [ -x "$NEW_ELECTRON" ] || fail "The package is incomplete" "That's a problem with the release. Please open an issue at $REPO_URL/issues."
   NEW_VERSION="$(run_new --version 2>/dev/null)" ||
-    fail "The downloaded app won't run on this Mac" "Please open an issue at $REPO_URL/issues with your macOS version and chip."
+    fail "The new copy of SpeakMore won't run on this Mac" "Please open an issue at $REPO_URL/issues with your macOS version and chip."
   ok "$1 SpeakMore $NEW_VERSION"
 }
 
-# 用刚下到的那一份程序跑一条命令
+# 用新的那一份程序跑一条命令
 run_new() {
-  SPEAKMORE_HOME="$HOME_DIR" ELECTRON_RUN_AS_NODE=1 "$NEW_ELECTRON" "$TMP_DIR/app/bin/speakmore.mjs" "$@"
+  SPEAKMORE_HOME="$HOME_DIR" ELECTRON_RUN_AS_NODE=1 "$NEW_ELECTRON" "$NEW_DIR/app/bin/speakmore.mjs" "$@"
 }
 
 # 把程序和运行环境换成刚下到的。两样要么都换成，要么都不换：中途出错就把原来的放回去
@@ -283,22 +350,69 @@ install_files() {
   case "$output" in *"Moved the old version's data"*) ok "$(printf '%s\n' "$output" | grep "Moved the old version's data" | head -1)" ;; esac
   case "$output" in *"SpeakMore stopped."* | *"force-quit"*) ok "Stopped the running SpeakMore" ;; esac
 
-  swap_in
+  # 换家时程序已经在新目录里了（整个拷过来的），不用换
+  [ -n "$PREVIOUS_HOME" ] || swap_in
+  SWAPPED=1
 
   mkdir -p "$HOME_DIR/bin"
   LAUNCHER="$HOME_DIR/bin/speakmore"
-  # 目录的位置写死在启动脚本里：它会被别处的链接指着，不能靠"我在哪"来猜
-  cat >"$LAUNCHER" <<EOF
+  # 启动脚本里不写任何路径：顺着指向它的链接找到自己真正在哪，它的上一级就是家目录。整个目录搬到别处照样能用。
+  # 家目录总是它自己所在的那个，不沿用外面传进来的 SPEAKMORE_HOME：程序和数据永远是同一个目录里的，
+  # 搬家后环境里残留的旧位置也带不偏。0.11.0 及以前的启动脚本把路径写死在里面，升级时换成这一份
+  cat >"$LAUNCHER" <<'EOF'
 #!/bin/sh
 # The speakmore command, generated by the SpeakMore installer.
 # Runs on the bundled Electron as Node, so Node doesn't need to be installed.
-installed_in=$(quoted "$HOME_DIR")
-SPEAKMORE_HOME="\${SPEAKMORE_HOME:-\$installed_in}"
+# Finds its folder from where this file really is (following links to it), so the folder can be moved.
+self="$0"
+while [ -L "$self" ]; do
+  target="$(readlink "$self")"
+  case "$target" in /*) self="$target" ;; *) self="$(dirname "$self")/$target" ;; esac
+done
+SPEAKMORE_HOME="$(CDPATH='' cd -- "$(dirname "$self")/.." && pwd)" || exit 1
 export SPEAKMORE_HOME
-ELECTRON_RUN_AS_NODE=1 exec $(quoted "$HOME_DIR/runtime/Electron.app/Contents/MacOS/Electron") $(quoted "$HOME_DIR/app/bin/speakmore.mjs") "\$@"
+ELECTRON_RUN_AS_NODE=1 exec "$SPEAKMORE_HOME/runtime/Electron.app/Contents/MacOS/Electron" "$SPEAKMORE_HOME/app/bin/speakmore.mjs" "$@"
 EOF
   chmod 755 "$LAUNCHER"
-  ok "Installed to $(pretty "$HOME_DIR")"
+  if [ -n "$PREVIOUS_HOME" ]; then ok "Moved to $(pretty "$HOME_DIR")"; else ok "Installed to $(pretty "$HOME_DIR")"; fi
+}
+
+# 换家：links 里记着的、指着旧目录（或者已经指着这里）那条命令的链接，都改指到这里的启动脚本。
+# 比真实路径：记下链接时的家目录可能写法不规整，或者经过符号链接
+relink_moved() {
+  local file="$HOME_DIR/bin/links" link target dir old new
+  [ -f "$file" ] || return 0
+  old="$(CDPATH="" cd -- "$PREVIOUS_HOME/bin" 2>/dev/null && pwd -P)" || old=""
+  new="$(CDPATH="" cd -- "$HOME_DIR/bin" && pwd -P)"
+  while IFS= read -r link || [ -n "$link" ]; do
+    [ -n "$link" ] && [ -L "$link" ] || continue
+    target="$(readlink "$link")"
+    case "$target" in /*) ;; *) target="$(dirname "$link")/$target" ;; esac
+    dir="$(CDPATH="" cd -- "$(dirname "$target")" 2>/dev/null && pwd -P)" || dir=""
+    [ "$(basename "$target")" = speakmore ] && [ -n "$dir" ] && { [ "$dir" = "$old" ] || [ "$dir" = "$new" ]; } || continue
+    ln -sfn "$LAUNCHER" "$link" || fail "Couldn't update the link $(pretty "$link")" "Check that folder's permissions."
+    ok "speakmore command: $(pretty "$link")"
+  done <"$file"
+}
+
+# 记下 SpeakMore 装在哪（定位文件）。先写到旁边再改名换上，写到一半断电留下的也是旧的那份。
+# 装在默认位置时没记上也照常能用（没有定位文件就是默认位置），只提醒一句（比如 ~/.config 被别的程序以 root 建了）；
+# 装在别处的必须记上，不然从"应用程序"打开的 App、下次安装都找不到它
+record_location() {
+  local temporary="$LOCATION_FILE.$$.tmp"
+  if mkdir -p "$(dirname "$LOCATION_FILE")" 2>/dev/null &&
+    printf '{\n  "home": %s\n}\n' "$(json_string "$HOME_DIR")" >"$temporary" 2>/dev/null &&
+    mv -f "$temporary" "$LOCATION_FILE" 2>/dev/null; then
+    ok "Location recorded: $(pretty "$LOCATION_FILE")"
+    return
+  fi
+  rm -f "$temporary" 2>/dev/null || true
+  if [ "$HOME_DIR" = "$(CDPATH="" cd -- "$HOME" && pwd)/.speakmore" ]; then
+    warn "Couldn't write $(pretty "$LOCATION_FILE"); SpeakMore is in the default place, so it works without it"
+    return
+  fi
+  fail "Couldn't write $(pretty "$LOCATION_FILE")" \
+    "SpeakMore needs it to find $(pretty "$HOME_DIR") when opened from Applications. Check that folder's permissions."
 }
 
 link_command() {
@@ -352,7 +466,9 @@ main() {
     esac
   done
 
-  HOME_DIR="${SPEAKMORE_HOME:-$HOME/.speakmore}"
+  # 和 src/storage/location.mjs 的 locationFileOf 是同一个位置（test/storage/location-everywhere.test.mjs 核对）
+  LOCATION_FILE="$HOME/.config/speakmore/location.json"
+  PREVIOUS_HOME="${SPEAKMORE_PREVIOUS_HOME:-}"
   DOWNLOAD_BASE="${SPEAKMORE_INSTALL_BASE:-$DOWNLOAD_URL}"
   # 本机的一个目录也可以当下载地址
   case "$DOWNLOAD_BASE" in /*) DOWNLOAD_BASE="file://$DOWNLOAD_BASE" ;; esac
@@ -360,19 +476,43 @@ main() {
   printf '\n  %sSpeakMore installer%s\n' "$BOLD" "$RESET"
   trap cleanup EXIT
 
+  # 装到哪：指定了就装那里，否则照定位文件（装过、搬过的在那里），都没有是默认位置
+  if [ -n "${SPEAKMORE_HOME:-}" ]; then
+    HOME_DIR="$SPEAKMORE_HOME" HOME_FROM=env
+  else
+    read_location
+    if [ -n "$LOCATION_HOME" ]; then HOME_DIR="$LOCATION_HOME" HOME_FROM=location; else HOME_DIR="$HOME/.speakmore" HOME_FROM=default; fi
+  fi
+  if [ -n "$PREVIOUS_HOME" ]; then
+    [ "$HOME_FROM" = env ] && [ -z "${SPEAKMORE_INSTALL_FROM:-}" ] ||
+      fail "SPEAKMORE_PREVIOUS_HOME goes with SPEAKMORE_HOME (where SpeakMore was copied to), not with SPEAKMORE_INSTALL_FROM"
+  fi
+
   heading "Checks"
   check_system
   ARCHIVE="speakmore-darwin-$ARCH.tar.xz"
   check_home
-  # 从准备好的树装（speakmore update）不用联网
-  [ -n "${SPEAKMORE_INSTALL_FROM:-}" ] || check_network
+  # 从准备好的树装（speakmore update）、换家（speakmore move）不用联网
+  [ -n "${SPEAKMORE_INSTALL_FROM:-}" ] || [ -n "$PREVIOUS_HOME" ] || check_network
 
   heading "Install"
-  if [ -n "${SPEAKMORE_INSTALL_FROM:-}" ]; then use_tree; else download; fi
+  if [ -n "$PREVIOUS_HOME" ]; then
+    use_copied
+  elif [ -n "${SPEAKMORE_INSTALL_FROM:-}" ]; then
+    use_tree
+  else
+    download
+  fi
   install_files
-  link_command
+  # 换家时命令的链接还在原处，改指过来；另挑一处新建的话会多出一个
+  if [ -n "$PREVIOUS_HOME" ]; then relink_moved; else link_command; fi
+  record_location
 
-  if [ -n "$INSTALLED_VERSION" ] && [ "$INSTALLED_VERSION" != "$NEW_VERSION" ]; then
+  if [ -n "$PREVIOUS_HOME" ]; then
+    printf '\n  %sMoved SpeakMore %s to %s%s\n\n' "$BOLD" "$NEW_VERSION" "$(pretty "$HOME_DIR")" "$RESET"
+    cleanup
+    return
+  elif [ -n "$INSTALLED_VERSION" ] && [ "$INSTALLED_VERSION" != "$NEW_VERSION" ]; then
     printf '\n  %sUpgraded: %s → %s%s\n' "$BOLD" "$INSTALLED_VERSION" "$NEW_VERSION" "$RESET"
   else
     printf '\n  %sInstalled SpeakMore %s%s\n' "$BOLD" "$NEW_VERSION" "$RESET"
