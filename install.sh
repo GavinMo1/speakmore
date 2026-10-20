@@ -4,15 +4,18 @@
 #   curl -fsSL https://dl.zephyrxiang.com/speakmore/install.sh | bash
 #
 # 所有东西都装在一个目录里（程序、运行环境，以及之后的设置、key、历史和录音），默认是 ~/.speakmore，可以装在别处。
-# 目录以外只有两样：一个指向命令的链接，和记着目录在哪的定位文件 ~/.config/speakmore/location.json
-# （src/storage/location.mjs；从"应用程序"打开的 App、下次安装都靠它找到目录）。不需要 Node、npm、Xcode，也不需要 sudo。
+# 目录以外只建一个指向命令的链接；装在默认位置以外时，另有一个记着目录在哪的定位文件
+# ~/Library/Application Support/com.zephyrxiang.speakmore/location.json（src/storage/location.mjs：从"应用程序"打开的 App、
+# 下次安装都靠它找到目录）。不需要 Node、npm、Xcode，也不需要 sudo。
 # 已经装过的话再运行一次就是升级：程序换成新的，你的东西不动，装在哪照定位文件。卸载用 speakmore uninstall。
-# 0.11.0 及以前装的（没有定位文件、启动脚本里写死了路径）升级时一样处理：启动脚本换成新的，定位文件补上。
+# 0.11.0 及以前装的（启动脚本里写死了路径）升级时一样处理：启动脚本换成新的。
 # 这个脚本也随程序一起装进 app/ 里：speakmore update 拼好新版本后，用新版本自带的这一份把它换上（SPEAKMORE_INSTALL_FROM）；
 # speakmore move 把整个目录拷到新位置后，用那里的这一份把命令的链接和定位文件改指过去（SPEAKMORE_PREVIOUS_HOME）。
 #
 # 可以用环境变量调整：
-#   SPEAKMORE_HOME          装到哪（默认照定位文件，没有定位文件是 ~/.speakmore）
+#   SPEAKMORE_INSTALL_DIR   装在哪个文件夹下（装进它里面的 .speakmore，记进定位文件）。只用于第一次安装；
+#                           已经装在别处的，用 speakmore move 搬
+#   SPEAKMORE_HOME          这一次用哪个目录，原样不改定位文件（开发、测试用；speakmore update 也这样告诉新版本装在哪）
 #   SPEAKMORE_VERSION       装哪个版本，比如 v0.11.0（默认最新的；0.11.0 以前的包是 tar.gz，这个脚本不装）
 #   SPEAKMORE_INSTALL_BASE  从哪下载：一个网址前缀，或者本机的一个目录（npm run release 打出来的 dist/release）
 #   SPEAKMORE_BIN_DIR       命令的链接建在哪个目录（默认 ~/.local/bin）
@@ -148,24 +151,45 @@ read_location() {
   LOCATION_HOME="$home"
 }
 
+# 这个目录里有没有东西（装过、用过）
+has_contents() { [ -d "$1" ] && [ -n "$(ls -A "$1" 2>/dev/null)" ]; }
+
+# 指定了装在哪个文件夹下（SPEAKMORE_INSTALL_DIR）：只用于第一次安装。别处已经有一份的话停下，
+# 不然会多出一个空的目录，"应用程序"里的 App 跟着定位文件换过去，看着像数据丢了。已经装了的用 speakmore move 搬
+check_install_dir() {
+  local folder="$SPEAKMORE_INSTALL_DIR" other
+  case "$folder" in /*) ;; *) fail "SPEAKMORE_INSTALL_DIR must be an absolute path, not $folder" ;; esac
+  [ -d "$folder" ] || fail "No such folder: $folder" "SPEAKMORE_INSTALL_DIR names the folder to install into; create it first."
+  folder="$(CDPATH="" cd -- "$folder" && pwd -P)" || fail "Can't open $SPEAKMORE_INSTALL_DIR"
+  # 选的就是一个 .speakmore 的话就用它本身，不再套一层
+  case "$folder" in */.speakmore) HOME_DIR="$folder" ;; *) HOME_DIR="$folder/.speakmore" ;; esac
+  for other in "$LOCATION_HOME" "$HOME/.speakmore"; do
+    [ -n "$other" ] && has_contents "$other" || continue
+    [ "$(CDPATH="" cd -- "$other" && pwd -P)" = "$HOME_DIR" ] && continue
+    fail "SpeakMore is already set up in $(pretty "$other")" \
+      "To keep using it there, run this again without SPEAKMORE_INSTALL_DIR." \
+      "To move it to $(pretty "$HOME_DIR"), run: speakmore move $(pretty "$folder")"
+  done
+}
+
 check_home() {
   local bytes
   case "$HOME_DIR" in /*) ;; *) fail "SPEAKMORE_HOME must be an absolute path, not $HOME_DIR" ;; esac
   case "$HOME_DIR" in *[[:cntrl:]]*) fail "The install path has a line break or another control character in it" ;; esac
-  # 定位文件说装在一个现在不在的地方（移动硬盘没接、改了名）：不在那里新建一个空的，也不改装到默认位置
-  if [ "$HOME_FROM" = location ] && [ ! -d "$HOME_DIR" ] && [ ! -d "$(dirname "$HOME_DIR")" ]; then
+  # 定位文件说装在一个现在不在的地方（移动硬盘没接、盘被换了）：不在那里新建一个空的，也不改装到默认位置
+  if [ "$HOME_FROM" = location ] && [ ! -d "$HOME_DIR" ]; then
     fail "Can't find the SpeakMore folder: $(pretty "$HOME_DIR")" \
-      "The folder it's in isn't there. If it's on an external drive, connect the drive and run this again." \
-      "To install to the default place instead, delete $(pretty "$LOCATION_FILE") first."
+      "If it's on an external drive, connect the drive and run this again." \
+      "If you no longer use that place, delete $(pretty "$LOCATION_FILE") to install to the default one."
   fi
 
   mkdir -p "$HOME_DIR" 2>/dev/null && [ -w "$HOME_DIR" ] ||
-    fail "Can't create or write to $(pretty "$HOME_DIR")" "Check its permissions, or pick another place with SPEAKMORE_HOME."
-  # 规范成完整写法（a//b、末尾的 /、.. 这些去掉，符号链接不解开）：记进定位文件的和程序算出来的是同一个
-  HOME_DIR="$(CDPATH="" cd -- "$HOME_DIR" && pwd)" || fail "Can't open $HOME_DIR"
+    fail "Can't create or write to $(pretty "$HOME_DIR")" "Check its permissions, or install somewhere else with SPEAKMORE_INSTALL_DIR."
+  # 规范成真实的完整路径（a//b、末尾的 /、..、符号链接都解开）：写进链接、定位文件的和程序算出来的是同一个字符串
+  HOME_DIR="$(CDPATH="" cd -- "$HOME_DIR" && pwd -P)" || fail "Can't open $HOME_DIR"
   bytes="$(printf '%s' "$HOME_DIR" | wc -c | tr -d ' ')"
   [ "$bytes" -le "$MAX_HOME_BYTES" ] ||
-    fail "Install path is too long: $HOME_DIR" "Pick a shorter one with SPEAKMORE_HOME=/a/short/path and run again."
+    fail "Install path is too long: $HOME_DIR" "Pick a shorter place (at most $MAX_HOME_BYTES bytes) and run again."
   # 里面会有录音和 key，只让自己进得去
   chmod 700 "$HOME_DIR"
 
@@ -370,6 +394,10 @@ while [ -L "$self" ]; do
   case "$target" in /*) self="$target" ;; *) self="$(dirname "$self")/$target" ;; esac
 done
 SPEAKMORE_HOME="$(CDPATH='' cd -- "$(dirname "$self")/.." && pwd)" || exit 1
+if [ ! -f "$SPEAKMORE_HOME/app/bin/speakmore.mjs" ]; then
+  echo "speakmore: this command must stay in SpeakMore's bin folder; link to it instead of copying it ($self)" >&2
+  exit 1
+fi
 export SPEAKMORE_HOME
 ELECTRON_RUN_AS_NODE=1 exec "$SPEAKMORE_HOME/runtime/Electron.app/Contents/MacOS/Electron" "$SPEAKMORE_HOME/app/bin/speakmore.mjs" "$@"
 EOF
@@ -395,22 +423,23 @@ relink_moved() {
   done <"$file"
 }
 
-# 记下 SpeakMore 装在哪（定位文件）。先写到旁边再改名换上，写到一半断电留下的也是旧的那份。
-# 装在默认位置时没记上也照常能用（没有定位文件就是默认位置），只提醒一句（比如 ~/.config 被别的程序以 root 建了）；
-# 装在别处的必须记上，不然从"应用程序"打开的 App、下次安装都找不到它
-record_location() {
-  local temporary="$LOCATION_FILE.$$.tmp"
+# 记下 SpeakMore 装在哪（定位文件）：只在明确选了位置时（SPEAKMORE_INSTALL_DIR、speakmore move 换家）。
+# 在默认位置就不要定位文件（有指着这里的就删掉）；在别处就写，先写到旁边再改名换上，写到一半断电留下的也是旧的那份。
+# 写不了就照实报错：不然从"应用程序"打开的 App、下次安装都找不到它
+update_location() {
+  local default temporary="$LOCATION_FILE.$$.tmp"
+  default="$(CDPATH="" cd -- "$HOME" && pwd -P)/.speakmore"
+  if [ "$HOME_DIR" = "$default" ]; then
+    rm -f "$LOCATION_FILE" 2>/dev/null || fail "Couldn't remove $(pretty "$LOCATION_FILE")" "Check that folder's permissions."
+    return
+  fi
   if mkdir -p "$(dirname "$LOCATION_FILE")" 2>/dev/null &&
     printf '{\n  "home": %s\n}\n' "$(json_string "$HOME_DIR")" >"$temporary" 2>/dev/null &&
     mv -f "$temporary" "$LOCATION_FILE" 2>/dev/null; then
-    ok "Location recorded: $(pretty "$LOCATION_FILE")"
+    ok "Recorded where SpeakMore is: $(pretty "$LOCATION_FILE")"
     return
   fi
   rm -f "$temporary" 2>/dev/null || true
-  if [ "$HOME_DIR" = "$(CDPATH="" cd -- "$HOME" && pwd)/.speakmore" ]; then
-    warn "Couldn't write $(pretty "$LOCATION_FILE"); SpeakMore is in the default place, so it works without it"
-    return
-  fi
   fail "Couldn't write $(pretty "$LOCATION_FILE")" \
     "SpeakMore needs it to find $(pretty "$HOME_DIR") when opened from Applications. Check that folder's permissions."
 }
@@ -467,7 +496,7 @@ main() {
   done
 
   # 和 src/storage/location.mjs 的 locationFileOf 是同一个位置（test/storage/location-everywhere.test.mjs 核对）
-  LOCATION_FILE="$HOME/.config/speakmore/location.json"
+  LOCATION_FILE="$HOME/Library/Application Support/com.zephyrxiang.speakmore/location.json"
   PREVIOUS_HOME="${SPEAKMORE_PREVIOUS_HOME:-}"
   DOWNLOAD_BASE="${SPEAKMORE_INSTALL_BASE:-$DOWNLOAD_URL}"
   # 本机的一个目录也可以当下载地址
@@ -476,12 +505,23 @@ main() {
   printf '\n  %sSpeakMore installer%s\n' "$BOLD" "$RESET"
   trap cleanup EXIT
 
-  # 装到哪：指定了就装那里，否则照定位文件（装过、搬过的在那里），都没有是默认位置
+  # 装到哪：这一次指定了目录（SPEAKMORE_HOME）就用它；第一次安装选了文件夹（SPEAKMORE_INSTALL_DIR）就装进它里面；
+  # 否则照定位文件（装在别处、搬过的在那里），都没有是默认位置
+  [ -z "${SPEAKMORE_HOME:-}" ] || [ -z "${SPEAKMORE_INSTALL_DIR:-}" ] ||
+    fail "Set SPEAKMORE_INSTALL_DIR or SPEAKMORE_HOME, not both"
+  LOCATION_HOME=""
   if [ -n "${SPEAKMORE_HOME:-}" ]; then
     HOME_DIR="$SPEAKMORE_HOME" HOME_FROM=env
   else
     read_location
-    if [ -n "$LOCATION_HOME" ]; then HOME_DIR="$LOCATION_HOME" HOME_FROM=location; else HOME_DIR="$HOME/.speakmore" HOME_FROM=default; fi
+    if [ -n "${SPEAKMORE_INSTALL_DIR:-}" ]; then
+      check_install_dir
+      HOME_FROM=chosen
+    elif [ -n "$LOCATION_HOME" ]; then
+      HOME_DIR="$LOCATION_HOME" HOME_FROM=location
+    else
+      HOME_DIR="$HOME/.speakmore" HOME_FROM=default
+    fi
   fi
   if [ -n "$PREVIOUS_HOME" ]; then
     [ "$HOME_FROM" = env ] && [ -z "${SPEAKMORE_INSTALL_FROM:-}" ] ||
@@ -506,7 +546,8 @@ main() {
   install_files
   # 换家时命令的链接还在原处，改指过来；另挑一处新建的话会多出一个
   if [ -n "$PREVIOUS_HOME" ]; then relink_moved; else link_command; fi
-  record_location
+  # 明确选了位置的才动定位文件；SPEAKMORE_HOME 只管这一次（开发时装进临时目录，不能把正式的 App 也指过去）
+  if [ -n "$PREVIOUS_HOME" ] || [ "$HOME_FROM" = chosen ]; then update_location; fi
 
   if [ -n "$PREVIOUS_HOME" ]; then
     printf '\n  %sMoved SpeakMore %s to %s%s\n\n' "$BOLD" "$NEW_VERSION" "$(pretty "$HOME_DIR")" "$RESET"
