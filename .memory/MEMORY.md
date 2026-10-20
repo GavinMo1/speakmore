@@ -33,7 +33,7 @@
 - [模型广场不替用户选](speakmore-model-plaza.md) — 有什么加什么、尽量全；跑通不打标签、评测过才打已评测、没调过的打未验证；按角色分原生/转写/润色，侧栏单独一页；选识别方式在首页选单；10-17 进度、还剩哪些在里面
 - [判官是 Claude 自己](bench-judge-is-claude.md) — 评测打分由 Claude 来，不调 Gemini 等接口；Gemini 3.6 Flash MINIMAL 的成品只当参照，参照听错时不扣分
 - [统一输入输出、策略模式](architecture-unified-io-strategy.md) — 插件化、可热插拔；录音先统一成 16 kHz 单声道，转写统一成 transcribe → { text }；不打补丁，从分层上根治
-- [本地模型的配置表和国内源](speakmore-model-mirror.md) — 全局只有 src/models/catalog.mjs 一份；10-20 起国内源是魔搭（ardsfsw 个人账号，钉提交、可续传）；老的 COS 国内源还开着，下线前问他
+- [本地模型的配置表和国内源](speakmore-model-mirror.md) — 全局只有 src/models/catalog.mjs 一份；10-20 起国内源是魔搭（ardsfsw 个人账号，钉提交、可续传）；老的 COS 国内源 10-20 已撤掉
 - [云上改动交给用户跑](cloud-changes-user-runs.md) — 证书、CDN、解析、发版公证由用户跑：写成自己挂后台的脚本或一行命令，放在回复最后
 - [长任务挂后台](long-runs-in-background.md) — 评测、批量调模型等几分钟的活用后台跑，不占着对话，用户要边等边讨论
 - [百炼 CLI 装在项目里](bailian-cli-local.md) — .tools/bailian-cli/bl 包装脚本跑，配置不进 ~/.bailian；skill init 会写七个全局目录所以没跑；目录 125 家族 354 型号
@@ -47,5 +47,5 @@
 - [Windows 上的系统窗口让他点](windows-gui-user-clicks.md) — 选文件这类系统窗口直接告诉他点哪，不用 SendKeys 或界面自动化；网页部分用 CDP 核对；那台机器的 Defender 是关着的
 - [腾讯云费用](speakmore-cloud-billing.md) — 按量付费、不能欠费，余额花完 CDN 两小时后下载全断；10-19 余额 137 元、告警 50 元；查下载量时顺带看余额
 - [真机测更新要隔离](update-e2e-isolation.md) — 钉住 SPEAKMORE_APP、SPEAKMORE_BIN_DIR；临时签名的 App 被 open 打开会弹麦克风授权、可能覆盖正式版的；Windows 的 install.ps1 改开始菜单快捷方式和 Path，先备份
-- [分发重构](speakmore-distribution-rework.md) — 10-20 定：模型换魔搭、包换压缩瘦身、分块差量更新；老模型 CDN 等魔搭端到端过了才下线；两台电脑端到端、重测速、老文档全改
+- [分发重构](speakmore-distribution-rework.md) — 10-20 全部做完并随 0.11.0 发布：模型换魔搭、包压缩瘦身、分块差量更新，两台电脑验过，旧的模型源和旧版本已撤；还剩 Electron fuses
 - [重构要做干净](refactor-surgical-clean.md) — 定了重构就手术式、不给我们自己的旧做法留兼容；碰到用户手里旧版本的先说清影响
