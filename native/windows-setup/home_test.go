@@ -144,17 +144,48 @@ func TestCheckFolderAnswer(t *testing.T) {
 	}
 	// 资源管理器"复制为路径"带着引号，前后可能有空格
 	for _, typed := range []string{existing, `"` + existing + `"`, "  " + existing + "  "} {
-		if folder, problem := checkFolderAnswer(typed); problem != "" || folder != existing {
+		if folder, problem := checkFolderAnswer(typed, english); problem != "" || folder != existing {
 			t.Fatalf("%q: got %q %q", typed, folder, problem)
 		}
+	}
+	taken := filepath.Join(m.profile, "Taken")
+	if err := os.MkdirAll(filepath.Join(taken, ".speakmore"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(taken, ".speakmore", "notes.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 	for typed, want := range map[string]string{
 		"relative":                       "full path",
 		filepath.Join(m.profile, "nope"): "doesn't exist",
 		filepath.Join(existing, strings.Repeat("x", 130)): "too long",
+		taken: "already has other things",
 	} {
-		if _, problem := checkFolderAnswer(typed); !strings.Contains(problem, want) {
+		if _, problem := checkFolderAnswer(typed, english); !strings.Contains(problem, want) {
 			t.Fatalf("%q: want %q, got %q", typed, want, problem)
 		}
+	}
+}
+
+func TestReuseOldHome(t *testing.T) {
+	m := newMachine(t)
+	old := filepath.Join(m.profile, "Old")
+	if err := os.MkdirAll(filepath.Join(old, ".speakmore", "data"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if folder, problem := checkFolderAnswer(old, english); problem != "" || folder != old {
+		t.Fatalf("got %q %q", folder, problem)
+	}
+}
+
+func TestWordsFollowTheDisplayLanguage(t *testing.T) {
+	// 0x0804 简体中文、0x0404 繁体中文、0x0409 英语（美国）、0x0411 日语
+	for lang, want := range map[uint16]string{0x0804: chinese.title, 0x0404: chinese.title, 0x0409: english.title, 0x0411: english.title} {
+		if got := wordsFor(lang).title; got != want {
+			t.Fatalf("%#x: got %q", lang, got)
+		}
+	}
+	if len(english.question) == 0 || len(chinese.question) == 0 {
+		t.Fatal("empty question")
 	}
 }

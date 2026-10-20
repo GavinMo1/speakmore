@@ -14,7 +14,7 @@ import (
 //   1. SPEAKMORE_HOME：这一次就用它
 //   2. 定位文件 %LOCALAPPDATA%\SpeakMore\location.json（装在默认位置以外的才有，src/storage/location.mjs）
 //   3. 默认位置 %USERPROFILE%\.speakmore 已经有一份：升级它
-//   4. 都没有是第一次安装：问装在哪个文件夹下，回车就是默认位置
+//   4. 都没有是第一次安装：问装在哪（系统的对话框，ask_windows.go），默认位置一键就装
 // 定位文件坏了、它说的目录不在（移动硬盘没接）都停下说清楚，不悄悄装到别处去。
 
 // maxHomeChars 和 install.ps1 的 $MaxHomeChars 一样：PowerShell 5.1 解包、拷贝受 260 个字符的限制
@@ -104,19 +104,45 @@ func resolveHome(getenv func(string) string, ask func(defaultHome string) (strin
 	return homeChoice{home: homeIn(folder), installDir: folder}, nil
 }
 
-// checkFolderAnswer 看看用户敲进来的文件夹能不能用：交回整理好的路径，或者不能用的原因（给人看的一句话）
-func checkFolderAnswer(typed string) (string, string) {
+// usedBefore 这个目录 SpeakMore 用过（重装系统前放在别的盘上的那种）：选到它时沿用里面的东西
+func usedBefore(home string) bool {
+	for _, name := range []string{"settings.json", "data", "models", "versions"} {
+		if _, err := os.Stat(filepath.Join(home, name)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// checkFolderAnswer 看看用户选的、敲进来的文件夹能不能用：交回整理好的路径，或者不能用的原因（给人看的一句话）。
+// 和 install.ps1 的 Test-Place 是同一套规矩：那边还会再查一遍
+func checkFolderAnswer(typed string, w words) (string, string) {
 	// 资源管理器里"复制为路径"带着引号
 	folder := strings.Trim(strings.TrimSpace(typed), `"`)
 	if !filepath.IsAbs(folder) {
-		return "", "Type a full path, like D:\\Apps."
+		return "", w.notFull
 	}
 	folder = filepath.Clean(folder)
-	if len(homeIn(folder)) > maxHomeChars {
-		return "", fmt.Sprintf("That path is too long; pick a folder whose path is shorter than %d characters.", maxHomeChars-len(`\.speakmore`))
+	home := homeIn(folder)
+	if len(home) > maxHomeChars {
+		return "", fmt.Sprintf(w.tooLong, maxHomeChars-len(`\.speakmore`))
 	}
 	if info, err := os.Stat(folder); err != nil || !info.IsDir() {
-		return "", "That folder doesn't exist. Create it first, or pick another one."
+		return "", w.missing
 	}
+	if hasContents(home) && !usedBefore(home) {
+		return "", fmt.Sprintf(w.notEmpty, home)
+	}
+	// 家目录要能设成只有自己能进（访问控制表）：FAT32、exFAT 没有这个
+	if format := diskFormat(folder); format != "" && !strings.EqualFold(format, "NTFS") && !strings.EqualFold(format, "ReFS") {
+		return "", fmt.Sprintf(w.format, format)
+	}
+	// 写得进去（Program Files 这类要管理员权限的地方写不进）
+	probe, err := os.CreateTemp(folder, ".speakmore-probe-")
+	if err != nil {
+		return "", w.unwritable
+	}
+	probe.Close()
+	os.Remove(probe.Name())
 	return folder, ""
 }

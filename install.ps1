@@ -13,7 +13,8 @@
 #   - 用户的 Path 里加上 <目录>\bin（新开的终端里敲 speakmore 就找得到）
 #   - 开始菜单里一个"SpeakMore"快捷方式
 # 升级时另外把指着旧版本的改指到新版本：开机启动那一项，固定到任务栏、发送到桌面的快捷方式副本。
-# 不需要 Node、npm、管理员权限。已经装过的话再运行一次就是升级：程序换成新的，你的东西不动，装在哪照定位文件。
+# 不需要 Node、npm、管理员权限。第一次安装、在 PowerShell 窗口里运行时，先说默认装在哪，回车就装在那里，也可以输入另一个文件夹。
+# 已经装过的话再运行一次就是升级：程序换成新的，你的东西不动，装在哪照定位文件。
 #
 # 可以用环境变量调整（irm | iex 传不了参数，所以都走环境变量）：
 #   SPEAKMORE_INSTALL_DIR   装在哪个文件夹下（装进它里面的 .speakmore，记进定位文件）。只用于第一次安装（安装程序问的就是它）；
@@ -134,20 +135,65 @@
     (Test-Path -LiteralPath $dir -PathType Container) -and @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue).Count -gt 0
   }
 
+  # 这个目录 SpeakMore 用过（重装系统前放在别的盘上的那种）：选到它时沿用里面的东西
+  function Test-UsedBefore($dir) {
+    foreach ($name in @('settings.json', 'data', 'models', 'versions')) {
+      if (Test-Path -LiteralPath (Join-Path $dir $name)) { return $true }
+    }
+    return $false
+  }
+
+  # 选的文件夹能不能装（第一次安装时问到的、SPEAKMORE_INSTALL_DIR 给的）：能装交回 @{ Home; Folder }（Home 是文件夹里的
+  # .speakmore，选的本身就叫 .speakmore 就是它），不能交回 @{ Problem = 为什么 }
+  function Test-Place([string]$folder) {
+    if ($folder -notmatch '^[A-Za-z]:[\\/]|^[\\/]{2}[^\\/]+[\\/][^\\/]+') { return @{ Problem = 'Use a full path, like D:\Apps' } }
+    if (-not (Test-Path -LiteralPath $folder -PathType Container)) { return @{ Problem = "No such folder: $folder (create it first, or pick another one)" } }
+    $folder = Get-FullHome $folder
+    $target = if ((Split-Path -Leaf $folder) -ieq '.speakmore') { $folder } else { Join-Path $folder '.speakmore' }
+    if ((Test-HasContents $target) -and -not (Test-UsedBefore $target)) { return @{ Problem = "$target already has other things in it; pick another folder" } }
+    if ($target.Length -gt $MaxHomeChars) { return @{ Problem = "That path is too long ($($target.Length) characters, at most $MaxHomeChars); pick a shorter place" } }
+    # 家目录要能设成只有自己能进（访问控制表）：FAT32、exFAT（U 盘、移动硬盘常见）没有这个。网络路径问不到格式，不拦
+    $format = $null
+    try { $format = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($target)).DriveFormat } catch { $format = $null }
+    if ($format -and $format -notin @('NTFS', 'ReFS')) { return @{ Problem = "$folder is on a disk formatted as $format; SpeakMore needs NTFS" } }
+    # 写得进去（Program Files 这类要管理员权限的地方写不进）
+    $probe = Join-Path $folder ".speakmore-probe-$PID"
+    try { [IO.File]::Create($probe).Dispose(); [IO.File]::Delete($probe) } catch { return @{ Problem = "Can't write to $folder; pick a folder of your own, like D:\Apps" } }
+    return @{ Home = $target; Folder = $folder }
+  }
+
   # 选了装在哪个文件夹下（SPEAKMORE_INSTALL_DIR，安装程序问的就是它）：只用于第一次安装。别处已经有一份的话停下，
   # 不然会多出一个空的目录。已经装了的用 speakmore move 搬
   function Resolve-InstallDir($located) {
-    $folder = $env:SPEAKMORE_INSTALL_DIR
-    if ($folder -notmatch '^[A-Za-z]:[\\/]|^[\\/]{2}[^\\/]+[\\/][^\\/]+') { Fail "SPEAKMORE_INSTALL_DIR must be a full path like D:\Apps, not $folder" }
-    if (-not (Test-Path -LiteralPath $folder -PathType Container)) { Fail "No such folder: $folder" "SPEAKMORE_INSTALL_DIR names the folder to install into; create it first." }
-    $folder = Get-FullHome $folder
-    # 选的就是一个 .speakmore 的话就用它本身，不再套一层
-    $target = if ((Split-Path -Leaf $folder) -ieq '.speakmore') { $folder } else { Join-Path $folder '.speakmore' }
+    $place = Test-Place $env:SPEAKMORE_INSTALL_DIR
+    if ($place.Problem) { Fail "Can't install into SPEAKMORE_INSTALL_DIR: $($place.Problem)" }
+    $target = $place.Home
     foreach ($other in @($located, $script:DefaultHome)) {
       if (-not $other -or $other -ieq $target -or -not (Test-HasContents $other)) { continue }
-      Fail "SpeakMore is already set up in $(Pretty $other)" "To keep using it there, run this again without SPEAKMORE_INSTALL_DIR." "To move it to $target, run: speakmore move `"$folder`""
+      Fail "SpeakMore is already set up in $(Pretty $other)" "To keep using it there, run this again without SPEAKMORE_INSTALL_DIR." "To move it to $target, run: speakmore move `"$($place.Folder)`""
     }
     return $target
+  }
+
+  # 第一次安装、在 PowerShell 窗口里时问一句装在哪：回车是默认位置，也可以输入一个文件夹（资源管理器"复制为路径"带的引号去掉）。
+  # 选了别处就和 SPEAKMORE_INSTALL_DIR 一样：装进它里面的 .speakmore、记进定位文件
+  function Read-Place {
+    Heading "Where to install"
+    Note "SpeakMore keeps everything in one folder: the program, on-device models (0.2-1.6 GB each),"
+    Note "and your settings, history and recordings. You can move it later with: speakmore move"
+    Write-Host "  Press Enter to use $(Pretty $script:DefaultHome), or type a folder (for example D:\Apps)"
+    Write-Host "  to install into .speakmore inside it."
+    while ($true) {
+      $answer = "$(Read-Host '  Folder')".Trim().Trim('"').Trim()
+      if (-not $answer) { return }
+      if ($answer -eq '~') { $answer = $env:USERPROFILE } elseif ($answer -match '^~[\\/]') { $answer = Join-Path $env:USERPROFILE $answer.Substring(2) }
+      $place = Test-Place $answer
+      if ($place.Problem) { Warn $place.Problem; continue }
+      if ($place.Home -ieq $script:DefaultHome) { return }
+      $script:HomeDir = $place.Home; $script:HomeFrom = 'chosen'
+      if (Test-UsedBefore $place.Home) { Note "Found SpeakMore data there; it will be used as it is." }
+      return
+    }
   }
 
   function Test-Home {
@@ -644,6 +690,11 @@
         Fail "SPEAKMORE_PREVIOUS_HOME goes with SPEAKMORE_HOME (where SpeakMore was copied to), not with SPEAKMORE_INSTALL_FROM"
       }
       $script:PreviousHome = Get-FullHome $env:SPEAKMORE_PREVIOUS_HOME
+    }
+    # 第一次安装（没有定位文件、默认位置还空着）、在 PowerShell 窗口里运行（不是脚本、安装程序调的）：先问一句装在哪
+    $interactive = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected -and $Host.Name -eq 'ConsoleHost'
+    if ($script:HomeFrom -eq 'default' -and $interactive -and -not $env:SPEAKMORE_INSTALL_FROM -and -not (Test-HasContents $script:HomeDir)) {
+      Read-Place
     }
     $script:VersionsDir = Join-Path $script:HomeDir 'versions'
     $script:CurrentFile = Join-Path $script:HomeDir 'current'
