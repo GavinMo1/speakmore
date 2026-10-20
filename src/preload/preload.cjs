@@ -47,6 +47,12 @@ contextBridge.exposeInMainWorld("speakmore", {
   // 设置 › 通用的软件更新：检查一次（真去问下载地址）、开始更新（另起进程，App 会退出再打开）
   checkForUpdate: () => ipcRenderer.invoke("update:check"),
   startUpdate: () => ipcRenderer.invoke("update:start"),
+  // 设置 › 通用的存储位置：选文件夹、确认，起搬家的进度窗口（这个 App 随后退出，搬完从新位置打开）
+  changeStorage: () => ipcRenderer.invoke("storage:change"),
+  // 搬家的进度窗口（src/app/move-window.mjs）
+  moveState: () => ipcRenderer.invoke("move:state"),
+  onMoveState: (callback) => ipcRenderer.on("move:state", (_event, state) => callback(state)),
+  closeMove: () => ipcRenderer.invoke("move:close"),
 
   // 主窗口：词典（只存在本机）。改完由页面自己重读
   getVocabulary: () => ipcRenderer.invoke("vocabulary:get"),

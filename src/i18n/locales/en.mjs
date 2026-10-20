@@ -722,8 +722,21 @@ export default {
     barHintFailed: "Hint setting not changed: {reason}",
     recheck: "Check again",
     version: "Version",
-    dataFolder: "Data folder",
     source: "Source code",
+    storage: {
+      title: "Storage location",
+      change: "Change…",
+      pickTitle: "Choose a new storage location",
+      pickMessage: "SpeakMore moves into .speakmore inside the folder you choose",
+      pickButton: "Choose",
+      confirm: "Move to {to}?",
+      confirmDetail:
+        "{size} ({count} files) will be copied, including the program, on-device models, recordings, and settings. SpeakMore quits while it moves and reopens when done; if the move fails, everything stays as it was.",
+      unknown: "Files in the current location that aren't SpeakMore's are neither moved nor deleted: {items}",
+      move: "Move",
+      cancel: "Cancel",
+      failed: "Couldn't change it: {reason}",
+    },
     update: {
       title: "Software update",
       check: "Check for updates",
@@ -742,6 +755,48 @@ export default {
       fromSource: "Running from source · Update with git pull",
       startFailed: "Couldn't start the update: {reason}",
     },
+  },
+
+  // Choosing the storage location the first time the app opens (src/app/first-run.mjs), in system dialogs
+  firstRun: {
+    title: "Choose a storage location",
+    detail:
+      "SpeakMore keeps its program data, on-device models, recordings, and settings in one folder.\n\nDefault location: {home}\n\nEach on-device model is about 0.2–1.6 GB. To keep them on another disk, choose a location now; you can also change it later in Settings › General › Storage location.",
+    useDefault: "Use Default Location",
+    choose: "Choose Another Location…",
+    pickTitle: "Choose a storage location",
+    pickMessage: "SpeakMore is saved in .speakmore inside the folder you choose",
+    pickButton: "Choose",
+    existing: "{home} already has SpeakMore data",
+    existingDetail: "Its settings, history, and recordings will be used as they are.",
+    reuse: "Use It",
+    again: "Choose Again",
+    unusable: "This location can't be used",
+  },
+
+  // The progress window while moving the storage location (src/app/move-window.mjs, src/renderer/move)
+  moveWindow: {
+    title: {
+      preparing: "Moving the storage location",
+      copying: "Moving the storage location",
+      switching: "Moving the storage location",
+      done: "Storage location changed",
+      failed: "Storage location not changed",
+    },
+    from: "From",
+    to: "To",
+    step: {
+      preparing: "Getting ready; SpeakMore quits for a moment…",
+      switching: "Switching to the new location…",
+      done: "All files are in the new location.",
+    },
+    copying: "Copying {done} / {total} ({percent}%) · keep the disk connected until it's done",
+    removed: "The files in the old location were deleted.",
+    later: "The files in the old location will be deleted after this window closes.",
+    left: "Files in the old location that aren't SpeakMore's were left alone: {items}",
+    unchanged: "SpeakMore is still in its old location; nothing changed.",
+    done: "Done",
+    close: "Close",
   },
 
   keyPanel: {

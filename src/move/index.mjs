@@ -19,7 +19,7 @@ import { checkTarget } from "./target.mjs";
 //   1. 检查新位置（target.mjs）、本机每一份 SpeakMore 都认得换家（家目录里的程序、Mac 上"应用程序"里的 App）
 //   2. 拿锁（和更新共用 update.lock），旧目录 run/move.json 记"正在搬"（这时 App、后台都不在这里启动），
 //      定位文件记上 moving（断了电下次认得出新位置那一份是半成品）
-//   3. 停掉正在运行的；在新位置试盘（probe.mjs）；只拷 SpeakMore 自己的东西（copy.mjs），核对符号链接
+//   3. 在新位置试盘（probe.mjs）；停掉正在运行的；只拷 SpeakMore 自己的东西（copy.mjs），核对符号链接
 //   4. 提交：新位置的安装脚本换家（试跑、改系统入口、写定位文件；installer.mjs）。没装程序的（Mac 上只装了 dmg 的）直接写定位文件
 //   5. 旧目录放下 MOVED.json（从残留的旧入口启动会被告知搬去了哪），原来在运行的从新位置重新打开，删旧目录
 //      （只删我们的；Windows 上这个进程自己就跑在旧目录的程序上，等它退出再删）
@@ -134,7 +134,7 @@ export async function settleMove({
  * @param {(app: string, home: string) => Promise<void>} [options.openApp] 把 Mac 的 App 从新位置重新打开
  * @param {{ clearUserHome?: (home: string) => boolean,
  *   removeHomeAfterExit?: (home: string, names: string[], pids: number[]) => void } | null} [options.system]
- *   Windows 上要动系统的几处（cli/windows-system.mjs）
+ *   Windows 上要动系统的几处（src/windows-system.mjs）
  */
 export function createMove({
   paths,
@@ -207,7 +207,7 @@ export function createMove({
   }
 
   /** 检查新位置、本机的每一份、盘够不够。交回新家目录、要搬的、要拷多少 */
-  async function prepare(folder) {
+  async function prepare(folder, { keep }) {
     checkRecorded();
     const { home: to } = checkTarget({ paths, folder, platform });
     const running = await runningNow();
@@ -216,7 +216,11 @@ export function createMove({
     const contents = classifyHome(paths);
     const size = measureHome({ from, plan: contents });
     checkSpace(path.dirname(to), size.bytes);
-    return { to, running, app, contents, size };
+    // 试盘放在最后、停掉正在运行的之前：盘不行（exFAT 这类）就在问"确定吗"之前说，不让 App 白退出一次。
+    // 只是问一句（keep 为假）时，这里建的目录试完就删
+    const { created } = await probe(to, { platform });
+    if (!keep && created) rmSync(to, { recursive: true, force: true });
+    return { to, running, app, contents, size, created };
   }
 
   /** 把停掉的那个重新打开：家目录里那一份用它的启动命令，Mac 的 App 用 open。打不开照实交回原因 */
@@ -262,8 +266,10 @@ export function createMove({
     let stats = null;
     try {
       await settleMove({ paths, env, platform, stdio, userHome, runRehome, pid, alive, now, report });
-      const prepared = await prepare(folder);
+      const prepared = await prepare(folder, { keep: true });
       to = prepared.to;
+      created = prepared.created;
+      touched = true;
       record.to = to;
       writeMoveRecord(paths, record);
       writeLocation(paths.locationFile, { home: from, moving: { to, pid, startedAt: record.startedAt } });
@@ -273,8 +279,6 @@ export function createMove({
         appPath = stopped === "bundle" ? (prepared.app?.path ?? null) : null;
         await instance.stop();
       }
-      ({ created } = await probe(to, { platform }));
-      touched = true;
       // 停掉之后再看一遍：停之前它可能还在写
       contents = classifyHome(paths);
       const total = measureHome({ from, plan: contents });
@@ -382,11 +386,12 @@ export function createMove({
 
   return {
     /**
-     * 能不能搬到这个文件夹、要拷多少：给命令行、App 在动手之前问一句"确定吗"用。不动磁盘
+     * 能不能搬到这个文件夹、要拷多少：给命令行、App 在动手之前问一句"确定吗"用。
+     * 除了在新位置试一下盘（试完删掉）不动磁盘
      * @returns {Promise<{ from: string, to: string, files: number, bytes: number, unknown: string[] }>}
      */
     async plan(folder) {
-      const { to, contents, size } = await prepare(folder);
+      const { to, contents, size } = await prepare(folder, { keep: false });
       return { from, to, files: size.files, bytes: size.bytes, unknown: contents.unknown };
     },
 

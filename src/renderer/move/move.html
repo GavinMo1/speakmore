@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'" />
+    <title>SpeakMore</title>
+    <link rel="stylesheet" href="../shared/tokens.css" />
+    <link rel="stylesheet" href="../shared/window.css" />
+    <link rel="stylesheet" href="move.css" />
+  </head>
+  <body>
+    <!-- 图标：lucide（ISC 许可），和主窗口同一套 -->
+    <svg class="sprite" aria-hidden="true">
+      <symbol id="i-folder-sync" viewBox="0 0 24 24"><g><path d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v.5"/><path d="M12 10v4h4"/><path d="m12 14l1.535-1.605a5 5 0 0 1 8 1.5"/><path d="M22 22v-4h-4"/><path d="m22 18l-1.535 1.605a5 5 0 0 1-8-1.5"/></g></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
+      <symbol id="i-circle-alert" viewBox="0 0 24 24"><g><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></g></symbol>
+    </svg>
+
+    <!-- 搬家的进度窗口（src/app/move-window.mjs）：从哪到哪、拷到多少、成没成 -->
+    <main class="move" id="move" data-phase="preparing">
+      <span class="move-mark"><svg class="icon" aria-hidden="true"><use id="move-icon" href="#i-folder-sync" /></svg></span>
+      <h1 class="move-title" id="move-title" data-i18n="moveWindow.title.preparing">Moving the storage location</h1>
+      <dl class="move-route">
+        <dt data-i18n="moveWindow.from">From</dt>
+        <dd><code id="move-from"></code></dd>
+        <dt data-i18n="moveWindow.to">To</dt>
+        <dd><code id="move-to"></code></dd>
+      </dl>
+      <div class="move-track" id="move-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <span class="move-fill" id="move-fill"></span>
+      </div>
+      <p class="move-step" id="move-step" role="status" aria-live="polite"></p>
+      <ul class="move-notes" id="move-notes"></ul>
+      <div class="move-actions">
+        <button type="button" class="button primary" id="move-close" hidden></button>
+      </div>
+    </main>
+    <script type="module" src="move.mjs"></script>
+  </body>
+</html>

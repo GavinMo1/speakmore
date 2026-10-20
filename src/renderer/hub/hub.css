@@ -889,6 +889,15 @@ code.setting-value {
   color: var(--problem);
 }
 
+/* 存储位置那一行：标题下面一行路径，和更新那一行同样的摆法 */
+.storage-path {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 /* 有新版本：侧栏的设置图标、设置里"通用"上各一个小点，颜色是主题色；上一次没更新成是红点 */
 .sidebar-foot .icon-button {
   position: relative;

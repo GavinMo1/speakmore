@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
-import { clearUserHome, isOurShortcut, removeLoginItem, removePathEntry } from "../../src/cli/windows-system.mjs";
+import { clearUserHome, isOurShortcut, removeLoginItem, removePathEntry } from "../src/windows-system.mjs";
 
 const windowsOnly = { skip: process.platform !== "win32" && "要在 Windows 上起 PowerShell" };
 
@@ -18,7 +18,7 @@ test("退出后再删：叫它的进程马上就退出，那几个目录照样�
   writeFileSync(join(doomed, "electron.exe"), "");
   // 和 speakmore uninstall、update 一样：交代完马上退出。Node 在 Windows 上会把直接起的子进程跟着自己一起收掉
   const script = join(dir, "caller.mjs");
-  const module = pathToFileURL(join(import.meta.dirname, "../../src/cli/windows-system.mjs")).href;
+  const module = pathToFileURL(join(import.meta.dirname, "../src/windows-system.mjs")).href;
   writeFileSync(
     script,
     `import { removeAfterExit } from ${JSON.stringify(module)};\nremoveAfterExit([process.argv[2]]);\n`,
@@ -41,7 +41,7 @@ test("搬家后删旧目录：等叫它的进程退出，只删我们的；还�
   }
   writeFileSync(join(homes.mixed, "notes.txt"), "用户自己的");
   const script = join(dir, "caller.mjs");
-  const module = pathToFileURL(join(import.meta.dirname, "../../src/cli/windows-system.mjs")).href;
+  const module = pathToFileURL(join(import.meta.dirname, "../src/windows-system.mjs")).href;
   writeFileSync(
     script,
     `import { removeHomeAfterExit } from ${JSON.stringify(module)};

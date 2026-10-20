@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
-// 命令行在 Windows 上要动系统的那几处：install.ps1 在家目录以外留下的（用户 Path 里的一项、开始菜单的快捷方式）、
-// App 里开过的开机启动，卸载时照着删；还有删不掉正在跑的程序这件事。都经 PowerShell 做，要用的值走环境变量，
-// 脚本里不拼外来的字。macOS 上用不到这里。
+// 在 Windows 上要动系统的那几处：install.ps1 在家目录以外留下的（用户 Path 里的一项、开始菜单的快捷方式）、
+// App 里开过的开机启动，卸载时照着删；搬家后删旧目录、清掉指着旧目录的环境变量；还有删不掉正在跑的程序这件事。
+// 命令行（卸载、搬家）和 App 的搬家进度窗口都用（所以不放在 src/cli 里：Mac 的 App 不带那个目录）。
+// 都经 PowerShell 做，要用的值走环境变量，脚本里不拼外来的字。macOS 上用不到这里。
 
 /**
  * 跑一段 PowerShell，交出它的标准输出。出错就停、以非零退出（execFileSync 抛出来）；正常跑完明确以 0 退出：

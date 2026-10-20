@@ -25,6 +25,14 @@ import { resolvePaths } from "../storage/paths.mjs";
 import { resolveSettings } from "../storage/settings.mjs";
 import { THEMES } from "../themes/index.mjs";
 import { createUpdates } from "../update/index.mjs";
+import {
+  clearUserHome,
+  isOurShortcut,
+  removeAfterExit,
+  removeHomeAfterExit,
+  removeLoginItem,
+  removePathEntry,
+} from "../windows-system.mjs";
 import { askSecret, Cancelled } from "./ask-secret.mjs";
 import { config, settings, theme } from "./commands/config.mjs";
 import { dict } from "./commands/dict.mjs";
@@ -42,14 +50,6 @@ import { usage } from "./commands/usage.mjs";
 import { ConfigError, UsageError } from "./common.mjs";
 import { createDaemon } from "./daemon.mjs";
 import { tailFile } from "./tail.mjs";
-import {
-  clearUserHome,
-  isOurShortcut,
-  removeAfterExit,
-  removeHomeAfterExit,
-  removeLoginItem,
-  removePathEntry,
-} from "./windows-system.mjs";
 
 // speakmore 命令：把"装好依赖、编小帮手、起后台应用、填 key、看历史、改设置"收成几个子命令。
 // 真正干活的是后台应用（src/app），这里通过控制通道指挥它；历史和设置文件则直接读写。

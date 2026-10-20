@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { closeSync, existsSync, openSync, rmSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { closeSync, existsSync, openSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import {
   app,
   BrowserWindow,
@@ -21,8 +22,10 @@ import { createTranslator, LocalizedError, msg, problemOf, resolveLocale, SYSTEM
 import { createInstance } from "../instance.mjs";
 import { alsoLogTo, log } from "../log.mjs";
 import { chipOf, downloadSize, MODELS, makerOf, measuredOn, SOURCES, tagsOn } from "../models/catalog.mjs";
+import { sizeText } from "../models/describe.mjs";
 import { createLocalModels, freeBytesAt } from "../models/library.mjs";
 import { presetsFor } from "../models/presets.mjs";
+import { createMove, settleMove } from "../move/index.mjs";
 import { CHAT_VENDORS, formatChatChoice } from "../server/chat/vendors.mjs";
 import { describeRoute, keyVendorOf, MODES } from "../server/modes.mjs";
 import { formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
@@ -51,11 +54,13 @@ import { insights } from "../usage/insights.mjs";
 import { usageReport } from "../usage/report.mjs";
 import { MAX_TERM_LENGTH, MAX_TERMS } from "../vocabulary/terms.mjs";
 import { createDelivery } from "./delivery.mjs";
+import { chooseHome, needsHomeChoice } from "./first-run.mjs";
 import { helperPaths, startHelper } from "./helper.mjs";
 import { createKeyManager } from "./keys/key-manager.mjs";
 import { createKeyStore } from "./keys/key-store.mjs";
 import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
 import { createModeSwitch } from "./modes.mjs";
+import { MOVE_TO, startMoveWindow } from "./move-window.mjs";
 import { startService } from "./service.mjs";
 import { summarizeSetup, summaryAsText } from "./setup-state.mjs";
 import { createAppUpdates } from "./updates.mjs";
@@ -70,9 +75,33 @@ import { describeVocabularySupport, vocabularyHops } from "./vocabulary.mjs";
 const EXTERNAL_SERVER_URL = process.env.SPEAKMORE_SERVER_URL ?? null;
 /** 是 speakmore 命令启动的：日志由它接到文件里，缺什么也由它在终端里说，这边不自己弹主窗口 */
 const LAUNCHED_BY_CLI = process.env.SPEAKMORE_CLI === "1";
+/**
+ * 这一次启动不是来跑 App 本身的，先办一件事（办这些时不找家目录、不拿单实例锁、不起服务）：
+ *   "move"   设置里点了"存储位置 › 更改"，App 另起的搬家进度窗口（move-window.mjs）
+ *   "choose" macOS 上从"应用程序"第一次打开、什么都还没装过：先问存储位置放哪（first-run.mjs），问完重新启动
+ * 平常是 null
+ */
+const PRELUDE = MOVE_TO
+  ? "move"
+  : needsHomeChoice({
+        env: process.env,
+        platform: process.platform,
+        packaged: app.isPackaged,
+        launchedByCli: LAUNCHED_BY_CLI,
+        userHome: homedir(),
+      })
+    ? "choose"
+    : null;
 
 let PATHS;
 let SETTINGS;
+/** 现在用哪个键。设置里可以当场换（setup:set-hotkey），换的时候重启小帮手 */
+let hotkey;
+/**
+ * 启动时用谁家的 key：原生链路是收音频的那家，本地转写链路是润色的那家；数据隐私模式不用 key，是 null。
+ * 正在用的以 keys.provider 为准
+ */
+let PROVIDER;
 /** 启动时走哪条路线（server/modes.mjs）。之后切模式、换模型时当场换（keys.switchRoute），正在走的以 service.route 为准 */
 let ROUTE;
 /** 本机模型用不用显卡（设置里的 acceleration）。在设置里换了当场生效（service.setAcceleration） */
@@ -97,27 +126,24 @@ function reportStartupProblem(error) {
 
 // Windows 上装好的那一份（开始菜单、开机启动、命令行起的都是它）：家目录就是程序所在的那个，外面传进来的 SPEAKMORE_HOME
 // 不算数。程序和数据永远是同一个目录里的：搬过家以后环境里残留的旧位置带不偏它
-if (process.platform === "win32") {
+if (process.platform === "win32" && PRELUDE === null) {
   const home = installedHomeOf(process.execPath, existsSync);
   if (home) process.env.SPEAKMORE_HOME = home;
 }
 
-try {
-  PATHS = resolvePaths(process.env);
-  SETTINGS = resolveSettings({ file: PATHS.settingsFile, env: process.env });
-  ROUTE = routeOf(SETTINGS);
-  acceleration = SETTINGS.acceleration.value;
-} catch (error) {
-  reportStartupProblem(error);
-  process.exit(2);
+if (PRELUDE === null) {
+  try {
+    PATHS = resolvePaths(process.env);
+    SETTINGS = resolveSettings({ file: PATHS.settingsFile, env: process.env });
+    ROUTE = routeOf(SETTINGS);
+    acceleration = SETTINGS.acceleration.value;
+    hotkey = SETTINGS.hotkey.value;
+    PROVIDER = keyVendorOf(ROUTE) ?? null;
+  } catch (error) {
+    reportStartupProblem(error);
+    process.exit(2);
+  }
 }
-/** 现在用哪个键。设置里可以当场换（setup:set-hotkey），换的时候重启小帮手 */
-let hotkey = SETTINGS.hotkey.value;
-/**
- * 启动时用谁家的 key：原生链路是收音频的那家，本地转写链路是润色的那家；数据隐私模式不用 key，是 null。
- * 正在用的以 keys.provider 为准
- */
-const PROVIDER = keyVendorOf(ROUTE) ?? null;
 /** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
 const thinkingFor = (provider) => (provider?.thinkingLevels ? SETTINGS.thinking.value : null);
 const WINDOWS = process.platform === "win32";
@@ -183,19 +209,34 @@ function launchUpdate() {
   }
 }
 
+/**
+ * 起搬家的进度窗口：用这个 App 自己的程序另起一个（不当 Node 跑，它要开窗口），环境变量 SPEAKMORE_MOVE_TO 说搬去哪
+ * （见文件开头的 PRELUDE）。它不挂在这个 App 名下（detached）：这个 App 马上会被它请退出
+ */
+function launchMove(folder) {
+  const { ELECTRON_RUN_AS_NODE: _asNode, SPEAKMORE_CLI: _byCli, ...env } = process.env;
+  const child = spawn(process.execPath, app.isPackaged ? [] : [app.getAppPath()], {
+    detached: true,
+    stdio: "ignore",
+    env: { ...env, SPEAKMORE_HOME: PATHS.home, SPEAKMORE_MOVE_TO: folder },
+  });
+  child.unref();
+  log.info("move_launched", { pid: child.pid, folder });
+}
+
 // Windows 认应用靠这个 id：任务栏把窗口归到一起、通知写谁发的。和 macOS 应用包的标识一样
 if (WINDOWS) app.setAppUserModelId("com.zephyrxiang.speakmore");
 
 // 所有东西都放在 paths.mjs 定的那一个目录里，命令行和这里用同一处。Electron 默认会按应用名在
 // ~/Library/Application Support 下另开一个目录放 Chromium 的缓存和状态，把它也收进来，和我们的数据分开放
-app.setPath("userData", PATHS.cacheDir);
+if (PRELUDE === null) app.setPath("userData", PATHS.cacheDir);
 
 /**
  * Windows 上装好的那一份：程序在家目录 versions 下某一个版本里。没有单独的"应用"：命令行起的、开始菜单起的都是它，
  * 用的是同一套 key 和设置（不像 macOS 的 SpeakMore.app 有自己的一套权限）
  */
 const INSTALLED_ON_WINDOWS =
-  WINDOWS && process.execPath.toLowerCase().startsWith(`${PATHS.versionsDir.toLowerCase()}\\`);
+  PRELUDE === null && WINDOWS && process.execPath.toLowerCase().startsWith(`${PATHS.versionsDir.toLowerCase()}\\`);
 /**
  * 开机启动登记的是这个可执行文件加上程序目录（Windows 上没有应用包，要把参数也记下来）。
  * 装了新版本时 install.ps1 把这一项改指到新版本的程序上（Electron 认开没开只比程序路径）
@@ -214,11 +255,11 @@ function loginItemEnabled() {
 
 // 打成应用后没有终端，日志自己写文件。由命令启动时标准输出已经被接到同一个文件里了。
 // Windows 上从开始菜单起的（不是命令行起的）也没有终端
-if (app.isPackaged || (INSTALLED_ON_WINDOWS && !LAUNCHED_BY_CLI)) alsoLogTo(PATHS.logFile);
+if (PRELUDE === null && (app.isPackaged || (INSTALLED_ON_WINDOWS && !LAUNCHED_BY_CLI))) alsoLogTo(PATHS.logFile);
 
 // 同一个家目录只跑一个。这里给的数据会随 second-instance 事件送到已经在运行的那一个手里
-const isOnlyInstance = app.requestSingleInstanceLock({ byCli: LAUNCHED_BY_CLI });
-if (!isOnlyInstance) {
+const isOnlyInstance = PRELUDE === null && app.requestSingleInstanceLock({ byCli: LAUNCHED_BY_CLI });
+if (PRELUDE === null && !isOnlyInstance) {
   console.error("已经有一个在运行了");
   // 约定的退出码：启动它的 speakmore 命令据此知道"不是没起来，是有别的先起来了"，接着等那一个
   app.exit(ALREADY_RUNNING_EXIT_CODE);
@@ -239,6 +280,9 @@ app.on("web-contents-created", (_event, contents) => {
   });
 });
 
+/** 第一次打开时问存储位置的那一次（PRELUDE 是 "choose"）：Chromium 的缓存先放临时目录，问完重新启动 */
+const FIRST_RUN_PROFILE = join(tmpdir(), "speakmore-first-run");
+
 // 不能写成顶层的 await app.whenReady()：Electron 要等主模块加载完才会就绪，
 // 而顶层 await 让模块一直加载不完，两边互相等（Electron 44.7 实测如此）。
 // 没抢到锁的那个正在退出，不往下走：家目录里的东西（进程号、控制通道）都是先到的那个的
@@ -252,12 +296,70 @@ if (isOnlyInstance) {
       reportStartupProblem(error);
       app.exit(1);
     });
+} else if (PRELUDE === "move") {
+  startMoveWindow({ folder: MOVE_TO, sourceDir, webPreferences, windowIcon: WINDOW_ICON });
+} else if (PRELUDE === "choose") {
+  startHomeChoice();
+}
+
+function startHomeChoice() {
+  app.setPath("userData", FIRST_RUN_PROFILE);
+  // 问的时候又双击了一次：交给正在问的那个
+  if (!app.requestSingleInstanceLock()) {
+    app.exit(0);
+    return;
+  }
+  app.dock?.hide();
+  app
+    .whenReady()
+    .then(async () => {
+      app.focus({ steal: true });
+      const t = createTranslator(resolveLocale(SYSTEM_LOCALE, app.getPreferredSystemLanguages()));
+      const home = await chooseHome({ dialog, t, env: process.env, userHome: homedir() });
+      console.log(`storage location chosen: ${home}`);
+      app.relaunch();
+      app.exit(0);
+    })
+    .catch((error) => {
+      reportStartupProblem(error);
+      app.exit(1);
+    });
+}
+
+/**
+ * 删掉以前搬家、第一次打开时放在临时目录里的 Chromium 缓存（speakmore-move-*、speakmore-first-run）。
+ * 只删一个小时以前的：刚起这个 App 的搬家进度窗口可能还开着。删不掉的留给系统清临时目录
+ */
+function removeOldTemporaryProfiles() {
+  const hourAgo = Date.now() - 60 * 60 * 1000;
+  let names = [];
+  try {
+    names = readdirSync(tmpdir()).filter((name) => /^speakmore-(move-.+|first-run)$/.test(name));
+  } catch (error) {
+    log.warn("temporary_profiles_unreadable", { error: error.code ?? error.message });
+  }
+  for (const name of names) {
+    const dir = join(tmpdir(), name);
+    try {
+      if (statSync(dir).mtimeMs < hourAgo) rmSync(dir, { recursive: true, force: true });
+    } catch (error) {
+      log.warn("temporary_profile_kept", { dir, error: error.code ?? error.message });
+    }
+  }
 }
 
 async function main() {
   app.dock?.hide();
 
+  // 搬家进行到一半（另一个进程正在搬）就不在这里启动；上次断在半路的先收拾好（src/move）
+  await settleMove({
+    paths: PATHS,
+    env: process.env,
+    stdio: "forward",
+    report: (message) => log.info("move_settled", { step: message.key, ...message.params }),
+  });
   ensureHome(PATHS);
+  removeOldTemporaryProfiles();
   // 记下进程号：万一卡住了不答话，speakmore stop 靠它找到这个进程。要赶在控制通道开始听之前写好，
   // 这样只要通道连得上，文件里记的就一定是通道那头的进程
   writeFileSync(PATHS.pidFile, `${process.pid}\n`);
@@ -673,6 +775,35 @@ async function main() {
   // 设置 › 通用的"软件更新"：检查、开始更新。进行到哪了跟着 setup:get 一起给（update）
   handle("update:check", () => appUpdates.check());
   handle("update:start", () => appUpdates.start());
+  // 设置 › 通用的"存储位置 › 更改"：选文件夹，先检查（和命令行的 speakmore move 同一套，src/move），说清楚要拷多少、问一句，
+  // 再起搬家的进度窗口（move-window.mjs）。它会请这个 App 退出，搬完从新位置把它打开
+  handle("storage:change", async () => {
+    const parent = hubWindow ?? undefined;
+    const picked = await dialog.showOpenDialog(parent, {
+      title: t("preferences.storage.pickTitle"),
+      message: t("preferences.storage.pickMessage"),
+      buttonLabel: t("preferences.storage.pickButton"),
+      defaultPath: dirname(PATHS.home),
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) return { started: false };
+    const [folder] = picked.filePaths;
+    const mover = createMove({ paths: PATHS, env: process.env, instance: createInstance({ paths: PATHS }) });
+    const plan = await mover.plan(folder);
+    const detail = [t("preferences.storage.confirmDetail", { size: sizeText(plan.bytes), count: plan.files })];
+    if (plan.unknown.length > 0) detail.push(t("preferences.storage.unknown", { items: t.list(plan.unknown) }));
+    const { response } = await dialog.showMessageBox(parent, {
+      type: "question",
+      message: t("preferences.storage.confirm", { to: plan.to }),
+      detail: detail.join("\n\n"),
+      buttons: [t("preferences.storage.move"), t("preferences.storage.cancel")],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response !== 0) return { started: false };
+    launchMove(folder);
+    return { started: true };
+  });
   handle("clipboard:write", (_event, text) => {
     if (typeof text !== "string") throw new TypeError("要复制的不是文字");
     clipboard.writeText(text);

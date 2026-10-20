@@ -1,0 +1,157 @@
+/* 搬家的进度窗口：一张卡片，图标、标题、从哪到哪、一条进度、一行说明。颜色全由主题给（window.css 里的 token） */
+
+.sprite {
+  display: none;
+}
+
+.move {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-3);
+  row-gap: var(--space-2);
+  grid-template-rows: auto auto auto auto auto 1fr;
+  align-content: stretch;
+  height: 100vh;
+  box-sizing: border-box;
+  padding: var(--space-6) var(--space-6) var(--space-4);
+}
+
+.move-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--on-primary);
+  background: var(--gradient);
+  border-radius: var(--radius-block);
+}
+
+.move-mark .icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.move[data-phase="failed"] .move-mark {
+  background: var(--problem);
+}
+
+.move-title {
+  align-self: center;
+  margin: 0;
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+}
+
+.move-route,
+.move-track,
+.move-step,
+.move-notes,
+.move-actions {
+  grid-column: 1 / -1;
+}
+
+.move-route {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-small);
+}
+
+.move-route dt {
+  color: var(--ink-2);
+}
+
+.move-route dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.move-route code {
+  display: block;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-track {
+  height: 0.375rem;
+  margin-top: var(--space-2);
+  overflow: hidden;
+  background: var(--fill-selected);
+  border-radius: var(--radius-full);
+}
+
+.move-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--gradient);
+  border-radius: var(--radius-full);
+  transition: width var(--dur-base) var(--ease-out);
+}
+
+/* 准备、切换这两段没有百分比：一小段来回走 */
+.move[data-phase="preparing"] .move-fill,
+.move[data-phase="switching"] .move-fill {
+  width: 30%;
+  animation: move-sweep 1.2s var(--ease-out) infinite alternate;
+}
+
+.move[data-phase="done"] .move-fill {
+  width: 100%;
+}
+
+.move[data-phase="failed"] .move-track {
+  display: none;
+}
+
+@keyframes move-sweep {
+  from {
+    transform: translateX(-10%);
+  }
+  to {
+    transform: translateX(240%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .move-fill {
+    transition: none;
+  }
+  .move[data-phase="preparing"] .move-fill,
+  .move[data-phase="switching"] .move-fill {
+    animation: none;
+  }
+}
+
+.move-step {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-small);
+}
+
+.move[data-phase="failed"] .move-step {
+  color: var(--problem);
+}
+
+.move-notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-2);
+  font-size: var(--text-small);
+}
+
+.move-notes:empty {
+  display: none;
+}
+
+.move-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-self: end;
+  margin-top: var(--space-2);
+}

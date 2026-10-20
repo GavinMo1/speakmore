@@ -695,8 +695,21 @@ export default {
     barHintFailed: "操作提示未能更改：{reason}",
     recheck: "重新检查",
     version: "版本",
-    dataFolder: "数据目录",
     source: "源代码",
+    storage: {
+      title: "存储位置",
+      change: "更改…",
+      pickTitle: "选择新的存储位置",
+      pickMessage: "SpeakMore 会移到所选文件夹中的 .speakmore",
+      pickButton: "选择",
+      confirm: "移动到 {to}？",
+      confirmDetail:
+        "将复制 {size}（{count} 个文件），包括程序、本机模型、录音和设置。移动期间 SpeakMore 会暂时退出，完成后自动重新打开；未能完成时一切照旧。",
+      unknown: "原位置中不属于 SpeakMore 的文件不会移动，也不会删除：{items}",
+      move: "移动",
+      cancel: "取消",
+      failed: "未能更改：{reason}",
+    },
     update: {
       title: "软件更新",
       check: "检查更新",
@@ -715,6 +728,48 @@ export default {
       fromSource: "从源码运行 · 请用 git pull 更新",
       startFailed: "未能开始更新：{reason}",
     },
+  },
+
+  // App 第一次打开时选存储位置（src/app/first-run.mjs），用系统的对话框
+  firstRun: {
+    title: "选择存储位置",
+    detail:
+      "SpeakMore 的程序数据、本机模型、录音和设置都保存在同一个文件夹中。\n\n默认位置：{home}\n\n本机模型每个约 0.2–1.6 GB。如需保存到其他磁盘，可以现在选择；以后也可在 设置 › 通用 › 存储位置 中更改。",
+    useDefault: "使用默认位置",
+    choose: "选择其他位置…",
+    pickTitle: "选择存储位置",
+    pickMessage: "SpeakMore 会保存在所选文件夹中的 .speakmore",
+    pickButton: "选择",
+    existing: "{home} 中已有 SpeakMore 的数据",
+    existingDetail: "将直接使用其中的设置、历史和录音。",
+    reuse: "使用",
+    again: "重新选择",
+    unusable: "此位置不可用",
+  },
+
+  // 搬家的进度窗口（src/app/move-window.mjs、src/renderer/move）
+  moveWindow: {
+    title: {
+      preparing: "正在移动存储位置",
+      copying: "正在移动存储位置",
+      switching: "正在移动存储位置",
+      done: "存储位置已更改",
+      failed: "存储位置未能更改",
+    },
+    from: "原位置",
+    to: "新位置",
+    step: {
+      preparing: "正在准备，SpeakMore 会暂时退出…",
+      switching: "正在切换到新位置…",
+      done: "所有文件已移到新位置。",
+    },
+    copying: "正在复制 {done} / {total}（{percent}%）· 完成前请勿断开磁盘",
+    removed: "原位置的文件已删除。",
+    later: "原位置的文件将在此窗口关闭后删除。",
+    left: "原位置中不属于 SpeakMore 的文件保留未动：{items}",
+    unchanged: "SpeakMore 仍在原位置，一切照旧。",
+    done: "完成",
+    close: "关闭",
   },
 
   keyPanel: {

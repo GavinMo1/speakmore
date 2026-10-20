@@ -202,11 +202,32 @@ test("换家失败：系统入口换回旧目录，定位文件放回原样，�
   assert.deepEqual(reports, ["move.copying", "move.switching"]);
 });
 
+test("盘不行（exFAT 这类）：在停掉正在运行的之前就说，App 不用白退出一次，什么都没动", posixOnly, async (t) => {
+  const { root, paths, disk } = setup(t);
+  const instance = fakeInstance({ pid: 1, packaged: true });
+  await assert.rejects(
+    mover({
+      paths,
+      root,
+      instance,
+      bundles: fakeApp(root),
+      probe: async () => {
+        throw new Error("exFAT");
+      },
+    }).run({ folder: disk, by: "app" }),
+    /exFAT/,
+  );
+  assert.deepEqual(instance.calls, []);
+  assert.equal(existsSync(paths.locationFile), false);
+  assert.deepEqual(readdirSync(disk), []);
+});
+
 test(
-  "没换家之前就失败（盘不行）：定位文件回到搬之前（默认位置就是没有），停掉的那个从旧位置重新打开",
+  "停掉之后才出错（拷坏了）：定位文件回到搬之前（默认位置就是没有），停掉的那个从旧位置重新打开",
   posixOnly,
   async (t) => {
     const { root, from, paths, disk } = setup(t);
+    symlinkSync(join(from, "models"), join(from, "data", "absolute"));
     const opened = [];
     const instance = fakeInstance({ pid: 1, packaged: true });
     await assert.rejects(
@@ -216,12 +237,10 @@ test(
         instance,
         bundles: fakeApp(root),
         openApp: async (app, home) => opened.push([app, home]),
-        probe: async () => {
-          throw new Error("exFAT");
-        },
       }).run({ folder: disk, by: "app" }),
-      /exFAT/,
+      (error) => error.problem?.key === "move.copyBroken",
     );
+    assert.deepEqual(instance.calls, ["stop"]);
     assert.equal(existsSync(paths.locationFile), false);
     assert.deepEqual(opened, [[join(root, "SpeakMore.app"), from]]);
     assert.deepEqual(readdirSync(disk), []);
@@ -249,7 +268,7 @@ test("选的就是一个空的 .speakmore：搬不成时只清空它，目录留
   assert.deepEqual(readdirSync(to), []);
 });
 
-test("先问一句：要拷多少、搬去哪；不动磁盘", posixOnly, async (t) => {
+test("先问一句：要拷多少、搬去哪；除了试一下盘不动磁盘", posixOnly, async (t) => {
   const { root, from, paths, disk, to } = setup(t);
   const plan = await mover({ paths, root }).plan(disk);
   assert.equal(plan.from, from);
@@ -257,6 +276,7 @@ test("先问一句：要拷多少、搬去哪；不动磁盘", posixOnly, async 
   assert.equal(plan.files, 4);
   assert.equal(plan.bytes, Buffer.byteLength('{"hotkey":"fn"}历史模型日志'));
   assert.deepEqual(plan.unknown, ["notes.txt"]);
+  // 试过盘，试完删掉
   assert.deepEqual(readdirSync(disk), []);
   assert.equal(existsSync(paths.locationFile), false);
 });

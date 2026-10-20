@@ -106,7 +106,7 @@ npm run install-app     # 打包并装进“应用程序”，然后打开
 
 ## Windows
 
-Windows 版和 Mac 版是同一份代码，差别关在几处：听热键、贴字的小帮手是 `native/windows/`（Go，只用标准库，协议和 Swift 那个一字不差）；控制通道是 named pipe；家目录的权限用访问控制表只给本人和 SYSTEM；key 用 DPAPI 加密（Electron 的 safeStorage）；系统朗读用 System.Speech；安装、升级、卸载是 `install.ps1` 和 `src/cli/windows-system.mjs`。文案里按系统说的话写在各语言文案的 `windows` 一节，名字照抄通用的那句（`test/i18n/` 会查盖的那句存在、参数一样）。
+Windows 版和 Mac 版是同一份代码，差别关在几处：听热键、贴字的小帮手是 `native/windows/`（Go，只用标准库，协议和 Swift 那个一字不差）；控制通道是 named pipe；家目录的权限用访问控制表只给本人和 SYSTEM；key 用 DPAPI 加密（Electron 的 safeStorage）；系统朗读用 System.Speech；安装、升级、卸载是 `install.ps1` 和 `src/windows-system.mjs`。文案里按系统说的话写在各语言文案的 `windows` 一节，名字照抄通用的那句（`test/i18n/` 会查盖的那句存在、参数一样）。
 
 装好的样子和 Mac 一样全在 `%USERPROFILE%\.speakmore` 里，只是程序按版本放：`versions\<版本>-<编号>\` 里是 `app\` 和 `runtime\`（原版 Electron），`current` 一行字记着现在用哪个，`bin\speakmore.cmd` 照它找程序；数据、日志、模型和 Mac 一样。装新版本是解进一个新目录、试过能跑再改 `current`，不挪、不覆盖任何已有的文件，换下来的旧版本没人用了再删（0.9.2 及以前直接放在 `app\`、`runtime\`，升级时一并删掉），现在删不掉的交给一个隐藏的 PowerShell 隔几秒再试。同一个家目录同时只装一个（按家目录取名的系统互斥量）。0.9.3 以前的版本不认这种放法，install.ps1 不装它们。家目录以外只动两处、都记在 `bin\links`：用户 Path 里的 `%USERPROFILE%\.speakmore\bin`，开始菜单的 SpeakMore 快捷方式；App 设置里开了开机启动的话还有注册表 Run 里的一条。`speakmore uninstall` 照着删。升级时开机启动那一条、用户固定到任务栏或发送到桌面的快捷方式副本，凡是指着这个家目录里旧版本的，都改指到新版本。
 
