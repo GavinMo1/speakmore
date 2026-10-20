@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -13,9 +14,11 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { classifyHome, copyHome, measureHome, verifyCopy } from "../../src/move/copy.mjs";
 import { resolvePaths } from "../../src/storage/paths.mjs";
 
@@ -184,4 +187,41 @@ test("拷的时候目标已经有同名的：报错，不覆盖", async (t) => {
   put(join(to, "settings.json"), "别人的");
   await assert.rejects(copyHome({ from: home, to, plan: classifyHome(paths) }), { code: "ERR_FS_CP_EEXIST" });
   assert.equal(readFileSync(join(to, "settings.json"), "utf8"), "别人的");
+});
+
+/** 开发依赖里的 Electron（npm 的 electron 包交出的是可执行文件的路径） */
+const ELECTRON = createRequire(import.meta.url)("electron");
+
+test("在 Electron 里拷、量、核对：.asar 按普通文件（运行环境里有 default_app.asar；命令行就跑在自带的 Electron 上）", {
+  skip: !existsSync(ELECTRON) && "没装 Electron",
+}, (t) => {
+  const base = process.platform === "win32" ? tmpdir() : "/tmp";
+  const root = realpathSync(mkdtempSync(join(base, "sm-a-")));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const from = join(root, "old");
+  const to = join(root, "new");
+  // 随便什么内容：Electron 只看名字，以 .asar 结尾就当压缩包去读
+  mkdirSync(join(from, "runtime"), { recursive: true });
+  writeFileSync(join(from, "runtime", "default_app.asar"), "不是压缩包，照原样拷");
+  const script = join(root, "copy.mjs");
+  const module = pathToFileURL(resolve(import.meta.dirname, "../../src/move/copy.mjs")).href;
+  writeFileSync(
+    script,
+    `import { copyHome, measureHome, verifyCopy } from ${JSON.stringify(module)};
+const plan = { move: ["runtime"], leftovers: [], unknown: [], current: null };
+const measured = measureHome({ from: process.argv[2], plan });
+const copied = await copyHome({ from: process.argv[2], to: process.argv[3], plan });
+verifyCopy({ to: process.argv[3] });
+console.log(JSON.stringify({ measured, copied }));
+`,
+  );
+  const run = spawnSync(ELECTRON, [script, from, to], {
+    encoding: "utf8",
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+  });
+  assert.equal(run.status, 0, run.stderr);
+  const { measured, copied } = JSON.parse(run.stdout);
+  assert.equal(measured.files, 1);
+  assert.equal(copied.files, 1);
+  assert.equal(readFileSync(join(to, "runtime", "default_app.asar"), "utf8"), "不是压缩包，照原样拷");
 });

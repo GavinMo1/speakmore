@@ -13,6 +13,30 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 
 /** 更新、安装被打断留下的半截（update/home.mjs 的 .update-、install.sh 的 .install.、换下来的 app.old 这些） */
 const LEFTOVER = /^\.update-|^\.install\.|^(app|runtime)\.old(\..+)?$/;
+/**
+ * 在 Electron 里（命令行跑在自带的 Electron 上，App 的搬家窗口也是）fs 把名字以 .asar 结尾的文件当成压缩包、当目录读：
+ * 运行环境里的 default_app.asar 拷不过去（"Invalid package"），量大小时也会钻进去数。拷、量、核对时关掉，按普通文件处理。
+ * 只在这几步里关，做完放回原样（Node 里没有这个开关，设了也不碍事）
+ */
+function asPlainFiles(work) {
+  const before = process.noAsar;
+  process.noAsar = true;
+  let result;
+  try {
+    result = work();
+  } catch (error) {
+    process.noAsar = before;
+    throw error;
+  }
+  if (!(result instanceof Promise)) {
+    process.noAsar = before;
+    return result;
+  }
+  return result.finally(() => {
+    process.noAsar = before;
+  });
+}
+
 /** 系统在文件夹里自己放的：打开过就有。不删的话旧目录删不掉，搬家的记号 MOVED.json 一直留着 */
 const SYSTEM_LITTER = /^(\.DS_Store|Thumbs\.db|desktop\.ini)$/i;
 /** 每家一把 key（storage/paths.mjs 的 keyFile、oldAppKeyFile） */
@@ -77,6 +101,10 @@ function keeper(from, plan) {
  * @returns {{ files: number, bytes: number }}
  */
 export function measureHome({ from, plan }) {
+  return asPlainFiles(() => measure(from, plan));
+}
+
+function measure(from, plan) {
   const keep = keeper(from, plan);
   const total = { files: 0, bytes: 0 };
   const walk = (path) => {
@@ -99,7 +127,11 @@ export function measureHome({ from, plan }) {
  *   onProgress?: (done: { files: number, bytes: number }) => void }} options onProgress：每开始拷一个文件报一次拷到哪了
  * @returns {Promise<{ files: number, bytes: number }>} 拷了多少个文件、多少字节
  */
-export async function copyHome({ from, to, plan, onProgress = () => {} }) {
+export function copyHome({ from, to, plan, onProgress = () => {} }) {
+  return asPlainFiles(() => copy(from, to, plan, onProgress));
+}
+
+async function copy(from, to, plan, onProgress) {
   mkdirSync(to, { recursive: true });
   const stats = { files: 0, bytes: 0 };
   const keep = keeper(from, plan);
@@ -133,6 +165,10 @@ export async function copyHome({ from, to, plan, onProgress = () => {} }) {
  * @throws {Error} 说哪个链接不对
  */
 export function verifyCopy({ to }) {
+  asPlainFiles(() => verify(to));
+}
+
+function verify(to) {
   const root = resolve(to);
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
