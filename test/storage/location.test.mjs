@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
-import { forgetLocation, locationFileOf, readLocation, writeLocation } from "../../src/storage/location.mjs";
+import {
+  forgetLocation,
+  locationFileOf,
+  readLocation,
+  readLocationRecord,
+  removeLocation,
+  writeLocation,
+} from "../../src/storage/location.mjs";
 
 const zh = createTranslator("zh-CN");
 const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
@@ -15,13 +22,12 @@ function tempDir(t) {
   return dir;
 }
 
-test("定位文件的位置是固定的：macOS 在 ~/.config/speakmore 下，Windows 在本机的 AppData\\Local\\SpeakMore 下", () => {
-  assert.equal(locationFileOf({}, "/Users/someone", "darwin"), "/Users/someone/.config/speakmore/location.json");
-  // 从程序坞打开的 App 拿不到终端里设的 XDG_CONFIG_HOME，认它的话两边会看不同的文件
-  assert.equal(
-    locationFileOf({ XDG_CONFIG_HOME: "/elsewhere" }, "/Users/someone", "darwin"),
-    "/Users/someone/.config/speakmore/location.json",
-  );
+const MAC_FILE = "/Users/someone/Library/Application Support/com.zephyrxiang.speakmore/location.json";
+
+test("定位文件的位置是固定的：macOS 在按应用标识取名的 Application Support 下，Windows 在本机的 AppData\\Local\\SpeakMore 下", () => {
+  assert.equal(locationFileOf({}, "/Users/someone", "darwin"), MAC_FILE);
+  // 不认 XDG_CONFIG_HOME 这类环境变量：从程序坞打开的 App 拿不到终端里设的，认它的话两边会看不同的文件
+  assert.equal(locationFileOf({ XDG_CONFIG_HOME: "/elsewhere" }, "/Users/someone", "darwin"), MAC_FILE);
   assert.equal(
     locationFileOf({ LOCALAPPDATA: "C:\\Users\\someone\\AppData\\Local" }, "C:\\Users\\someone", "win32"),
     "C:\\Users\\someone\\AppData\\Local\\SpeakMore\\location.json",
@@ -110,6 +116,32 @@ test("forgetLocation：只删指着这个家目录的那份（Windows 上不分�
 
   writeLocation(file, "D:\\SpeakMore\\.speakmore");
   assert.equal(forgetLocation(file, "d:\\speakmore\\.SPEAKMORE", "win32"), true);
+  assert.equal(readLocation(file, "win32"), null);
+});
+
+test("正在搬家时多一项 moving：读家目录的人只认 home；moving 坏了当没有，不挡住启动", (t) => {
+  const dir = tempDir(t);
+  const file = join(dir, "location.json");
+  writeLocation(file, {
+    home: "/a/.speakmore",
+    moving: { to: "/b/.speakmore/", startedAt: "2026-10-20T00:00:00.000Z" },
+  });
+  assert.equal(readLocation(file, "darwin"), "/a/.speakmore");
+  assert.deepEqual(readLocationRecord(file, "darwin"), {
+    home: "/a/.speakmore",
+    moving: { to: "/b/.speakmore", startedAt: "2026-10-20T00:00:00.000Z" },
+  });
+  writeFileSync(file, JSON.stringify({ home: "/a/.speakmore", moving: { to: "relative" } }));
+  assert.deepEqual(readLocationRecord(file, "darwin"), { home: "/a/.speakmore", moving: null });
+});
+
+test("带 BOM 的也认（PowerShell 5.1 写 UTF-8 常带）；removeLocation 本来没有也不报错", (t) => {
+  const dir = tempDir(t);
+  const file = join(dir, "location.json");
+  writeFileSync(file, `\uFEFF${JSON.stringify({ home: "D:\\SM\\.speakmore" })}`);
+  assert.equal(readLocation(file, "win32"), "D:\\SM\\.speakmore");
+  removeLocation(file);
+  removeLocation(file);
   assert.equal(readLocation(file, "win32"), null);
 });
 

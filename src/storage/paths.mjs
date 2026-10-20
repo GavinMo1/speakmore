@@ -11,8 +11,8 @@ import { restrictToOwner } from "./owner-only.mjs";
 // 它可以装在任何地方，装在哪记在定位文件里（location.mjs）：那是目录以外唯一的一个文件。找它的顺序：
 //   1. 环境变量 SPEAKMORE_HOME：装在家目录里的程序（启动脚本、Windows 开始菜单起的 App）用它告诉程序"我是哪个家目录的"；
 //      开发、测试、安装脚本指定装到哪也用它
-//   2. 定位文件
-//   3. 默认位置：用户目录下的 .speakmore（0.11.0 及以前都装在这里，没有定位文件）
+//   2. 定位文件：装在默认位置以外时才有（location.mjs）
+//   3. 默认位置：用户目录下的 .speakmore（0.11.0 及以前都装在这里）
 //
 //   <家目录>/                       默认是 ~/.speakmore
 //     bin/ app/ runtime/           程序本身：安装时放进去，升级时整个换掉（macOS）
@@ -48,7 +48,13 @@ export function resolvePaths(env = process.env, userHome = homedir(), platform =
   const join = path.join;
   const locationFile = locationFileOf(env, userHome, platform);
   // SPEAKMORE_HOME 在前：测试用它指到临时目录，不碰真实的历史，也不受这台机器上的定位文件影响
-  const home = env.SPEAKMORE_HOME || readLocation(locationFile, platform) || join(userHome, ".speakmore");
+  const located = env.SPEAKMORE_HOME ? null : readLocation(locationFile, platform);
+  const home = env.SPEAKMORE_HOME || located || join(userHome, ".speakmore");
+  // 定位文件说的家目录必须已经在：只有安装和搬家建它。不在（移动硬盘没接、盘符被另一块盘占了）就照实说，
+  // 不在那里新建一个空的，看着像数据丢了
+  if (located !== null && !existsSync(located)) {
+    throw new LocalizedError(msg("paths.homeMissing", { home: located, file: locationFile }));
+  }
   // 相对路径会随着"在哪个目录运行命令"而变：换个目录就找不到正在运行的那个，还会再起一个
   if (!isFullPath(home, platform)) {
     throw new LocalizedError(msg("paths.homeNotAbsolute", { home: JSON.stringify(home) }));
