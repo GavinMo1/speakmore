@@ -375,6 +375,29 @@ test("从拼好的树装：只认家目录里 .update- 开头的目录；别处�
   assert.equal(installedVersion(), "9.9.9");
 });
 
+test("从拼好的树装：家目录写成 a//b、末尾带 /、经过符号链接，都认得出是它里面的；用 .. 绕出去的不认", () => {
+  assert.equal(install().code, 0);
+  const prepared = join(home(), ".update-10.0.0-0badf00d");
+  execFileSync("mv", [makeTree("10.0.0"), prepared]);
+  // 家目录经过一个符号链接、写法又不规整；交来的是真实路径（speakmore update 规范化过的）
+  const linked = join(root, "linked-home");
+  execFileSync("ln", ["-s", userHome, linked]);
+  const messy = `${linked}//.speakmore/`;
+  const { code, out } = install({
+    env: { SPEAKMORE_HOME: messy, SPEAKMORE_INSTALL_FROM: prepared },
+    args: ["--no-start"],
+  });
+  assert.equal(code, 0, out);
+  assert.equal(installedVersion(), "10.0.0");
+
+  const outside = makeTree("10.0.1");
+  mkdirSync(join(home(), ".update-10.0.1-0badf00d"));
+  const sneaky = join(home(), ".update-10.0.1-0badf00d", "..", "..", "..", outside.split("/").at(-1));
+  assertRefused(install({ env: { SPEAKMORE_INSTALL_FROM: sneaky } }), /must be a \.update- folder inside/);
+  assert.ok(existsSync(join(outside, "app", "package.json")), "绕出去的那个目录没被删");
+  assert.equal(installedVersion(), "10.0.0");
+});
+
 test("不认识的参数：不装", () => {
   assertRefused(install({ args: ["--force"] }), /Unknown option: --force/);
   assert.equal(existsSync(home()), false);

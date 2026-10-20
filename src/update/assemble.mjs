@@ -17,6 +17,7 @@ import { setImmediate as yieldToLoop } from "node:timers/promises";
 import { LocalizedError, msg } from "../i18n/index.mjs";
 import { chunksOf, sha256 } from "./chunker.mjs";
 import { chunksIn } from "./manifest.mjs";
+import { withoutAsar } from "./no-asar.mjs";
 import { unpackObject } from "./objects.mjs";
 
 // 照一份清单拼出一棵目录树：本机已经有的块（种子：装着的那几份 SpeakMore）直接拷，没有的才下载。
@@ -44,7 +45,11 @@ function filesUnder(root) {
  * @param {string[]} seeds 本机装着的几份（目录）。不存在的跳过
  * @returns {Promise<Map<string, { file: string, offset: number, size: number }>>}
  */
-export async function indexSeeds(seeds, manifest) {
+export function indexSeeds(seeds, manifest) {
+  return withoutAsar(() => indexSeedFiles(seeds, manifest));
+}
+
+async function indexSeedFiles(seeds, manifest) {
   const wanted = chunksIn(manifest);
   const index = new Map();
   for (const root of seeds) {
@@ -73,16 +78,11 @@ export async function indexSeeds(seeds, manifest) {
  * @param {AbortSignal} [options.signal]
  * @returns {Promise<{ downloadedChunks: number, downloadedBytes: number, reusedBytes: number }>}
  */
-export async function assembleTree({
-  manifest,
-  dest,
-  seeds = [],
-  seedIndex,
-  fetchObjects,
-  cacheDir,
-  onProgress,
-  signal,
-}) {
+export function assembleTree(options) {
+  return withoutAsar(() => assemble(options));
+}
+
+async function assemble({ manifest, dest, seeds = [], seedIndex, fetchObjects, cacheDir, onProgress, signal }) {
   if (existsSync(dest) && readdirSync(dest).length > 0) throw new Error(`要拼到的 ${dest} 不是空的`);
   const index = seedIndex ?? (await indexSeeds(seeds, manifest));
   signal?.throwIfAborted();

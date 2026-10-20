@@ -249,7 +249,8 @@
       try { $version = [string](Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $from 'app\package.json') | ConvertFrom-Json).version } catch { $version = '' }
       if ($version -notmatch '^\d+\.\d+\.\d+([-+.][0-9A-Za-z.-]+)?$') { Fail "The prepared copy has no valid version: $from" "Please open an issue at $RepoUrl/issues." }
       New-VersionDir $version
-      try { Copy-Item -Path (Join-Path $from '*') -Destination $script:VersionDir -Recurse -Force } catch {
+      # -LiteralPath：临时目录的路径里可能有 [ ]（用户名里带的），-Path 会把它们当通配符
+      try { Get-ChildItem -LiteralPath $from -Force | Copy-Item -Destination $script:VersionDir -Recurse -Force } catch {
         Fail "Couldn't copy the new version into $(Pretty $script:VersionsDir)" "Check the free space and run it again." "($($_.Exception.Message))"
       }
     }

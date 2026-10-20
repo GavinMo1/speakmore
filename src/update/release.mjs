@@ -24,6 +24,12 @@ export function downloadBase(env) {
   return base;
 }
 
+/**
+ * 跟着跳转走时只许跳到 https：channel.json 决定信哪份清单，它自己没有校验值，不能被一个跳到 http 的回应换掉
+ * （块和清单都按 sha256 核对，换不了）
+ */
+const NO_DOWNGRADE = ["--proto-redir", "=https"];
+
 /** 一次交给 curl 取多少个对象：取完一批报一次进度，断了重来只补没取到的 */
 const BATCH = 64;
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -107,6 +113,7 @@ export function createRelease({ env }) {
       );
       const { code, said } = await curlBatch([
         "-fsSL",
+        ...NO_DOWNGRADE,
         "--retry",
         "2",
         "--connect-timeout",
@@ -166,7 +173,7 @@ export function createRelease({ env }) {
       const url = `${base}/${CHANNEL}`;
       let text;
       try {
-        text = await run("curl", ["-fsSL", "--max-time", String(timeoutSeconds), url], { env });
+        text = await run("curl", ["-fsSL", ...NO_DOWNGRADE, "--max-time", String(timeoutSeconds), url], { env });
       } catch (error) {
         throw new LocalizedError(msg("update.unreachable", { url, reason: error.said }), { cause: error });
       }

@@ -19,6 +19,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { assembleTree, indexSeeds } from "../../src/update/assemble.mjs";
 import { sha256 } from "../../src/update/chunker.mjs";
 import { describeTree, encodeManifest, parseManifest } from "../../src/update/manifest.mjs";
+import { withoutAsar } from "../../src/update/no-asar.mjs";
 import { packObject, unpackObject } from "../../src/update/objects.mjs";
 
 const posix = { skip: process.platform === "win32" && "符号链接和可执行位只在 macOS 上有" };
@@ -124,6 +125,35 @@ test("从空的本机拼一棵树：文件内容、空文件、空目录、可�
   assert.equal(result.reusedBytes, 0);
 });
 
+test("路径里带 .asar 的文件当普通文件原样拼（Electron 当 Node 跑时 fs 会把它当归档；运行环境里就有 default_app.asar）", async () => {
+  // 在 Electron 的 Node 上跑这条才测得到（ship 会跑一遍）。摆、读测试文件时自己关掉 asar，拼的那一步靠被测的代码自己关
+  const resources = (root) => join(root, "runtime", "Electron.app", "Contents", "Resources");
+  const asar = pseudoRandom(200_000, 5);
+  const store = makeStore();
+  const { source, seed, manifest } = await withoutAsar(async () => {
+    const source = makeTree(join(dir, "v1"));
+    mkdirSync(resources(source), { recursive: true });
+    writeFileSync(join(resources(source), "default_app.asar"), asar);
+    // 本机装着的那份也有它：切种子时要读得出来
+    const seed = makeTree(join(dir, "seed"));
+    mkdirSync(resources(seed), { recursive: true });
+    writeFileSync(join(resources(seed), "default_app.asar"), asar);
+    return { source, seed, manifest: await publishTree(source, store) };
+  });
+  assert.ok(source);
+  const dest = join(dir, "out");
+  const result = await assembleTree({
+    manifest,
+    dest,
+    seeds: [seed],
+    fetchObjects: store.fetchObjects,
+    cacheDir: join(dir, "cache"),
+  });
+  assert.equal(process.noAsar, undefined, "拼完把 asar 恢复原样");
+  await withoutAsar(async () => assert.deepEqual(readFileSync(join(resources(dest), "default_app.asar")), asar));
+  assert.ok(result.reusedBytes >= asar.length, `reused ${result.reusedBytes}`);
+});
+
 test("本机装着上一版：只下变了的块，没变的从本机那份拷", async () => {
   const big = pseudoRandom(3 * 1024 * 1024, 11);
   const old = makeTree(join(dir, "v1"), { big, version: "1.0.0" });
@@ -214,7 +244,7 @@ test("拼到的目录已经有东西：不往里写，免得混进别的文件",
   );
 });
 
-test("清单：越出目录的路径、绝对路径、反斜杠、指到外面的链接、重复的路径、不认识的切法都拒收", async () => {
+test("清单：越出目录的路径、绝对路径、反斜杠、指到外面的链接、重名的路径、不认识的切法都拒收", async () => {
   const good = { format: 1, chunking: "fastcdc-gear32-v1", entries: [{ path: "a", type: "dir" }] };
   const sha = "a".repeat(64);
   const bad = [
@@ -238,10 +268,46 @@ test("清单：越出目录的路径、绝对路径、反斜杠、指到外面�
   }
   assert.throws(
     () => parseManifest(Buffer.from(JSON.stringify({ ...good, entries: [good.entries[0], good.entries[0]] }))),
-    /重复/,
+    /重名/,
   );
   assert.throws(() => parseManifest(Buffer.from(JSON.stringify({ ...good, chunking: "other" }))), /切法/);
   assert.throws(() => parseManifest(Buffer.from(JSON.stringify({ ...good, format: 2 }))), /格式/);
+});
+
+test("清单：链接下面不许再有东西（不然顺着链接能写到目录外面）；不分大小写的重名、Windows 上有特殊含义的名字都拒收", () => {
+  const good = { format: 1, chunking: "fastcdc-gear32-v1" };
+  const parse = (entries) => parseManifest(Buffer.from(JSON.stringify({ ...good, entries })));
+  const dir = (path) => ({ path, type: "dir" });
+  // a/s 指到 b（深一层的链接指到浅一层），a/s/t 按字面在里面，顺着 a/s 走却出去了：链接下面的一概不收，不管排在前后
+  assert.throws(
+    () =>
+      parse([
+        dir("a"),
+        { path: "a/s/t", type: "link", target: "../../x" },
+        { path: "a/s", type: "link", target: "../b" },
+        dir("b"),
+      ]),
+    /a\/s\/t 在链接 a\/s 下面/,
+  );
+  // macOS、Windows 的文件系统默认不分大小写：App 是链接时 app/x 也是顺着它写
+  assert.throws(() => parse([{ path: "App", type: "link", target: "b" }, dir("b"), dir("app/x")]), /在链接 App 下面/);
+  assert.throws(() => parse([dir("app"), dir("App")]), /重名/);
+  assert.throws(() => parse([dir("caf\u00e9"), dir("cafe\u0301")]), /重名/);
+  for (const name of ["a:b", "x?", "CON", "nul.txt", "com1", "trailing.", "space ", "tab\tname"]) {
+    assert.throws(() => parse([dir(name)]), /路径不对/, name);
+  }
+  // 真实的树里那几种都收：Electron 框架里的链接、带点和空格的文件名
+  assert.equal(
+    parse([
+      dir("Versions"),
+      dir("Versions/A"),
+      { path: "Versions/Current", type: "link", target: "A" },
+      { path: "Resources", type: "link", target: "Versions/Current/Resources" },
+      { path: "Electron Helper (GPU).app", type: "dir" },
+      { path: "v8_context_snapshot.arm64.bin", type: "file", exec: false, chunks: [] },
+    ]).entries.length,
+    6,
+  );
 });
 
 test("对象：压过再解开原样回来；sha256 对不上的拒收", () => {

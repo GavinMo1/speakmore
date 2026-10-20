@@ -190,14 +190,18 @@ download() {
   try_new "Unpacked"
 }
 
-# 从一棵已经准备好的树装（SPEAKMORE_INSTALL_FROM）：只认家目录里 .update- 开头的目录，和要换上的在同一块盘上，改名就换上
+# 从一棵已经准备好的树装（SPEAKMORE_INSTALL_FROM）：只认直接放在家目录里、.update- 开头的目录，和要换上的在同一块盘上，改名就换上。
+# 两边都先解析成真实路径再比：家目录可能写成 a//b、末尾带 /，或者经过符号链接（/tmp 其实是 /private/tmp），
+# 而 speakmore update 交来的是规范化过的；也挡住 .update-x/../.. 这种绕出去的（失败时这个目录会被整个删掉）
 use_tree() {
-  case "$SPEAKMORE_INSTALL_FROM" in
-    "$HOME_DIR"/.update-*) ;;
-    *) fail "SPEAKMORE_INSTALL_FROM must be a .update- folder inside $(pretty "$HOME_DIR")" "Got $SPEAKMORE_INSTALL_FROM" ;;
-  esac
   [ -d "$SPEAKMORE_INSTALL_FROM" ] || fail "No such folder: $SPEAKMORE_INSTALL_FROM"
-  TMP_DIR="$SPEAKMORE_INSTALL_FROM"
+  local from home
+  from="$(CDPATH="" cd -- "$SPEAKMORE_INSTALL_FROM" && pwd -P)" || fail "Can't open $SPEAKMORE_INSTALL_FROM"
+  home="$(CDPATH="" cd -- "$HOME_DIR" && pwd -P)" || fail "Can't open $(pretty "$HOME_DIR")"
+  case "$(basename "$from")" in .update-*) ;; *) from="" ;; esac
+  [ -n "$from" ] && [ "$(dirname "$from")" = "$home" ] ||
+    fail "SPEAKMORE_INSTALL_FROM must be a .update- folder inside $(pretty "$HOME_DIR")" "Got $SPEAKMORE_INSTALL_FROM"
+  TMP_DIR="$from"
   try_new "Prepared"
 }
 
