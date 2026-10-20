@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { msg, problemOf } from "../i18n/index.mjs";
 import { probeTarget } from "../move/probe.mjs";
-import { canonicalDir, checkLength, homeIn } from "../move/target.mjs";
-import { locationFileOf, writeLocation } from "../storage/location.mjs";
+import { checkLength, homeIn } from "../move/target.mjs";
+import { canonicalDir, locationFileOf, writeLocation } from "../storage/location.mjs";
 import { legacyDataDir } from "../storage/paths.mjs";
 
 // macOS 上从"应用程序"第一次打开 SpeakMore.app：还什么都没装过时，先问一句存储位置放哪（程序数据、本机模型、录音、设置

@@ -55,6 +55,9 @@ test("分清哪些是 SpeakMore 的、要搬；哪些是半截的、不搬但删
     "runtime.old.3/x",
     "notes.txt",
     "Backups/a",
+    ".DS_Store",
+    "Thumbs.db",
+    "desktop.ini",
   ]) {
     put(join(home, name));
   }
@@ -72,7 +75,18 @@ test("分清哪些是 SpeakMore 的、要搬；哪些是半截的、不搬但删
     "settings.json",
     "vocabulary.json",
   ]);
-  assert.deepEqual(leftovers.sort(), [".install.AbCd12", ".update-0.12.0-1a2b3c4d", "app.old", "run", "runtime.old.3"]);
+  // 系统在文件夹里自己放的（访达的 .DS_Store、资源管理器的 Thumbs.db、desktop.ini）也不搬、跟旧目录一起删：
+  // 不然旧目录删不掉，MOVED.json 一直留着
+  assert.deepEqual(leftovers.sort(), [
+    ".DS_Store",
+    ".install.AbCd12",
+    ".update-0.12.0-1a2b3c4d",
+    "Thumbs.db",
+    "app.old",
+    "desktop.ini",
+    "run",
+    "runtime.old.3",
+  ]);
   assert.deepEqual(unknown.sort(), ["Backups", "notes.txt"]);
 });
 

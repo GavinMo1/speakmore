@@ -4,7 +4,7 @@ import { join, posix, win32 } from "node:path";
 import { TimeoutError } from "../control.mjs";
 import { LocalizedError, msg, problemOf } from "../i18n/index.mjs";
 import { sizeText } from "../models/describe.mjs";
-import { readLocationRecord, removeLocation, sameHome, writeLocation } from "../storage/location.mjs";
+import { canonicalDir, readLocationRecord, removeLocation, sameHome, writeLocation } from "../storage/location.mjs";
 import { MOVED_FILE } from "../storage/paths.mjs";
 import { createBundles } from "../update/bundle.mjs";
 import { runToEnd } from "../update/exec.mjs";
@@ -13,7 +13,7 @@ import { classifyHome, copyHome, measureHome, verifyCopy } from "./copy.mjs";
 import { canRehome, installerIn, rehome } from "./installer.mjs";
 import { probeTarget } from "./probe.mjs";
 import { moverAlive, readMoveRecord, stillMoving, stillRunning, writeMoveRecord } from "./state.mjs";
-import { canonicalDir, checkTarget } from "./target.mjs";
+import { checkTarget } from "./target.mjs";
 
 // 把整个家目录搬到别处（speakmore move、App 设置里的"存储位置"）。命令行和 App 都只调这里。按这个顺序：
 //   1. 检查新位置（target.mjs）、本机每一份 SpeakMore 都认得换家（家目录里的程序、Mac 上"应用程序"里的 App）

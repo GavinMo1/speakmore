@@ -4,6 +4,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmdirSync,
   rmSync,
@@ -58,6 +59,29 @@ export function normalizedHome(home, platform) {
 export function sameHome(a, b, platform) {
   const [x, y] = [normalizedHome(a, platform), normalizedHome(b, platform)];
   return platform === "win32" ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+
+/**
+ * 一个目录的正式写法，比较、写进定位文件都用它。macOS 上解开符号链接、按磁盘上的大小写（/tmp → /private/tmp、
+ * 经过链接的用户目录），和安装脚本（pwd -P）、启动脚本交给程序的是同一个字符串；还不存在的那几层照原样接在后面。
+ * Windows 上只规整写法（和 install.ps1 的 GetFullPath 一样）
+ */
+export function canonicalDir(dir, platform = process.platform) {
+  const path = pathModule(platform);
+  const full = path.resolve(dir);
+  if (platform === "win32") return full;
+  const missing = [];
+  for (let head = full; ; ) {
+    try {
+      return path.join(realpathSync.native(head), ...missing.reverse());
+    } catch (error) {
+      if (error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
+    }
+    const parent = path.dirname(head);
+    if (parent === head) return full;
+    missing.push(path.basename(head));
+    head = parent;
+  }
 }
 
 /**

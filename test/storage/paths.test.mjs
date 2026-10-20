@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
-import { writeLocation } from "../../src/storage/location.mjs";
+import { locationFileOf, writeLocation } from "../../src/storage/location.mjs";
 import {
   ensureHome,
   installedHomeOf,
@@ -171,13 +171,35 @@ test("定位文件说的家目录不在（移动硬盘没接、盘符被别的�
   assert.throws(() => statSync(missing));
 });
 
-test("搬走了的旧目录（里面有 MOVED.json）：说搬去了哪，不在半个旧目录上跑起来", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "sm-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  writeFileSync(join(dir, "MOVED.json"), JSON.stringify({ to: "/Volumes/Data/.speakmore" }));
-  assert.throws(() => resolvePaths({ SPEAKMORE_HOME: dir }), said(/已经搬到 \/Volumes\/Data\/\.speakmore/));
-  writeFileSync(join(dir, "MOVED.json"), "{ 坏了");
-  assert.throws(() => resolvePaths({ SPEAKMORE_HOME: dir }), said(/已经搬到 \?/));
+test("搬走了的旧目录（里面有 MOVED.json，SpeakMore 记着的正是它说的新位置）：说搬去了哪，不在半个旧目录上跑起来", (t) => {
+  const user = mkdtempSync(join(tmpdir(), "sm-"));
+  t.after(() => rmSync(user, { recursive: true, force: true }));
+  const old = join(user, "old");
+  const moved = join(user, "Data", ".speakmore");
+  mkdirSync(old);
+  mkdirSync(moved, { recursive: true });
+  const env = { SPEAKMORE_HOME: old };
+  writeLocation(locationFileOf(env, user, process.platform), { home: moved });
+  writeFileSync(join(old, "MOVED.json"), JSON.stringify({ to: moved }));
+  assert.throws(() => resolvePaths(env, user), said(/已经搬到 .*Data/));
+  writeFileSync(join(old, "MOVED.json"), "{ 坏了");
+  assert.throws(() => resolvePaths(env, user), said(/已经搬到 \?/));
+});
+
+test("过期的 MOVED.json（新位置后来卸载了、定位文件没了）：不理它，默认位置照常能用、能重装", (t) => {
+  const user = mkdtempSync(join(tmpdir(), "sm-"));
+  t.after(() => rmSync(user, { recursive: true, force: true }));
+  const home = join(user, ".speakmore");
+  mkdirSync(home);
+  writeFileSync(join(home, ".DS_Store"), "");
+  writeFileSync(join(home, "MOVED.json"), JSON.stringify({ to: join(user, "gone", ".speakmore") }));
+  assert.equal(resolvePaths({}, user).home, home);
+  assert.equal(resolvePaths({ SPEAKMORE_HOME: home }, user).home, home);
+  // 从别处搬回了默认位置：旧目录的记号说的就是默认位置，还算数
+  const elsewhere = join(user, "elsewhere");
+  mkdirSync(elsewhere);
+  writeFileSync(join(elsewhere, "MOVED.json"), JSON.stringify({ to: home }));
+  assert.throws(() => resolvePaths({ SPEAKMORE_HOME: elsewhere }, user), said(/已经搬到/));
 });
 
 test("ensureHome：家目录所在的那一层不存在（移动硬盘没接、盘符没了）就报错，不在别处新建", (t) => {

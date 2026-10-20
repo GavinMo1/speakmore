@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
 import { LocalizedError, msg } from "../i18n/index.mjs";
-import { isFullPath, locationFileOf, readLocation } from "./location.mjs";
+import { canonicalDir, isFullPath, locationFileOf, readLocation, sameHome } from "./location.mjs";
 import { restrictToOwner } from "./owner-only.mjs";
 
 // SpeakMore 的家：程序、运行环境、设置、key、历史、录音、日志，全在这一个目录里。
@@ -55,9 +55,13 @@ export function resolvePaths(env = process.env, userHome = homedir(), platform =
   if (located !== null && !existsSync(located)) {
     throw new LocalizedError(msg("paths.homeMissing", { home: located, file: locationFile }));
   }
-  // 搬走了的旧目录（speakmore move 删它之前先放下这个记号）：从残留的旧入口启动时说清楚搬去了哪，不在半个旧目录上跑起来
+  // 搬走了的旧目录（speakmore move 删它之前先放下这个记号）：从残留的旧入口启动时说清楚搬去了哪，不在半个旧目录上跑起来。
+  // 只在 SpeakMore 记着的位置正是记号说的新位置时才算数：新位置后来卸载了、定位文件没了的，是过期的记号，
+  // 不理它（不然默认位置永远起不来、也装不上）
   const moved = movedTo(join(home, MOVED_FILE));
-  if (moved !== undefined) throw new LocalizedError(msg("paths.homeMoved", { home, to: moved ?? "?" }));
+  if (moved !== undefined && (moved === null || isRecorded(moved, located, env, locationFile, userHome, platform))) {
+    throw new LocalizedError(msg("paths.homeMoved", { home, to: moved ?? "?" }));
+  }
   // 相对路径会随着"在哪个目录运行命令"而变：换个目录就找不到正在运行的那个，还会再起一个
   if (!isFullPath(home, platform)) {
     throw new LocalizedError(msg("paths.homeNotAbsolute", { home: JSON.stringify(home) }));
@@ -119,6 +123,19 @@ export function resolvePaths(env = process.env, userHome = homedir(), platform =
 
 /** 搬家删旧目录之前在里面放下的记号：{ "to": "<新家目录>" } */
 export const MOVED_FILE = "MOVED.json";
+
+/** SpeakMore 记着的位置（定位文件，没有就是默认位置）是不是 dir。读不出、比不了时当作是：照记号说 */
+function isRecorded(dir, located, env, locationFile, userHome, platform) {
+  try {
+    const recorded =
+      located ??
+      (env.SPEAKMORE_HOME ? readLocation(locationFile, platform) : null) ??
+      (platform === "win32" ? win32 : posix).join(userHome, ".speakmore");
+    return sameHome(canonicalDir(recorded, platform), canonicalDir(dir, platform), platform);
+  } catch {
+    return true;
+  }
+}
 
 /** 这个记号说搬去了哪；没有记号是 undefined，有记号但读不出是 null */
 function movedTo(file) {

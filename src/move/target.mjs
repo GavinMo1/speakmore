@@ -1,7 +1,7 @@
 import { readdirSync, realpathSync, statSync } from "node:fs";
 import { posix, win32 } from "node:path";
 import { LocalizedError, msg } from "../i18n/index.mjs";
-import { isFullPath } from "../storage/location.mjs";
+import { canonicalDir, isFullPath } from "../storage/location.mjs";
 
 // 搬到哪：用户选一个文件夹，SpeakMore 搬进它里面的 .speakmore（选的本身就叫 .speakmore 时就是它）。
 // 只管这个子目录：搬失败了删、以后卸载删，都不会删到所选文件夹里别的东西。这里只做检查，不动磁盘。
@@ -19,29 +19,6 @@ export function homeIn(folder, platform = process.platform) {
   const full = path.resolve(folder);
   const named = platform === "win32" ? path.basename(full).toLowerCase() : path.basename(full);
   return named === ".speakmore" ? full : path.join(full, ".speakmore");
-}
-
-/**
- * 一个目录的正式写法，比较、写进定位文件都用它。macOS 上解开符号链接、按磁盘上的大小写（/tmp → /private/tmp、
- * 经过链接的用户目录），和安装脚本（pwd -P）、启动脚本交给程序的是同一个字符串；还不存在的那几层照原样接在后面。
- * Windows 上只规整写法（和 install.ps1 的 GetFullPath 一样）
- */
-export function canonicalDir(dir, platform = process.platform) {
-  const path = pathModule(platform);
-  const full = path.resolve(dir);
-  if (platform === "win32") return full;
-  const missing = [];
-  for (let head = full; ; ) {
-    try {
-      return path.join(realpathSync.native(head), ...missing.reverse());
-    } catch (error) {
-      if (error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
-    }
-    const parent = path.dirname(head);
-    if (parent === head) return full;
-    missing.push(path.basename(head));
-    head = parent;
-  }
 }
 
 /** 路径长度合不合格：macOS 按字节（套接字路径的上限），Windows 按字符 */

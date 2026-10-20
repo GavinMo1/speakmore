@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
-import { canonicalDir, checkLength, checkTarget, homeIn } from "../../src/move/target.mjs";
+import { checkLength, checkTarget, homeIn } from "../../src/move/target.mjs";
 import { resolvePaths } from "../../src/storage/paths.mjs";
 
 const zh = createTranslator("zh-CN");
@@ -79,15 +79,4 @@ test("路径太长：macOS 上控制通道的套接字路径最长 103 字节（
   assert.throws(() => checkLength(`/Users/someone/${"中".repeat(25)}/.speakmore`, "darwin"), said(/太长/));
   assert.doesNotThrow(() => checkLength(`D:\\${"x".repeat(106)}\\.speakmore`, "win32"));
   assert.throws(() => checkLength(`D:\\${"x".repeat(107)}\\.speakmore`, "win32"), said(/太长/));
-});
-
-test("正式写法：macOS 上解开符号链接、按磁盘上的大小写，还不存在的几层照原样接上；Windows 上只规整写法", {
-  skip: process.platform === "win32" && "macOS 的事",
-}, (t) => {
-  const linked = mkdtempSync("/tmp/sm-c-");
-  t.after(() => rmSync(linked, { recursive: true, force: true }));
-  const real = realpathSync(linked);
-  mkdirSync(join(real, "Data"));
-  assert.equal(canonicalDir(join(linked, "data", "x", ".speakmore"), "darwin"), join(real, "Data", "x", ".speakmore"));
-  assert.equal(canonicalDir("D:\\Apps\\..\\SM\\", "win32"), "D:\\SM");
 });

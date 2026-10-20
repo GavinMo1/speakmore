@@ -141,9 +141,10 @@ test("搬过去：我们的拷过去、旧目录里只删我们的，用户自�
   assert.equal(progress.at(-1).files, 4);
 });
 
-test("旧目录里只有我们的：搬完整个删掉，连记号一起", posixOnly, async (t) => {
+test("旧目录里只有我们的（和访达放的 .DS_Store）：搬完整个删掉，连记号一起", posixOnly, async (t) => {
   const { root, from, paths, disk } = setup(t);
   rmSync(join(from, "notes.txt"));
+  put(join(from, ".DS_Store"));
   const result = await mover({ paths, root }).run({ folder: disk, by: "cli" });
   assert.deepEqual(result.left, []);
   assert.equal(existsSync(from), false);

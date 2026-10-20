@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
 import {
+  canonicalDir,
   forgetLocation,
   locationFileOf,
   readLocation,
@@ -164,4 +165,15 @@ test("forgetLocation：定位文件坏了时不删（不知道它指着哪）", 
   writeFileSync(file, "{ 坏了");
   assert.throws(() => forgetLocation(file, "/a/.speakmore", "darwin"), said(/location\.json/));
   assert.equal(readFileSync(file, "utf8"), "{ 坏了");
+});
+
+test("正式写法：macOS 上解开符号链接、按磁盘上的大小写，还不存在的几层照原样接上；Windows 上只规整写法", {
+  skip: process.platform === "win32" && "macOS 的事",
+}, (t) => {
+  const linked = mkdtempSync("/tmp/sm-c-");
+  t.after(() => rmSync(linked, { recursive: true, force: true }));
+  const real = realpathSync(linked);
+  mkdirSync(join(real, "Data"));
+  assert.equal(canonicalDir(join(linked, "data", "x", ".speakmore"), "darwin"), join(real, "Data", "x", ".speakmore"));
+  assert.equal(canonicalDir("D:\\Apps\\..\\SM\\", "win32"), "D:\\SM");
 });
