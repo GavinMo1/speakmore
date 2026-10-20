@@ -18,7 +18,7 @@ metadata:
 - **完成标准**：多 agent 对抗性审查（他开了 ultracode，但说别起太多 agent、别打爆额度）＋ Mac 和 Windows 两台端到端（Windows 游戏电脑开着，可以随时测）。他说出一点差错 App 就起不来，要非常谨慎。
 - 本地大模型润色已婉拒：不测、不打包、模型广场不收，用户自己用 vLLM/SGLang/Ollama 走自定义服务接。
 
-- **10-20 晚状态**：分支 relocatable-home 做完——第一次安装时选位置（Mac App 对话框、install.sh/install.ps1 终端里问、Setup.exe 系统对话框）、`speakmore move`、App 设置"更改…"；审查一轮修了 26 条；两台端到端全过，三处系统对话框他亲手点过。验证记录在 docs/development.md"验证到哪一步"。还没合主干、没发版（等他点头）。
+- **已随 0.12.0 发布（10-20）**，#10 回复后关闭，两台他真在用的都升上来了；分支已合并、删掉。之前的记录：分支 relocatable-home 做完——第一次安装时选位置（Mac App 对话框、install.sh/install.ps1 终端里问、Setup.exe 系统对话框）、`speakmore move`、App 设置"更改…"；审查一轮修了 26 条；两台端到端全过，三处系统对话框他亲手点过。验证记录在 docs/development.md"验证到哪一步"。（发版经过见 [[speakmore-release-on-cos]]）
 
 **Why:** Windows 用户想把模型（一个约 0.8 GB）和数据放到 C 盘以外，迁移时整体带走。
 **How to apply:** 在 relocatable-home 分支上做；之后接着做 [[speakmore-hotkey-any-key]]。相关：[[speakmore-release-on-cos]]、[[update-e2e-isolation]]、[[refactor-surgical-clean]]。

@@ -15,6 +15,11 @@ metadata:
 - **临时签名的 SpeakMore.app 被 `open` 打开时，系统当成新应用**，会弹麦克风授权。应用标识和正式版一样，他点了允许以后，正式版的麦克风授权可能被覆盖，下次听写会再问一次。所以 App 那条路径要么只在发版前测一次，要么用命令行、App 不在跑的方式测。直接从 shell 执行 App 里的程序不会弹，因为权限算在终端头上。
 - **Windows 上 install.ps1 会改写开始菜单的「SpeakMore」快捷方式，并往用户 Path 里加一项**，名字是固定的。测之前先备份，测完还原；脚本在会话临时目录的 e2e/win 下，有 prepare、start-app、restore 三个。
 - 测试发布包（0.11.0 起的按块摆法）：版本号临时改成 `0.11.0-e2e.N` 这类预发号（install.sh 只认 0.11.0 及以上，预发号比正式版旧），`MAC_SIGNING_IDENTITY= MAC_NOTARY_PROFILE= node scripts/release/release.mjs` 不签名不公证也出 App 的清单；打两个版本，用前一个装、后一个当下载地址（`SPEAKMORE_INSTALL_BASE`）测更新。打包期间别 `git add -A`：10-19 就这样把临时版本号提交进去过一次。
+- **Windows 换用户目录做隔离（10-20）**：把 `USERPROFILE`、`LOCALAPPDATA`、`APPDATA` 换成临时目录前，先在里面建好 `AppData\Roaming\Microsoft\Windows\Start Menu\Programs` 和 `Desktop`：`[Environment]::GetFolderPath` 照 `%USERPROFILE%` 展开、目录在才交回，不建的话 install.ps1 建快捷方式那一步报空路径；建了以后快捷方式落在假目录里，真的不用备份（用户 Path 还是真的，照旧备份还原）。
+- **写给 Windows PowerShell 5.1 的测试脚本要带 BOM**：不带的话按 GBK 读，中文注释会吞掉换行，下一行跟着成了注释（10-20 还原脚本因此没还原 Path）。
+- **照 `irm | iex` 在同一作用域里跑 install.ps1**：它的 `$script:Base` 这些会盖掉测试脚本里同名的变量（PowerShell 变量名不分大小写），测试脚本的变量起个不会撞的名字。
+- 测试起的 App 用了假的用户目录，搜狗输入法会往里写日志并一直开着，那几个文件要等它退出才删得掉。
+- Mac 上从 shell 直接执行测试 App 时，连 `CFFIXED_USER_HOME` 一起换成假目录，不然偏好设置写进真的；执行过的 App 会登记进 LaunchServices，删之前 `lsregister -u` 注销。
 - Mac 的测试家目录用短路径，别带 `//`：install.sh 要比对拼好的目录在不在家目录里（10-19 查出过 a//b 比不上的毛病，已修）。
 
 **Why:** 第一次跑时差点去换他 /Applications 里的 App，他的 PATH 链接、开始菜单、麦克风授权也都是真的。
