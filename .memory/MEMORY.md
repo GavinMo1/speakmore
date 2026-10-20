@@ -47,3 +47,5 @@
 - [Windows 上的系统窗口让他点](windows-gui-user-clicks.md) — 选文件这类系统窗口直接告诉他点哪，不用 SendKeys 或界面自动化；网页部分用 CDP 核对；那台机器的 Defender 是关着的
 - [腾讯云费用](speakmore-cloud-billing.md) — 按量付费、不能欠费，余额花完 CDN 两小时后下载全断；10-19 余额 137 元、告警 50 元；查下载量时顺带看余额
 - [真机测更新要隔离](update-e2e-isolation.md) — 钉住 SPEAKMORE_APP、SPEAKMORE_BIN_DIR；临时签名的 App 被 open 打开会弹麦克风授权、可能覆盖正式版的；Windows 的 install.ps1 改开始菜单快捷方式和 Path，先备份
+- [分发重构](speakmore-distribution-rework.md) — 10-20 定：模型换魔搭、包换压缩瘦身、分块差量更新；老模型 CDN 等魔搭端到端过了才下线；两台电脑端到端、重测速、老文档全改
+- [重构要做干净](refactor-surgical-clean.md) — 定了重构就手术式、不给我们自己的旧做法留兼容；碰到用户手里旧版本的先说清影响
