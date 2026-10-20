@@ -53,8 +53,8 @@ const SHIMS = {
   uname: `#!/bin/sh\ncase "$1" in -s) echo "\${FAKE_OS:-Darwin}" ;; -m) echo "\${FAKE_ARCH:-arm64}" ;; *) exec /usr/bin/uname "$@" ;; esac\n`,
   id: `#!/bin/sh\n[ "$1" = "-u" ] && [ -n "$FAKE_UID" ] && { echo "$FAKE_UID"; exit 0; }\nexec /usr/bin/id "$@"\n`,
   df: `#!/bin/sh\n[ -n "$FAKE_FREE_KB" ] && { echo "Filesystem 1024-blocks Used Available Capacity Mounted on"; echo "/dev/x 9 9 $FAKE_FREE_KB 1% /"; exit 0; }\nexec /bin/df "$@"\n`,
-  // 装样子说所有的盘都是 FAKE_FS 格式（比如 exfat）
-  mount: `#!/bin/sh\n[ -n "$FAKE_FS" ] && { /sbin/mount | sed "s/ (apfs/ ($FAKE_FS/"; exit 0; }\nexec /sbin/mount "$@"\n`,
+  // 装样子说所有的盘都是 FAKE_FS 格式（比如 exfat）；FAKE_MOUNT_PAD 在后面再列一大串（挂载的盘很多，比管道一次装得下的还多）
+  mount: `#!/bin/sh\n[ -n "$FAKE_FS$FAKE_MOUNT_PAD" ] || exec /sbin/mount "$@"\n/sbin/mount | sed "s/ (apfs/ (\${FAKE_FS:-apfs}/"\n[ -z "$FAKE_MOUNT_PAD" ] || awk 'BEGIN { for (i = 0; i < 2000; i++) print "map auto_pad" i " on /Volumes/pad" i " (autofs, automounted, nobrowse)" }'\n`,
   // 只有问各家模型连不连得上的那几次是假的；下载用的 file:// 照常交给真的 curl
   curl: `#!/bin/sh\ncase "$*" in *generativelanguage.googleapis.com*) exit "\${FAKE_GEMINI_EXIT:-0}" ;; *api.openai.com*) exit "\${FAKE_OPENAI_EXIT:-0}" ;; *dashscope.aliyuncs.com*) exit "\${FAKE_BAILIAN_EXIT:-0}" ;; esac\nexec /usr/bin/curl "$@"\n`,
 };
@@ -353,6 +353,16 @@ test("装到别处（SPEAKMORE_HOME），路径里有空格和引号也行；链
   assert.equal(recorded(), null);
 });
 
+test("装在路径里带反斜杠的文件夹：校验照样对得上，定位文件里记得对", () => {
+  // 临时目录的路径本来就长，名字取短：家目录最长 86 个字节
+  const folder = join(root, "a\\b");
+  mkdirSync(folder);
+  const result = install({ env: { SPEAKMORE_INSTALL_DIR: folder } });
+  assert.equal(result.code, 0, result.all);
+  assert.equal(installedVersion(join(folder, ".speakmore")), "9.9.9");
+  assert.equal(recorded(), join(folder, ".speakmore"));
+});
+
 test("SPEAKMORE_HOME 装一份试试：不动已有的定位文件", () => {
   const custom = join(root, "Data");
   mkdirSync(custom);
@@ -472,6 +482,18 @@ test("选的文件夹在 exFAT、FAT32 这类盘上（套接字、符号链接�
   assert.equal(installedVersion(), "9.9.9");
 });
 
+test("挂载的盘很多（mount 说的比管道一次装得下的还多）：照样看得出盘是什么格式，不一声不吭地退出", () => {
+  const folder = join(root, "Data");
+  mkdirSync(folder);
+  assertRefused(
+    install({ env: { SPEAKMORE_INSTALL_DIR: folder, FAKE_FS: "exfat", FAKE_MOUNT_PAD: "1" } }),
+    /formatted as exFAT/,
+  );
+  const result = install({ env: { SPEAKMORE_INSTALL_DIR: folder, FAKE_MOUNT_PAD: "1" } });
+  assert.equal(result.code, 0, result.all);
+  assert.equal(installedVersion(join(folder, ".speakmore")), "9.9.9");
+});
+
 test("不在终端里（脚本、CI 调的）：不问，装在默认位置", () => {
   const { code, all } = install();
   assert.equal(code, 0, all);
@@ -501,6 +523,50 @@ test("选文件夹只用于第一次安装：默认位置已经用过的就停�
   );
 });
 
+test("选文件夹时别处已经装过：建议的 speakmore move 命令照抄就能用（路径里有空格、引号）", () => {
+  mkdirSync(home());
+  writeFileSync(join(home(), "settings.json"), "{}");
+  for (const [folder, shown] of [
+    [join(root, "a 'b'"), /run: speakmore move '/],
+    [join(userHome, "Data"), /run: speakmore move ~\/Data$/m],
+  ]) {
+    mkdirSync(folder);
+    const result = install({ env: { SPEAKMORE_INSTALL_DIR: folder } });
+    assertRefused(result, /already set up in/);
+    assert.match(result.err, shown);
+    const command = result.err.match(/run: (speakmore move .*)$/m)[1];
+    const words = execFileSync("/bin/sh", ["-c", `set -- ${command}; printf '%s\\n' "$@"`], {
+      encoding: "utf8",
+      env: { HOME: userHome },
+    });
+    assert.deepEqual(words.trim().split("\n"), ["speakmore", "move", folder]);
+  }
+});
+
+test("选文件夹（SPEAKMORE_INSTALL_DIR）时定位文件记着别处：那里现在不在（移动硬盘没接）也停下，不改定位文件", () => {
+  // 名字取短：临时目录的路径本来就长，家目录最长 86 个字节
+  const unplugged = join(root, "usb", ".speakmore");
+  mkdirSync(join(locationFile(), ".."), { recursive: true });
+  writeFileSync(locationFile(), JSON.stringify({ home: unplugged }));
+  const folder = join(root, "Data");
+  mkdirSync(folder);
+  assertRefused(
+    install({ env: { SPEAKMORE_INSTALL_DIR: folder } }),
+    /Can't find the SpeakMore folder[\s\S]*connect the drive[\s\S]*delete/,
+  );
+  assert.equal(recorded(), unplugged);
+  assert.equal(existsSync(join(folder, ".speakmore")), false);
+  // 接上了：说已经装在那里，用 speakmore move 搬
+  mkdirSync(unplugged, { recursive: true });
+  writeFileSync(join(unplugged, "settings.json"), "{}");
+  assertRefused(install({ env: { SPEAKMORE_INSTALL_DIR: folder } }), /already set up in[\s\S]*speakmore move/);
+  assert.equal(recorded(), unplugged);
+  // 选的就是记着的那一处：照常装
+  const same = install({ env: { SPEAKMORE_INSTALL_DIR: join(root, "usb") } });
+  assert.equal(same.code, 0, same.all);
+  assert.equal(installedVersion(unplugged), "9.9.9");
+});
+
 test("定位文件坏了：不装，也不改装到默认位置（那样看着像数据丢了），说清楚怎么办", () => {
   mkdirSync(join(locationFile(), ".."), { recursive: true });
   for (const text of ["{ 坏了", '{"home": "relative"}', '{"other": "/x"}']) {
@@ -523,6 +589,20 @@ test("定位文件说装在一个现在不在的地方（移动硬盘没接、�
   assertRefused(install(), /Can't find the SpeakMore folder/);
   assert.equal(existsSync(join(root, "unplugged", ".speakmore")), false);
   assert.equal(existsSync(home()), false);
+});
+
+test("定位文件指着一个已经在、还空着的文件夹（App 第一次打开时选的）：装到一半出错也不删它", () => {
+  const picked = join(root, "Picked", ".speakmore");
+  mkdirSync(picked, { recursive: true });
+  mkdirSync(join(locationFile(), ".."), { recursive: true });
+  writeFileSync(locationFile(), JSON.stringify({ home: picked }));
+  writeFileSync(join(release, "v9.9.9", "speakmore-darwin-arm64.tar.xz.sha256"), `${"0".repeat(64)}  x\n`);
+  assertRefused(install(), /Checksum mismatch/);
+  assert.equal(existsSync(picked), true, "不是这一次建的，不删");
+  assert.equal(recorded(), picked);
+  makeArchive("arm64");
+  assert.equal(install().code, 0);
+  assert.equal(installedVersion(picked), "9.9.9");
 });
 
 test("启动脚本里不写死路径：整个目录搬到别处、链接改指过去照样能用；外面残留的 SPEAKMORE_HOME 带不偏", () => {
@@ -634,6 +714,53 @@ test("换家：新目录里拷过去的程序跑不起来（比如那块盘不�
   assert.equal(recorded(), null);
 });
 
+test("换家时改不了指着旧目录的命令链接（所在的目录不让写）：停下，不说“装好了、再运行一次”（speakmore move 接着会换回去）", () => {
+  assert.equal(install().code, 0);
+  const bin = join(userHome, ".local", "bin");
+  const link = join(bin, "speakmore");
+  const moved = join(root, "Data", ".speakmore");
+  copyHome(home(), moved);
+  chmodSync(bin, 0o555);
+  try {
+    const result = install({ env: { SPEAKMORE_HOME: moved, SPEAKMORE_PREVIOUS_HOME: home() } });
+    assert.equal(result.code, 1, result.all);
+    assert.match(result.err, /Couldn't update the link/);
+    assert.match(result.err, /Switching SpeakMore to .*Data\/\.speakmore didn't finish/);
+    assert.doesNotMatch(result.err, /run this again|Nothing was installed/);
+    assert.equal(readlinkSync(link), join(home(), "bin", "speakmore"));
+  } finally {
+    chmodSync(bin, 0o755);
+  }
+});
+
+test("换家换回去（或启动时收拾半路断掉的搬家）：已经指着这里的命令链接不动，所在的目录不让写也照常换完", () => {
+  assert.equal(install().code, 0);
+  const bin = join(userHome, ".local", "bin");
+  const link = join(bin, "speakmore");
+  // 另一条也指着这里，只是写法经过一个符号链接
+  const otherBin = join(root, "other bin");
+  const other = join(otherBin, "speakmore");
+  const spelled = join(root, "linked-u", ".speakmore", "bin", "speakmore");
+  execFileSync("ln", ["-s", userHome, join(root, "linked-u")]);
+  mkdirSync(otherBin);
+  execFileSync("ln", ["-s", spelled, other]);
+  writeFileSync(join(home(), "bin", "links"), `${link}\n${other}\n`);
+  const moved = join(root, "Data", ".speakmore");
+  copyHome(home(), moved);
+  chmodSync(bin, 0o555);
+  chmodSync(otherBin, 0o555);
+  try {
+    const back = install({ env: { SPEAKMORE_HOME: home(), SPEAKMORE_PREVIOUS_HOME: moved } });
+    assert.equal(back.code, 0, back.all);
+    assert.equal(readlinkSync(link), join(home(), "bin", "speakmore"));
+    assert.equal(readlinkSync(other), spelled);
+    assert.match(back.out, /speakmore command: ~\/\.local\/bin\/speakmore/);
+  } finally {
+    chmodSync(bin, 0o755);
+    chmodSync(otherBin, 0o755);
+  }
+});
+
 test("换家要和 SPEAKMORE_HOME 一起给；新目录里没有拷过去的程序不换", () => {
   assert.equal(install().code, 0);
   assertRefused(install({ env: { SPEAKMORE_PREVIOUS_HOME: home() } }), /goes with SPEAKMORE_HOME/);
@@ -707,6 +834,28 @@ test("0.11.0 以前的版本（包是 tar.gz）不装：说清楚怎么办；0.1
   const result = install({ env: { SPEAKMORE_VERSION: "v0.10.1" } });
   assertRefused(result, /can't install v0\.10\.1[\s\S]*packaged differently[\s\S]*v0\.10\.1\/SpeakMore-arm64\.dmg/);
   assert.equal(existsSync(join(home(), "app")), false);
+});
+
+test("0.12.0 以前的版本只认默认位置：不装到别处（卸载它时定位文件会留下、指着删掉的目录）；默认位置照常装", () => {
+  makeArchive("arm64", "0.11.0");
+  const folder = join(root, "Data");
+  mkdirSync(folder);
+  assertRefused(
+    install({ env: { SPEAKMORE_INSTALL_DIR: folder, SPEAKMORE_VERSION: "v0.11.0" } }),
+    /v0\.11\.0 can only be installed in ~\/\.speakmore[\s\S]*v0\.12\.0/,
+  );
+  assert.equal(existsSync(join(folder, ".speakmore")), false);
+  assert.equal(recorded(), null);
+  // 已经装在别处（照定位文件）的，也不降到它：先搬回默认位置
+  makeArchive("arm64", "9.9.9");
+  assert.equal(install({ env: { SPEAKMORE_INSTALL_DIR: folder } }).code, 0);
+  assertRefused(install({ env: { SPEAKMORE_VERSION: "v0.11.0" } }), /speakmore move ~/);
+  assert.equal(installedVersion(join(folder, ".speakmore")), "9.9.9");
+  assert.equal(recorded(), join(folder, ".speakmore"));
+
+  rmSync(locationFile());
+  assert.equal(install({ env: { SPEAKMORE_VERSION: "v0.11.0" } }).code, 0);
+  assert.equal(installedVersion(), "0.11.0");
 });
 
 test("从拼好的树装：只是改名换上，磁盘剩得不多也装（拼的时候已经占过地方了）", () => {

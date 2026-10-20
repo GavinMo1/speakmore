@@ -17,7 +17,8 @@
 #   SPEAKMORE_INSTALL_DIR   装在哪个文件夹下（装进它里面的 .speakmore，记进定位文件）。只用于第一次安装；
 #                           已经装在别处的，用 speakmore move 搬
 #   SPEAKMORE_HOME          这一次用哪个目录，原样不改定位文件（开发、测试用；speakmore update 也这样告诉新版本装在哪）
-#   SPEAKMORE_VERSION       装哪个版本，比如 v0.11.0（默认最新的；0.11.0 以前的包是 tar.gz，这个脚本不装）
+#   SPEAKMORE_VERSION       装哪个版本，比如 v0.11.0（默认最新的；0.11.0 以前的包是 tar.gz，这个脚本不装；
+#                           0.12.0 以前的只认默认位置，装在别处时不装）
 #   SPEAKMORE_INSTALL_BASE  从哪下载：一个网址前缀，或者本机的一个目录（npm run release 打出来的 dist/release）
 #   SPEAKMORE_BIN_DIR       命令的链接建在哪个目录（默认 ~/.local/bin）
 #   SPEAKMORE_INSTALL_FROM  不下载，装一棵已经准备好的树（里面是 app/ 和 runtime/）：speakmore update 拼在家目录里
@@ -41,6 +42,8 @@ MIN_MACOS_MAJOR=12
 # 从这个版本起包是 tar.xz（摆法见 src/update/layout.mjs）；更早的只有 tar.gz，这个脚本不装它们。
 # 0.10.0 及以前的 speakmore update 会下这个脚本、指定装 v0.10.1：到这里说清楚怎么办，而不是报"连不上"
 MIN_VERSION="0.11.0"
+# 从这个版本起才认得装在默认位置以外（定位文件），见 check_version_place
+MIN_PLACE_VERSION="0.12.0"
 # 下载的包约 95 MB，解开约 390 MB；升级时旧的要等新的放好才删
 NEEDED_MB=1000
 # macOS 上 Unix 套接字的路径最长 103 个字节，控制通道在 <目录>/run/control.sock
@@ -62,6 +65,9 @@ READ_LOCATION_JS='function run(argv) {
 TMP_DIR=""
 # 新版本换上了没有：之后才出错的（只剩记下装在哪），不能再说"什么都没装"
 SWAPPED=0
+# 家目录是不是这一次建的：没装成时只删自己建的。本来就在的空目录（比如 App 第一次打开时选好、写进定位文件的）删了，
+# App 和下次安装都会说找不到它
+CREATED_HOME=0
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   GREEN=$'\033[32m' YELLOW=$'\033[33m' RED=$'\033[31m' BOLD=$'\033[1m' DIM=$'\033[2m' RESET=$'\033[0m'
@@ -73,12 +79,15 @@ heading() { printf '\n  %s%s%s\n' "$BOLD" "$1" "$RESET"; }
 ok() { printf '  %s✓%s %s\n' "$GREEN" "$RESET" "$1"; }
 warn() { printf '  %s!%s %s\n' "$YELLOW" "$RESET" "$1"; }
 note() { printf '    %s%s%s\n' "$DIM" "$1" "$RESET"; }
-# 说清楚哪里不行、怎么办，然后退出。新版本换上之前出错的什么都没动；换上之后才出错的照实说装好了什么
+# 说清楚哪里不行、怎么办，然后退出。新版本换上之前出错的什么都没动；换上之后才出错的照实说装好了什么。
+# 换家是 speakmore move 调的，它接着会换回去：不说"装在新目录里、再运行一次"
 fail() {
   printf '  %s✗%s %s\n' "$RED" "$RESET" "$1" >&2
   shift
   for line in "$@"; do printf '    %s\n' "$line" >&2; done
-  if [ "$SWAPPED" = 1 ]; then
+  if [ "$SWAPPED" = 1 ] && [ -n "${PREVIOUS_HOME:-}" ]; then
+    printf "\n  Switching SpeakMore to %s didn't finish.\n" "$(pretty "$HOME_DIR")" >&2
+  elif [ "$SWAPPED" = 1 ]; then
     printf '\n  SpeakMore %s is in %s; fix the above and run this again.\n' "$NEW_VERSION" "$(pretty "$HOME_DIR")" >&2
   else
     printf '\n  Nothing was installed; what you had is untouched.\n' >&2
@@ -88,6 +97,18 @@ fail() {
 
 # 给人看的路径：家目录写成 ~
 pretty() { case "$1" in "$HOME"/*) printf '~%s' "${1#"$HOME"}" ;; *) printf '%s' "$1" ;; esac; }
+# 给人照抄去敲的路径：只有寻常字符时同 pretty，否则整个放进单引号（里面的 ' 写成 '\''），带空格的照抄也是一个参数。
+# 用 sed 换引号：${var//…} 里引号、反斜杠怎么算，各版本的 bash 不一样
+shell_path() {
+  case "$1" in
+    *[!A-Za-z0-9_./-]*) printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")" ;;
+    *) pretty "$1" ;;
+  esac
+}
+# 目录的真实路径（经过的符号链接都解开）；现在不在的原样交回
+real_dir() { (CDPATH="" cd -- "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"; }
+# 默认位置，写成真实路径（和规范过的 HOME_DIR 比）
+default_home() { printf '%s/.speakmore' "$(real_dir "$HOME")"; }
 # 把一段文字写成 JSON 的字符串：路径里的 \ 和 " 转义。控制字符在 check_home 就挡掉了
 json_string() {
   local text=$1
@@ -98,8 +119,8 @@ json_string() {
 on_path() { case ":$PATH:" in *":$1:"*) return 0 ;; *) return 1 ;; esac; }
 cleanup() {
   [ -z "$TMP_DIR" ] || rm -rf "$TMP_DIR"
-  # 什么都没装成的话，不留下一个空目录（里面有东西时这一句删不掉它，正好）
-  rmdir "${HOME_DIR:-}" 2>/dev/null || true
+  # 什么都没装成的话，不留下这一次建的空目录（里面有东西时这一句删不掉它，正好）
+  [ "$CREATED_HOME" = 0 ] || rmdir "${HOME_DIR:-}" 2>/dev/null || true
 }
 
 # ---------- 预检查 ----------
@@ -167,7 +188,10 @@ filesystem_of() {
   local point
   point="$(df -P "$1" 2>/dev/null | awk 'NR == 2 { for (i = 6; i <= NF; i++) printf "%s%s", $i, (i < NF ? " " : "") }')"
   [ -n "$point" ] || return 0
-  mount | awk -v on=" on $point (" 'index($0, on) { rest = substr($0, index($0, on) + length(on)); sub(/[,)].*/, "", rest); print rest; exit }'
+  # 读完 mount 说的再交出第一个对上的：找到就退出的话，盘多、mount 说得比管道装得下的还多时它会被 SIGPIPE 结束，
+  # pipefail 把这当成失败，整个脚本一声不吭地停掉
+  mount | awk -v on=" on $point (" 'found == "" && index($0, on) { found = substr($0, index($0, on) + length(on)); sub(/[,)].*/, "", found) }
+    END { if (found != "") print found }'
 }
 
 # 选的文件夹能不能装（第一次安装时问到的、SPEAKMORE_INSTALL_DIR 给的）。能装的话 PLACE_HOME 是要装进的目录
@@ -199,19 +223,29 @@ check_place() {
 }
 
 # 指定了装在哪个文件夹下（SPEAKMORE_INSTALL_DIR）：只用于第一次安装。别处已经有一份的话停下，
-# 不然会多出一个空的目录，"应用程序"里的 App 跟着定位文件换过去，看着像数据丢了。已经装了的用 speakmore move 搬
+# 不然会多出一个空的目录，"应用程序"里的 App 跟着定位文件换过去，看着像数据丢了。已经装了的用 speakmore move 搬。
+# 定位文件记着别处就算装过，那里现在不在、是空的也一样：移动硬盘没接时看着不在，数据其实都在上面；默认位置用过才算
 check_install_dir() {
-  local other
   check_place "$SPEAKMORE_INSTALL_DIR"
   [ -z "$PLACE_PROBLEM" ] || fail "Can't install into SPEAKMORE_INSTALL_DIR: $PLACE_PROBLEM"
   HOME_DIR="$PLACE_HOME"
-  for other in "$LOCATION_HOME" "$HOME/.speakmore"; do
-    [ -n "$other" ] && has_contents "$other" || continue
-    [ "$(CDPATH="" cd -- "$other" && pwd -P)" = "$HOME_DIR" ] && continue
-    fail "SpeakMore is already set up in $(pretty "$other")" \
-      "To keep using it there, run this again without SPEAKMORE_INSTALL_DIR." \
-      "To move it to $(pretty "$HOME_DIR"), run: speakmore move $(pretty "${HOME_DIR%/.speakmore}")"
-  done
+  if [ -n "$LOCATION_HOME" ] && [ "$(real_dir "$LOCATION_HOME")" != "$HOME_DIR" ]; then
+    [ -d "$LOCATION_HOME" ] ||
+      fail "Can't find the SpeakMore folder: $(pretty "$LOCATION_HOME")" \
+        "SpeakMore is set up there. If it's on an external drive, connect the drive and run this again." \
+        "If you no longer use that place, delete $(pretty "$LOCATION_FILE") first."
+    set_up_elsewhere "$LOCATION_HOME"
+  fi
+  if has_contents "$HOME/.speakmore" && [ "$(real_dir "$HOME/.speakmore")" != "$HOME_DIR" ]; then
+    set_up_elsewhere "$HOME/.speakmore"
+  fi
+}
+
+# 已经装在别处：停下，说怎么接着用那一处、怎么搬过来
+set_up_elsewhere() {
+  fail "SpeakMore is already set up in $(pretty "$1")" \
+    "To keep using it there, run this again without SPEAKMORE_INSTALL_DIR." \
+    "To move it to $(pretty "$HOME_DIR"), run: speakmore move $(shell_path "${HOME_DIR%/.speakmore}")"
 }
 
 # 第一次安装、在终端里时问一句装在哪：回车是默认位置，也可以输入或从访达拖进来一个文件夹（拖进来的路径空格前带 \，
@@ -237,7 +271,7 @@ ask_place() {
       warn "$PLACE_PROBLEM"
       continue
     fi
-    [ "$PLACE_HOME" = "$(CDPATH="" cd -- "$HOME" && pwd -P)/.speakmore" ] && return 0
+    [ "$PLACE_HOME" = "$(default_home)" ] && return 0
     HOME_DIR="$PLACE_HOME" HOME_FROM=chosen
     used_before "$HOME_DIR" && note "Found SpeakMore data there; it will be used as it is."
     return 0
@@ -255,6 +289,7 @@ check_home() {
       "If you no longer use that place, delete $(pretty "$LOCATION_FILE") to install to the default one."
   fi
 
+  [ -d "$HOME_DIR" ] || CREATED_HOME=1
   mkdir -p "$HOME_DIR" 2>/dev/null && [ -w "$HOME_DIR" ] ||
     fail "Can't create or write to $(pretty "$HOME_DIR")" "Check its permissions, or install somewhere else with SPEAKMORE_INSTALL_DIR."
   # 规范成真实的完整路径（a//b、末尾的 /、..、符号链接都解开）：写进链接、定位文件的和程序算出来的是同一个字符串
@@ -308,7 +343,20 @@ resolve_version() {
       "Run it again without SPEAKMORE_VERSION to install the latest, or download that version's installer:" \
       "$DOWNLOAD_BASE/$version/SpeakMore-$ARCH.dmg"
   fi
+  check_version_place "$version"
   BASE_URL="$DOWNLOAD_BASE/$version"
+}
+
+# 0.12.0 以前的版本只认默认位置：不读定位文件，卸载时也不删它，留下的定位文件指着删掉的目录，新版的 App 就打不开了。
+# 所以装到别处（选的、定位文件记着的）只装 0.12.0 起的。默认位置、SPEAKMORE_HOME（只管这一次、不碰定位文件）不拦
+check_version_place() {
+  local default
+  case "$HOME_FROM" in chosen | location) ;; *) return 0 ;; esac
+  default="$(default_home)"
+  [ "$(real_dir "$HOME_DIR")" != "$default" ] && older_than "${1#v}" "$MIN_PLACE_VERSION" || return 0
+  local hint="Install it in the default place instead, or pick v$MIN_PLACE_VERSION or later."
+  [ "$HOME_FROM" = location ] && hint="SpeakMore is in $(pretty "$HOME_DIR") now; move it back first with: speakmore move ~"
+  fail "SpeakMore $1 can only be installed in $(pretty "$default")" "Versions before v$MIN_PLACE_VERSION only work in that place." "$hint"
 }
 
 # 两个 x.y.z 比大小（不管预发版的后缀）：$1 比 $2 旧时成立
@@ -361,7 +409,8 @@ download() {
 
   local expected actual
   expected="$(awk '{ print $1; exit }' "$TMP_DIR/$ARCHIVE.sha256")"
-  actual="$(shasum -a 256 "$TMP_DIR/$ARCHIVE" | awk '{ print $1 }')"
+  # 从标准输入读：路径里有 \ 时 shasum 会在结果前面加一个 \，就永远对不上了
+  actual="$(shasum -a 256 <"$TMP_DIR/$ARCHIVE" | awk '{ print $1 }')"
   [ -n "$expected" ] && [ "$expected" = "$actual" ] ||
     fail "Checksum mismatch: the download differs from the release" "It was probably damaged on the way. Run it again." "Expected $expected" "Got      $actual"
   ok "Checksum OK"
@@ -477,7 +526,9 @@ EOF
   if [ -n "$PREVIOUS_HOME" ]; then ok "Moved to $(pretty "$HOME_DIR")"; else ok "Installed to $(pretty "$HOME_DIR")"; fi
 }
 
-# 换家：links 里记着的、指着旧目录（或者已经指着这里）那条命令的链接，都改指到这里的启动脚本。
+# 换家：links 里记着的、指着旧目录那条命令的链接，改指到这里的启动脚本。已经指着这里的不动：换回去、启动时收拾
+# 半路断掉的搬家时多半就是这样，而它所在的目录可能改不了（老的 /usr/local/bin、SPEAKMORE_BIN_DIR 指的），
+# 去改反而出错，每次启动都收拾不完。指着旧目录的改不了就停下：旧目录随后会被删（换回去时是拷了一半的那份），留着它命令就坏了。
 # 比真实路径：记下链接时的家目录可能写法不规整，或者经过符号链接
 relink_moved() {
   local file="$HOME_DIR/bin/links" link target dir old new
@@ -489,8 +540,12 @@ relink_moved() {
     target="$(readlink "$link")"
     case "$target" in /*) ;; *) target="$(dirname "$link")/$target" ;; esac
     dir="$(CDPATH="" cd -- "$(dirname "$target")" 2>/dev/null && pwd -P)" || dir=""
-    [ "$(basename "$target")" = speakmore ] && [ -n "$dir" ] && { [ "$dir" = "$old" ] || [ "$dir" = "$new" ]; } || continue
-    ln -sfn "$LAUNCHER" "$link" || fail "Couldn't update the link $(pretty "$link")" "Check that folder's permissions."
+    [ "$(basename "$target")" = speakmore ] && [ -n "$dir" ] || continue
+    if [ "$dir" = "$old" ]; then
+      ln -sfn "$LAUNCHER" "$link" || fail "Couldn't update the link $(pretty "$link")" "Check that folder's permissions."
+    elif [ "$dir" != "$new" ]; then
+      continue
+    fi
     ok "speakmore command: $(pretty "$link")"
   done <"$file"
 }
@@ -499,9 +554,8 @@ relink_moved() {
 # 在默认位置就不要定位文件（有指着这里的就删掉）；在别处就写，先写到旁边再改名换上，写到一半断电留下的也是旧的那份。
 # 写不了就照实报错：不然从"应用程序"打开的 App、下次安装都找不到它
 update_location() {
-  local default temporary="$LOCATION_FILE.$$.tmp"
-  default="$(CDPATH="" cd -- "$HOME" && pwd -P)/.speakmore"
-  if [ "$HOME_DIR" = "$default" ]; then
+  local temporary="$LOCATION_FILE.$$.tmp"
+  if [ "$HOME_DIR" = "$(default_home)" ]; then
     rm -f "$LOCATION_FILE" 2>/dev/null || fail "Couldn't remove $(pretty "$LOCATION_FILE")" "Check that folder's permissions."
     return
   fi
