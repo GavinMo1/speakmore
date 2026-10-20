@@ -200,10 +200,10 @@ test("检查：一天最多问一次下载地址，结果记在家目录里两�
 test("检查：问不到不抛，说原因；之前知道的最新版本留着（不因为这次没网就当没有新版本）", async () => {
   await setup().updates.check();
   const offline = setup({
-    latest: new LocalizedError(msg("update.unreachable", { url: "https://x/latest", reason: "curl: (6)" })),
+    latest: new LocalizedError(msg("update.unreachable", { url: "https://x/channel.json", reason: "curl: (6)" })),
   });
   const result = await offline.updates.check({ force: true });
-  assert.match(zh.text(result.problem), /无法连接 https:\/\/x\/latest：curl: \(6\)/);
+  assert.match(zh.text(result.problem), /无法连接 https:\/\/x\/channel\.json：curl: \(6\)/);
   assert.equal(result.latest, "0.2.0");
   assert.equal(result.available, true);
   assert.equal(JSON.parse(readFileSync(paths.updateCheckFile, "utf8")).latest, "0.2.0");
@@ -273,7 +273,7 @@ test("更新：已经是最新的什么都不做，记成 current（App 不会�
   assert.equal(readProgress(paths).state, "current");
 });
 
-test("更新：下载、核对失败：什么都不停，记下原因，下好的删掉，锁放掉", async () => {
+test("更新：拼的时候下载、核对失败：什么都不停，记下原因，拼好的删掉，锁放掉", async () => {
   const broken = new LocalizedError(msg("update.checksum", { object: "0123456789ab" }));
   const { updates, steps } = setup({
     running: APP_RUNNING,
@@ -284,7 +284,7 @@ test("更新：下载、核对失败：什么都不停，记下原因，下好�
   });
   await assert.rejects(updates.run({ by: "app" }), (error) => error === broken);
   assert.ok(!steps.includes("stop"));
-  assert.ok(steps.includes("discard-app"), "已经下好的 App 删掉");
+  assert.ok(steps.includes("discard-app"), "已经拼好的 App 删掉");
   const record = readProgress(paths);
   assert.equal(record.state, "failed");
   assert.match(zh.text(record.problem), /下载的更新数据（0123456789ab）与发布的不符/);

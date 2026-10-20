@@ -1,4 +1,4 @@
-// 版本号：认什么写法、怎么比大小。下载地址上的 latest、App 的 Info.plist、各份程序的 package.json 都按这里认。
+// 版本号：认什么写法、怎么比大小。下载地址上的 channel.json、App 的 Info.plist、各份程序的 package.json 都按这里认。
 
 /** 和安装脚本认的写法一样：v0.6.0、0.6.0-rc.1 */
 const VERSION = /^v?(\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.-]+)?)$/;

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 带着腾讯云 COS 的密钥跑一条命令（把发布包、官网的图、本地模型传上去时用）。密钥只进这一条命令的进程，
+# 带着腾讯云 COS 的密钥跑一条命令（发版、传官网的图、看下载量时用）。密钥只进这一条命令的进程，
 # 不留在当前 shell 里，也不出现在命令行参数里。
 #
 #   scripts/release/with-cos-key.sh <命令…>        比如：scripts/release/with-cos-key.sh npm run publish-release
@@ -31,7 +31,7 @@ bucket="${COS_BUCKET:-}" region="${COS_REGION:-}" media="${SITE_MEDIA_BUCKET:-}"
 export COS_BUCKET="${bucket:-${COS_BUCKET:-}}" COS_REGION="${region:-${COS_REGION:-}}"
 # 官网图片的桶（website/scripts/upload-media.mjs），没配也不影响发布
 export SITE_MEDIA_BUCKET="${media:-${SITE_MEDIA_BUCKET:-}}"
-# 本地模型的国内源（scripts/release/sync-models.mjs），没配也不影响发布
+# 本地模型老的国内源：只有 npm run stats 还看它的下载量，没配也不影响发布
 export MODELS_BUCKET="${models:-${MODELS_BUCKET:-}}"
 [ -n "$COS_BUCKET" ] && [ -n "$COS_REGION" ] || fail "$config 里的 COS_BUCKET 或 COS_REGION 是空的"
 

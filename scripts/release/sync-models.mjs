@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 把配置表（src/models/catalog.mjs）里的本地模型传到国内源：魔搭（ModelScope）上 SpeakMore 组织下的仓库，一个模型一个。
+// 把配置表（src/models/catalog.mjs）里的本地模型传到国内源：魔搭（ModelScope）上配置表 MODELSCOPE_OWNER 名下的仓库，一个模型一个。
 // 加了模型、换了原始提交之后跑一次；魔搭上已经有、内容一样的文件 SDK 自己跳过，断了再跑就接着传。
 //
 //   scripts/release/with-modelscope-key.sh npm run sync-models -- --from <本机模型仓>              传

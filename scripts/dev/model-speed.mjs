@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 量本机模型的几个下载源有多快：默认那个模型的大文件（850 MB），每个源各下两次、每次最多 40 秒，取平均。
+// 量本机模型的几个下载源有多快：默认那个模型最大的文件（约 850 MB），每个源各下两次、每次最多 40 秒，取平均。
 // README 和官网的下载速度对比图（website/scripts/readme-media.mjs 的 SPEED）照这里量出来的填。
 //
 //   node scripts/dev/model-speed.mjs            量魔搭、hf-mirror、Hugging Face
@@ -11,7 +11,7 @@
 import { spawnSync } from "node:child_process";
 import { lookup } from "node:dns/promises";
 import { parseArgs } from "node:util";
-import { DEFAULT_TRANSCRIBER, MODELS, mirrorRepo } from "../../src/models/catalog.mjs";
+import { DEFAULT_TRANSCRIBER, downloadUrls, MODELS } from "../../src/models/catalog.mjs";
 
 const { values: args } = parseArgs({
   options: {
@@ -25,10 +25,10 @@ const rounds = Math.max(1, Number(args.rounds) || 2);
 
 const model = MODELS.find((m) => m.id === DEFAULT_TRANSCRIBER);
 const file = Object.values(model.files).sort((a, b) => b.size - a.size)[0];
+// 地址照 App 下载时用的（catalog.mjs 的 downloadUrls），换了源这里跟着换
+const NAMES = { "modelscope.cn": "魔搭", "huggingface.co": "Hugging Face" };
 const SOURCES = [
-  ["魔搭", `https://modelscope.cn/models/${mirrorRepo(model)}/resolve/${model.mirror.revision}/${file.path}`],
-  ["hf-mirror.com", `https://hf-mirror.com/${model.origin.repo}/resolve/${model.origin.revision}/${file.path}`],
-  ["Hugging Face", `https://huggingface.co/${model.origin.repo}/resolve/${model.origin.revision}/${file.path}`],
+  ...downloadUrls(model, file).map((url) => [NAMES[new URL(url).hostname] ?? new URL(url).hostname, url]),
   ...(args.old
     ? [["老的国内源", `https://models.speakmore.zephyrxiang.com/${model.id}/${model.origin.revision}/${file.path}`]]
     : []),
@@ -82,6 +82,8 @@ for (const [name, url] of SOURCES) {
 console.log("\n平均（MB/s，十进制）：");
 for (const { name, mean } of results) {
   const minutes = mean > 0 ? (file.size / 1e6 / mean / 60).toFixed(1) : "-";
-  console.log(`  ${name.padEnd(14)} ${mean.toFixed(2).padStart(6)}   下完 850 MB 约 ${minutes} 分钟`);
+  console.log(
+    `  ${name.padEnd(14)} ${mean.toFixed(2).padStart(6)}   下完 ${(file.size / 1e6).toFixed(0)} MB 约 ${minutes} 分钟`,
+  );
 }
 console.log(`\n${JSON.stringify({ measuredAt: new Date().toISOString(), seconds, rounds, results })}`);

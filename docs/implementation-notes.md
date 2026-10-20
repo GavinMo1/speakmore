@@ -253,7 +253,7 @@ src/usage/report.mjs                    今天、本月、累计、按型号分�
 目标是一行命令装好并启动，装的人不需要 Node、npm、Xcode，装的和产生的东西都在 `~/.speakmore` 一个目录里。
 
 - **运行环境是包里自带的原版 Electron，命令行也用它跑。** Electron 里本来就有一个 Node，设上 `ELECTRON_RUN_AS_NODE=1` 它就当普通的 Node 用（VS Code 的 `code` 命令是同一个做法）。这样只带一份运行环境，不依赖系统里有没有 Node、是哪个版本。实测 Electron 44.7 里是 Node 24.21，带着 `node:sqlite`；跑 `speakmore --version` 要 41–43 毫秒，系统的 Node 26 是 51–57 毫秒。
-- **发布包自带一切。** `scripts/release/release.mjs` 在打包的机器上把运行时依赖装好、小帮手按两种芯片编好合成一个文件，再配上对应芯片的 Electron，打成 `speakmore-darwin-<芯片>.tar.xz`（0.10.1 以前是 tar.gz，约 135 MB）；更新不下这个包，只照清单下本机缺的块（见[开发说明](development.md)的下载地址一节）。Electron 的压缩包按 `electron` 这个 npm 包里带的校验值核对过才用。
+- **发布包自带一切。** `scripts/release/release.mjs` 在打包的机器上把运行时依赖装好、小帮手按两种芯片编好合成一个文件，再配上对应芯片的 Electron，打成 `speakmore-darwin-<芯片>.tar.xz`（Apple 芯片约 92 MB、Intel 约 100 MB；0.10.1 以前是 tar.gz，约 135 MB）；更新不下这个包，只照清单下本机缺的块（见[开发说明](development.md)的下载地址一节）。Electron 的压缩包按 `electron` 这个 npm 包里带的校验值核对过才用。
 - **发布包放在自己的下载地址上，不用 GitHub Release**（那边在国内太慢）。腾讯云 COS 的一个私有桶，前面挡一层 CDN（`dl.zephyrxiang.com`），桶只让 CDN 读。上面的样子定在 `src/update/layout.mjs`：更新用的块和清单在 `store/` 下、按内容命名，每个版本首次安装用的包在各自的目录里，传上去就不再变（长期缓存）；根上的 `install.sh`、`install.ps1` 和 `channel.json`（最新的版本号和每种装法的清单）每次发布会换，只缓存一分钟。上传时先传块、再传包和安装脚本，最后才换 `channel.json`，所以任何时刻照着它去取，要的东西都已经在了；同一个版本号已经在上面而内容不一样时拒绝覆盖。发布只从作者的电脑上发（`npm run ship`），0.4.0 起不再由 CI 发。
 - **安装脚本只做搬运。** `install.sh` 先做预检查，下载后核对 SHA-256，解到家目录里的临时位置并原地试跑一次，都没问题才停掉正在运行的、把 `app/` 和 `runtime/` 换进去。两样要么都换成，要么都不换。
 - **启动脚本里的路径是写死的。** `~/.speakmore/bin/speakmore` 由安装脚本生成，家目录的位置直接写在里面：它会被 `~/.local/bin` 里的链接指着，不能靠“我在哪”来猜。

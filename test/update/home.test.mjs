@@ -96,7 +96,7 @@ test("这份程序是不是家目录里装的那一份：经过符号链接也�
   assert.equal(isHomeCopy(paths.appDir, paths, "win32"), false, "0.9.2 那样直接放在 app 里的不算");
 });
 
-test("按什么芯片取包：和 install.sh 一样，Apple 芯片上转译跑的也取 arm64；Windows 只有 x64", () => {
+test("按什么芯片取清单：和 install.sh 一样，Apple 芯片上转译跑的也取 arm64；Windows 只有 x64", () => {
   assert.equal(homeArch("darwin", "arm64"), "arm64");
   assert.equal(
     homeArch("darwin", "x64", () => true),

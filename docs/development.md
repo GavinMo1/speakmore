@@ -66,7 +66,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 
 | 目录 | 内容 |
 | --- | --- |
-| `install.sh`、`install.ps1` | 安装脚本（macOS、Windows）：预检查、下载、校验、装进 `~/.speakmore`（Windows 是 `%USERPROFILE%\.speakmore`）、启动。输出只有英文，不跟界面语言 |
+| `install.sh`、`install.ps1` | 安装脚本（macOS、Windows）：预检查、下载、校验、装进 `~/.speakmore`（Windows 是 `%USERPROFILE%\.speakmore`）、启动。设了 `SPEAKMORE_INSTALL_FROM`（一棵准备好的程序树：`speakmore update` 拼好的、Windows 安装程序解出来的）就不下载，直接装它。输出只有英文，不跟界面语言 |
 | `bin/`、`src/cli/` | `speakmore` 命令 |
 | `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、主窗口、首次引导；`keys/` 是 key 的保存和启用 |
 | `src/renderer/`、`src/preload/` | 各个窗口的页面，一个窗口一个目录：`bar/`（悬浮条：状态机、录音、听写协议的客户端、画面）、`hub/`（主窗口：首页、历史记录、设置对话框）、`onboarding/`（首次引导：选识别方式、准备模型和密钥，判断在 `plan.mjs`、`steps.mjs`），共用的样式、拼节点的小工具在 `shared/` |
@@ -82,7 +82,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `src/update/` | 版本检查和更新，命令行（`speakmore status`、`update`）和 App（设置 › 通用 › 软件更新）只调这里，壳里不写更新的逻辑。查新版本一天最多问一次下载地址，记在 `run/update-check.json`，两边共用；更新进行到哪、失败原因记在 `run/update.json`，`run/update.lock` 不让两边同时换。更新把本机装着的每一份都换成最新：家目录里的那一份（`home.mjs`，拼好后交给新版本自带的安装脚本装），Mac 上还有 SpeakMore.app（`bundle.mjs`，拼在旁边，核对签名和开发者后对调）。拼（`assemble.mjs`）只下本机缺的块，下到的块放在 `run/update-cache`，换成了才删。下载和核对都在停掉正在运行的那个之前做完，停着的只有换程序那几秒；换完只重新打开原来在运行的那个。App 点了更新另起一个进程（`background.mjs`，借 App 自己的 Electron 当 Node 跑）：它要让 App 退出、换掉、再打开。下载地址上的摆法在 `layout.mjs`，打包和更新共用 |
 | `src/control.mjs`、`src/instance.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道；问正在运行的那个的状态、请它退出（命令行和更新共用）；日志 |
 | `test/` | 自动测试，目录和 `src/` 对应 |
-| `scripts/` | 开发用的脚本，按用途分四组：`build/` 编译小程序、打 .app；`release/` 发新版本（`ship.sh`：把关、打包、上传、核对）、把本地模型传到国内源（`sync-models.mjs`）；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key、在 Windows 开发机上跑（`win-*.sh`，见上面的 Windows 一节）；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`） |
+| `scripts/` | 开发用的脚本，按用途分五组：`build/` 编译小程序、打 .app；`release/` 发新版本（`ship.sh`：把关、打包、上传、核对）、把本地模型传到国内源（`sync-models.mjs`）；`dev/` 端到端、评估提示词、回放录音、按本机配置加载 key、在 Windows 开发机上跑（`win-*.sh`，见上面的 Windows 一节）；`checks/` 核对 GitHub 账号、检查本机信息有没有漏进仓库（配置样板是 `.machine.env.example`）；`ops/` 看下载量和余额（`stats.mjs`）、下载地址按小时封顶（`cdn-cap.mjs`） |
 | `bench/` | 评测（[说明](../bench/README.md)）：本地转写这一跳（洗样本、跑参照和各个本地模型、判分、出报告），词典的判法（`lib/vocabulary.mjs`），各轮的记录在 `results/` |
 | `docs/` | [实现笔记](implementation-notes.md)、这份开发说明、README 的图在图片桶上的清单（`media.json`，见下面的"README 的图"） |
 | `website/` | 官网（[说明](../website/README.md)）：React + Tailwind CSS v4 的单页静态站，中英双语，Docker 部署；截图从 App 的真页面离屏截、放在单独的 COS 桶 |
@@ -275,6 +275,6 @@ README 里的图不进仓库，和官网的截图放在同一个 COS 图片桶�
   - Mac 的 SpeakMore.app：从设置里点更新，下载核对约 6 秒、对调 0.1 秒、`open` 重新打开，签名完好、旁边不留半截文件；审查改动后用命令行再换一次（App 装着没在跑，两份一起换）。临时签名的 App 被 `open` 打开时系统当成新应用，弹了麦克风授权，所以第二次没再从 App 里点。
   - Windows（作者的游戏电脑，桌面会话里像开始菜单那样起，临时家目录）：点更新约 9 秒，install.ps1 从本地镜像装好、切到新版本，`speakmore.cmd start` 起的新版本在桌面会话里，换下来的旧版本目录在更新进程退出后删掉了。审查改动后（子进程的输出经管道转进日志、只等退出）再跑一遍：点下到新版本起来约 8 秒，记下停掉的是家目录那一份，被重新打开的 App 说过结果，旧版本目录 3 秒内删掉，安装脚本的输出进了日志（PowerShell 经管道输出时 ✓ 变成了 ?，只是日志里的样子）。安装脚本改写的开始菜单快捷方式和用户 Path 事先备份、测完还原。
   - 也真跑过：没问到时的失败提示和"重试"、命令行的 `status` 提醒和 `update`、再跑一次说已是最新。
-  - **没验证的**：签了名、过了公证的正式包之间的更新（0.10.1 是第一个有更新按钮的版本，要等 0.10.2 才能从 App 里升）；Intel 的 Mac；从访达打开的 App 拿到的是精简的 PATH 和没有代理的环境，大陆网络下安装脚本查各家模型能不能连上要多等十几秒。
+  - **没验证的**：签了名、过了公证的正式包之间的更新（0.10.1 是第一个有更新按钮的版本；0.11.0 换了下载地址的摆法，0.10.1 看不到它，正式包之间从 App 里升要等 0.11.1）；Intel 的 Mac；从访达打开的 App 拿到的是精简的 PATH 和没有代理的环境，大陆网络下安装脚本查各家模型能不能连上要多等十几秒。
 - 只有自动测试、没在真机上试的：启动时断网、从 0.1 版搬数据、重新检查权限时不再反复弹系统授权框。
 

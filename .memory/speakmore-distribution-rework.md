@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c790f439-dd17-4af4-a34b-18711867efb4
-  modified: 2026-10-20T03:09:35.103Z
+  modified: 2026-10-20T05:28:05.411Z
 ---
 
 2026-10-20 查流量费时定的。查到的情况：流量的大头是本机模型下载（默认模型一个约 0.8 GB），其次是首次安装，更新占得少；没有被刷的迹象，但防线只有"每天封顶"，被刷就是全天 404。具体数字不记（仓库公开，`npm run stats` 能重算）。
@@ -20,6 +20,7 @@ metadata:
 - **老的模型 CDN 在魔搭端到端实测通过之前不能下线**："可以短路一会，但不能长"。
 - 重构要做干净，见 [[refactor-surgical-clean]]。
 - **完成标准**：在他这台 Mac 和游戏电脑（Windows）上都端到端验过；换模型源后重新测速；把所有提到旧做法的文档都改掉。他说会一步步指引。
+- **撤旧的先后（10-19 他再三强调，别搞混，否则宕机太久）**：两台端到端验过 → 打包发版 → 官网和 README 更新完、确认线上全是新版 → 最后才撤旧：腾讯云桶里的模型全部删干净、不留，老模型 CDN 下线，旧的东西清理掉。他已授权我去删，不用再问。
 
 **Why:** 每次更新都全量下载一两百兆，他认为"肯定不对"；本机模型走自己的 CDN 是最大的流量费来源，也会被刷。
 **How to apply:** 动手前开分支；每件事做完按 [[acceptance-end-to-end]] 在两台机器上验。相关：[[speakmore-release-on-cos]]、[[speakmore-model-mirror]]、[[speakmore-cloud-billing]]、[[speakmore-download-stats]]、[[cloud-changes-user-runs]]。
