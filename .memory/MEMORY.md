@@ -49,3 +49,5 @@
 - [真机测更新要隔离](update-e2e-isolation.md) — 钉住 SPEAKMORE_APP、SPEAKMORE_BIN_DIR；临时签名的 App 被 open 打开会弹麦克风授权、可能覆盖正式版的；Windows 的 install.ps1 改开始菜单快捷方式和 Path，先备份
 - [分发重构](speakmore-distribution-rework.md) — 10-20 全部做完并随 0.11.0 发布：模型换魔搭、包压缩瘦身、分块差量更新，两台电脑验过，旧的模型源和旧版本已撤；还剩 Electron fuses
 - [重构要做干净](refactor-surgical-clean.md) — 定了重构就手术式、不给我们自己的旧做法留兼容；碰到用户手里旧版本的先说清影响
+- [目录可配置重构](speakmore-relocatable-home.md) — issue #10：只留定位文件、整个 .speakmore 可装别处并一键迁移；老版本自动迁移；多 agent 审查加两台端到端
+- [热键开放任意键](speakmore-hotkey-any-key.md) — 待做：任意键或组合键、配置驱动，目录重构发版后单独做
