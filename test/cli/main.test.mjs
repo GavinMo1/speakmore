@@ -185,6 +185,8 @@ function harness({
   system = {},
   /** 搬家（src/move）：假的，记下问过、搬过哪里 */
   mover = fakeMover(),
+  /** 记着的搬家进程还在不在 */
+  moverAlive = () => false,
 } = {}) {
   const output = { out: "", err: "" };
   const asked = [];
@@ -302,6 +304,7 @@ function harness({
     packageDir,
     cwd: () => "/work",
     mover: () => mover,
+    moverAlive,
   };
   // 版本检查和更新走真的内核（src/update），只把下载地址、App、安装脚本这三样换成假的、记下做过什么
   io.updates = createUpdates({
@@ -1773,6 +1776,22 @@ test("uninstall：装在默认位置以外的，定位文件一起删；--keep-d
   assert.equal(await all.speakmore("uninstall", "--yes"), 0);
   assert.equal(existsSync(paths.locationFile), false);
   assert.match(all.output.out, /定位文件/);
+});
+
+test("正在搬家时不改家目录里的东西（写进旧目录的会跟着它一起删掉）；搬完了照常", async () => {
+  const { writeMoveRecord } = await import("../../src/move/state.mjs");
+  writeMoveRecord(paths, {
+    state: "running",
+    pid: 4242,
+    to: "/Volumes/T7/.speakmore",
+    startedAt: new Date().toISOString(),
+  });
+  const moving = harness({ moverAlive: () => true });
+  assert.equal(await moving.speakmore("dict", "add", "GitHub"), 1);
+  assert.match(moving.output.err, /正在从 .* 搬到 \/Volumes\/T7\/\.speakmore/);
+  assert.equal(await moving.speakmore("config", "set", "hotkey", "fn"), 1);
+  // 搬家的进程没了（断了）：不挡
+  assert.equal(await harness({ moverAlive: () => false }).speakmore("dict", "add", "GitHub"), 0);
 });
 
 test("uninstall：定位文件坏了也照常卸完，说一声它没删", posixOnly, async () => {

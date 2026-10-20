@@ -16,6 +16,7 @@ import {
 import { log } from "../log.mjs";
 import { createLocalModels } from "../models/library.mjs";
 import { createMove } from "../move/index.mjs";
+import { readMoveRecord, stillMoving } from "../move/state.mjs";
 import { CHAT_VENDORS } from "../server/chat/vendors.mjs";
 import { PROVIDERS } from "../server/providers/index.mjs";
 import { adoptAppKeys } from "../storage/app-keys.mjs";
@@ -88,6 +89,36 @@ const COMMANDS = {
 };
 
 /**
+ * 直接改家目录里文件的命令（设置、词典、key、历史、模型、卸载）：正在搬家时不做。后台没在跑时它们直接写文件，
+ * 写进的是正在被拷走的旧目录，拷完就跟着旧目录一起删了。stop、status 这些不挡：换家时安装脚本自己要用 stop
+ */
+const WRITES_HOME = new Set([
+  "key",
+  "mode",
+  "model",
+  "transcriber",
+  "polish",
+  "config",
+  "theme",
+  "dict",
+  "history",
+  "uninstall",
+]);
+
+function refuseWhileMoving(io) {
+  let record = null;
+  try {
+    record = readMoveRecord(io.paths);
+  } catch {
+    // 记录读不出来（权限这类）：不因为它挡住命令
+    return;
+  }
+  if (stillMoving(record, io.moverAlive ? { alive: io.moverAlive } : {})) {
+    throw new LocalizedError(msg("move.inProgress", { home: io.paths.home, to: record.to ?? "?" }));
+  }
+}
+
+/**
  * 执行一条命令。
  * @param {string[]} argv 命令名和它的参数（不含 node 和脚本路径）
  * @param {object} io 和外界打交道的全部途径，测试时整个换掉。真实的见 createIo
@@ -105,6 +136,7 @@ export async function run(argv, io) {
     }
     const [name = "start", ...rest] = argv;
     if (!Object.hasOwn(COMMANDS, name)) throw new UsageError(msg("cli.unknownCommand", { name }));
+    if (WRITES_HOME.has(name)) refuseWhileMoving(io);
     return await COMMANDS[name](rest, io);
   } catch (error) {
     const said = () => io.err(io.t.text(problemOf(error)));
