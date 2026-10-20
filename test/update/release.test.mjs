@@ -130,7 +130,7 @@ test("取到的对象内容不对（被换了、坏了）：不留下，说是�
   });
 });
 
-test("清单：取回来核对过再解析；不是清单的（坏了的发布）报清单无效", async () => {
+test("清单：取回来核对过再解析，交回它压过的大小（算进下载量）；不是清单的（坏了的发布）报清单无效", async () => {
   const root = join(dir, "release");
   const manifest = { format: MANIFEST_FORMAT, chunking: CHUNKING.algorithm, entries: [{ path: "app", type: "dir" }] };
   const [good, packedGood] = objectOf(JSON.stringify(manifest));
@@ -140,7 +140,7 @@ test("清单：取回来核对过再解析；不是清单的（坏了的发布�
     [bad, packedBad],
   ]);
   const server = createRelease({ env: { ...process.env, SPEAKMORE_INSTALL_BASE: root } });
-  assert.deepEqual(await server.manifest(good), manifest);
+  assert.deepEqual(await server.manifest(good), { manifest, bytes: packedGood.length });
   await assert.rejects(server.manifest(bad), (error) => {
     assert.match(zh.text(error.problem), new RegExp(`更新清单（${bad.slice(0, 12)}）无效`));
     // 哪里不对给排查的人看，跟着 cause 走

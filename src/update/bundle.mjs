@@ -133,9 +133,11 @@ export function createBundles({ env, release, platform = process.platform, arch 
       const cannotReplace = (error, reason = error.message) =>
         new LocalizedError(msg("update.appReplace", { path: app, reason, url: dmgUrl }), { cause: error });
       let stats;
+      let manifestBytes = 0;
       try {
         if (!channel.targets[target]) throw new LocalizedError(msg("update.noTarget", { target, version }));
-        const manifest = await release.manifest(channel.targets[target]);
+        const { manifest, bytes } = await release.manifest(channel.targets[target]);
+        manifestBytes = bytes;
         // 上次没拼完留下的：拼之前清掉（同一时间只有一个更新，见 state.mjs 的锁）
         rmSync(staged, { recursive: true, force: true });
         try {
@@ -170,7 +172,8 @@ export function createBundles({ env, release, platform = process.platform, arch 
       }
 
       return {
-        downloadedBytes: stats.downloadedBytes,
+        // 下了多少：缺的块加上清单本身
+        downloadedBytes: stats.downloadedBytes + manifestBytes,
         reusedBytes: stats.reusedBytes,
         commit() {
           rmSync(old, { recursive: true, force: true });

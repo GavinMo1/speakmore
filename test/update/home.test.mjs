@@ -6,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -136,7 +137,10 @@ test(
     assert.deepEqual(readdirSync(staged.dir).sort(), ["app", "runtime"]);
     assert.deepEqual(readFileSync(join(staged.dir, "runtime", "electron")), RUNTIME);
     assert.equal(staged.reusedBytes, RUNTIME.length);
-    assert.ok(staged.downloadedBytes > 0 && staged.downloadedBytes < 2000, `downloaded ${staged.downloadedBytes}`);
+    // 下了多少：缺的块（在缓存里）加上清单本身
+    const fetched = readdirSync(cacheDir).reduce((sum, name) => sum + statSync(join(cacheDir, name)).size, 0);
+    const manifestBytes = statSync(join(release, "store", channel.targets["darwin-arm64"])).size;
+    assert.equal(staged.downloadedBytes, fetched + manifestBytes);
     assert.equal(existsSync(join(paths.home, ".update-9.9.8-deadbeef")), false);
     staged.discard();
     assert.equal(existsSync(staged.dir), false);

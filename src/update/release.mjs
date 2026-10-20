@@ -202,13 +202,17 @@ export function createRelease({ env }) {
 
     fetchObjects,
 
-    /** 取一份清单（也是一个对象）并核对 */
+    /**
+     * 取一份清单（也是一个对象）并核对
+     * @returns {Promise<{ manifest: ReturnType<typeof parseManifest>, bytes: number }>} bytes：下了多少（压过的大小），算进这次更新的下载量
+     */
     async manifest(sha) {
       const dir = mkdtempSync(join(tmpdir(), "speakmore-manifest-"));
       try {
         await fetchObjects([sha], dir);
+        const packed = readFileSync(join(dir, sha));
         try {
-          return parseManifest(unpackObject(readFileSync(join(dir, sha)), sha));
+          return { manifest: parseManifest(unpackObject(packed, sha)), bytes: packed.length };
         } catch (error) {
           // 哪里不对（error.message）是给排查的人看的，跟着 cause 进日志；给用户的话只说是哪份清单
           throw new LocalizedError(msg("update.badManifest", { manifest: sha.slice(0, 12) }), { cause: error });

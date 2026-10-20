@@ -218,10 +218,11 @@ try {
     makeDmg({ appPath, dmgPath: dmg, signing });
     writeChecksum(dmg);
   }
-  if (!signing?.notaryProfile) {
-    console.warn(
-      "没配签名和公证（.machine.env 的 MAC_SIGNING_IDENTITY、MAC_NOTARY_PROFILE），不打安装包（dmg），App 也没公证；只能本机试，发布时传不上去",
-    );
+  if (archs.length > 0 && !signing?.notaryProfile) {
+    const what = signing
+      ? "没配公证（.machine.env 的 MAC_NOTARY_PROFILE）：App 只签了名、没公证"
+      : "没配签名和公证（.machine.env 的 MAC_SIGNING_IDENTITY、MAC_NOTARY_PROFILE）：App 是本机的临时签名";
+    console.warn(`${what}，不打安装包（dmg）；只能本机试，发布时传不上去`);
   }
   await Promise.all(packing);
 } finally {

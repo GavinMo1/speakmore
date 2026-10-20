@@ -154,7 +154,7 @@ export function createHomes({
       const target = homeTarget(platform, homeArch(platform, arch, translated));
       if (!channel.targets[target])
         throw new LocalizedError(msg("update.noTarget", { target, version: channel.version }));
-      const manifest = await release.manifest(channel.targets[target]);
+      const { manifest, bytes: manifestBytes } = await release.manifest(channel.targets[target]);
       const suffix = randomBytes(4).toString("hex");
       let dir;
       if (windows) {
@@ -181,7 +181,8 @@ export function createHomes({
           cacheDir,
           onProgress,
         });
-        return { dir, discard, downloadedBytes: stats.downloadedBytes, reusedBytes: stats.reusedBytes };
+        // 下了多少：缺的块加上清单本身
+        return { dir, discard, downloadedBytes: stats.downloadedBytes + manifestBytes, reusedBytes: stats.reusedBytes };
       } catch (error) {
         discard();
         if (error instanceof LocalizedError) throw error;
