@@ -137,14 +137,16 @@ function isRecorded(dir, located, env, locationFile, userHome, platform) {
   }
 }
 
-/** 这个记号说搬去了哪；没有记号是 undefined，有记号但读不出是 null */
+/**
+ * 这个记号说搬去了哪；没有记号是 undefined，有记号但读不出是 null。
+ * 连家目录都到不了（网络路径断了、盘没了）不算有记号：照常往下走，由后面的步骤说到不了
+ */
 function movedTo(file) {
   let text;
   try {
     text = readFileSync(file, "utf8");
   } catch (error) {
-    if (error.code === "ENOENT" || error.code === "ENOTDIR") return undefined;
-    return null;
+    return ["EACCES", "EPERM", "EISDIR"].includes(error.code) ? null : undefined;
   }
   try {
     const to = JSON.parse(text).to;

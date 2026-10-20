@@ -1637,7 +1637,10 @@ test("usage 不收别的参数", async () => {
 
 // ---------- 搬家 ----------
 
-test("move：不写文件夹就说现在在哪、怎么搬", async () => {
+// 这几条按 macOS 的路径写（/Volumes/T7、正斜杠）；Windows 上的走法在真机端到端里验
+const posixOnly = { skip: process.platform === "win32" && "按 macOS 的路径写" };
+
+test("move：不写文件夹就说现在在哪、怎么搬", posixOnly, async () => {
   const { speakmore, output, io } = harness();
   assert.equal(await speakmore("move"), 0);
   assert.match(output.out, new RegExp(`SpeakMore 现在在 ${paths.home}`));
@@ -1645,7 +1648,7 @@ test("move：不写文件夹就说现在在哪、怎么搬", async () => {
   assert.deepEqual(io.mover().calls, []);
 });
 
-test("move：先说清楚搬到哪、拷多少、旧目录里别人的东西不动，再问一句；不答应就什么都不动", async () => {
+test("move：先说清楚搬到哪、拷多少、旧目录里别人的东西不动，再问一句；不答应就什么都不动", posixOnly, async () => {
   const mover = fakeMover({ unknown: ["notes.txt", "Backups"] });
   const declined = harness({ mover, confirms: [false] });
   assert.equal(await declined.speakmore("move", "/Volumes/T7"), 1);
@@ -1665,7 +1668,7 @@ test("move：先说清楚搬到哪、拷多少、旧目录里别人的东西不�
   assert.match(agreed.output.out, /旧目录 .* 已经删掉/);
 });
 
-test("move：相对路径按当前目录，~ 是用户目录", async () => {
+test("move：相对路径按当前目录，~ 是用户目录", posixOnly, async () => {
   const { homedir } = await import("node:os");
   const relative = harness({ confirms: [true] });
   await relative.speakmore("move", "disk", "--yes");
@@ -1758,7 +1761,7 @@ test("uninstall --yes：停掉后台，整个目录、家目录以外的命令�
   assert.doesNotMatch(output.out, /com\.github\.Electron/);
 });
 
-test("uninstall：装在默认位置以外的，定位文件一起删；--keep-data 时留着（重装后照它找回数据）", async () => {
+test("uninstall：装在默认位置以外的，定位文件一起删；--keep-data 时留着（重装后照它找回数据）", posixOnly, async () => {
   const { writeLocation } = await import("../../src/storage/location.mjs");
   seedInstalled();
   writeLocation(paths.locationFile, { home: paths.home });

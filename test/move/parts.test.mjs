@@ -11,6 +11,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { canRehome, installerIn, rehome } from "../../src/move/installer.mjs";
@@ -22,7 +23,8 @@ import { stillMoving } from "../../src/move/state.mjs";
 const posixOnly = { skip: process.platform === "win32" && "试盘、跑 install.sh 是 macOS 的事" };
 
 function scratch(t) {
-  const root = realpathSync(mkdtempSync("/tmp/sm-p-"));
+  // macOS 上要短路径（套接字最长 103 字节），Windows 上没有 /tmp
+  const root = realpathSync(mkdtempSync(process.platform === "win32" ? join(tmpdir(), "sm-p-") : "/tmp/sm-p-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return root;
 }

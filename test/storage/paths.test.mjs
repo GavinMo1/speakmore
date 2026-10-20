@@ -18,6 +18,8 @@ import { assertOwnerOnlyDir } from "../helpers/owner-only.mjs";
 const zh = createTranslator("zh-CN");
 /** 报错里给人看的那句，按中文翻出来对得上 */
 const said = (pattern) => (error) => pattern.test(zh.text(error.problem ?? error.message));
+// 按 macOS 的写法拼的路径，在 Windows 的临时目录里拼不出来
+const posixOnly = { skip: process.platform === "win32" && "按 macOS 的路径写" };
 
 /** 家目录里的那些：除了定位文件，都在家目录里 */
 const inside = (paths) => Object.entries(paths).filter(([name]) => name !== "locationFile");
@@ -85,7 +87,7 @@ test("SPEAKMORE_HOME 把整个目录换到别处", () => {
   for (const [, path] of inside(paths)) assert.ok(path.startsWith("/tmp/elsewhere"), path);
 });
 
-test("家目录装在别处时照定位文件找；SPEAKMORE_HOME 优先于定位文件，都没有才是默认位置", (t) => {
+test("家目录装在别处时照定位文件找；SPEAKMORE_HOME 优先于定位文件，都没有才是默认位置", posixOnly, (t) => {
   const user = mkdtempSync(join(tmpdir(), "sm-user-"));
   t.after(() => rmSync(user, { recursive: true, force: true }));
   assert.equal(resolvePaths({}, user, "darwin").home, join(user, ".speakmore"));
@@ -110,10 +112,13 @@ test("Windows 上的定位文件在 LOCALAPPDATA 下；照它找到的家目录�
   const defaults = resolvePaths(env, "C:\\Users\\someone", "win32");
   assert.equal(defaults.home, "C:\\Users\\someone\\.speakmore");
   mkdirSync(join(local, "SpeakMore"));
-  writeFileSync(join(local, "SpeakMore", "location.json"), JSON.stringify({ home: "D:\\Apps\\.speakmore" }));
+  // 定位文件说的家目录要真的在
+  const custom = join(local, "Apps", ".speakmore");
+  mkdirSync(custom, { recursive: true });
+  writeFileSync(join(local, "SpeakMore", "location.json"), JSON.stringify({ home: custom }));
   const moved = resolvePaths(env, "C:\\Users\\someone", "win32");
-  assert.equal(moved.home, "D:\\Apps\\.speakmore");
-  assert.equal(moved.versionsDir, "D:\\Apps\\.speakmore\\versions");
+  assert.equal(moved.home, custom);
+  assert.equal(moved.versionsDir, join(custom, "versions"));
   assert.notEqual(moved.controlSocket, defaults.controlSocket);
 });
 
@@ -134,7 +139,10 @@ test("SPEAKMORE_HOME 是空字符串时当作没设，不把文件写到当前�
 
 test("控制通道的路径太长时报错并说明怎么办，不等到监听时才失败", () => {
   const long = `/tmp/${"x".repeat(100)}`;
-  assert.throws(() => resolvePaths({ SPEAKMORE_HOME: long }, "/Users/someone", "darwin"), said(/太长.*\n.*挪到路径短一些的地方/));
+  assert.throws(
+    () => resolvePaths({ SPEAKMORE_HOME: long }, "/Users/someone", "darwin"),
+    said(/太长.*\n.*挪到路径短一些的地方/),
+  );
 });
 
 test("SPEAKMORE_HOME 要是绝对路径：相对路径会随着在哪个目录运行命令而变，找不到同一个后台应用", () => {
@@ -159,7 +167,7 @@ test("ensureHome：把目录建出来，只有自己进得去（里面有录音�
   assertOwnerOnlyDir(paths.home);
 });
 
-test("定位文件说的家目录不在（移动硬盘没接、盘符被别的盘占了）：报找不到，不新建一个空的", (t) => {
+test("定位文件说的家目录不在（移动硬盘没接、盘符被别的盘占了）：报找不到，不新建一个空的", posixOnly, (t) => {
   const user = mkdtempSync(join(tmpdir(), "sm-user-"));
   t.after(() => rmSync(user, { recursive: true, force: true }));
   // 上一级在（比如 D:\ 现在是另一块盘），家目录本身不在

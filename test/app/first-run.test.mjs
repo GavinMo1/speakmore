@@ -38,23 +38,30 @@ function fakeDialog({ boxes = [], folders = [] }) {
 const choose = (userHome, dialog, extra = {}) =>
   chooseHome({ dialog, t, env: {}, userHome, platform: "darwin", ...extra });
 
-test("什么时候问：Mac 上打成应用、从程序坞打开、什么都还没装过（没有定位文件、默认位置、0.1 版的旧数据）", (t) => {
-  const userHome = scratch(t);
-  const base = { env: {}, platform: "darwin", packaged: true, launchedByCli: false, userHome };
-  assert.equal(needsHomeChoice(base), true);
-  assert.equal(needsHomeChoice({ ...base, platform: "win32" }), false);
-  assert.equal(needsHomeChoice({ ...base, packaged: false }), false);
-  assert.equal(needsHomeChoice({ ...base, launchedByCli: true }), false);
-  assert.equal(needsHomeChoice({ ...base, env: { SPEAKMORE_HOME: "/x" } }), false);
-  mkdirSync(join(userHome, "Library", "Application Support", "SpeakMore"), { recursive: true });
-  assert.equal(needsHomeChoice(base), false, "0.1 版的老用户");
-  rmSync(join(userHome, "Library"), { recursive: true });
-  mkdirSync(join(userHome, ".speakmore"));
-  assert.equal(needsHomeChoice(base), false, "装过了");
-  rmSync(join(userHome, ".speakmore"), { recursive: true });
-  writeFileSync(join(userHome, "location"), "");
-  assert.equal(needsHomeChoice({ ...base, exists: (path) => path === locationFileOf({}, userHome, "darwin") }), false);
-});
+test(
+  "什么时候问：Mac 上打成应用、从程序坞打开、什么都还没装过（没有定位文件、默认位置、0.1 版的旧数据）",
+  posixOnly,
+  (t) => {
+    const userHome = scratch(t);
+    const base = { env: {}, platform: "darwin", packaged: true, launchedByCli: false, userHome };
+    assert.equal(needsHomeChoice(base), true);
+    assert.equal(needsHomeChoice({ ...base, platform: "win32" }), false);
+    assert.equal(needsHomeChoice({ ...base, packaged: false }), false);
+    assert.equal(needsHomeChoice({ ...base, launchedByCli: true }), false);
+    assert.equal(needsHomeChoice({ ...base, env: { SPEAKMORE_HOME: "/x" } }), false);
+    mkdirSync(join(userHome, "Library", "Application Support", "SpeakMore"), { recursive: true });
+    assert.equal(needsHomeChoice(base), false, "0.1 版的老用户");
+    rmSync(join(userHome, "Library"), { recursive: true });
+    mkdirSync(join(userHome, ".speakmore"));
+    assert.equal(needsHomeChoice(base), false, "装过了");
+    rmSync(join(userHome, ".speakmore"), { recursive: true });
+    writeFileSync(join(userHome, "location"), "");
+    assert.equal(
+      needsHomeChoice({ ...base, exists: (path) => path === locationFileOf({}, userHome, "darwin") }),
+      false,
+    );
+  },
+);
 
 test("选默认位置：不写定位文件，建好默认位置的空目录（只让自己进），重新启动后不再问", posixOnly, async (t) => {
   const userHome = scratch(t);
