@@ -5,7 +5,7 @@
 // 钉上票据，这样的应用拿到别的 Mac 上也能直接打开，重新打包后权限和 key 也不用重给。都没配就是不带身份的本机签名。
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { packager } from "@electron/packager";
@@ -27,6 +27,8 @@ export async function packageMacApp({ packageDir, arch, out, signing }) {
 
   // 先在一个临时目录里摆出"应用里该有的东西"，只装运行时依赖，再从那里打包
   const staging = mkdtempSync(join(tmpdir(), "speakmore-package-"));
+  // 临时目录建出来是 700，打包时原样成了 Contents/Resources/app 的权限：别的用户打不开 App。改成和别的目录一样的 755
+  chmodSync(staging, 0o755);
   let bundleDir;
   try {
     stageApp(packageDir, staging, APP_ENTRIES, arch);

@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, rmSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { msg } from "../../i18n/index.mjs";
+import { STAGING_PREFIX } from "../../update/home.mjs";
 import { noPositionals, parse, UsageError } from "../common.mjs";
 
 // speakmore uninstall：停掉后台，把 SpeakMore 的目录整个删掉；目录以外删不了的照实列出来。
@@ -10,6 +11,8 @@ import { noPositionals, parse, UsageError } from "../common.mjs";
 
 /** Electron（Chromium）在缓存目录里记加密钥匙的那个文件 */
 const LOCAL_STATE = "Local State";
+/** 家目录里程序留下的半截：安装脚本的临时目录（.install.）、换下来的旧程序（app.old 这些） */
+const INSTALL_LEFTOVER = /^\.install\.|^(app|runtime)\.old(\..+)?$/;
 
 /** 这个链接是不是指向我们自己的那条命令。清单里记的东西卸载前要再认一遍：那个位置上可能已经换成了别的 */
 function isOurLink(link, binDir) {
@@ -95,6 +98,12 @@ export async function uninstall(args, io) {
     // Windows 上程序在 versions 下（每个版本一个目录）、current 记着用哪个；0.9.2 及以前在 app、runtime 里
     const program = io.platform === "win32" ? [paths.versionsDir, paths.currentFile] : [];
     for (const dir of [paths.appDir, paths.runtimeDir, ...program, paths.runDir, logsDir]) remove(dir);
+    // 更新拼了一半的（.update-，src/update/home.mjs）、安装脚本被打断留下的（.install.、换下来的 app.old 这些）也是程序
+    if (existsSync(paths.home)) {
+      for (const name of readdirSync(paths.home)) {
+        if (name.startsWith(STAGING_PREFIX) || INSTALL_LEFTOVER.test(name)) remove(join(paths.home, name));
+      }
+    }
     // Windows 上留着的 key 是 Electron 的 safeStorage 加密的，解开它要的那把钥匙（DPAPI 加密过）记在
     // 缓存目录的 Local State 里：留着 key 就得留着它，缓存别的都删。macOS 上那把钥匙在钥匙串里，缓存整个删
     if (io.platform === "win32" && existsSync(paths.cacheDir)) {

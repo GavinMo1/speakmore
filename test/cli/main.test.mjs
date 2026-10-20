@@ -1708,6 +1708,9 @@ test("uninstall：运行环境在别处留的那个共用的偏好文件，有�
 
 test("uninstall --keep-data：只删程序，设置、key、历史和录音留着，钥匙串也不动（留着的 key 要靠它解开）", async () => {
   const { link } = seedInstalled();
+  // 更新拼了一半的、安装脚本被打断留下的，也是程序
+  const leftovers = [".update-0.2.0-abcd1234", ".install.Ab12Cd", "app.old"].map((name) => join(paths.home, name));
+  for (const dir of leftovers) mkdirSync(join(dir, "x"), { recursive: true });
   const { speakmore, output } = harness({ keychain: () => assert.fail("不该动钥匙串") });
   assert.equal(await speakmore("uninstall", "--keep-data", "--yes"), 0);
   for (const kept of [
@@ -1718,7 +1721,15 @@ test("uninstall --keep-data：只删程序，设置、key、历史和录音留�
   ]) {
     assert.equal(existsSync(kept), true, kept);
   }
-  for (const gone of [paths.binDir, paths.appDir, paths.runtimeDir, paths.cacheDir, paths.logFile, link]) {
+  for (const gone of [
+    paths.binDir,
+    paths.appDir,
+    paths.runtimeDir,
+    paths.cacheDir,
+    paths.logFile,
+    link,
+    ...leftovers,
+  ]) {
     assert.equal(existsSync(gone), false, gone);
   }
   assert.match(output.out, /留着/);

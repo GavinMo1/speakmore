@@ -116,6 +116,7 @@
       $name = ''
       try { $name = [IO.File]::ReadAllText($script:CurrentFile).Trim() } catch { $name = '' }
       $manifest = if ($name -match $VersionNamePattern) { Join-Path $script:VersionsDir "$name\app\package.json" } else { $null }
+      if ($name -match $VersionNamePattern) { $script:PreviousName = $name }
     }
     if ($manifest -and (Test-Path -LiteralPath $manifest)) {
       try { $script:InstalledVersion = (Get-Content -Raw -Encoding UTF8 -LiteralPath $manifest | ConvertFrom-Json).version } catch { $script:InstalledVersion = '' }
@@ -244,6 +245,7 @@
     if ((Split-Path -Parent $from) -ieq $script:VersionsDir -and $name -match $VersionNamePattern) {
       $script:VersionName = $name
       $script:VersionDir = $from
+      $script:InPlace = $true
     } else {
       $version = ''
       try { $version = [string](Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $from 'app\package.json') | ConvertFrom-Json).version } catch { $version = '' }
@@ -330,12 +332,30 @@
     } finally { Remove-Item Env:SPEAKMORE_REMOVE }
   }
 
+  # speakmore update 拼新版本时拿着 run\update.lock（里面是它的进程号，src/update/state.mjs），拼在 versions 下一个新目录里。
+  # 它自己调这个脚本装它拼的那一份时（Use-Tree 原地用）不算别的；锁里的进程没了、或者拿了两小时以上（进程号早被别的程序用上了）也不算
+  function Test-OtherUpdate {
+    if ($script:InPlace) { return $false }
+    $lock = Join-Path $script:HomeDir 'run\update.lock'
+    try {
+      $age = (Get-Date) - (Get-Item -LiteralPath $lock -Force -ErrorAction Stop).LastWriteTime
+      $holder = [IO.File]::ReadAllText($lock).Trim()
+    } catch { return $false }
+    # 刚建好、还没写进进程号：那边正要写
+    if ($holder -notmatch '^\d+$') { return $age.TotalSeconds -lt 10 }
+    if ($age.TotalHours -ge 2) { return $false }
+    return [bool](Get-Process -Id ([int]$holder) -ErrorAction SilentlyContinue)
+  }
+
   # 换下来的：versions 里别的版本、0.9.2 及以前直接放在家目录里的 app 和 runtime（连同那时换下来的 *.old.*、
   # 装到一半留下的下载临时目录 .install.*）。没有程序在用的现在删；有程序在用的（比如正在跑 speakmore update 的那个旧版本）
   # 和现在删不掉的，交给 Remove-Later
   function Remove-Old {
     $old = @(Get-ChildItem -LiteralPath $script:HomeDir -Directory -Force | Where-Object { $_.Name -match '^(app|runtime)(\.old\..+)?$|^\.install\.' })
-    $old += @(Get-ChildItem -LiteralPath $script:VersionsDir -Directory -Force | Where-Object { $_.Name -match $VersionNamePattern -and $_.Name -ne $script:VersionName })
+    $versions = @(Get-ChildItem -LiteralPath $script:VersionsDir -Directory -Force | Where-Object { $_.Name -match $VersionNamePattern -and $_.Name -ne $script:VersionName })
+    # 别的 speakmore update 正在 versions 下拼新版本：只删换下来的那一份，别的可能是它拼了一半的，留给下次装时再删
+    if (Test-OtherUpdate) { $versions = @($versions | Where-Object { $_.Name -eq $script:PreviousName }) }
+    $old += $versions
     if ($old.Count -eq 0) { return }
     $running = @(Get-Process | Where-Object { $_.Path })
     $later = @(); $waitFor = @(); $left = @()
@@ -450,6 +470,7 @@
   try {
     # irm | iex 时这些记在用户窗口的全局作用域里：同一个窗口再跑一次，不能接着用上一次的
     $script:VersionDir = $null; $script:Stopped = $false; $script:Switched = $false; $script:InstallLock = $null; $script:LockHeld = $false
+    $script:PreviousName = ''; $script:InPlace = $false
     $script:Base = if ($env:SPEAKMORE_INSTALL_BASE) { $env:SPEAKMORE_INSTALL_BASE.TrimEnd('/', '\') } else { $DownloadUrl }
     # 本机的一个目录也可以当下载地址
     $script:LocalBase = $script:Base -notmatch '^[a-z]+://'
