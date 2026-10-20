@@ -26,7 +26,11 @@ npm run release               # 打发布：dist/release/ 下是更新用的块�
 
 **更新**只下本机缺的块：照新版本的清单拼出整棵树，本机装着的几份里有的块直接拷，每块写进去前核对 sha256，拼出来的和发布的逐字节相同，所以拼完照旧核对 App 的签名和开发者、照旧让安装脚本试跑。0.10.0 → 0.10.1 实测要下的：Mac App 1.31 MB、Windows 0.25 MB、Mac 终端 0.13 MB（整包是一两百兆）。换 Electron 的那一版要多下 Electron 里变了的部分。0.10.1 及以前的版本读的是已经不再更新的 `latest`，看不到之后的版本，要用一行命令或安装包重新装一次。
 
-从源码跑的和装好的用的是同一个 `~/.speakmore`，想分开就设 `SPEAKMORE_HOME`。
+从源码跑的和装好的用的是同一个家目录（定位文件说的那个，没有定位文件就是 `~/.speakmore`），想分开就设 `SPEAKMORE_HOME`：它只管这一次，从不改定位文件。
+
+**家目录放在哪、搬家**：程序、模型、数据全在一个家目录里，它可以在任何地方，在哪记在家目录以外唯一的一个文件里——定位文件（`src/storage/location.mjs`：Mac 是 `~/Library/Application Support/com.zephyrxiang.speakmore/location.json`，Windows 是 `%LOCALAPPDATA%\SpeakMore\location.json`）。只有装在默认位置以外才有它，只在明确选了位置时写：第一次安装时选的（Mac App 第一次打开的对话框 `src/app/first-run.mjs`、Windows 安装程序的对话框、安装脚本在终端里问的、`SPEAKMORE_INSTALL_DIR`）、搬家（`src/move/`）。找家目录的顺序是 `SPEAKMORE_HOME` → 定位文件 → 默认位置；定位文件说的目录不在（移动硬盘没接）就报错，不新建空的。装好的程序自己认得自己在哪：Mac 的启动脚本按自己所在的目录，Windows 的 App 按自己所在的 `versions\`，所以里面没有写死的路径。搬家（命令行 `speakmore move`、App 设置里的"存储位置"，同一套）：先检查新位置、试盘（exFAT 这类建不了套接字、符号链接、只给自己的权限），停掉正在运行的，只拷 SpeakMore 自己的东西，再交给新位置自带的安装脚本"换家"（`SPEAKMORE_PREVIOUS_HOME`：试跑、改命令链接、Path、开始菜单、开机启动、定位文件），最后旧目录放下 `MOVED.json`、只删我们的。提交之前任何一步出错都换回旧目录；断在半路的，下次从旧目录启动时 `settleMove` 收拾好。App 里搬家时另起一个自己的进程开进度窗口（`src/app/move-window.mjs`）。
+
+要试搬家、第一次安装这些会写定位文件的，把 `HOME` 换成临时目录（Windows 是 `USERPROFILE`、`LOCALAPPDATA`）：定位文件、默认位置都跟着它走，不碰这台电脑上真的。这时用 Electron 本体起（`node_modules/electron/dist/Electron.app/Contents/MacOS/Electron .`）：`node_modules/.bin/electron` 换了 `HOME` 会卡住不动。只搬"记着的那一个"：`SPEAKMORE_HOME` 临时指到别处的家目录不让搬，免得定位文件被改指到它。
 
 要真调模型的命令需要环境里有那一家的 key（`GEMINI_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、阿里云百炼的 `BAILIAN_API_KEY`、Kimi 的 `MOONSHOT_API_KEY`、智谱的 `ZHIPU_API_KEY`、MiniMax 的 `MINIMAX_API_KEY`）。`scripts/dev/with-key.sh <厂商>` 可以按你自己机器上的配置把它只喂给一条命令，见 `.machine.env.example`。用哪家哪个模型由 `SPEAKMORE_MODEL` 定，默认 Gemini：
 
@@ -66,7 +70,7 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 
 | 目录 | 内容 |
 | --- | --- |
-| `install.sh`、`install.ps1` | 安装脚本（macOS、Windows）：预检查、下载、校验、装进 `~/.speakmore`（Windows 是 `%USERPROFILE%\.speakmore`）、启动。设了 `SPEAKMORE_INSTALL_FROM`（一棵准备好的程序树：`speakmore update` 拼好的、Windows 安装程序解出来的）就不下载，直接装它。输出只有英文，不跟界面语言 |
+| `install.sh`、`install.ps1` | 安装脚本（macOS、Windows）：预检查、下载、校验、装进家目录（默认 `~/.speakmore`，Windows 是 `%USERPROFILE%\.speakmore`；第一次安装在终端里时先问装在哪）、启动。设了 `SPEAKMORE_INSTALL_FROM`（一棵准备好的程序树：`speakmore update` 拼好的、Windows 安装程序解出来的）就不下载，直接装它。输出只有英文，不跟界面语言 |
 | `bin/`、`src/cli/` | `speakmore` 命令 |
 | `src/app/` | 后台应用的主进程（Electron）：悬浮条、菜单栏、主窗口、首次引导；`keys/` 是 key 的保存和启用 |
 | `src/renderer/`、`src/preload/` | 各个窗口的页面，一个窗口一个目录：`bar/`（悬浮条：状态机、录音、听写协议的客户端、画面）、`hub/`（主窗口：首页、历史记录、设置对话框）、`onboarding/`（首次引导：选识别方式、准备模型和密钥，判断在 `plan.mjs`、`steps.mjs`），共用的样式、拼节点的小工具在 `shared/` |
@@ -77,7 +81,8 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `src/usage/` | 用量报表（今天、本月、累计、按型号）、首页的统计（字数、语速、连续天数、热力图）和数字的写法，命令和主窗口共用；`estimate.mjs` 估推荐组合的月成本 |
 | `native/` | 听热键、贴字、说话时截住 `esc` 和悬浮条上点击的小程序：macOS 的是 Swift，`windows/` 是 Go（只用标准库，在 Mac 上交叉编译） |
 | `assets/` | 图标：`icon.svg` 是那方印，`tray.svg` 是菜单栏上的五道；`.icns`、Windows 用的 `icon.ico` 和 `trayTemplate*.png` 由 `scripts/build/make-icon.sh` 从它们生成 |
-| `src/storage/` | `~/.speakmore` 里的东西：放在哪、设置、历史库、词典、旧数据的迁移。命令和后台应用共用 |
+| `src/storage/` | 家目录里的东西：放在哪（`paths.mjs`、定位文件 `location.mjs`）、设置、历史库、词典、旧数据的迁移。命令和后台应用共用 |
+| `src/move/` | 搬家：检查新位置（`target.mjs`）、试盘（`probe.mjs`）、只拷我们的（`copy.mjs`）、交给安装脚本换家（`installer.mjs`）、整个流程和断在半路的收拾（`index.mjs`）。命令行 `speakmore move` 和 App 的"存储位置"只调这里 |
 | `src/vocabulary/` | 词典：词怎么规整、导入怎么解析，各模型收词的三种做法和挑词（`fitTerms`） |
 | `src/update/` | 版本检查和更新，命令行（`speakmore status`、`update`）和 App（设置 › 通用 › 软件更新）只调这里，壳里不写更新的逻辑。查新版本一天最多问一次下载地址，记在 `run/update-check.json`，两边共用；更新进行到哪、失败原因记在 `run/update.json`，`run/update.lock` 不让两边同时换。更新把本机装着的每一份都换成最新：家目录里的那一份（`home.mjs`，拼好后交给新版本自带的安装脚本装），Mac 上还有 SpeakMore.app（`bundle.mjs`，拼在旁边，核对签名和开发者后对调）。拼（`assemble.mjs`）只下本机缺的块，下到的块放在 `run/update-cache`，换成了才删。下载和核对都在停掉正在运行的那个之前做完，停着的只有换程序那几秒；换完只重新打开原来在运行的那个。App 点了更新另起一个进程（`background.mjs`，借 App 自己的 Electron 当 Node 跑）：它要让 App 退出、换掉、再打开。下载地址上的摆法在 `layout.mjs`，打包和更新共用 |
 | `src/control.mjs`、`src/instance.mjs`、`src/log.mjs` | 命令和后台应用之间的控制通道；问正在运行的那个的状态、请它退出（命令行和更新共用）；日志 |

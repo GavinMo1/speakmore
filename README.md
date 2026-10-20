@@ -46,9 +46,9 @@
 ## 🚀 安装
 
 <p align="center">
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.11.0/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Apple%20芯片-111?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版（Apple 芯片）" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.11.0/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版（Intel）" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.11.0/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/下载-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="下载 Windows 版" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.12.0/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Apple%20芯片-111?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版（Apple 芯片）" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.12.0/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版（Intel）" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.12.0/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/下载-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="下载 Windows 版" /></a>
 </p>
 
 **macOS**
@@ -77,6 +77,13 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 ```
 
 - 下载链接末尾附加 `.sha256`，可获取对应文件的校验值。
+
+**存储位置**
+
+- 程序、本机模型、设置、历史记录与录音统一保存在一个文件夹中，默认为 `~/.speakmore`（Windows 为 `%USERPROFILE%\.speakmore`）。
+- 首次安装时可另选位置，例如其他磁盘：Mac App 首次打开时询问，Windows 安装程序在安装前询问，终端安装在命令行中询问。SpeakMore 保存在所选文件夹中的 `.speakmore`。
+- 之后可在「设置 › 通用 › 存储位置」更改，或执行 `speakmore move <文件夹>`；全部文件整体迁移，完成后自动重新打开。
+- 所选磁盘需为 APFS、Mac OS 扩展或 NTFS 格式；exFAT、FAT32 格式的 U 盘与移动硬盘不支持。
 
 <details>
 <summary><b>安装包与终端安装的区别</b></summary>
@@ -324,7 +331,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 - **开源**：MIT 许可，语音处理相关代码全部公开。
 - **无需账号**：无注册与登录流程。
-- **单一目录**：数据、设置、密钥、模型与日志统一存放于 `~/.speakmore`（Windows 为 `%USERPROFILE%\.speakmore`）。
+- **单一目录**：数据、设置、密钥、模型与日志统一存放于一个文件夹，默认为 `~/.speakmore`（Windows 为 `%USERPROFILE%\.speakmore`），可迁移至其他磁盘。
 - **一键清除**：执行 `speakmore uninstall` 删除全部内容。
 - **签名公证**：Mac 版经 Developer ID 签名与 Apple 公证。
 - **可校验**：全部安装包提供 SHA-256 校验值。
@@ -396,6 +403,7 @@ flowchart LR
 | `speakmore theme [名称]` | 查看或切换主题 |
 | `speakmore settings` | 打开设置 |
 | `speakmore logs [-n 行数] [-f]` | 查看日志 |
+| `speakmore move [<文件夹>]` | 将全部文件迁移至该文件夹中的 `.speakmore`（`~` 为默认位置）；不带参数时显示当前位置 |
 | `speakmore uninstall [--keep-data]` | 卸载（执行前确认） |
 
 - `update` 同时升级 SpeakMore.app，设置、密钥、历史记录、录音与词典保留。
@@ -481,12 +489,13 @@ flowchart LR
 | `models/` | 本机模型 |
 | `bin/`、`app/`、`runtime/` | 终端安装的程序文件 |
 
-- 全部文件位于 `~/.speakmore/`（Windows 为 `%USERPROFILE%\.speakmore\`），仅当前用户可读。
+- 全部文件位于存储位置（默认 `~/.speakmore/`，Windows 为 `%USERPROFILE%\.speakmore\`），仅当前用户可读。
 - 密钥的解密密钥保存在钥匙串中（Windows 由 DPAPI 绑定账户），文件复制至他处无法解密。
 - 日志仅记录长度、耗时与用量，不记录口述内容与密钥。
 - 本机模型按需下载，并校验 SHA-256。
 - 目录之外：钥匙串条目、已授予的系统权限、"应用程序"中的 SpeakMore。
 - Windows 另有开始菜单快捷方式、Path 条目与开机自启项。
+- 存储位置不在默认位置时，另有一个记录其位置的定位文件：`~/Library/Application Support/com.zephyrxiang.speakmore/location.json`（Windows 为 `%LOCALAPPDATA%\SpeakMore\location.json`）。
 
 </details>
 
@@ -500,6 +509,7 @@ flowchart LR
 | 按快捷键无响应 | `speakmore status` 查看缺失项，`speakmore restart` 重启 |
 | 命令提示"没有在 5 秒内回话" | 执行 `speakmore stop`，再执行 `speakmore` |
 | 菜单栏中无图标 | 按住 ⌘ 将部分图标拖出菜单栏，或执行 `speakmore settings` |
+| 提示找不到 SpeakMore 的目录 | 存储位置在移动硬盘上时，先连接该磁盘 |
 
 - "未验证"表示启动时未能连接厂商，暂用已保存的密钥。
 - 检测未通过多由模型名称或思考档位有误导致，`speakmore config unset model` 可恢复默认。
@@ -513,7 +523,8 @@ flowchart LR
 - **升级**：App 的「设置 › 通用 › 软件更新」检查并安装新版本；终端运行 `speakmore update` 效果相同。两处共用同一套更新流程：先在后台下载并校验，再替换终端安装与 SpeakMore.app，最后重新打开升级前运行的一方；仅替换期间短暂停止。更新只下载变化的部分，通常为几 MB。
 - **0.10.1 及更早版本**：无法检测到之后的版本，需重新安装一次：Mac 下载新版 dmg 覆盖安装，或重新运行终端安装命令；Windows 重新运行安装程序或安装命令。
 - **升级保留**：设置、密钥、历史记录、录音与词典。
-- **卸载**：`speakmore uninstall` 停止 SpeakMore，删除整个目录、命令及钥匙串条目。
+- **降级至 0.11.0 及更早版本**：旧版本仅识别默认位置，降级前先执行 `speakmore move ~` 迁回默认位置。
+- **卸载**：`speakmore uninstall` 停止 SpeakMore，删除整个目录、命令、定位文件及钥匙串条目。
 - **Windows 卸载**：另删除 Path 条目、开始菜单快捷方式与开机自启项。
 - **保留数据卸载**：附加 `--keep-data`，保留设置、密钥、历史记录、录音与词典。
 - **仅安装 App 时卸载**：从菜单栏退出后，将其移至废纸篓。
