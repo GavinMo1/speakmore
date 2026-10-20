@@ -5,7 +5,7 @@ import { TimeoutError } from "../control.mjs";
 import { LocalizedError, msg, problemOf } from "../i18n/index.mjs";
 import { sizeText } from "../models/describe.mjs";
 import { canonicalDir, readLocationRecord, removeLocation, sameHome, writeLocation } from "../storage/location.mjs";
-import { MOVED_FILE } from "../storage/paths.mjs";
+import { MOVED_FILE, usedBefore } from "../storage/paths.mjs";
 import { createBundles } from "../update/bundle.mjs";
 import { runToEnd } from "../update/exec.mjs";
 import { acquireLock, isAlive } from "../update/state.mjs";
@@ -68,6 +68,15 @@ const sameDir = (a, b, platform) => sameHome(canonicalDir(a, platform), canonica
 function commitLocation(paths, home, defaultHome, platform) {
   if (sameDir(home, defaultHome, platform)) removeLocation(paths.locationFile);
   else writeLocation(paths.locationFile, { home: canonicalDir(home, platform) });
+}
+
+/**
+ * 家目录里装着程序：Mac 上终端装的（app、runtime、bin），Windows 上的（versions、current，0.9.2 及以前是 app、runtime）。
+ * Mac 上只装了 dmg 的，家目录里只有数据
+ */
+function hasProgram(home, platform) {
+  const names = platform === "win32" ? ["versions", "current", "app", "runtime", "bin"] : ["app", "runtime", "bin"];
+  return names.some((name) => existsSync(join(home, name)));
 }
 
 /** 这个家目录里有会换家的安装脚本（0.12.0 起的） */
@@ -239,8 +248,11 @@ export function createMove({
 
   /** 本机每一份都得认得换家：不然搬完以后，旧的那一份找不到新位置（看着像数据丢了），或者换不了家 */
   function checkCopies(app) {
-    const script = installerIn(from, platform);
-    if (script !== null && !canRehome(script)) throw new LocalizedError(msg("move.homeTooOld", { home: from }));
+    // 装着程序却没有会换家的安装脚本（Mac 上 0.10.x 的终端安装 app 里不带 install.sh；0.11.0 的不认换家；
+    // Windows 上 current 坏了）：不能当成只装了 dmg 的来搬，不然命令、开始菜单还指着旧目录，旧目录又被删了
+    if (hasProgram(from, platform) && !rehomeable(from, platform)) {
+      throw new LocalizedError(msg("move.homeTooOld", { home: from }));
+    }
     if (app && !existsSync(join(app.path, "Contents", "Resources", "app", "src", "storage", "location.mjs"))) {
       throw new LocalizedError(msg("move.appTooOld", { app: app.path, version: app.version }));
     }
@@ -260,11 +272,16 @@ export function createMove({
 
   /**
    * 只搬记着的那一个（定位文件说的，没有就是默认位置）。这一次的家目录是 SPEAKMORE_HOME 临时指的（开发、测试）时不搬：
-   * 不然定位文件会改指到它，真正装着的那一份就被盖住了
+   * 不然定位文件会改指到它，真正装着的那一份就被盖住了。
+   * 例外是 0.11.0 及以前用 SPEAKMORE_HOME 装到别处的：从来没记进定位文件。没有定位文件、默认位置没装过、
+   * 这里装着会换家的程序，就认它（搬完记下新位置）
    */
   function checkRecorded() {
-    const recorded = readLocationRecord(paths.locationFile, platform)?.home ?? defaultHome;
-    if (!sameDir(recorded, from, platform)) throw new LocalizedError(msg("move.notRecorded", { home: from, recorded }));
+    const record = readLocationRecord(paths.locationFile, platform);
+    const recorded = record?.home ?? defaultHome;
+    if (sameDir(recorded, from, platform)) return;
+    if (record === null && rehomeable(from, platform) && !usedBefore(defaultHome)) return;
+    throw new LocalizedError(msg("move.notRecorded", { home: from, recorded }));
   }
 
   /** 检查新位置、本机的每一份、盘够不够。交回新家目录、要搬的、要拷多少 */

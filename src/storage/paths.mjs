@@ -197,6 +197,11 @@ function checkedVendorId(provider) {
   return provider;
 }
 
+/** 这个目录里有 SpeakMore 用过的痕迹（设置、数据、模型、程序）。安装脚本的 used_before、安装程序的 usedBefore 认的是同一些 */
+export function usedBefore(home) {
+  return ["settings.json", "data", "models", "app", "versions"].some((name) => existsSync(posix.join(home, name)));
+}
+
 /**
  * 把家目录建出来。里面有录音和 key，所以只有自己进得去。
  * @param {ReturnType<typeof resolvePaths>} paths

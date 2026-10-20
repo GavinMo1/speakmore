@@ -166,14 +166,15 @@ test("搬回默认位置：定位文件删掉", posixOnly, async (t) => {
 });
 
 test("正在运行的：先停掉，搬完从新位置用它的启动命令重新打开", posixOnly, async (t) => {
-  const { root, from, paths, disk, to } = setup(t);
+  const { root, from, paths, disk, to } = setup(t, { installer: true });
   // 启动命令记下自己是从哪个家目录起的
   const marker = join(root, "started-in");
   put(join(from, "bin", "speakmore"), `#!/bin/sh\nprintf '%s %s' "$SPEAKMORE_HOME" "$1" > '${marker}'\n`);
   const { chmodSync } = await import("node:fs");
   chmodSync(join(from, "bin", "speakmore"), 0o755);
   const instance = fakeInstance({ pid: 1, packaged: false });
-  await mover({ paths, root, instance, stdio: "forward" }).run({ folder: disk, by: "cli" });
+  const rehome = fakeRehome({ paths, root });
+  await mover({ paths, root, instance, rehome, stdio: "forward" }).run({ folder: disk, by: "cli" });
   assert.deepEqual(instance.calls, ["stop"]);
   assert.equal(readFileSync(marker, "utf8"), `${to} start`);
 });
@@ -313,7 +314,40 @@ test("不搬：家目录里的程序太旧、应用程序里的 App 太旧、这
   const other = resolvePaths({ SPEAKMORE_HOME: join(root, "dev-home") }, root, "darwin");
   mkdirSync(other.home);
   await assert.rejects(mover({ paths: other, root }).plan(disk), key("move.notRecorded"));
+
+  // 装着程序、却没有能换家的安装脚本（Mac 上 0.10.x 的终端安装，app 里不带 install.sh）：不能当成只装了 dmg 的来搬
+  put(join(from, "app", "package.json"), "{}");
+  put(join(from, "bin", "speakmore"), "#!/bin/sh\n");
+  await assert.rejects(mover({ paths, root, bundles }).plan(disk), key("move.homeTooOld"));
 });
+
+test(
+  "0.11.0 及以前用 SPEAKMORE_HOME 装到别处的（从没记进定位文件）：默认位置没装过时认它，搬完记下新位置",
+  posixOnly,
+  async (t) => {
+    const root = realpathSync(mkdtempSync("/tmp/sm-m-"));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const from = join(root, "custom");
+    put(join(from, "settings.json"), "{}");
+    put(join(from, "app", "install.sh"), "# 认得 SPEAKMORE_PREVIOUS_HOME\n");
+    const paths = resolvePaths({ SPEAKMORE_HOME: from }, root, "darwin");
+    const disk = join(root, "disk");
+    mkdirSync(disk);
+    const to = join(disk, ".speakmore");
+    const rehome = fakeRehome({ paths, root });
+    const plan = await mover({ paths, root, rehome }).plan(disk);
+    assert.equal(plan.to, to);
+    // 默认位置也装过（这一份多半是开发、测试临时指的）：不认
+    put(join(root, ".speakmore", "settings.json"), "{}");
+    await assert.rejects(
+      mover({ paths, root, rehome }).plan(disk),
+      (error) => error.problem?.key === "move.notRecorded",
+    );
+    rmSync(join(root, ".speakmore"), { recursive: true });
+    await mover({ paths, root, rehome }).run({ folder: disk, by: "cli" });
+    assert.deepEqual(readLocationRecord(paths.locationFile, "darwin"), { home: to, moving: null });
+  },
+);
 
 test("同时只有一个在搬（和更新共用一把锁）", posixOnly, async (t) => {
   const { root, paths, disk } = setup(t);

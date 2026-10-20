@@ -4,17 +4,12 @@ import { msg, problemOf } from "../i18n/index.mjs";
 import { probeTarget } from "../move/probe.mjs";
 import { checkLength, homeIn } from "../move/target.mjs";
 import { canonicalDir, locationFileOf, writeLocation } from "../storage/location.mjs";
-import { legacyDataDir } from "../storage/paths.mjs";
+import { legacyDataDir, usedBefore } from "../storage/paths.mjs";
 
 // macOS 上从"应用程序"第一次打开 SpeakMore.app：还什么都没装过时，先问一句存储位置放哪（程序数据、本机模型、录音、设置
 // 都在那一个文件夹里，模型一个就有零点几到一点几 GB）。默认就是用户目录下的 .speakmore；选了别处就把那里记进定位文件。
 // 问完 App 重新启动一次，照常按定位文件找家目录（storage/paths.mjs）。
 // Windows 上程序本身就装在家目录里，位置由安装程序在装之前问（native/windows-setup）；终端安装的由安装脚本问。
-
-/** 家目录里有 SpeakMore 用过的痕迹：选的文件夹里已经有一份（比如重装系统前放在移动硬盘上的），沿用它 */
-function usedBefore(home) {
-  return ["settings.json", "data", "models", "app", "versions"].some((name) => existsSync(join(home, name)));
-}
 
 /**
  * 这一次是不是要先问：打成应用、不是命令行起的、没指定 SPEAKMORE_HOME、没有定位文件、默认位置还没有，

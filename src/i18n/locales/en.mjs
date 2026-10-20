@@ -959,7 +959,7 @@ export default {
   paths: {
     homeNotAbsolute: "The SPEAKMORE_HOME env var must be an absolute path; it's {home}",
     homeTooLong:
-      "The SpeakMore folder path is too long for the control socket: {home}\nUse the SPEAKMORE_HOME env var to pick a shorter one.",
+      "The SpeakMore folder path is too long for the control socket: {home}\nMove this folder somewhere with a shorter path, then run the install command and choose the folder that holds it.",
     homeParentMissing:
       "Can't find the SpeakMore folder {home}: {parent} doesn't exist. If it's on an external or another drive, connect that drive first.",
     homeMoved:
@@ -983,7 +983,8 @@ export default {
     interrupted: "The move stopped halfway (the process quit unexpectedly)",
     notRecorded:
       "The folder in use, {home}, was set just for this run by SPEAKMORE_HOME; SpeakMore's recorded place is {recorded}. Only the recorded one can be moved.",
-    homeTooOld: "The SpeakMore program in {home} is too old to move. Run speakmore update first, then move.",
+    homeTooOld:
+      "The SpeakMore program in {home} is too old to move. Update it first (speakmore update, or run the install command again), then move.",
     appTooOld:
       "{app} is still version {version} and won't find the new place. Run speakmore update to update it too, then move.",
     noSpace: "Not enough space on the disk of {folder}: {need} needed, {free} free.",

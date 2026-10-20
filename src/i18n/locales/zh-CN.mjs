@@ -926,7 +926,8 @@ export default {
 
   paths: {
     homeNotAbsolute: "环境变量 SPEAKMORE_HOME 要写绝对路径，现在是 {home}",
-    homeTooLong: "SpeakMore 的目录路径太长，控制通道建不起来：{home}\n用环境变量 SPEAKMORE_HOME 换一个短一些的目录。",
+    homeTooLong:
+      "SpeakMore 的目录路径太长，控制通道建不起来：{home}\n把这个文件夹挪到路径短一些的地方，再运行安装命令、选它所在的文件夹。",
     homeParentMissing:
       "找不到 SpeakMore 的目录 {home}：它所在的 {parent} 不存在。装在移动硬盘或别的盘上的话，先把那块盘接上。",
     homeMoved: "SpeakMore 已经搬到 {to} 了，这里（{home}）是还没删完的旧目录。从新位置打开 SpeakMore。",
@@ -948,7 +949,7 @@ export default {
     interrupted: "搬到一半中断了（进程意外退出）",
     notRecorded:
       "这一次用的目录 {home} 是环境变量 SPEAKMORE_HOME 临时指定的，SpeakMore 记着的位置是 {recorded}。只能搬记着的那一个。",
-    homeTooOld: "{home} 里的程序是旧版本，还不支持搬家。先运行 speakmore update 更新，再搬。",
+    homeTooOld: "{home} 里的程序是旧版本，还不支持搬家。先更新它（speakmore update，不行就重新运行安装命令），再搬。",
     appTooOld: "{app} 还是 {version} 版，不认识新位置。先运行 speakmore update 把它一起更新，再搬。",
     noSpace: "{folder} 所在的磁盘空间不足：需要 {need}，只剩 {free}。",
     recovered: "上次搬到 {to} 没有完成，已经收拾好：SpeakMore 仍在 {home}。",
