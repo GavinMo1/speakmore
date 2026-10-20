@@ -51,7 +51,7 @@ READ_LOCATION_JS='function run(argv) {
   const text = $.NSString.stringWithContentsOfFileEncodingError(argv[0], $.NSUTF8StringEncoding, null);
   if (text.isNil()) throw new Error("unreadable");
   try {
-    const home = JSON.parse(text.js.replace(/^﻿/, "")).home;
+    const home = JSON.parse(text.js.replace(/^\uFEFF/, "")).home;
     return typeof home === "string" ? home : "";
   } catch (error) {
     return "";

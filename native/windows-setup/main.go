@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -32,6 +33,12 @@ func main() {
 }
 
 func install() int {
+	// 先定好装在哪（home.go）：第一次安装要问一句，问完再花时间解包
+	choice, err := resolveHome(os.Getenv, askWhere)
+	if err != nil {
+		fmt.Printf("\n  x %v\n", err)
+		return 1
+	}
 	dir, err := unpack()
 	if dir != "" {
 		defer removeTemp(dir)
@@ -46,12 +53,19 @@ func install() int {
 		return 1
 	}
 	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", runInstall)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(withoutHome(os.Environ()),
 		"SPEAKMORE_INSTALL_SCRIPT="+script,
 		"SPEAKMORE_INSTALL_FROM="+dir,
 		// 装完由这里打开 App；install.ps1 自己启动的是命令行那一份，会在终端里问 key
 		"SPEAKMORE_NO_START=1",
 	)
+	// 装在哪明确告诉 install.ps1，装完打开的就是同一个：第一次安装选了别处的交给 SPEAKMORE_INSTALL_DIR（它记进定位文件），
+	// 别的就是这一次用的目录
+	if choice.installDir != "" {
+		cmd.Env = append(cmd.Env, "SPEAKMORE_INSTALL_DIR="+choice.installDir)
+	} else {
+		cmd.Env = append(cmd.Env, "SPEAKMORE_HOME="+choice.home)
+	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		if exit, ok := err.(*exec.ExitError); ok {
@@ -61,11 +75,7 @@ func install() int {
 		return 1
 	}
 
-	home := os.Getenv("SPEAKMORE_HOME")
-	if home == "" {
-		home = filepath.Join(os.Getenv("USERPROFILE"), ".speakmore")
-	}
-	if err := openApp(home); err != nil {
+	if err := openApp(choice.home); err != nil {
 		fmt.Printf("  Couldn't open SpeakMore (%v). Open it from the Start menu.\n", err)
 		return 0
 	}
@@ -73,6 +83,45 @@ func install() int {
 	// 留一会儿让人看见装好了，再关窗口
 	time.Sleep(3 * time.Second)
 	return 0
+}
+
+// withoutHome 去掉环境里的 SPEAKMORE_HOME、SPEAKMORE_INSTALL_DIR：由 resolveHome 定下的那一个交给 install.ps1
+func withoutHome(env []string) []string {
+	kept := env[:0:0]
+	for _, entry := range env {
+		name := strings.ToUpper(strings.SplitN(entry, "=", 2)[0])
+		if name == "SPEAKMORE_HOME" || name == "SPEAKMORE_INSTALL_DIR" {
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
+}
+
+// askWhere 第一次安装时问装在哪个文件夹下：回车就是默认位置。不是在控制台里跑的（脚本调的）不问，用默认位置
+func askWhere(defaultHome string) (string, error) {
+	if !stdinIsConsole() {
+		return "", nil
+	}
+	fmt.Println()
+	fmt.Println("  SpeakMore keeps everything it installs and saves (the app, on-device models, history) in one folder.")
+	fmt.Printf("  Press Enter to use %s,\n", defaultHome)
+	fmt.Print("  or type another folder to install into (for example D:\\Apps) and press Enter: ")
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		line, err := reader.ReadString('\n')
+		if strings.TrimSpace(line) == "" {
+			return "", nil
+		}
+		folder, problem := checkFolderAnswer(line)
+		if problem == "" {
+			return folder, nil
+		}
+		if err != nil {
+			return "", fmt.Errorf("%s", problem)
+		}
+		fmt.Printf("  %s\n  Folder (or press Enter for the default): ", problem)
+	}
 }
 
 // removeTemp 删掉解包用的临时目录。里面刚写出来的程序杀毒软件可能还在扫，扫完之前删不掉：

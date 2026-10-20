@@ -39,6 +39,12 @@ func appEnv(env []string) []string {
 	return kept
 }
 
+// stdinIsConsole 标准输入是不是控制台（双击打开的是；被脚本调、输入被重定向的不是，那时不问问题）
+func stdinIsConsole() bool {
+	var mode uint32
+	return syscall.GetConsoleMode(syscall.Handle(os.Stdin.Fd()), &mode) == nil
+}
+
 func setTitle(title string) {
 	text, err := syscall.UTF16PtrFromString(title)
 	if err != nil {
