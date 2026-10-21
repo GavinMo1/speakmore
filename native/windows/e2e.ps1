@@ -5,6 +5,9 @@
 # 热键只用右 Ctrl、F13、esc：单按它们哪个应用都不会有反应，不碰 Alt、Win（会开菜单栏、开始菜单）。
 # 按键分三种模拟法各来一遍（docs/hotkey-research.md 4.2）：只给扫描码（KEYEVENTF_SCANCODE，最像真键盘）、
 # 只给 vk（别的工具常这么发，扫描码是 0）、两个都给。
+# 录键（record）、查组合有没有被占（probe）、info 也各查一遍：录键只按右 Ctrl、F13，录到的键整段吞掉，前台应用收不到。
+# 录键里有一段要等 30 秒（查到点自己停），整个脚本要多跑半分钟：win-desktop.sh 默认只等 60 秒，
+# 跑的时候写 WAIT=120 scripts/dev/win-desktop.sh - < 这个文件。
 # 没查的：右 Alt 单按之后菜单栏会不会被叫出来（新版记事本不是老式菜单，查不了），要人在 Office 这类应用里试一下。
 $ErrorActionPreference = 'Stop'
 $repo = "$HOME\speakmore-dev\repo"
@@ -20,6 +23,9 @@ public static class Fake {
   [DllImport("user32.dll")] static extern uint SendInput(uint n, INPUT[] inputs, int size);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
+  [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vk);
+  // 系统认为这个键按着没有。低级钩子吞掉的按下系统不记（所有钩子都放行了才更新），拿它看录到的键吞没吞
+  public static bool KeyDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
   // 钩子报的是物理像素；不声明的话这个进程看到的屏幕尺寸是按缩放换算过的，两边对不上
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
   // mode：scan 只给扫描码（KEYEVENTF_SCANCODE，系统自己换出 vk）；vk 只给 vk（扫描码 0）；both 两个都给（系统照 vk 走）。
@@ -91,6 +97,12 @@ $Ctrl = 0x11, 0x1D, $false; $Delete = 0x2E, 0x53, $true; $F13 = 0x7C, 0x64, $fal
 # 不分左右的 VK_CONTROL 加扩展位：有的工具这样模拟右 Ctrl，小帮手要自己分出是右边
 $GenericRCtrl = 0x11, 0x1D, $true
 function Press($key, $down, $mode = 'both') { [Fake]::Key($key[0], $key[1], $key[2], $down, $mode) }
+# 录键报的集合是不是这几个：mods、keys 都要有，空的也是 []
+function Is-Recording($e, $mods, $keys) {
+  $e.event -eq 'recording' -and $e.on -eq $true -and $null -ne $e.mods -and $null -ne $e.keys -and
+    (@($e.mods) -join ',') -eq ($mods -join ',') -and (@($e.keys) -join ',') -eq ($keys -join ',')
+}
+function Show($events) { ($events | ForEach-Object { $_ | ConvertTo-Json -Compress }) -join ' ' }
 
 $saved = Get-Clipboard -Raw
 $helper = Start-Helper
@@ -140,6 +152,80 @@ try {
   Press $RCtrl $false 'scan'
   Check '组合键报一次 interrupted' ($other.event -eq 'interrupted' -and $other.id -eq 'dictate#0' -and @($other.PSObject.Properties).Count -eq 2) ($other | ConvertTo-Json -Compress)
   Check '被打断以后松开不报' ($null -eq (Next-Event $helper 300))
+  Drain $helper
+
+  # 录键（docs/hotkey-research.md 5.6）。热键还是上面那三个：录键期间右 Ctrl、右 Ctrl+F13 都不该认。
+  # 对照：没在录时右 Ctrl 不吞（修饰键从来不吞），系统看得到它按下；看不到的话，下面"吞掉了"那条也不作数
+  Press $RCtrl $true 'scan'; $null = Next-Event $helper; Start-Sleep -Milliseconds 100
+  $seenOutside = [Fake]::KeyDown(0xA3)
+  Press $RCtrl $false 'scan'; $null = Next-Event $helper
+  Check '对照：没在录时右 Ctrl 按下，系统看得到' $seenOutside ''
+
+  Send $helper @{ cmd = 'record'; on = $true }
+  $entered = Next-Event $helper
+  Check '进入录键报一次空的集合' (Is-Recording $entered @() @()) (Show $entered)
+  Press $RCtrl $true 'scan'; $s1 = Next-Event $helper
+  Start-Sleep -Milliseconds 100; $seenInside = [Fake]::KeyDown(0xA3)
+  Press $F13 $true 'scan'; $s2 = Next-Event $helper
+  Press $F13 $true 'scan'   # 自动重复：不改集合，不另报
+  Press $F13 $false 'scan'; $s3 = Next-Event $helper
+  Press $RCtrl $false 'scan'; $s4 = Next-Event $helper
+  Check '按右 Ctrl+F13 集合变两次、松开再变两次，热键不认' ((Is-Recording $s1 @(0xA3) @()) -and (Is-Recording $s2 @(0xA3) @(0x64)) -and (Is-Recording $s3 @(0xA3) @()) -and (Is-Recording $s4 @() @())) (Show @($s1, $s2, $s3, $s4))
+  Check '录到的右 Ctrl 吞掉了，系统没看到它按下' (-not $seenInside) ''
+  $extra = Next-Event $helper 300
+  Check '录键期间没有多报（自动重复不报）' ($null -eq $extra) (Show $extra)
+
+  Send $helper @{ cmd = 'record'; on = $false }
+  $left = Next-Event $helper
+  Check '离开录键报 on:false' ($left.event -eq 'recording' -and $left.on -eq $false -and @($left.PSObject.Properties).Count -eq 2) (Show $left)
+  Press $RCtrl $true 'scan'; $down = Next-Event $helper
+  Press $RCtrl $false 'scan'; $up = Next-Event $helper
+  Check '离开以后热键照常认' ($down.id -eq 'dictate#0' -and $down.down -eq $true -and $up.id -eq 'dictate#0' -and $up.down -eq $false) (Show @($down, $up))
+
+  # 离开时还按着的键：之后的松开照样吞、不报；松开以后热键照常认
+  Send $helper @{ cmd = 'record'; on = $true }; $null = Next-Event $helper
+  Press $RCtrl $true 'scan'; $null = Next-Event $helper
+  Send $helper @{ cmd = 'record'; on = $false }; $left = Next-Event $helper
+  Press $RCtrl $false 'scan'
+  $extra = Next-Event $helper 300
+  Check '离开时还按着的右 Ctrl，松开不报' ($left.event -eq 'recording' -and $left.on -eq $false -and $null -eq $extra) (Show @($left, $extra))
+  Press $RCtrl $true 'scan'; $down = Next-Event $helper
+  Press $RCtrl $false 'scan'; $up = Next-Event $helper
+  Check '它松开以后热键照常认' ($down.id -eq 'dictate#0' -and $down.down -eq $true -and $up.id -eq 'dictate#0' -and $up.down -eq $false) (Show @($down, $up))
+
+  # 已经在录时再让录：从头录，再报一次空的集合；之前按着的 F13 松开不改集合、不报
+  Send $helper @{ cmd = 'record'; on = $true }; $null = Next-Event $helper
+  Press $F13 $true 'scan'; $null = Next-Event $helper
+  Send $helper @{ cmd = 'record'; on = $true }; $again = Next-Event $helper
+  Press $F13 $false 'scan'
+  $extra = Next-Event $helper 300
+  Check '再让录：报一次空的集合，之前按着的松开不报' ((Is-Recording $again @() @()) -and $null -eq $extra) (Show @($again, $extra))
+  # 从再让录那一下起 30 秒没人说停：先报 error，再报 on:false，之后热键照常认
+  $timeout = Next-Event $helper 32000; $left = Next-Event $helper
+  Check '录了 30 秒自己停：先报 error 再报 on:false' ($timeout.event -eq 'error' -and $left.event -eq 'recording' -and $left.on -eq $false) (Show @($timeout, $left))
+  Press $RCtrl $true 'scan'; $down = Next-Event $helper
+  Press $RCtrl $false 'scan'; $up = Next-Event $helper
+  Check '自己停了以后热键照常认' ($down.id -eq 'dictate#0' -and $down.down -eq $true -and $up.id -eq 'dictate#0' -and $up.down -eq $false) (Show @($down, $up))
+
+  # probe（docs/hotkey-research.md 5.5）：只试登记、马上注销，不按任何键
+  Send $helper @{ cmd = 'probe'; id = 1; mods = @(0xA3); key = 0x64 }
+  $probed = Next-Event $helper
+  Check 'probe 右 Ctrl+F13 没被占' ($probed.event -eq 'probed' -and $probed.id -eq 1 -and $probed.conflict -eq $false -and @($probed.PSObject.Properties).Count -eq 3) (Show $probed)
+  # Win+R（R 的扫描码 0x13）：系统自己的组合报不报冲突，照实记下，不算过或不过
+  Send $helper @{ cmd = 'probe'; id = 2; mods = @(0x5B); key = 0x13 }
+  $results.Add("INFO probe Win+R：$(Show @((Next-Event $helper), (Next-Event $helper 300)))")
+  Send $helper @{ cmd = 'probe'; id = 3; mods = @(0xA3) }
+  $probed = Next-Event $helper
+  Check 'probe 只有修饰键的，直接回没被占' ($probed.event -eq 'probed' -and $probed.id -eq 3 -and $probed.conflict -eq $false) (Show $probed)
+  Send $helper @{ cmd = 'probe'; id = 4; mods = 'x'; key = 0x64 }
+  $probed = Next-Event $helper; $why = Next-Event $helper
+  Check 'probe 形状不对：照样回 probed，另报 error' ($probed.event -eq 'probed' -and $probed.id -eq 4 -and $probed.conflict -eq $false -and $why.event -eq 'error') (Show @($probed, $why))
+  Send $helper @{ cmd = 'probe'; mods = @(0xA3); key = 0x64 }
+  $why = Next-Event $helper; $extra = Next-Event $helper 300
+  Check 'probe 没有 id：只报 error' ($why.event -eq 'error' -and $null -eq $extra) (Show @($why, $extra))
+  Send $helper @{ cmd = 'info' }
+  $info = Next-Event $helper
+  Check 'info 只回 event' ($info.event -eq 'info' -and @($info.PSObject.Properties).Count -eq 1) (Show $info)
   Drain $helper
 
   # 截住 esc 和一块区域里的点击

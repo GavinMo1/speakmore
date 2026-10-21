@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ACTIONS, actionOf, defaultChords, MAX_CHORDS } from "../../src/hotkeys/actions.mjs";
 import { parseChord } from "../../src/hotkeys/chord.mjs";
-import { checkBindings, rejectReason, warningsOf } from "../../src/hotkeys/validate.mjs";
-import { createTranslator } from "../../src/i18n/index.mjs";
+import { checkBindings, refineWarning, rejectReason, warningsOf } from "../../src/hotkeys/validate.mjs";
+import { createTranslator, msg } from "../../src/i18n/index.mjs";
 
 const en = { darwin: createTranslator("en", "darwin"), win32: createTranslator("en", "win32") };
 const dictate = actionOf("dictate");
@@ -194,4 +194,24 @@ test("整份绑定：动作之间同键、用了取消的键、一个动作里�
     "dictate#1 warn Option with a typing key normally types a special character (Option-Space is a non-breaking space); bound, it no longer will",
   ]);
   assert.deepEqual(reasons({ dictate: chords("AltRight"), cancel: chords("Escape") }), []);
+});
+
+test("地球仪键那条提醒按系统设置说具体：设成无操作的不提醒，读不到的照原样说，别的提醒不动", () => {
+  const fn = msg("binding.fnSystem");
+  const wrapped = msg("hotkeySetting.problem", { chord: "fn", reason: fn });
+  assert.equal(refineWarning(fn, { fnUsage: 0 }), null);
+  assert.equal(refineWarning(wrapped, { fnUsage: 0 }), null);
+  assert.deepEqual(refineWarning(fn, { fnUsage: 2 }), msg("binding.fnSystemUse", { use: msg("binding.fnUses.emoji") }));
+  assert.deepEqual(
+    refineWarning(wrapped, { fnUsage: 1 }),
+    msg("hotkeySetting.problem", {
+      chord: "fn",
+      reason: msg("binding.fnSystemUse", { use: msg("binding.fnUses.inputSource") }),
+    }),
+  );
+  assert.deepEqual(refineWarning(wrapped, { fnUsage: 3 }).params.reason.params.use, msg("binding.fnUses.dictation"));
+  assert.equal(refineWarning(fn, {}), fn);
+  assert.equal(refineWarning(fn, { fnUsage: 9 }), fn);
+  const other = msg("binding.altGr");
+  assert.equal(refineWarning(other, { fnUsage: 0 }), other);
 });

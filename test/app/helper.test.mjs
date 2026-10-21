@@ -5,7 +5,8 @@ import { startHelper } from "../../src/app/helper.mjs";
 
 // 用一小段 Node 脚本冒充原生小帮手：启动时报 ready 和一次绑定按下，收到 paste 就按文字内容决定怎么回；
 // 收到 bind 回 bound（把收到的表原样带回来）；收到 capture 就当作用户点了划出来的第一块，
-// 收到 release 就当作被打断，把收到的命令原样报回来
+// 收到 release 就当作被打断，把收到的命令原样报回来；record 回一份空快照；probe 按 key 决定冲不冲突（不回、乱回 id 的也有）；
+// info 回 fnUsage
 const FAKE_HELPER = `
 const emit = (o) => console.log(JSON.stringify(o));
 emit({ event: "ready", listen: true, trusted: true });
@@ -16,6 +17,13 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
   if (command.cmd === "bind") return emit({ event: "bound", rejected: [], got: command.bindings });
   if (command.cmd === "capture") return emit({ event: "click", id: command.regions[0]?.id ?? null, regions: command.regions });
   if (command.cmd === "release") return emit({ event: "interrupted", id: "dictate#0", got: command });
+  if (command.cmd === "record") return emit(command.on ? { event: "recording", on: true, mods: [], keys: [] } : { event: "recording", on: false });
+  if (command.cmd === "probe") {
+    if (command.key === 0) return;
+    if (command.key === 1) emit({ event: "probed", id: command.id + 100, conflict: true });
+    return emit({ event: "probed", id: command.id, conflict: command.key === 49, ...(command.key === 49 ? { source: "symbolic" } : {}), got: command });
+  }
+  if (command.cmd === "info") return emit({ event: "info", fnUsage: 2 });
   const { id, text } = command;
   if (text === "不回") return;
   if (text === "退出") process.exit(3);
@@ -129,4 +137,49 @@ test("可执行文件不存在时，粘贴失败而不是一直等；并且照�
     ["exit"],
   );
   await assert.rejects(helper.paste("再来"), /没有在运行/);
+});
+
+test("录键：命令原样送到，快照往上转", async () => {
+  const { helper, events } = start();
+  const on = once(events, "recording");
+  helper.record(true);
+  assert.deepEqual((await on)[0], { event: "recording", on: true, mods: [], keys: [] });
+  const off = once(events, "recording");
+  helper.record(false);
+  assert.deepEqual((await off)[0], { event: "recording", on: false });
+  helper.stop();
+});
+
+test("探测冲突：按 id 认回各自的回执，不往上转；回执不来时按不冲突算，不一直等", async () => {
+  const { helper, seen } = start();
+  const [taken, free, wrongId] = await Promise.all([
+    helper.probe({ mods: [55], key: 49 }),
+    helper.probe({ mods: [61], key: 105 }),
+    helper.probe({ mods: [61], key: 1 }),
+  ]);
+  assert.deepEqual(taken, { conflict: true, source: "symbolic" });
+  assert.deepEqual(free, { conflict: false });
+  assert.deepEqual(wrongId, { conflict: false });
+  const started = Date.now();
+  assert.deepEqual(await helper.probe({ mods: [61], key: 0 }, { timeoutMs: 50 }), { conflict: false, timedOut: true });
+  assert.ok(Date.now() - started < 1000);
+  assert.ok(!seen.some((event) => event.event === "probed"), "回执不往上转");
+  helper.stop();
+});
+
+test("问系统信息：回执交给调用方，不往上转", async () => {
+  const { helper, seen } = start();
+  assert.deepEqual(await helper.info(), { fnUsage: 2 });
+  assert.ok(!seen.some((event) => event.event === "info"));
+  helper.stop();
+});
+
+test("小帮手不在了：探测按不冲突算，系统信息是空的", async () => {
+  const { helper, events } = start();
+  const exited = once(events, "exit");
+  helper.stop();
+  await exited;
+  helper.record(true);
+  assert.deepEqual(await helper.probe({ mods: [55], key: 49 }), { conflict: false, timedOut: true });
+  assert.deepEqual(await helper.info(), {});
 });

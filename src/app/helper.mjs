@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 
 const PASTE_TIMEOUT_MS = 3_000;
+/** 探测冲突、问系统信息等多久：只是查一下，回不来就当没查到，不挡着录键 */
+const QUERY_TIMEOUT_MS = 1_500;
 
 /**
  * 小帮手的源码、编好的可执行文件、指纹文件在哪。App 启动时要用，所以放在这一层：
@@ -28,8 +30,8 @@ export function helperPaths(packageDir, platform = process.platform) {
  * @param {string} command 可执行文件
  * @param {object} options
  * @param {string[]} [options.args]
- * @param {(event: object) => void} options.onEvent 收到 ready / bound / binding / interrupted / click，
- *   以及小帮手不在了（退出或根本没起来）时的 exit，只报一次
+ * @param {(event: object) => void} options.onEvent 收到 ready / bound / binding / interrupted / click / recording 等，
+ *   以及小帮手不在了（退出或根本没起来）时的 exit，只报一次。pasted、probed、info 是对某条命令的回执，交给那条命令的调用方
  * @param {{ warn: Function, error: Function }} options.log
  */
 export function startHelper(command, { args = [], onEvent, log }) {
@@ -37,6 +39,11 @@ export function startHelper(command, { args = [], onEvent, log }) {
   /** 发出去还没回的粘贴请求：id → { resolve, reject, timer } */
   const pending = new Map();
   let nextId = 1;
+  /** 发出去还没回的探测：id → 回执来了交给谁 */
+  const probes = new Map();
+  let nextProbe = 1;
+  /** 问系统信息的，按发出的先后排着：回执不带 id，一问一答 */
+  const infos = [];
   let exited = false;
 
   const rejectAll = (error) => {
@@ -61,6 +68,10 @@ export function startHelper(command, { args = [], onEvent, log }) {
       pending.delete(event.id);
       clearTimeout(request.timer);
       request.resolve({ ok: event.ok, reason: event.reason ?? null });
+    } else if (event.event === "probed") {
+      probes.get(event.id)?.(event);
+    } else if (event.event === "info") {
+      infos.shift()?.(event);
     } else if (event.event === "error") {
       log.error("helper_error", { message: event.message });
     } else {
@@ -74,6 +85,9 @@ export function startHelper(command, { args = [], onEvent, log }) {
     if (exited) return;
     exited = true;
     rejectAll(reason);
+    // 探测、系统信息的等着的照常有个结果：按"没查到"算
+    for (const answer of probes.values()) answer(null);
+    for (const answer of infos.splice(0)) answer(null);
     onEvent({ event: "exit", code, signal });
   };
 
@@ -124,6 +138,58 @@ export function startHelper(command, { args = [], onEvent, log }) {
     /** 不截了 */
     release() {
       send({ cmd: "release" });
+    },
+    /**
+     * 进出录键模式（docs/hotkey-research.md 5.6）。录键时匹配暂停，小帮手每当按住的键变了就报一次 recording，
+     * 离开时（这里让停的、它 30 秒到点自己停的）报 recording on:false
+     */
+    record(on) {
+      send({ cmd: "record", on });
+    },
+    /**
+     * 这个组合是不是已经被系统（Mac 的系统快捷键）或别的程序（Windows 上 RegisterHotKey 登记过的）占了。
+     * 回执不来（小帮手不在、超时）时按不冲突算，带 timedOut
+     * @param {{ mods: number[], key: number }} chord 原生码，写法同绑定表
+     * @returns {Promise<{ conflict: boolean, source?: string, timedOut?: true }>}
+     */
+    probe(chord, { timeoutMs = QUERY_TIMEOUT_MS } = {}) {
+      if (exited) return Promise.resolve({ conflict: false, timedOut: true });
+      const id = nextProbe++;
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => answer(null), timeoutMs);
+        const answer = (event) => {
+          clearTimeout(timer);
+          probes.delete(id);
+          if (event === null) resolve({ conflict: false, timedOut: true });
+          else
+            resolve({
+              conflict: event.conflict === true,
+              ...(event.conflict && event.source ? { source: event.source } : {}),
+            });
+        };
+        probes.set(id, answer);
+        send({ cmd: "probe", id, mods: chord.mods, key: chord.key });
+      });
+    },
+    /**
+     * 系统设置里和热键相关的值（Mac：fnUsage 是"按下地球仪键时"那一项）。回执不来时是空的
+     * @returns {Promise<{ fnUsage?: number }>}
+     */
+    info({ timeoutMs = QUERY_TIMEOUT_MS } = {}) {
+      if (exited) return Promise.resolve({});
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          const index = infos.indexOf(answer);
+          if (index !== -1) infos.splice(index, 1);
+          resolve({});
+        }, timeoutMs);
+        const answer = (event) => {
+          clearTimeout(timer);
+          resolve(Number.isInteger(event?.fnUsage) ? { fnUsage: event.fnUsage } : {});
+        };
+        infos.push(answer);
+        send({ cmd: "info" });
+      });
     },
     /** 关掉标准输入，小帮手会自己退出 */
     stop() {

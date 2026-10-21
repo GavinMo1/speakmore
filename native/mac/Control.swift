@@ -1,4 +1,4 @@
-// 父进程的 bind、capture、release 命令，和三样要盯着的系统状态（docs/hotkey-research.md 4.1）——
+// 父进程的 bind、capture、release、record、probe、info 命令，和三样要盯着的系统状态（docs/hotkey-research.md 4.1）——
 //   权限    辅助功能、输入监控在运行中被收回或给了：没了就立刻作废对应的 tap，给了就重新建，再报一次 permissions
 //   锁屏    锁屏、切到别的用户时不认热键，回来以后从头认
 //   安全输入 密码框、终端的安全键盘输入开着时 tap 收不到按下松开：带普通键的绑定由 Carbon 顶着，顶不了的报 secure_input
@@ -76,6 +76,53 @@ func capture(_ on: Bool, regions: [Region] = []) {
     }
     captureDeadline = deadline
     DispatchQueue.main.asyncAfter(deadline: .now() + captureLimit, execute: deadline)
+}
+
+// MARK: - 录键
+
+/// 录了多久还没人说停：多半是父进程那边出了岔子，自己停，不能让匹配器一直停着、录到的键一直被吞着
+private let recordLimit: TimeInterval = 30
+private var recordDeadline: DispatchWorkItem?
+
+/// record：进入录键模式（已经在录就重新开始、重新计时），或者离开
+func record(_ on: Bool) {
+    recordDeadline?.cancel()
+    recordDeadline = nil
+    setRecording(on)
+    guard on else { return }
+    let deadline = DispatchWorkItem {
+        emit(["event": "error", "message": "录了 \(Int(recordLimit)) 秒还没录完，自己停了"])
+        record(false)
+    }
+    recordDeadline = deadline
+    DispatchQueue.main.asyncAfter(deadline: .now() + recordLimit, execute: deadline)
+}
+
+// MARK: - probe、info
+
+/// probe：查一个组合是不是已经被系统快捷键占了（Probe.swift 判断，这里只读系统表）
+func probe(_ object: [String: Any]) {
+    for event in answerProbe(object, symbolic: copySymbolicHotKeys) { emit(event) }
+}
+
+/// 系统设置里定义的全局快捷键。头文件说这个接口不是线程安全的：只在主线程上调
+private func copySymbolicHotKeys() -> Result<[SymbolicHotKey], SymbolicFailure> {
+    var array: Unmanaged<CFArray>?
+    let status = CopySymbolicHotKeys(&array)
+    guard status == noErr else { return .failure(SymbolicFailure(status: status)) }
+    // 调用方负责释放（头文件原话 "The array must be released by the caller"），所以是 retained
+    let items = array?.takeRetainedValue() as? [[String: Any]] ?? []
+    return .success(items.compactMap { item in
+        guard let code = item[kHISymbolicHotKeyCode] as? Int,
+              let modifiers = item[kHISymbolicHotKeyModifiers] as? Int else { return nil }
+        return SymbolicHotKey(code: code, modifiers: modifiers, enabled: item[kHISymbolicHotKeyEnabled] as? Bool ?? false)
+    })
+}
+
+/// info：地球仪键的用途（AppleFnUsageType），和系统设置读的是同一份
+func info() {
+    let value = CFPreferencesCopyAppValue("AppleFnUsageType" as CFString, "com.apple.HIToolbox" as CFString)
+    emit(infoEvent(fnUsage: value))
 }
 
 // MARK: - 安全输入

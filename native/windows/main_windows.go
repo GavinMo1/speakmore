@@ -3,6 +3,7 @@ package main
 // 入口和线程：低级钩子的回调由装它的那个线程在取消息时调用，剪贴板也要一个窗口当主人，所以这些都放在
 // 同一个锁定的系统线程上跑一个消息循环。读标准输入、写标准输出各是一个 goroutine：要在钩子线程上做的事
 // 经 tasks 交过去、再投一条消息叫醒它；钩子回调里不做任何会等的事（系统嫌慢会悄悄卸掉钩子）。
+// 录键（record.go）接在匹配器前面，钩子回调把键先交给它。probe 的试登记也在这个线程上做（见 probe）。
 // 同一个消息窗口还收三样系统通知（docs/hotkey-research.md 4.2）：
 //   睡眠唤醒、锁屏解锁、切换用户  钩子可能在睡眠中被悄悄卸掉、松开的事件也丢了：回来以后重装钩子，从头认
 //   前台换了窗口                  前台是以管理员身份运行的窗口时，钩子收不到发给它的按键，报 elevated_foreground 让父进程提示
@@ -24,6 +25,12 @@ const restoreDelay = 300 * time.Millisecond
 // 不能让取消用的键（esc）在所有应用里一直按不出来
 const captureLimit = 600 * time.Second
 
+// 录键最长 30 秒。录了这么久父进程还没说"停"，多半是它那边出了岔子：自己停，不能让录到的键一直被吞着
+const recordLimit = 30 * time.Second
+
+// 试登记用的热键号：只在 probe 里登记一下、马上注销，同一时刻只有这一个
+const probeHotkeyID = 1
+
 const wmTask = wmApp + 1
 
 var (
@@ -32,15 +39,17 @@ var (
 
 	// 键盘钩子装上没有：没装上时 bind 的绑定一个都装不了。main 里定下来以后才开始读标准输入
 	listening bool
-	// 热键匹配和点击的截取：只在钩子线程上碰，不加锁
+	// 热键匹配、录键和点击的截取：只在钩子线程上碰，不加锁
 	hotkeys      = newMatcher(keyStillDown)
+	recording    = newRecorder(hotkeys)
 	clicks       clickCapture
 	board        *clipboard
 	window       uintptr
 	keyboardHook uintptr
 	mouseHook    uintptr
-	// 截的期限：每次开始截换一个号，过期的那个不算数
+	// 截的期限、录键的期限：每次开始换一个号，过期的那个不算数
 	captureGeneration int
+	recordGeneration  int
 )
 
 func emit(e event) { out.send(e) }
@@ -75,7 +84,7 @@ func keyboardProc(code int32, wParam, lParam uintptr) uintptr {
 		if down || wParam == wmKeyUp || wParam == wmSysKeyUp {
 			in := normalize(keyInput{vk: info.vkCode, scan: info.scanCode, extended: info.flags&llkhfExtended != 0,
 				down: down, ours: info.extraInfo == ourMark, time: info.time}, scanOfVK)
-			result := hotkeys.onKey(in)
+			result := recording.onKey(in)
 			report(result)
 			if result.mask {
 				// 就在回调里插（AutoHotkey、handy-keys 也是）：排在这个事件后面、Alt 或 Win 的松开前面。
@@ -152,15 +161,15 @@ func relisten(reason string) {
 	}
 	procUnhookWindowsHookEx.Call(keyboardHook)
 	keyboardHook = fresh
-	for _, e := range hotkeys.reset() {
+	for _, e := range recording.reset() {
 		emit(e)
 	}
 	emit(event{"event": "relistened", "reason": reason})
 }
 
-// 睡下去、锁屏、切走：按着的绑定补报松开（之后它的松开到不了）。回来时 relisten
+// 睡下去、锁屏、切走：按着的绑定补报松开、录着的集合清空（之后它们的松开到不了）。回来时 relisten
 func pauseListening() {
-	for _, e := range hotkeys.reset() {
+	for _, e := range recording.reset() {
 		emit(e)
 	}
 }
@@ -234,6 +243,47 @@ func setCapturing(on bool, regions []region) {
 			setCapturing(false, nil)
 		})
 	})
+}
+
+// 进入或离开录键模式。进入时开始计 30 秒，再进入一次从头计
+func setRecording(on bool) {
+	recordGeneration++
+	for _, e := range recording.record(on) {
+		emit(e)
+	}
+	if !on {
+		return
+	}
+	generation := recordGeneration
+	time.AfterFunc(recordLimit, func() {
+		onUIThread(func() {
+			if generation != recordGeneration || !recording.on {
+				return
+			}
+			emit(event{"event": "error", "message": fmt.Sprintf("录了 %d 秒还没录完，自己停了", int(recordLimit.Seconds()))})
+			setRecording(false)
+		})
+	})
+}
+
+// 试登记一次这个组合，看是不是已经被别的程序用 RegisterHotKey 登记了（docs/hotkey-research.md 4.2、5.5，PowerToys 也这么查）。
+// 要在钩子线程上做：不给窗口时热键挂在调用的线程上，登记上了立刻注销。RegisterHotKey 要 vk，扫描码按前台窗口的键盘布局换：
+// 用户在前台按这个组合时，系统也是照那个布局换的
+func probe(id int, combo binding) []event {
+	foreground, _, _ := procGetForegroundWindow.Call()
+	thread, _, _ := procGetWindowThreadProcess.Call(foreground, 0)
+	layout, _, _ := procGetKeyboardLayout.Call(thread)
+	// combo.Key 的扩展键本来就带 0xE0 高字节，MAPVK_VSC_TO_VK_EX 认这个写法
+	vk, _, _ := procMapVirtualKeyExW.Call(uintptr(combo.Key), mapvkVSCToVKEx, layout)
+	if vk == 0 {
+		return []event{noConflict(id), {"event": "error", "message": fmt.Sprintf("扫描码 0x%X 在当前键盘布局里换不出键码，试登记不了", combo.Key)}}
+	}
+	ok, _, lastError := procRegisterHotKey.Call(0, probeHotkeyID, uintptr(registerModifiers(combo.Mods)), vk)
+	if ok != 0 {
+		procUnregisterHotKey.Call(0, probeHotkeyID)
+	}
+	errno, _ := lastError.(syscall.Errno)
+	return probeResult(id, ok != 0, uint32(errno))
 }
 
 // 存剪贴板 → 写入文字 → 模拟 Ctrl+V → 等一会儿 → 还原剪贴板。只有粘贴这一条路，同 macOS 版
@@ -311,6 +361,29 @@ func handle(line []byte) {
 		onUIThread(func() { setCapturing(true, regions) })
 	case "release":
 		onUIThread(func() { setCapturing(false, nil) })
+	case "record":
+		on, err := parseRecord(cmd.On)
+		if err != nil {
+			emit(event{"event": "error", "message": err.Error()})
+			return
+		}
+		onUIThread(func() { setRecording(on) })
+	case "probe":
+		id, combo, reply := parseProbe(cmd)
+		if reply != nil {
+			for _, e := range reply {
+				emit(e)
+			}
+			return
+		}
+		onUIThread(func() {
+			for _, e := range probe(id, combo) {
+				emit(e)
+			}
+		})
+	case "info":
+		// Windows 上没有要报的系统设置（fnUsage 只有 Mac 有）
+		emit(event{"event": "info"})
 	default:
 		emit(event{"event": "error", "message": "不认识的命令：" + cmd.Cmd})
 	}

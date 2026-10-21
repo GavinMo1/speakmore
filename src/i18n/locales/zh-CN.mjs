@@ -116,6 +116,26 @@ export default {
     problem: "{chord}：{reason}",
   },
 
+  // 设置页、引导页录键（src/app/hotkey-recording.mjs、src/renderer/shared/hotkey-editor.mjs）
+  hotkeyRecord: {
+    prompt: "按下新组合",
+    hint: "两键以内 · esc 取消",
+    hintCapturing: "单个键 · 点别处取消",
+    tooMany: "最多两个键",
+    unknownKey: "无法识别此键",
+    systemTaken: "已被系统快捷键占用",
+    appTaken: "已被其他程序占用",
+    saveFailed: "保存失败",
+    add: "添加另一个",
+    reset: "恢复默认",
+    change: "更换 {chord}",
+    remove: "删除 {chord}",
+    saved: "已保存",
+    limit: "最多 {count} 个",
+    needsListen: "需先授予输入监控权限",
+    envOverride: "环境变量 {variable} 优先，此处修改暂不生效",
+  },
+
   // 下发给小帮手之前查出来的、小帮手说装不上的（src/hotkeys/bindings.mjs），放进"还差什么"
   hotkeyProblem: {
     chord: "「{action}」的 {chord} 用不了：{reason}",
@@ -150,6 +170,9 @@ export default {
     usesCapturingKey: "{key}是「{action}」的键：说话时按它只会取消",
     capturingKeyUsed: "{key}在「{action}」的组合里：只在说话时生效的动作不能再绑它",
     fnSystem: "地球仪键在系统设置里若设了别的用途（切换输入法、表情、听写），按它时会一起触发；外接键盘多半没有 fn",
+    // 小帮手读得到系统设置时说具体（src/hotkeys/validate.mjs 的 refineWarning）
+    fnSystemUse: "按地球仪键时系统还会{use}：可在系统设置 › 键盘里改成“无操作”",
+    fnUses: { inputSource: "切换输入法", emoji: "显示表情与符号", dictation: "开始听写" },
     macOptionTyping: "⌥ 加打字的键平时会打出特殊字符（⌥空格是不换行空格），绑上以后就打不出来了",
     altGr: "有些键盘布局（德语、法语等）把右 Alt 当 AltGr 打字用，按它时会一起触发",
     winAltLetter: "Alt 加字母平时会打开应用的菜单（Alt+F 打开“文件”），绑上以后就打不开了",
@@ -788,7 +811,6 @@ export default {
     acceleration: "本机模型加速",
     barHint: "悬浮条操作提示",
     openAtLogin: "开机启动",
-    hotkeyFailed: "没改成：{reason}",
     themeFailed: "主题没换成：{reason}",
     languageFailed: "语言没换成：{reason}",
     loginFailed: "开机启动没设上：{reason}",
@@ -963,9 +985,7 @@ export default {
       question: "键变色了吗？",
       yes: "变了，继续",
       no: "没变，换个键",
-      switchTo: "换成",
       switched: "已换，按一下试试",
-      failed: "没换成：{reason}",
     },
     try: {
       soft: "现在，",

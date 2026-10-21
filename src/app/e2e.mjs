@@ -21,6 +21,9 @@ export const fakeHelper = {
   bind() {},
   capture() {},
   release() {},
+  record() {},
+  probe: async () => ({ conflict: false }),
+  info: async () => ({}),
   stop() {},
 };
 

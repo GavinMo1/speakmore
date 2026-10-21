@@ -1,6 +1,7 @@
 import { LOCALES, SYSTEM_LOCALE } from "../../i18n/index.mjs";
 import { fillSelect } from "../shared/dom.mjs";
-import { hotkeyOptions, t } from "../shared/i18n.mjs";
+import { createHotkeyEditor } from "../shared/hotkey-editor.mjs";
+import { t } from "../shared/i18n.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
 
 // 设置对话框：原版的"设置中心"，左边一列菜单。我们的三页：通用（热键、主题、语言、本机模型的下载源、开机启动、
@@ -122,9 +123,13 @@ export function createSettings({ refresh }) {
 
   // ---------- 通用：热键、主题、语言、开机启动 ----------
 
+  const hotkeyEditor = createHotkeyEditor($("hotkey-editor"), { onChanged: refresh });
+
   function renderGeneral(setup) {
-    const hotkey = hotkeyOptions(setup.hotkey);
-    fillSelect($("hotkey"), hotkey.options, hotkey.current);
+    // 录键要小帮手在跑、收得到按键（Mac 上要输入监控权限）
+    hotkeyEditor.render(setup.hotkeyActions, {
+      canRecord: setup.helper === "running" && setup.permissions.listen !== false,
+    });
     fillSelect(
       $("theme"),
       setup.theme.choices.map((id) => [id, t(`themes.${id}.name`)]),
@@ -156,17 +161,6 @@ export function createSettings({ refresh }) {
     $(id).dataset.tone = tone;
     $(id).hidden = !message;
   }
-
-  $("hotkey").addEventListener("change", async (event) => {
-    showNote("hotkey-note", null);
-    try {
-      const result = await window.speakmore.setHotkey("dictate", event.target.value);
-      showNote("hotkey-note", result.note ?? null);
-    } catch (error) {
-      showNote("hotkey-note", t("preferences.hotkeyFailed", { reason: describeError(error) }), "problem");
-    }
-    await refresh();
-  });
 
   $("theme").addEventListener("change", async (event) => {
     showNote("general-problem", null);

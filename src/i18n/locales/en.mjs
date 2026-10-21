@@ -118,6 +118,26 @@ export default {
     problem: "{chord}: {reason}",
   },
 
+  // Recording a shortcut in Settings and onboarding (src/app/hotkey-recording.mjs, src/renderer/shared/hotkey-editor.mjs)
+  hotkeyRecord: {
+    prompt: "Press keys",
+    hint: "Up to two keys · esc to cancel",
+    hintCapturing: "One key · click elsewhere to cancel",
+    tooMany: "Two keys at most",
+    unknownKey: "Key not recognized",
+    systemTaken: "Used by a system shortcut",
+    appTaken: "Used by another app",
+    saveFailed: "Couldn't save",
+    add: "Add another",
+    reset: "Reset",
+    change: "Change {chord}",
+    remove: "Remove {chord}",
+    saved: "Saved",
+    limit: "Up to {count}",
+    needsListen: "Needs Input Monitoring permission",
+    envOverride: "{variable} takes precedence; changes here won't apply yet",
+  },
+
   // Found before handing the shortcuts to the helper, or reported back by it (src/hotkeys/bindings.mjs); listed under what's missing
   hotkeyProblem: {
     chord: "{action}'s {chord} doesn't work: {reason}",
@@ -155,6 +175,9 @@ export default {
     capturingKeyUsed: "{key} is part of a {action} combination: an action that works only while you talk can't use it",
     fnSystem:
       "If the Globe key has another job in System Settings (switching input sources, emoji, dictation), that fires too; most external keyboards have no fn",
+    // Said precisely when the helper can read the system setting (refineWarning in src/hotkeys/validate.mjs)
+    fnSystemUse: "Pressing Globe also {use}; set it to “Do Nothing” in System Settings › Keyboard",
+    fnUses: { inputSource: "changes the input source", emoji: "shows Emoji & Symbols", dictation: "starts Dictation" },
     macOptionTyping:
       "Option with a typing key normally types a special character (Option-Space is a non-breaking space); bound, it no longer will",
     altGr: "Some keyboard layouts (German, French…) use Right Alt as AltGr for typing; pressing it fires this too",
@@ -825,7 +848,6 @@ export default {
     acceleration: "On-device model acceleration",
     barHint: "Hints above the voice bar",
     openAtLogin: "Launch at login",
-    hotkeyFailed: "Not changed: {reason}",
     themeFailed: "Theme not changed: {reason}",
     languageFailed: "Language not changed: {reason}",
     loginFailed: "Couldn't set launch at login: {reason}",
@@ -1000,9 +1022,7 @@ export default {
       question: "Did the key light up?",
       yes: "Yes, continue",
       no: "No, pick another key",
-      switchTo: "Switch to",
       switched: "Switched. Press it to try",
-      failed: "Not switched: {reason}",
     },
     try: {
       soft: "Now, ",

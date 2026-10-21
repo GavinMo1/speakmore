@@ -2,7 +2,8 @@
 // 这两件事 Electron 自己做不了，原版也是交给 Swift 写的库和子进程（docs/07-native-helpers.md）。
 // 文件：main.swift 入口；Control.swift 命令，和权限、锁屏、安全输入的变化；Keyboard.swift 三个 tap、按键和点击；
 // HotKeys.swift Carbon 热键；
-// Matcher.swift 热键匹配；Bindings.swift 绑定表的解析；Paste.swift 贴字；Output.swift 往父进程写事件。
+// Matcher.swift 热键匹配；Recorder.swift 录键；Bindings.swift 绑定表的解析；Probe.swift 冲突查询和系统设置；
+// Paste.swift 贴字；Output.swift 往父进程写事件。
 //
 // 和父进程用"一行一个 JSON"通信，和 Windows 版（native/windows/）一字不差（docs/hotkey-research.md 5.8）：
 //   标准输出  {"event":"ready","listen":true,"trusted":true,"capture":true}
@@ -19,6 +20,14 @@
 //             {"event":"secure_input","on":true,"unavailable":["dictate#1"]}
 //                                         安全输入开了、关了（只有 Mac 有）。开着时带普通键的绑定由 Carbon 顶着，
 //                                         unavailable 是顶不了的（带 fn 的、被别的应用占了的），这段时间按了没反应
+//             {"event":"recording","on":true,"mods":[61],"keys":[49]}
+//                                         录键模式里按住了哪些键：进入时报一次（两个空数组），之后录到的集合每变一次报一次。
+//                                         只算进入以后按下的；mods 是修饰键、keys 是别的键，都是 kVK 键码，各自升序；fn 原样报
+//             {"event":"recording","on":false}       离开了录键模式（父进程说停的、30 秒到点自己停的）
+//             {"event":"probed","id":7,"conflict":true,"source":"symbolic"}
+//                                         probe 的答复：被系统快捷键占了；没占是 {"event":"probed","id":7,"conflict":false}
+//             {"event":"info","fnUsage":1}           系统设置里地球仪键的用途（AppleFnUsageType），读不到就不带 fnUsage
+//             {"event":"error","message":"…"}       看不懂的命令、形状不对的参数、到点自己停了这一类
 //   标准输入  {"cmd":"bind","bindings":[{"id":"dictate#0","mods":[61],"when":"always"},
 //                                       {"id":"cancel#0","mods":[],"key":53,"when":"capturing"}]}
 //                                         整表替换；mods 是修饰键、key 是普通键，都是 kVK 键码；
@@ -26,11 +35,20 @@
 //             {"cmd":"capture","regions":[{"id":"cancel","x":0,"y":0,"width":28,"height":28}]}
 //                                         开始截：capturing 的绑定，和这几块（屏幕坐标）里的鼠标点击
 //             {"cmd":"release"}           不截了
+//             {"cmd":"record","on":true}  进入录键模式（已经在录就重新开始）：匹配器停下，按着的绑定补报松开；
+//                                         录到的普通键吞掉（有辅助功能权限时），修饰键不吞。30 秒还没说停就自己停
+//             {"cmd":"record","on":false} 离开录键模式，匹配器照常工作；离开时还按着的普通键吞到松开为止
+//             {"cmd":"probe","id":7,"mods":[55],"key":49}
+//                                         查这个组合是不是已经被系统快捷键占了；mods、key 的写法同 bind，
+//                                         只有"修饰键 + 普通键"才可能冲突。id 是整数时一定回一条 probed
+//             {"cmd":"info"}              问一次系统设置里和热键相关的值
 //             {"cmd":"paste","id":1,"text":"…"}
 // 父进程退出（标准输入关闭）时自己也退出。
 // --no-prompt：缺权限时不让系统弹授权提示，只照实报。
 //
-// 按键内容不出这个进程：只报绑定的按下、松开、被打断，不报是哪个键。
+// 按键内容平时不出这个进程：只报绑定的按下、松开、被打断，不报是哪个键。录键是一个有边界的例外（docs/hotkey-research.md 5.6
+// "隐私"）：只在父进程说开始录以后、到说停或 30 秒到点为止，报按住了哪些键码；只报键码、不报打出来的字符，
+// 进入前就按着的不报，离开以后不再报。
 
 import AppKit
 
@@ -85,6 +103,16 @@ Thread.detachNewThread {
             DispatchQueue.main.async { capture(true, regions: parsed) }
         case "release":
             DispatchQueue.main.async { capture(false) }
+        case "record":
+            guard let on = object["on"] as? Bool else {
+                emit(["event": "error", "message": "record 需要 on：true 或 false"])
+                continue
+            }
+            DispatchQueue.main.async { record(on) }
+        case "probe":
+            DispatchQueue.main.async { probe(object) }
+        case "info":
+            DispatchQueue.main.async { info() }
         default:
             emit(["event": "error", "message": "不认识的命令：\(command)"])
         }

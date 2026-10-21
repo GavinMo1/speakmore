@@ -20,6 +20,7 @@ const { insights } = await import(join(ROOT, "src/usage/insights.mjs"));
 const { describePlaza, loadPriceBook } = await import(join(ROOT, "src/app/model-plaza.mjs"));
 const { resolveSettings, routeOf } = await import(join(ROOT, "src/storage/settings.mjs"));
 const { MODE_ORDER } = await import(join(ROOT, "src/renderer/hub/engine/plaza-view.mjs"));
+const { ACTIONS, MAX_CHORDS } = await import(join(ROOT, "src/hotkeys/actions.mjs"));
 
 const out = resolve(process.argv[process.argv.indexOf("--") + 1] ?? "media-out");
 const VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
@@ -139,7 +140,18 @@ ipcMain.handle("setup:get", () => ({
   key: { state: "ready", source: "stored" },
   permissions: { microphone: "granted", listen: true, trusted: true },
   summary: { ready: true, missing: [], blocker: null, degraded: null },
-  hotkey: { value: HOTKEYS.dictate, choices: ["ControlRight", "AltRight", "MetaRight", "Fn"] },
+  // 设置页、引导页每个动作一行，拼法同 app/main.mjs 的 describeHotkeyActions
+  hotkeyActions: ACTIONS.map((action) => ({
+    id: action.id,
+    when: action.when,
+    clearable: action.clearable,
+    max: MAX_CHORDS,
+    chords: HOTKEYS[action.id],
+    inEffect: HOTKEYS[action.id],
+    defaults: HOTKEYS[action.id],
+    problems: [],
+    env: null,
+  })),
   theme: { value: current.theme.id, choices: THEMES.map(({ id }) => id) },
   language: { value: "system", locale: current.locale },
   openAtLogin: { supported: true, enabled: true },

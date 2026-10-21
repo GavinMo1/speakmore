@@ -2,7 +2,8 @@
 // Mac 小帮手的回归脚本：起真的小帮手（build/key-helper，源码变了先重编），按场景下发绑定，让发键程序发合成按键，
 // 对小帮手报的事件和漏到末尾的键（docs/hotkey-research.md 第 6 步"第 7 步"那一行）。查的是单元测试碰不到的那一半：
 // 三个 tap 真的装得上、快速连发不漏（触发 tap 同步打开吞键 tap）、同一个事件经过几个 tap 只算一次、Carbon 吞得住单个 F 键、
-// 截着时才吞 esc、自己合成的 ⌘V 不算。
+// 截着时才吞 esc、自己合成的 ⌘V 不算；录键时只报按住的键码、录到的普通键吞到松开为止、离开后匹配器照常；
+// probe 查得出系统快捷键（⌘空格、⌃空格），info 和 defaults 读到的一样。
 //
 // 用法：node scripts/dev/mac-hotkeys.mjs [--secure-input]
 //   --secure-input  再查安全输入期间 Carbon 顶着的组合键（发键程序自己开安全输入，查完关掉）
@@ -10,7 +11,7 @@
 // 合成的键都带记号，在 annotated session 层的末尾被发键程序接住，一个都不会到达任何应用（mac-hotkeys-poster.swift）。
 // 跑的时候别碰键盘：自己按的键会混进匹配器。运行它的终端要有输入监控和辅助功能权限。
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -30,6 +31,14 @@ ensureHelper(ROOT, { onBuild: () => console.log("小帮手的源码变了，先�
 const scratch = mkdtempSync(join(tmpdir(), "speakmore-hotkeys-"));
 const posterBinary = join(scratch, "poster");
 await run("swiftc", ["-O", "-o", posterBinary, join(ROOT, "scripts/dev/mac-hotkeys-poster.swift")]);
+// 锁屏时不跑：末尾接不住的键会打进锁屏的密码框。每个场景开始前发键程序还会自己再查一次
+try {
+  await run(posterBinary, ["check"]);
+} catch (error) {
+  console.error(`现在不能发键，没跑：${error.message}`);
+  rmSync(scratch, { recursive: true, force: true });
+  process.exit(2);
+}
 
 const helper = spawn(helperPaths(ROOT).binary, ["--no-prompt"], { stdio: ["pipe", "pipe", "inherit"] });
 const events = [];
@@ -173,6 +182,119 @@ try {
     "不截了之后 esc 照常放行",
     got.length === 0 && count(sink, KEY_DOWN, 0x35) === 1,
     `${got.join(" ")} ${JSON.stringify(sink)}`,
+  );
+
+  // 录键：匹配器停下，只报按住的键码；录到的普通键整段吞掉，修饰键照常放行
+  await bind([DICTATE, CHORD, CANCEL]);
+  const held = (mods, keys) => ({ event: "recording", on: true, mods, keys });
+  send({ cmd: "record", on: true });
+  await sleep(150);
+  got = take();
+  check("进入录键：立刻报一次空快照", same(got, [held([], [])]), JSON.stringify(got));
+  sink = await poster("record");
+  await sleep(150);
+  got = take();
+  check(
+    "录键时按右 Option+空格：按下报两次快照、松开报两次，不报绑定",
+    same(got, [held([0x3d], []), held([0x3d], [0x31]), held([0x3d], []), held([], [])]),
+    JSON.stringify(got),
+  );
+  check(
+    "录键时空格的按下、自动重复、松开都吞了",
+    count(sink, KEY_DOWN, 0x31) === 0 && count(sink, KEY_UP, 0x31) === 0,
+    JSON.stringify(sink),
+  );
+  check("录键时修饰键的 flagsChanged 照常到末尾", count(sink, FLAGS_CHANGED, 0x3d) === 2, JSON.stringify(sink));
+  sink = await poster("injected");
+  await sleep(150);
+  got = take();
+  check(
+    "录键时自己合成的 ⌘V 不算、不吞",
+    same(got, [held([0x3d], []), held([], [])]) && count(sink, KEY_DOWN, 0x09) === 1 && count(sink, KEY_UP, 0x09) === 1,
+    `${JSON.stringify(got)} ${JSON.stringify(sink)}`,
+  );
+  send({ cmd: "record", on: true });
+  await sleep(150);
+  got = take();
+  check("录着时再说开始：重新开始，再报一次空快照", same(got, [held([], [])]), JSON.stringify(got));
+  // 按着空格离开录键模式，离开以后才松开
+  const release = join(scratch, "release");
+  const holding = poster("hold", release);
+  await waitFor((event) => event.event === "recording" && event.keys?.length === 1, 3000);
+  send({ cmd: "record", on: false });
+  await waitFor((event) => event.event === "recording" && event.on === false, 2000);
+  writeFileSync(release, "");
+  sink = await holding;
+  await sleep(150);
+  got = take();
+  check("离开录键：报 on:false", same(got, [held([], [0x31]), { event: "recording", on: false }]), JSON.stringify(got));
+  check(
+    "离开时还按着的空格：之后的自动重复和松开照样吞",
+    count(sink, KEY_DOWN, 0x31) === 0 && count(sink, KEY_UP, 0x31) === 0,
+    JSON.stringify(sink),
+  );
+  send({ cmd: "record", on: false });
+  await sleep(150);
+  got = take();
+  check("没在录时说停：什么也不报", got.length === 0, JSON.stringify(got));
+  await poster("single");
+  got = await bindings();
+  check(
+    "离开录键以后匹配器照常：单按右 Option 三次",
+    got.join(" ") === "↓dictate#0 ↑dictate#0 ".repeat(3).trim(),
+    got.join(" "),
+  );
+  sink = await poster("chord");
+  got = await bindings();
+  check(
+    "离开录键以后右 Option+空格 20 次照样升级、空格不漏",
+    got.join(" ") === "↓dictate#0 ✕dictate#0→x#0 ↓x#0 ↑x#0 ".repeat(20).trim() &&
+      count(sink, KEY_DOWN, 0x31) + count(sink, KEY_UP, 0x31) === 0,
+    `${got.join(" ").slice(0, 400)} ${JSON.stringify(sink).slice(0, 400)}`,
+  );
+
+  // probe：⌘空格是 Spotlight、⌃空格是切换输入法（本机系统快捷键表里都启用着），右 Option+F13 没人占
+  async function probe(command) {
+    send({ cmd: "probe", ...command });
+    await waitFor((event) => event.event === "probed" || event.event === "error", 2000);
+    await sleep(100);
+    return take();
+  }
+  got = await probe({ id: 1, mods: [0x37], key: 0x31 });
+  check(
+    "probe 左 ⌘空格：被系统快捷键占了",
+    same(got, [{ event: "probed", id: 1, conflict: true, source: "symbolic" }]),
+    JSON.stringify(got),
+  );
+  got = await probe({ id: 2, mods: [0x3e], key: 0x31 });
+  check(
+    "probe 右 Control+空格：左右合并，也被占了",
+    same(got, [{ event: "probed", id: 2, conflict: true, source: "symbolic" }]),
+    JSON.stringify(got),
+  );
+  got = await probe({ id: 3, mods: [0x3d], key: 0x69 });
+  check("probe 右 Option+F13：没被占", same(got, [{ event: "probed", id: 3, conflict: false }]), JSON.stringify(got));
+  got = await probe({ id: 4, mods: [0x3d] });
+  check("probe 只有修饰键：直接不冲突", same(got, [{ event: "probed", id: 4, conflict: false }]), JSON.stringify(got));
+  got = await probe({ id: 5, mods: [0x31], key: 0x31 });
+  check(
+    "probe 形状不对：报 error，照样回一条不冲突",
+    got.length === 2 && got[0].event === "error" && same(got[1], { event: "probed", id: 5, conflict: false }),
+    JSON.stringify(got),
+  );
+  got = await probe({ mods: [0x37], key: 0x31 });
+  check("probe 没有 id：只报 error", got.length === 1 && got[0].event === "error", JSON.stringify(got));
+
+  // info：和 defaults 读到的同一份；本机没有这一项时不带 fnUsage
+  send({ cmd: "info" });
+  await waitFor((event) => event.event === "info", 2000);
+  got = take();
+  const defaults = spawnSync("defaults", ["read", "com.apple.HIToolbox", "AppleFnUsageType"], { encoding: "utf8" });
+  const fnUsage = defaults.status === 0 ? Number(defaults.stdout.trim()) : undefined;
+  check(
+    "info：fnUsage 和 defaults 读到的一样（读不到就不带）",
+    same(got, [fnUsage === undefined ? { event: "info" } : { event: "info", fnUsage }]),
+    `${JSON.stringify(got)}，defaults：${fnUsage}`,
   );
 
   if (withSecureInput) {

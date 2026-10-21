@@ -739,12 +739,27 @@ body {
     0 10px 30px -8px var(--primary);
 }
 
-.hotkey-choice {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 1rem;
-  font-size: var(--text-small);
+/* 每个动作和它的键：和设置页同一个控件（shared/hotkey-editor.css），这里只收一收上下的空 */
+.hotkey-list {
+  margin-top: 1.25rem;
+  max-width: 34rem;
+}
+
+.hotkey-list .hotkey-row:last-child {
+  border-bottom: none;
+}
+
+/* 引导页左栏窄：名字和说明在上，组合在下，都靠左 */
+.hotkey-list .hotkey-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hotkey-list .hotkey-chords {
+  justify-content: flex-start;
+}
+
+.hotkey-list .hotkey-note {
+  text-align: left;
 }
 
 /* ---------- 体验一下 ---------- */

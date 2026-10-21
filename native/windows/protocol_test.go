@@ -208,3 +208,136 @@ func TestBoundAlwaysCarriesAnArrayOfRejections(t *testing.T) {
 		t.Fatalf("有被拒的：%q", line)
 	}
 }
+
+func TestParsesRecordOnAndOff(t *testing.T) {
+	for line, want := range map[string]bool{`{"cmd":"record","on":true}`: true, `{"cmd":"record","on":false}`: false} {
+		cmd, err := parseCommand([]byte(line))
+		if err != nil || cmd.Cmd != "record" {
+			t.Fatalf("%s：%+v %v", line, cmd, err)
+		}
+		if on, err := parseRecord(cmd.On); err != nil || on != want {
+			t.Fatalf("%s：得到 %v %v", line, on, err)
+		}
+	}
+}
+
+func TestRecordWithoutABooleanOnIsAnError(t *testing.T) {
+	for _, line := range []string{
+		`{"cmd":"record"}`,
+		`{"cmd":"record","on":null}`,
+		`{"cmd":"record","on":1}`,
+		`{"cmd":"record","on":"true"}`,
+	} {
+		cmd, err := parseCommand([]byte(line))
+		if err != nil {
+			t.Fatalf("%s：整行就没认：%v", line, err)
+		}
+		if _, err := parseRecord(cmd.On); err == nil || err.Error() != "record 需要 on：true 或 false" {
+			t.Fatalf("%s：%v", line, err)
+		}
+	}
+}
+
+func probeCommand(t *testing.T, line string) command {
+	t.Helper()
+	cmd, err := parseCommand([]byte(line))
+	if err != nil || cmd.Cmd != "probe" {
+		t.Fatalf("%s：%+v %v", line, cmd, err)
+	}
+	return cmd
+}
+
+// 修饰键 + 普通键：交给系统去试登记，mods、key 的写法同 bind
+func TestProbeOfAModifierPlusKeyIsAskedOfTheSystem(t *testing.T) {
+	for line, want := range map[string]binding{
+		`{"cmd":"probe","id":7,"mods":[163],"key":100}`:  {Mods: []uint32{0xA3}, Key: 0x64, HasKey: true},
+		`{"cmd":"probe","id":7,"mods":[91],"key":57416}`: {Mods: []uint32{0x5B}, Key: 0xE048, HasKey: true},
+	} {
+		id, combo, reply := parseProbe(probeCommand(t, line))
+		if reply != nil || id != 7 || !reflect.DeepEqual(combo, want) {
+			t.Fatalf("%s：得到 %d %+v %v", line, id, combo, reply)
+		}
+	}
+}
+
+// 只有修饰键的、单个普通键的：RegisterHotKey 登记不了这种，别的程序也就占不了，当场回 conflict:false
+func TestProbeOfOtherShapesAnswersNoConflictAtOnce(t *testing.T) {
+	for _, line := range []string{
+		`{"cmd":"probe","id":7,"mods":[163]}`,
+		`{"cmd":"probe","id":7,"mods":[163,161]}`,
+		`{"cmd":"probe","id":7,"mods":[163],"key":null}`,
+		`{"cmd":"probe","id":7,"mods":[],"key":100}`,
+	} {
+		_, _, reply := parseProbe(probeCommand(t, line))
+		expectEvents(t, line, reply, event{"event": "probed", "id": 7, "conflict": false})
+	}
+}
+
+// id 是整数就一定回一条 probed（父进程在等它）：形状不对的回 conflict:false，另报一条 error 说哪里不对
+func TestProbeWithTheWrongShapeStillAnswersItsID(t *testing.T) {
+	const mods, key, rule = "probe 的 mods 不对：要一组修饰键的 vk，同 bind",
+		"probe 的 key 不对：要一个普通键的扫描码，同 bind",
+		"probe 的组合不合规矩：同 bind，修饰键 0 到 2 个、不重复，合起来 1 到 2 个键"
+	for _, c := range []struct{ line, message string }{
+		{`{"cmd":"probe","id":7,"key":100}`, mods},
+		{`{"cmd":"probe","id":7,"mods":null,"key":100}`, mods},
+		{`{"cmd":"probe","id":7,"mods":163,"key":100}`, mods},
+		{`{"cmd":"probe","id":7,"mods":["ControlRight"],"key":100}`, mods},
+		{`{"cmd":"probe","id":7,"mods":[-1],"key":100}`, mods},
+		{`{"cmd":"probe","id":7,"mods":[163],"key":"F13"}`, key},
+		{`{"cmd":"probe","id":7,"mods":[163],"key":-1}`, key},
+		{`{"cmd":"probe","id":7,"mods":[163],"key":1.5}`, key},
+		{`{"cmd":"probe","id":7,"mods":[65],"key":100}`, rule},
+		{`{"cmd":"probe","id":7,"mods":[17],"key":100}`, rule},
+		{`{"cmd":"probe","id":7,"mods":[163,163],"key":100}`, rule},
+		{`{"cmd":"probe","id":7,"mods":[163,161],"key":100}`, rule},
+		{`{"cmd":"probe","id":7,"mods":[163],"key":0}`, rule},
+		{`{"cmd":"probe","id":7,"mods":[163],"key":57344}`, rule},
+		{`{"cmd":"probe","id":7,"mods":[]}`, rule},
+	} {
+		_, _, reply := parseProbe(probeCommand(t, c.line))
+		expectEvents(t, c.line, reply, event{"event": "probed", "id": 7, "conflict": false}, event{"event": "error", "message": c.message})
+	}
+}
+
+// 没有 id 就回不了 probed：只报 error。id 不是整数的，整行就看不懂
+func TestProbeWithoutAnIDOnlyReportsAnError(t *testing.T) {
+	for _, line := range []string{`{"cmd":"probe","mods":[163],"key":100}`, `{"cmd":"probe","id":null,"mods":[163],"key":100}`} {
+		_, _, reply := parseProbe(probeCommand(t, line))
+		expectEvents(t, line, reply, event{"event": "error", "message": "probe 需要整数 id"})
+	}
+	for _, line := range []string{`{"cmd":"probe","id":"7","mods":[163],"key":100}`, `{"cmd":"probe","id":7.5,"mods":[163],"key":100}`} {
+		if _, err := parseCommand([]byte(line)); err == nil {
+			t.Fatalf("%s 没被拒绝", line)
+		}
+	}
+}
+
+// RegisterHotKey 的修饰键不分左右：左右合并成 MOD_*，一律带 MOD_NOREPEAT
+func TestProbeMergesBothSidesIntoRegisterHotKeyModifiers(t *testing.T) {
+	for _, c := range []struct {
+		mods []uint32
+		want uint32
+	}{
+		{[]uint32{vkLShift}, 0x4004},
+		{[]uint32{vkRShift}, 0x4004},
+		{[]uint32{vkLControl}, 0x4002},
+		{[]uint32{vkRControl, vkRMenu}, 0x4003},
+		{[]uint32{vkLMenu}, 0x4001},
+		{[]uint32{vkLWin}, 0x4008},
+		{[]uint32{vkRWin, vkLShift}, 0x400C},
+	} {
+		if got := registerModifiers(c.mods); got != c.want {
+			t.Errorf("%v：得到 0x%X，应为 0x%X", c.mods, got, c.want)
+		}
+	}
+}
+
+// 试登记的结果：登记上了是没被占；1409（ERROR_HOTKEY_ALREADY_REGISTERED）是别的程序登记过；别的失败照没被占报，另报带错误码的 error
+func TestProbeResultFollowsTheRegisterHotKeyError(t *testing.T) {
+	expectEvents(t, "登记上了", probeResult(7, true, 0), event{"event": "probed", "id": 7, "conflict": false})
+	expectEvents(t, "1409", probeResult(7, false, 1409), event{"event": "probed", "id": 7, "conflict": true, "source": "registered"})
+	expectEvents(t, "别的失败", probeResult(7, false, 87),
+		event{"event": "probed", "id": 7, "conflict": false},
+		event{"event": "error", "message": "试登记组合没成功（错误码 87），查不出是不是被别的程序占了"})
+}

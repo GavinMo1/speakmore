@@ -18,7 +18,7 @@ import {
   Tray,
 } from "electron";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
-import { ACTIONS, actionOf } from "../hotkeys/actions.mjs";
+import { ACTIONS, actionOf, defaultChords, MAX_CHORDS } from "../hotkeys/actions.mjs";
 import {
   actionOfBinding,
   bindingTable,
@@ -26,11 +26,11 @@ import {
   describeHotkeyProblem,
   resolveHotkeys,
 } from "../hotkeys/bindings.mjs";
-import { chordString, chordsName, chordsText, parseChord } from "../hotkeys/chord.mjs";
-import { isModifier, KEYS } from "../hotkeys/keys.mjs";
+import { chordString, chordsName, chordsText } from "../hotkeys/chord.mjs";
+import { isModifier, nativeCode } from "../hotkeys/keys.mjs";
 import { legacyIdOf } from "../hotkeys/legacy.mjs";
-import { settingNameOf } from "../hotkeys/settings.mjs";
-import { rejectReason } from "../hotkeys/validate.mjs";
+import { chordsOf, chordsValue, settingNameOf } from "../hotkeys/settings.mjs";
+import { refineWarning } from "../hotkeys/validate.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale, SYSTEM_LOCALE } from "../i18n/index.mjs";
 import { createInstance } from "../instance.mjs";
 import { alsoLogTo, log } from "../log.mjs";
@@ -54,6 +54,7 @@ import {
   resolveSettings,
   routeOf,
   saveSetting,
+  unsetSetting,
 } from "../storage/settings.mjs";
 import { openVocabulary, readImportFile } from "../storage/vocabulary.mjs";
 import { toHex } from "../themes/color.mjs";
@@ -67,6 +68,7 @@ import { MAX_TERM_LENGTH, MAX_TERMS } from "../vocabulary/terms.mjs";
 import { createDelivery } from "./delivery.mjs";
 import { chooseHome, needsHomeChoice } from "./first-run.mjs";
 import { helperPaths, startHelper } from "./helper.mjs";
+import { createHotkeyRecording } from "./hotkey-recording.mjs";
 import { createKeyManager } from "./keys/key-manager.mjs";
 import { createKeyStore } from "./keys/key-store.mjs";
 import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
@@ -174,19 +176,14 @@ const chordStrings = (chords) =>
 function hotkeySettingValues(settings) {
   return Object.fromEntries(ACTIONS.map((action) => [settingNameOf(action), settings[settingNameOf(action)].value]));
 }
-/**
- * 引导页、设置页的下拉框里列的：这个系统上单按就能给听写用的修饰键（Mac 右 Control、右 Option、右 Command、fn，
- * Windows 右 Ctrl、右 Alt）。换成录键以后不用了（docs/hotkey-research.md 5.6）
- */
-const SINGLE_KEY_CHOICES = KEYS.filter(({ code }) => {
-  if (!isModifier(code)) return false;
-  try {
-    parseChord(code);
-  } catch {
-    return false;
-  }
-  return rejectReason([code], { action: actionOf("dictate"), platform: process.platform }) === null;
-}).map(({ code }) => code);
+/** 一个组合换成小帮手认的原生码（探测冲突用，写法同绑定表） */
+function nativeChord(codes, platform) {
+  const key = codes.find((code) => !isModifier(code));
+  return {
+    mods: codes.filter(isModifier).map((code) => nativeCode(code, platform)),
+    ...(key === undefined ? {} : { key: nativeCode(key, platform) }),
+  };
+}
 /** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
 const thinkingFor = (provider) => (provider?.thinkingLevels ? SETTINGS.thinking.value : null);
 const WINDOWS = process.platform === "win32";
@@ -501,6 +498,8 @@ async function main() {
   let onboardingWindow = null;
   /** 首次引导正在测快捷键：热键送到引导窗口，不去开悬浮条 */
   let hotkeyToOnboarding = false;
+  /** 小帮手问来的系统设置（Mac：按下地球仪键时做什么），录键存的时候按它说提醒；小帮手每次起来再问一遍 */
+  let systemInfo = {};
 
   // ---------- 界面语言 ----------
 
@@ -756,14 +755,21 @@ async function main() {
 
   function onHelperEvent(event) {
     switch (event.event) {
-      case "ready":
+      case "ready": {
         helperState = "running";
         helperPermissions = { listen: event.listen, trusted: event.trusted };
         log.info("helper_ready", { ...helperPermissions, capture: event.capture });
+        const asked = helperGeneration;
+        helper.info().then((info) => {
+          if (asked !== helperGeneration) return;
+          systemInfo = info;
+          log.info("helper_info", info);
+        });
         setBarControls(event.capture === true);
         setupChanged();
         offerSettingsIfIncomplete();
         break;
+      }
       case "bound": {
         // 装不上的绑定按了不会有反应：先看这条。没有辅助功能权限时取消装不上是预料之中的，悬浮条那时也不画按钮
         const sent = sentHotkeys.shift() ?? hotkeys.chords;
@@ -805,6 +811,10 @@ async function main() {
       case "interrupted":
         onBindingEvent(event);
         break;
+      case "recording":
+        // 录键模式里按住的键（设置页、引导页在录）：只交给录键那边，不进日志
+        recording.onRecording(event);
+        break;
       case "click":
         // 只在听写进行中才会有：那时页面让小帮手把它们截下来了
         // 字段不能叫 event：日志这一条的名字就记在 event 里，会被盖掉
@@ -814,6 +824,7 @@ async function main() {
       case "exit":
         helperState = "stopped";
         helperPermissions = null;
+        recording.helperGone();
         setBarControls(false);
         log.error("helper_exited", { code: event.code, signal: event.signal });
         setupChanged();
@@ -853,6 +864,23 @@ async function main() {
     if (blocker === null) tellBar("input", input);
     else if (event.event === "binding" && event.down) notify(blocker);
   }
+
+  // 设置页、引导页录键（hotkey-recording.mjs）：小帮手的录键模式、定稿、探测冲突、保存
+  const recording = createHotkeyRecording({
+    platform: process.platform,
+    record: (on) => helper.record(on),
+    probe: async (codes) => {
+      const found = await helper.probe(nativeChord(codes, process.platform));
+      if (found.timedOut) log.warn("hotkey_probe_timeout", { chord: chordString(codes) });
+      return found;
+    },
+    chordsOf: (actionId) => chordsOf(hotkeySettings[settingNameOf(actionOf(actionId))]),
+    save: (actionId, chords) => setHotkey(actionId, chordsValue(chords)),
+    send: (contents, payload) => {
+      if (!contents.isDestroyed()) contents.send("hotkey:recording", payload);
+    },
+    log,
+  });
 
   // 端到端测试时不启动小帮手：不听真键盘，也绝不往用户当前的窗口里贴字
   if (e2e) helper = e2e.fakeHelper;
@@ -1038,8 +1066,8 @@ async function main() {
     return {
       ...setup,
       summary: summarizeSetup(setup),
-      // 听写现在装着的组合和下拉框里能选的单键；叫什么由页面按界面语言写，这里只给 code
-      hotkey: { value: hotkeys.chords.dictate, choices: SINGLE_KEY_CHOICES },
+      // 每个动作一行：设置里存的组合、装着的、默认的、装不上的；叫什么由页面按界面语言写，这里只给 code
+      hotkeyActions: describeHotkeyActions(),
       theme: { value: theme.id, choices: THEMES.map(({ id }) => id) },
       barHint: currentBarHint(),
       language: { value: languageSetting, locale },
@@ -1242,7 +1270,28 @@ async function main() {
     log.info("open_at_login", { enabled: Boolean(enabled) });
     setupChanged();
   });
-  handle("setup:set-hotkey", (_event, action, wanted) => setHotkey(action, wanted));
+  // 录键（docs/hotkey-research.md 5.6）：页面点了某个组合（换掉它）或者"添加"，结果经 hotkey:recording 报回那个页面
+  handle("hotkey:record", (event, action, index) => {
+    blockKeysWhileRecording(event.sender);
+    recording.start(event.sender, action, Number.isInteger(index) ? index : null);
+  });
+  handle("hotkey:record-stop", (event) => recording.stop(event.sender, "blur"));
+  handle("setup:remove-hotkey", (_event, actionId, index) => {
+    const action = actionOf(actionId);
+    if (action === null) throw new TypeError(`不认识的动作：${actionId}`);
+    const chords = chordsOf(hotkeySettings[settingNameOf(action)]).filter((_, at) => at !== index);
+    return setHotkey(action.id, chordsValue(chords));
+  });
+  handle("setup:reset-hotkey", (_event, actionId) => {
+    const action = actionOf(actionId);
+    if (action === null) throw new TypeError(`不认识的动作：${actionId}`);
+    const name = settingNameOf(action);
+    unsetSetting(PATHS.settingsFile, name);
+    log.info("hotkey_reset", { action: action.id });
+    reloadHotkeys();
+    const variable = overridingEnv(name, process.env);
+    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
+  });
   handle("setup:set-theme", (_event, wanted) => {
     saveSetting(PATHS.settingsFile, "theme", wanted);
     reloadTheme();
@@ -1364,7 +1413,43 @@ async function main() {
     reloadHotkeys();
     const variable = overridingEnv(name, process.env);
     if (variable !== null) return { note: msg("notes.envRemove", { variable }) };
-    return warnings.length > 0 ? { note: warnings[0] } : {};
+    // 地球仪键那条按系统设置说具体，设成"无操作"的不提醒
+    const notes = warnings.map((warning) => refineWarning(warning, systemInfo)).filter(Boolean);
+    return notes.length > 0 ? { note: notes[0] } : {};
+  }
+
+  /** 设置页、引导页的快捷键：动作目录里每个动作一行 */
+  function describeHotkeyActions() {
+    const problems = [...hotkeys.problems, ...helperHotkeyProblems];
+    return ACTIONS.map((action) => {
+      const name = settingNameOf(action);
+      return {
+        id: action.id,
+        when: action.when,
+        clearable: action.clearable,
+        max: MAX_CHORDS,
+        chords: chordsOf(hotkeySettings[name]),
+        inEffect: hotkeys.chords[action.id],
+        defaults: defaultChords(action, process.platform),
+        // 存着的组合里装不上的（下发前查出来的、小帮手退回的），和一个都装不上、先用默认的那条
+        problems: problems
+          .filter((problem) => problem.action === action.id)
+          .map((problem) =>
+            problem.fallback ? { fallback: problem.fallback } : { chord: problem.chord, reason: problem.reason },
+          ),
+        env: overridingEnv(name, process.env),
+      };
+    });
+  }
+
+  /** 录键时拦住这个页面的按键：没有辅助功能权限的 Mac 上小帮手吞不了，⌘W、⌘Q 之类会作用在窗口上（5.6）。每个页面装一次 */
+  const blocking = new WeakSet();
+  function blockKeysWhileRecording(contents) {
+    if (blocking.has(contents)) return;
+    blocking.add(contents);
+    contents.on("before-input-event", (event) => {
+      if (recording.recordingFor(contents)) event.preventDefault();
+    });
   }
 
   // ---------- 菜单栏、主窗口和首次引导 ----------
@@ -1401,8 +1486,12 @@ async function main() {
       window.webContents.send("history:changed");
       window.webContents.send("setup:changed");
     });
+    // 录键时切走了（点了别的应用、⌘Tab）就不录了：焦点不在这里，人也不在看
+    const contents = window.webContents;
+    window.on("blur", () => recording.stop(contents, "blur"));
     window.on("closed", () => {
       hubWindow = null;
+      recording.stop(contents, "blur");
     });
     return window;
   }
@@ -1425,9 +1514,12 @@ async function main() {
         if (listen !== true || trusted !== true) recheckPermissions();
         else setupChanged();
       });
+      const contents = onboardingWindow.webContents;
+      onboardingWindow.on("blur", () => recording.stop(contents, "blur"));
       onboardingWindow.on("closed", () => {
         onboardingWindow = null;
         hotkeyToOnboarding = false;
+        recording.stop(contents, "blur");
       });
       // 页面崩了就没人说"测完了"
       onboardingWindow.webContents.on("render-process-gone", (_event, details) => {

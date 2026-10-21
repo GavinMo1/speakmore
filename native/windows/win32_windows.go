@@ -36,6 +36,10 @@ var (
 	procGetForegroundWindow               = user32.NewProc("GetForegroundWindow")
 	procGetWindowThreadProcess            = user32.NewProc("GetWindowThreadProcessId")
 	procMapVirtualKeyW                    = user32.NewProc("MapVirtualKeyW")
+	procMapVirtualKeyExW                  = user32.NewProc("MapVirtualKeyExW")
+	procGetKeyboardLayout                 = user32.NewProc("GetKeyboardLayout")
+	procRegisterHotKey                    = user32.NewProc("RegisterHotKey")
+	procUnregisterHotKey                  = user32.NewProc("UnregisterHotKey")
 	procSetWinEventHook                   = user32.NewProc("SetWinEventHook")
 	procRegisterSuspendResumeNotification = user32.NewProc("RegisterSuspendResumeNotification")
 
@@ -85,6 +89,7 @@ const (
 	eventSystemForeground = 0x0003
 	wineventOutOfContext  = 0x0000
 
+	mapvkVSCToVKEx = 3 // 扫描码换 vk，分左右；高字节写 0xE0 是扩展键
 	mapvkVKToVSCEx = 4
 
 	llkhfExtended = 0x01 // KBDLLHOOKSTRUCT.flags：扫描码带 0xE0 前缀的键

@@ -11,7 +11,7 @@ package main
 //   - 松开的事件可能丢（UIPI、管理员窗口、Win+L）：每次按下前用系统接口核对按住的别的键，普通键按下超过 10 秒的也当丢了。
 //     我们吞掉的键系统接口查不准，只按 10 秒算；修饰键也核对（Mac 每个 flagsChanged 都从标志位重新读，不用）。见 prune。
 // 只有 Windows 有的：Alt 或 Win 按住期间，我们第一次触发绑定或吞键时插一下掩码键（见 settleMask）。
-// 只报绑定的按下、松开、被打断，不报是哪个键。
+// 只报绑定的按下、松开、被打断，不报是哪个键（录键模式是有边界的例外，在 record.go，录键期间不喂这里）。
 
 // 一个绑定：父进程 bind 下发的一行
 type binding struct {
@@ -140,6 +140,24 @@ func (m *matcher) reset() []event {
 	m.capturingDown = map[keyID]*binding{}
 	m.settleMask(&outcome{})
 	return events
+}
+
+// 现在按着的键，和它的按下吞没吞（录键进入时要知道哪些是进入前就按着的，record.go）。没吞的问一遍系统，松开丢了的不算；
+// 吞了的系统查不准（见 prune），照记着的算，它们的松开还得接着吞
+func (m *matcher) heldKeys() map[keyID]bool {
+	keys := map[keyID]bool{}
+	for id, key := range m.held {
+		if !m.swallowed[id] && m.stillDown(id, key) {
+			keys[id] = false
+		}
+	}
+	for id := range m.swallowed {
+		keys[id] = true
+	}
+	for id := range m.capturingDown {
+		keys[id] = true
+	}
+	return keys
 }
 
 func (m *matcher) release() []event {

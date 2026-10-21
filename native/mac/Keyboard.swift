@@ -1,6 +1,6 @@
 // 键盘和悬浮条上的点击：三个 tap 加 Carbon，共用一个匹配器（docs/hotkey-research.md 4.1"tap 的布置""三个 tap 怎么分工"）。
 //   只听 tap  常开，收 flagsChanged、keyDown、keyUp，要输入监控权限。平时匹配器靠它喂。
-//   吞键 tap  能改事件，平时关着。截着（说话时）、有吞了按下还没吞松开的键、"修饰键 + 普通键"绑定的修饰键按着时才开，
+//   吞键 tap  能改事件，平时关着。截着（说话时）、录键时、有吞了按下还没吞松开的键、"修饰键 + 普通键"绑定的修饰键按着时才开，
 //             要辅助功能权限。开着时事件先到它这里，当场匹配、当场决定吞不吞。悬浮条上的点击也由它截。
 //   触发 tap  能改事件但一律放行，只收 flagsChanged；有"修饰键 + 普通键"的绑定时才建，建了就一直开着。
 //             它的回调是同步的，系统等它返回才往下送：修饰键按下时在这里把吞键 tap 打开，紧跟着的普通键一定先到吞键 tap。
@@ -28,6 +28,8 @@ let modifierFlagMasks: [Int: UInt64] = [
 /// 核对按住的键查的是硬件那份状态：我们的 tap 吞掉的键，合并后的那份（combinedSessionState）一直说没按着，
 /// 硬件那份照实说按着（本机实测，合成按键四组一致）
 let matcher = Matcher(stillDown: { CGEventSource.keyState(.hidSystemState, key: CGKeyCode($0)) })
+/// 录键（Recorder.swift）：录着的时候，和它还在吞松开的键，事件交给它，不交给匹配器
+let recorder = Recorder()
 
 /// 一个 tap 和它挂在 run loop 上的源：作废时两样都要拿下来
 private struct Tap {
@@ -78,17 +80,29 @@ private func feed(_ type: CGEventType, _ event: CGEvent) -> Bool {
     let code = Int(event.getIntegerValueField(.keyboardEventKeycode))
     let identity = EventKey(timestamp: event.timestamp, type: type.rawValue, code: Int64(code), flags: event.flags.rawValue)
     if seenBefore(identity) { return false }
+    let flags = event.flags.rawValue
+    let down: Bool
+    if type == .flagsChanged {
+        // CapsLock 之类也走 flagsChanged，但它们不是修饰键
+        guard let mask = modifierFlagMasks[code] else { return false }
+        down = flags & mask != 0
+    } else {
+        down = type == .keyDown
+    }
+    let autorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+    if let recorded = recorder.onKey(code, down: down, autorepeat: autorepeat) {
+        if recorded.changed { emit(recorder.json) }
+        settleSwallowTap()
+        return recorded.swallow
+    }
     // CGEvent 的时间戳是开机以来的纳秒（和 CLOCK_UPTIME_RAW 同一个钟，实验记录里对过）
     let time = event.timestamp / 1_000_000
     var outcome = Outcome()
     if type == .flagsChanged {
-        // CapsLock 之类也走 flagsChanged，但它们不是修饰键
-        guard let mask = modifierFlagMasks[code] else { return false }
-        let flags = event.flags.rawValue
         outcome.events = releaseLostModifiers(flags: flags, except: code)
-        outcome.events += matcher.onKey(code, down: flags & mask != 0, timeMs: time).events
+        outcome.events += matcher.onKey(code, down: down, timeMs: time).events
     } else {
-        outcome = matcher.onKey(code, down: type == .keyDown, timeMs: time)
+        outcome = matcher.onKey(code, down: down, timeMs: time)
     }
     for event in outcome.events { emit(event.json) }
     settleSwallowTap()
@@ -100,10 +114,10 @@ private func feed(_ type: CGEventType, _ event: CGEvent) -> Bool {
 private func nowMs() -> UInt64 { clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1_000_000 }
 
 /// Carbon 报的按下松开（HotKeys.swift）。只在安全输入开着时算：平时这些键的按下松开只听 tap 都看得到，
-/// 再算一次就重了。Carbon 分不了左右，不用另外核对：修饰键的 flagsChanged 安全输入下照常收得到，匹配器按它记着的
-/// 左右去凑，凑不上就当没按（这一下已经被 Carbon 吞了，到不了前台应用）
+/// 再算一次就重了；录键期间匹配器不喂，也不算。Carbon 分不了左右，不用另外核对：修饰键的 flagsChanged 安全输入下照常收得到，
+/// 匹配器按它记着的左右去凑，凑不上就当没按（这一下已经被 Carbon 吞了，到不了前台应用）
 func carbonFired(_ code: Int, down: Bool) {
-    guard secureInput, !suspended else { return }
+    guard secureInput, !suspended, !recorder.on else { return }
     for event in matcher.onKey(code, down: down, timeMs: nowMs()).events { emit(event.json) }
     settleSwallowTap()
 }
@@ -131,11 +145,11 @@ private func resetMatcher() {
 // MARK: - 吞键 tap 开关
 
 /// 吞键 tap 现在该不该开着。手还没松开的那一下要吞完整：按下吞了、松开却放出去的话，前台应用会收到没头没尾的半个事件。
-/// Carbon 管的键由系统自己吞，不用开着
+/// Carbon 管的键由系统自己吞，不用开着。录键吞的键不减 Carbon 管的：它的按下是我们的 tap 吞的，Carbon 没见过
 private var swallowWanted: Bool {
     guard !suspended else { return false }
-    return capturing || pressedRegion != nil || !matcher.pendingSwallow.subtracting(carbonKeys).isEmpty
-        || triggerModifiers.contains(where: matcher.isHeld)
+    return capturing || pressedRegion != nil || recorder.swallowWanted
+        || !matcher.pendingSwallow.subtracting(carbonKeys).isEmpty || triggerModifiers.contains(where: matcher.isHeld)
 }
 
 private func settleSwallowTap() {
@@ -292,6 +306,21 @@ func setSecureInput(_ on: Bool) {
     guard on != secureInput else { return }
     secureInput = on
     if !on { resetMatcher() }
+}
+
+// MARK: - 录键（Control.swift 的 record 调，限时也在那边管）
+
+/// 进入录键模式（已经在录就是重新开始），或者离开；没在录时说离开，什么也不报。
+/// 两头各 reset 一次匹配器、报它给的事件：进入时按着的绑定补报松开；录键期间它没喂，离开时它记着的已经不准了。
+/// 进入时匹配器吞了按下的键交给录键吞完松开（Carbon 管的除外，系统自己吞）
+func setRecording(_ on: Bool) {
+    if on {
+        recorder.start(swallowing: matcher.pendingSwallow.subtracting(carbonKeys))
+    } else if !recorder.stop() {
+        return
+    }
+    resetMatcher()
+    emit(recorder.json)
 }
 
 // MARK: - 绑定表

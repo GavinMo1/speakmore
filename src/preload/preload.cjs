@@ -90,7 +90,12 @@ contextBridge.exposeInMainWorld("speakmore", {
   openPrivacySettings: (permission) => ipcRenderer.invoke("setup:open-privacy", permission),
   recheckPermissions: () => ipcRenderer.invoke("setup:recheck"),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke("setup:set-open-at-login", enabled),
-  setHotkey: (action, value) => ipcRenderer.invoke("setup:set-hotkey", action, value),
+  // 录键（docs/hotkey-research.md 5.6）：index 是换掉第几个组合，null 是加一个；结果经 onHotkeyRecording 报回来
+  recordHotkey: (action, index) => ipcRenderer.invoke("hotkey:record", action, index),
+  stopRecordingHotkey: () => ipcRenderer.invoke("hotkey:record-stop"),
+  onHotkeyRecording: (callback) => ipcRenderer.on("hotkey:recording", (_event, payload) => callback(payload)),
+  removeHotkey: (action, index) => ipcRenderer.invoke("setup:remove-hotkey", action, index),
+  resetHotkey: (action) => ipcRenderer.invoke("setup:reset-hotkey", action),
   setBarHint: (value) => ipcRenderer.invoke("setup:set-bar-hint", value),
 
   // 首次引导

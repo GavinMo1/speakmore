@@ -778,7 +778,8 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 {"event":"binding","id":"dictate#0","down":false}
 {"event":"interrupted","id":"dictate#0"}
 {"event":"interrupted","id":"dictate#0","to":"x#0"}
-{"event":"recording","mods":[61],"keys":[49]}
+{"event":"recording","on":true,"mods":[61],"keys":[49]}
+{"event":"recording","on":false}
 {"event":"probed","id":7,"conflict":true,"source":"symbolic"}
 {"event":"info","fnUsage":1}
 {"event":"click","id":"cancel"}
@@ -791,7 +792,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 - `bound` 回执说明哪些绑定装不上、为什么，`rejected` 总是数组。原因有四种：`invalid`（形状不合规矩）；`needs_listen`（Mac 没有输入监控权限、Windows 键盘钩子没装上）；`needs_trusted`（Mac 上要吞普通键却没有辅助功能权限）；`register_failed`（Mac 上单个 F 键交给 Carbon 注册不上，多半是别的应用占了）。不装上而让普通键漏出去，会往用户的输入框里打字，所以宁可装不上并照实提示。
 - `interrupted` 带 `to` 时表示升级，紧接着一定是 `to` 那个绑定的按下。状态机可以据此决定保留麦克风、只换动作，还是取消再开始；第一版按"取消再开始"处理即可。
-- `recording` 只在录制模式下出现，报当前按住的原生码集合，修饰键和别的键分开报（录制时可能按着不止一个普通键，所以 `keys` 是数组，交给 JS 判形状）。
+- `recording` 只在录制模式下出现，报当前按住的原生码集合，修饰键和别的键分开报（录制时可能按着不止一个普通键，所以 `keys` 是数组，交给 JS 判形状）。进入时先报一份空的；只算进入以后才按下的键。离开时（命令让停的、30 秒到点自己停的）报 `on: false`。主进程按自己发出的 `record off` 计数，认掉对应的回执，剩下的才是到点（`src/app/hotkey-recording.mjs`）；刚开始录时、空快照之前到的是上一轮晚到的，不算。
 - `probed` 的 `source` 是 `symbolic`（Mac 系统快捷键）或 `registered`（Windows 上已被别的程序登记）；`info` 里 `fnUsage` 读不到时不带这个字段。
 - `permissions`、`secure_input` 只有 Mac 有。`permissions`：运行中两项权限变了（每秒查一次，辅助功能另听 `com.apple.accessibility.api`），没了的那项的 tap 已经作废，紧跟着按新的权限重报一次 `bound`。`secure_input`：安全输入开了、关了；开着时带普通键的绑定由 Carbon 顶着，`unavailable` 是顶不了的（带 fn 的、注册不上的）。
 - `elevated_foreground`、`relistened` 只有 Windows 有。`elevated_foreground`：前台换成了以管理员身份运行的窗口（`on: true`，带 `pid`），或者换走了（`on: false`）；小帮手自己是管理员身份时不报。主进程对同一个进程只提示一次（D8）。`relistened`：睡眠唤醒（`reason: "resume"`）、解锁或切回这个用户（`"unlock"`）以后重装了键盘钩子；睡下去、锁屏时按着的绑定先补报松开。

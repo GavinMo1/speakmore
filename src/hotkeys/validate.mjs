@@ -176,3 +176,22 @@ export function checkBindings(bindings, platform) {
   // 同一个组合的：拒绝在前，提醒在后；sort 是稳定的，同一级里保持上面报的先后
   return problems.sort((a, b) => order(a) - order(b) || (a.level === b.level ? 0 : a.level === "reject" ? -1 : 1));
 }
+
+/** 系统设置里"按下地球仪键时"各个值是做什么（AppleFnUsageType；0 是无操作） */
+const FN_USES = { 1: "binding.fnUses.inputSource", 2: "binding.fnUses.emoji", 3: "binding.fnUses.dictation" };
+
+/**
+ * 存的时候的一条提醒，按小帮手问来的系统设置说具体（docs/hotkey-research.md 5.8 的 info）：单按地球仪键的那条，
+ * 系统里设成"无操作"的就不提醒（null），设了别的就点明会一起做什么；读不到、不认识的值照原样说。别的提醒原样返回
+ * @param {object} warning 一句还没定语言的话；可以是 hotkeySetting.problem 包着的（前面带着是哪个组合）
+ * @param {{ fnUsage?: number }} info
+ */
+export function refineWarning(warning, { fnUsage } = {}) {
+  const wrapped = warning?.key === "hotkeySetting.problem";
+  const reason = wrapped ? warning.params.reason : warning;
+  if (reason?.key !== "binding.fnSystem" || !Number.isInteger(fnUsage)) return warning;
+  if (fnUsage === 0) return null;
+  if (!Object.hasOwn(FN_USES, fnUsage)) return warning;
+  const refined = msg("binding.fnSystemUse", { use: msg(FN_USES[fnUsage]) });
+  return wrapped ? msg("hotkeySetting.problem", { ...warning.params, reason: refined }) : refined;
+}

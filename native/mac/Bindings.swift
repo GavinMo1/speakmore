@@ -47,24 +47,32 @@ func parseBindings(_ value: Any?) -> (bindings: [Binding], rejected: [Rejected])
 private func bindingOf(_ item: (id: String, mods: [Int], key: Int?, when: String)) -> Binding? {
     let (id, mods, key, when) = item
     let capturing = when == "capturing"
-    guard !id.isEmpty, when == "always" || capturing,
-          mods.count <= 2, Set(mods).count == mods.count, mods.allSatisfy({ modifierKeyCodes.contains($0) }),
-          // 普通键：kVK 都在 0x00–0x7F 里，修饰键不能放在这一栏
-          key.map({ $0 <= 0x7F && !modifierKeyCodes.contains($0) }) ?? true,
-          (1 ... 2).contains(mods.count + (key == nil ? 0 : 1)),
+    guard !id.isEmpty, when == "always" || capturing, isValidChord(mods: mods, key: key),
           // 只在说话时生效的只按自己那一个键认（5.3）
           !capturing || (key != nil && mods.isEmpty) else { return nil }
     return Binding(id: id, mods: mods, key: key, capturing: capturing)
 }
 
-/// JSON 里的非负整数。JSONSerialization 把 true、1.5 也解成 NSNumber，这两种不算
-private func natural(_ value: Any?) -> Int? {
-    guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
-          let exact = Int(exactly: number.doubleValue), exact >= 0 else { return nil }
-    return exact
+/// 一个组合的形状合不合规矩（bind、probe 共用）：修饰键 0 到 2 个、不重复；普通键最多 1 个；合计 1 到 2 个键
+func isValidChord(mods: [Int], key: Int?) -> Bool {
+    mods.count <= 2 && Set(mods).count == mods.count && mods.allSatisfy { modifierKeyCodes.contains($0) }
+        // 普通键：kVK 都在 0x00–0x7F 里，修饰键不能放在这一栏
+        && (key.map { $0 <= 0x7F && !modifierKeyCodes.contains($0) } ?? true)
+        && (1 ... 2).contains(mods.count + (key == nil ? 0 : 1))
 }
 
-private func naturals(_ value: Any?) -> [Int]? {
+/// JSON 里的整数。JSONSerialization 把 true、1.5 也解成 NSNumber，这两种不算
+func integer(_ value: Any?) -> Int? {
+    guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+    return Int(exactly: number.doubleValue)
+}
+
+/// JSON 里的非负整数
+func natural(_ value: Any?) -> Int? {
+    integer(value).flatMap { $0 >= 0 ? $0 : nil }
+}
+
+func naturals(_ value: Any?) -> [Int]? {
     guard let list = value as? [Any] else { return nil }
     let ints = list.compactMap(natural)
     return ints.count == list.count ? ints : nil

@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="../shared/tokens.css" />
     <link rel="stylesheet" href="../shared/window.css" />
     <link rel="stylesheet" href="../shared/setup.css" />
+    <link rel="stylesheet" href="../shared/hotkey-editor.css" />
     <link rel="stylesheet" href="onboarding.css" />
   </head>
   <body>
@@ -26,6 +27,8 @@
       <symbol id="i-download" viewBox="0 0 24 24"><g><path d="M12 15V3m9 12v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10l5 5l5-5"/></g></symbol>
       <symbol id="i-clipboard-paste" viewBox="0 0 24 24"><g><path d="M11 14h10M16 4h2a2 2 0 0 1 2 2v1.344M17 18l4-4l-4-4M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113"/><rect width="8" height="4" x="8" y="2" rx="1"/></g></symbol>
       <symbol id="i-external-link" viewBox="0 0 24 24"><path d="M15 3h6v6m-11 5L21 3m-3 10v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" /></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14m-7-7v14"/></symbol>
       <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
       <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m15 18l-6-6l6-6" /></symbol>
       <symbol id="i-circle-alert" viewBox="0 0 24 24"><g><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></g></symbol>
@@ -139,11 +142,8 @@
             <button type="button" class="button primary" id="hotkey-yes" data-i18n="onboarding.hotkey.yes">Yes, continue</button>
             <button type="button" class="button" id="hotkey-no" data-i18n="onboarding.hotkey.no">No, pick another key</button>
           </div>
-          <div class="hotkey-choice" id="hotkey-choice" hidden>
-            <label for="hotkey-select" data-i18n="onboarding.hotkey.switchTo">Switch to</label>
-            <select class="select" id="hotkey-select"></select>
-          </div>
-          <p class="hint" id="hotkey-note" role="status" hidden></p>
+          <!-- 每个动作和它的键（D10）；"换个键"在这里录（shared/hotkey-editor.mjs） -->
+          <div class="hotkey-list" id="hotkey-editor"></div>
         </div>
         <aside class="visual keycap-panel" aria-hidden="true">
           <kbd class="big-keycap" id="big-keycap"></kbd>
