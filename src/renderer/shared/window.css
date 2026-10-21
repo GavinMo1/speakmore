@@ -250,6 +250,27 @@ p {
   filter: none;
 }
 
+/* 胶囊：和下拉框、标题行的胶囊按钮一个样子（设置里和下拉框排在同一列的按钮）。
+   软件更新那个按钮有新版本时是主要按钮：只换成全圆，渐变照旧 */
+.button.capsule {
+  font-weight: var(--weight-semibold);
+  border-radius: var(--radius-full);
+}
+
+.button.capsule:not(.primary) {
+  background: var(--surface);
+  box-shadow: var(--edge), var(--lift);
+}
+
+.button.capsule:not(.primary):hover {
+  background: var(--surface-solid);
+}
+
+.button.capsule:not(.primary):disabled {
+  background: var(--surface);
+  box-shadow: var(--edge);
+}
+
 .icon-button {
   display: inline-grid;
   place-items: center;
