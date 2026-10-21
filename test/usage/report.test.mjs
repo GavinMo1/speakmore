@@ -53,6 +53,22 @@ test("今天从本机时区的零点算，本月从 1 号零点算，累计不�
   );
 });
 
+test("当天零点因夏令时不存在（圣地亚哥九月初）时，本月仍从 1 号零点算，和本月的柱子同一个起点", () => {
+  const before = process.env.TZ;
+  process.env.TZ = "America/Santiago";
+  try {
+    // 2026-09-06 这天 00:00 跳到 01:00；1 号那天没有跳
+    const history = fakeHistory({});
+    const report = usageReport(history, { now: new Date(2026, 8, 6, 20) });
+    const firstOfMonth = new Date(2026, 8, 1).toISOString();
+    assert.ok(history.asked.includes(firstOfMonth), `本月问的是 ${history.asked}，应从 ${firstOfMonth} 起`);
+    assert.equal(report.month.series.buckets[0].start, firstOfMonth);
+  } finally {
+    if (before === undefined) delete process.env.TZ;
+    else process.env.TZ = before;
+  }
+});
+
 test("每段给出 token 合计和模型一般多久回话（中位数）、慢的时候多久（九成都比它快）；最外面按型号分开的是累计的", () => {
   const all = {
     ...totals({

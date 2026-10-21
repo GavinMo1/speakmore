@@ -55,10 +55,10 @@ function period(usage, series) {
  *   series：今天按钟头（0 点到 23 点），本月按天（1 号到月底），累计按用了多久（spanSeries）
  */
 export function usageReport(history, { now }) {
-  const midnight = new Date(now);
-  midnight.setHours(0, 0, 0, 0);
-  const firstOfMonth = new Date(midnight);
-  firstOfMonth.setDate(1);
+  // 按年月日现拼，和柱子的格子（series.mjs 的 startOf）同一个算法：
+  // 当天零点因夏令时不存在、顺延到 01:00 时，不能再拿它推 1 号，不然 1 号也从 01:00 算起
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const lastOfMonth = new Date(firstOfMonth.getFullYear(), firstOfMonth.getMonth() + 1, 0);
   const lastHour = new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate(), 23);
   // 按天分的一份本月、累计共用：series 只取落在自己范围里的
