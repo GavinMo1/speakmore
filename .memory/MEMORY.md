@@ -16,7 +16,7 @@
 - [SpeakMore 按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节
 - [SpeakMore 还在内测](speakmore-only-user-in-beta.md) — 只有他一个人在用；兼容旧版本、迁移按一个人的量来权衡，不做重
 - [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，代码在仓库根，已公开（MIT）；一行命令安装并启动，装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端以后用 Electron（同 Typeless，不用 Tauri）
-- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship，挂后台），GitHub 不再发；最新 0.12.0（10-20；0.11.0 起换成 channel.json + store/ 按块更新）；安装包公证会自己重交三次，再断就只补那一步、别重打包；发过的版本不覆盖；证书 2027-01-12 到期要续
+- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship，挂后台），GitHub 不再发；最新 0.13.1（10-21，#11 热修；0.11.0 起换成 channel.json + store/ 按块更新）；安装包公证会自己重交三次，再断就只补那一步、别重打包；发过的版本不覆盖；证书 2027-01-12 到期要续
 - [SpeakMore 官网](speakmore-website.md) — 代码在 website/，图片在单独的桶加 media 子域名（证书 2027-01-13 到期要续），Docker 部署、npm run deploy；README 的图在同一个桶的 readme/ 下；10-17 重做已上线（费用并进模型、开发者终端、costs.json 对账）；发新版后要再部署
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README；别人报的修好发版回复完就直接关
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
@@ -46,12 +46,12 @@
 - [Linux 暂不做](speakmore-no-linux-yet.md) — #6 留着不关、用户多了再议；整理笔记关联 Obsidian 不在范围（#7 已关）
 - [词典功能](speakmore-vocabulary-plan.md) — 已随 0.10.0 发布，#9 已关；还待他定：西里尔形近字归一、评测参照错和 multicard 判法
 - [Windows 上的系统窗口让他点](windows-gui-user-clicks.md) — 选文件这类系统窗口直接告诉他点哪，不用 SendKeys 或界面自动化；网页部分用 CDP 核对；那台机器的 Defender 是关着的
-- [腾讯云费用](speakmore-cloud-billing.md) — 按量付费、不能欠费，余额花完 CDN 两小时后下载全断；10-21 余额 120 元、告警 50 元；查下载量时顺带看余额
+- [腾讯云费用](speakmore-cloud-billing.md) — 按量付费、不能欠费，余额花完 CDN 两小时后下载全断；10-21 余额约 120 元、告警 50 元；查下载量时顺带看余额
 - [真机测更新要隔离](update-e2e-isolation.md) — 钉住 SPEAKMORE_APP、SPEAKMORE_BIN_DIR；临时签名的 App 被 open 打开会弹麦克风授权；Windows 换用户目录前先建好开始菜单和桌面，ps1 测试脚本带 BOM
 - [分发重构](speakmore-distribution-rework.md) — 10-20 全部做完并随 0.11.0 发布：模型换魔搭、包压缩瘦身、分块差量更新，两台电脑验过，旧的模型源和旧版本已撤；还剩 Electron fuses
 - [重构要做干净](refactor-surgical-clean.md) — 定了重构就手术式、不给我们自己的旧做法留兼容；碰到用户手里旧版本的先说清影响
 - [目录可配置重构](speakmore-relocatable-home.md) — issue #10：只留定位文件、整个 .speakmore 可装别处并一键迁移；已随 0.12.0 发布、#10 已关
-- [引擎页（原模型页）改成树](plaza-tree-prototype.md) — 10-21 在 engine-tree 分支做完、真窗口验过；没合并、没审查（他要等后面的改动一起审）；原型存档在 .playwright-mcp/plaza-tree/
-- [热键开放任意键](speakmore-hotkey-any-key.md) — 待做：任意键或组合键、配置驱动，目录重构发版后单独做
-- [界面逐页打磨的分支](ui-polish-branch.md) — ui-polish（从 engine-tree 开出）：首页、词典、引擎节点、胶囊按钮做完；下一块是首页花费统计；和引擎页一起等他说再审
+- [引擎页（原模型页）改成树](plaza-tree-prototype.md) — 10-21 审查、合并，随 0.13.0 发布；原型存档在 .playwright-mcp/plaza-tree/
+- [热键开放任意键](speakmore-hotkey-any-key.md) — 两键以内、配置驱动；10-21 调研完，报告 docs/hotkey-research.md，等他拍板 D1–D12 再动手
+- [界面逐页打磨的分支](ui-polish-branch.md) — ui-polish：首页、词典、引擎节点、胶囊按钮、花费卡做完，10-21 审查、合并，随 0.13.0 发布
 - [界面改动在开发窗口给他看](ui-review-in-dev-window.md) — 从源码起的隔离 App 验完不关，他直接在上面提意见，不打包
