@@ -1,5 +1,5 @@
 import { fillSelect, h, progressBadge, svg } from "../shared/dom.mjs";
-import { keycapOf, localize, t } from "../shared/i18n.mjs";
+import { hotkeyOptions, hotkeyText, localize, t } from "../shared/i18n.mjs";
 import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
 import { describeError, permissionGranted } from "../shared/setup-text.mjs";
@@ -441,7 +441,7 @@ function renderSummary() {
   const mic = permissionGranted("microphone", setup.permissions.microphone);
   $("summary").replaceChildren(
     item("i-audio-lines", t("onboarding.done.mode"), mode, state ? state.tone : "ok"),
-    item("i-keyboard", t("onboarding.done.hotkey"), keycapOf(setup.hotkey.value), "ok"),
+    item("i-keyboard", t("onboarding.done.hotkey"), hotkeyText(setup.hotkey.value), "ok"),
     item(
       "i-mic",
       t("permissions.microphone"),
@@ -475,13 +475,10 @@ function render() {
     button.disabled = granted === true;
   }
 
-  const keycap = keycapOf(setup.hotkey.value);
+  const keycap = hotkeyText(setup.hotkey.value);
   $("big-keycap").textContent = keycap;
-  fillSelect(
-    $("hotkey-select"),
-    setup.hotkey.choices.map((id) => [id, t(`hotkeys.${id}.name`)]),
-    setup.hotkey.value,
-  );
+  const hotkey = hotkeyOptions(setup.hotkey);
+  fillSelect($("hotkey-select"), hotkey.options, hotkey.current);
   $("try-text").placeholder = t("onboarding.try.placeholder", { keycap });
 
   // 底下：返回（第一步没有）、跳过引导、继续。这一步做完了"继续"是主按钮，没做完是次要的（照样能往下走）
@@ -567,7 +564,7 @@ $("hotkey-no").addEventListener("click", () => {
 $("hotkey-select").addEventListener("change", async (event) => {
   $("hotkey-note").hidden = true;
   try {
-    const result = await window.speakmore.setHotkey(event.target.value);
+    const result = await window.speakmore.setHotkey("dictate", event.target.value);
     $("hotkey-note").textContent = result.note ? t.text(result.note) : t("onboarding.hotkey.switched");
   } catch (error) {
     $("hotkey-note").textContent = t("onboarding.hotkey.failed", { reason: describeError(error) });

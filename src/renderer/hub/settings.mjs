@@ -1,6 +1,6 @@
 import { LOCALES, SYSTEM_LOCALE } from "../../i18n/index.mjs";
 import { fillSelect } from "../shared/dom.mjs";
-import { t } from "../shared/i18n.mjs";
+import { hotkeyOptions, t } from "../shared/i18n.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
 
 // 设置对话框：原版的"设置中心"，左边一列菜单。我们的三页：通用（热键、主题、语言、本机模型的下载源、开机启动、
@@ -123,11 +123,8 @@ export function createSettings({ refresh }) {
   // ---------- 通用：热键、主题、语言、开机启动 ----------
 
   function renderGeneral(setup) {
-    fillSelect(
-      $("hotkey"),
-      setup.hotkey.choices.map((id) => [id, t(`hotkeys.${id}.name`)]),
-      setup.hotkey.value,
-    );
+    const hotkey = hotkeyOptions(setup.hotkey);
+    fillSelect($("hotkey"), hotkey.options, hotkey.current);
     fillSelect(
       $("theme"),
       setup.theme.choices.map((id) => [id, t(`themes.${id}.name`)]),
@@ -163,7 +160,7 @@ export function createSettings({ refresh }) {
   $("hotkey").addEventListener("change", async (event) => {
     showNote("hotkey-note", null);
     try {
-      const result = await window.speakmore.setHotkey(event.target.value);
+      const result = await window.speakmore.setHotkey("dictate", event.target.value);
       showNote("hotkey-note", result.note ?? null);
     } catch (error) {
       showNote("hotkey-note", t("preferences.hotkeyFailed", { reason: describeError(error) }), "problem");

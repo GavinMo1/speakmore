@@ -51,16 +51,6 @@ export default {
     request: "授权",
   },
 
-  // 名字要能直接嵌进句子里（"按一下右 Option 键开始说话"），所以以"键"结尾
-  hotkeys: {
-    right_option: { name: "右 Option 键", keycap: "右⌥" },
-    right_command: { name: "右 Command 键", keycap: "右⌘" },
-    right_control: { name: "右 Control 键", keycap: "右⌃" },
-    fn: { name: "地球仪（fn）键", keycap: "fn" },
-    right_alt: { name: "右 Alt 键", keycap: "右 Alt" },
-    right_ctrl: { name: "右 Ctrl 键", keycap: "右 Ctrl" },
-  },
-
   // 键的名字、组合里的叫法、键帽（src/hotkeys/keys.mjs 里的 code）。字母、数字、F 键、标点的字和语言无关，写在键表里，
   // 名字用 named 拼。名字要能嵌进句子（"按一下右 Option 键开始说话"），所以以"键"结尾。这里是 Mac 的说法，Windows 的在 windows 一节
   keys: {
@@ -119,6 +109,22 @@ export default {
     cancel: { name: "取消", description: "说话时按下，取消这一次。" },
   },
 
+  // 热键的设置项（src/hotkeys/settings.mjs）
+  hotkeySetting: {
+    describe: "「{action}」的快捷键：两键以内的任意组合，写法见 README",
+    notList: '要写一个组合（AltRight、ControlRight+Space），或者一组组合（["Fn","MetaRight"]）',
+    problem: "{chord}：{reason}",
+  },
+
+  // 下发给小帮手之前查出来的、小帮手说装不上的（src/hotkeys/bindings.mjs），放进"还差什么"
+  hotkeyProblem: {
+    chord: "「{action}」的 {chord} 用不了：{reason}",
+    fallback: "「{action}」先用默认的 {chord}",
+    needsTrusted: "要先在系统设置里给 SpeakMore 辅助功能权限",
+    registerFailed: "系统没让注册，可能被别的应用占了",
+    invalid: "小帮手认不出这个组合",
+  },
+
   // 一个组合为什么不能绑、为什么要提醒（src/hotkeys/validate.mjs）
   binding: {
     notAvailable: "这个系统上没有{key}",
@@ -142,6 +148,7 @@ export default {
     repeated: "这个组合写了两遍",
     taken: "已经给了「{action}」",
     usesCapturingKey: "{key}是「{action}」的键：说话时按它只会取消",
+    capturingKeyUsed: "{key}在「{action}」的组合里：只在说话时生效的动作不能再绑它",
     fnSystem: "地球仪键在系统设置里若设了别的用途（切换输入法、表情、听写），按它时会一起触发；外接键盘多半没有 fn",
     macOptionTyping: "⌥ 加打字的键平时会打出特殊字符（⌥空格是不换行空格），绑上以后就打不出来了",
     altGr: "有些键盘布局（德语、法语等）把右 Alt 当 AltGr 打字用，按它时会一起触发",
@@ -172,7 +179,6 @@ export default {
 
   settings: {
     describe: {
-      hotkey: "按哪个键开始和结束说话",
       mode: "识别走哪条路：native 是录音直接交给收音频的模型，local 是本机的小模型先转成文字、再交给任意大模型润色，private 是只用本机模型转写、什么都不上传",
       model: "用哪一家的哪个模型整理，写成 厂商/模型；只写厂商就用它的默认模型。换模型用 speakmore model",
       thinking: "Gemini 的思考档位，越高越慢。别家的模型用不上",
@@ -1085,6 +1091,7 @@ export default {
     historyTooNew: "历史库的版本是 {found}，比这个程序认识的 {known} 新，不敢动它",
     historyTooOld: "历史库的版本是 {found}，这个程序认识的是 {known}：先把 SpeakMore 启动一次，或者更新到新版",
     legacyRunning: "旧版本的 SpeakMore 还在运行，数据搬不过来。先把它退出（菜单栏“听写”→“退出”），再运行一次。",
+    settingsMigrateFailed: "设置文件 {file} 里的旧热键换不过来（{reason}）。让这个文件能写，再运行一次。",
   },
 
   cli: {
@@ -1232,7 +1239,9 @@ export default {
       themeOverridden: "正在运行的 SpeakMore 用的还是{theme}：启动它的环境里设着 {variable}，它盖过设置文件。",
       languageOverridden: "正在运行的 SpeakMore 用的还是{language}：启动它的环境里设着 {variable}，它盖过设置文件。",
       modelSourceOverridden: "正在运行的 SpeakMore 用的还是{source}：启动它的环境里设着 {variable}，它盖过设置文件。",
+      hotkeyOverridden: "正在运行的 SpeakMore 用的还是{hotkey}：启动它的环境里设着 {variable}，它盖过设置文件。",
       envWarning: "注意：环境变量 {variable} 现在设着，它会盖过这个值。",
+      warning: "注意：{warning}",
       changed: "{name} 改成了 {value}。",
       modeCommand: "这一项平时用 {command} 换：它先检查能不能用，不行就不换。config set 不检查，直接写进设置。",
       otherMode: "现在是 {current} 模式，这一项切到 {mode} 模式时才用上。",
@@ -1242,8 +1251,8 @@ export default {
       settingsOpened: "设置已经打开。",
       title: "设置",
       choices: "{describe}。能填：{choices}",
-      hintSet: "改一项：speakmore config set hotkey fn",
-      hintUnset: "回到默认：speakmore config unset hotkey",
+      hintSet: "改一项：speakmore config set hotkey.dictate Fn+Space",
+      hintUnset: "回到默认：speakmore config unset hotkey.dictate",
       hintKey: "换 key：speakmore key",
       hintTheme: "换主题：speakmore theme",
       folder: "目录",
@@ -1574,6 +1583,7 @@ speakmore help     全部命令`,
     },
     cli: {
       key: { storage: "它会用 Windows 的数据保护加密后存在这台电脑上，不会发到别处。" },
+      config: { hintSet: "改一项：speakmore config set hotkey.dictate ControlRight" },
     },
     permissions: { openSettings: "设置" },
     setup: { openSettings: "任务栏通知区域的图标 › 设置" },

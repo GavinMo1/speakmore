@@ -53,15 +53,6 @@ export default {
     request: "Allow",
   },
 
-  hotkeys: {
-    right_option: { name: "Right Option", keycap: "Right ⌥" },
-    right_command: { name: "Right Command", keycap: "Right ⌘" },
-    right_control: { name: "Right Control", keycap: "Right ⌃" },
-    fn: { name: "Globe (fn)", keycap: "fn" },
-    right_alt: { name: "Right Alt", keycap: "Right Alt" },
-    right_ctrl: { name: "Right Ctrl", keycap: "Right Ctrl" },
-  },
-
   // Key names, short names inside a combination, and keycaps (codes from src/hotkeys/keys.mjs). Letters, digits, F keys and
   // punctuation read the same in every language: their text is in the key table and named builds the name. Windows wording is under windows
   keys: {
@@ -120,6 +111,22 @@ export default {
     cancel: { name: "Cancel", description: "Press while talking to cancel this one." },
   },
 
+  // The shortcut settings (src/hotkeys/settings.mjs)
+  hotkeySetting: {
+    describe: "Shortcut for {action}: any combination of up to two keys; see the README for how to write it",
+    notList: 'must be one combination (AltRight, ControlRight+Space) or a list of them (["Fn","MetaRight"])',
+    problem: "{chord}: {reason}",
+  },
+
+  // Found before handing the shortcuts to the helper, or reported back by it (src/hotkeys/bindings.mjs); listed under what's missing
+  hotkeyProblem: {
+    chord: "{action}'s {chord} doesn't work: {reason}",
+    fallback: "{action} uses the default {chord} for now",
+    needsTrusted: "SpeakMore needs Accessibility access in System Settings first",
+    registerFailed: "the system wouldn't register it; another app may be using it",
+    invalid: "the helper doesn't recognize this combination",
+  },
+
   // Why a combination can't be bound, or what to watch out for (src/hotkeys/validate.mjs)
   binding: {
     notAvailable: "{key} isn't available on this system",
@@ -145,6 +152,7 @@ export default {
     repeated: "Listed twice",
     taken: "Already used by {action}",
     usesCapturingKey: "{key} is the key for {action}: while you talk, pressing it only cancels",
+    capturingKeyUsed: "{key} is part of a {action} combination: an action that works only while you talk can't use it",
     fnSystem:
       "If the Globe key has another job in System Settings (switching input sources, emoji, dictation), that fires too; most external keyboards have no fn",
     macOptionTyping:
@@ -177,7 +185,6 @@ export default {
 
   settings: {
     describe: {
-      hotkey: "Which key starts and stops dictation",
       mode: "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this Mac first, then has any LLM polish the text; private only transcribes on this Mac and uploads nothing",
       model:
         "Which provider and model refines your words, as provider/model; a provider alone uses its default. Switch with speakmore model",
@@ -1134,6 +1141,8 @@ export default {
       "The history database is version {found}, but this program expects {known}: start SpeakMore once, or update to the latest version",
     legacyRunning:
       "An old version of SpeakMore is still running, so its data can't be moved. Quit it first (menu bar → Quit), then run this again.",
+    settingsMigrateFailed:
+      "Can't update the old shortcut in the settings file {file} ({reason}). Make the file writable, then run this again.",
   },
 
   cli: {
@@ -1293,7 +1302,10 @@ export default {
         "The running SpeakMore still uses {language}: {variable} is set where it was started, and it overrides the settings file.",
       modelSourceOverridden:
         "The running SpeakMore still uses {source}: {variable} is set where it was started, and it overrides the settings file.",
+      hotkeyOverridden:
+        "The running SpeakMore still uses {hotkey}: {variable} is set where it was started, and it overrides the settings file.",
       envWarning: "Note: the {variable} env var is set and overrides this value.",
+      warning: "Note: {warning}",
       changed: "{name} set to {value}.",
       modeCommand:
         "This is usually changed with {command}, which checks it works first and leaves it alone if not. config set skips the checks and writes it straight in.",
@@ -1304,8 +1316,8 @@ export default {
       settingsOpened: "Settings opened.",
       title: "Settings",
       choices: "{describe}. Options: {choices}",
-      hintSet: "Change one: speakmore config set hotkey fn",
-      hintUnset: "Reset one: speakmore config unset hotkey",
+      hintSet: "Change one: speakmore config set hotkey.dictate Fn+Space",
+      hintUnset: "Reset one: speakmore config unset hotkey.dictate",
       hintKey: "Replace the key: speakmore key",
       hintTheme: "Switch theme: speakmore theme",
       folder: "Folder",
@@ -1671,6 +1683,7 @@ speakmore help     all commands`,
     },
     cli: {
       key: { storage: "It's encrypted with Windows data protection and stays on this PC." },
+      config: { hintSet: "Change one: speakmore config set hotkey.dictate ControlRight" },
     },
     permissions: { openSettings: "Settings" },
     // PowerShell strips double quotes from arguments it passes to speakmore.cmd; they need a backslash

@@ -2,7 +2,7 @@
 // 画面不在这里：该是什么样子由 bar-view.mjs 算，画出来由 bar-ui.mjs 管。
 
 import { LocalizedError, msg, problemOf } from "../../i18n/index.mjs";
-import { keycapOf, localize, setLocale, t } from "../shared/i18n.mjs";
+import { hotkeyText, localize, setLocale, t } from "../shared/i18n.mjs";
 import { createBarUi } from "./bar-ui.mjs";
 import { viewOf } from "./bar-view.mjs";
 import { Action, eventTypeOf, initialState, LONG_PRESS_MS, Phase, transition } from "./machine.mjs";
@@ -14,28 +14,28 @@ const MAX_DURATION_MS = 540_000;
 
 // 页面的 lang 跟着界面语言：提示是 aria-live 的，读屏软件按它挑用哪种语言念
 localize();
-const { serverUrl, hotkey: initialHotkey, barControls, barHint } = await window.speakmore.config();
-/** 现在的热键（id）。提示里写它的短名字，按界面语言写 */
-let hotkey = initialHotkey;
+const { serverUrl, hotkeys: initialHotkeys, barControls, barHint } = await window.speakmore.config();
+/** 现在每个动作的热键（组合列表）。提示里写听写的键帽，按界面语言写 */
+let hotkeys = initialHotkeys;
 const voice = new VoiceSocket(serverUrl);
 const ui = createBarUi({
   document,
   host: { setVisible: window.speakmore.setBarVisible, capture: window.speakmore.captureBarInput },
-  keycap: keycapOf(hotkey),
+  keycap: hotkeyText(hotkeys.dictate),
   t,
 });
 ui.setControls(barControls);
 ui.setHintShown(barHint === "on");
 window.speakmore.onBarHint((value) => ui.setHintShown(value === "on"));
-window.speakmore.onHotkeyChanged((next) => {
-  hotkey = next;
-  ui.setKeycap(keycapOf(hotkey));
+window.speakmore.onHotkeysChanged((next) => {
+  hotkeys = next;
+  ui.setKeycap(hotkeyText(hotkeys.dictate));
 });
 // 设置里换了语言：悬浮条不重新加载（可能正在听写），换掉翻译，下一句就是新的语言
 window.speakmore.onLocaleChanged((locale) => {
   setLocale(locale);
   ui.setTranslator(t, t.text(state.message));
-  ui.setKeycap(keycapOf(hotkey));
+  ui.setKeycap(hotkeyText(hotkeys.dictate));
 });
 
 let state = initialState;

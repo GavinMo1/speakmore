@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ACTIONS, actionOf } from "../../src/hotkeys/actions.mjs";
-import { actionOfBinding, bindingTable } from "../../src/hotkeys/bindings.mjs";
+import {
+  actionOfBinding,
+  bindingTable,
+  boundProblems,
+  describeHotkeyProblem,
+  resolveHotkeys,
+} from "../../src/hotkeys/bindings.mjs";
 import { parseChord } from "../../src/hotkeys/chord.mjs";
+import { hotkeySettings } from "../../src/hotkeys/settings.mjs";
+import { createTranslator } from "../../src/i18n/index.mjs";
 
 const chords = (map) => Object.fromEntries(Object.entries(map).map(([id, list]) => [id, list.map(parseChord)]));
 
@@ -53,4 +61,101 @@ test("绑定 id 认回动作：每个动作的每个组合都认得回来；不�
     assert.equal(actionOfBinding(row.id), actionOf(row.id.split("#")[0]), row.id);
   }
   for (const id of ["", "nope#0", "dictate", "#0", undefined, 7]) assert.equal(actionOfBinding(id), null, String(id));
+});
+
+// ---------- 下发前的校验和退回（5.2 的第三道） ----------
+
+/** 照 resolveSettings 的样子拼热键那几项：给了的算用户自己设的（file），没给的是默认值 */
+function settingsOn(platform, values = {}) {
+  return Object.fromEntries(
+    Object.entries(hotkeySettings(platform)).map(([name, setting]) => [
+      name,
+      name in values
+        ? { value: setting.parse(values[name]), source: "file" }
+        : { value: setting.default, source: "default" },
+    ]),
+  );
+}
+const zhWin = createTranslator("zh-CN", "win32");
+const zhMac = createTranslator("zh-CN", "darwin");
+const texts = (problems, t) => problems.map((problem) => t.text(describeHotkeyProblem(problem)));
+
+test("都是默认的：照装，没有问题；Windows 的右 Alt 带一条 AltGr 的提醒", () => {
+  for (const platform of ["darwin", "win32"]) {
+    const resolved = resolveHotkeys(settingsOn(platform), platform);
+    assert.deepEqual(resolved.chords, { dictate: [["AltRight"]], cancel: [["Escape"]] });
+    assert.deepEqual(resolved.problems, []);
+    assert.deepEqual(
+      resolved.warnings.map(({ action, chord }) => [action, chord]),
+      platform === "win32" ? [["dictate", ["AltRight"]]] : [],
+    );
+  }
+});
+
+test("Mac 的设置搬到 Windows 上：fn 写法没错、绑不了，听写退回右 Alt 并说明；App 照样起得来（3.4 第 9 条）", () => {
+  const resolved = resolveHotkeys(settingsOn("win32", { "hotkey.dictate": "Fn" }), "win32");
+  assert.deepEqual(resolved.chords, { dictate: [["AltRight"]], cancel: [["Escape"]] });
+  assert.deepEqual(texts(resolved.problems, zhWin), [
+    "「语音输入」的 fn 用不了：这个系统上没有地球仪（fn）键",
+    "「语音输入」先用默认的 右 Alt",
+  ]);
+  // 能装的照装：只有装不上的那个不装，不退回
+  const partly = resolveHotkeys(settingsOn("win32", { "hotkey.dictate": '["Fn","ControlRight"]' }), "win32");
+  assert.deepEqual(partly.chords.dictate, [["ControlRight"]]);
+  assert.deepEqual(texts(partly.problems, zhWin), ["「语音输入」的 fn 用不了：这个系统上没有地球仪（fn）键"]);
+});
+
+test("手改文件写了系统保留的、取消写成了修饰键、清空了不能清空的：那个不装，必须有键的退回默认", () => {
+  const reserved = resolveHotkeys(settingsOn("darwin", { "hotkey.dictate": "MetaRight+KeyC" }), "darwin");
+  assert.deepEqual(reserved.chords.dictate, [["AltRight"]]);
+  assert.match(texts(reserved.problems, zhMac)[0], /^「语音输入」的 右⌘ C 用不了：⌘ 加打字的键/);
+  const cancel = resolveHotkeys(settingsOn("darwin", { "hotkey.cancel": "AltRight+Space" }), "darwin");
+  assert.deepEqual(cancel.chords.cancel, [["Escape"]]);
+  const cleared = resolveHotkeys(settingsOn("darwin", { "hotkey.cancel": "[]" }), "darwin");
+  assert.deepEqual(cleared.chords.cancel, [["Escape"]]);
+  assert.deepEqual(texts(cleared.problems, zhMac), ["「取消」先用默认的 esc"]);
+});
+
+test("两个都是自己设的、撞了：按动作目录的先后，后面的让位", () => {
+  const resolved = resolveHotkeys(
+    settingsOn("darwin", { "hotkey.dictate": "ControlRight+F13", "hotkey.cancel": "F13" }),
+    "darwin",
+  );
+  assert.deepEqual(resolved.chords, { dictate: [["ControlRight", "F13"]], cancel: [["Escape"]] });
+  assert.match(texts(resolved.problems, zhMac)[0], /^「取消」的 F13 用不了：F13 键在「语音输入」的组合里/);
+});
+
+test("能绑但要提醒的照装，提醒单独交出来写日志，不算问题", () => {
+  const resolved = resolveHotkeys(settingsOn("darwin", { "hotkey.dictate": "Fn" }), "darwin");
+  assert.deepEqual(resolved.chords.dictate, [["Fn"]]);
+  assert.deepEqual(resolved.problems, []);
+  assert.equal(resolved.warnings.length, 1);
+  assert.deepEqual(resolved.warnings[0].chord, ["Fn"]);
+  assert.match(zhMac.text(resolved.warnings[0].reason), /^地球仪键在系统设置里/);
+});
+
+test("小帮手的 bound 回执：按绑定 id 认回是哪个组合，原因换成人话；没有输入监控权限的不重复报（那一项另有一条）", () => {
+  const chords = { dictate: [["AltRight"], ["AltRight", "Space"]], cancel: [["Escape"]] };
+  const problems = boundProblems(
+    [
+      { id: "dictate#1", reason: "needs_trusted" },
+      { id: "cancel#0", reason: "needs_listen" },
+      // 说话时才生效的（取消）没有辅助功能权限时本来就截不住，悬浮条那时也不画取消按钮：不算缺
+      { id: "cancel#0", reason: "needs_trusted" },
+      { id: "dictate#9", reason: "invalid" },
+      { id: "nope#0", reason: "invalid" },
+    ],
+    chords,
+  );
+  assert.deepEqual(texts(problems, zhMac), [
+    "「语音输入」的 右⌥ 空格 用不了：要先在系统设置里给 SpeakMore 辅助功能权限",
+  ]);
+  assert.match(
+    zhMac.text(describeHotkeyProblem(boundProblems([{ id: "dictate#0", reason: "register_failed" }], chords)[0])),
+    /系统没让注册/,
+  );
+  assert.match(
+    zhMac.text(describeHotkeyProblem(boundProblems([{ id: "dictate#0", reason: "invalid" }], chords)[0])),
+    /小帮手认不出/,
+  );
 });

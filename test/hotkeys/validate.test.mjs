@@ -161,8 +161,15 @@ test("整份绑定：动作之间同键、用了取消的键、一个动作里�
   assert.deepEqual(reasons({ dictate: chords("F13"), cancel: chords("F13") }), [
     "cancel#0 reject Already used by Voice input",
   ]);
-  assert.deepEqual(reasons({ dictate: chords("ControlRight+F13"), cancel: chords("F13") }), [
+  // 先到先得按传进来的先后：后来的让位。取消先占了 F13，语音输入的组合里就不能有它；反过来取消就不能用 F13
+  assert.deepEqual(reasons({ cancel: chords("F13"), dictate: chords("ControlRight+F13") }), [
     "dictate#0 reject F13 is the key for Cancel: while you talk, pressing it only cancels",
+  ]);
+  assert.deepEqual(reasons({ dictate: chords("ControlRight+F13"), cancel: chords("F13") }), [
+    "cancel#0 reject F13 is part of a Voice input combination: an action that works only while you talk can't use it",
+  ]);
+  assert.deepEqual(reasons({ cancel: chords("F13"), dictate: chords("F13") }), [
+    "dictate#0 reject Already used by Cancel",
   ]);
   assert.deepEqual(reasons({ dictate: chords("AltRight", "AltRight"), cancel: chords("Escape") }), [
     "dictate#1 reject Listed twice",

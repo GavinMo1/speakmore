@@ -1,3 +1,4 @@
+import { chordName, chordString, chordsText } from "../../hotkeys/chord.mjs";
 import { createTranslator } from "../../i18n/index.mjs";
 
 // 页面上的字：按主进程给的界面语言翻（预加载脚本同步取来的 window.speakmore.locale）。
@@ -31,5 +32,19 @@ export function localize(root = document) {
   for (const template of root.querySelectorAll("template")) localize(template.content);
 }
 
-/** 一个热键在提示、键帽上写成什么 */
-export const keycapOf = (hotkey) => t(`hotkeys.${hotkey}.keycap`);
+/** 一个动作的热键（主进程给的组合列表）在提示、键帽上写成什么：fn、右⌘ */
+export const hotkeyText = (chords) => t.text(chordsText(chords));
+
+/**
+ * 引导页、设置页的热键下拉框：能选的单键各一项，叫什么按界面语言写；装着的不在其中（命令行里设的组合、几个组合）时
+ * 排在最前、选中它。值是写进设置的写法
+ * @param {{ value: string[][], choices: string[] }} hotkey 主进程 setup:get 的 hotkey
+ * @returns {{ options: Array<[string, string]>, current: string }}
+ */
+export function hotkeyOptions({ value, choices }) {
+  const single = value.length === 1 && value[0].length === 1 && choices.includes(value[0][0]);
+  const current = single ? value[0][0] : JSON.stringify(value.map(chordString));
+  const options = choices.map((code) => [code, t.text(chordName([code]))]);
+  if (!single) options.unshift([current, hotkeyText(value)]);
+  return { options, current };
+}

@@ -109,7 +109,9 @@ ipcMain.on("locale:get", (event) => {
 ipcMain.handle("history:list", () => current.history.list());
 ipcMain.handle("usage:report", () => usageReport(current.history, { now: new Date() }));
 ipcMain.handle("insights:get", () => insights(current.history.dictations(), { now: new Date() }));
-ipcMain.handle("app:info", () => ({ version: VERSION, hotkey: "right_option" }));
+/** 默认的热键，拼法同 app/main.mjs 的 hotkeys.chords：Mac 上听写是右 Option，取消是 esc */
+const HOTKEYS = { dictate: [["AltRight"]], cancel: [["Escape"]] };
+ipcMain.handle("app:info", () => ({ version: VERSION, hotkeys: HOTKEYS }));
 /** 首页标题右边的识别方式、引擎页按它画：出厂设置、原生识别、配了 Gemini 的密钥，拼法同 app/main.mjs 的 describePlazaNow */
 const settings = resolveSettings({ file: join(tmpdir(), "speakmore-shots-none", "settings.json"), env: {} });
 const plaza = describePlaza({
@@ -137,7 +139,7 @@ ipcMain.handle("setup:get", () => ({
   key: { state: "ready", source: "stored" },
   permissions: { microphone: "granted", listen: true, trusted: true },
   summary: { ready: true, missing: [], blocker: null, degraded: null },
-  hotkey: { value: "right_option", choices: ["right_option", "right_command", "right_control", "fn"] },
+  hotkey: { value: HOTKEYS.dictate, choices: ["ControlRight", "AltRight", "MetaRight", "Fn"] },
   theme: { value: current.theme.id, choices: THEMES.map(({ id }) => id) },
   language: { value: "system", locale: current.locale },
   openAtLogin: { supported: true, enabled: true },
@@ -161,7 +163,7 @@ ipcMain.handle("setup:get", () => ({
   switchable: true,
   plaza,
 }));
-ipcMain.handle("config:get", () => ({ serverUrl: "ws://127.0.0.1:9/none", hotkey: "right_option", barControls: true }));
+ipcMain.handle("config:get", () => ({ serverUrl: "ws://127.0.0.1:9/none", hotkeys: HOTKEYS, barControls: true }));
 ipcMain.on("bar:set-visible", () => {});
 ipcMain.on("bar:capture", () => {});
 
@@ -284,7 +286,7 @@ async function shootBar(locale) {
       b.dataset.shown = "true";
       b.dataset.controls = "true";
       const kbd = (text) => Object.assign(document.createElement("kbd"), { textContent: text });
-      const parts = hintFor("recording", { keycap: t("hotkeys.right_option.keycap"), cancellable: true }, t);
+      const parts = hintFor("recording", { keycap: t("keys.AltRight.keycap"), cancellable: true }, t);
       document.getElementById("hint").replaceChildren(...parts.map((p) => (typeof p === "string" ? p : kbd(p.key))));
       [...document.querySelectorAll("#wave i")].forEach((i, n) => i.style.setProperty("--h", ${JSON.stringify(WAVE)}[n]));
     })()`);

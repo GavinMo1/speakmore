@@ -32,7 +32,7 @@ contextBridge.exposeInMainWorld("speakmore", {
   deliver: (payload) => ipcRenderer.invoke("dictation:deliver", payload),
   reportFailure: (payload) => ipcRenderer.invoke("dictation:failed", payload),
 
-  onHotkeyChanged: (callback) => ipcRenderer.on("bar:hotkey", (_event, hotkey) => callback(hotkey)),
+  onHotkeysChanged: (callback) => ipcRenderer.on("bar:hotkeys", (_event, hotkeys) => callback(hotkeys)),
   onBarHint: (callback) => ipcRenderer.on("bar:hint", (_event, value) => callback(value)),
 
   // 主窗口：首页、历史记录
@@ -90,7 +90,7 @@ contextBridge.exposeInMainWorld("speakmore", {
   openPrivacySettings: (permission) => ipcRenderer.invoke("setup:open-privacy", permission),
   recheckPermissions: () => ipcRenderer.invoke("setup:recheck"),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke("setup:set-open-at-login", enabled),
-  setHotkey: (hotkey) => ipcRenderer.invoke("setup:set-hotkey", hotkey),
+  setHotkey: (action, value) => ipcRenderer.invoke("setup:set-hotkey", action, value),
   setBarHint: (value) => ipcRenderer.invoke("setup:set-bar-hint", value),
 
   // 首次引导

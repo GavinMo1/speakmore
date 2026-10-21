@@ -20,6 +20,42 @@ test("一切就绪时说怎么用，并列出 key、权限、热键、模型", (
   assert.match(text, /模型\s+Gemini 的 gemini-3\.6-flash（MINIMAL）/);
 });
 
+test("后台是 0.13 以前的版本（只报旧 id）：照样叫得出名字；更新的版本报了认不出的，用它自己的说法", () => {
+  const { "hotkey.dictate": _dictate, "hotkey.cancel": _cancel, ...old } = ready;
+  const before = renderStatus(
+    { status: { ...old, hotkey: "right_command" }, version: "0.1.0", settings, stats: noStats },
+    plain,
+  );
+  assert.match(before, /热键\s+右 Command 键/);
+  const newer = renderStatus(
+    {
+      status: { ...old, "hotkey.dictate": "MouseX", hotkey: null, hotkeyLabel: "鼠标侧键" },
+      version: "0.1.0",
+      settings,
+      stats: noStats,
+    },
+    plain,
+  );
+  assert.match(newer, /热键\s+鼠标侧键/);
+});
+
+test("绑了几个组合：任一个都行，并列着说", () => {
+  const status = { ...ready, "hotkey.dictate": '["Fn","MetaRight"]' };
+  const text = renderStatus({ status, version: "0.1.0", settings, stats: noStats }, plain);
+  assert.match(text, /按一下地球仪（fn）键、右 Command 键开始说话/);
+});
+
+test("能用、但有个热键组合装不上：照样说怎么用，再说还差什么", () => {
+  const status = {
+    ...ready,
+    summary: { ...ready.summary, missing: ["「语音输入」的 fn 用不了：这个系统上没有地球仪（fn）键"] },
+  };
+  const text = renderStatus({ status, version: "0.1.0", settings, stats: noStats }, plain);
+  assert.match(text, /运行中/);
+  assert.match(text, /开始说话/);
+  assert.match(text, /「语音输入」的 fn 用不了/);
+});
+
 test("缺东西时标题说还差几样，逐项标出，并说权限记在终端名下", () => {
   const status = {
     ...ready,

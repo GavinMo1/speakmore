@@ -136,6 +136,21 @@ test("本地模型就绪或没走本地转写：不影响结论；key 的问题�
   assert.match(both.blocker, /key/);
 });
 
+test("热键装不上的、退回默认的：列进要补的，照样能用（还有别的键能按）", () => {
+  const hotkeys = [
+    { action: "dictate", chord: ["Fn"], reason: msg("binding.notAvailable", { key: msg("keys.Fn.name") }) },
+    { action: "dictate", fallback: [["AltRight"]] },
+  ];
+  const summary = summarize({ ...allGood, hotkeys });
+  assert.equal(summary.ready, true);
+  assert.equal(summary.blocker, null);
+  assert.deepEqual(summary.missing, [
+    "「语音输入」的 fn 用不了：这个系统上没有地球仪（fn）键",
+    "「语音输入」先用默认的 右⌥",
+  ]);
+  assert.deepEqual(summarize({ ...allGood, hotkeys: [] }).missing, []);
+});
+
 test("同一个结论换成英文说：缺的东西、按热键时的那句、打了折扣的说明", () => {
   const setup = {
     ...withKey({ state: "missing" }),

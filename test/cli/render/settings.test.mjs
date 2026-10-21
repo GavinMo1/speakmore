@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderConfig, renderThemes } from "../../../src/cli/render/settings.mjs";
-import { HOTKEY_IDS } from "../../../src/storage/settings.mjs";
 import { THEMES } from "../../../src/themes/index.mjs";
 import { plain, settings } from "./fixtures.mjs";
 
@@ -10,7 +9,7 @@ test("设置逐项列出现在的值、从哪来、能填什么，后面是文�
     {
       settings: {
         ...settings,
-        hotkey: { value: "fn", source: "file" },
+        "hotkey.dictate": { value: '["Fn","MetaRight"]', source: "file" },
         model: { value: "gemini/gemini-3.8-flash", source: "env", env: "GEMINI_MODEL" },
       },
       paths: {
@@ -21,9 +20,10 @@ test("设置逐项列出现在的值、从哪来、能填什么，后面是文�
     },
     plain,
   );
-  assert.match(text, /hotkey\s+fn\s+地球仪（fn）键/);
-  // 能填哪几个按本机这个系统的写
-  assert.match(text, new RegExp(HOTKEY_IDS.join(" \\/ ")));
+  // 热键：值后面写键帽，几个组合任一个都行；不列可选值，说明是设置项自带的
+  assert.match(text, /hotkey\.dictate\s+\["Fn","MetaRight"\]\s+fn、右⌘ · 存在设置文件里/);
+  assert.match(text, /hotkey\.cancel\s+\["Escape"\]\s+esc · 默认/);
+  assert.match(text, /「取消」的快捷键：两键以内的任意组合，写法见 README\n/);
   // 用的是改名前的环境变量：照实写它的名字
   assert.match(text, /model\s+gemini\/gemini-3\.8-flash\s+Gemini · 这次运行来自环境变量 GEMINI_MODEL/);
   assert.match(text, /thinking\s+MINIMAL\s+.*默认/);
@@ -41,7 +41,8 @@ test("设置逐项列出现在的值、从哪来、能填什么，后面是文�
   assert.match(text, /on \/ off/);
   assert.match(text, /theme\s+ink\s+墨 · 默认/);
   assert.match(text, /ink \/ cinnabar \/ indigo/);
-  assert.match(text, /speakmore config set hotkey fn/);
+  assert.match(text, /speakmore config set hotkey\.dictate Fn\+Space/);
+  assert.match(text, /speakmore config unset hotkey\.dictate/);
   assert.match(text, /目录\s+\/home\/\.speakmore\n/);
   assert.match(text, /\/home\/\.speakmore\/logs\/main\.log/);
   assert.match(text, /speakmore uninstall/);

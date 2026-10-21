@@ -101,24 +101,26 @@ const isPart = (part, whole) => part.length < whole.length && part.every((code) 
 
 /**
  * 一整份绑定合不合：每个组合各查一遍（rejectReason、warningsOf），再查动作之间和一个动作内部。
- * 拒绝的组合每个只报第一个原因；能绑的再报它的提醒。按动作目录的先后、每个动作内按组合的先后报。
- * @param {Record<string, string[][]>} bindings 动作 id → 组合列表（规整过的 code 数组）；目录里有、这里没写的动作不查
+ * 动作之间撞了是先到先得，按 bindings 里写的先后：后来的让位。存设置时把要改的那个动作放在最后，撞了就是它不能存；
+ * 下发之前把用户自己绑的放在前面，新动作的默认组合撞上了就是它不装（5.4）。
+ * 拒绝的组合每个只报第一个原因；能绑的再报它的提醒。按 bindings 的先后、每个动作内按组合的先后报。
+ * @param {Record<string, string[][]>} bindings 动作 id → 组合列表（规整过的 code 数组）；目录里没有的 id 不管，
+ *   目录里有、这里没写的动作不查
  * @param {string} platform
  * @returns {Array<{ action: string, index: number, level: "reject" | "warn", reason: object }>}
  */
 export function checkBindings(bindings, platform) {
   const problems = [];
   const report = (action, index, level, reason) => problems.push({ action: action.id, index, level, reason });
-  const listed = ACTIONS.filter((action) => Object.hasOwn(bindings, action.id));
-  // 已经认下来的组合：规整写法 → 哪个动作。先到先得，后面撞上的算重复或被占用
+  const listed = Object.keys(bindings)
+    .map((id) => ACTIONS.find((action) => action.id === id))
+    .filter(Boolean);
+  // 已经认下来的组合：规整写法 → 哪个动作
   const taken = new Map();
   const accepted = [];
-  // 只在说话时生效的动作用掉的键：别的动作的组合里不能有它，不然说话时按那个组合只会取消
+  // 只在说话时生效的动作认下来的键，和别的动作认下来的多键组合里的键：两边不能有同一个，不然说话时按那个组合只会取消
   const capturingKeys = new Map();
-  for (const action of listed) {
-    if (action.when !== "capturing") continue;
-    for (const codes of bindings[action.id]) if (codes.length === 1) capturingKeys.set(codes[0], action);
-  }
+  const comboKeys = new Map();
 
   for (const action of listed) {
     const chords = bindings[action.id];
@@ -133,8 +135,13 @@ export function checkBindings(bindings, platform) {
       const holder = taken.get(chordString(codes));
       if (holder === action) return msg("binding.repeated");
       if (holder !== undefined) return msg("binding.taken", { action: actionName(holder) });
+      if (action.when === "capturing") {
+        const user = comboKeys.get(codes[0]);
+        if (user === undefined) return null;
+        return msg("binding.capturingKeyUsed", { key: keyName(codes[0]), action: actionName(user) });
+      }
       // 和取消那一个键一模一样的，归到上面的"已经给了"：那是重复，不是组合里夹带了它
-      if (action.when === "capturing" || codes.length === 1) return null;
+      if (codes.length === 1) return null;
       const clash = codes.find((code) => capturingKeys.has(code));
       if (clash === undefined) return null;
       return msg("binding.usesCapturingKey", { key: keyName(clash), action: actionName(capturingKeys.get(clash)) });
@@ -147,6 +154,8 @@ export function checkBindings(bindings, platform) {
       }
       taken.set(chordString(codes), action);
       accepted.push({ action, index, codes });
+      if (action.when === "capturing") capturingKeys.set(codes[0], action);
+      else if (codes.length > 1) for (const code of codes) if (!comboKeys.has(code)) comboKeys.set(code, action);
     }
   }
 

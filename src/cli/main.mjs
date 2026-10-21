@@ -21,7 +21,7 @@ import { CHAT_VENDORS } from "../server/chat/vendors.mjs";
 import { PROVIDERS } from "../server/providers/index.mjs";
 import { adoptAppKeys } from "../storage/app-keys.mjs";
 import { openHistory } from "../storage/history.mjs";
-import { migrateLegacyData } from "../storage/legacy.mjs";
+import { migrateLegacyData, migrateLegacySettings } from "../storage/legacy.mjs";
 import { resolvePaths } from "../storage/paths.mjs";
 import { resolveSettings } from "../storage/settings.mjs";
 import { THEMES } from "../themes/index.mjs";
@@ -310,6 +310,8 @@ export async function main(argv) {
       const moved = await migrateLegacyData({ paths: io.paths, log: { info() {}, warn: log.warn } });
       // 0.7.0 及以前 App 另存的那份 key 搬进共用的文件：没启动后台时命令行也看得到
       adoptAppKeys({ paths: io.paths, log: { info() {}, warn: log.warn } });
+      // 0.13 以前的热键设置换成新写法：要赶在第一次读设置之前（docs/hotkey-research.md 5.9）
+      migrateLegacySettings(io.paths.settingsFile);
       if (moved.length > 0) io.out(io.t("cli.migrated", { home: io.paths.home, items: moved.join(", ") }));
     } catch (error) {
       io.err(io.t.text(problemOf(error)));

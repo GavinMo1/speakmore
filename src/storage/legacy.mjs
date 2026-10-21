@@ -1,11 +1,14 @@
-import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { NotRunningError, requestControl } from "../control.mjs";
+import { legacyChord } from "../hotkeys/legacy.mjs";
 import { LocalizedError, msg } from "../i18n/index.mjs";
 import { ensureHome, keyFile, legacyDataDir, oldAppKeyFile } from "./paths.mjs";
 
-// 0.1 版把数据放在 ~/Library/Application Support/SpeakMore。那里还有东西的话，第一次运行时搬进现在的家目录。
-// 想退回 0.1：把这几样搬回原处即可。历史里的录音只按文件名认（history.mjs），不用跟着改。
+// 旧版本留下的东西，第一次运行新版时换成现在的样子：
+//   0.1 版把数据放在 ~/Library/Application Support/SpeakMore。那里还有东西的话，搬进现在的家目录（migrateLegacyData）。
+//     想退回 0.1：把这几样搬回原处即可。历史里的录音只按文件名认（history.mjs），不用跟着改。
+//   0.13 以前热键的设置叫 hotkey、存一个旧 id（migrateLegacySettings）。
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -103,4 +106,36 @@ export async function migrateLegacyData({ paths, legacyDir = legacyDataDir(), lo
   }
   if (moved.length > 0) log.info("legacy_data_migrated", { from: legacyDir, to: paths.home, moved });
   return moved;
+}
+
+/** 旧的热键设置换成哪一项 */
+const LEGACY_HOTKEY = { from: "hotkey", to: "hotkey.dictate" };
+
+/**
+ * 0.13 以前设置文件里的 "hotkey"（一个旧 id）换成 "hotkey.dictate"（组合列表，docs/hotkey-research.md 5.9）。
+ * 要在第一次读设置之前跑：App 和命令行的入口都调它。同步的，再跑一遍什么都不变。
+ * 已经有 hotkey.dictate 也覆盖：新版从不写 hotkey，有它就是还没换过，或者退回旧版后在旧版里改过，两种都该以它为准。
+ * 不是旧 id 的值照原样搬过去，由读设置的地方照实报错；本系统绑不了的（Mac 的 fn 到了 Windows 上）由下发前那道退回默认键。
+ * 没有文件、文件坏了（读设置时会报）、没有 hotkey 时不动文件。写不进去时报错
+ * @param {string} file 设置文件
+ * @returns {{ from: string, to: string, value: unknown, stored: unknown } | null} 换了什么，交给调用方记日志；没换是 null
+ */
+export function migrateLegacySettings(file) {
+  let settings;
+  try {
+    settings = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+  if (settings === null || typeof settings !== "object" || Array.isArray(settings)) return null;
+  if (!Object.hasOwn(settings, LEGACY_HOTKEY.from)) return null;
+  const { [LEGACY_HOTKEY.from]: value, ...rest } = settings;
+  const chord = typeof value === "string" ? legacyChord(value) : null;
+  const stored = chord === null ? value : [chord];
+  try {
+    writeFileSync(file, `${JSON.stringify({ ...rest, [LEGACY_HOTKEY.to]: stored }, null, 2)}\n`);
+  } catch (error) {
+    throw new LocalizedError(msg("storage.settingsMigrateFailed", { file, reason: error.message }), { cause: error });
+  }
+  return { ...LEGACY_HOTKEY, value, stored };
 }

@@ -1,4 +1,4 @@
-import { LocalizedError, msg } from "../i18n/index.mjs";
+import { alternatives, LocalizedError, msg } from "../i18n/index.mjs";
 import { isModifier, keyOf, MODIFIER_ORDER, SHIFTS } from "./keys.mjs";
 
 // 一个组合：最多两个键，写成 "ControlRight+Space"（docs/hotkey-research.md 5.2）。
@@ -79,6 +79,11 @@ export function chordText(codes) {
   if (second === undefined) return keycap(first);
   return msg("chord.text", { first: keycap(first), second: keycap(second) });
 }
+
+/** 一个动作的几个组合嵌进句子：任一个都行，按"或"并列（地球仪（fn）键、右 Command 键） */
+export const chordsName = (chords) => alternatives(chords.map(chordName));
+/** 一个动作的几个组合写成纯文字（fn、右⌘） */
+export const chordsText = (chords) => alternatives(chords.map(chordText));
 
 /** 键帽，一个键一个，按显示顺序。悬浮条、首页、设置页画成一排 */
 export const chordKeycaps = (codes) => sortChord(codes).map(keycap);
