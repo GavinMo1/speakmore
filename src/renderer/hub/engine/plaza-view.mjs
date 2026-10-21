@@ -20,7 +20,6 @@ export const MODE_ROLES = Object.freeze({
   private: ["transcribe"],
   local: ["transcribe", "polish"],
 });
-export const MODE_ICONS = Object.freeze({ native: "i-sparkles", local: "i-wand-sparkles", private: "i-shield-check" });
 
 /** 平台是某家自己的开放平台时，渠道上写"官方"（百炼另有名字，不算） */
 const OFFICIAL = Object.freeze({

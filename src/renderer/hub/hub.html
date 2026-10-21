@@ -120,6 +120,7 @@
           <button type="button" class="icon-button" id="open-about" data-i18n-aria-label="hub.about" data-i18n-title="hub.about">
             <svg class="icon" aria-hidden="true"><use href="#i-info" /></svg>
           </button>
+          <p class="app-version" id="app-version"></p>
         </div>
       </aside>
 
@@ -131,109 +132,102 @@
           <button type="button" class="button" id="banner-action" data-i18n="hub.fix">Settings</button>
         </div>
 
-        <!-- 首页：标题右边写着正在用哪种识别方式，点一下去引擎页换（mode-chip.mjs）；下面是原版"洞察"那一列，加上我们的花费；右边一列是口述卡和版本 -->
+        <!-- 首页：标题下面一行是热键，标题右边写着正在用哪种识别方式，点一下去引擎页换（mode-chip.mjs）；
+             下面是原版"洞察"那一列，加上我们的花费，占满整宽 -->
         <section class="page" data-route="home" aria-labelledby="home-title">
           <header class="page-head">
-            <h1 class="page-title" id="home-title" data-i18n="home.title">Speak, don't type</h1>
+            <div class="page-heading">
+              <h1 class="page-title" id="home-title" data-i18n="home.title">Speak, don't type</h1>
+              <p class="page-lede"><kbd class="keycap" id="home-keycap"></kbd><span data-i18n="home.dictate">Press to talk</span></p>
+            </div>
             <button type="button" class="picker-trigger" id="mode-chip"></button>
           </header>
-          <div class="home">
-            <div class="insights">
-              <div class="card stats">
-                <div class="stat">
-                  <p class="stat-value" id="stat-words"></p>
-                  <p class="stat-label" data-i18n="home.words">Words</p>
-                </div>
-                <div class="stat">
-                  <p class="stat-value" id="stat-saved"></p>
-                  <p class="stat-label" data-i18n="home.saved">Time saved</p>
-                </div>
-                <div class="stat">
-                  <p class="stat-value" id="stat-speed"></p>
-                  <p class="stat-label" data-i18n="home.speed">Speed</p>
-                </div>
-                <div class="stat">
-                  <p class="stat-value" id="stat-time"></p>
-                  <p class="stat-label" data-i18n="home.time">Dictation time</p>
-                </div>
+          <div class="insights">
+            <div class="card stats">
+              <div class="stat">
+                <p class="stat-value" id="stat-words"></p>
+                <p class="stat-label" data-i18n="home.words">Words</p>
               </div>
-
-              <div class="card activity">
-                <div class="streaks">
-                  <div>
-                    <p class="stat-value" id="stat-active"></p>
-                    <p class="stat-label" data-i18n="home.active">Active</p>
-                  </div>
-                  <div>
-                    <p class="stat-value" id="stat-current"></p>
-                    <p class="stat-label" data-i18n="home.streak">Streak</p>
-                  </div>
-                  <div>
-                    <p class="stat-value" id="stat-longest"></p>
-                    <p class="stat-label" data-i18n="home.longest">Longest</p>
-                  </div>
-                </div>
-                <div class="heatmap" id="heatmap">
-                  <!-- 星期几的简写由 home.mjs 按界面语言填 -->
-                  <div class="weekdays" id="heatmap-weekdays" aria-hidden="true"></div>
-                  <div class="cells" id="heatmap-cells" role="img" data-i18n-aria-label="home.activity"></div>
-                  <button type="button" class="page-arrow" id="heatmap-back" data-i18n-aria-label="home.earlier">
-                    <svg class="icon" aria-hidden="true"><use href="#i-chevron" /></svg>
-                  </button>
-                  <div class="months" id="heatmap-months" aria-hidden="true"></div>
-                  <button type="button" class="page-arrow next" id="heatmap-next" data-i18n-aria-label="home.later">
-                    <svg class="icon" aria-hidden="true"><use href="#i-chevron" /></svg>
-                  </button>
-                </div>
-                <p class="legend" aria-hidden="true">
-                  <span data-i18n="home.less">Less</span><span class="cell" data-level="1"></span
-                  ><span class="cell" data-level="2"></span><span class="cell" data-level="3"></span
-                  ><span class="cell" data-level="4"></span><span data-i18n="home.more">More</span>
-                </p>
+              <div class="stat">
+                <p class="stat-value" id="stat-saved"></p>
+                <p class="stat-label" data-i18n="home.saved">Time saved</p>
               </div>
-
-              <!-- 花费：选一段时间，按模型分开列，最后一行合计（home.mjs 的 renderSpend） -->
-              <div class="card spend" id="spend" hidden>
-                <div class="spend-head">
-                  <div>
-                    <p class="stat-value" id="spend-total"></p>
-                    <p class="stat-label" id="spend-label"></p>
-                  </div>
-                  <div class="segmented" id="spend-periods" role="radiogroup" data-indicator="spend-periods" data-i18n-aria-label="home.spendPeriods">
-                    <span class="indicator" aria-hidden="true"></span>
-                    <!-- biome-ignore lint/a11y/useSemanticElements: 规范的分段控件是按钮加 radio 角色（window.css 的 .segmented），和模型页的渠道切换同一套 -->
-                    <button type="button" class="segment" role="radio" aria-checked="false" data-period="today" data-i18n="periods.today">Today</button>
-                    <!-- biome-ignore lint/a11y/useSemanticElements: 规范的分段控件是按钮加 radio 角色（window.css 的 .segmented），和模型页的渠道切换同一套 -->
-                    <button type="button" class="segment" role="radio" aria-checked="false" data-period="month" data-i18n="periods.month">This month</button>
-                    <!-- biome-ignore lint/a11y/useSemanticElements: 规范的分段控件是按钮加 radio 角色（window.css 的 .segmented），和模型页的渠道切换同一套 -->
-                    <button type="button" class="segment" role="radio" aria-checked="false" data-period="total" data-i18n="periods.total">All time</button>
-                  </div>
-                </div>
-                <table class="spend-table">
-                  <thead>
-                    <tr>
-                      <th scope="col" data-i18n="home.model">Model</th>
-                      <th scope="col" data-i18n="home.cost">Cost</th>
-                      <th scope="col" data-i18n="home.tokens">Tokens</th>
-                      <th scope="col" data-i18n="home.count">Count</th>
-                      <th scope="col" data-i18n="home.latency">Latency</th>
-                    </tr>
-                  </thead>
-                  <tbody id="spend-rows"></tbody>
-                  <tfoot id="spend-sum"></tfoot>
-                </table>
-                <p class="spend-note" id="spend-note" hidden></p>
+              <div class="stat">
+                <p class="stat-value" id="stat-speed"></p>
+                <p class="stat-label" data-i18n="home.speed">Speed</p>
+              </div>
+              <div class="stat">
+                <p class="stat-value" id="stat-time"></p>
+                <p class="stat-label" data-i18n="home.time">Dictation time</p>
               </div>
             </div>
 
-            <aside class="home-side">
-              <!-- 口述卡：一张小卡，主题渐变只在键帽上 -->
-              <div class="dictate">
-                <kbd class="dictate-key" id="home-keycap"></kbd>
-                <p class="dictate-title" data-i18n="home.dictate">Press to talk</p>
+            <div class="card activity">
+              <div class="streaks">
+                <div>
+                  <p class="stat-value" id="stat-active"></p>
+                  <p class="stat-label" data-i18n="home.active">Active</p>
+                </div>
+                <div>
+                  <p class="stat-value" id="stat-current"></p>
+                  <p class="stat-label" data-i18n="home.streak">Streak</p>
+                </div>
+                <div>
+                  <p class="stat-value" id="stat-longest"></p>
+                  <p class="stat-label" data-i18n="home.longest">Longest</p>
+                </div>
               </div>
-              <p class="version" id="home-version"></p>
-            </aside>
+              <div class="heatmap" id="heatmap">
+                <!-- 星期几的简写由 home.mjs 按界面语言填 -->
+                <div class="weekdays" id="heatmap-weekdays" aria-hidden="true"></div>
+                <div class="cells" id="heatmap-cells" role="img" data-i18n-aria-label="home.activity"></div>
+                <button type="button" class="page-arrow" id="heatmap-back" data-i18n-aria-label="home.earlier">
+                  <svg class="icon" aria-hidden="true"><use href="#i-chevron" /></svg>
+                </button>
+                <div class="months" id="heatmap-months" aria-hidden="true"></div>
+                <button type="button" class="page-arrow next" id="heatmap-next" data-i18n-aria-label="home.later">
+                  <svg class="icon" aria-hidden="true"><use href="#i-chevron" /></svg>
+                </button>
+              </div>
+              <p class="legend" aria-hidden="true">
+                <span data-i18n="home.less">Less</span><span class="cell" data-level="1"></span
+                ><span class="cell" data-level="2"></span><span class="cell" data-level="3"></span
+                ><span class="cell" data-level="4"></span><span data-i18n="home.more">More</span>
+              </p>
+            </div>
+
+            <!-- 花费：选一段时间，按模型分开列，最后一行合计（home.mjs 的 renderSpend） -->
+            <div class="card spend" id="spend" hidden>
+              <div class="spend-head">
+                <div>
+                  <p class="stat-value" id="spend-total"></p>
+                  <p class="stat-label" id="spend-label"></p>
+                </div>
+                <div class="segmented" id="spend-periods" role="radiogroup" data-indicator="spend-periods" data-i18n-aria-label="home.spendPeriods">
+                  <span class="indicator" aria-hidden="true"></span>
+                  <!-- biome-ignore lint/a11y/useSemanticElements: 规范的分段控件是按钮加 radio 角色（window.css 的 .segmented），和模型页的渠道切换同一套 -->
+                  <button type="button" class="segment" role="radio" aria-checked="false" data-period="today" data-i18n="periods.today">Today</button>
+                  <!-- biome-ignore lint/a11y/useSemanticElements: 规范的分段控件是按钮加 radio 角色（window.css 的 .segmented），和模型页的渠道切换同一套 -->
+                  <button type="button" class="segment" role="radio" aria-checked="false" data-period="month" data-i18n="periods.month">This month</button>
+                  <!-- biome-ignore lint/a11y/useSemanticElements: 规范的分段控件是按钮加 radio 角色（window.css 的 .segmented），和模型页的渠道切换同一套 -->
+                  <button type="button" class="segment" role="radio" aria-checked="false" data-period="total" data-i18n="periods.total">All time</button>
+                </div>
+              </div>
+              <table class="spend-table">
+                <thead>
+                  <tr>
+                    <th scope="col" data-i18n="home.model">Model</th>
+                    <th scope="col" data-i18n="home.cost">Cost</th>
+                    <th scope="col" data-i18n="home.tokens">Tokens</th>
+                    <th scope="col" data-i18n="home.count">Count</th>
+                    <th scope="col" data-i18n="home.latency">Latency</th>
+                  </tr>
+                </thead>
+                <tbody id="spend-rows"></tbody>
+                <tfoot id="spend-sum"></tfoot>
+              </table>
+              <p class="spend-note" id="spend-note" hidden></p>
+            </div>
           </div>
         </section>
 

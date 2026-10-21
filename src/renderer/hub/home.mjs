@@ -5,7 +5,7 @@ import { keycapOf, t } from "../shared/i18n.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
 import { slidingIndicators } from "./indicators.mjs";
 
-// 首页：原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费；右边一列是口述卡和版本。
+// 首页：标题下面一行热键；原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费。版本号写在侧栏底下。
 // 数是主进程从全部历史里算好的（src/usage/insights.mjs、src/usage/report.mjs），这里只管画。
 // 花费按模型分开列：哪家、哪个型号、本机的那一跳各花了多少、用了多少次，选今天、本月或累计看。
 
@@ -245,7 +245,7 @@ export function createHome() {
       usage = report;
       renderSpend();
       $("home-keycap").textContent = keycapOf(app.hotkey);
-      $("home-version").textContent = `v${app.version}`;
+      $("app-version").textContent = `v${app.version}`;
     },
 
     /** 页面切到前台时，分段控件的底块要按真实宽度重新放（藏着时量不出来） */
