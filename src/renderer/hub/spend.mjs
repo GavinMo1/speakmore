@@ -3,9 +3,11 @@ import { h, platformName } from "../shared/dom.mjs";
 import { t } from "../shared/i18n.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
 import { slidingIndicators } from "./indicators.mjs";
+import { curvePath, smoothed, spreadFor } from "./trend.mjs";
 
 // 首页的花费卡：上面是这段时间花了多少、选时段；中间是花费随时间怎么走的柱子；下面每个型号一行，名字下面一道线是它占几成。
 // 柱子只用主题色一种：型号多了配一堆颜色反而认不出谁是谁。想看某个型号，指着它那一条，柱子里只亮它那一份。
+// 柱子上叠一条淡的平滑曲线（trend.mjs），柱子密了也看得出起伏；指着型号时曲线换成它自己的走势。
 // 指着柱子看那一格花了多少、各型号各多少；指着型号，那一行露出它的 token、次数、一般多久回话。
 // 数是主进程算好的（src/usage/report.mjs、src/usage/series.mjs），这里只管画。
 
@@ -119,11 +121,39 @@ export function createSpend() {
     }
     if (key === null) delete plot.dataset.focus;
     else plot.dataset.focus = "";
+    drawTrend(key);
+  }
+
+  /** 柱子最高那根的钱：柱子和曲线按它算高 */
+  let peak = 0;
+
+  /**
+   * 趋势线：到现在为止的每一格平滑一下，按柱子的比例画在柱子上（viewBox 横着一格一个单位、竖着 0–100）。
+   * 还没到的格子不画；不到两格、或者一分钱没花，就不画
+   * @param {string | null} key 只看哪个型号；null 是全部
+   */
+  function drawTrend(key) {
+    const { buckets } = period().series;
+    const past = buckets.filter(({ future }) => !future);
+    const values = past.map((bucket) => (key === null ? bucket.costUsd : (bucket.models[key] ?? 0)));
+    const trend = $("spend-trend");
+    // SVG 元素没有 hidden 这个开关，直接增删属性
+    const hidden = past.length < 2 || peak === 0;
+    trend.toggleAttribute("hidden", hidden);
+    if (hidden) return;
+    trend.setAttribute("viewBox", `0 0 ${buckets.length} 100`);
+    const points = smoothed(values, spreadFor(buckets.length)).map((value, index) => [
+      index + 0.5,
+      100 - (value / peak) * 100,
+    ]);
+    // 写成 CSS 的 d：点数不变时（换着指型号）曲线从上一个样子滑过去
+    const d = `path("${curvePath(points)}")`;
+    for (const path of trend.children) path.style.d = d;
   }
 
   function renderChart() {
     const { unit, buckets } = period().series;
-    const peak = Math.max(0, ...buckets.map(({ costUsd }) => costUsd));
+    peak = Math.max(0, ...buckets.map(({ costUsd }) => costUsd));
     const peakIndex = peak > 0 ? buckets.findIndex(({ costUsd }) => costUsd === peak) : -1;
     plot.replaceChildren(
       ...buckets.map((bucket, index) => {
@@ -166,6 +196,7 @@ export function createSpend() {
     const blank = $("spend-blank");
     blank.hidden = peak > 0;
     blank.textContent = period().calls === 0 ? t("home.emptyPeriod") : t("home.noCost");
+    drawTrend(null);
   }
 
   plot.addEventListener("pointermove", (event) => {

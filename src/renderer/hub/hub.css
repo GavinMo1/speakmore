@@ -588,15 +588,18 @@
   gap: 0.75rem 1.5rem;
 }
 
+/* 柱子那块多高、上面给最高那根的数留多少：趋势线照着同一块画 */
 .spend-chart {
+  --plot-height: 7.5rem;
+  --plot-headroom: 1rem;
   position: relative;
 }
 
 /* 一格一列，列占满整格好指，柱子在列里居中、细一点，格子之间留出空。最高那根上面写数，留出一行的高度 */
 .spend-plot {
   display: flex;
-  height: 8.5rem;
-  padding-top: 1rem;
+  height: calc(var(--plot-height) + var(--plot-headroom));
+  padding-top: var(--plot-headroom);
 }
 
 .spend-col {
@@ -660,6 +663,41 @@
 /* 指着一根柱子时，别的淡下去 */
 .spend-plot:has(> [data-active]) > :not([data-active]) .spend-bar {
   opacity: 0.45;
+}
+
+/* 趋势线：叠在柱子上的一条淡线，下面垫一道底色的边，压在柱子上也看得清。拉伸的 viewBox 下线宽不跟着变 */
+.spend-trend {
+  position: absolute;
+  top: var(--plot-headroom);
+  left: 0;
+  width: 100%;
+  height: var(--plot-height);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.spend-trend[hidden] {
+  display: none;
+}
+
+.spend-trend path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  transition: d var(--dur-base) var(--ease-out);
+}
+
+.spend-trend-halo {
+  stroke: var(--surface-solid);
+  stroke-opacity: 0.7;
+  stroke-width: 4px;
+}
+
+.spend-trend-line {
+  stroke: var(--ink);
+  stroke-opacity: 0.45;
+  stroke-width: 1.5px;
 }
 
 /* 最高那根上面的数：在头一两格、最后一两格时贴着那一边，不出卡片 */
@@ -1254,7 +1292,8 @@ code.setting-value {
   .spend-peak,
   .spend-fill,
   .spend-item,
-  .spend-detail {
+  .spend-detail,
+  .spend-trend path {
     transition: none;
   }
 
