@@ -614,7 +614,7 @@ export default {
     add: "New word",
     import: "Import",
     local: "Stored on this device only",
-    localMeta: { device: "Never leaves this device", cloud: "Never synced · sent with requests" },
+    localMeta: { device: "Never uploaded", cloud: "Sent with dictation requests" },
     localTip:
       "The dictionary is saved in {file} and is never uploaded or synced. When you dictate, the words your model can take are sent along with that request; in Privacy mode they never leave this device",
     current: "Current · {mode}",
