@@ -160,7 +160,7 @@ body {
   margin-top: 0.2rem;
 }
 
-/* ---------- 选识别方式：一种一行，左图标、中间名字和要什么、右边经过谁家 ---------- */
+/* ---------- 选识别方式：一种一行，左边单选标记、中间名字和要什么、右边经过谁家 ---------- */
 
 .choices {
   display: flex;
@@ -170,7 +170,7 @@ body {
 
 .choice {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 1rem;
   width: 100%;
@@ -208,34 +208,6 @@ body {
 .choice:disabled {
   cursor: default;
   opacity: 0.6;
-}
-
-/* 方式的图标：一块小方砖，选中的换成主题渐变 */
-.choice-icon {
-  display: grid;
-  place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  color: var(--ink);
-  background: var(--surface-solid);
-  border-radius: var(--radius-block);
-  box-shadow:
-    0 0 0 1px var(--line),
-    0 1px 2px oklch(0 0 0 / 0.06);
-  transition:
-    color var(--dur-base) var(--ease-out),
-    background var(--dur-base) var(--ease-out);
-}
-
-.choice-icon .icon {
-  width: 1.25rem;
-  height: 1.25rem;
-}
-
-.choice[aria-checked="true"] .choice-icon {
-  color: var(--on-primary);
-  background: var(--gradient);
-  box-shadow: 0 6px 16px -8px color-mix(in oklch, var(--primary) 80%, transparent);
 }
 
 .choice-body {
@@ -917,7 +889,6 @@ body {
   .step-groups button,
   .step-groups button::after,
   .choice,
-  .choice-icon,
   .key-field,
   .meter span,
   .big-keycap {
