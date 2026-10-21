@@ -21,7 +21,7 @@
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README；别人报的修好发版回复完就直接关
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
 - [验收要端到端闭环](acceptance-end-to-end.md) — 沿用户路径走一遍；没什么可验的也要把打好的包真启动一次；Windows 包先出先验、不干等；issue 全验完再回
-- [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、改完就收，不再派第二轮，除非他点名
+- [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、放在全部步骤做完之后统一审（中途不审），改完就收，不再派第二轮，除非他点名
 - [workflow 子 agent 控制在十个上下](workflow-agent-budget.md) — 派之前算总数；复核按组批量判，不按条乘人数；10-21 一次起了 73 个他嫌多
 - [桌面端的文案和观感](desktop-copy-and-look.md) — 书面语、短词短句；配色走自己的主题；按钮一律胶囊（共用一条样式）；图标不垫色块、不用星光魔杖；改样式后真窗口逐个查按钮
 - [README 中文为主](readme-chinese-default.md) — 中文 README.md 默认、英文 README.en.md 切换；书面语像报告，五个自由、讲好不讲坏、多配图，图放图片桶
