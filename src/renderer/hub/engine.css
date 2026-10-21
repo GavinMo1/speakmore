@@ -413,11 +413,13 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
     var(--lift);
 }
 
+/* 环节只有字，没有标志：左边和字的边距照右边 */
 .node[data-level="role"] {
   min-height: 4rem;
+  padding-left: 1rem;
 }
 
-/* 图标底座：大一号的（环节、详情）、小一号的（搜索结果），正在用的环节换主题色，缺密钥的变淡 */
+/* 品牌标志的底座：大一号的（详情）、小一号的（搜索结果），缺密钥的变淡 */
 .logo-tile[data-size="lg"] {
   width: 2.25rem;
   height: 2.25rem;
@@ -426,10 +428,6 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
 .logo-tile[data-size="sm"] {
   width: var(--control-sm);
   height: var(--control-sm);
-}
-
-.logo-tile[data-tone="live"] {
-  color: var(--primary);
 }
 
 .logo-tile[data-dim] {

@@ -146,7 +146,8 @@ export function createTree(ctx, els) {
 
   // ---------- 环节、厂商 ----------
 
-  function node({ level, key, icon, name, count, status, tone, open, dim, title, onclick, large = false }) {
+  /** 一个节点：厂商前面是品牌标志的方形底座，环节只有字（不给说明性的图标垫底座，见界面规范第 3 节） */
+  function node({ level, key, icon = null, name, count, status, tone, open, dim, title, onclick }) {
     return h(
       "button",
       {
@@ -160,16 +161,7 @@ export function createTree(ctx, els) {
         title,
         onclick,
       },
-      h(
-        "span",
-        {
-          class: "logo-tile",
-          "data-size": large ? "lg" : null,
-          "data-tone": large && tone === "live" ? "live" : null,
-          "data-dim": dim ? "" : null,
-        },
-        icon,
-      ),
+      icon && h("span", { class: "logo-tile", "data-dim": dim ? "" : null }, icon),
       h(
         "span",
         { class: "node-text" },
@@ -193,13 +185,11 @@ export function createTree(ctx, els) {
     return node({
       level: "role",
       key: role,
-      icon: svg(ROLES[role].icon),
       name: roleName(role),
       count: setup.plaza.shelves[role].reduce((sum, group) => sum + group.items.length, 0),
       status: line(spot ? (live ? "live" : "standby") : "plain", chosen),
       tone: spot ? (live ? "live" : "standby") : null,
       open: ui.role === role,
-      large: true,
       title: [
         roleName(role),
         t(`plaza.roleDesc.${role}`),

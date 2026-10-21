@@ -4,11 +4,11 @@ import { t } from "../../shared/i18n.mjs";
 // 引擎页的状态怎么定：哪个环节在用、哪一项是选定的、看哪个渠道、还差什么、线画成哪种。
 // 只读主进程拼好的数据（app/model-plaza.mjs 的 describePlaza），不碰页面，单元测试在 Node 里跑。
 
-/** 三个环节 → 设置里那一项、属于哪种识别方式、图标。转写在两种方式里都有：数据隐私方式用它自己那一项（privateTranscriber） */
+/** 三个环节 → 设置里那一项、属于哪种识别方式。转写在两种方式里都有：数据隐私方式用它自己那一项（privateTranscriber） */
 export const ROLES = Object.freeze({
-  native: { setting: "native", mode: "native", icon: "i-sparkles" },
-  transcribe: { setting: "transcriber", mode: "local", icon: "i-audio-lines" },
-  polish: { setting: "polish", mode: "local", icon: "i-wand-sparkles" },
+  native: { setting: "native", mode: "native" },
+  transcribe: { setting: "transcriber", mode: "local" },
+  polish: { setting: "polish", mode: "local" },
 });
 export const ROLE_IDS = Object.freeze(Object.keys(ROLES));
 
