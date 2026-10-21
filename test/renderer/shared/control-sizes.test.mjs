@@ -91,7 +91,8 @@ test("圆角只用 --radius-*（或者全圆的 50%），例外都写明了缘�
  * 按钮一类的东西：外形一律是胶囊（全圆）。只看选择器最后那一段，同上；
  * 伪元素是它的一部分（下拉框打开后的单子 ::picker），不算
  */
-const CAPSULE = /\.(button|icon-button|select|picker-trigger|state-box|check|badge)(?![\w-])/;
+const CAPSULE =
+  /\.(button|icon-button|select|picker-trigger|state-box|check|badge|segmented|segment|indicator)(?![\w-])/;
 const isCapsule = (selector) =>
   selector.split(",").some((part) => {
     const last = part
@@ -101,7 +102,7 @@ const isCapsule = (selector) =>
     return CAPSULE.test(last) && !last.includes("::");
   });
 
-test("按钮一类的（按钮、图标按钮、下拉框、胶囊按钮、状态框、检测、徽标）写圆角时只能是全圆", () => {
+test("按钮一类的（按钮、图标按钮、下拉框、胶囊按钮、状态框、检测、徽标、分段控件和它的滑块）写圆角时只能是全圆", () => {
   const offenders = cssFiles(RENDERER)
     .filter((path) => !relative(RENDERER, path).replaceAll("\\", "/").startsWith("bar/"))
     .flatMap(rules)
@@ -126,6 +127,8 @@ test("查得到违规的写法：控件认得准，写死的圆角认得出", ()
   assert.ok(!isCapsule(".vocab-check"));
   assert.ok(!isCapsule(".picker-trigger > .chevron"));
   assert.ok(!isCapsule(".select::picker(select)"));
+  assert.ok(isCapsule(".segmented > .indicator"));
+  assert.ok(!isCapsule(".segmented-row"));
   assert.ok(RADIUS_VALUE.test("var(--radius-card)"));
   assert.ok(!RADIUS_VALUE.test("6px"));
 });

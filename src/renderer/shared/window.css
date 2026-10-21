@@ -786,7 +786,7 @@ button.badge:focus-visible {
     width var(--dur-slide) var(--ease-out);
 }
 
-/* ---------- 分段控件：二到四个互斥的选项，滑块跟着走 ---------- */
+/* ---------- 分段控件：二到四个互斥的选项，滑块跟着走。外形和按钮一样是胶囊：槽、每一段、滑块都全圆 ---------- */
 
 .segmented {
   position: relative;
@@ -795,7 +795,7 @@ button.badge:focus-visible {
   height: var(--control-md);
   padding: 3px;
   background: var(--fill-hover);
-  border-radius: calc(var(--radius-control) + 2px);
+  border-radius: var(--radius-full);
 }
 
 .segment {
@@ -804,7 +804,7 @@ button.badge:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0 0.75rem;
+  padding: 0 0.875rem;
   font: inherit;
   font-size: var(--text-small);
   font-weight: var(--weight-medium);
@@ -813,7 +813,7 @@ button.badge:focus-visible {
   white-space: nowrap;
   background: none;
   border: none;
-  border-radius: calc(var(--radius-control) - 1px);
+  border-radius: var(--radius-full);
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease-out);
 }
@@ -844,7 +844,7 @@ button.badge:focus-visible {
   top: 3px;
   bottom: 3px;
   background: var(--surface-solid);
-  border-radius: calc(var(--radius-control) - 1px);
+  border-radius: var(--radius-full);
   box-shadow:
     0 0 0 1px var(--line),
     0 1px 3px oklch(0 0 0 / 0.1);
