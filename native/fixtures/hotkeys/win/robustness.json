@@ -1,0 +1,575 @@
+{
+  "cases": [
+    {
+      "name": "松开的事件丢了（用 Tab 切进密码框）：下次按键前核对，丢了的移出去，热键照常按下",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 0,
+          "scan": 15,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "lostUp": {
+            "vk": 0,
+            "scan": 15,
+            "extended": false
+          },
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "按下超过 10 秒还没松开的普通键当成丢了松开，即使系统接口说它还按着",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 0,
+          "scan": 15,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 0,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 10001,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 10002,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "不到 10 秒、系统接口也说还按着：照样算按着，不触发",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 0,
+          "scan": 15,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 0,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 9000,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 9001,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 15,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 9002,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "监听停了又打开：按着的绑定补报松开，按住的普通键和吞了一半的都清掉",
+      "bindings": [
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": 57
+        }
+      ],
+      "steps": [
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": true,
+            "mask": true
+          }
+        },
+        {
+          "reset": true,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "被打断的绑定遇到监听重开：不再补报松开",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 37,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "dictate#0"
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "reset": true,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 37,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "自己模拟的按键（贴字时的 ⌘V/Ctrl+V、插的掩码键）：不算，原样放行",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 47,
+          "extended": false,
+          "down": true,
+          "injected": true,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 47,
+          "extended": false,
+          "down": false,
+          "injected": true,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "换了绑定表：按着的绑定补报松开，按住的键照旧记着",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "bind": [
+            {
+              "id": "dictate#0",
+              "when": "always",
+              "mods": [
+                163
+              ],
+              "key": null
+            }
+          ],
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 163,
+          "scan": 29,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 163,
+          "scan": 29,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    }
+  ]
+}

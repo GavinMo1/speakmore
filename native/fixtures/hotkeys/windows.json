@@ -1,0 +1,33 @@
+{
+  "cases": [
+    {
+      "name": "AltGr 布局：按右 Alt 时系统先补一个假的左 Ctrl（扫描码 0x21D），不算别的键",
+      "platforms": ["win32"],
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "ControlLeft", "down": true, "scan": 541 },
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "ControlLeft", "down": false, "scan": 541 },
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+      ]
+    },
+    {
+      "name": "掩码只在有 Alt 的绑定按下时插：右 Ctrl 加 F13 不插，左 Alt 加 K 插",
+      "platforms": ["win32"],
+      "bindings": [
+        { "id": "x#0", "chord": "ControlRight+F13" },
+        { "id": "y#0", "chord": "AltLeft+KeyK" }
+      ],
+      "steps": [
+        { "key": "ControlRight", "down": true },
+        { "key": "F13", "down": true, "events": [{ "down": "x#0" }], "swallow": true },
+        { "key": "F13", "down": false, "swallow": true },
+        { "key": "ControlRight", "down": false, "events": [{ "up": "x#0" }] },
+        { "key": "AltLeft", "down": true },
+        { "key": "KeyK", "down": true, "events": [{ "down": "y#0" }], "swallow": true, "mask": true },
+        { "key": "KeyK", "down": false, "swallow": true },
+        { "key": "AltLeft", "down": false, "events": [{ "up": "y#0" }] }
+      ]
+    }
+  ]
+}

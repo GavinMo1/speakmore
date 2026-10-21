@@ -1,0 +1,773 @@
+{
+  "cases": [
+    {
+      "name": "单个修饰键：按下、松开各报一次，自动重复不算新的一下；修饰键不吞",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "单个右 Ctrl：不含 Alt，不插掩码",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            62
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "code": 62,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 62,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "两个修饰键：先按哪个都行，第二个按下时触发；全部松开才算松开",
+      "bindings": [
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            62,
+            60
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "code": 62,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 60,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 60,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 62,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 60,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 62,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 62,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 7,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 60,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 8,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "绑定按着时组合里的键松开又按回去：不算新的一下，不报事件",
+      "bindings": [
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            62,
+            60
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "code": 62,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 60,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 60,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 60,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 60,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 62,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "修饰键加普通键：普通键的按下、自动重复、松开整段吞掉；修饰键照常放行",
+      "bindings": [
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": 49
+        }
+      ],
+      "steps": [
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 49,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "code": 49,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": true
+          }
+        },
+        {
+          "code": 49,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": true
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "修饰键先松开、普通键后松开：普通键松开时才算松开，它的松开照样吞",
+      "bindings": [
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": 49
+        }
+      ],
+      "steps": [
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 49,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 49,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": false
+              }
+            ],
+            "swallow": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "先按普通键再按修饰键：不触发，什么都不吞",
+      "bindings": [
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": 49
+        }
+      ],
+      "steps": [
+        {
+          "code": 49,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 49,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "单个 F 键：按下就触发，整段吞掉",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [],
+          "key": 105
+        }
+      ],
+      "steps": [
+        {
+          "code": 105,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "code": 105,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": true
+          }
+        },
+        {
+          "code": 105,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "没绑的键：不报、不吞",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "code": 0,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 0,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 62,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 62,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "集合要恰好相等：按着别的键时再按绑定的键不触发，也不吞",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        },
+        {
+          "id": "f#0",
+          "when": "always",
+          "mods": [],
+          "key": 105
+        }
+      ],
+      "steps": [
+        {
+          "code": 13,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 105,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 105,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 13,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        }
+      ]
+    }
+  ]
+}

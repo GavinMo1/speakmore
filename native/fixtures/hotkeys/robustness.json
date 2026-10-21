@@ -1,0 +1,76 @@
+{
+  "cases": [
+    {
+      "name": "松开的事件丢了（用 Tab 切进密码框）：下次按键前核对，丢了的移出去，热键照常按下",
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "Tab", "down": true },
+        { "lostUp": "Tab" },
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+      ]
+    },
+    {
+      "name": "按下超过 10 秒还没松开的普通键当成丢了松开，即使系统接口说它还按着",
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "Tab", "down": true, "t": 0 },
+        { "key": "AltRight", "down": true, "t": 10001, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+      ]
+    },
+    {
+      "name": "不到 10 秒、系统接口也说还按着：照样算按着，不触发",
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "Tab", "down": true, "t": 0 },
+        { "key": "AltRight", "down": true, "t": 9000 },
+        { "key": "AltRight", "down": false },
+        { "key": "Tab", "down": false }
+      ]
+    },
+    {
+      "name": "监听停了又打开：按着的绑定补报松开，按住的普通键和吞了一半的都清掉",
+      "bindings": [{ "id": "x#0", "chord": "AltRight+Space" }],
+      "steps": [
+        { "key": "AltRight", "down": true },
+        { "key": "Space", "down": true, "events": [{ "down": "x#0" }], "swallow": true, "mask": true },
+        { "reset": true, "events": [{ "up": "x#0" }] },
+        { "key": "Space", "down": false },
+        { "key": "AltRight", "down": false }
+      ]
+    },
+    {
+      "name": "被打断的绑定遇到监听重开：不再补报松开",
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "KeyK", "down": true, "events": [{ "interrupted": "dictate#0" }] },
+        { "reset": true },
+        { "key": "KeyK", "down": false },
+        { "key": "AltRight", "down": false }
+      ]
+    },
+    {
+      "name": "自己模拟的按键（贴字时的 ⌘V/Ctrl+V、插的掩码键）：不算，原样放行",
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "KeyV", "down": true, "injected": true },
+        { "key": "KeyV", "down": false, "injected": true },
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+      ]
+    },
+    {
+      "name": "换了绑定表：按着的绑定补报松开，按住的键照旧记着",
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "bind": [{ "id": "dictate#0", "chord": "ControlRight" }], "events": [{ "up": "dictate#0" }] },
+        { "key": "AltRight", "down": false },
+        { "key": "ControlRight", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "ControlRight", "down": false, "events": [{ "up": "dictate#0" }] }
+      ]
+    }
+  ]
+}

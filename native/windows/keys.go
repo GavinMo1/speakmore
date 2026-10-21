@@ -31,11 +31,13 @@ var hotkeys = map[string]uint32{
 
 // 一个键盘事件
 type keyInput struct {
-	vk   uint32
-	scan uint32
-	down bool
+	vk       uint32
+	scan     uint32
+	extended bool // LLKHF_EXTENDED：扫描码带 0xE0 前缀的键（右 Ctrl、方向键……）
+	down     bool
 	// 我们自己模拟的（插的 vkMask、贴字时的 Ctrl+V）：不算用户按的键，原样放行
 	ours bool
+	time uint32 // 毫秒（KBDLLHOOKSTRUCT.time）
 }
 
 type outcome struct {

@@ -1,0 +1,81 @@
+{
+  "cases": [
+    {
+      "name": "说话时（截着）按 esc：报取消、整段吞掉；不截的时候照常放行、不报",
+      "bindings": [
+        { "id": "dictate#0", "chord": "AltRight" },
+        { "id": "cancel#0", "chord": "Escape", "when": "capturing" }
+      ],
+      "steps": [
+        { "key": "Escape", "down": true },
+        { "key": "Escape", "down": false },
+        { "capture": true },
+        { "key": "Escape", "down": true, "events": [{ "down": "cancel#0" }], "swallow": true },
+        { "key": "Escape", "down": true, "swallow": true },
+        { "key": "Escape", "down": false, "events": [{ "up": "cancel#0" }], "swallow": true },
+        { "capture": false },
+        { "key": "Escape", "down": true },
+        { "key": "Escape", "down": false }
+      ]
+    },
+    {
+      "name": "热键还按着时按 esc：只报取消，不算打断，esc 也不进按住的键",
+      "bindings": [
+        { "id": "dictate#0", "chord": "AltRight" },
+        { "id": "cancel#0", "chord": "Escape", "when": "capturing" }
+      ],
+      "steps": [
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "capture": true },
+        { "key": "Escape", "down": true, "events": [{ "down": "cancel#0" }], "swallow": true },
+        { "key": "Escape", "down": false, "events": [{ "up": "cancel#0" }], "swallow": true },
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+      ]
+    },
+    {
+      "name": "esc 按下时还截着、松开前不截了：重复和松开照样吞；之后的 esc 照常放行",
+      "bindings": [
+        { "id": "dictate#0", "chord": "AltRight" },
+        { "id": "cancel#0", "chord": "Escape", "when": "capturing" }
+      ],
+      "steps": [
+        { "capture": true },
+        { "key": "Escape", "down": true, "events": [{ "down": "cancel#0" }], "swallow": true },
+        { "capture": false },
+        { "key": "Escape", "down": true, "swallow": true },
+        { "key": "Escape", "down": false, "events": [{ "up": "cancel#0" }], "swallow": true },
+        { "key": "Escape", "down": true },
+        { "key": "Escape", "down": false }
+      ]
+    },
+    {
+      "name": "不截的时候 esc 是普通的键：热键按着时按它算打断，不吞",
+      "bindings": [
+        { "id": "dictate#0", "chord": "AltRight" },
+        { "id": "cancel#0", "chord": "Escape", "when": "capturing" }
+      ],
+      "steps": [
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "Escape", "down": true, "events": [{ "interrupted": "dictate#0" }] },
+        { "key": "Escape", "down": false },
+        { "key": "AltRight", "down": false }
+      ]
+    },
+    {
+      "name": "取消换成 F13：截着时按 F13 取消，esc 照常放行；不截的时候 F13 也照常放行",
+      "bindings": [
+        { "id": "dictate#0", "chord": "AltRight" },
+        { "id": "cancel#0", "chord": "F13", "when": "capturing" }
+      ],
+      "steps": [
+        { "key": "F13", "down": true },
+        { "key": "F13", "down": false },
+        { "capture": true },
+        { "key": "Escape", "down": true },
+        { "key": "Escape", "down": false },
+        { "key": "F13", "down": true, "events": [{ "down": "cancel#0" }], "swallow": true },
+        { "key": "F13", "down": false, "events": [{ "up": "cancel#0" }], "swallow": true }
+      ]
+    }
+  ]
+}
