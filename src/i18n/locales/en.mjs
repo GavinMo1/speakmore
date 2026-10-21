@@ -62,6 +62,58 @@ export default {
     right_ctrl: { name: "Right Ctrl", keycap: "Right Ctrl" },
   },
 
+  // Key names, short names inside a combination, and keycaps (codes from src/hotkeys/keys.mjs). Letters, digits, F keys and
+  // punctuation read the same in every language: their text is in the key table and named builds the name. Windows wording is under windows
+  keys: {
+    named: "{label}",
+    ControlLeft: { name: "Left Control", short: "Left Control", keycap: "Left ⌃" },
+    ControlRight: { name: "Right Control", short: "Right Control", keycap: "Right ⌃" },
+    ShiftLeft: { name: "Left Shift", short: "Left Shift", keycap: "Left ⇧" },
+    ShiftRight: { name: "Right Shift", short: "Right Shift", keycap: "Right ⇧" },
+    AltLeft: { name: "Left Option", short: "Left Option", keycap: "Left ⌥" },
+    AltRight: { name: "Right Option", short: "Right Option", keycap: "Right ⌥" },
+    MetaLeft: { name: "Left Command", short: "Left Command", keycap: "Left ⌘" },
+    MetaRight: { name: "Right Command", short: "Right Command", keycap: "Right ⌘" },
+    Fn: { name: "Globe (fn)", short: "fn", keycap: "fn" },
+    ContextMenu: { name: "Menu key", short: "Menu", keycap: "Menu" },
+    Space: { name: "Space", short: "Space", keycap: "Space" },
+    Escape: { name: "esc", short: "esc", keycap: "esc" },
+    Enter: { name: "Return", short: "Return", keycap: "↩" },
+    Tab: { name: "Tab", short: "Tab", keycap: "⇥" },
+    Backspace: { name: "Delete", short: "Delete", keycap: "⌫" },
+    Delete: { name: "Forward Delete", short: "Forward Delete", keycap: "⌦" },
+    Insert: { name: "Insert", short: "Insert", keycap: "Insert" },
+    Home: { name: "Home", short: "Home", keycap: "Home" },
+    End: { name: "End", short: "End", keycap: "End" },
+    PageUp: { name: "Page Up", short: "Page Up", keycap: "Page Up" },
+    PageDown: { name: "Page Down", short: "Page Down", keycap: "Page Down" },
+    ArrowUp: { name: "Up Arrow", short: "Up", keycap: "↑" },
+    ArrowDown: { name: "Down Arrow", short: "Down", keycap: "↓" },
+    ArrowLeft: { name: "Left Arrow", short: "Left", keycap: "←" },
+    ArrowRight: { name: "Right Arrow", short: "Right", keycap: "→" },
+    CapsLock: { name: "Caps Lock", short: "Caps Lock", keycap: "⇪" },
+    NumLock: { name: "Num Lock", short: "Num Lock", keycap: "Num Lock" },
+    ScrollLock: { name: "Scroll Lock", short: "Scroll Lock", keycap: "Scroll Lock" },
+    Pause: { name: "Pause", short: "Pause", keycap: "Pause" },
+    PrintScreen: { name: "Print Screen", short: "Print Screen", keycap: "PrtSc" },
+  },
+
+  chord: {
+    named: "{first}+{second}",
+    // Mac menus put no plus sign between keys; our keycaps carry Left/Right, so a space keeps them readable
+    text: "{first} {second}",
+    empty: "No keys",
+    unknown: "Unknown key {code}",
+    tooMany: "Two keys at most",
+    twice: "{key} is listed twice",
+    blocked: "{key} can't be part of a shortcut",
+    typingAlone: "{key} needs a modifier: on its own it types",
+    shiftAlone: "Shift on its own can't be a shortcut: input methods use it to switch languages",
+    twoPlain: "One of the two keys has to be a modifier",
+    escapeCombo: "esc can't be combined with other keys",
+    shiftTyping: "Shift with a typing key types capitals or symbols; pick another modifier",
+  },
+
   themes: {
     ink: { name: "Ink", describe: "Black and white. Shape and motion show the state; color only for errors" },
     cinnabar: { name: "Cinnabar", describe: "A warm red on the wave and the main buttons" },
@@ -1543,6 +1595,23 @@ speakmore help     all commands`,
 
   // Windows 上说法不同的那几句，名字照抄通用的（见 src/i18n/index.mjs 开头）
   windows: {
+    // A combination is joined with a plus sign (Right Alt+Space)
+    chord: { text: "{first}+{second}" },
+    keys: {
+      ControlLeft: { name: "Left Ctrl", short: "Left Ctrl", keycap: "Left Ctrl" },
+      ControlRight: { name: "Right Ctrl", short: "Right Ctrl", keycap: "Right Ctrl" },
+      ShiftLeft: { name: "Left Shift", short: "Left Shift", keycap: "Left Shift" },
+      ShiftRight: { name: "Right Shift", short: "Right Shift", keycap: "Right Shift" },
+      AltLeft: { name: "Left Alt", short: "Left Alt", keycap: "Left Alt" },
+      AltRight: { name: "Right Alt", short: "Right Alt", keycap: "Right Alt" },
+      MetaLeft: { name: "Left Win", short: "Left Win", keycap: "Left Win" },
+      MetaRight: { name: "Right Win", short: "Right Win", keycap: "Right Win" },
+      Enter: { name: "Enter", short: "Enter", keycap: "Enter" },
+      Tab: { name: "Tab", short: "Tab", keycap: "Tab" },
+      Backspace: { name: "Backspace", short: "Backspace", keycap: "Backspace" },
+      Delete: { name: "Delete", short: "Delete", keycap: "Delete" },
+      CapsLock: { name: "Caps Lock", short: "Caps Lock", keycap: "Caps Lock" },
+    },
     instance: {
       stuckNoPid:
         "SpeakMore is stuck and not answering, and its process can't be identified. In Task Manager's Details tab, find electron.exe and end it.",

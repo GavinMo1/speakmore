@@ -61,6 +61,58 @@ export default {
     right_ctrl: { name: "右 Ctrl 键", keycap: "右 Ctrl" },
   },
 
+  // 键的名字、组合里的叫法、键帽（src/hotkeys/keys.mjs 里的 code）。字母、数字、F 键、标点的字和语言无关，写在键表里，
+  // 名字用 named 拼。名字要能嵌进句子（"按一下右 Option 键开始说话"），所以以"键"结尾。这里是 Mac 的说法，Windows 的在 windows 一节
+  keys: {
+    named: "{label} 键",
+    ControlLeft: { name: "左 Control 键", short: "左 Control", keycap: "左⌃" },
+    ControlRight: { name: "右 Control 键", short: "右 Control", keycap: "右⌃" },
+    ShiftLeft: { name: "左 Shift 键", short: "左 Shift", keycap: "左⇧" },
+    ShiftRight: { name: "右 Shift 键", short: "右 Shift", keycap: "右⇧" },
+    AltLeft: { name: "左 Option 键", short: "左 Option", keycap: "左⌥" },
+    AltRight: { name: "右 Option 键", short: "右 Option", keycap: "右⌥" },
+    MetaLeft: { name: "左 Command 键", short: "左 Command", keycap: "左⌘" },
+    MetaRight: { name: "右 Command 键", short: "右 Command", keycap: "右⌘" },
+    Fn: { name: "地球仪（fn）键", short: "fn", keycap: "fn" },
+    ContextMenu: { name: "菜单键", short: "菜单", keycap: "菜单" },
+    Space: { name: "空格键", short: "空格", keycap: "空格" },
+    Escape: { name: "esc 键", short: "esc", keycap: "esc" },
+    Enter: { name: "Return 键", short: "Return", keycap: "↩" },
+    Tab: { name: "Tab 键", short: "Tab", keycap: "⇥" },
+    Backspace: { name: "Delete 键", short: "Delete", keycap: "⌫" },
+    Delete: { name: "向前删除键", short: "向前删除", keycap: "⌦" },
+    Insert: { name: "Insert 键", short: "Insert", keycap: "Insert" },
+    Home: { name: "Home 键", short: "Home", keycap: "Home" },
+    End: { name: "End 键", short: "End", keycap: "End" },
+    PageUp: { name: "Page Up 键", short: "Page Up", keycap: "Page Up" },
+    PageDown: { name: "Page Down 键", short: "Page Down", keycap: "Page Down" },
+    ArrowUp: { name: "上方向键", short: "上", keycap: "↑" },
+    ArrowDown: { name: "下方向键", short: "下", keycap: "↓" },
+    ArrowLeft: { name: "左方向键", short: "左", keycap: "←" },
+    ArrowRight: { name: "右方向键", short: "右", keycap: "→" },
+    CapsLock: { name: "大写锁定键", short: "大写锁定", keycap: "⇪" },
+    NumLock: { name: "Num Lock 键", short: "Num Lock", keycap: "Num Lock" },
+    ScrollLock: { name: "Scroll Lock 键", short: "Scroll Lock", keycap: "Scroll Lock" },
+    Pause: { name: "Pause 键", short: "Pause", keycap: "Pause" },
+    PrintScreen: { name: "Print Screen 键", short: "Print Screen", keycap: "PrtSc" },
+  },
+
+  chord: {
+    named: "{first}+{second}",
+    // Mac 的菜单里修饰键和键之间不加号；我们的键帽带左右，挨在一起不好认，空一格
+    text: "{first} {second}",
+    empty: "没写键",
+    unknown: "不认识的键 {code}",
+    tooMany: "最多两个键",
+    twice: "{key}写了两次",
+    blocked: "{key}不能放进快捷键",
+    typingAlone: "{key}要和一个修饰键一起按：单按会打出字",
+    shiftAlone: "单按 Shift 不能当快捷键：输入法常用它切换中英文",
+    twoPlain: "两个键里要有一个是修饰键",
+    escapeCombo: "esc 不能和别的键组合",
+    shiftTyping: "Shift 加打字的键会打出大写或符号，换一个修饰键",
+  },
+
   themes: {
     ink: { name: "墨", describe: "黑白。状态靠形状和动作来说，只有出错才出现颜色" },
     cinnabar: { name: "朱砂", describe: "一种暖红，用在声波和最主要的按钮上" },
@@ -1455,6 +1507,23 @@ speakmore help     全部命令`,
 
   // Windows 上说法不同的那几句，名字照抄通用的（见 src/i18n/index.mjs 开头）。"本机"这类不分系统的不写
   windows: {
+    // 组合用加号连（右 Alt+空格），修饰键叫 Ctrl、Alt、Win
+    chord: { text: "{first}+{second}" },
+    keys: {
+      ControlLeft: { name: "左 Ctrl 键", short: "左 Ctrl", keycap: "左 Ctrl" },
+      ControlRight: { name: "右 Ctrl 键", short: "右 Ctrl", keycap: "右 Ctrl" },
+      ShiftLeft: { name: "左 Shift 键", short: "左 Shift", keycap: "左 Shift" },
+      ShiftRight: { name: "右 Shift 键", short: "右 Shift", keycap: "右 Shift" },
+      AltLeft: { name: "左 Alt 键", short: "左 Alt", keycap: "左 Alt" },
+      AltRight: { name: "右 Alt 键", short: "右 Alt", keycap: "右 Alt" },
+      MetaLeft: { name: "左 Win 键", short: "左 Win", keycap: "左 Win" },
+      MetaRight: { name: "右 Win 键", short: "右 Win", keycap: "右 Win" },
+      Enter: { name: "回车键", short: "回车", keycap: "Enter" },
+      Tab: { name: "Tab 键", short: "Tab", keycap: "Tab" },
+      Backspace: { name: "退格键", short: "退格", keycap: "Backspace" },
+      Delete: { name: "Delete 键", short: "Delete", keycap: "Delete" },
+      CapsLock: { name: "大写锁定键", short: "大写锁定", keycap: "Caps Lock" },
+    },
     instance: {
       stuckNoPid: "SpeakMore 卡住了不答话，也认不出它的进程号。在“任务管理器”的“详细信息”里找到 electron.exe，结束它。",
       cantStop: "SpeakMore 停不掉（进程号 {pid}）。在“任务管理器”里结束它。",
