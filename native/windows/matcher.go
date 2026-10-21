@@ -6,10 +6,11 @@ package main
 //   - 只有按下能凑成组合；组合里的键全部松开才算松开。按着时组合里的某个键松开又按回去，不算新的一下。
 //   - 按着时来了组合外的键：新的集合恰好是另一个绑定就是"升级"，先报打断（带 to）再报新绑定按下；否则报一次打断，
 //     之后不报松开，组合里的键全松开之前不再触发任何东西。
-//   - 修饰键一律不吞；凑成组合的那个普通键整段吞掉（按下、自动重复、松开）。有 Alt 或 Win 的绑定按下时要插掩码键。
+//   - 修饰键一律不吞；凑成组合的那个普通键整段吞掉（按下、自动重复、松开）。
 //   - 只在说话时生效的绑定（取消）不按集合认：截着的时候它那个键一按下就算，吞掉，也不进按住的键。
-//   - 松开的事件可能丢（UIPI、管理员窗口）：每次按下前用系统接口核对按住的普通键，按下超过 10 秒的也当丢了。
-//     我们吞掉的键系统接口查不准，只按 10 秒算（只有 Windows 这样，见 prune）。
+//   - 松开的事件可能丢（UIPI、管理员窗口、Win+L）：每次按下前用系统接口核对按住的别的键，普通键按下超过 10 秒的也当丢了。
+//     我们吞掉的键系统接口查不准，只按 10 秒算；修饰键也核对（Mac 每个 flagsChanged 都从标志位重新读，不用）。见 prune。
+// 只有 Windows 有的：Alt 或 Win 按住期间，我们第一次触发绑定或吞键时插一下掩码键（见 settleMask）。
 // 只报绑定的按下、松开、被打断，不报是哪个键。
 
 // 一个绑定：父进程 bind 下发的一行
@@ -28,18 +29,24 @@ type keyID uint32
 const modifierBit keyID = 1 << 16
 
 var modifierVKs = map[uint32]bool{
-	0xA0: true, 0xA1: true, // 左右 Shift
+	vkLShift: true, vkRShift: true,
 	vkLControl: true, vkRControl: true,
-	0xA4: true, vkRMenu: true, // 左右 Alt
-	0x5B: true, 0x5C: true, // 左右 Win
+	vkLMenu: true, vkRMenu: true,
+	vkLWin: true, vkRWin: true,
 }
 
-// 按着时要插掩码键的修饰键：Alt 和 Win 单独松开会打开菜单栏、开始菜单
-var maskedVKs = map[uint32]bool{0xA4: true, vkRMenu: true, 0x5B: true, 0x5C: true}
+// 单独按下再松开会打开菜单栏、开始菜单的修饰键：Alt 和 Win
+var menuVKs = map[uint32]bool{vkLMenu: true, vkRMenu: true, vkLWin: true, vkRWin: true}
+
+// 不是物理键的那几个 vk（keys.go 的 virtualVKs）在匹配里的身份：按 vk 认，和哪个扫描码都不撞
+const virtualBit keyID = 1 << 17
 
 func keyIDOf(in keyInput) keyID {
 	if modifierVKs[in.vk] {
 		return modifierBit | keyID(in.vk)
+	}
+	if virtualVKs[in.vk] {
+		return virtualBit | keyID(in.vk)
 	}
 	id := keyID(in.scan & 0xFF)
 	if in.extended {
@@ -74,6 +81,8 @@ type matcher struct {
 	// 现在按着的绑定；被打断以后 interrupted 为 true，等它的键全松开再清掉
 	current     *binding
 	interrupted bool
+	// 这次 Alt、Win 按住期间插过掩码键了：插一次就够，全松开再清
+	masked bool
 }
 
 func newMatcher(stillDown func(keyID, heldKey) bool) *matcher {
@@ -109,15 +118,6 @@ func (b *binding) has(id keyID) bool {
 	return false
 }
 
-func (b *binding) masked() bool {
-	for _, vk := range b.Mods {
-		if maskedVKs[vk] {
-			return true
-		}
-	}
-	return false
-}
-
 // 换一份绑定表。按着的绑定补报松开；按住的键照旧记着
 func (m *matcher) bind(bindings []binding) []event {
 	events := m.release()
@@ -127,16 +127,18 @@ func (m *matcher) bind(bindings []binding) []event {
 
 func (m *matcher) setCapturing(on bool) { m.capturing = on }
 
-// 监听停了又打开（钩子重装、睡眠唤醒）：这段时间的松开多半丢了。按着的绑定补报松开，按住的普通键和吞了一半的都清掉
+// 监听停了又打开（钩子重装、睡眠唤醒、解锁）：这段时间的松开多半丢了。按着的绑定补报松开，按住的普通键和吞了一半的都清掉，
+// 修饰键问一遍系统（Win+L 锁屏时 Win 的松开到不了钩子，留着的话回来以后什么绑定都凑不上）
 func (m *matcher) reset() []event {
 	events := m.release()
-	for id := range m.held {
-		if !id.isModifier() {
+	for id, key := range m.held {
+		if !id.isModifier() || !m.stillDown(id, key) {
 			delete(m.held, id)
 		}
 	}
 	m.swallowed = map[keyID]bool{}
 	m.capturingDown = map[keyID]*binding{}
+	m.settleMask(&outcome{})
 	return events
 }
 
@@ -150,19 +152,51 @@ func (m *matcher) release() []event {
 }
 
 func (m *matcher) onKey(in keyInput) outcome {
-	// 自己模拟的（插的掩码键、贴字时的 Ctrl+V）：不算用户按的键
-	if in.ours {
-		return outcome{}
-	}
-	// 用了 AltGr 的布局上，按右 Alt 时系统先补一个假的左 Ctrl：不是用户按的别的键
-	if in.vk == vkLControl && in.scan == altGrFakeCtrlScan {
+	// 自己模拟的（插的掩码键、贴字时的 Ctrl+V）、驱动补的假修饰键（AltGr 的假左 Ctrl、小键盘的假 Shift）：不是用户按的键
+	if in.ours || in.scan&fakeScanBit != 0 {
 		return outcome{}
 	}
 	id := keyIDOf(in)
+	var out outcome
 	if in.down {
-		return m.onDown(id, in)
+		out = m.onDown(id, in)
+	} else {
+		out = m.onUp(id)
 	}
-	return m.onUp(id)
+	m.settleMask(&out)
+	return out
+}
+
+// 掩码：Alt 或 Win 按住期间，我们触发了绑定或吞了键，系统看到的就是"Alt、Win 单按了一下"，松开时会开菜单。
+// 这次按住期间第一回这样时插一下掩码键。被吞的键松开时也算：先按 F13（单键绑定，整段吞）、再按 Win、
+// 松开 F13、松开 Win，系统看到的只有 Win 的按下松开（handy-keys 实测过，listener.rs:755-790）
+func (m *matcher) settleMask(out *outcome) {
+	if !m.menuKeyHeld() {
+		m.masked = false
+		return
+	}
+	if m.masked || !(out.swallow || firesBinding(out.events)) {
+		return
+	}
+	out.mask, m.masked = true, true
+}
+
+func (m *matcher) menuKeyHeld() bool {
+	for id := range m.held {
+		if id.isModifier() && menuVKs[uint32(id&^modifierBit)] {
+			return true
+		}
+	}
+	return false
+}
+
+func firesBinding(events []event) bool {
+	for _, e := range events {
+		if e["event"] == "binding" && e["down"] == true {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *matcher) onDown(id keyID, in keyInput) outcome {
@@ -182,6 +216,8 @@ func (m *matcher) onDown(id keyID, in keyInput) outcome {
 		}
 	}
 	m.prune(in.time)
+	// 核对时清掉了松开丢了的 Alt、Win：上一次按住已经过去了，这一下另算
+	m.settleMask(&outcome{})
 	m.held[id] = heldKey{since: in.time, vk: in.vk}
 
 	if m.current != nil {
@@ -210,7 +246,7 @@ func (m *matcher) pressed(id keyID, b *binding, before ...event) outcome {
 	if swallow {
 		m.swallowed[id] = true
 	}
-	return outcome{swallow: swallow, events: append(before, bindingEvent(b, true)), mask: b.masked()}
+	return outcome{swallow: swallow, events: append(before, bindingEvent(b, true))}
 }
 
 func (m *matcher) onUp(id keyID) outcome {
@@ -274,16 +310,16 @@ func (m *matcher) capturingBinding(id keyID) *binding {
 	return nil
 }
 
-// 按下前核对按住的普通键：系统说已经松开的、按下超过 10 秒的，都当成松开的事件丢了（docs/hotkey-research.md 5.3 第 8 条）
+// 按下前核对按住的别的键：系统说已经松开的、普通键按下超过 10 秒的，都当成松开的事件丢了（docs/hotkey-research.md 5.3 第 8 条）。
+// 修饰键也问系统：Alt+Tab 切进管理员窗口时，Alt 和 Tab 的松开都被 UIPI 挡掉，不清掉 Alt 的话回来按右 Alt 凑不上听写。
+// 修饰键不按 10 秒算：按住说话的那个键可以一直按着
 func (m *matcher) prune(now uint32) {
 	for id, key := range m.held {
-		if id.isModifier() {
-			continue
-		}
 		// 吞掉的不问系统：低级钩子吞了按下，系统就不更新这个键的状态，GetAsyncKeyState 一直说它没按着
 		// （所有低级钩子都放行了才改：https://devblogs.microsoft.com/oldnewthing/20140213-00/?p=1773 ）。
-		// 它的松开要是丢了，只靠 10 秒清。无符号相减：钩子的时间 49 天绕一圈也算得对
-		if now-key.since > staleAfterMs || (!m.swallowed[id] && !m.stillDown(id, key)) {
+		// 它的松开要是丢了，只靠 10 秒清。修饰键从来不吞。无符号相减：钩子的时间 49 天绕一圈也算得对
+		stale := !id.isModifier() && now-key.since > staleAfterMs
+		if stale || (!m.swallowed[id] && !m.stillDown(id, key)) {
 			delete(m.held, id)
 		}
 	}

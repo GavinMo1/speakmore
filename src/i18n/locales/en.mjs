@@ -400,6 +400,8 @@ export default {
     recordError: "Recording error: {reason}",
     helperStopped: "Key listener stopped; {hotkey} won't work. Try restarting SpeakMore",
     secureInput: "Secure input is on in another app, so some shortcuts won't work for now",
+    // 只有 Windows 有：系统不把发给管理员窗口的按键交给我们
+    elevatedForeground: "The window in front runs as administrator, so shortcuts won't work in it",
   },
 
   tray: {

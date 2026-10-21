@@ -442,7 +442,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - Win 或 Alt 单独按下再松开、中间没有别的键，系统会弹开始菜单，或者激活前台窗口的菜单栏。对策是在中间插一个无效键，让系统以为是"Win/Alt + 某个键"。现在只有右 Alt 按下时插 0xE8（`keys.go:17-19, 98`）。
 - 新规则：本次 Win 或 Alt 按住期间，只要有绑定触发、或者有事件被我们吞掉，就插一次掩码。**被吞的键松开时也算**：handy-keys 实测"F20↓ Win↓ F20↑ Win↑ with Win+F20 blocked opens Start"（`handy-keys@e7d1b8e src/platform/windows/listener.rs:755-790`）。
 - Ctrl 或 Shift 按下，本身就会让之前按着的 Win、Alt 不再触发菜单（AutoHotkey `hook.cpp:2020` 的注释）。所以 `Ctrl+Win` 这类组合自带掩码，Wispr 也说 "Ctrl+Win suppresses the Start/Search action while that combination is held"。
-- 插的时机：现在是交回消息循环再插。AutoHotkey 和 handy-keys 都在回调里同步 `SendInput`，注入的事件靠记号放行。对右 Alt，现状已经验收过；Win 键按下后交回消息循环再插能不能挡住开始菜单，未验证（真机绑左 Win 点一下即知）。
+- 插的时机：第 8 步起改成在回调里同步 `SendInput`（AutoHotkey 和 handy-keys 也是），注入的事件靠记号放行。原来交回消息循环再插：消息循环先处理的是钩子回调（发来的消息排在投递的前面），点得快或者线程正忙时，Alt、Win 的松开可能抢在掩码前面。一次按住只插一次，Alt、Win 全松开再算下一次（`native/windows/matcher.go` 的 `settleMask`）。Win 键绑定点一下能不能挡住开始菜单，仍要真机试（第 12 步）。
 - 0xE8 在微软 VK 表里仍标为 "Unassigned"（https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes ）。AutoHotkey 文档提醒，微软以后可能给未分配的码派用途，例如 0x07 从 1909 起被用来开 Game Bar（https://www.autohotkey.com/docs/v2/lib/A_MenuMaskKey.htm ）。另外 `keys.go:18` 的注释"AutoHotkey 用的也是它"不准确：AHK 的默认掩码键是左 Ctrl（`AutoHotkey@0b8e6fa source/globaldata.cpp:66-67`），0xE8 是文档推荐值。
 
 **其他修饰键自带的系统行为**
@@ -784,6 +784,8 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 {"event":"click","id":"cancel"}
 {"event":"permissions","listen":true,"trusted":false,"capture":false}
 {"event":"secure_input","on":true,"unavailable":["dictate#1"]}
+{"event":"elevated_foreground","on":true,"pid":4242}
+{"event":"relistened","reason":"resume"}
 {"event":"pasted","id":1,"ok":true}
 ```
 
@@ -791,7 +793,8 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - `interrupted` 带 `to` 时表示升级，紧接着一定是 `to` 那个绑定的按下。状态机可以据此决定保留麦克风、只换动作，还是取消再开始；第一版按"取消再开始"处理即可。
 - `recording` 只在录制模式下出现，报当前按住的原生码集合，修饰键和别的键分开报（录制时可能按着不止一个普通键，所以 `keys` 是数组，交给 JS 判形状）。
 - `probed` 的 `source` 是 `symbolic`（Mac 系统快捷键）或 `registered`（Windows 上已被别的程序登记）；`info` 里 `fnUsage` 读不到时不带这个字段。
-- `permissions`、`secure_input` 只有 Mac 有。`permissions`：运行中两项权限变了（每秒查一次，辅助功能另听 `com.apple.accessibility.api`），没了的那项的 tap 已经作废，紧跟着按新的权限重报一次 `bound`。`secure_input`：安全输入开了、关了；开着时带普通键的绑定由 Carbon 顶着，`unavailable` 是顶不了的（带 fn 的、注册不上的）。Windows 可选加一条前台是管理员窗口的提示事件（D8）。
+- `permissions`、`secure_input` 只有 Mac 有。`permissions`：运行中两项权限变了（每秒查一次，辅助功能另听 `com.apple.accessibility.api`），没了的那项的 tap 已经作废，紧跟着按新的权限重报一次 `bound`。`secure_input`：安全输入开了、关了；开着时带普通键的绑定由 Carbon 顶着，`unavailable` 是顶不了的（带 fn 的、注册不上的）。
+- `elevated_foreground`、`relistened` 只有 Windows 有。`elevated_foreground`：前台换成了以管理员身份运行的窗口（`on: true`，带 `pid`），或者换走了（`on: false`）；小帮手自己是管理员身份时不报。主进程对同一个进程只提示一次（D8）。`relistened`：睡眠唤醒（`reason: "resume"`）、解锁或切回这个用户（`"unlock"`）以后重装了键盘钩子；睡下去、锁屏时按着的绑定先补报松开。
 - 去掉的事件：`hotkey`、`other_key`、`escape`。
 - 可选：事件带时间戳（Mac `CGEvent.timestamp`，Windows `KBDLLHOOKSTRUCT.time`），以后做双击和按住时长不受进程间延迟影响。现在 600 ms 由 JS 计时（`bar.mjs:60-62`），误差可以接受，第一版不加。
 

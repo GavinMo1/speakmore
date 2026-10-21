@@ -3,6 +3,9 @@ package main
 // 入口和线程：低级钩子的回调由装它的那个线程在取消息时调用，剪贴板也要一个窗口当主人，所以这些都放在
 // 同一个锁定的系统线程上跑一个消息循环。读标准输入、写标准输出各是一个 goroutine：要在钩子线程上做的事
 // 经 tasks 交过去、再投一条消息叫醒它；钩子回调里不做任何会等的事（系统嫌慢会悄悄卸掉钩子）。
+// 同一个消息窗口还收三样系统通知（docs/hotkey-research.md 4.2）：
+//   睡眠唤醒、锁屏解锁、切换用户  钩子可能在睡眠中被悄悄卸掉、松开的事件也丢了：回来以后重装钩子，从头认
+//   前台换了窗口                  前台是以管理员身份运行的窗口时，钩子收不到发给它的按键，报 elevated_foreground 让父进程提示
 
 import (
 	"bufio"
@@ -30,11 +33,12 @@ var (
 	// 键盘钩子装上没有：没装上时 bind 的绑定一个都装不了。main 里定下来以后才开始读标准输入
 	listening bool
 	// 热键匹配和点击的截取：只在钩子线程上碰，不加锁
-	hotkeys   = newMatcher(keyStillDown)
-	clicks    clickCapture
-	board     *clipboard
-	window    uintptr
-	mouseHook uintptr
+	hotkeys      = newMatcher(keyStillDown)
+	clicks       clickCapture
+	board        *clipboard
+	window       uintptr
+	keyboardHook uintptr
+	mouseHook    uintptr
 	// 截的期限：每次开始截换一个号，过期的那个不算数
 	captureGeneration int
 )
@@ -57,14 +61,27 @@ func keyStillDown(_ keyID, key heldKey) bool {
 	return state&0x8000 != 0
 }
 
+// 只带了 vk、扫描码是 0 的模拟按键：照 vk 查一个扫描码（MAPVK_VK_TO_VSC_EX 的高字节是 0xE0、0xE1 时是扩展键）
+func scanOfVK(vk uint32) (uint32, bool) {
+	code, _, _ := procMapVirtualKeyW.Call(uintptr(vk), mapvkVKToVSCEx)
+	prefix := code >> 8 & 0xFF
+	return uint32(code) & 0xFF, prefix == 0xE0 || prefix == 0xE1
+}
+
 func keyboardProc(code int32, wParam, lParam uintptr) uintptr {
 	if code >= 0 {
 		info := (*kbdLLHookStruct)(unsafe.Pointer(lParam))
 		down := wParam == wmKeyDown || wParam == wmSysKeyDown
 		if down || wParam == wmKeyUp || wParam == wmSysKeyUp {
-			result := hotkeys.onKey(keyInput{vk: info.vkCode, scan: info.scanCode, extended: info.flags&llkhfExtended != 0,
-				down: down, ours: info.extraInfo == ourMark, time: info.time})
+			in := normalize(keyInput{vk: info.vkCode, scan: info.scanCode, extended: info.flags&llkhfExtended != 0,
+				down: down, ours: info.extraInfo == ourMark, time: info.time}, scanOfVK)
+			result := hotkeys.onKey(in)
 			report(result)
+			if result.mask {
+				// 就在回调里插（AutoHotkey、handy-keys 也是）：排在这个事件后面、Alt 或 Win 的松开前面。
+				// 交回消息循环再插的话，消息循环先处理的是钩子回调，快速点按时松开可能抢在掩码前面
+				sendKeys([]uint16{vkMask, vkMask}, []bool{true, false})
+			}
 			if result.swallow {
 				return 1
 			}
@@ -97,13 +114,10 @@ func report(result outcome) {
 	for _, e := range result.events {
 		emit(e)
 	}
-	if result.mask {
-		onUIThread(func() { sendKeys([]uint16{vkMask, vkMask}, []bool{true, false}) })
-	}
 }
 
 // 交给系统的回调。在 init 里建：鼠标的回调要装卸它自己，写成包级变量的初始值会成环
-var keyboardCallback, mouseCallback, windowCallback uintptr
+var keyboardCallback, mouseCallback, windowCallback, foregroundCallback uintptr
 
 func init() {
 	keyboardCallback = syscall.NewCallback(func(code, wParam, lParam uintptr) uintptr {
@@ -113,12 +127,79 @@ func init() {
 		return mouseProc(int32(code), wParam, lParam)
 	})
 	windowCallback = syscall.NewCallback(windowProc)
+	foregroundCallback = syscall.NewCallback(func(_, _, hwnd, _, _, _, _ uintptr) uintptr {
+		onForeground(hwnd)
+		return 0
+	})
 }
 
 func installHook(kind int, callback uintptr) uintptr {
 	module, _, _ := procGetModuleHandleW.Call(0)
 	hook, _, _ := procSetWindowsHookExW.Call(uintptr(kind), callback, module, 0)
 	return hook
+}
+
+// 重装键盘钩子，从头认（睡眠唤醒、解锁、切回这个用户以后）：Windows 睡眠时可能悄悄卸掉低级钩子
+// （handy-keys listener.rs 的注释），这段时间的松开也丢了。先装新的再卸旧的，中间不漏键；装不上就留着旧的
+func relisten(reason string) {
+	if keyboardHook == 0 {
+		return
+	}
+	fresh := installHook(whKeyboardLL, keyboardCallback)
+	if fresh == 0 {
+		emit(event{"event": "error", "message": "重装键盘钩子失败（" + reason + "），热键可能不灵了：重启 SpeakMore 试试"})
+		return
+	}
+	procUnhookWindowsHookEx.Call(keyboardHook)
+	keyboardHook = fresh
+	for _, e := range hotkeys.reset() {
+		emit(e)
+	}
+	emit(event{"event": "relistened", "reason": reason})
+}
+
+// 睡下去、锁屏、切走：按着的绑定补报松开（之后它的松开到不了）。回来时 relisten
+func pauseListening() {
+	for _, e := range hotkeys.reset() {
+		emit(e)
+	}
+}
+
+// 前台窗口是不是以管理员身份运行的：变了才报。我们自己以管理员身份运行时不用盯（watchForeground 不装）
+var foregroundElevated bool
+
+func onForeground(hwnd uintptr) {
+	elevated, pid := windowBlocksInput(hwnd)
+	if elevated == foregroundElevated {
+		return
+	}
+	foregroundElevated = elevated
+	if elevated {
+		emit(event{"event": "elevated_foreground", "on": true, "pid": pid})
+	} else {
+		emit(event{"event": "elevated_foreground", "on": false})
+	}
+}
+
+// 收三样系统通知（见文件开头）。登记不上的照实报，不影响热键本身
+func watchSystem() {
+	if ok, _, _ := procWTSRegisterSessionNotification.Call(window, notifyForThisSession); ok == 0 {
+		emit(event{"event": "error", "message": "登记不上锁屏解锁的通知：解锁后热键要是不灵，重启 SpeakMore"})
+	}
+	if handle, _, _ := procRegisterSuspendResumeNotification.Call(window, deviceNotifyWindowHandle); handle == 0 {
+		emit(event{"event": "error", "message": "登记不上睡眠唤醒的通知：唤醒后热键要是不灵，重启 SpeakMore"})
+	}
+	self, _, _ := procGetCurrentProcess.Call()
+	if processElevated(self) {
+		return
+	}
+	if hook, _, _ := procSetWinEventHook.Call(eventSystemForeground, eventSystemForeground, 0, foregroundCallback, 0, 0,
+		wineventOutOfContext); hook == 0 {
+		emit(event{"event": "error", "message": "盯不了前台窗口：管理员窗口在前台时没法提示热键用不了"})
+		return
+	}
+	foreground, _, _ := procGetForegroundWindow.Call()
+	onForeground(foreground)
 }
 
 // 鼠标钩子只在要截的时候装着：装着时全系统每一下鼠标都要先过我们这里
@@ -236,10 +317,27 @@ func handle(line []byte) {
 }
 
 func windowProc(hwnd, message, wParam, lParam uintptr) uintptr {
-	if message == wmTask {
+	switch message {
+	case wmTask:
 		// 做的过程中又排进来的，会再投一条消息，下一轮再做
 		for _, task := range tasks.takeAll() {
 			task()
+		}
+		return 0
+	case wmPowerBroadcast:
+		switch wParam {
+		case pbtAPMSuspend:
+			pauseListening()
+		case pbtAPMResumeAutomatic:
+			relisten("resume")
+		}
+		return 1
+	case wmWTSSessionChange:
+		switch wParam {
+		case wtsSessionLock, wtsConsoleDisconnect, wtsRemoteDisconnect:
+			pauseListening()
+		case wtsSessionUnlock, wtsConsoleConnect, wtsRemoteConnect:
+			relisten("unlock")
 		}
 		return 0
 	}
@@ -346,9 +444,10 @@ func main() {
 	}
 
 	// --no-prompt 照收不误：Windows 上没有授权框可弹。热键等父进程用 bind 下发，在那之前一个也不听
-	keyboard := installHook(whKeyboardLL, keyboardCallback)
-	listening = keyboard != 0
+	keyboardHook = installHook(whKeyboardLL, keyboardCallback)
+	listening = keyboardHook != 0
 	emit(event{"event": "ready", "listen": listening, "trusted": true, "capture": listening})
+	watchSystem()
 
 	go func() {
 		scanner := bufio.NewScanner(os.Stdin)

@@ -12,7 +12,82 @@
       ]
     },
     {
-      "name": "掩码只在有 Alt 的绑定按下时插：右 Ctrl 加 F13 不插，左 Alt 加 K 插",
+      "name": "NumLock 开着时按着 Shift 按小键盘：驱动补的假 Shift 松开、按下（扫描码 0x236）不算，补回来的那下不会凑成组合",
+      "platforms": ["win32"],
+      "bindings": [{ "id": "x#0", "chord": "ControlRight+ShiftRight" }],
+      "steps": [
+        { "key": "ShiftRight", "down": true },
+        { "key": "ShiftRight", "down": false, "scan": 566 },
+        { "key": "Home", "down": true, "scan": 71 },
+        { "key": "ControlRight", "down": true },
+        { "key": "Home", "down": false, "scan": 71 },
+        { "key": "ShiftRight", "down": true, "scan": 566 },
+        { "key": "ControlRight", "down": false },
+        { "key": "ShiftRight", "down": false }
+      ]
+    },
+    {
+      "name": "掩码：被吞的键在 Win 按着时松开也要插（先按 F13、再按 Win，系统只看到 Win 的按下松开，会开开始菜单）",
+      "platforms": ["win32"],
+      "bindings": [{ "id": "f#0", "chord": "F13" }],
+      "steps": [
+        { "key": "F13", "down": true, "events": [{ "down": "f#0" }], "swallow": true },
+        { "key": "MetaLeft", "down": true, "events": [{ "interrupted": "f#0" }] },
+        { "key": "F13", "down": false, "swallow": true, "mask": true },
+        { "key": "MetaLeft", "down": false }
+      ]
+    },
+    {
+      "name": "掩码：截着时按着左 Alt 按 esc，esc 被吞，插一下；一次按住只插一次，再按一次 Win 再插",
+      "platforms": ["win32"],
+      "bindings": [
+        { "id": "dictate#0", "chord": "MetaLeft" },
+        { "id": "cancel#0", "chord": "Escape", "when": "capturing" }
+      ],
+      "steps": [
+        { "capture": true },
+        { "key": "AltLeft", "down": true },
+        { "key": "Escape", "down": true, "events": [{ "down": "cancel#0" }], "swallow": true, "mask": true },
+        { "key": "Escape", "down": false, "events": [{ "up": "cancel#0" }], "swallow": true },
+        { "key": "Escape", "down": true, "events": [{ "down": "cancel#0" }], "swallow": true },
+        { "key": "Escape", "down": false, "events": [{ "up": "cancel#0" }], "swallow": true },
+        { "key": "AltLeft", "down": false },
+        { "capture": false },
+        { "key": "MetaLeft", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "MetaLeft", "down": false, "events": [{ "up": "dictate#0" }] },
+        { "key": "MetaLeft", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "MetaLeft", "down": false, "events": [{ "up": "dictate#0" }] }
+      ]
+    },
+    {
+      "name": "修饰键的松开丢了也核对：Alt+Tab 切进管理员窗口，Alt 和 Tab 的松开都被挡掉，回来按右 Alt 听写照常（Mac 从标志位重读，不用）",
+      "platforms": ["win32"],
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "AltLeft", "down": true },
+        { "key": "Tab", "down": true },
+        { "lostUp": "Tab" },
+        { "lostUp": "AltLeft" },
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+      ]
+    },
+    {
+      "name": "Win+L 锁屏后 Win 的松开到不了：解锁时从头认，修饰键也问一遍系统，再按 Win 是新的一下",
+      "platforms": ["win32"],
+      "bindings": [{ "id": "dictate#0", "chord": "MetaLeft" }],
+      "steps": [
+        { "key": "MetaLeft", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "KeyL", "down": true, "events": [{ "interrupted": "dictate#0" }] },
+        { "lostUp": "KeyL" },
+        { "lostUp": "MetaLeft" },
+        { "reset": true },
+        { "key": "MetaLeft", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "MetaLeft", "down": false, "events": [{ "up": "dictate#0" }] }
+      ]
+    },
+    {
+      "name": "掩码只在 Alt 或 Win 按着时插：右 Ctrl 加 F13 不插，左 Alt 加 K 插",
       "platforms": ["win32"],
       "bindings": [
         { "id": "x#0", "chord": "ControlRight+F13" },

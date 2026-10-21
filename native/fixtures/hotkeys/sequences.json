@@ -22,8 +22,7 @@
           "key": "Space",
           "down": true,
           "events": [{ "interrupted": "dictate#0", "to": "x#0" }, { "down": "x#0" }],
-          "swallow": true,
-          "mask": true
+          "swallow": true
         },
         { "key": "Space", "down": false, "swallow": true },
         { "key": "AltRight", "down": false, "events": [{ "up": "x#0" }] }

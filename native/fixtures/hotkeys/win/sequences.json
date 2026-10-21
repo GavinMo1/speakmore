@@ -128,7 +128,7 @@
               }
             ],
             "swallow": true,
-            "mask": true
+            "mask": false
           }
         },
         {

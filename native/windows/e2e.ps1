@@ -2,6 +2,9 @@
 # 看它报的事件对不对，再往记事本里贴一段字、读回来对一遍。要在有人登录的桌面上跑（scripts/dev/win-desktop.sh - < 这个文件）。
 # 会弹出一个记事本窗口、往里贴字，跑完自己关掉；剪贴板里原来的东西跑完还在。
 # 读回记事本里的字靠全选、复制（Ctrl 组合键不经过输入法）；不模拟敲字母：中文系统默认开着拼音，字母会进候选框。
+# 热键只用右 Ctrl、F13、esc：单按它们哪个应用都不会有反应，不碰 Alt、Win（会开菜单栏、开始菜单）。
+# 按键分三种模拟法各来一遍（docs/hotkey-research.md 4.2）：只给扫描码（KEYEVENTF_SCANCODE，最像真键盘）、
+# 只给 vk（别的工具常这么发，扫描码是 0）、两个都给。
 # 没查的：右 Alt 单按之后菜单栏会不会被叫出来（新版记事本不是老式菜单，查不了），要人在 Office 这类应用里试一下。
 $ErrorActionPreference = 'Stop'
 $repo = "$HOME\speakmore-dev\repo"
@@ -19,12 +22,24 @@ public static class Fake {
   [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
   // 钩子报的是物理像素；不声明的话这个进程看到的屏幕尺寸是按缩放换算过的，两边对不上
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-  // vk 和扫描码都填，不加 KEYEVENTF_SCANCODE（系统照 vk 走）：匹配器按 vk 认修饰键、按扫描码认别的键。
+  // mode：scan 只给扫描码（KEYEVENTF_SCANCODE，系统自己换出 vk）；vk 只给 vk（扫描码 0）；both 两个都给（系统照 vk 走）。
   // 扩展键（右 Ctrl、Delete）带 KEYEVENTF_EXTENDEDKEY，钩子才报 LLKHF_EXTENDED
-  public static void Key(ushort vk, ushort scan, bool extended, bool down) {
+  public static void Key(ushort vk, ushort scan, bool extended, bool down, string mode) {
     var input = new INPUT { type = 1 };
-    input.u.k = new KEYBDINPUT { vk = vk, scan = scan, flags = (extended ? 1u : 0u) | (down ? 0u : 2u) };
+    uint flags = (extended ? 1u : 0u) | (down ? 0u : 2u);
+    if (mode == "scan") { flags |= 8u; vk = 0; }
+    if (mode == "vk") scan = 0;
+    input.u.k = new KEYBDINPUT { vk = vk, scan = scan, flags = flags };
     SendInput(1, new[] { input }, Marshal.SizeOf(typeof(INPUT)));
+  }
+  // 小帮手的输出由一条后台线程按行读进队列：PowerShell 的 OutputDataReceived 事件回调在一阵连发里会乱序
+  // （升级时紧挨着的"打断""按下"两行实测颠倒过），这里要的是先来后到
+  public static System.Collections.Concurrent.ConcurrentQueue<string> ReadLines(System.IO.StreamReader reader) {
+    var queue = new System.Collections.Concurrent.ConcurrentQueue<string>();
+    var thread = new System.Threading.Thread(() => { string line; while ((line = reader.ReadLine()) != null) if (line.Length > 0) queue.Enqueue(line); });
+    thread.IsBackground = true;
+    thread.Start();
+    return queue;
   }
   // 屏幕物理像素 → SendInput 的绝对坐标（0..65535），按主屏
   public static void Click(int x, int y, bool down) {
@@ -49,12 +64,7 @@ function Start-Helper {
   $info.RedirectStandardOutput = $true
   $info.StandardOutputEncoding = [Text.Encoding]::UTF8
   $process = [System.Diagnostics.Process]::Start($info)
-  $queue = [System.Collections.Concurrent.ConcurrentQueue[string]]::new()
-  $reader = Register-ObjectEvent -InputObject $process -EventName OutputDataReceived -MessageData $queue -Action {
-    if ($EventArgs.Data) { $Event.MessageData.Enqueue($EventArgs.Data) }
-  }
-  $process.BeginOutputReadLine()
-  [pscustomobject]@{ Process = $process; Queue = $queue; Reader = $reader }
+  [pscustomobject]@{ Process = $process; Queue = [Fake]::ReadLines($process.StandardOutput) }
 }
 
 # 等下一条事件（JSON 解好），等不到是 $null
@@ -77,35 +87,57 @@ function Send($helper, $object) {
 
 # 每个键：vk、扫描码、是不是扩展键
 $RCtrl = 0xA3, 0x1D, $true; $Esc = 0x1B, 0x01, $false; $KeyA = 0x41, 0x1E, $false; $KeyC = 0x43, 0x2E, $false
-$Ctrl = 0x11, 0x1D, $false; $Delete = 0x2E, 0x53, $true
-function Press($key, $down) { [Fake]::Key($key[0], $key[1], $key[2], $down) }
+$Ctrl = 0x11, 0x1D, $false; $Delete = 0x2E, 0x53, $true; $F13 = 0x7C, 0x64, $false; $F14 = 0x7D, 0x65, $false
+# 不分左右的 VK_CONTROL 加扩展位：有的工具这样模拟右 Ctrl，小帮手要自己分出是右边
+$GenericRCtrl = 0x11, 0x1D, $true
+function Press($key, $down, $mode = 'both') { [Fake]::Key($key[0], $key[1], $key[2], $down, $mode) }
 
 $saved = Get-Clipboard -Raw
 $helper = Start-Helper
 try {
   $ready = Next-Event $helper 3000
   Check '启动报 ready，钩子装上了' ($ready.event -eq 'ready' -and $ready.listen -and $ready.capture) ($ready | ConvertTo-Json -Compress)
+  # 锁屏解锁、睡眠唤醒、前台窗口三样通知登记不上会报 error（前台恰好是管理员窗口时会报 elevated_foreground）
+  $extra = Next-Event $helper 500
+  Check '系统通知都登记上了，没报别的' ($null -eq $extra) ($extra | ConvertTo-Json -Compress)
 
-  # 热键由父进程下发：右 Ctrl 当听写，esc（扫描码 1）当截着时的取消
+  # 热键由父进程下发：右 Ctrl 当听写，右 Ctrl+F13（扫描码 0x64）当另一个动作，esc（扫描码 1）当截着时的取消
   Send $helper @{ cmd = 'bind'; bindings = @(
       @{ id = 'dictate#0'; mods = @(0xA3); when = 'always' },
+      @{ id = 'x#0'; mods = @(0xA3); key = 0x64; when = 'always' },
       @{ id = 'cancel#0'; mods = @(); key = 1; when = 'capturing' }) }
   $bound = Next-Event $helper
   Check 'bind 都装上了' ($bound.event -eq 'bound' -and $null -ne $bound.rejected -and @($bound.rejected).Count -eq 0) ($bound | ConvertTo-Json -Compress)
 
   # 热键按下、松开；按住时系统的自动重复不另报
-  Press $RCtrl $true; Start-Sleep -Milliseconds 50; Press $RCtrl $true
+  Press $RCtrl $true 'scan'; Start-Sleep -Milliseconds 50; Press $RCtrl $true 'scan'
   $down = Next-Event $helper
-  Press $RCtrl $false
+  Press $RCtrl $false 'scan'
   $up = Next-Event $helper
   Check '热键按下、松开各报一次' ($down.event -eq 'binding' -and $down.id -eq 'dictate#0' -and $down.down -eq $true -and $up.event -eq 'binding' -and $up.id -eq 'dictate#0' -and $up.down -eq $false) "$($down | ConvertTo-Json -Compress) $($up | ConvertTo-Json -Compress)"
   Check '自动重复不另报' ($null -eq (Next-Event $helper 300))
 
+  # 右 Ctrl 按着再按 F13：升级成 x#0（先报打断带 to，再报 x#0 按下），松开右 Ctrl 报 x#0 松开。三种模拟法各一遍
+  foreach ($mode in 'scan', 'vk', 'both') {
+    Press $RCtrl $true $mode; $first = Next-Event $helper
+    Press $F13 $true $mode; $upgrade = Next-Event $helper; $chord = Next-Event $helper
+    Press $F13 $false $mode; Press $RCtrl $false $mode; $chordUp = Next-Event $helper
+    $seen = @($first, $upgrade, $chord, $chordUp) | ForEach-Object { $_ | ConvertTo-Json -Compress }
+    Check "右 Ctrl+F13 升级（$mode）" ($first.id -eq 'dictate#0' -and $first.down -eq $true -and $upgrade.event -eq 'interrupted' -and $upgrade.to -eq 'x#0' -and $chord.id -eq 'x#0' -and $chord.down -eq $true -and $chordUp.id -eq 'x#0' -and $chordUp.down -eq $false) ($seen -join ' ')
+    Check "F13 的松开不另报（$mode）" ($null -eq (Next-Event $helper 300))
+  }
+
+  # 不分左右的 VK_CONTROL 加扩展位：认成右 Ctrl
+  Press $GenericRCtrl $true 'vk'; $down = Next-Event $helper
+  Press $GenericRCtrl $false 'vk'; $up = Next-Event $helper
+  Check '不分左右的 VK_CONTROL 加扩展位认成右 Ctrl' ($down.id -eq 'dictate#0' -and $down.down -eq $true -and $up.id -eq 'dictate#0' -and $up.down -eq $false) "$($down | ConvertTo-Json -Compress) $($up | ConvertTo-Json -Compress)"
+
   # 按住热键再按别的键：报一次 interrupted，不说是哪个键；被打断的松开不报
-  Press $RCtrl $true; $null = Next-Event $helper
-  Press $KeyA $true; Press $KeyA $false; Press $KeyA $true; Press $KeyA $false
+  Press $RCtrl $true 'scan'; $null = Next-Event $helper
+  # 别的键用 F14：右 Ctrl+A 会在前台应用里全选
+  Press $F14 $true 'scan'; Press $F14 $false 'scan'; Press $F14 $true 'scan'; Press $F14 $false 'scan'
   $other = Next-Event $helper
-  Press $RCtrl $false
+  Press $RCtrl $false 'scan'
   Check '组合键报一次 interrupted' ($other.event -eq 'interrupted' -and $other.id -eq 'dictate#0' -and @($other.PSObject.Properties).Count -eq 2) ($other | ConvertTo-Json -Compress)
   Check '被打断以后松开不报' ($null -eq (Next-Event $helper 300))
   Drain $helper
@@ -116,7 +148,7 @@ try {
   $results.Add("INFO 主屏 ${width}x${height}（物理像素），点在 ($x, $y)")
   Send $helper @{ cmd = 'capture'; regions = @(@{ id = 'done'; x = $x - 20; y = $y - 20; width = 40; height = 40 }) }
   Start-Sleep -Milliseconds 200
-  Press $Esc $true; Press $Esc $false
+  Press $Esc $true 'scan'; Press $Esc $false 'scan'
   $cancelDown = Next-Event $helper
   $cancelUp = Next-Event $helper
   Check '截着时按 esc 报取消的按下、松开' ($cancelDown.event -eq 'binding' -and $cancelDown.id -eq 'cancel#0' -and $cancelDown.down -eq $true -and $cancelUp.event -eq 'binding' -and $cancelUp.id -eq 'cancel#0' -and $cancelUp.down -eq $false) "$($cancelDown | ConvertTo-Json -Compress) $($cancelUp | ConvertTo-Json -Compress)"
@@ -125,7 +157,7 @@ try {
   Check '截着时点那一块报 click' ($click.event -eq 'click' -and $click.id -eq 'done') ($click | ConvertTo-Json -Compress)
   Send $helper @{ cmd = 'release' }
   Start-Sleep -Milliseconds 200
-  Press $Esc $true; Press $Esc $false
+  Press $Esc $true 'scan'; Press $Esc $false 'scan'
   [Fake]::Click($x, $y, $true); [Fake]::Click($x, $y, $false)
   Check '不截了之后 esc 和点击都不报' ($null -eq (Next-Event $helper 400))
 
@@ -163,7 +195,6 @@ try {
   $helper.Process.StandardInput.Close()
   if (-not $helper.Process.WaitForExit(2000)) { $helper.Process.Kill() }
   Check '关掉标准输入后自己退出' ($helper.Process.HasExited) ''
-  Unregister-Event -SourceIdentifier $helper.Reader.Name -ErrorAction SilentlyContinue
   # 只关这次开的（不碰用户自己开着的记事本）
   if ($startedAt) { Get-Process notepad -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -ge $startedAt } | Stop-Process -Force -ErrorAction SilentlyContinue }
   if ($null -ne $saved) { Set-Clipboard -Value $saved }

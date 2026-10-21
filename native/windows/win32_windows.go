@@ -11,29 +11,35 @@ var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
 	advapi32 = syscall.NewLazyDLL("advapi32.dll")
+	wtsapi32 = syscall.NewLazyDLL("wtsapi32.dll")
 
-	procSetWindowsHookExW       = user32.NewProc("SetWindowsHookExW")
-	procUnhookWindowsHookEx     = user32.NewProc("UnhookWindowsHookEx")
-	procCallNextHookEx          = user32.NewProc("CallNextHookEx")
-	procGetMessageW             = user32.NewProc("GetMessageW")
-	procTranslateMessage        = user32.NewProc("TranslateMessage")
-	procDispatchMessageW        = user32.NewProc("DispatchMessageW")
-	procPostMessageW            = user32.NewProc("PostMessageW")
-	procRegisterClassExW        = user32.NewProc("RegisterClassExW")
-	procCreateWindowExW         = user32.NewProc("CreateWindowExW")
-	procDefWindowProcW          = user32.NewProc("DefWindowProcW")
-	procSendInput               = user32.NewProc("SendInput")
-	procGetAsyncKeyState        = user32.NewProc("GetAsyncKeyState")
-	procOpenClipboard           = user32.NewProc("OpenClipboard")
-	procCloseClipboard          = user32.NewProc("CloseClipboard")
-	procEmptyClipboard          = user32.NewProc("EmptyClipboard")
-	procEnumClipboardFormats    = user32.NewProc("EnumClipboardFormats")
-	procGetClipboardData        = user32.NewProc("GetClipboardData")
-	procSetClipboardData        = user32.NewProc("SetClipboardData")
-	procIsClipboardFormatAvail  = user32.NewProc("IsClipboardFormatAvailable")
-	procRegisterClipboardFormat = user32.NewProc("RegisterClipboardFormatW")
-	procGetForegroundWindow     = user32.NewProc("GetForegroundWindow")
-	procGetWindowThreadProcess  = user32.NewProc("GetWindowThreadProcessId")
+	procSetWindowsHookExW                 = user32.NewProc("SetWindowsHookExW")
+	procUnhookWindowsHookEx               = user32.NewProc("UnhookWindowsHookEx")
+	procCallNextHookEx                    = user32.NewProc("CallNextHookEx")
+	procGetMessageW                       = user32.NewProc("GetMessageW")
+	procTranslateMessage                  = user32.NewProc("TranslateMessage")
+	procDispatchMessageW                  = user32.NewProc("DispatchMessageW")
+	procPostMessageW                      = user32.NewProc("PostMessageW")
+	procRegisterClassExW                  = user32.NewProc("RegisterClassExW")
+	procCreateWindowExW                   = user32.NewProc("CreateWindowExW")
+	procDefWindowProcW                    = user32.NewProc("DefWindowProcW")
+	procSendInput                         = user32.NewProc("SendInput")
+	procGetAsyncKeyState                  = user32.NewProc("GetAsyncKeyState")
+	procOpenClipboard                     = user32.NewProc("OpenClipboard")
+	procCloseClipboard                    = user32.NewProc("CloseClipboard")
+	procEmptyClipboard                    = user32.NewProc("EmptyClipboard")
+	procEnumClipboardFormats              = user32.NewProc("EnumClipboardFormats")
+	procGetClipboardData                  = user32.NewProc("GetClipboardData")
+	procSetClipboardData                  = user32.NewProc("SetClipboardData")
+	procIsClipboardFormatAvail            = user32.NewProc("IsClipboardFormatAvailable")
+	procRegisterClipboardFormat           = user32.NewProc("RegisterClipboardFormatW")
+	procGetForegroundWindow               = user32.NewProc("GetForegroundWindow")
+	procGetWindowThreadProcess            = user32.NewProc("GetWindowThreadProcessId")
+	procMapVirtualKeyW                    = user32.NewProc("MapVirtualKeyW")
+	procSetWinEventHook                   = user32.NewProc("SetWinEventHook")
+	procRegisterSuspendResumeNotification = user32.NewProc("RegisterSuspendResumeNotification")
+
+	procWTSRegisterSessionNotification = wtsapi32.NewProc("WTSRegisterSessionNotification")
 
 	procGetModuleHandleW  = kernel32.NewProc("GetModuleHandleW")
 	procGlobalAlloc       = kernel32.NewProc("GlobalAlloc")
@@ -61,13 +67,30 @@ const (
 	wmLButtonUp   = 0x0202
 	wmApp         = 0x8000
 
+	// 睡眠唤醒（RegisterSuspendResumeNotification 登记过的窗口才收得到：只收消息的窗口收不到广播）
+	wmPowerBroadcast         = 0x0218
+	pbtAPMSuspend            = 0x0004
+	pbtAPMResumeAutomatic    = 0x0012 // 不管是不是人叫醒的，醒来都有这一条
+	deviceNotifyWindowHandle = 0
+	// 锁屏解锁、切换用户（WTSRegisterSessionNotification）
+	wmWTSSessionChange   = 0x02B1
+	notifyForThisSession = 0
+	wtsConsoleConnect    = 0x1
+	wtsConsoleDisconnect = 0x2
+	wtsRemoteConnect     = 0x3
+	wtsRemoteDisconnect  = 0x4
+	wtsSessionLock       = 0x7
+	wtsSessionUnlock     = 0x8
+	// 前台换了窗口（SetWinEventHook）
+	eventSystemForeground = 0x0003
+	wineventOutOfContext  = 0x0000
+
+	mapvkVKToVSCEx = 4
+
 	llkhfExtended = 0x01 // KBDLLHOOKSTRUCT.flags：扫描码带 0xE0 前缀的键
 
 	inputKeyboard  = 1
 	keyEventFKeyUp = 0x0002
-
-	vkControl = 0x11
-	vkV       = 0x56
 
 	cfUnicodeText = 13
 	gmemMoveable  = 0x0002
@@ -187,19 +210,26 @@ func foregroundBlocksInput() bool {
 		return false
 	}
 	window, _, _ := procGetForegroundWindow.Call()
+	blocked, _ := windowBlocksInput(window)
+	return blocked
+}
+
+// 这个窗口所在的进程是不是以管理员身份运行（不管我们自己是不是），和它的进程号。
+// 它收的按键我们的钩子看不到，我们模拟的按键也进不去
+func windowBlocksInput(window uintptr) (bool, uint32) {
 	if window == 0 {
-		return false
+		return false, 0
 	}
 	var pid uint32
 	procGetWindowThreadProcess.Call(window, uintptr(unsafe.Pointer(&pid)))
 	if pid == 0 {
-		return false
+		return false, 0
 	}
 	process, _, _ := procOpenProcess.Call(processQueryLimitedInformation, 0, uintptr(pid))
 	if process == 0 {
 		// 连这个都打不开的是受保护的系统进程，也不会接受我们的按键
-		return true
+		return true, pid
 	}
 	defer procCloseHandle.Call(process)
-	return processElevated(process)
+	return processElevated(process), pid
 }

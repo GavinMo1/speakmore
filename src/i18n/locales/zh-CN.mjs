@@ -385,6 +385,8 @@ export default {
     recordError: "录音出错：{reason}",
     helperStopped: "按键监听停了，{hotkey}失效：重启 SpeakMore 试试",
     secureInput: "有应用开着安全输入，部分组合键暂时用不了",
+    // 只有 Windows 有：系统不把发给管理员窗口的按键交给我们
+    elevatedForeground: "前台是以管理员身份运行的窗口，在它上面快捷键用不了",
   },
 
   tray: {

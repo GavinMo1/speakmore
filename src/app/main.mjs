@@ -751,6 +751,9 @@ async function main() {
     sendHotkeys();
   }
 
+  /** 提示过"管理员窗口在前台、热键用不了"的进程号 */
+  const elevatedNoticed = new Set();
+
   function onHelperEvent(event) {
     switch (event.event) {
       case "ready":
@@ -784,6 +787,19 @@ async function main() {
         // 有应用开着安全输入（密码框、终端的安全键盘输入）：带普通键的组合由 Carbon 顶着，顶不了的这段时间按了没反应
         log.info("secure_input", { on: event.on, unavailable: event.unavailable });
         if (event.on && event.unavailable?.length > 0) notify(msg("bar.secureInput"));
+        break;
+      case "elevated_foreground":
+        // Windows：以管理员身份运行的窗口在前台，钩子收不到发给它的按键，按热键没有任何反应。
+        // 同一个窗口（进程）只提示一次，切来切去不反复弹
+        log.info("elevated_foreground", { on: event.on, pid: event.pid });
+        if (event.on && !elevatedNoticed.has(event.pid)) {
+          elevatedNoticed.add(event.pid);
+          notify(msg("bar.elevatedForeground"));
+        }
+        break;
+      case "relistened":
+        // Windows：睡眠唤醒、解锁以后小帮手重装了键盘钩子。热键这时候不灵的话，先看有没有这条
+        log.info("helper_relistened", { reason: event.reason });
         break;
       case "binding":
       case "interrupted":

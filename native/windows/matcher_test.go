@@ -157,7 +157,8 @@ func TestRightShiftWithOrWithoutExtendedFlagIsTheSameKey(t *testing.T) {
 // （所有低级钩子都放行了，系统才改键的状态：https://devblogs.microsoft.com/oldnewthing/20140213-00/?p=1773 ）。
 // 核对按住的键时要是信了它，按着右 Ctrl+Space 再按 K，就成了只按着右 Ctrl+K
 func TestSwallowedKeyIsNotCheckedAgainstTheSystemState(t *testing.T) {
-	m := newMatcher(func(keyID, heldKey) bool { return false })
+	// 修饰键从来不吞，系统查得准，照实说按着
+	m := newMatcher(func(id keyID, _ heldKey) bool { return id.isModifier() })
 	m.bind([]binding{
 		{ID: "a#0", Mods: []uint32{vkRControl}, Key: 0x39, HasKey: true},
 		{ID: "b#0", Mods: []uint32{vkRControl}, Key: 0x25, HasKey: true},

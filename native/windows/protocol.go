@@ -8,6 +8,8 @@
 //	          {"event":"interrupted","id":"dictate#0","to":"x#0"}            升级成了另一个绑定，紧接着报 x#0 的按下
 //	          {"event":"pasted","id":1,"ok":true}     ok 为 false 时文字留在剪贴板里，reason 说为什么
 //	          {"event":"click","id":"cancel"}
+//	          {"event":"relistened","reason":"resume"}            睡眠唤醒（resume）、解锁或切回这个用户（unlock）以后重装了键盘钩子
+//	          {"event":"elevated_foreground","on":true,"pid":42}   前台换成了以管理员身份运行的窗口（换走了是 on:false，不带 pid）
 //	标准输入  {"cmd":"bind","bindings":[{"id":"dictate#0","mods":[165],"when":"always"},{"id":"cancel#0","mods":[],"key":1,"when":"capturing"}]}
 //	          {"cmd":"paste","id":1,"text":"…"}
 //	          {"cmd":"capture","regions":[{"id":"cancel","x":0,"y":0,"width":28,"height":28}]}   屏幕上的物理像素
@@ -23,7 +25,9 @@
 // 父进程退出（标准输入关闭）时自己也退出。和 macOS 不同的地方：
 //   - Windows 没有"输入监控""辅助功能"这两项权限，listen、trusted 照实报装没装上钩子；
 //   - 目标窗口是以管理员身份运行的、我们不是时，系统不让模拟的按键进去（UIPI），而且不报错：
-//     这时不去按 Ctrl+V，把文字留在剪贴板里，报 ok:false、reason:"elevated"。
+//     这时不去按 Ctrl+V，把文字留在剪贴板里，报 ok:false、reason:"elevated"。发给它的按键钩子也收不到，
+//     所以前台换成这种窗口时报 elevated_foreground，让父进程提示（我们自己以管理员身份运行时不报）；
+//   - 没有 permissions、secure_input；睡眠唤醒、解锁以后自己重装钩子，报 relistened。
 //
 // 这个文件和 keys.go、matcher.go、capture.go 只有纯逻辑，不碰 Windows 的接口，在任何系统上都能 go test。
 package main
