@@ -707,10 +707,13 @@
 }
 
 /* 线的末端：现在。实心小圆点，一圈底色隔开，外面一圈淡的主题色 */
+/* --x、--y 是这一点在柱子那块里横竖占几成，由页面写进来 */
 .spend-now {
+  --x: 0;
+  --y: 0;
   position: absolute;
-  top: calc(var(--plot-headroom) + var(--y, 0) * var(--plot-height));
-  left: calc(var(--x, 0) * 100%);
+  top: calc(var(--plot-headroom) + var(--y) * var(--plot-height));
+  left: calc(var(--x) * 100%);
   width: 0.5rem;
   height: 0.5rem;
   margin: -0.25rem 0 0 -0.25rem;
