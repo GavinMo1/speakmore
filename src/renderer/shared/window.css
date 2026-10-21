@@ -56,6 +56,11 @@
     --glass-strong: var(--bg);
     --glass-filter: none;
   }
+
+  /* 平时悬停是从半透明换成实底，这里两者一样：叠一层淡的墨色，悬停才看得出来（引擎页的节点同理，见 engine.css） */
+  :where(.button, .select, .picker-trigger, .node, .leaf):hover:not(:disabled) {
+    background-image: linear-gradient(var(--fill-hover), var(--fill-hover));
+  }
 }
 
 *,
@@ -290,8 +295,14 @@ p {
   text-underline-offset: 0.25em;
 }
 
-.link:hover {
+.link:hover:not(:disabled) {
   text-decoration-color: currentColor;
+}
+
+/* 等别的事回话时不让点：置灰，悬停也不加深 */
+.link:disabled {
+  color: var(--ink-2);
+  cursor: default;
 }
 
 :is(.button, .icon-button, .link, .input, .select, .switch):focus-visible {
@@ -380,13 +391,19 @@ p {
   box-shadow:
     var(--edge),
     0 24px 60px -20px oklch(0 0 0 / 0.35);
-  opacity: 1;
-  translate: 0 0;
+  /* 收起时淡出：收起的样子写在这里，打开的写在 :open 上；进场从 @starting-style 淡入 */
+  opacity: 0;
+  translate: 0 -0.25rem;
   transition:
     opacity var(--dur-fast) var(--ease-out),
     translate var(--dur-fast) var(--ease-out),
     display var(--dur-fast) allow-discrete,
     overlay var(--dur-fast) allow-discrete;
+}
+
+.select:open::picker(select) {
+  opacity: 1;
+  translate: 0 0;
 }
 
 @starting-style {

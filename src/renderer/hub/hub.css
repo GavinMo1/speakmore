@@ -227,6 +227,11 @@
   gap: 0.75rem;
 }
 
+/* 词典页：右边一组按钮也对着标题那一行，在标题的行高里居中 */
+.page-head:has(> .page-heading) > .page-tools {
+  min-height: calc(var(--text-display) * 1.2);
+}
+
 /* 搜索框（引擎页、词典页）：搜索框不再往窄里挤，提示字会被截断 */
 .search {
   position: relative;
