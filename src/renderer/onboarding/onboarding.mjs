@@ -1,4 +1,4 @@
-import { h, progressBadge, svg } from "../shared/dom.mjs";
+import { fillSelect, h, progressBadge, svg } from "../shared/dom.mjs";
 import { keycapOf, localize, t } from "../shared/i18n.mjs";
 import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
@@ -478,8 +478,10 @@ function render() {
 
   const keycap = keycapOf(setup.hotkey.value);
   $("big-keycap").textContent = keycap;
-  $("hotkey-select").replaceChildren(
-    ...setup.hotkey.choices.map((id) => new Option(t(`hotkeys.${id}.name`), id, false, id === setup.hotkey.value)),
+  fillSelect(
+    $("hotkey-select"),
+    setup.hotkey.choices.map((id) => [id, t(`hotkeys.${id}.name`)]),
+    setup.hotkey.value,
   );
   $("try-text").placeholder = t("onboarding.try.placeholder", { keycap });
 

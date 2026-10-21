@@ -293,8 +293,7 @@ p {
   outline-offset: 2px;
 }
 
-.input,
-.select {
+.input {
   height: var(--control-md);
   min-width: 0;
   padding: 0.35rem 0.7rem;
@@ -308,6 +307,124 @@ p {
 
 .input::placeholder {
   color: var(--ink-2);
+}
+
+/* ---------- 下拉框：和标题行的胶囊按钮一个样子（无描边、浮起一点、字加粗、右边一个箭头）。
+   用 appearance: base-select 画，打开后的单子是锚在下面的玻璃浮层，和"支持的模型"那种浮层一样，
+   Mac、Windows 一个样子。里面的按钮、箭头由 dom.mjs 的 fillSelect 放进去 ---------- */
+
+.select,
+.select::picker(select) {
+  appearance: base-select;
+}
+
+.select {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-md);
+  min-width: 0;
+  padding: 0 0.625rem 0 0.875rem;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-full);
+  box-shadow: var(--edge), var(--lift);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.select:hover,
+.select:open {
+  background: var(--surface-solid);
+}
+
+/* 箭头用自己的（和胶囊按钮同一个），不要自带的 */
+.select::picker-icon {
+  display: none;
+}
+
+.select > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.select > button > .chevron {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--ink-2);
+  rotate: -90deg;
+  transition: rotate var(--dur-base) var(--ease-out);
+}
+
+.select:open > button > .chevron {
+  rotate: 90deg;
+}
+
+/* 打开后的单子：右边和下拉框对齐、往左展开，至少和它一样宽；下面放不下翻到上面，左边放不下改成往右展开 */
+.select::picker(select) {
+  position-area: block-end span-inline-start;
+  position-try-fallbacks:
+    flip-block,
+    flip-inline,
+    flip-block flip-inline;
+  min-width: anchor-size(width);
+  margin: 0.375rem 0;
+  padding: 0.3125rem;
+  color: var(--ink);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-filter);
+  border: none;
+  border-radius: var(--radius-block);
+  box-shadow:
+    var(--edge),
+    0 24px 60px -20px oklch(0 0 0 / 0.35);
+  opacity: 1;
+  translate: 0 0;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    translate var(--dur-fast) var(--ease-out),
+    display var(--dur-fast) allow-discrete,
+    overlay var(--dur-fast) allow-discrete;
+}
+
+@starting-style {
+  .select:open::picker(select) {
+    opacity: 0;
+    translate: 0 -0.25rem;
+  }
+}
+
+/* 一项一行：选中的字加粗、右边一个主题色的勾 */
+.select option {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  min-height: var(--control-md);
+  padding: 0 0.625rem 0 0.75rem;
+  font-size: var(--text-small);
+  white-space: nowrap;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.select option:is(:hover, :focus-visible) {
+  background: var(--fill-hover);
+  outline: none;
+}
+
+.select option:checked {
+  font-weight: var(--weight-semibold);
+}
+
+.select option::checkmark {
+  order: 1;
+  margin-left: auto;
+  font-weight: var(--weight-bold);
+  color: var(--primary);
 }
 
 /* 开关：原版的布尔设置都是这种 */
@@ -785,15 +902,15 @@ button.badge:focus-visible {
   .switch,
   .switch::before,
   .check,
-  .pill,
-  .tab,
-  .tab > .icon,
   .count,
   .segment,
   .indicator,
   .radio-mark,
   .radio-mark .icon,
-  .badge[data-tone="progress"]::before {
+  .badge[data-tone="progress"]::before,
+  .select,
+  .select > button > .chevron,
+  .select::picker(select) {
     transition: none;
   }
 

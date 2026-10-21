@@ -1,4 +1,5 @@
 import { LOCALES, SYSTEM_LOCALE } from "../../i18n/index.mjs";
+import { fillSelect } from "../shared/dom.mjs";
 import { t } from "../shared/i18n.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
 
@@ -121,41 +122,32 @@ export function createSettings({ refresh }) {
 
   // ---------- 通用：热键、主题、语言、开机启动 ----------
 
-  /** 一组选项：[值, 写什么]，选中现在的那个 */
-  const options = (choices, current) =>
-    choices.map(([value, label]) => new Option(label, value, false, value === current));
-
   function renderGeneral(setup) {
-    $("hotkey").replaceChildren(
-      ...options(
-        setup.hotkey.choices.map((id) => [id, t(`hotkeys.${id}.name`)]),
-        setup.hotkey.value,
-      ),
+    fillSelect(
+      $("hotkey"),
+      setup.hotkey.choices.map((id) => [id, t(`hotkeys.${id}.name`)]),
+      setup.hotkey.value,
     );
-    $("theme").replaceChildren(
-      ...options(
-        setup.theme.choices.map((id) => [id, t(`themes.${id}.name`)]),
-        setup.theme.value,
-      ),
+    fillSelect(
+      $("theme"),
+      setup.theme.choices.map((id) => [id, t(`themes.${id}.name`)]),
+      setup.theme.value,
     );
     // 跟随系统，再列出每种语言（名字用它自己的语言写）
-    $("language").replaceChildren(
-      ...options(
-        [[SYSTEM_LOCALE, t("language.system")], ...LOCALES.map(({ id, name }) => [id, name])],
-        setup.language.value,
-      ),
+    fillSelect(
+      $("language"),
+      [[SYSTEM_LOCALE, t("language.system")], ...LOCALES.map(({ id, name }) => [id, name])],
+      setup.language.value,
     );
-    $("model-source").replaceChildren(
-      ...options(
-        setup.local.source.choices.map((id) => [id, t(`modelSources.${id}`)]),
-        setup.local.source.value,
-      ),
+    fillSelect(
+      $("model-source"),
+      setup.local.source.choices.map((id) => [id, t(`modelSources.${id}`)]),
+      setup.local.source.value,
     );
-    $("acceleration").replaceChildren(
-      ...options(
-        setup.local.acceleration.choices.map((id) => [id, t(`accelerations.${id}`)]),
-        setup.local.acceleration.value,
-      ),
+    fillSelect(
+      $("acceleration"),
+      setup.local.acceleration.choices.map((id) => [id, t(`accelerations.${id}`)]),
+      setup.local.acceleration.value,
     );
     $("bar-hint").checked = setup.barHint === "on";
     $("open-at-login").checked = setup.openAtLogin.enabled;
