@@ -8,6 +8,8 @@
 >
 > 第三版（2026-10-21）按主人新定的方向改：热键彻底做成配置驱动，内部不为旧写法留兼容层；老用户升级后无感，能感觉到的只有"热键能自己录、能组合了"。重写了 1.1、5.2、5.4、5.9 和第 6 节，改了 D2、D4、D7，新增 D13；3.3、3.4、5.3、5.5、5.7、附录跟着改。第二版的"听写存两处、`status` 加 `dictateCombo`、等第二个动作再把 `hotkeys` 升格、第一版只开放听写改键、实施中途保留 `--key`"都不要了。
 >
+> D1–D13 主人已于 2026-10-21 拍板，结果见 1.2 和 7.1。和建议不同的五条：D1 改成全部松开才算松开；D4 界面照 Typeless 一个动作列多个组合、能添加能删；D9 只认键盘，鼠标键一律不做；D10 新动作必须带默认键并在引导页讲到；D11 单按 Shift 也不开放。相关章节已跟着改。
+>
 > 引用约定：
 >
 > - `文件:行` 指仓库根目录下的源码。
@@ -26,30 +28,30 @@
 1. **底层机制不换。** macOS 继续用 CGEventTap，Windows 继续用 `WH_KEYBOARD_LL`。系统热键接口（Carbon `RegisterEventHotKey`、Win32 `RegisterHotKey`、Electron `globalShortcut`）做不了单独修饰键，也分不了左右；Win32 `RegisterHotKey` 和 Electron `globalShortcut` 还没有松开事件。所以它们只做辅助：`RegisterHotKey` 做冲突探测；Carbon 用来吞 Mac 上的单个 F 键，并在安全输入期间顶替带普通键的绑定（4.1，前提是 V19 验证通过）。第三方库一概不用。
 2. **键用 W3C `KeyboardEvent.code` 名标识**，例如 `AltRight`、`MetaRight`、`Fn`、`Space`、`F13`。全项目只在 JS 里放一张键表，从 Chromium 的 `dom_code_data.inc`（BSD 许可）裁出子集，再补上 `Fn`。主进程把 code 换成原生码再下发，两个小帮手不再维护键名。现在的 4 份键表和 2 份按 id 写的文案，合并成这一处。
 3. **匹配和吞键在小帮手里做。** 主进程用一条 `bind` 命令下发绑定表，可以随时整表替换，换键不再重启小帮手。小帮手只报"哪个绑定按下、松开、被打断"，不报别的按键，现有的隐私约定不变。录快捷键是一个限时模式，只有这段时间报原始按键。
-4. **组合最多两个键，按集合精确匹配。** 修饰键之间不分先后。修饰键加普通键时，普通键必须最后按。只有按下能凑成组合，松开不能。组合按着时来了别的键，报 `interrupted`，取代今天的 `other_key`；新的键集合恰好是另一个绑定时，算一次"升级"。
+4. **组合最多两个键，按集合精确匹配。** 修饰键之间不分先后。修饰键加普通键时，普通键必须最后按。只有按下能凑成组合，松开不能；组合里的键全部松开才算松开（D1）。组合按着时来了别的键，报 `interrupted`，取代今天的 `other_key`；新的键集合恰好是另一个绑定时，算一次"升级"。
 5. **修饰键一律不吞，组合里的普通键整段吞掉**（按下、自动重复、松开）。Windows 上有 Alt 或 Win 参与时插掩码键，规则从"只管右 Alt"推广到全部 Alt 和 Win。macOS 上吞普通键要用能改事件的 tap，需要辅助功能权限；这个 tap 按需打开，平时仍然关着。两个 tap 共用一个匹配器，按事件去重。
-6. **动作目录是唯一的出处**（`src/hotkeys/actions.mjs`）：每个动作一行，写默认组合（按系统分）、生效场景、能否清空、长按阈值、交给谁处理。设置项、环境变量、命令行、设置页、状态、下发给小帮手的绑定表，全都按这张表生成。除了各动作自己的处理代码（和引导页专门教听写的那一步），没有一处按动作写死。第一版两个动作："听写"和"取消（只在说话时）"，两个都能改键。以后加功能（比如翻译），只改三处：目录里加一行、两份文案里加动作名、写这个功能本身。有测试按目录逐个动作查，漏了哪处就红（5.4）。
-7. **一个动作一项设置**：`hotkey.dictate`、`hotkey.cancel`，值是组合写法（`"ControlRight+Space"`，几个组合用逗号隔开，`none` 是关掉），只存改过的。这正好落在现有设置框架的规矩里（一项一个键、值是字符串），环境变量、`config set/unset`、"设置改了还没生效"都现成，不为热键开特例（5.2）。
-8. **老用户无感**（5.9）：存的、报的、显示的一律是新写法，旧写法只在入口认。第一次启动时把设置文件里的 `"hotkey": "right_command"` 换成 `"hotkey.dictate": "MetaRight"`；旧的环境变量 `SPEAKMORE_HOTKEY` 和旧命令 `config set hotkey` 照样能用；六个旧键的键帽和名字逐字不变，用法、权限都不变。退回旧版照样能起来，热键回到默认键。
+6. **动作目录是唯一的出处**（`src/hotkeys/actions.mjs`）：每个动作一行，写默认组合（按系统分）、生效场景、能否清空、长按阈值、交给谁处理。设置项、环境变量、命令行、设置页、状态、下发给小帮手的绑定表，全都按这张表生成。除了各动作自己的处理代码（和引导页专门教听写的那一步），没有一处按动作写死。第一版两个动作："听写"和"取消（只在说话时）"，两个都能改键，每个动作能绑多个组合（D4）。以后加功能（比如翻译），只改三处：目录里加一行（必须带默认键，D10）、两份文案里加名字和说明、写这个功能本身；设置页和引导页自动带上它。有测试按目录逐个动作查，漏了哪处就红（5.4）。
+7. **一个动作一项设置**：`hotkey.dictate`、`hotkey.cancel`，设置文件里存成组合的列表（`["ControlRight+Space", "F13"]`，空列表是关掉），只存改过的。这正好落在现有设置框架的规矩里（一项一个键，读写列表用框架现成的 `json`、`store`），环境变量、`config set/unset`、"设置改了还没生效"都现成，不为热键开特例（5.2）。
+8. **老用户无感**（5.9）：存的、报的、显示的一律是新写法，旧写法只在入口认。第一次启动时把设置文件里的 `"hotkey": "right_command"` 换成 `"hotkey.dictate": ["MetaRight"]`；旧的环境变量 `SPEAKMORE_HOTKEY` 和旧命令 `config set hotkey` 照样能用；六个旧键的键帽和名字逐字不变，用法、权限都不变。退回旧版照样能起来，热键回到默认键。
 9. **实施顺序**：先写纯逻辑和一套 Go、Swift 共用的按键轨迹样例，再改协议，再做吞键和平台细节，最后做录键界面。每一步都能单独测试、单独提交。
 
 ### 1.2 需要主人拍板的事
 
-每条的选项和理由见第 7 节。
+2026-10-21 主人逐条拍板。每条的选项和理由见第 7 节。
 
-| # | 问题 | 建议 |
+| # | 问题 | 定了 |
 | --- | --- | --- |
-| D1 | 组合的"松开"按哪个键松开算 | 任一键松开即算松开 |
+| D1 | 组合的"松开"按哪个键松开算 | 全部松开才算松开（同 Typeless） |
 | D2 | 前缀共享（如 `AltRight` 与 `AltRight+Space` 分给两个动作） | 允许，保存时警告；运行时按下即触发，第二个键到来时升级 |
 | D3 | macOS 上带普通键的绑定怎么做（修饰键 + 普通键、单个 F 键） | 修饰键 + 普通键走按需打开的吞键 tap；单个 F 键走 Carbon；安全输入期间由 Carbon 顶替。Carbon 在小帮手里收不到时，单个 F 键第一版在 Mac 上不开放 |
-| D4 | 每个动作允许几个组合 | 设置的写法支持多个（逗号隔开）；界面第一版只给一个 |
+| D4 | 每个动作允许几个组合 | 多个，上限 4；设置页照 Typeless 列出每个组合，能删、能"添加另一个" |
 | D5 | 默认键 | 不变：Mac 右 Option，Windows 右 Alt |
 | D6 | 键帽上左右怎么标 | 一律标左右，单按和组合都标 |
 | D7 | 命令行怎么改热键 | `config set hotkey.<动作> <组合>`，每个动作一项；旧的 `config set hotkey` 当成改听写 |
 | D8 | Windows 管理员窗口在前台时热键失效 | 第一版只提示，不做"以管理员身份运行" |
-| D9 | 鼠标侧键 | 放到第二阶段 |
-| D10 | 以后新动作（如"粘贴上一条"）的默认组合 | 默认留空，由用户自己绑 |
-| D11 | 单按 Shift、CapsLock 这类有系统副作用的键 | Shift 允许但警告；CapsLock 第一版不开放 |
+| D9 | 鼠标侧键 | 不做：只认键盘，鼠标的任何键都不能当热键 |
+| D10 | 以后新动作（如翻译）的默认组合 | 必须有默认键，不能留空；引导页要讲到。具体用哪个键，做那个功能时再定 |
+| D11 | 单按 Shift、CapsLock 这类有系统副作用的键 | 都不开放（Shift 仍可和别的键组合） |
 | D12 | 是否支持"任一侧"修饰键 | 不支持，只认分左右的具体键 |
 | D13 | `status --json` 里的旧字段（`hotkey`、`hotkeyLabel`、`settings.hotkey`） | 保留一个版本、标弃用，再下一版删掉（AGENTS.md 红线 6） |
 
@@ -188,7 +190,7 @@ settings.json {"hotkey":"right_option"} 或 SPEAKMORE_HOTKEY
 
 - `:28-41` 的 `Hotkey` 结构和字典、全局 `hotkey`：改成按原生码描述的绑定表。
 - `:119-154` 的 `hotkeyIsDown`、`reportedOtherKey`、`onKeyEvent`、`reportOtherKeyIfHeld`：改成按集合匹配的匹配器，抽成可单测的纯逻辑。
-- `:157-161` 只听 tap 的掩码：要加 `keyUp` 和 `otherMouseDown/Up`（鼠标在第二阶段）。现在看不到普通键的松开，普通键当热键时算不了长按。
+- `:157-161` 只听 tap 的掩码：要加 `keyUp`。鼠标键不做（D9）。现在看不到普通键的松开，普通键当热键时算不了长按。
 - `:270-282` 截取 tap：推广成"吞键 tap"，打开条件从"截取中"扩成"截取中，或录键中，或某个'修饰键 + 普通键'绑定的修饰键正按着，或还有吞了一半的键"，掩码加上 flagsChanged。两个 tap 喂同一个匹配器，分工见 4.1。
 - 新增 Carbon 注册（单个 F 键、安全输入期间的顶替），见 4.1。
 - 新增标准输入命令 `bind`、`record`、`probe`、`info` 的处理（5.8）。
@@ -297,7 +299,7 @@ settings.json {"hotkey":"right_option"} 或 SPEAKMORE_HOTKEY
 **tap 的布置**
 
 - 层级：session 层（`.cgSessionEventTap`），和现在一致。AltTab 在注释里记录了一次教训：一直开着的 HID 层主动 keyDown tap 弄坏了第三方输入法（`alt-tab-macos@240e3ff src/events/KeyboardEvents.swift:16-19`，issue #5766）。
-- 只听 tap 常开：掩码 flagsChanged、keyDown、keyUp（第二阶段加 otherMouseDown/Up）。
+- 只听 tap 常开：掩码 flagsChanged、keyDown、keyUp。
 - 吞键 tap 按需打开，平时关着。打开条件：截取中；或录键中（5.6）；或某个"修饰键 + 普通键"绑定的修饰键正按着；或还有吞了按下、没吞松开的键。这是现有截取 tap 的 `captureWanted` 写法（`main.swift:195` 附近）的推广。理由有三：
   - 主动 tap 挡在每一次按键的路上，回调一慢全系统打字都卡，系统会补发 `kCGEventTapDisabledByTimeout`（`SDK:CGEventTypes.h:128-131`；超时是几秒没有公开文档）。
   - 2026-09 有报告：session 层、`.defaultTap`、事件原样放行的 tap，在辅助功能权限被撤销时整机键盘鼠标冻住，只能强制重启（https://developer.apple.com/forums/thread/844416 ）。
@@ -486,9 +488,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - 修饰键、功能键、导航键用我们自己的文案表，不随布局变。
 - 字母数字键的字：`GetKeyNameTextW` 返回的名字随布局语言变，A–Z 一律返回大写拉丁字母（https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getkeynametextw ）；`ToUnicodeEx` 会改动内核键盘缓冲区、影响死键，必须加 `wFlags` bit 2 并放在消息循环里调，不能在钩子里调（https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-tounicodeex ）。布局要取前台窗口线程的（`GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow()))`）。
 
-**鼠标侧键（第二阶段）**
-
-`WH_MOUSE_LL` 的 `WM_XBUTTONDOWN/UP`，`mouseData` 高字区分 `XBUTTON1/2`（https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-msllhookstruct ）。代价是鼠标钩子要常驻（现在特意只在截取期间装，`main_windows.go:109-120`）。建议只有绑了鼠标键时才常驻，回调里遇到 `WM_MOUSEMOVE` 第一行就返回。侧键默认是浏览器后退前进，命中时按下松开都吞。
+鼠标侧键不做（D9），鼠标钩子照旧只在截取期间装（`main_windows.go:109-120`）。
 
 ---
 
@@ -515,7 +515,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - 主进程把 code 换成当前系统的原生码再下发；小帮手收到原生码，录键时也报原生码，主进程换回 code。表里没有的原生码，录键时直接拒绝（"这个键暂不支持"），不学 Typeless 的 `unknown-<码>`，表保持可控。
 - 小帮手里仍然保留少量不随绑定变化的平台事实：mac 修饰键键码到设备标志位的对应；Windows 的修饰键 vk、假事件的扫描码、掩码键、自家注入记号。
 - 分歧说明：分路笔记 03、04 的协议草案让小帮手收 code 名，笔记 05 让它收原生码。本文选原生码，理由是只有这样小帮手才完全不需要键名表，"一处键表"才名副其实。
-- 鼠标键（第二阶段）：W3C code 不含鼠标，建议用语义名 `MouseMiddle`、`MouseBack`、`MouseForward`。mac 按钮号 2、3、4 和 Windows 中键、`XBUTTON1`、`XBUTTON2` 的对应关系，在具体鼠标上未验证。
+- 只认键盘（D9）：键表里没有鼠标键，录键时鼠标按钮一律不算。
 
 ### 5.2 绑定与配置的形状
 
@@ -526,18 +526,20 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 ```jsonc
 // settings.json
 {
-  "hotkey.dictate": "ControlRight+Space",   // 听写换成了组合
-  "hotkey.cancel": "F13"                    // 取消换成了 F13；没写的动作用默认值
+  "hotkey.dictate": ["Fn", "MetaRight"],    // 听写绑了两个
+  "hotkey.cancel": ["F13"]                  // 取消换成了 F13；没写的动作用默认值
 }
 ```
 
-- 一个组合写成 `"ControlRight+Space"`，手改设置、写环境变量、看日志都直观。一个动作绑几个组合时用逗号隔开，例如 `"AltRight, F13"`（D4）。`"none"` 表示关掉，只有允许清空的动作能写。code 名里不会出现 `+` 和 `,`，不需要 Typeless 那种特殊处理。
+- 一个动作是组合的列表，最多 4 个（D4，同 Typeless）。一个组合写成 `"ControlRight+Space"`，手改设置、写环境变量、看日志都直观；code 名里不会出现 `+`，不需要 Typeless 那种特殊处理。
+- 空列表 `[]` 表示关掉，只有允许清空的动作能写。
+- 只给一个组合时可以不写成列表：命令行 `config set hotkey.dictate Fn`、环境变量 `SPEAKMORE_HOTKEY_DICTATE=Fn` 都认；要给多个就写列表 `'["Fn","MetaRight"]'`。
 - 规范化：读入时把组合里的键按显示顺序排好（5.7），去重；比较、查重都用规范化后的集合。存下来的、后台报的、日志里写的都是规范化后的写法。
 - 旧写法只在入口认（5.9）：值是 `right_option` 这类旧 id 时，当成它对应的组合（`AltRight`）；存下来的仍是新写法。
 
 **为什么一个动作一项、值是字符串**
 
-现有框架一项一项各管各的：`resolveSettings` 逐项从 `stored[name]` 取值、出错就抛（`src/storage/settings.mjs:305-323`），`saveSetting`、`unsetSetting` 只写、只删 `[name]` 这一个键（`:327-339`），`patchSettings` 同理（`:347-354`）；设置都存成字符串（`:177` 的注释）。一个动作一项，正好落在这套规矩里：环境变量、`config set/unset`、`config` 列表、来源（环境变量、文件、默认）、`pendingSettings` 的"设置改了还没生效"都按名字循环，全部现成，不为热键开特例。存成一个 `hotkeys` 对象的话，上面四个函数都得认嵌套路径，第二版为此给热键开了三个专用钩子，这一版不要了。
+现有框架一项一项各管各的：`resolveSettings` 逐项从 `stored[name]` 取值、出错就抛（`src/storage/settings.mjs:305-323`），`saveSetting`、`unsetSetting` 只写、只删 `[name]` 这一个键（`:327-339`），`patchSettings` 同理（`:347-354`）；设置都存成字符串（`:177` 的注释）。一个动作一项，正好落在这套规矩里。值在框架里仍是字符串（规范化后的列表写成 JSON），文件里存成列表用的是框架现成的两个钩子：`json`（文件里写成数组也认，`src/storage/settings.mjs:75`）和 `store`（写进文件时换成数组，`:74`），`customParams` 已经在用 `json`，`model` 已经在用 `store`。环境变量、`config set/unset`、`config` 列表、来源（环境变量、文件、默认）、`pendingSettings` 的"设置改了还没生效"都按名字循环，全部现成，不为热键开特例。存成一个 `hotkeys` 对象的话，上面四个函数都得认嵌套路径，第二版为此给热键开了三个专用钩子，这一版不要了。
 
 **框架补的三样，都是通用的**
 
@@ -563,8 +565,8 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 **界面和命令行都按目录生成**
 
-- 设置页的快捷键区按动作目录逐行画：动作名、录键控件、"恢复默认"，可清空的动作再给"关掉"。数据由主进程一次给齐：每个动作的当前组合、默认组合、能否清空、有什么问题。
-- `config` 列表里每个动作一行 `hotkey.<动作>`，值是组合写法，不列可选值，提示"任意组合，见 README"。
+- 设置页的快捷键区照 Typeless 的样子，按动作目录逐行画：左边动作名和一句说明（"按下开始和停止语音输入。"）；右边列出这个动作已绑的每个组合，一个组合一个框、框里一个键一个键帽、右侧 × 删掉；下面"添加另一个"，满 4 个时不显示。不能清空的动作只剩一个组合时，那个 × 不显示。另有"恢复默认"。数据由主进程一次给齐：每个动作的当前组合、默认组合、能否清空、有什么问题。
+- `config` 列表里每个动作一行 `hotkey.<动作>`，值按 5.7 格式化成键帽文字（例如"fn、右⌘"），不列可选值，提示"任意组合，见 README"。
 - 命令行改键：`speakmore config set hotkey.<动作> <组合>`、`config unset hotkey.<动作>`（D7）。`config set hotkey <组合>` 照旧能用，等于改听写。
 - 当场生效：`LIVE` 表（`src/cli/commands/config.mjs:80-96`）按目录给每个 `hotkey.<动作>` 加一项；控制通道加一条 `reload-hotkeys`，后台重读设置、重发 `bind`、推新键帽，不重启。旧后台不认这条命令时照 `applyLive` 现有的退路处理。
 - 状态：后台报的状态里每个动作一项 `hotkey.<动作>`，和设置同名，`pendingSettings`（`src/cli/render/status.mjs:92-103`）照旧按名字比。旧的 `hotkey`、`hotkeyLabel` 怎么处理见 D13。
@@ -575,13 +577,14 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 | 形状 | 例子 | 第一版 |
 | --- | --- | --- |
-| 单个修饰键 | `AltRight`、`MetaRight`、`ControlRight`、`Fn`（仅 Mac） | 允许（现状就是这一种） |
+| 单个修饰键 | `AltRight`、`MetaRight`、`ControlRight`、`Fn`（仅 Mac） | 允许（现状就是这一种）；单按 Shift 除外（D11） |
 | 修饰键 + 修饰键 | `ControlRight+ShiftRight`、`Fn+ShiftLeft`、`ControlLeft+MetaLeft` | 允许 |
 | 修饰键 + 普通键 | `AltRight+Space`、`ControlRight+F13` | 允许，普通键要吞（Mac 需辅助功能权限）；两边系统保留的组合除外（5.5） |
 | 单个非打字键 | `F13`、`F5`、`ContextMenu` | 允许，要吞 |
 | 单个打字键 | `KeyA`、`Space`、`Enter` | 禁止 |
 | 普通键 + 普通键 | `KeyA+KeyS` | 禁止 |
 | `Shift` + 打字键 | `ShiftLeft+KeyA` | 禁止：会打出大写或符号，两键以内无法再加修饰键 |
+| 单按 Shift | `ShiftLeft`、`ShiftRight` | 禁止（D11）：微软拼音单按 Shift 切中英文，连按可能弹粘滞键；和别的修饰键、F 键组合仍允许 |
 
 **匹配规则**
 
@@ -589,7 +592,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 2. 修饰键 + 修饰键不分先后。
 3. 修饰键 + 普通键要求普通键最后按下。先按着空格、再碰一下 Ctrl，不触发。
 4. 只有按下能凑成组合；松开导致集合恰好等于某个绑定时不触发。这同时实现了 Typeless 的"不降级"。
-5. 组合的"松开"是其中任一键松开（D1）。
+5. 组合里的键全部松开才算松开（D1，同 Typeless）。绑定按着期间，组合里的某个键松开又按下，不算新的一次，不报事件；只有组合外的键按下才算打断（第 6 条）。
 6. 组合按着时又按下一个键：
    - 新集合恰好等于另一个绑定：升级。先对旧绑定报 `interrupted`（带上 `to`），紧接着对新绑定报按下。
    - 否则对当前绑定报一次 `interrupted`，也就是今天的 `other_key`。被打断的绑定此后不再报松开，直到相关的键全部松开前不再触发任何东西。
@@ -618,7 +621,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 **点按、按住与 600 ms**
 
 - 小帮手只报按下、松开、被打断，不判断单击、长按、双击。以后加"按住说话""双击"时不用改原生层。
-- 600 ms 规则由动作决定，写在动作目录里：听写的计时从绑定按下开始，到绑定松开或被打断为止。和 Typeless 的区别：升级以后，新绑定从自己按下时重新计时，而 Typeless 从第一个键算起、升级不重置。
+- 600 ms 规则由动作决定，写在动作目录里：听写的计时从绑定按下开始，到组合里的键全部松开或被打断为止。比如空格先抬、Ctrl 晚了 0.7 秒才松，算按住了 0.7 秒，这次取消，和 Typeless 一样（D1）。和 Typeless 的区别：升级以后，新绑定从自己按下时重新计时，而 Typeless 从第一个键算起、升级不重置。
 - 和现有状态机的对应：`binding down` → `KEY_DOWN`，`binding up` → `KEY_UP`，`interrupted` → `OTHER_KEY`。状态机本身不用改语义；`OTHER_KEY` 只在 `held` 时生效（`machine.mjs:59-62`），所以说话中打字不受影响，这一点保持不变。
 - Typeless 的 300 ms 听写防抖暂不加，等真遇到误触再说。
 
@@ -639,17 +642,20 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | 默认组合 | Mac `AltRight`；Windows `AltRight` | `Escape` |
 | 生效场景 `when` | 任何时候（`always`） | 只在截取中（`capturing`） |
 | 能否清空 | 不能（Typeless 的 `disabledClearShortcut` 同义） | 不能 |
+| 说明 | 按下开始和停止语音输入。 | 说话时按下，取消这一次。 |
 | 长按阈值 | 600 ms，超过即取消 | 无 |
 | 处理者 `handler` | 悬浮条的录音会话（`session`） | 悬浮条的取消（`cancel`） |
 
-- 两个动作第一版都能改键，设置页两行都画。"取消"只按自己那一个键认（5.3），所以只能绑单个非修饰键。
+- 每个动作两个系统都必须有默认组合（D10）。两个动作第一版都能改键，设置页两行都画。"取消"只按自己那一个键认（5.3），所以只能绑单个非修饰键。
 - 小帮手里的绑定 id 写作"动作#序号"，如 `dictate#0`，原样报回。主进程按动作目录里的处理者分发：
   - `session`：按下、松开、被打断分别变成 `KEY_DOWN`、`KEY_UP`、`OTHER_KEY` 送给悬浮条，事件带着动作 id；会话开始时记下是哪个动作开的，写进日志。以后的"翻译"如果也是"录音、转写、再处理"，就是又一个 `session` 动作，按动作 id 选处理链；选处理链是做那个功能时的事，这次不做。
   - `cancel`：变成 `USER_CANCEL`。
   - 以后要在主进程里执行的动作（例如"粘贴上一条"）再加一种处理者。有了真实的第三种用法再加，现在不预留。
-- **加一个动作只改三处**：目录里加一行（默认组合多半留空，D10）；两份文案里加动作名 `actions.<动作>.name`；写这个动作本身的处理代码。小帮手、设置格式、命令行、设置页、状态都不用动。
+- **加一个动作只改三处**：目录里加一行（必须带两个系统的默认组合，D10）；两份文案里加名字和说明 `actions.<动作>.name/description`；写这个动作本身的处理代码。小帮手、设置格式、命令行、设置页、引导页、状态都不用动。
+- **引导页讲到每个动作**（D10）：引导页的快捷键那一步按动作目录列出每个动作和它当前的键，新动作自动出现在里面。"测快捷键"那一小步仍只测听写（5.6）。老用户不会再走一遍引导，新动作上线时怎么告诉他们，做那个功能时一起定。
+- **新默认键和用户自己的键撞了**：以用户自己绑的为准，新动作的默认键不装，放进"还差什么"并在设置页那一行提示换一个（5.2 的下发前校验）。
 - **机器查得出来**：
-  - 测试按目录逐个动作查：有对应的设置项和环境变量，两份文案里有名字，`config` 列表、设置页拿到的数据、`LIVE` 表、后台报的状态、绑定表里都有它。目录里加了一行而漏了哪一处，这条测试就红。
+  - 测试按目录逐个动作查：两个系统都有默认组合、默认组合之间不冲突，有对应的设置项和环境变量，两份文案里有名字和说明，引导页的列表、`config` 列表、设置页拿到的数据、`LIVE` 表、后台报的状态、绑定表里都有它。目录里加了一行而漏了哪一处，这条测试就红。
   - 测试扫一遍 `src/` 和 `native/`：旧 id（`right_option` 等六个）只许出现在 `src/hotkeys/legacy.mjs`；小帮手源码里不出现动作名。
 - 会模拟按键的动作（例如"粘贴上一条"），要等组合里的修饰键都松开后再执行，或者发 ⌘V / Ctrl+V 前确认用户没按着修饰键。否则 Windows 上用户还按着 Alt 时发出的 Ctrl+V 会变成 Ctrl+Alt+V。依据是 `SendInput` "does not reset the keyboard's current state"（about-keyboard-input 页）和 Alfred 的做法（https://www.alfredapp.com/help/workflows/triggers/hotkey/ ）；实际会不会混进去，两个系统都未验证。听写的贴字发生在出结果之后，不受影响。
 
@@ -669,6 +675,9 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - Mac 上 `Fn` + 方向键、删除、回车。
 - 和自家另一个动作的绑定规范化后相同：拒绝，并写明"已被「某动作」占用"。"任何时候"和别的场景都算重叠，所以现在任意两个动作都不能同键；以后有了互不重叠的场景，才按场景放开。
 
+- 单按 Shift（D11）。
+- 一个动作超过 4 个组合（D4）。
+
 **警告（允许保存）**
 
 | 情况 | 原因 |
@@ -676,7 +685,6 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | Mac 单按 `Fn` | 系统"按下地球仪键时"不是"无操作"时会同时触发系统动作；外接键盘多半没有 Fn |
 | `AltRight`（AltGr 布局） | 打 AltGr 字符时热键会先触发再被打断 |
 | Mac 上 Option + 字母 | 需要辅助功能权限才能吞掉字母（否则会打出特殊字符）；没有权限时绑不上（`bound` 回执 `needs_trusted`） |
-| 单按 Shift（D11） | Windows 微软拼音单按 Shift 切中英文；连按可能弹粘滞键 |
 | Windows 单按 Win | 依赖掩码挡开始菜单，未验证 |
 | Windows 上 `AltLeft+ShiftLeft`、`AltLeft+ShiftRight` | 默认在输入语言之间切换（4.2，V23） |
 | Windows 上 `Ctrl+Shift` | 装了多个布局时会切换布局 |
@@ -690,13 +698,13 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 **流程**
 
-1. 设置页某个动作的键帽区域点一下，进入录制。同一时刻只有一个录制控件在录，新的开始时旧的自动取消。
+1. 设置页点某个动作的"添加另一个"，或者点一个已绑的组合（换掉它），进入录制。同一时刻只有一个录制控件在录，新的开始时旧的自动取消。
 2. 主进程发 `{"cmd":"record","on":true}`。小帮手暂停全部匹配，开始报"当前按着哪些原生码"。录制有 30 秒超时，到时小帮手自己退出录制并报一条 error，和现有截取模式的兜底同一个思路（`main.swift:188-215`）。
 3. 设置页实时显示按住的键。按到第三个键，当场提示"最多两个键"。
 4. 按住的键数**第一次减少**时，把此前的最大集合作为结果。两键以内，这和"全部松开时定稿"结果相同，反馈更快。
 5. 结果立即过 5.5 的校验。通过就保存、重发 `bind`、退出录制；被拒就显示原因，等用户全部松开后可以直接重按，仍在录制中。
 6. 单按 esc 取消录制（录"取消"动作时除外）。点控件外、窗口失焦或关闭时也取消，主进程发 `record off`。
-7. 每个动作旁边有"恢复默认"。
+7. 每个动作有"恢复默认"；每个组合右侧的 × 删掉它（5.2）。
 
 **细节**
 
@@ -799,7 +807,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 | 地方 | 现在 | 升级以后 |
 | --- | --- | --- |
-| 设置文件里的 `"hotkey": "right_command"` | 听写用右 ⌘ | 第一次启动时换成 `"hotkey.dictate": "MetaRight"`，删掉 `hotkey`；热键不变 |
+| 设置文件里的 `"hotkey": "right_command"` | 听写用右 ⌘ | 第一次启动时换成 `"hotkey.dictate": ["MetaRight"]`，删掉 `hotkey`；热键不变 |
 | 用默认键的人（文件里没有 `hotkey`） | 右 Option / 右 Alt | 不变，文件不动 |
 | 环境变量 `SPEAKMORE_HOTKEY=right_command` | 本次运行用右 ⌘ | 照旧（`legacyEnv`，值按对照表换算） |
 | `speakmore config set hotkey right_command`、`config unset hotkey` | 改、清听写 | 照旧（`legacyName`）；回话里写的是新名字和新写法 |
@@ -866,7 +874,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | 6 | 设置：按目录生成 `hotkey.<动作>`，删掉旧的 `hotkey` 项和 `settings.mjs` 里的键表；框架补 `describe`、`legacyName`、`check`；`migrateLegacySettings` 接到两个入口（App 那一处挪到 `main.mjs:137` 之前）；`bindings.mjs` 的下发前校验和降级；环境变量；`config`、`LIVE` 和 `reload-hotkeys`；后台状态和 D13；5.4 的两条按目录查的测试 | 换算、幂等、"旧版里改过以旧版为准"、跨系统降级、直接起 App 不丢键、旧环境变量和旧命令照样能用，各有用例；按目录查的测试先往目录里加一个假动作、看它红 |
 | 7 | macOS 吞键：吞键 tap 按需打开，两个 tap 共用匹配器并按事件去重；tap 挪到独立线程；单个 F 键走 Carbon；停用和锁屏时清状态；跳过自己合成的事件；安全输入检测、Carbon 顶替与提示 | 先跑 V1、V8、V19、V20 四个实验；再在真机按清单逐项走 |
 | 8 | Windows 平台细节：掩码通用化、假 Shift、睡眠唤醒重装、`GetAsyncKeyState` 校正、扫描码为 0 的回退 | `keys_test.go` 补用例；`e2e.ps1` 改用扫描码注入并加只带 vk 的一组 |
-| 9 | 录键：小帮手 `record` 模式、IPC、设置页按动作目录逐行画录键控件、引导页"换个键"复用它（"测快捷键"仍走真实匹配）、系统冲突探测 `probe`（Mac `CopySymbolicHotKeys`，Windows `RegisterHotKey` 试登记）、`info` | 定稿规则的 JS 单测；`probe`、`info` 进协议测试；界面在开发窗口里给主人看（项目记忆 `ui-review-in-dev-window`） |
+| 9 | 录键：小帮手 `record` 模式、IPC、设置页按动作目录逐行画录键控件（照 Typeless 一个动作列多个组合、× 删、"添加另一个"，D4）、引导页按目录列出每个动作和它的键（D10）、引导页"换个键"复用它（"测快捷键"仍走真实匹配）、系统冲突探测 `probe`（Mac `CopySymbolicHotKeys`，Windows `RegisterHotKey` 试登记）、`info` | 定稿规则的 JS 单测；`probe`、`info` 进协议测试；界面在开发窗口里给主人看（项目记忆 `ui-review-in-dev-window`） |
 | 10 | 显示：`keys.<code>.*` 和 `actions.<动作>.name` 文案、悬浮条一组键帽、菜单栏、命令行 `status` 和 `config` | `bar-view.test.mjs`、`i18n` 测试、`cli` 测试改写；六个旧键的键帽和名字逐字不变 |
 | 11 | 文档：README（设置表每个动作一行、`status --json` 按 D13 写）、`implementation-notes.md`、`development.md`、`desktop-ui-spec.md`、隐私说明；引导页、悬浮条、首页的界面改了，README 和官网的截图要重拍（`website/scripts/readme-media.mjs`，3.3 的截图一条） | 逐处对照 3.3 的清单 |
 | 12 | 真机验收：沿用户路径走一遍，打好的包真启动一次（项目记忆 `acceptance-end-to-end`）。另走一遍老用户升级：两台电脑各装 0.13.1、换成非默认键（Mac 右 ⌘、Windows 右 Ctrl），开着升级到新版；再退回 0.13.1 起一次 | 第 7.2 节的真机清单；升级后热键照旧能用、键帽不变、没有新的权限弹窗、设置文件已换算；退回后能起来、用默认键 |
@@ -888,7 +896,11 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 ### 7.1 需要主人拍板
 
+2026-10-21 主人逐条拍板，每条开头的"定"是结果；选项和理由留着备查。
+
 **D1 组合的"松开"按哪个键算**
+
+**定：B，全部松开才算松开。** 主人用 Typeless 顺手，两只手都抬起来才算按完。代价照实记着：空格先抬、Ctrl 晚了超过 600 ms 才松，这次会被当成按住而取消，和 Typeless 一样。
 
 - 选项 A：任一键松开即算松开（笔记 05 的取舍）。好处：按了 `Ctrl+Space`、Space 很快松开但 Ctrl 多按了一会儿，不会被当成长按取消；按住修饰键连点两下普通键，正好是"开始、结束"。
 - 选项 B：全部松开才算（Typeless）。好处：和原版一致。
@@ -896,11 +908,15 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 **D2 前缀共享**
 
+**定：A。**
+
 - 选项 A：允许，保存时警告；运行时按下即触发、第二个键到来时升级（Typeless、Wispr）。
 - 选项 B：直接不让存。
 - 建议 A。代价是升级时麦克风指示灯可能闪一下（未验证），以及说话中按长组合会先结束本次听写。第一版的听写和取消之间不会有前缀关系（5.3），这个问题要到第三个动作出现时才出现。
 
 **D3 macOS 上带普通键的绑定怎么做**
+
+**定：A。** V1、V19、V20 哪个不通过，再找主人选。
 
 分两类：修饰键 + 普通键（`AltRight+Space`），单个 F 键（`F13`）。
 
@@ -912,15 +928,21 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 **D4 每个动作几个组合**
 
+**定：多个，上限 4，界面照 Typeless。** 设置页每个动作列出已绑的每个组合，一个组合一个框，右侧 × 删掉，下面"添加另一个"；设置文件里存成列表，不用逗号拼（5.2）。
+
 - 选项 A：设置的写法支持多个（逗号隔开），界面第一版只给一个。
 - 选项 B：照 Typeless、Wispr 给多个（上限 4）。
 - 建议 A。写法一开始就支持多个，以后界面放开时不用换算设置；第一版界面简单。外接键盘没有 Fn 的场景，可以等真有需要时再放开。
 
 **D5 默认键**
 
+**定：不变。**
+
 - 建议不变：Mac 右 Option（为了和 Typeless 的 Fn 同时开着用，`main.swift:19`），Windows 右 Alt。注意 Typeless 的 Windows 默认也是右 Alt，两者在 Windows 上同时运行会撞键。
 
 **D6 左右怎么标**
+
+**定：A，一律标左右。** Typeless 也是这样（`Right Cmd`、`Left Shift`）。
 
 - 选项 A：一律标左右，单按和组合都标。
 - 选项 B：单按修饰键时标左右；组合里右侧标"右"、左侧不标。
@@ -929,33 +951,47 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 **D7 命令行怎么改热键**
 
+**定：A，走 `config set`。** 多个组合写成列表。
+
 - 选项 A：每个动作一项设置，`speakmore config set hotkey.<动作> <组合>`、`config unset hotkey.<动作>`，`config` 列表里每个动作一行，都按动作目录生成（5.2）。旧的 `config set hotkey <组合>` 当成改听写（`legacyName`），老用户照旧能用。
 - 选项 B：单独做 `speakmore hotkey <动作> <组合>` 子命令。
 - 建议 A。走现有的设置框架，环境变量、来源、"设置改了还没生效"、当场生效都现成；B 要另写一套，还得和 `config` 两边同步。
 
 **D8 Windows 管理员窗口**
 
+**定：① 只提示。**
+
 - 选项：① 只提示；② 可选"以管理员身份运行小帮手"；③ uiAccess。
 - 建议 ①。② 每次弹 UAC 或要计划任务；③ 要代码签名并装进 Program Files，和"一次删干净、可整体搬家"冲突。
 
 **D9 鼠标侧键**
 
+**定：不做。** 只认键盘，鼠标的任何键都不能当热键，以后也不做。报告里给鼠标预留的部分已删。
+
 - 建议放到第二阶段。Windows 要常驻鼠标钩子，Mac 要处理 otherMouse 事件；键盘部分稳定后再做。
 
 **D10 新动作的默认组合**
 
+**定：必须有默认键，不能留空。** 不给默认键，用户不知道有这个功能。引导页要讲到每个动作和它的键（5.4）。具体用哪个键，做那个功能时再定。和用户自己绑的键撞了时，以用户的为准，新默认键不装并提示（5.4）。
+
 - 两键以内很难找到不冲突的默认值（Typeless 的"再贴一次"是三键）。建议默认留空，由用户自己绑。
 
 **D11 单按 Shift、CapsLock**
+
+**定：都不开放。** Shift 仍可以和别的修饰键、F 键组合。
 
 - Shift：建议允许但警告（微软拼音切中英文、粘滞键）。也可以直接禁止，对中文用户更安全。
 - CapsLock：建议第一版不开放。Mac 上常用的标志位反映锁没锁，两个无状态位有没有用未验证（V7）；Windows 上吞掉后大小写状态变不变未验证（V12）。
 
 **D12 "任一侧"修饰键**
 
+**定：不支持。** 两侧都想用，就左右各录一个（D4）。
+
 - PowerToys 支持左、右、任一侧三种（`ModifierKey.h:4-10`）。建议不支持，只认分左右的具体键，规则和键帽都更简单。
 
 **D13 `status --json` 里的旧字段**
+
+**定：A，留一个版本再删。**
 
 - 现状：`speakmore status --json` 输出 `status.hotkey`（旧 id）、`status.hotkeyLabel`（它的名字）和 `settings.hotkey`（`src/cli/commands/lifecycle.mjs:120`），README 把 `--json` 当作对外功能写着（`README.md:347`、`386`），读它的是别人写的脚本。新设计里它们换成按动作目录生成的 `status["hotkey.dictate"]`、`settings["hotkey.dictate"]` 等。
 - 选项 A：保留一个版本。下一版里三个旧字段照旧给（听写是六个旧键之一时给旧 id，是新组合时给 `null`），README 标"已弃用，再下一版删除"；再下一版删掉。代价是输出那一处十来行，用的还是 `legacy.mjs` 那张对照表，写明删除的版本。
@@ -974,16 +1010,16 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | V4 | Mac：地球仪键是否产生键码 179；fn + 方向键录到什么键码 | 5.1、5.5 | 只听 tap 记录全部事件 |
 | V5 | Mac：吞掉修饰键 flagsChanged 后，后续 keyDown 是否仍带修饰位 | "修饰键不吞"的依据之一 | 吞右 ⌘ 的 flagsChanged 再按 X |
 | V6 | Mac：session 层主动 tap 能否抢在 ⌘Space 之前 | 是否允许绑系统已占用的组合 | 吞 ⌘Space 的 keyDown，看 Spotlight |
-| V7 | Mac：不带设备位的键盘；CapsLock 事件序列，两个无状态位（`flags & 0x01000080`）能不能可靠给出按下和松开 | 左右判断的退路，D11 | 接第三方键盘记录 flags 原值；按下、松开 CapsLock 各记一次 flags |
+| V7 | Mac：不带设备位的键盘（CapsLock 那一半不用验了，D11 不开放） | 左右判断的退路 | 接第三方键盘记录 flags 原值 |
 | V8 | Mac：吞键 tap 后建排在前面（仓库注释的说法）；放行的同一个事件先后到两个 tap 时，时间戳、类型、键码是否不变 | 两个 tap 的分工和去重（4.1） | 先建只听 tap、再建主动 tap 吞 esc，看只听 tap 还收不收得到；放行 Space，两个回调各记一次时间戳比对 |
 | V9 | Windows：Win 当热键时交回消息循环再插 0xE8 能否挡住开始菜单 | 第 8 步 | 真机绑左 Win 点一下 |
 | V10 | Windows：插掩码能否挡住 Ctrl+Shift 切布局；微软拼音下钩子看到原 vk 还是 0xE5 | 5.5 的警告 | 装两个布局按组合；开拼音打字记 vkCode |
 | V11 | Windows：别的程序注入的不分左右的 vk、扫描码为 0 的事件长什么样 | 5.1、第 8 步 | `e2e.ps1` 分三种注入方式打日志 |
-| V12 | Windows：吞掉 CapsLock 后大小写状态变不变 | D11 | 真机绑 CapsLock |
+| V12 | ~~Windows：吞掉 CapsLock 后大小写状态变不变~~ | 不用验了：D11 不开放 CapsLock | — |
 | V13 | Windows：Raw Input 能否当钩子的看门狗 | 第 8 步（可选） | 回调里故意 `Sleep(1500)` 触发卸载，看能否检测并重装 |
 | V14 | 两个系统：用户按着修饰键时模拟粘贴，修饰键会不会混进去 | 以后的"粘贴上一条"类动作 | 按住右 Alt / 右 Option 时调 paste |
 | V15 | 升级时麦克风指示灯和悬浮条闪得明不明显 | D2 | 开发窗口里配 `AltRight` 和 `AltRight+Space` 实际按 |
-| V16 | 组合松开按任一键还是全部，手感比较 | D1 | 匹配器加开关各按一轮 |
+| V16 | D1 定了全部松开才算；常用组合各按一轮，看 600 ms 规则误取消多不多 | D1 | 开发窗口里配 `ControlRight+Space` 实际按 |
 | V17 | `navigator.keyboard.getLayoutMap()` 在 Electron `file://` 页面能否用 | 5.7 的后续 | 开发窗口控制台执行一次 |
 | V18 | Typeless 运行时是否真的吞命中的键；"再贴一次"是否真的不能用 | 只影响对原版的描述 | 装着 Typeless 按 `Fn+Space`、`Ctrl+Cmd+V` |
 | V19 | Mac：只跑 `RunLoop`、没有 `NSApplication` 的小帮手里，Carbon `RegisterEventHotKey` 的热键收不收得到（分路笔记 03 §3.2 已列） | 第 7 步，D3（单个 F 键、安全输入顶替） | 小帮手里注册 F13，按一下看回调 |

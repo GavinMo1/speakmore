@@ -1,0 +1,18 @@
+---
+name: decisions-as-options
+description: 有几件事要他拍板时，做成选项一批批让他点（AskUserQuestion），推荐项放第一个，他有想法会直接写在选项里
+metadata:
+  node_type: memory
+  type: feedback
+  originSessionId: 4b3f4054-1581-427e-aaee-1842cfa6c5c8
+  modified: 2026-10-21T07:51:27.994Z
+---
+
+2026-10-21 过热键的 D1–D13 时，我先用文字讲 D1、问他定不定，他说："你可以把这 1、2、3 个需要我拍板的东西做成选项，然后我来选。就算我有什么小想法，也会直接在选项里面跟你说。"之后三批、每批四条，他很快选完，有不同意见的直接写在"其他"里（D4 还附了 Typeless 的截图）。
+
+**Why:** 一条条用文字来回问太慢；选项能让他一眼比较、快速点选，补充意见也有地方写。
+
+**How to apply:**
+- 要他拍板的事超过一两件时，用 AskUserQuestion 做成选项，一次最多四条，分批发。
+- 每条写清楚是什么场景、各选项的代价；推荐的放第一个、标"（推荐）"；和既定原则冲突的选项（比如"老用户无感"、AGENTS.md 红线）在描述里写明。
+- 他在"其他"里写的是真实意见，常和推荐不同，照他说的改，并把连带要改的地方一起改掉。相关：[[user-action-requests-plain-steps]]、[[speakmore-hotkey-any-key]]。
