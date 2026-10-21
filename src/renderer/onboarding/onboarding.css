@@ -730,7 +730,13 @@ body {
 }
 
 /* 按下去：换成主题渐变，往下沉一点，底下透出同色的光 */
-.big-keycap[data-pressed] {
+/* 一个组合的几个键并排；按下时一起亮 */
+.big-keycaps {
+  display: flex;
+  gap: 1rem;
+}
+
+.big-keycaps[data-pressed] .big-keycap {
   color: var(--on-primary);
   background: var(--gradient);
   translate: 0 3px;

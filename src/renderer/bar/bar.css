@@ -83,6 +83,12 @@ body[data-shown="false"] .shell {
   display: none;
 }
 
+/* 一个组合的几个键：挨着排，不写加号 */
+.hint .keys {
+  display: inline-flex;
+  gap: 0.3em;
+}
+
 /* 键名：用和正文一样的字体，等宽字体里 ⌥ ⌘ 这些符号又小又偏 */
 .hint kbd {
   font: inherit;

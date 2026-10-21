@@ -1,6 +1,7 @@
 import { h, progressBadge, svg } from "../shared/dom.mjs";
 import { createHotkeyEditor } from "../shared/hotkey-editor.mjs";
 import { hotkeyText, localize, t } from "../shared/i18n.mjs";
+import { keycapRow } from "../shared/keycaps.mjs";
 import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
 import { describeError, permissionGranted } from "../shared/setup-text.mjs";
@@ -487,7 +488,8 @@ function render() {
   }
 
   const keycap = hotkeyText(dictateChords());
-  $("big-keycap").textContent = keycap;
+  // 大键帽：听写的第一个组合，一个键一块
+  $("big-keycap").replaceChildren(...keycapRow(dictateChords()[0] ?? [], "big-keycap"));
   hotkeyEditor.render(setup.hotkeyActions, {
     canRecord: setup.helper === "running" && setup.permissions.listen !== false,
   });

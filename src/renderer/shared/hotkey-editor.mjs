@@ -1,14 +1,12 @@
-import { chordKeycaps, chordString, chordsText, chordText } from "../../hotkeys/chord.mjs";
+import { chordString, chordsText, chordText } from "../../hotkeys/chord.mjs";
 import { h, svg } from "./dom.mjs";
 import { t } from "./i18n.mjs";
+import { keycapRow as keycaps } from "./keycaps.mjs";
 
 // 快捷键编辑（docs/hotkey-research.md 5.6、D4），设置页和首次引导共用：动作目录里每个动作一行，每个组合一个胶囊框
 // （点它换掉、× 删掉），"添加另一个"（至多 4 个），和默认不一样时"恢复默认"。
 // 录键在主进程和小帮手那边：这里点了告诉主进程（recordHotkey），主进程经 onHotkeyRecording 报回现在按着什么、存没存上。
 // 页面只画，不判断合不合规矩：存的时候主进程查，被拒了说原因，人直接重按。
-
-/** 一个组合的键帽，一个键一个 */
-const keycaps = (codes) => chordKeycaps(codes).map((cap) => h("kbd", { class: "keycap", text: t.text(cap) }));
 
 /**
  * @param {HTMLElement} root 画在这里面

@@ -300,6 +300,19 @@ p {
     0 1px 2px oklch(0 0 0 / 0.06);
 }
 
+/* 一个组合的一排键帽，和几个组合之间的"或"（shared/keycaps.mjs） */
+.keycaps {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.keycaps-or {
+  margin: 0 0.25rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
 .link {
   padding: 0;
   font: inherit;

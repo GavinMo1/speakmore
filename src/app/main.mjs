@@ -844,7 +844,8 @@ async function main() {
     }
     // 热键不灵时先看这条日志有没有：没有就是小帮手没收到按键（权限或键选错了）
     const fields = { event: event.event, id: event.id, down: event.down, to: event.to };
-    const input = { event: event.event, action: action.id, down: event.down };
+    // chord：这个动作的第几个组合（绑定 id 的序号），悬浮条的提示里写按下的那一个
+    const input = { event: event.event, action: action.id, down: event.down, chord: Number(event.id.split("#")[1]) };
     if (action.handler !== "session") {
       // 只在说话时生效的（取消）：那时页面让小帮手截着，交给悬浮条
       log.info("key_event", fields);
