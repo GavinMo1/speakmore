@@ -157,7 +157,7 @@
   text-wrap: balance;
 }
 
-/* 标题行：大标题，右侧是这一页的一个控件（首页的识别方式、模型页的搜索） */
+/* 标题行：大标题，右侧是这一页的控件（首页的识别方式、引擎页的搜索、推荐组合和密钥） */
 .page-head {
   display: flex;
   flex-wrap: wrap;
@@ -169,6 +169,66 @@
 
 .page-head .page-title {
   margin: 0;
+}
+
+/* 标题行右侧的一组控件（引擎页、词典页）：窄到放不下时整组折到标题下面 */
+.page-tools {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* 搜索框（引擎页、词典页）：搜索框不再往窄里挤，提示字会被截断 */
+.search {
+  position: relative;
+  display: flex;
+  flex: 0 1 18rem;
+  min-width: 15rem;
+  align-items: center;
+}
+
+.search > .icon {
+  position: absolute;
+  left: 0.875rem;
+  color: var(--ink-2);
+  pointer-events: none;
+}
+
+.search .input {
+  width: 100%;
+  height: var(--control-lg);
+  padding: 0 1rem 0 2.5rem;
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-full);
+  box-shadow: var(--edge);
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.search .input:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px var(--primary),
+    0 0 0 4px color-mix(in oklch, var(--primary) 18%, transparent);
+}
+
+/* 列表上面的一条工具（词典页的搜索和计数） */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  min-height: var(--control-md);
+  margin: 1.25rem 0 1.5rem;
+}
+
+/* 数后面小一号的单位（首页的数、推荐组合的月成本） */
+.unit {
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
 }
 
 /* 还差什么才能用：原版断网时顶上也是这样一条 */
@@ -667,7 +727,7 @@
   cursor: help;
 }
 
-/* ---------- 一路经过的模型（route-view.mjs）：首页的识别方式选单、模型页的推荐组合共用 ---------- */
+/* ---------- 一路经过的模型（route-view.mjs）：引擎页的推荐组合用 ---------- */
 
 /* 图标加名字，后一个带着前面的箭头一起折行（箭头不会落单在行尾）；不截断 */
 .hops {
@@ -948,7 +1008,8 @@ code.setting-value {
     animation: none;
   }
 
-  .toast {
+  .toast,
+  .search .input {
     transition: none;
   }
 }

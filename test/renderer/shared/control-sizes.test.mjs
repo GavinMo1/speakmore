@@ -64,7 +64,6 @@ const RADIUS_VALUE = /^(50%|0|var\(--radius-[a-z]+\)|calc\(var\(--radius-[a-z]+\
 
 const RADIUS_EXCEPTIONS = [
   ["bar/", "悬浮条自己的形状和电平条"],
-  ["shared/window.css:.tabs > .indicator", "分类标签下面那条 2px 的下划线"],
   ["hub/hub.css:.cell", "首页活跃度热力图的小格子"],
   ["hub/hub.css:.page-arrow", "热力图翻页的小箭头"],
 ];

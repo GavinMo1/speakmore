@@ -144,7 +144,7 @@ export default {
     modelLoading: "The local model is loading; give it a few seconds",
     modelFailed: "The local model couldn't be set up: {reason}",
     modelMissing:
-      "The local model {model} isn't downloaded: download it on the Models page in Settings, or run speakmore transcriber download {id}",
+      "The local model {model} isn't downloaded: download it on the Engine page, or run speakmore transcriber download {id}",
     undecodable: "Couldn't read the recording: {reason}",
     transcribeFailed: "Local transcription failed: {reason}",
   },
@@ -324,7 +324,7 @@ export default {
   hub: {
     pages: "Pages",
     home: "Home",
-    models: "Models",
+    models: "Engine",
     history: "History",
     vocabulary: "Dictionary",
     settings: "Settings",
@@ -334,16 +334,47 @@ export default {
     switchWay: "Switch mode",
   },
 
+  // The Engine page in the sidebar (renderer/hub/engine/)
   plaza: {
-    title: "Models",
-    search: "Search models or makers",
+    title: "Engine",
+    search: "Search models",
     modes: { native: "Native", local: "Transcribe + Polish", private: "Data Privacy" },
-    facts: { upload: "Audio sent to {platform}" },
-    // This role isn't part of the recognition mode in use (the line under the models toolbar)
-    standby: {
-      elsewhere: "Mode in use: {current} · Enabling a model here switches to {mode}",
-      privateCloud: "Data Privacy uses on-device models only · Enabling a cloud model switches to {mode}",
-      pick: "Change mode",
+    // The tree's three stages, and what each one does (on hover)
+    roles: { native: "Native", transcribe: "Transcribe", polish: "Polish" },
+    roleDesc: {
+      native: "Audio straight to finished text",
+      transcribe: "Audio to text",
+      polish: "Text to finished copy",
+    },
+    // The small line above each column of the tree
+    columns: { modes: "Mode", roles: "Stage", makers: "Maker", models: "Model" },
+    unchosen: "None selected",
+    state: { notDownloaded: "Not downloaded", downloading: "Downloading", downloaded: "{done}/{total} downloaded" },
+    legend: { standby: "Selected · another mode" },
+    zoom: {
+      in: "Zoom in",
+      out: "Zoom out",
+      reset: "Reset to 100%",
+      fit: "Fit to canvas",
+      hint: "Drag to pan · Pinch or ⌘-scroll to zoom",
+    },
+    // The details on the right after picking a model (renderer/hub/engine/detail.mjs)
+    detail: {
+      label: "{model} details",
+      close: "Close details",
+      switchTo: "Enabling switches to {mode}",
+      current: "Current · {mode}",
+      price: "Price",
+      perHour: "/ hour of audio",
+      listPrice: "{platform} list price",
+      listPriceTokens: "{platform} list price · per million tokens",
+      specsNote: "Scores from 97 real recordings · Green is best in group",
+      license: "{license} license",
+      audioLocal: "Audio stays on this device",
+      audioTo: "Audio sent to {platform}",
+      textTo: "Text sent to {platform}",
+      textToCustom: "Text sent to your custom service",
+      notOnChannel: "{platform} doesn't offer this model",
     },
     via: { local: "This Mac" },
     inUse: "In use",
@@ -362,21 +393,7 @@ export default {
       localTip: "Transcribe a spoken sample",
       keyTip: "Send a minimal request with this key",
     },
-    tabs: { label: "Model categories", native: "Native", transcribe: "Transcribe", polish: "Polish", keys: "Keys" },
-    toolbar: {
-      all: "All",
-      makers: "Filter by maker",
-      best: "Best in column",
-      keysLocal: "Keys stay on this Mac",
-      onlyUsable: "Available only",
-      perMillion: "Price · per million tokens",
-    },
     cols: {
-      model: "Model",
-      platform: "Platform",
-      status: "Status",
-      action: "Action",
-      key: "Key",
       input: "Input",
       inputTip: "Input price · per million tokens",
       output: "Output",
@@ -420,8 +437,6 @@ export default {
     groups: {
       local: "On this Mac",
       custom: "Custom",
-      localMeta: "Audio stays on this Mac · {done}/{total} downloaded",
-      localMetaFree: "Audio stays on this Mac · {done}/{total} downloaded · {free} free",
     },
     channel: {
       label: "Channel",
@@ -433,7 +448,7 @@ export default {
     notice: { noKey: "No key configured", custom: "Not configured" },
     actions: {
       use: "Enable",
-      download: "Download",
+      download: "Download {size}",
       cancel: "Cancel",
       configure: "Configure",
       configureKey: "Add key",
@@ -444,7 +459,7 @@ export default {
     custom: {
       name: "Custom service",
       desc: "OpenAI-compatible API · Your own address, model, and key",
-      meta: "OpenRouter, SiliconFlow, Ollama, and others",
+      kind: "OpenAI-compatible API",
       url: "API address",
       urlPlaceholder: "API address, e.g. https://api.example.com/v1",
       model: "Model name",
@@ -456,8 +471,12 @@ export default {
       keyKept: "Key configured; leave blank to keep it",
       modelMissing: "Enter a model name",
     },
-    empty: { title: "No matching models", search: "Search “{query}”", clear: "Clear filters" },
+    empty: { title: "No matching models" },
+    // The keys panel on the right of the title row (renderer/hub/engine/keys.mjs)
     keys: {
+      title: "Keys",
+      meta: "{done}/{total} configured",
+      local: "Keys stay on this device · {home}",
       coverage: "Covers",
       env: "Environment",
       envTip: "From the environment variable {variable}; takes precedence over a saved key",
@@ -484,14 +503,9 @@ export default {
       canceled: "Download canceled",
       removed: "{model} removed",
     },
-    notes: {
-      keys: "Stored in {home}",
-      transcribe: "On-device scores · 97 real recordings, Apple silicon, 2026-10-16 · Hover a column for details",
-      prices: "Tags · Default, Evaluated, Known issue, Unverified · Prices as listed by each platform, ¥ CNY, $ USD",
-    },
   },
 
-  // Recommended setups next to the models page title (src/models/presets.mjs, renderer/hub/preset-picker.mjs). Monthly cost at 100 a day, 30 days
+  // Recommended setups next to the Engine page title (src/models/presets.mjs, renderer/hub/preset-picker.mjs). Monthly cost at 100 a day, 30 days
   presets: {
     title: "Recommended setups",
     meta: "Monthly cost at {daily} dictations a day",
@@ -558,7 +572,7 @@ export default {
     // The recognition mode menu next to the title (renderer/hub/mode-picker.mjs); mode names live in plaza.modes
     mode: {
       label: "Recognition",
-      meta: "Choose one of three · Each keeps its own models",
+      open: "Change it on the Engine page",
       desc: {
         native: "Audio straight to the model · One request",
         local: "Speech transcription · Text polishing",
@@ -570,11 +584,9 @@ export default {
         downloading: "Downloading {model} · {percent}%",
         url: "No custom service URL",
       },
-      fix: "Set up",
       switching: "Switching",
       failed: "Not switched",
       switched: "Switched to {mode}",
-      configure: "Change the models {mode} uses",
       locked: "The mode is set by the separately started server and can't be changed here",
     },
   },
@@ -852,9 +864,9 @@ export default {
         sources: { cn: "China mirror", original: "Hugging Face" },
       },
       nativeOnly: "Only these take audio directly · DeepSeek, Kimi, GLM and more are under Transcribe + Polish",
-      later: "Optional · set it up later on the Models page",
-      laterModel: "Optional · download it later on the Models page",
-      more: "Cloud transcription and custom services are on the Models page",
+      later: "Optional · set it up later on the Engine page",
+      laterModel: "Optional · download it later on the Engine page",
+      more: "Cloud transcription and custom services are on the Engine page",
       status: {
         enabled: "{mode} enabled",
         enabling: "Enabling",
@@ -1577,12 +1589,8 @@ speakmore help     all commands`,
     bar: { noMicPermission: "No microphone access: Settings › Privacy & security › Microphone" },
     plaza: {
       via: { local: "This PC" },
-      toolbar: { keysLocal: "Keys stay on this PC" },
-      groups: {
-        local: "On this PC",
-        localMeta: "Audio stays on this PC · {done}/{total} downloaded",
-        localMetaFree: "Audio stays on this PC · {done}/{total} downloaded · {free} free",
-      },
+      groups: { local: "On this PC" },
+      zoom: { hint: "Drag to pan · Pinch or Ctrl-scroll to zoom" },
     },
     onboarding: {
       permissions: {

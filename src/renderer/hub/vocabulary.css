@@ -1,6 +1,6 @@
 /* 侧栏"词典"一页（vocabulary.mjs）。结构照原版的词典页：一格一个词，三列铺开，鼠标移上去才出现编辑和删除。
    标题下面多一栏原版没有的：词典只存在本机、当前方式每一步怎么收、"支持的模型"浮层。
-   按钮、标签、搜索框、浮层都是规范里的那几样（shared/window.css、models.css、picker.css），这里只排版。 */
+   按钮、标签、搜索框、浮层都是规范里的那几样（shared/window.css、hub.css、picker.css），这里只排版。 */
 
 #vocabulary-support-trigger {
   anchor-name: --vocabulary-support;

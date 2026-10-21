@@ -5,13 +5,11 @@ import { createChecks } from "./checks.mjs";
 import { hopChain, needText } from "./route-view.mjs";
 import { toast } from "./toast.mjs";
 
-// 模型页标题行右边的推荐组合（models/presets.mjs，主进程拼好，随 getSetup 来）：一个按钮，点开一列，
-// 浮层的样子同首页的识别方式选单（picker.css）。每项上面写名字、说明、一路经过的模型、每月多少钱（每天 100 次），
-// 下面一行左边检测、右边启用：检测把这一套整条走一遍（用到本机模型的念一句交给它转，用到云端的拿这套设置发最小的请求），
-// 不换掉正在用的；启用交给主进程切（app/modes.mjs 的 switchMode，当场换上，还差的照实写着）。
-// 还差什么的，下面那一行写出来，右边是去补的按钮：缺 key 去密钥表展开那一家，没下载就在这里下（显示进度）。
-
-const ICONS = { native: "i-sparkles", local: "i-wand-sparkles", private: "i-shield-check" };
+// 引擎页标题行右边的推荐组合（models/presets.mjs，主进程拼好，随 getSetup 来）：一个按钮，点开一列（picker.css）。
+// 一项一行：左边名字和识别方式、说明、一路经过的模型，右边每月多少钱（每天 100 次）和启用；正在用的那项实底、描主题色边，
+// 其余平铺。检测把这一套整条走一遍（用到本机模型的念一句交给它转，用到云端的拿这套设置发最小的请求），不换掉正在用的；
+// 启用交给主进程切（app/modes.mjs 的 switchMode，当场换上，还差的照实写着）。
+// 还差什么的，左边那一行写出来，右边是去补的按钮：缺 key 去密钥面板展开那一家，没下载就在这里下（显示进度）。
 
 /**
  * @param {object} options
@@ -110,68 +108,61 @@ export function createPresetPicker({ refresh, configureKey }) {
     );
   }
 
-  /** 下面一行：左边检测（还差什么时写差什么），右边启用（正在用、去补、下载进度） */
-  function foot(preset) {
-    const key = `preset:${preset.id}`;
-    const gaps = gapsOf(preset);
-    const left =
-      gaps.length > 0
-        ? h("p", { class: "preset-gap" }, svg("i-circle-alert"), h("span", { text: gaps.join(" · ") }))
-        : h("div", { class: "preset-check" }, checks.control(key, t("presets.checkTip"), checkCall(preset)));
-    let right;
+  /** 右边的操作：正在用、去补、启用中、启用 */
+  function action(preset, gaps) {
     if (preset.active) {
-      right = h("span", { class: "state-box block", "data-tone": "accent" }, svg("i-check"), t("plaza.inUse"));
-    } else if (gaps.length > 0) {
-      right = fix(preset);
-    } else if (busy === preset.id) {
-      right = h(
+      return h("span", { class: "state-box block", "data-tone": "accent" }, svg("i-check"), t("plaza.inUse"));
+    }
+    if (gaps.length > 0) return fix(preset);
+    if (busy === preset.id) {
+      return h(
         "span",
         { class: "badge block", "data-tone": "progress", role: "status" },
         svg("i-loader-circle", "icon spin"),
         h("span", { class: "label", text: t("presets.enabling") }),
       );
-    } else {
-      right = h("button", {
-        type: "button",
-        class: "button block",
-        disabled: !setup.switchable || busy !== null,
-        text: t("presets.enable"),
-        onclick: () => pick(preset),
-      });
     }
-    return h("div", { class: "preset-foot" }, left, h("div", { class: "preset-action" }, right));
+    return h("button", {
+      type: "button",
+      class: "button block",
+      disabled: !setup.switchable || busy !== null,
+      text: t("presets.enable"),
+      "aria-label": `${t("presets.enable")} ${nameOf(preset.id)}`,
+      onclick: () => pick(preset),
+    });
   }
 
   function option(preset) {
+    const key = `preset:${preset.id}`;
+    const gaps = gapsOf(preset);
     return h(
       "article",
-      { class: "preset", "data-active": preset.active, "aria-current": preset.active ? "true" : null },
+      { class: "preset-row", "data-active": preset.active ? "" : null, "aria-current": preset.active ? "true" : null },
       h(
         "div",
-        { class: "preset-main" },
-        h("span", { class: "picker-glyph" }, svg(ICONS[preset.mode])),
-        h(
-          "div",
-          { class: "picker-option-body" },
-          h(
-            "span",
-            { class: "picker-option-title" },
-            h("span", { class: "picker-option-name", text: nameOf(preset.id) }),
-          ),
-          h("span", { class: "picker-option-desc", text: t(`presets.items.${preset.id}.desc`) }),
-          hopChain(preset.hops, platformOf),
-        ),
-        cost(preset),
-      ),
-      foot(preset),
-      failure?.id === preset.id &&
+        { class: "preset-row-main" },
         h(
           "p",
-          { class: "callout", role: "alert" },
-          svg("i-circle-alert"),
-          h("span", {}, h("b", { text: t("plaza.actionFailed") }), ` · ${t.text(failure.problem)}`),
+          { class: "preset-row-title" },
+          h("span", { class: "preset-row-name", text: nameOf(preset.id) }),
+          h("span", { class: "preset-row-mode", text: t(`plaza.modes.${preset.mode}`) }),
         ),
-      checks.note(`preset:${preset.id}`),
+        h("p", { class: "preset-row-desc", text: t(`presets.items.${preset.id}.desc`) }),
+        hopChain(preset.hops, platformOf),
+        // 还差什么写出来；都齐了才能整套检测
+        gaps.length > 0
+          ? h("p", { class: "preset-gap" }, svg("i-circle-alert"), h("span", { text: gaps.join(" · ") }))
+          : h("div", { class: "preset-check" }, checks.control(key, t("presets.checkTip"), checkCall(preset))),
+        failure?.id === preset.id &&
+          h(
+            "p",
+            { class: "callout", role: "alert" },
+            svg("i-circle-alert"),
+            h("span", {}, h("b", { text: t("plaza.actionFailed") }), ` · ${t.text(failure.problem)}`),
+          ),
+        checks.note(key),
+      ),
+      h("div", { class: "preset-row-side" }, cost(preset), action(preset, gaps)),
     );
   }
 
@@ -180,7 +171,7 @@ export function createPresetPicker({ refresh, configureKey }) {
     const { presets } = setup.plaza;
     trigger.hidden = presets.length === 0;
     trigger.replaceChildren(
-      h("span", { class: "picker-glyph" }, svg("i-zap")),
+      svg("i-zap"),
       h("span", { class: "picker-trigger-value", text: t("presets.title") }),
       svg("i-chevron", "icon chevron"),
     );
