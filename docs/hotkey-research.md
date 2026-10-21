@@ -2,9 +2,11 @@
 
 > 性质：纯调研。代码没动，未开始实施。成文日期 2026-10-20。
 >
-> 代码基线：`ui-polish` 分支。分路取证时 HEAD 为 `ab20c7e` 和 `7e9786e`，成文时为 `15afac0`，修订时复核到 `7c2cd6f`（0.13.1）。`15afac0` 之后 `src/`、`native/` 没有改动；`README.md`、`README.en.md` 改过，文中 README 的行号已按 `cdd50f9` 改正；`docs/development.md` 只在文末追加，文中引用的行号不变。分路笔记里 `src/i18n/locales/zh-CN.mjs` 第 560 行以后、`en.mjs` 第 546 行以后的行号要加 1，本文引用的已经改好。
+> 代码基线：`ui-polish` 分支。分路取证时 HEAD 为 `ab20c7e` 和 `7e9786e`，成文时为 `15afac0`，修订时复核到 `7c2cd6f`（0.13.1），第三版复核到 `0a2b29f`（`src/`、`native/` 与 `7c2cd6f` 相同）。`15afac0` 之后 `src/`、`native/` 没有改动；`README.md`、`README.en.md` 改过，文中 README 的行号已按 `cdd50f9` 改正；`docs/development.md` 只在文末追加，文中引用的行号不变。分路笔记里 `src/i18n/locales/zh-CN.mjs` 第 560 行以后、`en.mjs` 第 546 行以后的行号要加 1，本文引用的已经改好。
 >
 > 修订记录：第二版按一轮对抗性审查的 20 条意见改过。意见里引的源码、SDK 头文件和参考实现逐条对照过，20 条都成立。改动最大的是 4.1（两个 tap 怎么分工、单个 F 键怎么吞、安全输入用 Carbon 顶替）、5.2（设置怎么接进现有框架）、5.3（esc 与漏掉的松开）、5.8（协议补 `probe`、`info`）、5.9（写入路径统一、状态接口、退回旧版的步骤）。
+>
+> 第三版（2026-10-21）按主人新定的方向改：热键彻底做成配置驱动，内部不为旧写法留兼容层；老用户升级后无感，能感觉到的只有"热键能自己录、能组合了"。重写了 1.1、5.2、5.4、5.9 和第 6 节，改了 D2、D4、D7，新增 D13；3.3、3.4、5.3、5.5、5.7、附录跟着改。第二版的"听写存两处、`status` 加 `dictateCombo`、等第二个动作再把 `hotkeys` 升格、第一版只开放听写改键、实施中途保留 `--key`"都不要了。
 >
 > 引用约定：
 >
@@ -26,9 +28,10 @@
 3. **匹配和吞键在小帮手里做。** 主进程用一条 `bind` 命令下发绑定表，可以随时整表替换，换键不再重启小帮手。小帮手只报"哪个绑定按下、松开、被打断"，不报别的按键，现有的隐私约定不变。录快捷键是一个限时模式，只有这段时间报原始按键。
 4. **组合最多两个键，按集合精确匹配。** 修饰键之间不分先后。修饰键加普通键时，普通键必须最后按。只有按下能凑成组合，松开不能。组合按着时来了别的键，报 `interrupted`，取代今天的 `other_key`；新的键集合恰好是另一个绑定时，算一次"升级"。
 5. **修饰键一律不吞，组合里的普通键整段吞掉**（按下、自动重复、松开）。Windows 上有 Alt 或 Win 参与时插掩码键，规则从"只管右 Alt"推广到全部 Alt 和 Win。macOS 上吞普通键要用能改事件的 tap，需要辅助功能权限；这个 tap 按需打开，平时仍然关着。两个 tap 共用一个匹配器，按事件去重。
-6. **设置新增 `hotkeys`**：动作对应组合数组，只存改过的动作。旧的 `hotkey` 照样读。设置页、引导页、`config set/unset hotkey` 都走同一个写入函数：听写的组合能用旧 id 表达时只写 `hotkey`，否则只写 `hotkeys.dictate`，退回旧版照样能起来。文件里的单个组合写坏了不再让 App 起不来，只退回默认值并提示。环境变量里写了新组合时，退回旧版前要先删掉（5.9）。
-7. **动作用一张动作目录描述**：默认组合（按系统分）、生效场景、能否清空、长按阈值。第一版只有"听写"和"取消（esc，只在说话时）"两项。以后加功能，只往目录里加一行。
-8. **实施顺序**：先写纯逻辑和一套 Go、Swift 共用的按键轨迹样例，再改协议，再做吞键和平台细节，最后做录键界面。每一步都能单独测试、单独提交。
+6. **动作目录是唯一的出处**（`src/hotkeys/actions.mjs`）：每个动作一行，写默认组合（按系统分）、生效场景、能否清空、长按阈值、交给谁处理。设置项、环境变量、命令行、设置页、状态、下发给小帮手的绑定表，全都按这张表生成。除了各动作自己的处理代码（和引导页专门教听写的那一步），没有一处按动作写死。第一版两个动作："听写"和"取消（只在说话时）"，两个都能改键。以后加功能（比如翻译），只改三处：目录里加一行、两份文案里加动作名、写这个功能本身。有测试按目录逐个动作查，漏了哪处就红（5.4）。
+7. **一个动作一项设置**：`hotkey.dictate`、`hotkey.cancel`，值是组合写法（`"ControlRight+Space"`，几个组合用逗号隔开，`none` 是关掉），只存改过的。这正好落在现有设置框架的规矩里（一项一个键、值是字符串），环境变量、`config set/unset`、"设置改了还没生效"都现成，不为热键开特例（5.2）。
+8. **老用户无感**（5.9）：存的、报的、显示的一律是新写法，旧写法只在入口认。第一次启动时把设置文件里的 `"hotkey": "right_command"` 换成 `"hotkey.dictate": "MetaRight"`；旧的环境变量 `SPEAKMORE_HOTKEY` 和旧命令 `config set hotkey` 照样能用；六个旧键的键帽和名字逐字不变，用法、权限都不变。退回旧版照样能起来，热键回到默认键。
+9. **实施顺序**：先写纯逻辑和一套 Go、Swift 共用的按键轨迹样例，再改协议，再做吞键和平台细节，最后做录键界面。每一步都能单独测试、单独提交。
 
 ### 1.2 需要主人拍板的事
 
@@ -39,15 +42,16 @@
 | D1 | 组合的"松开"按哪个键松开算 | 任一键松开即算松开 |
 | D2 | 前缀共享（如 `AltRight` 与 `AltRight+Space` 分给两个动作） | 允许，保存时警告；运行时按下即触发，第二个键到来时升级 |
 | D3 | macOS 上带普通键的绑定怎么做（修饰键 + 普通键、单个 F 键） | 修饰键 + 普通键走按需打开的吞键 tap；单个 F 键走 Carbon；安全输入期间由 Carbon 顶替。Carbon 在小帮手里收不到时，单个 F 键第一版在 Mac 上不开放 |
-| D4 | 每个动作允许几个组合 | 数据格式用数组；界面第一版只给一个 |
+| D4 | 每个动作允许几个组合 | 设置的写法支持多个（逗号隔开）；界面第一版只给一个 |
 | D5 | 默认键 | 不变：Mac 右 Option，Windows 右 Alt |
 | D6 | 键帽上左右怎么标 | 一律标左右，单按和组合都标 |
-| D7 | 命令行怎么改热键 | 沿用 `config set hotkey <组合>` 改听写，旧 id 照收；多动作时再加 JSON 写法 |
+| D7 | 命令行怎么改热键 | `config set hotkey.<动作> <组合>`，每个动作一项；旧的 `config set hotkey` 当成改听写 |
 | D8 | Windows 管理员窗口在前台时热键失效 | 第一版只提示，不做"以管理员身份运行" |
 | D9 | 鼠标侧键 | 放到第二阶段 |
 | D10 | 以后新动作（如"粘贴上一条"）的默认组合 | 默认留空，由用户自己绑 |
 | D11 | 单按 Shift、CapsLock 这类有系统副作用的键 | Shift 允许但警告；CapsLock 第一版不开放 |
 | D12 | 是否支持"任一侧"修饰键 | 不支持，只认分左右的具体键 |
+| D13 | `status --json` 里的旧字段（`hotkey`、`hotkeyLabel`、`settings.hotkey`） | 保留一个版本、标弃用，再下一版删掉（AGENTS.md 红线 6） |
 
 ---
 
@@ -202,46 +206,48 @@ settings.json {"hotkey":"right_option"} 或 SPEAKMORE_HOTKEY
 
 **App 主进程**（`src/app/`）
 
-- `main.mjs:98-99`、`140` 的单个 `hotkey`：改成绑定表。
+- `main.mjs:98-99`、`140` 的单个 `hotkey`：改成由 `src/hotkeys/bindings.mjs` 按设置生成的绑定表。
+- `main.mjs:136-137`：读设置之前先同步跑一次旧设置换算 `migrateLegacySettings`（5.9）。现在 `:370` 的 `migrateLegacyData` 比 `:137` 的第一次读设置晚，换算放在那里的话，直接双击打开、开机自启的那一次会用默认键。
 - `main.mjs:665-676` 启动参数：去掉 `--key`，`ready` 之后发 `bind`。
 - `main.mjs:689-704` 事件分发：按绑定 id 分给不同动作；录键事件只发给发起录键的窗口。引导页"测快捷键"这条改道（`:689-697`，`hotkeyToOnboarding`）保留，改成把听写绑定的 `binding` 按下松开送给引导窗口。
-- `main.mjs:1195-1216` 的 `setHotkey`：校验换成结构校验加冲突检查，写入改走 5.2 的 `writeDictateBinding`；换键改为重发 `bind`，不再重启小帮手。
+- `main.mjs:1195-1216` 的 `setHotkey`：带上动作 id，写入走设置框架的 `saveSetting`（`hotkey.<动作>`，先过 `check`，5.2）；换键改为重发 `bind`，不再重启小帮手。
 - `main.mjs:1210` 的 `tellBar("bar:hotkey", hotkey)`：推给悬浮条的从 id 换成组合；接收端是 `src/renderer/bar/bar.mjs:17-38`（启动时从 `config()` 取初值，换键和换语言时重算键帽）。
 - `main.mjs:475` 的 `started` 日志、`:1204` 的 `hotkey_changed` 日志：字段换成组合。
 - `main.mjs:719`、`758`、`776`、`911`、`1315`：键名和键帽改用统一的格式化函数。
-- `main.mjs:1398-1400` 控制通道：`hotkeyLabel` 照旧给，`hotkey` 只在能写成旧 id 时给，新增 `dictateCombo` 字段，规则见 5.9。
+- `main.mjs:1398-1400` 控制通道：按动作目录每个动作报一项 `hotkey.<动作>`，和设置同名，命令行的 `pendingSettings` 照旧按名字比；旧的 `hotkey`、`hotkeyLabel` 按 D13 处理。控制通道加一条 `reload-hotkeys`（5.2）。
 - `main.mjs:1290-1292` 的 `onboarding:capture-hotkey`：保留原意（测快捷键时把热键送到引导窗口），不并入录键模式；只有"换个键"才进录键模式（5.6）。
 - `src/app/helper.mjs:19`：Mac 小帮手的源码现在写成单个文件 `native/main.swift`，第 5 步拆成多个文件后要改成目录；`:31` 的注释里列的事件名要跟着换。
 - `src/app/e2e.mjs:84-88`：合成的热键事件换成新事件。
 
 **preload**（`src/preload/preload.cjs`）
 
-- `:35` `onHotkeyChanged`、`:93` `setHotkey`、`:97` `captureHotkey`、`:98` `onOnboardingHotkey`：参数从 id 换成组合；新增录键的开始、结束、`recording` 推送，以及"恢复默认"。
+- `:35` `onHotkeyChanged`、`:93` `setHotkey`、`:97` `captureHotkey`、`:98` `onOnboardingHotkey`：参数从键 id 换成动作 id 加组合；新增录键的开始、结束、`recording` 推送，以及"恢复默认"。
 
 **设置**（`src/storage/settings.mjs`）
 
-- `:26-47` 的键表、`HOTKEY_IDS`、`hotkeyName`、`hotkeyKeycap`（后者全仓无人调用）：删掉或改成迁移用的旧 id 对照。
-- `:81-90` 的 `hotkey` 项：解析和写入交给新建的 `src/hotkeys/settings.mjs`；`resolveSettings`、`saveSetting`、`unsetSetting`、`patchSettings`（`:306-354`）加三个可选钩子。现有框架为什么装不下、钩子怎么定，见 5.2；迁移和回滚见 5.9。
+- `:26-47` 的键表、`HOTKEY_IDS`、`hotkeyName`、`hotkeyKeycap`（后者全仓无人调用）：删掉。旧 id 对照只留在 `src/hotkeys/legacy.mjs` 一处。
+- `:81-90` 的 `hotkey` 项：删掉，换成 `src/hotkeys/settings.mjs` 按动作目录生成的 `hotkey.<动作>` 各项。框架补三样通用的东西：设置项自带的说明 `describe`、命令行认的旧名字 `legacyName`、写入前的 `check`（5.2）。换算和回滚见 5.9。
+- `src/storage/legacy.mjs`：加同步的 `migrateLegacySettings`，App 和命令行两个入口都在第一次读设置前调（5.9）。
 
 **渲染层**
 
 - `src/renderer/shared/i18n.mjs:34-35` 的 `keycapOf(id)`：改成按组合格式化，4 个调用方（悬浮条、首页、历史页、引导页）跟着改。
 - `src/renderer/bar/bar.mjs:148-153` 的 `INPUT_EVENTS`：按绑定分发。
 - `src/renderer/bar/bar-view.mjs:44-62`：提示里的 `{key}` 从一个键帽变成一组键帽；`{esc}` 改成"取消"动作当前绑定的键帽。
-- `src/renderer/hub/settings.mjs` 和 `hub.html` 的热键下拉框：换成录键控件。`docs/desktop-ui-spec.md:63` 写着"下拉框用于快捷键"，要补一条录键控件的规范。
+- `src/renderer/hub/settings.mjs` 和 `hub.html` 的热键下拉框：换成按动作目录逐行画的录键控件（5.2）。`docs/desktop-ui-spec.md:63` 写着"下拉框用于快捷键"，要补一条录键控件的规范。
 - 引导页"测快捷键"一步（`src/renderer/onboarding/onboarding.mjs`、`onboarding.html:133-152`）：大键帽可能要画两颗；测试仍走真实的匹配路径，"换个键"改成录键（5.6）。
 
 **命令行**
 
-- `src/cli/commands/config.mjs:164-179` 的 `set`、`unset`：`hotkey` 这一项改走 5.2 的写入函数，`unset` 两处一起清。
-- `src/cli/commands/config.mjs:80-96` 的 `LIVE` 表：换键以后只要重发 `bind`，不必重启后台，可以把 `hotkey` 加进当场生效的几项（控制通道加一条 `reload-hotkeys` 之类的命令；旧后台不认时照 `applyLive` 现有的退路处理）。
-- `src/cli/render/status.mjs:81-83`、`92-103`：用格式化函数；`pendingSettings` 的比较要能吃旧 id 和组合两种写法，否则会误报"设置改了还没生效"。
-- `src/cli/render/settings.mjs:29-45`：可选值清单不再适用；值的显示宽度按字符串算，`hotkey` 的值保持字符串（5.2）。
-- `cli.config.hintSet/hintUnset` 的示例：`hintSet` 现在在 Windows 上写的是非法值 `fn`（`zh-CN.mjs:1157`，`en.mjs:1215`），新格式下一并改掉；`hintUnset`（`zh-CN.mjs:1158`，`en.mjs:1216`）教的 `config unset hotkey` 要能把 `hotkeys.dictate` 一起清掉。
+- `src/cli/commands/config.mjs:164-179` 的 `set`、`unset`：不用改，`hotkey.<动作>` 是普通设置项；旧名字 `hotkey` 由框架的 `legacyName` 认。
+- `src/cli/commands/config.mjs:80-96` 的 `LIVE` 表：按动作目录给每个 `hotkey.<动作>` 加一项，命令是 `reload-hotkeys`。换键只要重发 `bind`，不必重启后台；旧后台不认这条命令时照 `applyLive` 现有的退路处理。
+- `src/cli/render/status.mjs:81-83`、`92-103`：`hotkeyTitle` 换成格式化函数；`pendingSettings` 不用改，它本来就按设置名逐项比。
+- `src/cli/render/settings.mjs:29-45`：说明优先用设置项自带的 `describe`；热键项不列可选值，改成提示"任意组合，见 README"。
+- `cli.config.hintSet/hintUnset` 的示例：`hintSet` 现在在 Windows 上写的是非法值 `fn`（`zh-CN.mjs:1157`，`en.mjs:1215`），新格式下一并改掉；`hintUnset`（`zh-CN.mjs:1158`，`en.mjs:1216`）教的 `config unset hotkey` 换成 `config unset hotkey.dictate`。
 
 **文案与文档**
 
-- 文案：`hotkeys.<id>.*` 改成 `keys.<code>.keycap/name`；新增录键控件、冲突、保留键的提示。
+- 文案：`hotkeys.<id>.*` 改成 `keys.<code>.keycap/name`；新增每个动作的名字 `actions.<动作>.name`、热键设置项共用的说明（5.2），以及录键控件、冲突、保留键的提示。
 - 带热键参数的句子，参数从一个键帽变成一组：`bar.recording/recordingNoEsc` 的 `{key}`（`zh-CN.mjs:284-285`，`en.mjs:294-295`）、`bar.helperStopped` 的 `{hotkey}`（`zh-CN.mjs:292`，`en.mjs:302`）、`tray.ready`（`zh-CN.mjs:296`，`en.mjs:306`）、`history.empty`（`zh-CN.mjs:582`，`en.mjs:596`）、`onboarding.try.placeholder`（`zh-CN.mjs:878`，`en.mjs:910`）、`cli.status.ready`（`zh-CN.mjs:1303`，`en.mjs:1374`）。不带参数但要改说法的：`settings.describe.hotkey`（`zh-CN.mjs:87`）、`onboarding.hotkey.no/switchTo`（`zh-CN.mjs:868-869`）。
 - 文档：`docs/implementation-notes.md:9-11`（"用法上照着原版的地方"）和 `:278`；`docs/development.md:82, 114`；`docs/desktop-ui-spec.md:63`。
 - README（中英同号）：`:100`、`:102` 用法；`:133` 引导页截图；`:426` 设置表；`:442` 可选值；`:449` 环境变量；`:472` 权限说明。
@@ -257,7 +263,7 @@ settings.json {"hotkey":"right_option"} 或 SPEAKMORE_HOTKEY
 6. **Windows 掩码只对右 Alt 生效**（`keys.go:98`）。
 7. **自动重复**：Windows 只对热键滤了重复（`keys.go:92-95`）；mac 普通键要看 `keyboardEventAutorepeat`（截取 tap 已用到，`main.swift:231` 附近）。
 8. **fn 标志位**：方向键等事件也带 fn 位，所以现在先比键码（`main.swift:129`）。允许"fn + 别的键"时，不能用这个标志位判断 fn 按着没有。
-9. **设置跨系统**：Mac 和 Windows 的旧 id 不重叠，Mac 的 `settings.json` 拿到 Windows 上 `parse` 会抛错，App 起不来（`settings.mjs:86`）。目录可以整体搬家（issue #10），新格式最好跨平台通用。是否真有跨系统搬目录的用户，未验证。
+9. **设置跨系统**：Mac 和 Windows 的旧 id 不重叠，Mac 的 `settings.json` 拿到 Windows 上 `parse` 会抛错，App 起不来（`settings.mjs:86`）。目录可以整体搬家（issue #10），新格式最好跨平台通用。是否真有跨系统搬目录的用户，未验证。新方案的写法两个系统通用，本系统绑不了的组合在下发前退回默认并提示，App 照样起得来（5.2）。
 10. **和原版的细小差异**：我们的 `LONG_HOLD` 不看阶段，STARTING 阶段按满 600 ms 也会取消（`machine.mjs:64-66`）；原版在麦克风初始化期间不接长按。这一条没有测试覆盖。与本次重构无关，记在附录 A。
 
 ### 3.5 钉住现有行为的测试
@@ -513,45 +519,55 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 ### 5.2 绑定与配置的形状
 
-设置文件只存用户改过的动作：
+**一个动作一项设置**
+
+动作目录（5.4）里每个动作生成一项设置，名字是 `hotkey.<动作>`，值是字符串。设置文件只存用户改过的：
 
 ```jsonc
 // settings.json
 {
-  "hotkey": "right_command",          // 旧写法：听写能用旧 id 表达时只写这里（见 5.9）
-  "hotkeys": {
-    "pasteLast": ["AltRight+KeyV"]    // 以后新增的动作；一个动作是组合数组
-  }
+  "hotkey.dictate": "ControlRight+Space",   // 听写换成了组合
+  "hotkey.cancel": "F13"                    // 取消换成了 F13；没写的动作用默认值
 }
 ```
 
-```jsonc
-// 听写换成旧写法表达不了的组合时
-{
-  "hotkeys": {
-    "dictate": ["ControlRight+Space"],
-    "pasteLast": []                   // 空数组 = 用户关掉了；没写 = 用默认值
-  }
-}
-```
+- 一个组合写成 `"ControlRight+Space"`，手改设置、写环境变量、看日志都直观。一个动作绑几个组合时用逗号隔开，例如 `"AltRight, F13"`（D4）。`"none"` 表示关掉，只有允许清空的动作能写。code 名里不会出现 `+` 和 `,`，不需要 Typeless 那种特殊处理。
+- 规范化：读入时把组合里的键按显示顺序排好（5.7），去重；比较、查重都用规范化后的集合。存下来的、后台报的、日志里写的都是规范化后的写法。
+- 旧写法只在入口认（5.9）：值是 `right_option` 这类旧 id 时，当成它对应的组合（`AltRight`）；存下来的仍是新写法。
 
-- 一个组合写成字符串 `"ControlRight+Space"`，手改设置、写环境变量、看日志都直观。code 名里不会出现 `+`，不需要 Typeless 那种特殊处理。
-- 规范化：读入时把组合里的键按显示顺序排好（见 5.7），去重；比较、查重都用规范化后的集合。
-**怎么接进现有的设置框架**
+**为什么一个动作一项、值是字符串**
 
-现有框架一项一项各管各的：`resolveSettings` 逐项从 `stored[name]` 取值、出错就抛（`src/storage/settings.mjs:306-324`），`saveSetting`、`unsetSetting` 只写、只删 `[name]` 这一个键（`:327-339`），`patchSettings` 同理（`:347-354`）。`json: true` 也不是"文件里存对象"的先例：`customParams` 写进文件的仍是 JSON 字符串（`:177` 的注释"设置都存成字符串"，`formatCustomParams` 返回字符串，`src/server/chat/vendors.mjs:218`），`json: true` 只保证读的时候也认对象（`parseValue`，`:258-262`）。听写的组合要跨 `hotkey`、`hotkeys` 两个键读写，还要"出错时降级而不是退出"，框架现有的写法装不下。
+现有框架一项一项各管各的：`resolveSettings` 逐项从 `stored[name]` 取值、出错就抛（`src/storage/settings.mjs:305-323`），`saveSetting`、`unsetSetting` 只写、只删 `[name]` 这一个键（`:327-339`），`patchSettings` 同理（`:347-354`）；设置都存成字符串（`:177` 的注释）。一个动作一项，正好落在这套规矩里：环境变量、`config set/unset`、`config` 列表、来源（环境变量、文件、默认）、`pendingSettings` 的"设置改了还没生效"都按名字循环，全部现成，不为热键开特例。存成一个 `hotkeys` 对象的话，上面四个函数都得认嵌套路径，第二版为此给热键开了三个专用钩子，这一版不要了。
 
-做法：
+**框架补的三样，都是通用的**
 
-- 第一版只有听写可改，`SETTINGS` 里仍然只有 `hotkey` 这一项，它的值是听写组合的字符串（规范化后的，例如 `"AltRight"`、`"ControlRight+Space"`）。`hotkeys` 不是独立的设置项，只是 `hotkey` 在文件里的另一处存放。这样 `renderConfig`（`src/cli/render/settings.mjs:29-45`）、`pendingSettings`、`status --json` 拿到的都还是一个字符串，显示宽度照旧按字符串算；`choices` 去掉，`config` 列表里这一项不再列可选值，改成提示"任意组合，见 README"。以后有第二个可改的动作时，再把 `hotkeys` 升格成设置项（D7）。
-- 新建 `src/hotkeys/settings.mjs`，放听写这一项的全部读写规则。框架给设置项加三个可选钩子，只有 `hotkey` 用：
-  - `fromFile(stored)`：从整个文件对象读出值，按 5.9 的规则看 `hotkey` 和 `hotkeys.dictate`。坏值不抛，返回 `{ value: 默认值, problem }`。
-  - `toFile(stored, value)`：返回写入后的整个文件对象，按 5.9 只写一处、删另一处。
-  - `clear(stored)`：返回两处都删掉的文件对象。
-  `resolveSettings`、`saveSetting`、`unsetSetting`、`patchSettings` 遇到有钩子的项就调钩子，没有的照旧。
-- 解析拆成两个函数：`parseDictateInput(text)` 收用户输入，旧 id 和组合写法都认，给命令行、环境变量、设置页、引导页用；`readStoredHotkey(value)` 只认旧 id，校验文件里的 `hotkey`。所有写入（`config set hotkey`、设置页、引导页）都走同一个 `writeDictateBinding()`，也就是上面的 `toFile`；`config unset hotkey` 走 `clear`，两处一起清。3.3 里说的"5.2 的写入函数"就是它。
-- 坏值降级：只有结构坏了（不是对象、不是 JSON）才按现有规则报错。单个组合不合法（未知 code、本系统不可绑、超过两键、被禁止）时丢掉、记一条 warn 日志，听写退回默认值，并把 `problem` 放进 `summarizeSetup` 的"还差什么"（`src/app/setup-state.mjs`），首页、命令行 `status` 照现有的路子显示。这样 Mac 的配置拿到 Windows 上也起得来（3.4 第 9 条）。
-- 环境变量：`SPEAKMORE_HOTKEY` 继续认，含义是"本次运行的听写组合"，旧 id 和新组合写法都收，走 `parseDictateInput`；写坏了照现有规则报错退出，因为这是用户这一次手动给的。多动作时再加 `SPEAKMORE_HOTKEYS`（写 JSON）。环境变量常写在 shell 配置或 launchd 里，不只管一次运行：`SPEAKMORE_HOTKEY` 里写了新组合时，退回旧版会起不来（旧版 `parse` 不认就退出，`src/app/main.mjs:136-145`），退回前要先删掉，见 5.9。
+- `describe`：设置项可以自带说明。生成的热键项共用一句"「{动作}」的快捷键"，动作名取文案里的 `actions.<动作>.name`；没有自带说明的照旧查 `settings.describe.<名字>`（`src/cli/render/settings.mjs:34`）。
+- `legacyName`：改名之前叫什么，命令行 `config set/unset` 照样认。和现有的 `legacyEnv`（`src/storage/settings.mjs:73`）同一个意思，只在入口生效，写进文件的总是新名字。听写这一项写 `legacyName: "hotkey"`、`legacyEnv: "SPEAKMORE_HOTKEY"`。
+- `check(value, settings)`：写入前看这一项和别的项合不合。`saveSetting`、`patchSettings` 调它，读文件时不调。热键项用它查本系统能不能绑、是不是系统保留组合、和别的动作冲不冲突（5.5）。
+
+`src/hotkeys/` 不反过来引用 `src/storage/settings.mjs`：`check` 拿到的是调用方传进来的整份设置，依赖只有"设置框架 → 热键模块"一个方向。
+
+**三道校验，各管各的**
+
+| 在哪 | 查什么 | 不通过时 |
+| --- | --- | --- |
+| `parse`：读文件、环境变量、命令行、界面，所有入口 | 写法：认得的 code 名、两键以内、5.3 的形状规则；旧 id 换算 | 照现有规矩报错 |
+| `check`：`config set`、设置页、引导页写入前 | 本系统能不能绑、系统保留组合、和别的动作冲突；警告 | 不让存，说明原因；只有警告时照存 |
+| 下发 `bind` 前：`src/hotkeys/bindings.mjs` | 和 `check` 同一套规则，对全部动作一起查 | 那个组合不装，记 warn 日志，放进 `summarizeSetup` 的"还差什么"（`src/app/setup-state.mjs`），首页、命令行 `status` 照现有的路子显示；必须有键的动作（听写、取消）一个都装不上时退回默认组合 |
+
+最后一道兜住手改文件、环境变量和跨系统搬家：Mac 的设置拿到 Windows 上，`Fn` 写法没错、`parse` 通过，下发前发现 Windows 绑不了，听写退回右 Alt 并提示，App 照样起得来（3.4 第 9 条）。小帮手的 `bound` 回执（5.8，比如没有辅助功能权限）也走这条提示路径。
+
+**环境变量**
+
+每个动作一个，按名字生成：`SPEAKMORE_HOTKEY_DICTATE`、`SPEAKMORE_HOTKEY_CANCEL`，含义是"本次运行用这个"，写法同设置文件。听写另认旧的 `SPEAKMORE_HOTKEY`（`legacyEnv`），旧 id 和新写法都收。写坏了照现有规则报错退出，因为这是用户这一次手动给的。
+
+**界面和命令行都按目录生成**
+
+- 设置页的快捷键区按动作目录逐行画：动作名、录键控件、"恢复默认"，可清空的动作再给"关掉"。数据由主进程一次给齐：每个动作的当前组合、默认组合、能否清空、有什么问题。
+- `config` 列表里每个动作一行 `hotkey.<动作>`，值是组合写法，不列可选值，提示"任意组合，见 README"。
+- 命令行改键：`speakmore config set hotkey.<动作> <组合>`、`config unset hotkey.<动作>`（D7）。`config set hotkey <组合>` 照旧能用，等于改听写。
+- 当场生效：`LIVE` 表（`src/cli/commands/config.mjs:80-96`）按目录给每个 `hotkey.<动作>` 加一项；控制通道加一条 `reload-hotkeys`，后台重读设置、重发 `bind`、推新键帽，不重启。旧后台不认这条命令时照 `applyLive` 现有的退路处理。
+- 状态：后台报的状态里每个动作一项 `hotkey.<动作>`，和设置同名，`pendingSettings`（`src/cli/render/status.mjs:92-103`）照旧按名字比。旧的 `hotkey`、`hotkeyLabel` 怎么处理见 D13。
 
 ### 5.3 组合的语义（两键以内）
 
@@ -597,7 +613,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | 前缀绑定改成松开时触发，且中间没按过别的键 | VoiceInk 的 Toggle 模式 | 失去"按下就开始录"藏起来的麦克风初始化时间，600 ms 长按规则也失去意义 |
 | 按下后等一小段时间看有没有第二个键 | Alfred（等修饰键松开） | 每次都多一段延迟 |
 
-建议沿用第一种。它和 Typeless 一致，也和我们已经验收过的"按下即开始"一致。还有一个副作用要写进文档：说话进行中按带前缀的长组合，前缀那一下会先被当成"再按一下"，直接结束这次听写。保存时对前缀关系给警告，文案参考 Wispr："Your Hands-free mode shortcut is a part of a Push-to-talk shortcut. This may lead to conflicts."（https://docs.wisprflow.ai/articles/2612050838-supported-unsupported-keyboard-hotkey-shortcuts ）。第一版只有听写一个可改的动作，前缀问题要到第二个动作出现时才真正出现，但匹配器从一开始就支持升级，代价很小。
+建议沿用第一种。它和 Typeless 一致，也和我们已经验收过的"按下即开始"一致。还有一个副作用要写进文档：说话进行中按带前缀的长组合，前缀那一下会先被当成"再按一下"，直接结束这次听写。保存时对前缀关系给警告，文案参考 Wispr："Your Hands-free mode shortcut is a part of a Push-to-talk shortcut. This may lead to conflicts."（https://docs.wisprflow.ai/articles/2612050838-supported-unsupported-keyboard-hotkey-shortcuts ）。第一版的两个动作之间不会有前缀关系："取消"是单键，别的动作的组合按 5.5 不能含它的键。前缀问题要到第三个动作出现时才真正出现，但匹配器从一开始就支持升级，代价很小。
 
 **点按、按住与 600 ms**
 
@@ -612,23 +628,29 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - `when: capturing` 的绑定**不按集合精确匹配**，只看它自己那个键的按下：截取期间 Escape 一按下，不管还按着别的什么，一律吞掉并报取消。这就是现在的语义（截取期间任何 esc 按下都取消，`main.swift:229-240`），现有测试照旧成立，包括"热键还按着（STARTING）时按 esc 也取消，而且 esc 被吞"（`native/windows/keys_test.go:110` 的 `TestEscapeWhileHotkeyHeldAndCapturingIsNotAnOtherKey`）。
 - 为什么不也按精确匹配：那样集合是 `{AltRight, Escape}`，取消绑定匹配不上，esc 不吞，会漏给前台应用、顺手关掉它的对话框；截取 esc 本来就是为了防这个（`main.swift:171-174`）。集合里有残留的键时也一样会漏。
 - 截取期间按 esc 时听写绑定还按着：只报取消，不对听写报 `interrupted`，被吞的 esc 也不进按住集合。这正是上面那条测试名字里的"IsNotAnOtherKey"。
-- 第一版 esc 不开放给别的动作，"取消"本身也先不开放改键。
+- 单个 `Escape` 只能给只在截取中生效的动作（现在只有"取消"）。"取消"本身可以改键（5.4）；改了以后截取中按 esc 不再吞，照常送给前台应用。
 
 ### 5.4 动作目录
 
-代码里一张表，建议 `src/hotkeys/actions.mjs`：
+代码里一张表，`src/hotkeys/actions.mjs`。这是"有哪些动作"唯一的出处：设置项、环境变量、命令行、设置页、状态、下发给小帮手的绑定表，都从它生成。
 
 | 字段 | 听写 `dictate` | 取消 `cancel` |
 | --- | --- | --- |
 | 默认组合 | Mac `AltRight`；Windows `AltRight` | `Escape` |
-| 生效场景 | 任何时候 | 只在截取中 |
+| 生效场景 `when` | 任何时候（`always`） | 只在截取中（`capturing`） |
 | 能否清空 | 不能（Typeless 的 `disabledClearShortcut` 同义） | 不能 |
-| 可否改键 | 能 | 第一版不能 |
 | 长按阈值 | 600 ms，超过即取消 | 无 |
-| 处理者 | 悬浮条状态机 | 悬浮条状态机（`USER_CANCEL`） |
+| 处理者 `handler` | 悬浮条的录音会话（`session`） | 悬浮条的取消（`cancel`） |
 
-- 小帮手里的绑定 id 写作"动作#序号"，如 `dictate#0`，原样报回，主进程按动作分发。
-- 以后加动作只加一行：默认组合（多半留空，D10）、场景、处理者。
+- 两个动作第一版都能改键，设置页两行都画。"取消"只按自己那一个键认（5.3），所以只能绑单个非修饰键。
+- 小帮手里的绑定 id 写作"动作#序号"，如 `dictate#0`，原样报回。主进程按动作目录里的处理者分发：
+  - `session`：按下、松开、被打断分别变成 `KEY_DOWN`、`KEY_UP`、`OTHER_KEY` 送给悬浮条，事件带着动作 id；会话开始时记下是哪个动作开的，写进日志。以后的"翻译"如果也是"录音、转写、再处理"，就是又一个 `session` 动作，按动作 id 选处理链；选处理链是做那个功能时的事，这次不做。
+  - `cancel`：变成 `USER_CANCEL`。
+  - 以后要在主进程里执行的动作（例如"粘贴上一条"）再加一种处理者。有了真实的第三种用法再加，现在不预留。
+- **加一个动作只改三处**：目录里加一行（默认组合多半留空，D10）；两份文案里加动作名 `actions.<动作>.name`；写这个动作本身的处理代码。小帮手、设置格式、命令行、设置页、状态都不用动。
+- **机器查得出来**：
+  - 测试按目录逐个动作查：有对应的设置项和环境变量，两份文案里有名字，`config` 列表、设置页拿到的数据、`LIVE` 表、后台报的状态、绑定表里都有它。目录里加了一行而漏了哪一处，这条测试就红。
+  - 测试扫一遍 `src/` 和 `native/`：旧 id（`right_option` 等六个）只许出现在 `src/hotkeys/legacy.mjs`；小帮手源码里不出现动作名。
 - 会模拟按键的动作（例如"粘贴上一条"），要等组合里的修饰键都松开后再执行，或者发 ⌘V / Ctrl+V 前确认用户没按着修饰键。否则 Windows 上用户还按着 Alt 时发出的 Ctrl+V 会变成 Ctrl+Alt+V。依据是 `SendInput` "does not reset the keyboard's current state"（about-keyboard-input 页）和 Alfred 的做法（https://www.alfredapp.com/help/workflows/triggers/hotkey/ ）；实际会不会混进去，两个系统都未验证。听写的贴字发生在出结果之后，不受影响。
 
 ### 5.5 冲突检测与禁用键
@@ -639,12 +661,13 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 - 5.3 表里标"禁止"的形状；超过两个键；同一个键出现两次（手改设置可能写出来）。
 - 本系统不可绑的键：Windows 上的 `Fn`；两个系统上的 CapsLock、NumLock、ScrollLock、Pause、媒体键；表外的键；Windows 上 0x07、0xE8、0xFF 等内部占用码对应的键。
-- esc（"取消"动作除外）。
+- 单个 `Escape`，除非这个动作只在截取中生效（现在只有"取消"）。
+- 只在截取中生效的动作只按自己那一个键认（5.3），所以别的动作的组合里不能含它的键：取消绑了 `F13`，听写就不能绑 `ControlRight+F13`，否则说话时按这个组合只会取消。
 - 系统保留组合，按系统分别建表、按 code 写、左右都列：
   - macOS：⌘ + `Space`、`Tab`、常用编辑键（C V X Z A S W Q N O P F H M T 和逗号）；`Control` + `Space`（切换输入法，对中文用户尤其要紧）；⌃ + F1–F5；⌘ + `Backspace`（来源：Apple HIG https://developer.apple.com/design/human-interface-guidelines/keyboards ，以及 Wispr 文档）。另外用 `CopySymbolicHotKeys()` 动态查启用的系统快捷键。
   - Windows：Alt+Tab、Alt+F4、Alt+Space、Ctrl + 常用编辑键、Win + 字母数字 Tab 方向键、Win+Space、Ctrl+Alt+Del、Win+L、`Shift + Space`（微软拼音全角半角）。另外对"修饰键 + 普通键"用 `RegisterHotKey` 试登记一次。
 - Mac 上 `Fn` + 方向键、删除、回车。
-- 和自家另一个绑定的规范化集合相同：拒绝，并写明"已被「某动作」占用"。场景不重叠的绑定（"取消"只在截取中）不算冲突。
+- 和自家另一个动作的绑定规范化后相同：拒绝，并写明"已被「某动作」占用"。"任何时候"和别的场景都算重叠，所以现在任意两个动作都不能同键；以后有了互不重叠的场景，才按场景放开。
 
 **警告（允许保存）**
 
@@ -697,6 +720,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - **左右**（D6）：修饰键一律标左右，单按和组合都标，沿用现有写法"右⌥""右 Alt"，左侧写"左⌥""左 Alt"。理由是只认指定的那一侧（D12）：`ControlLeft+Space` 要是显示成"⌃Space"，用户按右 Ctrl 不触发，会以为坏了。
 - **普通键的字**：第一版用美式名字（`KeyQ` 显示 Q、`Space` 显示"空格"或 Space）。两键组合里的普通键多是 Space、F 键这类不随布局变的键，影响很小。以后要按布局显示，有两条路：渲染进程的 `navigator.keyboard.getLayoutMap()`（在 Electron 的 `file://` 页面能否用、中文输入法下返回什么，都未验证；https://developer.mozilla.org/en-US/docs/Web/API/Keyboard/getLayoutMap ），或者小帮手按 4.1、4.2 的接口翻译后报上来。
 - **Fn**：键帽沿用"fn"，名字沿用"地球仪（fn）键"/"Globe (fn)"。
+- **老键逐字不变**：六个旧 id 对应的单键，键帽和名字要和现在 `hotkeys.<id>.keycap/name`（`zh-CN.mjs:55-62`、`en.mjs:56-63`）的文字一字不差，比如"右⌥""右 Option 键""右 Alt"。测试把这六组钉住，老用户在悬浮条、首页、菜单栏上看到的和升级前一样（5.9）。
 - **文案键**：`keys.<code>.keycap` 和 `keys.<code>.name`，Windows 的写法放在各语言文案的 `windows` 一节（`src/i18n/index.mjs:139-146` 已有按系统覆盖的机制）。
 - **悬浮条提示**：`{key}` 从一个键帽片段变成一组键帽；`{esc}` 改成"取消"动作当前绑定的键帽，不再写死。两键时提示变长，要在真窗口里看最窄的情况。
 - **格式化函数只有一个**，放在 `src/hotkeys/`。悬浮条、首页、历史页、引导页、菜单栏、命令行都调它，各处不再自己拼。
@@ -756,9 +780,11 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 为什么不把全部按键流给 JS 匹配：吞不吞必须在回调里当场决定，Windows 钩子超时会被静默卸掉，跨进程问 JS 来不及；而且小帮手的输出会变成键盘记录器，Typeless 正是这样，还把按键广播给四个窗口。原生层匹配的代价是逻辑在 Swift 和 Go 各写一遍，用共用样例约束（第 6 节）。
 
-### 5.9 从单个修饰键迁移，以及回滚
+### 5.9 老用户无感：旧设置的换算、回滚、对外接口
 
-**旧 id 对照**
+目标：升级以后老用户什么都不用做，热键还是原来那个，用法、提示、权限都和以前一样；能感觉到的变化只有"热键能自己录、能组合了"。内部不留兼容层：存的、后台报的、显示的一律是新写法，旧写法只在入口认，认了就换成新写法。
+
+**旧 id 对照**（`src/hotkeys/legacy.mjs`，全仓只此一处）
 
 | 旧 id | 系统 | 新组合 |
 | --- | --- | --- |
@@ -769,46 +795,46 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | `right_alt` | Windows | `AltRight` |
 | `right_ctrl` | Windows | `ControlRight` |
 
-**读取**
+**老用户会碰到的地方**
 
-1. 文件里同时有 `hotkey` 和 `hotkeys.dictate`：以 `hotkey` 为准（理由见下）。
-2. 只有 `hotkeys.dictate`：用它。
-3. 只有 `hotkey`：按上表换算。本系统认不出的旧 id（例如 Mac 的配置搬到了 Windows）退回默认值并提示，不再让 App 起不来。
-4. 都没有：用默认值。
+| 地方 | 现在 | 升级以后 |
+| --- | --- | --- |
+| 设置文件里的 `"hotkey": "right_command"` | 听写用右 ⌘ | 第一次启动时换成 `"hotkey.dictate": "MetaRight"`，删掉 `hotkey`；热键不变 |
+| 用默认键的人（文件里没有 `hotkey`） | 右 Option / 右 Alt | 不变，文件不动 |
+| 环境变量 `SPEAKMORE_HOTKEY=right_command` | 本次运行用右 ⌘ | 照旧（`legacyEnv`，值按对照表换算） |
+| `speakmore config set hotkey right_command`、`config unset hotkey` | 改、清听写 | 照旧（`legacyName`）；回话里写的是新名字和新写法 |
+| 键帽和名字 | "右⌥""右 Option 键""fn""右 Alt" | 六个旧键逐字相同，测试钉住（5.7） |
+| 用法 | 按一下开始、再按一下结束；按住 600 ms 取消；按着时来了别的键悄悄取消；esc 取消 | 不变，3.5 列的现有测试照旧通过 |
+| 权限 | 输入监控；贴字用的辅助功能 | 不多要。单个修饰键的绑定不吞键、不用 Carbon；只有用户自己绑了带普通键的组合才用到吞键，那要的辅助功能贴字本来就有 |
+| 换键 | 设置页下拉框；换完重启小帮手 | 录键控件，不重启。这是新功能本身 |
+| `status --json` 的 `status.hotkey`、`status.hotkeyLabel`、`settings.hotkey` | 旧 id 和它的名字 | 见 D13 |
 
-**写入：听写这一项只写在一处**
+**换算放在哪、什么时候跑**
 
-- 新组合能用旧 id 表达（单个修饰键，且在本系统的旧清单里）：写 `hotkey`，删掉 `hotkeys.dictate`。
-- 表达不了：写 `hotkeys.dictate`，删掉 `hotkey`。
-- 是默认值：两处都不写。
-- 所有写入口都走 `writeDictateBinding()`（5.2）：设置页、引导页、`config set hotkey`。`config unset hotkey` 两处一起清。命令行和环境变量收组合写法用的是 `parseDictateInput`，校验文件里的 `hotkey` 用的是只认旧 id 的 `readStoredHotkey`，两者分开，组合不会经命令行写进 `hotkey`。
-- 测试要钉住：`config set hotkey ControlRight+Space` 之后文件里只有 `hotkeys.dictate`，并且用旧版的 `parse` 读这个文件不报错；`config unset hotkey` 之后两处都没了。现有测试钉了文件写成 `{hotkey: …}`（`test/cli/main.test.mjs:733-734`、`1201-1202`），旧 id 的情况照旧成立。
+- 换算是一个同步函数 `migrateLegacySettings(file)`，放在 `src/storage/legacy.mjs`（0.1 版的数据搬家也在这里），对照表从 `src/hotkeys/legacy.mjs` 取。
+- 必须在第一次读设置之前跑：
+  - 命令行：`migrateLegacyData` 在命令执行前（`src/cli/main.mjs:310`），之前只有 `cliLocale` 读过一次语言（`:213`），不受影响，换算接在那里。注意 `migrateLegacyData` 没有 0.1 旧目录时直接返回（`src/storage/legacy.mjs:76`），换算要放在返回之前，或者单独调。
+  - App：顶层在 `src/app/main.mjs:137` 就读了设置，`migrateLegacyData` 要到 `:370` 才跑。换算放在 `:137` 之前，否则直接双击打开、开机自启的那一次用的是默认键。
+  - 测试钉住："只有旧 `hotkey` 的设置文件，直接起 App、直接跑 `status`，听写都是原来的键"。
+- 规则：文件里有 `hotkey` 就按对照表换成 `hotkey.dictate`（已有 `hotkey.dictate` 也覆盖），删掉 `hotkey`，记一条 info 日志 `settings_migrated`。新版从不写 `hotkey`，所以文件里出现它只有两种可能：还没换过，或者退回旧版后在旧版里改过。两种都该以它为准。
+- 幂等：再跑一遍什么都不变；App 和命令行先后各跑一次，结果相同。本系统认不出的旧 id（Mac 的 `fn` 到了 Windows 上）照样写成 `Fn`，由下发前那道校验退回默认并提示（5.2）。
+- 写不进去（比如文件只读）时照 `migrateLegacyData` 现有的路子报错，不静默。
 
 **回滚路径**（AGENTS.md 红线 6）
 
-- 旧版只认 `hotkey`，且对它做固定清单校验，不认就退出（`settings.mjs:81-90`）。上面的写法保证 `hotkey` 里永远只有旧版认得的值，所以退回旧版一定能起来：听写是旧键时照常可用；是新组合时旧版用默认键。
-- 旧版保存设置时保留文件里别的键（`settings.mjs:330` 的 `{ ...readFile(file), … }`），所以 `hotkeys` 不会被旧版弄丢。
-- 退回旧版后又在旧版里改了热键，文件里会同时出现 `hotkey` 和 `hotkeys.dictate`。新版自己从不同时写两处，所以两处都有就说明 `hotkey` 是后写的，读取时以它为准。
-- 这比分路笔记 05 的"能表达时把 `hotkey` 也一并写回"多一步判断，换来的是能分清两处谁新谁旧。按项目记忆，现在只有主人一个用户，不需要版本号字段。
-- 环境变量是例外：`SPEAKMORE_HOTKEY` 里写了新组合时，旧版起不来（5.2）。
+- 旧版只认 `hotkey`，读不到就用默认值：`resolveSettings` 只遍历自己的 `SETTINGS`（`src/storage/settings.mjs:305-323`），不认识的 `hotkey.*` 不读也不报错；保存设置时保留文件里别的键（`:330` 的 `{ ...readFile(file), … }`）。所以退回旧版一定能起来，热键是默认键；`hotkey.*` 留在文件里，再升回新版照旧生效。
+- 退回后在旧版里又改了热键：旧版写的是 `hotkey`，再升级时按上面的规则以它为准。
+- 环境变量是例外：`SPEAKMORE_HOTKEY` 里写了新组合时，旧版起不来（旧版 `parse` 不认就退出，`src/app/main.mjs:136-145`），退回前要先删掉。
 
 **退回旧版的步骤**
 
 现在只往前升级，没有"降级"命令。要退回时：
 
-1. 先删掉 shell 配置、launchd 里的 `SPEAKMORE_HOTKEY`（如果写的是新组合）。
+1. 先删掉 shell 配置、launchd 里写了新组合的 `SPEAKMORE_HOTKEY`。
 2. 从发布地址下载要退回的那个版本的安装包，照 README 的安装步骤装上；发过的版本不覆盖，历史版本都还在（项目记忆 `speakmore-release-on-cos`）。
-3. 设置文件不用动。旧版读得到 `hotkey` 就用它，读不到就用默认键；`hotkeys` 留在文件里，再升回新版时照旧生效。
+3. 设置文件不用动。热键回到默认键，要用原来的键就在旧版里再选一次。
 
-**跨版本的状态接口**（AGENTS.md 红线 6：对外 API 走弃用周期）
-
-- `status --json` 是 README 写明给程序读的公开输出（`README.md:347`、`386`）。`status.hotkey` 不改格式：听写能写成旧 id 时继续给旧 id；写不成时给 `null`。组合放进新字段 `dictateCombo`（总是有，值是组合字符串），`hotkeyLabel` 照旧给本地化的显示文字。
-- 不这样做会出两个问题：旧命令行的 `pendingSettings` 用旧 `parse` 解析后台报的 `hotkey`（`src/cli/render/status.mjs:92-103`），拿到 `"AltRight"` 会抛错，于是对每个用户（包括用默认键的）都报"设置改了还没生效"；外部读 `status --json` 的程序拿到的格式也变了。
-- 新命令行比较时优先看 `dictateCombo`，没有就退回 `hotkey`（连着旧后台的情况）。`hotkeyTitle`（`status.mjs:81-83`）照旧，认不出时用 `hotkeyLabel`。
-- README 的 JSON 输出说明里写上 `dictateCombo`。测试补"旧 id 和组合两种情况下 `status.hotkey`、`dictateCombo` 的值"（现在钉的是 `test/cli/main.test.mjs:780` 的 `settings.hotkey.value`）。
-- 等第二个可改的动作出现、`hotkeys` 升格成设置项时，再按同样的办法加字段，`hotkey` 一直保留。
-
-**对外文字**：`README.md:442, 449, 472` 及英文版（同号）；`website/scripts/screenshots.mjs:112, 140, 164, 287` 里模拟的 `app:info`、`setup.hotkey`、`config:get` 和悬浮条提示。
+**对外文字**：README 的设置表（`README.md:426`）改成每个动作一行；`:442, 449, 472` 及英文版（同号）；JSON 输出说明按 D13 写；`website/scripts/screenshots.mjs:112, 140, 164, 287` 里模拟的 `app:info`、`setup.hotkey`、`config:get` 和悬浮条提示。
 
 ### 5.10 用不用库：四看
 
@@ -827,23 +853,23 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 ## 6. 分步实施建议
 
-在 feature 分支上做，一个逻辑单元一个提交。每一步结束时 App 都能正常用。
+在 feature 分支上做，一个逻辑单元一个提交。每一步结束时 App 都能正常用，中途不写过后要删的过渡代码。
 
 | 步 | 内容 | 怎么验 |
 | --- | --- | --- |
 | 0 | **先修基线隐患**：Windows 钩子回调里的 `emit`、`onUIThread` 改成非阻塞发送，丢弃时计数并在消息循环里补报 error | Go 单测灌满 channel，回调不阻塞；先写测试、看它红 |
-| 1 | `src/hotkeys/keys.mjs`（键表）和 `chord.mjs`（组合的解析、规范化、显示顺序、格式化） | `node --test`：解析正反例、规范化、两个系统的格式化期望表 |
-| 2 | `actions.mjs`（动作目录）和 `validate.mjs`（拒绝、警告、自家冲突、前缀） | 每条拒绝和警告各有正例和反例，数清条数 |
-| 3 | 设置：`src/hotkeys/settings.mjs`、框架的三个钩子、旧 `hotkey` 的读取与回写规则、`writeDictateBinding`、环境变量、坏值降级、`status` 的 `dictateCombo`。主进程暂时仍用旧 `--key`：听写能表达成旧 id 时照常起帮手；表达不了（环境变量或手改文件写了组合）时退回默认键，记一条 warn 日志，并在"还差什么"里提示"这个组合要等下一版才能用" | 迁移、回写、"两处都有以 `hotkey` 为准"、跨系统降级、表达不了时退回默认键各有用例；退回旧版的场景用旧版的 `parse` 跑一遍新写出的文件 |
-| 4 | 共用按键轨迹样例 `native/fixtures/hotkeys/*.json` 和生成脚本；Go 匹配器（替换 `keys.go` 的热键部分，`keyInput` 加扩展位），Go 测试接进 `npm test` 或单独脚本 | 样例覆盖第 6 节下方清单；`scripts/build/go.sh test ./...`；生成脚本跑完 `git diff` 为空 |
-| 5 | Swift：`native/main.swift` 拆成"纯逻辑 + 入口"多个文件，Swift 测试用 `swiftc` 直接编出来跑 | 同一套样例在 Swift 上全绿；`src/cli/native-helper.mjs` 的 `sourceContent` 现在只收 `go.mod` 和 `.go`（`:44-50`），要把 `.swift` 收进来，`swiftc` 也要传多个源文件（`:120-135`） |
-| 6 | 协议：`bind`、`bound`、`binding`、`interrupted`；删 `--key`；主进程按动作分发；`bar.mjs` 的事件映射；esc 并进绑定表 | `test/app/helper.test.mjs` 的假小帮手加新事件；Go `protocol_test.go`；主进程 code → 原生码的期望表；`e2e.mjs` 换新事件 |
+| 1 | `src/hotkeys/keys.mjs`（键表）、`chord.mjs`（组合的解析、规范化、显示顺序、格式化）、`legacy.mjs`（旧 id 对照） | `node --test`：解析正反例、规范化、两个系统的格式化期望表、六个旧 id 的换算 |
+| 2 | `actions.mjs`（动作目录）和 `validate.mjs`（拒绝、警告、自家冲突、前缀、截取中动作的键不许出现在别的组合里） | 每条拒绝和警告各有正例和反例，数清条数 |
+| 3 | 共用按键轨迹样例 `native/fixtures/hotkeys/*.json` 和生成脚本；Go 匹配器（替换 `keys.go` 的热键部分，`keyInput` 加扩展位），Go 测试接进 `npm test` 或单独脚本 | 样例覆盖下方清单；`scripts/build/go.sh test ./...`；生成脚本跑完 `git diff` 为空 |
+| 4 | Swift：`native/main.swift` 拆成"纯逻辑 + 入口"多个文件，Swift 测试用 `swiftc` 直接编出来跑 | 同一套样例在 Swift 上全绿；`src/cli/native-helper.mjs` 的 `sourceContent` 现在只收 `go.mod` 和 `.go`（`:44-50`），要把 `.swift` 收进来，`swiftc` 也要传多个源文件（`:120-135`） |
+| 5 | 协议：`bind`、`bound`、`binding`、`interrupted`；删 `--key`；主进程按动作目录的处理者分发，事件带动作 id；esc 并进绑定表。这一步设置还是旧的 `hotkey` 一项，主进程用 `legacy.mjs` 把它换成组合再下发：对照表本来就要留着做换算，不是临时代码 | `test/app/helper.test.mjs` 的假小帮手加新事件；Go `protocol_test.go`；主进程 code → 原生码的期望表；`e2e.mjs` 换新事件 |
+| 6 | 设置：按目录生成 `hotkey.<动作>`，删掉旧的 `hotkey` 项和 `settings.mjs` 里的键表；框架补 `describe`、`legacyName`、`check`；`migrateLegacySettings` 接到两个入口（App 那一处挪到 `main.mjs:137` 之前）；`bindings.mjs` 的下发前校验和降级；环境变量；`config`、`LIVE` 和 `reload-hotkeys`；后台状态和 D13；5.4 的两条按目录查的测试 | 换算、幂等、"旧版里改过以旧版为准"、跨系统降级、直接起 App 不丢键、旧环境变量和旧命令照样能用，各有用例；按目录查的测试先往目录里加一个假动作、看它红 |
 | 7 | macOS 吞键：吞键 tap 按需打开，两个 tap 共用匹配器并按事件去重；tap 挪到独立线程；单个 F 键走 Carbon；停用和锁屏时清状态；跳过自己合成的事件；安全输入检测、Carbon 顶替与提示 | 先跑 V1、V8、V19、V20 四个实验；再在真机按清单逐项走 |
 | 8 | Windows 平台细节：掩码通用化、假 Shift、睡眠唤醒重装、`GetAsyncKeyState` 校正、扫描码为 0 的回退 | `keys_test.go` 补用例；`e2e.ps1` 改用扫描码注入并加只带 vk 的一组 |
-| 9 | 录键：小帮手 `record` 模式、IPC、设置页录键控件、引导页"换个键"复用它（"测快捷键"仍走真实匹配）、系统冲突探测 `probe`（Mac `CopySymbolicHotKeys`，Windows `RegisterHotKey` 试登记）、`info` | 定稿规则的 JS 单测；`probe`、`info` 进协议测试；界面在开发窗口里给主人看（项目记忆 `ui-review-in-dev-window`） |
-| 10 | 显示：`keys.<code>.*` 文案、悬浮条一组键帽、菜单栏、命令行 `status` 和 `config` | `bar-view.test.mjs`、`i18n` 测试、`cli` 测试改写 |
-| 11 | 文档：README（含 `status --json` 的 `dictateCombo`）、`implementation-notes.md`、`development.md`、`desktop-ui-spec.md`、隐私说明；引导页、悬浮条、首页的界面改了，README 和官网的截图要重拍（`website/scripts/readme-media.mjs`，3.3 的截图一条） | 逐处对照 3.3 的清单 |
-| 12 | 真机验收：沿用户路径走一遍，打好的包真启动一次（项目记忆 `acceptance-end-to-end`） | 第 7.2 节的真机清单 |
+| 9 | 录键：小帮手 `record` 模式、IPC、设置页按动作目录逐行画录键控件、引导页"换个键"复用它（"测快捷键"仍走真实匹配）、系统冲突探测 `probe`（Mac `CopySymbolicHotKeys`，Windows `RegisterHotKey` 试登记）、`info` | 定稿规则的 JS 单测；`probe`、`info` 进协议测试；界面在开发窗口里给主人看（项目记忆 `ui-review-in-dev-window`） |
+| 10 | 显示：`keys.<code>.*` 和 `actions.<动作>.name` 文案、悬浮条一组键帽、菜单栏、命令行 `status` 和 `config` | `bar-view.test.mjs`、`i18n` 测试、`cli` 测试改写；六个旧键的键帽和名字逐字不变 |
+| 11 | 文档：README（设置表每个动作一行、`status --json` 按 D13 写）、`implementation-notes.md`、`development.md`、`desktop-ui-spec.md`、隐私说明；引导页、悬浮条、首页的界面改了，README 和官网的截图要重拍（`website/scripts/readme-media.mjs`，3.3 的截图一条） | 逐处对照 3.3 的清单 |
+| 12 | 真机验收：沿用户路径走一遍，打好的包真启动一次（项目记忆 `acceptance-end-to-end`）。另走一遍老用户升级：两台电脑各装 0.13.1、换成非默认键（Mac 右 ⌘、Windows 右 Ctrl），开着升级到新版；再退回 0.13.1 起一次 | 第 7.2 节的真机清单；升级后热键照旧能用、键帽不变、没有新的权限弹窗、设置文件已换算；退回后能起来、用默认键 |
 
 **测试策略**
 
@@ -851,7 +877,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - 期望输出按系统分：掩码只有 Windows 有，fn 折叠、`kCGEventSourceUserData` 只有 Mac 有，AltGr 假 Ctrl、NumLock 假 Shift 只有 Windows 有。两边共有的部分（报什么事件、吞不吞）写在样例的公共段，生成时原样拷到两份里；各系统独有的写在 `mac`、`win` 两段，只进对应的那份。"一字不差"指的是公共段。
 - 生成脚本在 `npm run check` 里跑一遍并检查 `git diff` 为空，防止改了键表忘了重新生成。
 - 样例必须覆盖：单键按下松开；修饰 + 修饰两种顺序；修饰 + 普通键，以及先按普通键再按修饰键（不触发）；只有按下凑组合（松开不触发）；升级；被打断后不再触发；自动重复；吞了按下就吞松开；AltGr 假 Ctrl；NumLock 假 Shift；自己注入的键；扫描码为 0；丢失松开后清理（含"Tab 的松开丢了，再按 `AltRight`，听写照常按下"）；10 秒清理；监听被停用；截取中与非截取中的 esc（含热键还按着时按 esc：只报取消、esc 被吞）；录制模式下不匹配；Win 和 Alt 的掩码时机（含被吞键松开时）；Mac 吞键 tap 开着时同一个事件送两遍（`AltRight+Space` 按下只报一次，Space 的按下松开都被吞，全部松开后集合为空）；Windows 右 Shift 带不带扩展位都认成 `ShiftRight`。正例、反例、边界各一组，数清条数。
-- JS 纯逻辑：组合解析与规范化、校验、冲突与前缀、动作默认值、迁移和回写、环境变量、坏值降级、录键定稿规则。
+- JS 纯逻辑：组合解析与规范化、校验、冲突与前缀、动作默认值、旧设置换算、环境变量、下发前的降级、录键定稿规则，以及 5.4 按目录逐个动作查的两条测试。
 - 协议：假小帮手、Go 协议测试、code 与原生码换算。
 - 端到端：Windows `e2e.ps1` 改用 `KEYEVENTF_SCANCODE` 注入；Mac 用 `CGEvent` 合成键盘事件（`docs/development.md:199` 做过一次），合成修饰键能否产生带设备位的 flagsChanged 未验证。
 - 现状提醒：Go 测试和 `e2e.ps1` 不在 `npm test` 里，仓库没有 CI。至少让 Go 测试进 `npm run check` 能触发的范围，或者写一个单独的脚本并在 `docs/development.md` 里说明。
@@ -872,7 +898,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 - 选项 A：允许，保存时警告；运行时按下即触发、第二个键到来时升级（Typeless、Wispr）。
 - 选项 B：直接不让存。
-- 建议 A。代价是升级时麦克风指示灯可能闪一下（未验证），以及说话中按长组合会先结束本次听写。第一版只有一个可改的动作，这个问题要到第二个动作出现时才出现。
+- 建议 A。代价是升级时麦克风指示灯可能闪一下（未验证），以及说话中按长组合会先结束本次听写。第一版的听写和取消之间不会有前缀关系（5.3），这个问题要到第三个动作出现时才出现。
 
 **D3 macOS 上带普通键的绑定怎么做**
 
@@ -886,9 +912,9 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 **D4 每个动作几个组合**
 
-- 选项 A：数据用数组，界面第一版只给一个。
+- 选项 A：设置的写法支持多个（逗号隔开），界面第一版只给一个。
 - 选项 B：照 Typeless、Wispr 给多个（上限 4）。
-- 建议 A。数组让以后放开时不用迁移；第一版界面简单。外接键盘没有 Fn 的场景，可以等真有需要时再放开。
+- 建议 A。写法一开始就支持多个，以后界面放开时不用换算设置；第一版界面简单。外接键盘没有 Fn 的场景，可以等真有需要时再放开。
 
 **D5 默认键**
 
@@ -903,9 +929,9 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 **D7 命令行怎么改热键**
 
-- 选项 A：沿用 `speakmore config set hotkey <组合>`，值改成组合写法，旧 id 照收，只管听写；以后有多个动作时再加 `config set hotkeys '<JSON>'`。
+- 选项 A：每个动作一项设置，`speakmore config set hotkey.<动作> <组合>`、`config unset hotkey.<动作>`，`config` 列表里每个动作一行，都按动作目录生成（5.2）。旧的 `config set hotkey <组合>` 当成改听写（`legacyName`），老用户照旧能用。
 - 选项 B：单独做 `speakmore hotkey <动作> <组合>` 子命令。
-- 建议 A，改动最小，现有测试和文档的写法大多能保留。
+- 建议 A。走现有的设置框架，环境变量、来源、"设置改了还没生效"、当场生效都现成；B 要另写一套，还得和 `config` 两边同步。
 
 **D8 Windows 管理员窗口**
 
@@ -928,6 +954,13 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 **D12 "任一侧"修饰键**
 
 - PowerToys 支持左、右、任一侧三种（`ModifierKey.h:4-10`）。建议不支持，只认分左右的具体键，规则和键帽都更简单。
+
+**D13 `status --json` 里的旧字段**
+
+- 现状：`speakmore status --json` 输出 `status.hotkey`（旧 id）、`status.hotkeyLabel`（它的名字）和 `settings.hotkey`（`src/cli/commands/lifecycle.mjs:120`），README 把 `--json` 当作对外功能写着（`README.md:347`、`386`），读它的是别人写的脚本。新设计里它们换成按动作目录生成的 `status["hotkey.dictate"]`、`settings["hotkey.dictate"]` 等。
+- 选项 A：保留一个版本。下一版里三个旧字段照旧给（听写是六个旧键之一时给旧 id，是新组合时给 `null`），README 标"已弃用，再下一版删除"；再下一版删掉。代价是输出那一处十来行，用的还是 `legacy.mjs` 那张对照表，写明删除的版本。
+- 选项 B：直接换，README 和更新说明写一句。
+- 建议 A。AGENTS.md 红线 6 要求对外接口的不兼容变更走弃用周期；这也是全方案里唯一一处在输出上照顾旧写法，有删除日期，不是长期的兼容层。读这个输出的只有自己写脚本的人，用图形界面的用户碰不到。
 
 ### 7.2 需要真机验证的事项
 
@@ -973,6 +1006,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 6. 两边帮手都先解析 `--key` 再看 `--check`，键名错时连 `--check` 也会 exit 2（`main.swift:318-329`）。App 不用 `--check`，现在没有影响。
 7. 我们的状态机在 STARTING 阶段也接 `LONG_HOLD`（`machine.mjs:64-66`），原版在麦克风初始化期间不接；这一条没有测试。
 8. Go 单测和 `e2e.ps1` 不在 `npm test` 里，仓库没有 CI；Swift 帮手没有单测。
+9. App 顶层在 `src/app/main.mjs:137` 就读了设置，0.1 版的数据（含 `settings.json`）要到 `:370` 的 `migrateLegacyData` 才搬过来。直接双击打开、没先跑过命令行时，搬家的那一次按默认设置运行，下次启动才对（按代码顺序推断，未实测）。只影响 0.1 的数据；本次的旧设置换算要放在 `:137` 之前（5.9）。
 
 ## 附录 B 材料与分路笔记
 
@@ -998,5 +1032,5 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | 录制何时定稿（Typeless 第一次松键，04 全部松开） | 第一次松键 | 两键以内结果相同，反馈更快 |
 | Mac 吞键 tap 按需开（03）还是存在绑定时常开（05） | 按需开，竞态实验不过再在"常开"和"全部走 Carbon"之间重选（D3） | 保住"平时不在必经之路上"，降低权限撤销时冻住的风险 |
 | 键表份数（任务描述 3 份，02 查出 4 份） | 4 份键表加 2 份按 id 写的文案 | `main_windows.go:302` 的报错文案也是一份 |
-| 回滚写法（05 两处都写） | 听写只写一处，两处都有时以 `hotkey` 为准 | 能分清退回旧版后谁新谁旧 |
+| 回滚写法（05 两处都写；第二版只写一处） | 第三版：不再写旧的 `hotkey`，第一次启动时换算掉；文件里再出现 `hotkey` 就以它为准 | 主人 10-21 定的方向：内部做干净、老用户无感；退回旧版用默认键，照样起得来 |
 | Typeless 录制控件的行号（01 写 1920-1940） | `R:DdHsgR7k.js:1951-1971`，判断在 1962 | 成文时对照可读源码复核 |
