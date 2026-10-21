@@ -52,4 +52,5 @@
 - [目录可配置重构](speakmore-relocatable-home.md) — issue #10：只留定位文件、整个 .speakmore 可装别处并一键迁移；已随 0.12.0 发布、#10 已关
 - [引擎页（原模型页）改成树](plaza-tree-prototype.md) — 10-21 在 engine-tree 分支做完、真窗口验过；没合并、没审查（他要等后面的改动一起审）；原型存档在 .playwright-mcp/plaza-tree/
 - [热键开放任意键](speakmore-hotkey-any-key.md) — 待做：任意键或组合键、配置驱动，目录重构发版后单独做
+- [界面逐页打磨的分支](ui-polish-branch.md) — ui-polish（从 engine-tree 开出）：首页、词典、引擎节点、胶囊按钮做完；下一块是首页花费统计；和引擎页一起等他说再审
 - [界面改动在开发窗口给他看](ui-review-in-dev-window.md) — 从源码起的隔离 App 验完不关，他直接在上面提意见，不打包
