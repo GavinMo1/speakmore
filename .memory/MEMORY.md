@@ -22,6 +22,7 @@
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
 - [验收要端到端闭环](acceptance-end-to-end.md) — 沿用户路径走一遍；没什么可验的也要把打好的包真启动一次；Windows 包先出先验、不干等；issue 全验完再回
 - [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、改完就收，不再派第二轮，除非他点名
+- [workflow 子 agent 控制在十个上下](workflow-agent-budget.md) — 派之前算总数；复核按组批量判，不按条乘人数；10-21 一次起了 73 个他嫌多
 - [桌面端的文案和观感](desktop-copy-and-look.md) — 书面语、短词短句；配色走自己的主题；按钮一律胶囊（共用一条样式）；图标不垫色块、不用星光魔杖；改样式后真窗口逐个查按钮
 - [README 中文为主](readme-chinese-default.md) — 中文 README.md 默认、英文 README.en.md 切换；书面语像报告，五个自由、讲好不讲坏、多配图，图放图片桶
 - [客户端多语言](speakmore-i18n-next.md) — 已随 0.6.0 发布：英文和简体中文、跟随系统、命令行和内核报的话也跟着换，提示词不动；加语言照 docs/development.md
@@ -45,7 +46,7 @@
 - [Linux 暂不做](speakmore-no-linux-yet.md) — #6 留着不关、用户多了再议；整理笔记关联 Obsidian 不在范围（#7 已关）
 - [词典功能](speakmore-vocabulary-plan.md) — 已随 0.10.0 发布，#9 已关；还待他定：西里尔形近字归一、评测参照错和 multicard 判法
 - [Windows 上的系统窗口让他点](windows-gui-user-clicks.md) — 选文件这类系统窗口直接告诉他点哪，不用 SendKeys 或界面自动化；网页部分用 CDP 核对；那台机器的 Defender 是关着的
-- [腾讯云费用](speakmore-cloud-billing.md) — 按量付费、不能欠费，余额花完 CDN 两小时后下载全断；10-19 余额 137 元、告警 50 元；查下载量时顺带看余额
+- [腾讯云费用](speakmore-cloud-billing.md) — 按量付费、不能欠费，余额花完 CDN 两小时后下载全断；10-21 余额 120 元、告警 50 元；查下载量时顺带看余额
 - [真机测更新要隔离](update-e2e-isolation.md) — 钉住 SPEAKMORE_APP、SPEAKMORE_BIN_DIR；临时签名的 App 被 open 打开会弹麦克风授权；Windows 换用户目录前先建好开始菜单和桌面，ps1 测试脚本带 BOM
 - [分发重构](speakmore-distribution-rework.md) — 10-20 全部做完并随 0.11.0 发布：模型换魔搭、包压缩瘦身、分块差量更新，两台电脑验过，旧的模型源和旧版本已撤；还剩 Electron fuses
 - [重构要做干净](refactor-surgical-clean.md) — 定了重构就手术式、不给我们自己的旧做法留兼容；碰到用户手里旧版本的先说清影响
