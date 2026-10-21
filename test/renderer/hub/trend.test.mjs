@@ -5,10 +5,11 @@ import { curvePath, smoothed, spreadFor } from "../../../src/renderer/hub/trend.
 const close = (actual, expected, within = 1e-9) =>
   assert.ok(Math.abs(actual - expected) < within, `${actual} ≠ ${expected}`);
 
-test("平滑的宽窄跟着格子数走：格子总数的 1/16，至少 1 格", () => {
-  assert.equal(spreadFor(8), 1);
-  assert.equal(spreadFor(24), 1.5);
-  assert.equal(spreadFor(80), 5);
+test("平滑的宽窄跟着格子数走：格子总数的 1/32，至少 0.75 格", () => {
+  assert.equal(spreadFor(8), 0.75);
+  assert.equal(spreadFor(24), 0.75);
+  assert.equal(spreadFor(32), 1);
+  assert.equal(spreadFor(80), 2.5);
 });
 
 test("平滑：一样高的还是一样高，两头也不往下掉", () => {
