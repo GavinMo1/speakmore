@@ -1,6 +1,6 @@
 ---
 name: speakmore-hotkey-any-key
-description: 热键开放成任意键或两键组合（配置驱动、内部做干净、老用户无感）；报告 docs/hotkey-research.md，D1–D13 10-21 已拍板，V1/V8/V19/V20 10-21 跑完、D3 改定为触发 tap；在 feat/hotkey-any-key 分支按第 6 节实施
+description: 热键开放成任意键或两键组合（配置驱动、内部做干净、老用户无感）；报告 docs/hotkey-research.md，D1–D13 10-21 已拍板；feat/hotkey-any-key 上第 0–7 步已提交（10-21），接着第 8 步，全部做完再统一审一轮
 metadata:
   node_type: memory
   type: project
@@ -19,6 +19,8 @@ metadata:
 10-21 D1–D13 拍板（报告 1.2、7.1 记着）。和我建议不同的：D1 组合全部松开才算松开（他用 Typeless 顺手）；D4 一个动作能绑多个（上限 4），设置页照 Typeless 截图那样每个组合一个框、× 删、"添加另一个"，设置文件存成列表，他嫌逗号拼接审美低；D9 只认键盘，鼠标键以后也不做；D10 新功能必须带默认快捷键、引导页要讲到，"留空绝对不行"，具体键做那个功能时再定；D11 单按 Shift 和 CapsLock 都不开放。其余按建议：D2 允许前缀并提醒、D3 Mac 按需拦截、D5 默认键不变、D6 一律标左右、D7 走 config set、D8 管理员窗口只提示、D12 不支持任一侧、D13 status --json 旧字段留一版再删。
 
 10-21 真机实验（程序和数据在本机 .playwright-mcp/hotkey-research/experiments/）：V1 不通过，只听 tap 事后打开吞键 tap 会漏键（人同时按能按出 0.4 ms 间隔）；他在选项里选了"同步触发"：有修饰键+普通键绑定时常开一个只收 flagsChanged 的主动 tap，同步回调里打开吞键 tap，实测 0 漏。V19：小帮手要改用 NSApplication（.prohibited）跑，只跑 RunLoop 时 Carbon 会吃键不回调。V8、V20 通过。权限撤销冻住整机的风险只在虚拟机里验（V26），别在他电脑上试。
+
+10-21 实施进度：第 0–7 步已提交（第 6 步 a2db863 设置改成 hotkey.<动作>，第 7 步 a89448e Mac 盯权限、锁屏、安全输入）。第 7 步实测推翻了报告里"tap 挪到独立线程"：独立线程上漏 57/200 个空格、主线程 0 漏，tap 留在主线程（报告 4.1 已改）。Mac 回归跑 `node scripts/dev/mac-hotkeys.mjs --secure-input`（24 项）。还剩第 8–12 步，之后按 [[one-review-round-is-enough]] 统一审一轮。
 
 **Why:** 顺着目录重构"写死的都改成配置驱动"的思路提的；以后加功能要绑新热键。
 **How to apply:** 决定都定了，不要再重议；在 feat/hotkey-any-key 上按第 6 节的步骤一步一提交。
