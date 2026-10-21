@@ -24,8 +24,8 @@ const captureLimit = 600 * time.Second
 const wmTask = wmApp + 1
 
 var (
-	out   = make(chan []byte, 256)
-	tasks = make(chan func(), 64)
+	out   = newOutbox(256)
+	tasks taskQueue
 
 	state     keyState
 	board     *clipboard
@@ -35,11 +35,11 @@ var (
 	captureGeneration int
 )
 
-func emit(e event) { out <- encodeEvent(e) }
+func emit(e event) { out.send(e) }
 
 // 交给钩子线程去做
 func onUIThread(task func()) {
-	tasks <- task
+	tasks.push(task)
 	procPostMessageW.Call(window, wmTask, 0, 0)
 }
 
@@ -207,14 +207,11 @@ func handle(line []byte) {
 
 func windowProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	if message == wmTask {
-		for {
-			select {
-			case task := <-tasks:
-				task()
-			default:
-				return 0
-			}
+		// 做的过程中又排进来的，会再投一条消息，下一轮再做
+		for _, task := range tasks.takeAll() {
+			task()
 		}
+		return 0
 	}
 	result, _, _ := procDefWindowProcW.Call(hwnd, message, wParam, lParam)
 	return result
@@ -270,16 +267,20 @@ func main() {
 	runtime.LockOSThread()
 	go func() {
 		writer := bufio.NewWriter(os.Stdout)
-		for line := range out {
+		for {
+			line, ok := out.next()
+			if !ok {
+				return
+			}
 			writer.Write(line)
-			if len(out) == 0 {
+			if out.pending() == 0 {
 				writer.Flush()
 			}
 		}
 	}()
 	exit := func(code int) {
 		// 等写完再退：出错的那一行不能丢
-		for len(out) > 0 {
+		for out.pending() > 0 {
 			time.Sleep(10 * time.Millisecond)
 		}
 		time.Sleep(20 * time.Millisecond)
