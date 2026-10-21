@@ -1,7 +1,8 @@
 // 仿刻客户端的原生小帮手：听热键、把文字贴进当前输入框。
 // 这两件事 Electron 自己做不了，原版也是交给 Swift 写的库和子进程（docs/07-native-helpers.md）。
-// 文件：main.swift 入口和命令；Keyboard.swift 按键和点击（tap、Carbon）；Matcher.swift 热键匹配；
-// Bindings.swift 绑定表的解析；Paste.swift 贴字；Output.swift 往父进程写事件。
+// 文件：main.swift 入口；Control.swift 命令，和权限、锁屏、安全输入的变化；Keyboard.swift 三个 tap、按键和点击；
+// HotKeys.swift Carbon 热键；
+// Matcher.swift 热键匹配；Bindings.swift 绑定表的解析；Paste.swift 贴字；Output.swift 往父进程写事件。
 //
 // 和父进程用"一行一个 JSON"通信，和 Windows 版（native/windows/）一字不差（docs/hotkey-research.md 5.8）：
 //   标准输出  {"event":"ready","listen":true,"trusted":true,"capture":true}
@@ -13,6 +14,11 @@
 //             {"event":"interrupted","id":"dictate#0","to":"x#0"}    升级成了另一个绑定，紧接着报它的按下
 //             {"event":"click","id":"cancel"}                        截着的时候点了某一块
 //             {"event":"pasted","id":1,"ok":true}                    贴完了；ok 为 false 时文字留在剪贴板里
+//             {"event":"permissions","listen":true,"trusted":false,"capture":false}
+//                                         运行中两项权限变了（只有 Mac 有）：没了的那项的 tap 已经作废，紧跟着按新的权限重报 bound
+//             {"event":"secure_input","on":true,"unavailable":["dictate#1"]}
+//                                         安全输入开了、关了（只有 Mac 有）。开着时带普通键的绑定由 Carbon 顶着，
+//                                         unavailable 是顶不了的（带 fn 的、被别的应用占了的），这段时间按了没反应
 //   标准输入  {"cmd":"bind","bindings":[{"id":"dictate#0","mods":[61],"when":"always"},
 //                                       {"id":"cancel#0","mods":[],"key":53,"when":"capturing"}]}
 //                                         整表替换；mods 是修饰键、key 是普通键，都是 kVK 键码；
@@ -49,8 +55,9 @@ let trusted = mayPrompt
     : AXIsProcessTrusted()
 let listening = listenAllowed && startListenTap()
 // 先建只听的，再建吞键的：后建的排在前面，事件先到吞键的那里
-let capture = trusted && startSwallowTap()
-emit(["event": "ready", "listen": listening, "trusted": trusted, "capture": capture])
+let canCapture = trusted && startSwallowTap()
+emit(["event": "ready", "listen": listening, "trusted": trusted, "capture": canCapture])
+startWatching(listen: listenAllowed, trusted: trusted)
 
 Thread.detachNewThread {
     while let line = readLine() {
@@ -75,9 +82,9 @@ Thread.detachNewThread {
                 emit(["event": "error", "message": "capture 需要 regions：一组 { id, x, y, width, height }"])
                 continue
             }
-            DispatchQueue.main.async { setCapturing(true, regions: parsed) }
+            DispatchQueue.main.async { capture(true, regions: parsed) }
         case "release":
-            DispatchQueue.main.async { setCapturing(false) }
+            DispatchQueue.main.async { capture(false) }
         default:
             emit(["event": "error", "message": "不认识的命令：\(command)"])
         }

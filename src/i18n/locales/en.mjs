@@ -399,6 +399,7 @@ export default {
     noSignal: "The microphone isn't picking anything up: check the input device and mute",
     recordError: "Recording error: {reason}",
     helperStopped: "Key listener stopped; {hotkey} won't work. Try restarting SpeakMore",
+    secureInput: "Secure input is on in another app, so some shortcuts won't work for now",
   },
 
   tray: {

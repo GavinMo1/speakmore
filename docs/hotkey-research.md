@@ -313,7 +313,7 @@ settings.json {"hotkey":"right_option"} 或 SPEAKMORE_HOTKEY
   - 回调里打开吞键 tap 的那次 `tapEnable` 中位数 50 µs、p99 1.4 ms，只在绑定用到的修饰键按下、松开时才发生。
   - 字母键不经过它，只有修饰键事件经过，包括打大写字母时的 Shift。默认配置（单按右 Option）没有这类绑定，不建触发 tap，和现在一样。
 - 触发 tap 的代价：多一个常开的主动 tap。权限撤销时冻住整机的风险（上面第二条理由），现在的版本只在听写那几秒才有，改成这样后，绑了这类组合的用户会一直有。缓解：小帮手监听辅助功能权限的变化（`com.apple.accessibility.api` 分布式通知，外加每秒查一次 `AXIsProcessTrusted()`），一旦权限没了，立刻 `CFMachPortInvalidate` 掉所有主动 tap，退回只听。论坛报告里出事前没有任何停用通知，这样做救不救得回来未验证；验证会冻住本机，只能在随时可以重来的虚拟机里做（V26）。Typeless 常开 HID 层主动 tap，同样有这个风险。
-- 线程：所有 tap 挪到同一条独立线程的 run loop 上。现在两个 tap 和贴字都在主线程（`main.swift:164, 278, 360`），贴字要先快照剪贴板，遇到大图会很久；吞键 tap 一旦打开，这段时间全系统按键都会被卡住。触发 tap 的回调是同步的，更不能等主线程。AltTab 就是单独一个键盘线程（`KeyboardEvents.swift:249-252`）。Carbon 热键的回调只在主线程的 NSApplication 事件循环里来（V19），收到后转给键盘线程上的匹配器。
+- 线程：原计划把所有 tap 挪到同一条独立线程的 run loop 上（AltTab 就是单独一个键盘线程，`KeyboardEvents.swift:249-252`），理由是贴字要先快照剪贴板，遇到大图会很久，主线程卡住时同步的触发 tap 也跟着卡。**10-21 实测后改定：tap 留在主线程。**独立线程上，从触发 tap 的回调里打开吞键 tap 生效得晚：右 Option+空格合成 200 次（间隔 0–5 ms）漏了 57 个空格；同一份代码只把 run loop 换回主线程，200 次 0 漏；独立线程上让吞键 tap 一直开着，100 次 0 漏，说明漏在"打开"这一步。贴字也挪不出主线程：NSPasteboard 只能在主线程用（文档没写，Apple 回复过开发者，https://mjtsai.com/blog/2026/08/03/nspasteboard-crashes-when-handling-file-promises/ ）。代价照实记着：剪贴板里有大图时，贴字快照那一下修饰键会慢，回调超时的话系统会停掉触发 tap，收到停用通知后重新打开。快照到底多慢未测。
 
 **三个 tap 怎么分工：一个匹配器，按事件去重**
 
@@ -782,7 +782,8 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 {"event":"probed","id":7,"conflict":true,"source":"symbolic"}
 {"event":"info","fnUsage":1}
 {"event":"click","id":"cancel"}
-{"event":"secure_input","on":true}
+{"event":"permissions","listen":true,"trusted":false,"capture":false}
+{"event":"secure_input","on":true,"unavailable":["dictate#1"]}
 {"event":"pasted","id":1,"ok":true}
 ```
 
@@ -790,7 +791,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - `interrupted` 带 `to` 时表示升级，紧接着一定是 `to` 那个绑定的按下。状态机可以据此决定保留麦克风、只换动作，还是取消再开始；第一版按"取消再开始"处理即可。
 - `recording` 只在录制模式下出现，报当前按住的原生码集合，修饰键和别的键分开报（录制时可能按着不止一个普通键，所以 `keys` 是数组，交给 JS 判形状）。
 - `probed` 的 `source` 是 `symbolic`（Mac 系统快捷键）或 `registered`（Windows 上已被别的程序登记）；`info` 里 `fnUsage` 读不到时不带这个字段。
-- `secure_input` 只有 Mac 有。Windows 可选加一条前台是管理员窗口的提示事件（D8）。
+- `permissions`、`secure_input` 只有 Mac 有。`permissions`：运行中两项权限变了（每秒查一次，辅助功能另听 `com.apple.accessibility.api`），没了的那项的 tap 已经作废，紧跟着按新的权限重报一次 `bound`。`secure_input`：安全输入开了、关了；开着时带普通键的绑定由 Carbon 顶着，`unavailable` 是顶不了的（带 fn 的、注册不上的）。Windows 可选加一条前台是管理员窗口的提示事件（D8）。
 - 去掉的事件：`hotkey`、`other_key`、`escape`。
 - 可选：事件带时间戳（Mac `CGEvent.timestamp`，Windows `KBDLLHOOKSTRUCT.time`），以后做双击和按住时长不受进程间延迟影响。现在 600 ms 由 JS 计时（`bar.mjs:60-62`），误差可以接受，第一版不加。
 

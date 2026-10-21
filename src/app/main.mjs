@@ -773,6 +773,18 @@ async function main() {
         setupChanged();
         break;
       }
+      case "permissions":
+        // 运行中两项权限变了（Mac 小帮手自己盯着）：没了的那项的 tap 它已经作废，紧跟着按新的权限重报 bound
+        helperPermissions = { listen: event.listen, trusted: event.trusted };
+        log.info("helper_permissions", { ...helperPermissions, capture: event.capture });
+        setBarControls(event.capture === true);
+        setupChanged();
+        break;
+      case "secure_input":
+        // 有应用开着安全输入（密码框、终端的安全键盘输入）：带普通键的组合由 Carbon 顶着，顶不了的这段时间按了没反应
+        log.info("secure_input", { on: event.on, unavailable: event.unavailable });
+        if (event.on && event.unavailable?.length > 0) notify(msg("bar.secureInput"));
+        break;
       case "binding":
       case "interrupted":
         onBindingEvent(event);

@@ -384,6 +384,7 @@ export default {
     noSignal: "麦克风没信号：查输入设备、是否静音",
     recordError: "录音出错：{reason}",
     helperStopped: "按键监听停了，{hotkey}失效：重启 SpeakMore 试试",
+    secureInput: "有应用开着安全输入，部分组合键暂时用不了",
   },
 
   tray: {

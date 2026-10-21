@@ -12,6 +12,7 @@ cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
 npm run check                 # 代码检查 + 全部测试（不联网、不开窗口），含两个原生小帮手的测试（npm run test:native）
+node scripts/dev/mac-hotkeys.mjs   # Mac 小帮手的回归：真的 tap 和 Carbon，合成按键全在末尾接住、不到任何应用；改了 native/mac/ 跑一遍
 npm run release               # 打发布：dist/release/ 下是更新用的块和清单、首次安装用的包和两个安装脚本，摆成下载地址上的样子
 ```
 
