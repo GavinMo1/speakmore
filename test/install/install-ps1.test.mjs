@@ -17,7 +17,7 @@ import { test } from "node:test";
 // install.ps1 写的启动脚本 bin\speakmore.cmd。它照 current 找 versions 下的程序；从旧版本升上来、启动脚本变了时，
 // 旧的那份可能正跑着（speakmore update 就是它起的）就被改写，cmd 等程序退出后从原来的字节位置接着读。
 // 后两条要在 Windows 上真的起 cmd，"程序"是改名成 electron.exe 的 node。
-// 最后一条把 install.ps1 里写定位文件的那几个函数原样拿出来，在 Windows PowerShell 里跑。
+// 最后两条把 install.ps1 里写定位文件、清旧版本的那几个函数原样拿出来，在 Windows PowerShell 里跑。
 
 const INSTALLER = resolve(import.meta.dirname, "..", "..", "install.ps1");
 const windowsOnly = { skip: process.platform !== "win32" && "要在 Windows 上起 cmd" };
@@ -175,4 +175,40 @@ test("定位文件已经在（搬家时记着 moving、换到别处）：改写�
   assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { home: "D:\\New\\.speakmore" });
   assert.deepEqual(readdirSync(dir), ["location.json"]);
+});
+
+// issue #11：5.1 里进程的 Path 每读一次都现算（$this.Mainmodule.FileName），进程退出后再读是空的。
+// 这里把 Get-Process 换成"列完所有进程就停掉一个"，造出列进程和比路径之间有程序退出（比如刚停掉的旧版本）
+test("清旧版本时有程序刚退出：不报错，没人用的旧版本照删、在用的这一版留着", windowsOnly, (t) => {
+  const root = mkdtempSync(join(tmpdir(), "sm-old-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const home = join(root, ".speakmore");
+  const old = join(home, "versions", "0.9.3-0123abcd");
+  const current = join(home, "versions", "0.13.1-89abcdef");
+  mkdirSync(old, { recursive: true });
+  mkdirSync(current, { recursive: true });
+  const pattern = /^ {2}\$VersionNamePattern = .*$/m.exec(readFileSync(INSTALLER, "utf8"));
+  assert.ok(pattern, "install.ps1 里找不到 $VersionNamePattern");
+  const script = join(root, "remove-old.ps1");
+  const body = [
+    ...["Ok", "Note", "Pretty", "Remove-Later", "Test-OtherUpdate", "Remove-Old"].map(functionText),
+    "$ErrorActionPreference = 'Stop'",
+    pattern[0],
+    `$script:HomeDir = '${home}'`,
+    `$script:VersionsDir = '${join(home, "versions")}'`,
+    "$script:VersionName = '0.13.1-89abcdef'",
+    "$script:PreviousName = ''; $script:InPlace = $false",
+    "$victim = Start-Process -FilePath \"$env:WINDIR\\System32\\ping.exe\" -ArgumentList '-n', '30', '127.0.0.1' -WindowStyle Hidden -PassThru",
+    "Start-Sleep -Milliseconds 500",
+    "function Get-Process { Microsoft.PowerShell.Management\\Get-Process; Stop-Process -Id $victim.Id -Force; $victim.WaitForExit() }",
+    "Remove-Old",
+  ].join("\r\n");
+  writeFileSync(script, `\ufeff${body}\r\n`);
+  const run = spawnSync(
+    "powershell",
+    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script],
+    { encoding: "utf8", windowsHide: true },
+  );
+  assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
+  assert.deepEqual(readdirSync(join(home, "versions")), ["0.13.1-89abcdef"]);
 });

@@ -489,7 +489,9 @@
     if (Test-OtherUpdate) { $versions = @($versions | Where-Object { $_.Name -eq $script:PreviousName }) }
     $old += $versions
     if ($old.Count -eq 0) { return }
-    $running = @(Get-Process | Where-Object { $_.Path })
+    # 路径只读一次、存下来：5.1 里进程的 Path 每读一次都现算（$this.Mainmodule.FileName），
+    # 进程在两次读之间退出（比如刚停掉的旧版本还在收尾），再读就是空的（issue #11）
+    $running = @(Get-Process | ForEach-Object { $path = $_.Path; if ($path) { [pscustomobject]@{ Id = $_.Id; Path = $path } } })
     $later = @(); $waitFor = @(); $left = @()
     foreach ($dir in $old) {
       $prefix = $dir.FullName.TrimEnd('\') + '\'
