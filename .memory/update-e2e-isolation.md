@@ -18,6 +18,7 @@ metadata:
 - **Windows 换用户目录做隔离（10-20）**：把 `USERPROFILE`、`LOCALAPPDATA`、`APPDATA` 换成临时目录前，先在里面建好 `AppData\Roaming\Microsoft\Windows\Start Menu\Programs` 和 `Desktop`：`[Environment]::GetFolderPath` 照 `%USERPROFILE%` 展开、目录在才交回，不建的话 install.ps1 建快捷方式那一步报空路径；建了以后快捷方式落在假目录里，真的不用备份（用户 Path 还是真的，照旧备份还原）。
 - **写给 Windows PowerShell 5.1 的测试脚本要带 BOM**：不带的话按 GBK 读，中文注释会吞掉换行，下一行跟着成了注释（10-20 还原脚本因此没还原 Path）。
 - **照 `irm | iex` 在同一作用域里跑 install.ps1**：它的 `$script:Base` 这些会盖掉测试脚本里同名的变量（PowerShell 变量名不分大小写），测试脚本的变量起个不会撞的名字。
+- **从会话里传脚本给 Windows（10-21）**：`scripts/dev/win.sh` 把整段脚本塞进一条命令，过了 cmd 约 8000 字符的上限就报"命令行太长"，长脚本走 `win-desktop.sh`（它按文件传）。自己在 zsh 里写 scp 时目标写成 `"${WIN_SSH_TARGET}:路径"`：不加花括号的 `$WIN_SSH_TARGET:s…` 会被 zsh 当成修饰符，文件没传过去，反倒在本地生成名字里带账号和 IP 的文件。
 - 测试起的 App 用了假的用户目录，搜狗输入法会往里写日志并一直开着，那几个文件要等它退出才删得掉。
 - Mac 上从 shell 直接执行测试 App 时，连 `CFFIXED_USER_HOME` 一起换成假目录，不然偏好设置写进真的；执行过的 App 会登记进 LaunchServices，删之前 `lsregister -u` 注销。
 - Mac 的测试家目录用短路径，别带 `//`：install.sh 要比对拼好的目录在不在家目录里（10-19 查出过 a//b 比不上的毛病，已修）。
