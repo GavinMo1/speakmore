@@ -52,6 +52,6 @@
 - [重构要做干净](refactor-surgical-clean.md) — 定了重构就手术式、不给我们自己的旧做法留兼容；碰到用户手里旧版本的先说清影响
 - [目录可配置重构](speakmore-relocatable-home.md) — issue #10：只留定位文件、整个 .speakmore 可装别处并一键迁移；已随 0.12.0 发布、#10 已关
 - [引擎页（原模型页）改成树](plaza-tree-prototype.md) — 10-21 审查、合并，随 0.13.0 发布；原型存档在 .playwright-mcp/plaza-tree/
-- [热键开放任意键](speakmore-hotkey-any-key.md) — 两键以内、配置驱动；10-21 调研完，报告 docs/hotkey-research.md，等他拍板 D1–D12 再动手
+- [热键开放任意键](speakmore-hotkey-any-key.md) — 两键以内、配置驱动、内部做干净、老用户无感；报告 docs/hotkey-research.md 第三版，等他拍板 D1–D13 再动手
 - [界面逐页打磨的分支](ui-polish-branch.md) — ui-polish：首页、词典、引擎节点、胶囊按钮、花费卡做完，10-21 审查、合并，随 0.13.0 发布
 - [界面改动在开发窗口给他看](ui-review-in-dev-window.md) — 从源码起的隔离 App 验完不关，他直接在上面提意见，不打包
