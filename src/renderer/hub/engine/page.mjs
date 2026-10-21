@@ -62,9 +62,12 @@ export function createEngine({ refresh }) {
     checks.results[key] = { state: "fail", problem, title };
   }
 
+  /** 有一件事在等主进程回话（启用、下载、存密钥，或者换识别方式）：别的先不让点，同一时间只发一件 */
+  const waiting = () => ui.busy !== null || ui.modeBusy !== null;
+
   /** 发一件要等回话的事：同一时间只发一件，回来后重读状态 */
   async function act(key, call, { done } = {}) {
-    if (ui.busy) return;
+    if (waiting()) return;
     ui.busy = key;
     delete checks.results[key];
     draw();
@@ -135,8 +138,9 @@ export function createEngine({ refresh }) {
    * 换不了（设置写错了）就在那一项下面说为什么。换好后树展开到这种方式的第一个环节
    */
   async function switchMode(mode) {
-    if (ui.modeBusy !== null || !setup.switchable) return;
+    if (waiting() || !setup.switchable) return;
     if (mode === setup.plaza.mode) {
+      ui.modeFailure = null;
       expandRole(MODE_ROLES[mode][0]);
       draw({ view: "fit" });
       return;
@@ -220,6 +224,7 @@ export function createEngine({ refresh }) {
     },
     ui,
     checks,
+    waiting,
     act,
     failed,
     use,
@@ -230,6 +235,15 @@ export function createEngine({ refresh }) {
     closeDetail,
     reveal,
     openKeys: (platform, options) => keys.open(platform, options),
+    /** 从密钥面板回到详情：焦点放在还差的那一步（配置密钥）上，补齐了就放在启用上 */
+    focusDetail: () =>
+      canvas.quietly(() =>
+        (
+          dock.querySelector(".detail-need button:not(:disabled)") ??
+          dock.querySelector(".detail-actions button:not(:disabled)") ??
+          dock.querySelector(".detail-close")
+        )?.focus({ preventScroll: true }),
+      ),
     toast,
     draw: () => draw(),
   };
@@ -291,17 +305,57 @@ export function createEngine({ refresh }) {
     place(ui.detail ? "leaf" : "fit", { animate: false });
   }).observe(canvasEl);
 
+  // Esc 收起详情；开着的对话框（密钥面板、设置）、弹出的单子里按的 Esc 归它们自己
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || !ui.detail || canvasEl.offsetParent === null) return;
-    if ($("keys-sheet").open || document.querySelector(":popover-open")) return;
+    if (document.querySelector("dialog:modal, :popover-open")) return;
     closeDetail();
   });
 
   // ---------- 总的 ----------
 
-  /** 重画时正在填的输入框不能丢：记下它的值、光标，画完放回去 */
-  function keepingInput(paint) {
+  /**
+   * 能按的东西在重画前后怎么认：在哪一块（树的哪一列、详情、密钥列表），哪一行（节点的 data-key、密钥那一行的平台），
+   * 叫什么（节点本身就是那一行，不看字：下面那行状态会变）
+   */
+  function spotOf(el) {
+    const area = el?.closest?.(".tree-col, #engine-detail, #keys-list");
+    if (!area || el === area) return null;
+    const row = el.closest("[data-key], [data-platform]");
+    return {
+      area: area.id,
+      row: row?.dataset.key ?? row?.dataset.platform ?? null,
+      name: row === el ? "" : (el.getAttribute("aria-label") ?? el.textContent.trim()),
+    };
+  }
+
+  /** 重画后找回那一个；没了（下载变成了取消、密钥存好了），退到同一行、这一块的主操作、这一块第一个能按的 */
+  function findSpot(spot) {
+    const area = $(spot.area);
+    if (!area) return null;
+    const usable = [...area.querySelectorAll("button, input, select, [tabindex]")].filter(
+      (el) => !el.disabled && el.tabIndex >= 0,
+    );
+    const same = (el, name = true) => {
+      const other = spotOf(el);
+      return other.row === spot.row && (!name || other.name === spot.name);
+    };
+    return (
+      usable.find((el) => same(el)) ??
+      usable.find((el) => spot.row !== null && same(el, false)) ??
+      usable.find((el) => el.closest(".detail-actions")) ??
+      usable[0] ??
+      null
+    );
+  }
+
+  /**
+   * 重画会把树、详情、密钥列表整块换掉：焦点在里面的，画完放回同一个（不然掉回页面开头，下载时每半秒掉一次）；
+   * 正在填的输入框连值和光标一起放回去
+   */
+  function keepingFocus(paint) {
     const active = document.activeElement;
+    const spot = spotOf(active);
     const kept = active?.closest?.(".key-entry") && active.tagName === "INPUT" ? active : null;
     const values = [...document.querySelectorAll(".key-entry .input")].map((input) => [input.id, input.value]);
     paint();
@@ -313,7 +367,9 @@ export function createEngine({ refresh }) {
       const input = $(kept.id);
       input?.focus({ preventScroll: true });
       if (input && kept.selectionStart !== null) input.setSelectionRange(kept.selectionStart, kept.selectionEnd);
+      return;
     }
+    if (spot && !active.isConnected) canvas.quietly(() => findSpot(spot)?.focus({ preventScroll: true }));
   }
 
   /** 选的那几样在新状态里还在不在：不在了（换了语言、模型清单变了）就退回一层 */
@@ -342,12 +398,13 @@ export function createEngine({ refresh }) {
     if (!setup?.plaza) return;
     view = plazaView(setup.plaza, ui);
     const reset = keepSelection();
-    keepingInput(() => {
+    keepingFocus(() => {
       tree.render();
       detail.render();
       keys.render();
     });
     canvasEl.toggleAttribute("data-detail", ui.detail);
+    if (ui.detail) canvas.keepDockInside(dock);
     indicators.place();
     tree.drawLinks();
     if (how || reset) place(how ?? "fit");
@@ -358,6 +415,8 @@ export function createEngine({ refresh }) {
     render(next) {
       const first = setup === null;
       setup = next;
+      // 没切成的那种方式后来从别处换上了（详情里启用、菜单栏、命令行）：失败的说明作废
+      if (ui.modeFailure?.mode === next.plaza?.mode) ui.modeFailure = null;
       draw(first ? { view: "fit" } : {});
     },
 
@@ -372,6 +431,11 @@ export function createEngine({ refresh }) {
         return;
       }
       if (ROLES[tab]) pickRole(tab);
+    },
+
+    /** 离开这一页：密钥面板是模态的，开着就收起，不然换到别的页它还压着整个窗口 */
+    hidden() {
+      if ($("keys-sheet").open) $("keys-sheet").close();
     },
 
     /** 页面切到前台时：滑块按真实宽度重新放，画布重新放进窗口 */

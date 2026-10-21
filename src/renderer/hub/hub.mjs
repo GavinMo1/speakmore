@@ -42,6 +42,7 @@ function navigate(route) {
   document.querySelector(".content").scrollTop = 0;
   document.querySelector(".content").removeAttribute("data-scrolled");
   if (name === "models") engine.shown();
+  else engine.hidden();
   if (name === "home") home.shown();
   if (name === "vocabulary") vocabulary.shown();
   // 记在地址里：换语言时页面重新加载，回到的还是这一页。打开时带的 pane 也一并去掉，免得重新加载时设置又弹出来

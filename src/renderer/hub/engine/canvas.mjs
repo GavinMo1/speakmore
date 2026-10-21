@@ -6,6 +6,22 @@
 export const ZOOM_MIN = 0.4;
 export const ZOOM_MAX = 1.6;
 export const clampZoom = (k) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, k));
+/** 缩放按钮按一下的倍数；鼠标滚轮一格也按这一档 */
+const ZOOM_STEP = 1.2;
+/** 滚轮的像素换成倍数：每滚 100 像素缩成 1/e */
+const WHEEL_RATE = 0.01;
+
+/**
+ * 按住 ⌘ / Ctrl 滚一下缩放多少倍。触控板捏合每次只报几个像素，照原样连续缩；
+ * 鼠标滚轮一格报 100 左右（按行报的先换成像素），照原样算一格就是 e 倍、直接撞到头：一次最多走一档
+ * @param {number} deltaY
+ * @param {number} [deltaMode] 0 像素、1 行、2 页（WheelEvent.deltaMode）
+ */
+export function wheelZoom(deltaY, deltaMode = 0) {
+  const pixels = deltaY * ([1, 40, 800][deltaMode] ?? 1);
+  const most = Math.log(ZOOM_STEP) / WHEEL_RATE;
+  return Math.exp(-Math.sign(pixels) * Math.min(Math.abs(pixels), most) * WHEEL_RATE);
+}
 
 /** 拖动多远才算拖：再近就当点了一下 */
 const DRAG_SLOP = 4;
@@ -96,9 +112,25 @@ export function createCanvas({ canvas, world, content, zoomValue, onMove, ignore
     const y = view.y + center * view.k;
     if (y < 48 || y > ch - 72) view.y = ch / 2 - center * view.k;
     const leafY = view.y + center * view.k;
-    const top = Math.min(Math.max(12, leafY - DOCK_ANCHOR), Math.max(12, ch - card.offsetHeight - 60));
-    dock.style.top = `${top}px`;
+    dock.style.top = `${Math.min(Math.max(12, leafY - DOCK_ANCHOR), dockLimit(card))}px`;
     apply({ animate });
+  }
+
+  /** 详情的顶最低放到哪：底下给缩放条留出地方 */
+  const dockLimit = (card) => Math.max(12, canvas.clientHeight - card.offsetHeight - 60);
+
+  /**
+   * 详情重画后变高了（失败说明、下载进度）：底边不能伸出画布、压到缩放条下面，往上收；没变高就不动
+   * @param {HTMLElement} dock
+   */
+  function keepDockInside(dock) {
+    const card = dock.firstElementChild;
+    if (!card || canvas.clientWidth === 0) return;
+    const limit = dockLimit(card);
+    if (Number.parseFloat(dock.style.top) > limit) {
+      dock.style.top = `${limit}px`;
+      onMove(0);
+    }
   }
 
   function zoomAt(k, cx, cy, { animate = false } = {}) {
@@ -117,7 +149,7 @@ export function createCanvas({ canvas, world, content, zoomValue, onMove, ignore
       event.preventDefault();
       const rect = canvas.getBoundingClientRect();
       if (event.ctrlKey || event.metaKey) {
-        zoomAt(view.k * Math.exp(-event.deltaY * 0.01), event.clientX - rect.left, event.clientY - rect.top);
+        zoomAt(view.k * wheelZoom(event.deltaY, event.deltaMode), event.clientX - rect.left, event.clientY - rect.top);
         return;
       }
       view.x -= event.deltaX;
@@ -126,6 +158,33 @@ export function createCanvas({ canvas, world, content, zoomValue, onMove, ignore
     },
     { passive: false },
   );
+
+  /** 重画后把焦点放回原处时不挪树：他可能刚把那一项拖到了一边 */
+  let quiet = false;
+  function quietly(run) {
+    quiet = true;
+    try {
+      run();
+    } finally {
+      quiet = false;
+    }
+  }
+
+  // 用键盘走到画布外面的节点：把树挪过来让它露出来（画布不滚动，见 engine.css 的 .canvas）
+  canvas.addEventListener("focusin", (event) => {
+    if (quiet || !world.contains(event.target)) return;
+    const box = canvas.getBoundingClientRect();
+    const rect = event.target.getBoundingClientRect();
+    const margin = 24;
+    const shift = (start, end, low, high) =>
+      start < low + margin ? low + margin - start : end > high - margin ? high - margin - end : 0;
+    const dx = shift(rect.left, rect.right, box.left, box.right);
+    const dy = shift(rect.top, rect.bottom, box.top, box.bottom);
+    if (dx === 0 && dy === 0) return;
+    view.x += dx;
+    view.y += dy;
+    apply({ animate: true });
+  });
 
   // 拖动平移：按下后移动超过 4 像素才算拖，松手时吞掉这一次点击，免得拖完误点开节点
   let drag = null;
@@ -178,8 +237,10 @@ export function createCanvas({ canvas, world, content, zoomValue, onMove, ignore
     view,
     fit,
     focus,
-    zoomIn: () => zoomAt(view.k * 1.2, ...center(), { animate: true }),
-    zoomOut: () => zoomAt(view.k / 1.2, ...center(), { animate: true }),
+    keepDockInside,
+    quietly,
+    zoomIn: () => zoomAt(view.k * ZOOM_STEP, ...center(), { animate: true }),
+    zoomOut: () => zoomAt(view.k / ZOOM_STEP, ...center(), { animate: true }),
     reset: () => zoomAt(1, ...center(), { animate: true }),
     /** 适应画布：忘掉用户调过的倍数 */
     forgetZoom: () => {

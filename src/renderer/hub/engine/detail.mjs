@@ -233,8 +233,8 @@ export function createDetail(ctx, dock) {
   /** 右边的主操作：使用中、已选定、下载、启用；下载中时左边是进度、右边是取消 */
   function actions(role, group, item, key) {
     const { view, setup } = ctx;
-    // 同一时间只发一件事（page.mjs 的 act）：有一件在等回话时，别的启用、下载也先不让点，免得点了没反应
-    const busy = ui.busy !== null;
+    // 同一时间只发一件事（page.mjs 的 act）：有一件在等回话时（包括正在换识别方式），别的启用、下载也先不让点，免得点了没反应
+    const busy = ctx.waiting();
     const block = view.blocker(role, group, item);
     const name = itemName(group, item, { withBuild: true });
     let left = h("span");
@@ -309,7 +309,7 @@ export function createDetail(ctx, dock) {
         h("button", {
           type: "button",
           class: "link detail-link",
-          disabled: ui.busy !== null,
+          disabled: ctx.waiting(),
           text: t("plaza.actions.remove"),
           "aria-label": t("plaza.actions.removeModel", { model: name }),
           onclick: () =>

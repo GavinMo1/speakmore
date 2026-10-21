@@ -124,7 +124,8 @@ export function createTree(ctx, els) {
         "aria-busy": busy ? "true" : null,
         "data-key": mode,
         "data-warn": needs.length > 0 ? "" : null,
-        disabled: !setup.switchable || (ui.modeBusy !== null && !busy),
+        // 正在换的那一种不置灰（它在转圈）；别的事在等回话时也不让换
+        disabled: !setup.switchable || (ctx.waiting() && !busy),
         title: setup.switchable ? `${modeName(mode)} · ${t(`home.mode.desc.${mode}`)}` : t("home.mode.locked"),
         onclick: () => ctx.switchMode(mode),
         onmouseenter: () => hoverMode(mode),
@@ -231,6 +232,11 @@ export function createTree(ctx, els) {
 
   // ---------- 型号：树叶 ----------
 
+  /** 只放一个小图标的状态：悬停看 title，读屏读藏起来的那一句（图标本身对读屏是藏着的） */
+  function iconMark(text, ...glyph) {
+    return h("span", { class: "leaf-icon", title: text }, ...glyph, h("span", { class: "visually-hidden", text }));
+  }
+
   /** 型号右边：正在用、已选定写成带点的字；没下载、下载中、缺密钥、出了问题只放一个小图标 */
   function leafMark(role, group, item) {
     const { view } = ctx;
@@ -252,31 +258,23 @@ export function createTree(ctx, els) {
       );
     }
     if (group.kind === "local" && item.problem) {
-      return h(
-        "span",
-        { class: "leaf-icon", "data-tone": "problem", title: t.text(item.problem) },
-        svg("i-circle-alert"),
-      );
+      const mark = iconMark(t.text(item.problem), svg("i-circle-alert"));
+      mark.dataset.tone = "problem";
+      return mark;
     }
     const block = view.blocker(role, group, item);
     if (block === "downloading") {
       const { received, total } = item.download;
       const percent = Math.floor((received / (total || 1)) * 100);
-      return h(
-        "span",
-        { class: "leaf-icon", title: t("plaza.state.downloading") },
+      return iconMark(
+        t("plaza.state.downloading"),
         svg("i-loader-circle", "icon spin"),
         h("span", { class: "leaf-percent", text: `${percent}%` }),
       );
     }
-    if (block === "download")
-      return h("span", { class: "leaf-icon", title: t("plaza.state.notDownloaded") }, svg("i-download"));
+    if (block === "download") return iconMark(t("plaza.state.notDownloaded"), svg("i-download"));
     if (block === "key" || block === "custom") {
-      return h(
-        "span",
-        { class: "leaf-icon", title: t(block === "custom" ? "plaza.notice.custom" : "plaza.notice.noKey") },
-        svg("i-key-round"),
-      );
+      return iconMark(t(block === "custom" ? "plaza.notice.custom" : "plaza.notice.noKey"), svg("i-key-round"));
     }
     return null;
   }
@@ -349,14 +347,17 @@ export function createTree(ctx, els) {
     if (!ui.role) return found;
     const groups = setup.plaza.shelves[ui.role];
     const roleEl = find(els.roles, ui.role);
+    // 重画到一半（换了环节、厂商那一列还没换）时也会来问：对不上的那几个先不连，画完会再连一次
     for (const el of els.makers.children) {
       const group = groups.find(({ id }) => id === el.dataset.key);
+      if (!group) continue;
       found.push({ from: roleEl, to: el, kind: view.groupLine(ui.role, group), open: ui.maker === group.id });
     }
     const group = groups.find(({ id }) => id === ui.maker);
     const makerEl = find(els.makers, ui.maker);
-    for (const el of els.models.children) {
+    for (const el of group ? els.models.children : []) {
       const item = group.items.find((it) => itemKey(it) === el.dataset.key);
+      if (!item) continue;
       found.push({
         from: makerEl,
         to: el,
@@ -382,17 +383,17 @@ export function createTree(ctx, els) {
     const sorted = pairs()
       .filter(({ from, to }) => from && to)
       .sort((a, b) => weight(a) - weight(b));
-    const phase = `animation-delay: -${Math.round(performance.now() % FLOW_MS)}ms`;
     const paths = sorted.map(({ from, to, kind, open }) => {
       const a = offsetIn(from, tree);
       const b = offsetIn(to, tree);
       const d = curve(a.right, a.top + a.height / 2, b.left, b.top + b.height / 2);
       const path = `<path class="link ${kind}${open ? " open" : ""}" vector-effect="non-scaling-stroke" d="${d}"/>`;
-      return kind === "live"
-        ? `${path}<path class="flow" vector-effect="non-scaling-stroke" style="${phase}" d="${d}"/>`
-        : path;
+      return kind === "live" ? `${path}<path class="flow" vector-effect="non-scaling-stroke" d="${d}"/>` : path;
     });
     svgEl.innerHTML = paths.join("");
+    // 相位走 CSSOM：写在 innerHTML 的 style 属性里会被页面的 CSP 拦掉
+    const delay = `-${Math.round(performance.now() % FLOW_MS)}ms`;
+    for (const flow of svgEl.querySelectorAll(".flow")) flow.style.animationDelay = delay;
   }
 
   /** 点开的那一项连到右边停着的详情：画在画布这一层、不缩放，按屏幕上的位置算（过渡时每一帧跟着） */

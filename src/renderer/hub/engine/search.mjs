@@ -38,6 +38,7 @@ export function createSearch(ctx) {
     index = Math.min(index, Math.max(0, hits.length - 1));
     setOpen(true);
     if (hits.length === 0) {
+      input.removeAttribute("aria-activedescendant");
       box.replaceChildren(h("p", { class: "search-empty", text: t("plaza.empty.title") }));
       return;
     }
@@ -50,6 +51,8 @@ export function createSearch(ctx) {
             class: "search-hit",
             role: "option",
             id: `search-hit-${at}`,
+            // 焦点一直在搜索框里，上下键挑（aria-activedescendant）；按 Tab 直接去下一个控件，不停在结果上
+            tabindex: "-1",
             "aria-selected": String(at === index),
             // 按下时不让搜索框失焦，不然结果先收起、点不到
             onmousedown: (event) => event.preventDefault(),

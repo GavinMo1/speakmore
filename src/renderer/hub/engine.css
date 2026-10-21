@@ -108,7 +108,9 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
   flex: 1 1 auto;
   min-height: 24rem;
   margin: 0 -3.5rem -3rem -3rem;
-  overflow: hidden;
+  /* clip 而不是 hidden：hidden 还能被程序滚动，键盘走到画布外的节点时浏览器会把整块滚走，
+     缩放条、图例、详情跟着错位。露出焦点由 canvas.mjs 挪树来做 */
+  overflow: clip;
   /* 里面几层的先后自己排，不和标题行的搜索结果抢 */
   isolation: isolate;
   cursor: grab;
@@ -233,10 +235,11 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
   stroke-width: 2;
 }
 
-/* 一圈 2.6 秒，和 engine/tree.mjs 的 FLOW_MS 一致 */
+/* 一圈 2.6 秒，和 engine/tree.mjs 的 FLOW_MS 一致。颜色往底色那边提：
+   墨色主题里 glow 和线几乎一个颜色，直接用 glow 看不出光在走 */
 .flow {
   fill: none;
-  stroke: var(--glow);
+  stroke: color-mix(in oklch, var(--glow) 45%, var(--bg));
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-dasharray: 10 320;
@@ -995,11 +998,17 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
   color: var(--ink-2);
 }
 
+.detail-link:disabled {
+  opacity: 0.5;
+}
+
 /* ---------- 密钥面板：从窗口右边滑出 ---------- */
 
 .sheet {
   position: fixed;
   inset: 0.5rem 0.5rem 0.5rem auto;
+  /* 它盖在内容区顶上的拖动条上。拖动区只认 app-region，不管上面盖着什么：不写这一句，面板顶上一截点下去是在拖窗口 */
+  -webkit-app-region: no-drag;
   flex-direction: column;
   width: min(30rem, 100vw - 4rem);
   height: auto;
@@ -1041,8 +1050,9 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
   }
 }
 
+/* 和设置、词典对话框一样压暗：用 --ink 的话深色下变成一层白雾 */
 .sheet::backdrop {
-  background: color-mix(in oklch, var(--ink) 16%, transparent);
+  background: oklch(0 0 0 / 0.18);
 }
 
 .sheet-head {
@@ -1207,7 +1217,8 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
     display: none;
   }
 
-  .world,
+  /* .world 的过渡写在 .world[data-animate] 上，这里要同样的优先级才压得住 */
+  .world[data-animate],
   .node,
   .leaf,
   .mode-node,

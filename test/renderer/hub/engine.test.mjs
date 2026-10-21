@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULTS, describePlaza, loadPriceBook } from "../../../src/app/model-plaza.mjs";
-import { clampZoom, fitView, zoomAround } from "../../../src/renderer/hub/engine/canvas.mjs";
+import { clampZoom, fitView, wheelZoom, zoomAround } from "../../../src/renderer/hub/engine/canvas.mjs";
 import {
   MODE_ORDER,
   MODE_ROLES,
@@ -189,6 +189,19 @@ test("以一点为中心缩放：那一点在画布上的位置不动", () => {
   const after = { x: (300 - next.x) / next.k, y: (200 - next.y) / next.k };
   assert.ok(Math.abs(before.x - after.x) < 1e-9 && Math.abs(before.y - after.y) < 1e-9);
   assert.equal(next.k, 1.5);
+});
+
+test("按住 ⌘ / Ctrl 滚动缩放：触控板捏合照原样连续缩；鼠标滚一格只走一档（同缩放按钮的 1.2 倍），按行报的也一样", () => {
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  // 触控板捏合每次只报几个像素
+  assert.ok(near(wheelZoom(4), Math.exp(-0.04)));
+  assert.ok(near(wheelZoom(-4), Math.exp(0.04)));
+  // Windows 上鼠标一格 100 左右、Mac 上 120 左右：一格一档，不是一下跳到头
+  assert.ok(near(wheelZoom(100), 1 / 1.2));
+  assert.ok(near(wheelZoom(-120), 1.2));
+  // 按行报的（deltaMode 1）先换成像素
+  assert.ok(near(wheelZoom(3, 1), 1 / 1.2));
+  assert.equal(wheelZoom(0), 1);
 });
 
 test("连线是两头水平的三次曲线：分叉自然往右上、右、右下走", () => {

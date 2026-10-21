@@ -156,14 +156,14 @@ export function createKeys(ctx) {
         h("button", {
           type: "submit",
           class: "button primary",
-          disabled: ui.busy !== null,
+          disabled: ctx.waiting(),
           text: t("plaza.keys.save"),
         }),
         platform.key === "stored" &&
           h("button", {
             type: "button",
             class: "button ghost",
-            disabled: ui.busy !== null,
+            disabled: ctx.waiting(),
             text: t("plaza.keys.remove"),
             onclick: () =>
               ctx.act(key, () => window.speakmore.forgetKey(platform.id), {
@@ -192,7 +192,7 @@ export function createKeys(ctx) {
     const state = t(platform.key === "env" ? "plaza.keys.env" : filled ? "plaza.keys.stored" : "plaza.keys.none");
     return h(
       "div",
-      { class: "key-row", "data-open": open ? "" : null },
+      { class: "key-row", "data-platform": platform.id, "data-open": open ? "" : null },
       h("span", { class: "logo-tile" }, brand(platform.id)),
       h(
         "div",
@@ -282,8 +282,9 @@ export function createKeys(ctx) {
     ui.custom.form = null;
     back = false;
     ctx.draw();
-    // 从详情来的回详情（焦点留给它自己），否则回到"密钥"按钮
-    if (!returning) $("keys-trigger").focus({ preventScroll: true });
+    // 从详情来的回详情，否则回到"密钥"按钮。按下的那个按钮在面板打开前就随详情重画换掉了，对话框自己记不住它
+    if (returning) ctx.focusDetail();
+    else $("keys-trigger").focus({ preventScroll: true });
   });
 
   return { render, open };
