@@ -19,7 +19,7 @@ export default {
   hero: {
     title: "开口即成文",
     lead: "Mac 与 Windows 上的语音输入。\n模型、方式、费用，由你决定。",
-    shotAlt: "SpeakMore 主窗口首页：字数、省时、语速、口述时长与每日热力图，右上角选择识别方式",
+    shotAlt: "SpeakMore 主窗口首页：字数、省时、语速、口述时长与每日热力图，右上角为当前识别方式",
     barAlt: "口述时的悬浮条：左侧取消，中间为随语音起伏的声波，右侧完成",
   },
   demo: {
@@ -61,11 +61,11 @@ export default {
       { title: "实测标注", text: "评测过的模型标出得分。" },
       { title: "即换即用", text: "更换模型无需重启。" },
     ],
-    shotAlt: "模型页的润色分类：DeepSeek、通义千问、Kimi、智谱、MiniMax 等各家模型，标有价格与评测得分",
+    shotAlt: "引擎页：润色环节展开到 DeepSeek，详情中为渠道、价格与检测",
   },
   ways: {
     title: "三种识别方式\n按需切换",
-    lead: "首页一键切换，各方式的模型配置分别保存。",
+    lead: "在引擎页一键切换，各方式的模型配置分别保存。",
     lanes: { cloud: "云端", device: "本机", offline: "不联网" },
     items: [
       {
