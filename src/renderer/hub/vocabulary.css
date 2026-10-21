@@ -1,5 +1,5 @@
 /* 侧栏"词典"一页（vocabulary.mjs）。结构照原版的词典页：一个词一格，几列铺开，鼠标移上去才出现编辑、删除和多选的勾。
-   原版没有的两处：标题下面一行写词典只存在本机；搜索那一行的右边写当前方式每一跳怎么收，旁边是"支持的模型"浮层。
+   原版没有的两处：标题下面一行写词典只存在本机；搜索那一行的右边是"支持的模型"浮层。
    整页只靠字和细线分层：不给图标垫色块，词前面不放图标，状态用字的颜色说。
    按钮、标签、搜索框、浮层都是规范里的那几样（shared/window.css、hub.css、picker.css），这里只排版。 */
 
@@ -31,56 +31,6 @@
   width: 0.875rem;
   height: 0.875rem;
   margin-right: -0.25rem;
-}
-
-/* ---------- 搜索那一行的右边：当前方式每一跳怎么收，"转写 热词 · 润色 提示词" ---------- */
-
-.vocab-route {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem 1rem;
-  margin-left: auto;
-  font-size: var(--text-small);
-}
-
-/* 一跳：环节淡、收法正常色；中间一道细竖线隔开。不收的那一跳收法也淡下去 */
-.vocab-hop {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.375rem;
-  white-space: nowrap;
-  cursor: help;
-}
-
-.vocab-hop + .vocab-hop {
-  padding-left: 1rem;
-  box-shadow: inset 1px 0 0 var(--line);
-}
-
-.vocab-hop-role {
-  color: var(--ink-2);
-}
-
-.vocab-hop-kind {
-  font-weight: var(--weight-medium);
-}
-
-.vocab-hop[data-off] .vocab-hop-kind {
-  font-weight: var(--weight-regular);
-  color: var(--ink-2);
-}
-
-/* 一跳都不收：问题的颜色，前面一个提示图标 */
-.vocab-route[data-problem] {
-  gap: 0.375rem;
-  font-weight: var(--weight-medium);
-  color: var(--problem);
-}
-
-.vocab-route-icon {
-  width: 0.875rem;
-  height: 0.875rem;
 }
 
 /* ---------- 支持的模型（浮层） ---------- */
@@ -153,10 +103,14 @@
 
 /* ---------- 搜索和个数 ---------- */
 
-/* 搜索、个数挨着，右边一组（每一跳怎么收、支持的模型）靠右 */
+/* 搜索、个数挨着，"支持的模型"靠右 */
 .vocab-toolbar {
   justify-content: flex-start;
   gap: 0.75rem 1.25rem;
+}
+
+.vocab-toolbar > .picker-trigger {
+  margin-left: auto;
 }
 
 .vocab-count {

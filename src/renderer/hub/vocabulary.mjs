@@ -7,7 +7,7 @@ import { toast } from "./toast.mjs";
 // 侧栏"词典"一页。结构照原版的词典页（targets/typeless/_work/ui-reference/typeless-dictionary.png）：
 // 标题右边是导入和新词，下面是搜索，再下面一格一个词，鼠标移上去出现编辑、删除和多选的勾。
 // 和原版不同的几处：
-//   - 原版的词典在它的服务端，我们的只存在本机：标题下面一行写明这一点；搜索那一行的右边说清当前方式里每一跳怎么收词典，
+//   - 原版的词典在它的服务端，我们的只存在本机：标题下面一行写明这一点（当前方式里有收词典的云端模型时照实说随请求发出）；
 //     "支持的模型"点开是全部模型各怎么收（数据来自主进程 app/vocabulary.mjs，按模型清单里写的拼）
 //   - 新词就地输入、回车就加、接着输下一个；编辑在格子里直接改。删除、导入才弹对话框（要确认的事）
 // 增删改都交给主进程（storage/vocabulary.mjs），改完重读一遍。
@@ -138,38 +138,9 @@ export function createVocabulary() {
       $(id).title = blocked ?? "";
     }
     if (full || data.problem) closeComposer();
-    renderCurrent();
     renderSupport();
     if (editing !== null) deferred = true;
     else renderTerms();
-  }
-
-  /**
-   * 当前方式经过的每一跳一段字："转写 热词 · 润色 提示词"。模型名不占地方，悬停看；哪种方式也放在悬停里。
-   * 全部模型在"支持的模型"浮层里。一跳都不收时整段是问题的语气
-   */
-  function renderCurrent() {
-    const { mode, hops } = data.current;
-    const unused = hops.every(({ kind }) => kind === null);
-    const node = $("vocabulary-current");
-    node.toggleAttribute("data-problem", unused);
-    node.title = t("vocabulary.current", { mode: t(`plaza.modes.${mode}`) });
-    if (unused) {
-      node.replaceChildren(svg("i-circle-alert", "icon vocab-route-icon"), h("span", { text: t("vocabulary.unused") }));
-      return;
-    }
-    const hop = (each) =>
-      h(
-        "span",
-        {
-          class: "vocab-hop",
-          "data-off": each.kind === null || null,
-          title: `${each.name} · ${whereOf(each.platform)}\n${t(`vocabulary.kindTips.${each.kind ?? "none"}`)}`,
-        },
-        h("span", { class: "vocab-hop-role", text: t(`vocabulary.support.roles.${each.role}`) }),
-        h("span", { class: "vocab-hop-kind", text: t(`vocabulary.kinds.${each.kind ?? "none"}`) }),
-      );
-    node.replaceChildren(...hops.map(hop));
   }
 
   /** "支持的模型"浮层：原生识别、转写、润色三段；转写按在哪分组（本机、各家平台），一个模型一行，前面是厂商的标志 */

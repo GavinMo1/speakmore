@@ -605,9 +605,7 @@ export default {
     localMeta: { device: "不上传", cloud: "随听写请求发出" },
     localTip:
       "词典保存在 {file}，不上传、不同步。听写时，所用模型收得下的那部分词随这次请求一并发出；数据隐私方式下不离开本机",
-    current: "当前 · {mode}",
     composer: { placeholder: "输入新词", add: "添加", close: "收起" },
-    unused: "不使用词典",
     supportTrigger: "支持的模型",
     support: {
       title: "支持的模型",

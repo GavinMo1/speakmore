@@ -79,7 +79,7 @@ async function refreshSetup() {
   engine.render(setup);
   modeChip.render(setup);
   presetPicker.render(setup);
-  // 换了识别方式，词典页上"当前方式每一跳收不收"跟着变
+  // 换了识别方式，词典页标题下面那一行（词随不随请求发出）跟着变
   if (!document.querySelector('.page[data-route="vocabulary"]').hidden) await vocabulary.shown();
   return setup;
 }

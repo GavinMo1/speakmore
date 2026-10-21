@@ -617,9 +617,7 @@ export default {
     localMeta: { device: "Never uploaded", cloud: "Sent with dictation requests" },
     localTip:
       "The dictionary is saved in {file} and is never uploaded or synced. When you dictate, the words your model can take are sent along with that request; in Privacy mode they never leave this device",
-    current: "Current · {mode}",
     composer: { placeholder: "Type a new word", add: "Add", close: "Close" },
-    unused: "Doesn't use the dictionary",
     supportTrigger: "Supported models",
     support: {
       title: "Supported models",

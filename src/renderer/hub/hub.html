@@ -308,7 +308,7 @@
         </section>
 
         <!-- 词典：版式照原版的词典页，标题右边是导入和新词，下面一格一个词（vocabulary.mjs 画）。
-             标题下面一行写明词典只存在本机；搜索那一行的右边写当前方式每一跳怎么收词典，点"支持的模型"看全部 -->
+             标题下面一行写明词典只存在本机；搜索那一行的右边是"支持的模型"，各模型怎么收词典点开看 -->
         <section class="page" data-route="vocabulary" aria-labelledby="vocabulary-title" hidden>
           <header class="page-head">
             <div class="page-heading">
@@ -332,14 +332,13 @@
             <div class="vocab-support" id="vocabulary-support-list"></div>
           </div>
           <p class="problem load-error" id="vocabulary-error" role="alert" hidden></p>
-          <!-- 搜索、个数；右边是当前方式经过的每一跳收不收词典（"转写 热词 · 润色 提示词"），和全部模型的浮层 -->
+          <!-- 搜索、个数；右边是全部模型的浮层 -->
           <div class="toolbar vocab-toolbar">
             <search class="search">
               <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
               <input class="input" id="vocabulary-search" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="vocabulary.search" data-i18n-aria-label="vocabulary.search" />
             </search>
             <p class="vocab-count" id="vocabulary-count"></p>
-            <p class="vocab-route" id="vocabulary-current"></p>
             <button type="button" class="picker-trigger" id="vocabulary-support-trigger" popovertarget="vocabulary-support" aria-haspopup="dialog" aria-expanded="false">
               <span class="picker-trigger-value" data-i18n="vocabulary.supportTrigger">Supported models</span>
               <svg class="icon chevron" aria-hidden="true"><use href="#i-chevron" /></svg>
