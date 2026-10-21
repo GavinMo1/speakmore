@@ -152,3 +152,32 @@ func TestRightShiftWithOrWithoutExtendedFlagIsTheSameKey(t *testing.T) {
 		t.Fatalf("带扩展位的右 Shift 没认出来：%v", got.events)
 	}
 }
+
+// 只有 Windows 有：低级钩子吞了按下，系统就不更新这个键的异步状态，GetAsyncKeyState 一直说它没按着
+// （所有低级钩子都放行了，系统才改键的状态：https://devblogs.microsoft.com/oldnewthing/20140213-00/?p=1773 ）。
+// 核对按住的键时要是信了它，按着右 Ctrl+Space 再按 K，就成了只按着右 Ctrl+K
+func TestSwallowedKeyIsNotCheckedAgainstTheSystemState(t *testing.T) {
+	m := newMatcher(func(keyID, heldKey) bool { return false })
+	m.bind([]binding{
+		{ID: "a#0", Mods: []uint32{vkRControl}, Key: 0x39, HasKey: true},
+		{ID: "b#0", Mods: []uint32{vkRControl}, Key: 0x25, HasKey: true},
+	})
+	m.onKey(keyInput{vk: vkRControl, scan: 0x1D, extended: true, down: true, time: 1})
+	if out := m.onKey(keyInput{vk: 0x20, scan: 0x39, down: true, time: 2}); !out.swallow {
+		t.Fatalf("Space 凑成了 a#0，要吞：%+v", out)
+	}
+	got := m.onKey(keyInput{vk: 'K', scan: 0x25, down: true, time: 3})
+	if want := []event{{"event": "interrupted", "id": "a#0"}}; !reflect.DeepEqual(got.events, want) || got.swallow {
+		t.Fatalf("按着三个键，应该只是打断：%+v", got)
+	}
+	// 10 秒的清理照旧：吞掉的键松开要是丢了，靠它清。换一份表放掉按着的绑定，Space 的松开没来
+	m.onKey(keyInput{vk: 'K', scan: 0x25, down: false, time: 4})
+	m.onKey(keyInput{vk: vkRControl, scan: 0x1D, extended: true, down: false, time: 5})
+	m.bind([]binding{{ID: "d#0", Mods: []uint32{vkRControl}}})
+	m.onKey(keyInput{vk: vkRControl, scan: 0x1D, extended: true, down: true, time: 6})
+	m.onKey(keyInput{vk: vkRControl, scan: 0x1D, extended: true, down: false, time: 7})
+	got = m.onKey(keyInput{vk: vkRControl, scan: 0x1D, extended: true, down: true, time: 20_000})
+	if want := []event{{"event": "binding", "id": "d#0", "down": true}}; !reflect.DeepEqual(got.events, want) {
+		t.Fatalf("Space 的松开丢了 10 秒以上，单按右 Ctrl 应该照常按下：%+v", got)
+	}
+}

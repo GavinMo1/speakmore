@@ -3,17 +3,19 @@ import { EventEmitter, once } from "node:events";
 import { test } from "node:test";
 import { startHelper } from "../../src/app/helper.mjs";
 
-// 用一小段 Node 脚本冒充原生小帮手：启动时报 ready 和一次热键按下，收到 paste 就按文字内容决定怎么回；
-// 收到 capture 就当作用户点了划出来的第一块，收到 release 就把收到的命令原样报回来
+// 用一小段 Node 脚本冒充原生小帮手：启动时报 ready 和一次绑定按下，收到 paste 就按文字内容决定怎么回；
+// 收到 bind 回 bound（把收到的表原样带回来）；收到 capture 就当作用户点了划出来的第一块，
+// 收到 release 就当作被打断，把收到的命令原样报回来
 const FAKE_HELPER = `
 const emit = (o) => console.log(JSON.stringify(o));
 emit({ event: "ready", listen: true, trusted: true });
-emit({ event: "hotkey", down: true });
+emit({ event: "binding", id: "dictate#0", down: true });
 console.log("这一行不是 JSON");
 require("node:readline").createInterface({ input: process.stdin }).on("line", (line) => {
   const command = JSON.parse(line);
+  if (command.cmd === "bind") return emit({ event: "bound", rejected: [], got: command.bindings });
   if (command.cmd === "capture") return emit({ event: "click", id: command.regions[0]?.id ?? null, regions: command.regions });
-  if (command.cmd === "release") return emit({ event: "escape", got: command });
+  if (command.cmd === "release") return emit({ event: "interrupted", id: "dictate#0", got: command });
   const { id, text } = command;
   if (text === "不回") return;
   if (text === "退出") process.exit(3);
@@ -38,10 +40,10 @@ function start() {
 
 test("转发按键事件；不是 JSON 的行记一条警告，不影响后面", async () => {
   const { helper, events, seen, warnings } = start();
-  await once(events, "hotkey");
+  await once(events, "binding");
   assert.deepEqual(seen, [
     { event: "ready", listen: true, trusted: true },
-    { event: "hotkey", down: true },
+    { event: "binding", id: "dictate#0", down: true },
   ]);
   assert.deepEqual(await helper.paste("你好"), { ok: true, reason: null });
   assert.deepEqual(warnings, ["helper_bad_line"]);
@@ -66,7 +68,19 @@ test("两次粘贴各回各的", async () => {
   helper.stop();
 });
 
-test("开始截和不截了：命令原样送到，截到的点击和 esc 往上转", async () => {
+test("下发绑定表：命令原样送到，回执往上转", async () => {
+  const { helper, events } = start();
+  const table = [
+    { id: "dictate#0", mods: [61], when: "always" },
+    { id: "cancel#0", mods: [], key: 53, when: "capturing" },
+  ];
+  const bound = once(events, "bound");
+  helper.bind(table);
+  assert.deepEqual((await bound)[0], { event: "bound", rejected: [], got: table });
+  helper.stop();
+});
+
+test("开始截和不截了：命令原样送到，截到的点击和别的事件往上转", async () => {
   const { helper, events } = start();
   const regions = [
     { id: "cancel", x: 700, y: 900, width: 28, height: 28 },
@@ -75,17 +89,18 @@ test("开始截和不截了：命令原样送到，截到的点击和 esc 往上
   const clicked = once(events, "click");
   helper.capture(regions);
   assert.deepEqual((await clicked)[0], { event: "click", id: "cancel", regions });
-  const escaped = once(events, "escape");
+  const interrupted = once(events, "interrupted");
   helper.release();
-  assert.deepEqual((await escaped)[0], { event: "escape", got: { cmd: "release" } });
+  assert.deepEqual((await interrupted)[0], { event: "interrupted", id: "dictate#0", got: { cmd: "release" } });
   helper.stop();
 });
 
-test("小帮手不在了之后再说开始截、不截了：什么也不做，不报错", async () => {
+test("小帮手不在了之后再下发绑定、说开始截、不截了：什么也不做，不报错", async () => {
   const { helper, events } = start();
   const exited = once(events, "exit");
   helper.stop();
   await exited;
+  helper.bind([]);
   helper.capture([]);
   helper.release();
 });

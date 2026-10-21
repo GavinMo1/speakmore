@@ -11,6 +11,30 @@
       ]
     },
     {
+      "name": "吞掉的普通键松开丢了：Mac 照系统接口清掉（查的是硬件那份状态，吞不吞都准）；Windows 不信系统接口（钩子吞了按下，系统根本没记下它按着），只按 10 秒清",
+      "bindings": [
+        { "id": "a#0", "chord": "AltRight+Space" },
+        { "id": "b#0", "chord": "AltRight+KeyK" }
+      ],
+      "steps": [
+        { "key": "AltRight", "down": true },
+        { "key": "Space", "down": true, "events": [{ "down": "a#0" }], "swallow": true, "mask": true },
+        { "lostUp": "Space" },
+        {
+          "only": "darwin",
+          "key": "KeyK",
+          "down": true,
+          "events": [{ "interrupted": "a#0", "to": "b#0" }, { "down": "b#0" }],
+          "swallow": true
+        },
+        { "only": "win32", "key": "KeyK", "down": true, "events": [{ "interrupted": "a#0" }] },
+        { "only": "darwin", "key": "KeyK", "down": false, "swallow": true },
+        { "only": "win32", "key": "KeyK", "down": false },
+        { "only": "darwin", "key": "AltRight", "down": false, "events": [{ "up": "b#0" }] },
+        { "only": "win32", "key": "AltRight", "down": false }
+      ]
+    },
+    {
       "name": "按下超过 10 秒还没松开的普通键当成丢了松开，即使系统接口说它还按着",
       "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
       "steps": [

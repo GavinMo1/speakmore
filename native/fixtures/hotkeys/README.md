@@ -1,6 +1,6 @@
 # 热键的按键轨迹样例
 
-Mac（`native/*.swift`）和 Windows（`native/windows/*.go`）两个小帮手各写了一遍匹配规则，这些样例约束两边的行为一字不差（`docs/hotkey-research.md` 5.3、第 6 节）。
+Mac（`native/mac/*.swift`）和 Windows（`native/windows/*.go`）两个小帮手各写了一遍匹配规则，这些样例约束两边的行为一字不差（`docs/hotkey-research.md` 5.3、第 6 节）。
 
 - 这一层的 `*.json` 是手写的，键用 W3C code 名（`AltRight`、`Space`）。
 - `mac/`、`win/` 是 `node scripts/build/hotkey-fixtures.mjs` 按 `src/hotkeys/keys.mjs` 换成原生码生成的，不要手改。改了样例或键表之后重新生成；`test/scripts/build/hotkey-fixtures.test.mjs` 会核对生成的和仓库里的一致。

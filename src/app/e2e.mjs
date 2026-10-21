@@ -17,7 +17,8 @@ export const fakeHelper = {
     pasted.push(text);
     return { ok: true, reason: null };
   },
-  // 不截真的 esc 和鼠标点击
+  // 不听真键盘，也不截真的取消键和鼠标点击
+  bind() {},
   capture() {},
   release() {},
   stop() {},
@@ -81,10 +82,11 @@ export async function run({ bar, history, localModel, downloadModel, quit }) {
   if (bar.webContents.isLoading()) {
     await new Promise((resolve) => bar.webContents.once("did-finish-load", resolve));
   }
+  // 和主进程认出小帮手报的绑定事件之后交给悬浮条的一样（main.mjs 的 onBindingEvent）
   const press = async () => {
-    bar.webContents.send("input", { event: "hotkey", down: true });
+    bar.webContents.send("input", { event: "binding", action: "dictate", down: true });
     await sleep(120);
-    bar.webContents.send("input", { event: "hotkey", down: false });
+    bar.webContents.send("input", { event: "binding", action: "dictate", down: false });
   };
   await sleep(500);
   await press();

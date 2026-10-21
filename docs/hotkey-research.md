@@ -750,7 +750,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 ```json
 {"cmd":"bind","bindings":[
   {"id":"dictate#0","mods":[61],"when":"always"},
-  {"id":"cancel#0","key":53,"when":"capturing"}
+  {"id":"cancel#0","mods":[],"key":53,"when":"capturing"}
 ]}
 {"cmd":"capture","regions":[{"id":"cancel","x":0,"y":0,"width":28,"height":28}]}
 {"cmd":"release"}
@@ -761,7 +761,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 {"cmd":"paste","id":1,"text":"…"}
 ```
 
-- 一个绑定分成 `mods`（修饰键，0 到 2 个）和 `key`（普通键，最多 1 个）两栏，形状规则（5.3）直接写在结构里，小帮手不用自己猜哪个码是修饰键。
+- 一个绑定分成 `mods`（修饰键，0 到 2 个，一定带，没有就是空数组）和 `key`（普通键，最多 1 个，可以不带）两栏，形状规则（5.3）直接写在结构里，小帮手不用自己猜哪个码是修饰键。小帮手再查一遍形状：整条不对（不是一组对象、少了 `id`/`mods`/`when`、类型不对）报 `error`、绑定表不动；单个不合规矩的（含重复的 id，两个都不装）在回执里退回，原因 `invalid`。
 - `bind` 整表替换，可以随时再发。上例是 Mac 的原生码；Windows 上 `mods` 发 vk，`key` 发扫描码（4.2），所以 `AltRight` 是 165（0xA5），`Escape` 是 1，`F13` 是 100（0x64）。
 - `probe` 查系统冲突，结果见下面的 `probed`。Mac 上调 `CopySymbolicHotKeys`（Carbon 接口，只有 Swift 小帮手能调）；Windows 上用 `RegisterHotKey` 试登记，它要 vk，小帮手按前台窗口的布局用 `MapVirtualKeyEx` 把扫描码换成 vk。只对"修饰键 + 普通键"有意义，别的形状直接回 `conflict: false`。
 - `info` 问一次系统设置里和热键相关的值，第一版只有 Mac 的 `AppleFnUsageType`（4.1）。也可以由主进程用 `defaults read com.apple.HIToolbox AppleFnUsageType` 自己读，那样协议里就不需要 `info`；放在小帮手里，是为了和 `CFPreferencesCopyAppValue` 读到的同一份值一致。
@@ -786,7 +786,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 {"event":"pasted","id":1,"ok":true}
 ```
 
-- `bound` 回执说明哪些绑定装不上、为什么。例如 Mac 上没有辅助功能权限时，需要吞普通键的绑定装不上（`needs_trusted`）。不装上而让普通键漏出去，会往用户的输入框里打字，所以宁可装不上并照实提示。
+- `bound` 回执说明哪些绑定装不上、为什么，`rejected` 总是数组。原因有四种：`invalid`（形状不合规矩）；`needs_listen`（Mac 没有输入监控权限、Windows 键盘钩子没装上）；`needs_trusted`（Mac 上要吞普通键却没有辅助功能权限）；`register_failed`（Mac 上单个 F 键交给 Carbon 注册不上，多半是别的应用占了）。不装上而让普通键漏出去，会往用户的输入框里打字，所以宁可装不上并照实提示。
 - `interrupted` 带 `to` 时表示升级，紧接着一定是 `to` 那个绑定的按下。状态机可以据此决定保留麦克风、只换动作，还是取消再开始；第一版按"取消再开始"处理即可。
 - `recording` 只在录制模式下出现，报当前按住的原生码集合，修饰键和别的键分开报（录制时可能按着不止一个普通键，所以 `keys` 是数组，交给 JS 判形状）。
 - `probed` 的 `source` 是 `symbolic`（Mac 系统快捷键）或 `registered`（Windows 上已被别的程序登记）；`info` 里 `fnUsage` 读不到时不带这个字段。

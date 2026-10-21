@@ -79,6 +79,117 @@
       ]
     },
     {
+      "name": "吞掉的普通键松开丢了：Mac 照系统接口清掉（查的是硬件那份状态，吞不吞都准）；Windows 不信系统接口（钩子吞了按下，系统根本没记下它按着），只按 10 秒清",
+      "bindings": [
+        {
+          "id": "a#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": 57
+        },
+        {
+          "id": "b#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": 37
+        }
+      ],
+      "steps": [
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "a#0",
+                "down": true
+              }
+            ],
+            "swallow": true,
+            "mask": true
+          }
+        },
+        {
+          "lostUp": {
+            "vk": 0,
+            "scan": 57,
+            "extended": false
+          },
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 37,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "a#0"
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 37,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
       "name": "按下超过 10 秒还没松开的普通键当成丢了松开，即使系统接口说它还按着",
       "bindings": [
         {

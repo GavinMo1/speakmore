@@ -1,5 +1,5 @@
-# Windows 小帮手的真机检查：在桌面会话里起 key-helper.exe，用 SendInput 模拟按键和点击，看它报的事件对不对，
-# 再往记事本里贴一段字、读回来对一遍。要在有人登录的桌面上跑（scripts/dev/win-desktop.sh - < 这个文件）。
+# Windows 小帮手的真机检查：在桌面会话里起 key-helper.exe，用 bind 下发热键，用 SendInput 模拟按键和点击，
+# 看它报的事件对不对，再往记事本里贴一段字、读回来对一遍。要在有人登录的桌面上跑（scripts/dev/win-desktop.sh - < 这个文件）。
 # 会弹出一个记事本窗口、往里贴字，跑完自己关掉；剪贴板里原来的东西跑完还在。
 # 读回记事本里的字靠全选、复制（Ctrl 组合键不经过输入法）；不模拟敲字母：中文系统默认开着拼音，字母会进候选框。
 # 没查的：右 Alt 单按之后菜单栏会不会被叫出来（新版记事本不是老式菜单，查不了），要人在 Office 这类应用里试一下。
@@ -19,9 +19,11 @@ public static class Fake {
   [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
   // 钩子报的是物理像素；不声明的话这个进程看到的屏幕尺寸是按缩放换算过的，两边对不上
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-  public static void Key(ushort vk, bool down) {
+  // vk 和扫描码都填，不加 KEYEVENTF_SCANCODE（系统照 vk 走）：匹配器按 vk 认修饰键、按扫描码认别的键。
+  // 扩展键（右 Ctrl、Delete）带 KEYEVENTF_EXTENDEDKEY，钩子才报 LLKHF_EXTENDED
+  public static void Key(ushort vk, ushort scan, bool extended, bool down) {
     var input = new INPUT { type = 1 };
-    input.u.k = new KEYBDINPUT { vk = vk, flags = down ? 0u : 2u };
+    input.u.k = new KEYBDINPUT { vk = vk, scan = scan, flags = (extended ? 1u : 0u) | (down ? 0u : 2u) };
     SendInput(1, new[] { input }, Marshal.SizeOf(typeof(INPUT)));
   }
   // 屏幕物理像素 → SendInput 的绝对坐标（0..65535），按主屏
@@ -40,8 +42,8 @@ function Check($name, $ok, $detail) {
   $results.Add(("{0} {1}{2}" -f ($(if ($ok) { 'PASS' } else { 'FAIL' })), $name, $(if ($detail) { " — $detail" } else { '' })))
 }
 
-function Start-Helper($key) {
-  $info = [System.Diagnostics.ProcessStartInfo]::new("$repo\build\key-helper.exe", "--key $key")
+function Start-Helper {
+  $info = [System.Diagnostics.ProcessStartInfo]::new("$repo\build\key-helper.exe")
   $info.UseShellExecute = $false
   $info.RedirectStandardInput = $true
   $info.RedirectStandardOutput = $true
@@ -73,28 +75,39 @@ function Send($helper, $object) {
   $helper.Process.StandardInput.BaseStream.Flush()
 }
 
-$VK_RCONTROL = 0xA3; $VK_RMENU = 0xA5; $VK_ESCAPE = 0x1B; $VK_A = 0x41; $VK_CONTROL = 0x11
+# 每个键：vk、扫描码、是不是扩展键
+$RCtrl = 0xA3, 0x1D, $true; $Esc = 0x1B, 0x01, $false; $KeyA = 0x41, 0x1E, $false; $KeyC = 0x43, 0x2E, $false
+$Ctrl = 0x11, 0x1D, $false; $Delete = 0x2E, 0x53, $true
+function Press($key, $down) { [Fake]::Key($key[0], $key[1], $key[2], $down) }
 
 $saved = Get-Clipboard -Raw
-$helper = Start-Helper 'right_ctrl'
+$helper = Start-Helper
 try {
   $ready = Next-Event $helper 3000
   Check '启动报 ready，钩子装上了' ($ready.event -eq 'ready' -and $ready.listen -and $ready.capture) ($ready | ConvertTo-Json -Compress)
 
+  # 热键由父进程下发：右 Ctrl 当听写，esc（扫描码 1）当截着时的取消
+  Send $helper @{ cmd = 'bind'; bindings = @(
+      @{ id = 'dictate#0'; mods = @(0xA3); when = 'always' },
+      @{ id = 'cancel#0'; mods = @(); key = 1; when = 'capturing' }) }
+  $bound = Next-Event $helper
+  Check 'bind 都装上了' ($bound.event -eq 'bound' -and $null -ne $bound.rejected -and @($bound.rejected).Count -eq 0) ($bound | ConvertTo-Json -Compress)
+
   # 热键按下、松开；按住时系统的自动重复不另报
-  [Fake]::Key($VK_RCONTROL, $true); Start-Sleep -Milliseconds 50; [Fake]::Key($VK_RCONTROL, $true)
+  Press $RCtrl $true; Start-Sleep -Milliseconds 50; Press $RCtrl $true
   $down = Next-Event $helper
-  [Fake]::Key($VK_RCONTROL, $false)
+  Press $RCtrl $false
   $up = Next-Event $helper
-  Check '热键按下、松开各报一次' ($down.event -eq 'hotkey' -and $down.down -eq $true -and $up.event -eq 'hotkey' -and $up.down -eq $false) "$($down | ConvertTo-Json -Compress) $($up | ConvertTo-Json -Compress)"
+  Check '热键按下、松开各报一次' ($down.event -eq 'binding' -and $down.id -eq 'dictate#0' -and $down.down -eq $true -and $up.event -eq 'binding' -and $up.id -eq 'dictate#0' -and $up.down -eq $false) "$($down | ConvertTo-Json -Compress) $($up | ConvertTo-Json -Compress)"
   Check '自动重复不另报' ($null -eq (Next-Event $helper 300))
 
-  # 按住热键再按别的键：报一次 other_key，不说是哪个键
-  [Fake]::Key($VK_RCONTROL, $true); $null = Next-Event $helper
-  [Fake]::Key($VK_A, $true); [Fake]::Key($VK_A, $false); [Fake]::Key($VK_A, $true); [Fake]::Key($VK_A, $false)
+  # 按住热键再按别的键：报一次 interrupted，不说是哪个键；被打断的松开不报
+  Press $RCtrl $true; $null = Next-Event $helper
+  Press $KeyA $true; Press $KeyA $false; Press $KeyA $true; Press $KeyA $false
   $other = Next-Event $helper
-  [Fake]::Key($VK_RCONTROL, $false); $null = Next-Event $helper
-  Check '组合键报一次 other_key' ($other.event -eq 'other_key' -and @($other.PSObject.Properties).Count -eq 1) ($other | ConvertTo-Json -Compress)
+  Press $RCtrl $false
+  Check '组合键报一次 interrupted' ($other.event -eq 'interrupted' -and $other.id -eq 'dictate#0' -and @($other.PSObject.Properties).Count -eq 2) ($other | ConvertTo-Json -Compress)
+  Check '被打断以后松开不报' ($null -eq (Next-Event $helper 300))
   Drain $helper
 
   # 截住 esc 和一块区域里的点击
@@ -103,15 +116,16 @@ try {
   $results.Add("INFO 主屏 ${width}x${height}（物理像素），点在 ($x, $y)")
   Send $helper @{ cmd = 'capture'; regions = @(@{ id = 'done'; x = $x - 20; y = $y - 20; width = 40; height = 40 }) }
   Start-Sleep -Milliseconds 200
-  [Fake]::Key($VK_ESCAPE, $true); [Fake]::Key($VK_ESCAPE, $false)
-  $escape = Next-Event $helper
-  Check '截着时按 esc 报 escape' ($escape.event -eq 'escape') ($escape | ConvertTo-Json -Compress)
+  Press $Esc $true; Press $Esc $false
+  $cancelDown = Next-Event $helper
+  $cancelUp = Next-Event $helper
+  Check '截着时按 esc 报取消的按下、松开' ($cancelDown.event -eq 'binding' -and $cancelDown.id -eq 'cancel#0' -and $cancelDown.down -eq $true -and $cancelUp.event -eq 'binding' -and $cancelUp.id -eq 'cancel#0' -and $cancelUp.down -eq $false) "$($cancelDown | ConvertTo-Json -Compress) $($cancelUp | ConvertTo-Json -Compress)"
   [Fake]::Click($x, $y, $true); Start-Sleep -Milliseconds 50; [Fake]::Click($x, $y, $false)
   $click = Next-Event $helper
   Check '截着时点那一块报 click' ($click.event -eq 'click' -and $click.id -eq 'done') ($click | ConvertTo-Json -Compress)
   Send $helper @{ cmd = 'release' }
   Start-Sleep -Milliseconds 200
-  [Fake]::Key($VK_ESCAPE, $true); [Fake]::Key($VK_ESCAPE, $false)
+  Press $Esc $true; Press $Esc $false
   [Fake]::Click($x, $y, $true); [Fake]::Click($x, $y, $false)
   Check '不截了之后 esc 和点击都不报' ($null -eq (Next-Event $helper 400))
 
@@ -131,8 +145,8 @@ try {
   [Fake]::SetForegroundWindow($window) | Out-Null
   Start-Sleep -Milliseconds 500
   # Win11 的记事本会把上次没存的内容恢复出来：先清空
-  [Fake]::Key($VK_CONTROL, $true); [Fake]::Key($VK_A, $true); [Fake]::Key($VK_A, $false); [Fake]::Key($VK_CONTROL, $false)
-  [Fake]::Key(0x2E, $true); [Fake]::Key(0x2E, $false)
+  Press $Ctrl $true; Press $KeyA $true; Press $KeyA $false; Press $Ctrl $false
+  Press $Delete $true; Press $Delete $false
   Start-Sleep -Milliseconds 300
   Set-Clipboard -Value '贴之前用户复制的字'
   Send $helper @{ cmd = 'paste'; id = 1; text = $text }
@@ -140,7 +154,7 @@ try {
   Check '贴完报 pasted ok' ($pasted.event -eq 'pasted' -and $pasted.id -eq 1 -and $pasted.ok) ($pasted | ConvertTo-Json -Compress)
   Check '贴完剪贴板还是原来的' ((Get-Clipboard -Raw) -eq '贴之前用户复制的字') (Get-Clipboard -Raw)
   # 全选、复制，读回记事本里的字
-  [Fake]::Key($VK_CONTROL, $true); [Fake]::Key($VK_A, $true); [Fake]::Key($VK_A, $false); [Fake]::Key(0x43, $true); [Fake]::Key(0x43, $false); [Fake]::Key($VK_CONTROL, $false)
+  Press $Ctrl $true; Press $KeyA $true; Press $KeyA $false; Press $KeyC $true; Press $KeyC $false; Press $Ctrl $false
   Start-Sleep -Milliseconds 400
   $inNotepad = Get-Clipboard -Raw
   Check '记事本里是贴进去的那段字' ($inNotepad -eq $text) ($inNotepad)

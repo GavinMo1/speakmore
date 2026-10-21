@@ -18,7 +18,7 @@ import (
 const restoreDelay = 300 * time.Millisecond
 
 // 一次录音最长 9 分钟。截了这么久父进程还没说"不截了"，多半是它那边出了岔子：自己松开，
-// 不能让 esc 在所有应用里一直按不出来
+// 不能让取消用的键（esc）在所有应用里一直按不出来
 const captureLimit = 600 * time.Second
 
 const wmTask = wmApp + 1
@@ -27,7 +27,11 @@ var (
 	out   = newOutbox(256)
 	tasks taskQueue
 
-	state     keyState
+	// 键盘钩子装上没有：没装上时 bind 的绑定一个都装不了。main 里定下来以后才开始读标准输入
+	listening bool
+	// 热键匹配和点击的截取：只在钩子线程上碰，不加锁
+	hotkeys   = newMatcher(keyStillDown)
+	clicks    clickCapture
 	board     *clipboard
 	window    uintptr
 	mouseHook uintptr
@@ -43,12 +47,23 @@ func onUIThread(task func()) {
 	procPostMessageW.Call(window, wmTask, 0, 0)
 }
 
+// 系统说这个键还按着没有（matcher 核对按住的普通键时问）。钩子回调发生在系统更新键的状态之前，
+// 查不准正触发回调的这个键；matcher 只拿它查早先按下的别的键。vk 为 0 的键查不了，当它还按着，只靠 10 秒清
+func keyStillDown(_ keyID, key heldKey) bool {
+	if key.vk == 0 {
+		return true
+	}
+	state, _, _ := procGetAsyncKeyState.Call(uintptr(key.vk))
+	return state&0x8000 != 0
+}
+
 func keyboardProc(code int32, wParam, lParam uintptr) uintptr {
 	if code >= 0 {
 		info := (*kbdLLHookStruct)(unsafe.Pointer(lParam))
 		down := wParam == wmKeyDown || wParam == wmSysKeyDown
 		if down || wParam == wmKeyUp || wParam == wmSysKeyUp {
-			result := state.onKey(keyInput{vk: info.vkCode, scan: info.scanCode, down: down, ours: info.extraInfo == ourMark})
+			result := hotkeys.onKey(keyInput{vk: info.vkCode, scan: info.scanCode, extended: info.flags&llkhfExtended != 0,
+				down: down, ours: info.extraInfo == ourMark, time: info.time})
 			report(result)
 			if result.swallow {
 				return 1
@@ -63,9 +78,9 @@ func mouseProc(code int32, wParam, lParam uintptr) uintptr {
 	if code >= 0 && (wParam == wmLButtonDown || wParam == wmLButtonUp) {
 		info := (*msLLHookStruct)(unsafe.Pointer(lParam))
 		if info.extraInfo != ourMark {
-			result := state.onLeftButton(wParam == wmLButtonDown, float64(info.x), float64(info.y))
+			result := clicks.onLeftButton(wParam == wmLButtonDown, float64(info.x), float64(info.y))
 			report(result)
-			if !state.wantsCapture() {
+			if !clicks.wantsHook() {
 				// 不能在自己的回调里把自己卸掉：回到消息循环里再卸
 				onUIThread(settleMouseHook)
 			}
@@ -108,20 +123,22 @@ func installHook(kind int, callback uintptr) uintptr {
 
 // 鼠标钩子只在要截的时候装着：装着时全系统每一下鼠标都要先过我们这里
 func settleMouseHook() {
-	if state.wantsCapture() && mouseHook == 0 {
+	if clicks.wantsHook() && mouseHook == 0 {
 		mouseHook = installHook(whMouseLL, mouseCallback)
 		if mouseHook == 0 {
 			emit(event{"event": "error", "message": "装不上鼠标钩子，悬浮条上的按钮点不了"})
 		}
-	} else if !state.wantsCapture() && mouseHook != 0 {
+	} else if !clicks.wantsHook() && mouseHook != 0 {
 		procUnhookWindowsHookEx.Call(mouseHook)
 		mouseHook = 0
 	}
 }
 
+// 截不截同时管两样：只在截着时生效的绑定（取消），和悬浮条上的点击
 func setCapturing(on bool, regions []region) {
 	captureGeneration++
-	state.setCapturing(on, regions)
+	hotkeys.setCapturing(on)
+	clicks.setCapturing(on, regions)
 	settleMouseHook()
 	if !on {
 		return
@@ -129,7 +146,7 @@ func setCapturing(on bool, regions []region) {
 	generation := captureGeneration
 	time.AfterFunc(captureLimit, func() {
 		onUIThread(func() {
-			if generation != captureGeneration || !state.capturing {
+			if generation != captureGeneration || !clicks.capturing {
 				return
 			}
 			emit(event{"event": "error", "message": fmt.Sprintf("截了 %d 秒还没人说不截了，自己松开", int(captureLimit.Seconds()))})
@@ -184,6 +201,19 @@ func handle(line []byte) {
 		return
 	}
 	switch cmd.Cmd {
+	case "bind":
+		bindings, rejected, err := parseBindings(cmd.Bindings, listening)
+		if err != nil {
+			emit(event{"event": "error", "message": err.Error()})
+			return
+		}
+		onUIThread(func() {
+			// 换表前按着的绑定先补报松开，再报这次的回执
+			for _, e := range hotkeys.bind(bindings) {
+				emit(e)
+			}
+			emit(boundEvent(rejected))
+		})
 	case "paste":
 		if cmd.ID == nil || cmd.Text == nil {
 			emit(event{"event": "error", "message": "paste 需要 id 和 text"})
@@ -287,24 +317,7 @@ func main() {
 		os.Exit(code)
 	}
 
-	name := "right_alt"
 	args := os.Args[1:]
-	for i, arg := range args {
-		if arg == "--key" {
-			if i+1 < len(args) {
-				name = args[i+1]
-			} else {
-				name = ""
-			}
-		}
-	}
-	vk, ok := hotkeys[name]
-	if !ok {
-		emit(event{"event": "error", "message": "不认识的热键 " + name + "，可选：right_alt、right_ctrl"})
-		exit(2)
-	}
-	state.hotkey = vk
-
 	has := func(flag string) bool {
 		for _, arg := range args {
 			if arg == flag {
@@ -332,9 +345,9 @@ func main() {
 		exit(1)
 	}
 
-	// --no-prompt 照收不误：Windows 上没有授权框可弹
+	// --no-prompt 照收不误：Windows 上没有授权框可弹。热键等父进程用 bind 下发，在那之前一个也不听
 	keyboard := installHook(whKeyboardLL, keyboardCallback)
-	listening := keyboard != 0
+	listening = keyboard != 0
 	emit(event{"event": "ready", "listen": listening, "trusted": true, "capture": listening})
 
 	go func() {

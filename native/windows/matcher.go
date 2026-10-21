@@ -9,6 +9,7 @@ package main
 //   - 修饰键一律不吞；凑成组合的那个普通键整段吞掉（按下、自动重复、松开）。有 Alt 或 Win 的绑定按下时要插掩码键。
 //   - 只在说话时生效的绑定（取消）不按集合认：截着的时候它那个键一按下就算，吞掉，也不进按住的键。
 //   - 松开的事件可能丢（UIPI、管理员窗口）：每次按下前用系统接口核对按住的普通键，按下超过 10 秒的也当丢了。
+//     我们吞掉的键系统接口查不准，只按 10 秒算（只有 Windows 这样，见 prune）。
 // 只报绑定的按下、松开、被打断，不报是哪个键。
 
 // 一个绑定：父进程 bind 下发的一行
@@ -279,8 +280,10 @@ func (m *matcher) prune(now uint32) {
 		if id.isModifier() {
 			continue
 		}
-		// 无符号相减：钩子的时间 49 天绕一圈也算得对
-		if now-key.since > staleAfterMs || !m.stillDown(id, key) {
+		// 吞掉的不问系统：低级钩子吞了按下，系统就不更新这个键的状态，GetAsyncKeyState 一直说它没按着
+		// （所有低级钩子都放行了才改：https://devblogs.microsoft.com/oldnewthing/20140213-00/?p=1773 ）。
+		// 它的松开要是丢了，只靠 10 秒清。无符号相减：钩子的时间 49 天绕一圈也算得对
+		if now-key.since > staleAfterMs || (!m.swallowed[id] && !m.stillDown(id, key)) {
 			delete(m.held, id)
 		}
 	}

@@ -58,7 +58,7 @@ let staleAfterMs: UInt64 = 10_000
 
 final class Matcher {
     private var bindings: [Binding] = []
-    /// 系统接口说这个键还按着没有（CGEventSourceKeyState）；测试里换成假的
+    /// 系统接口说这个键还按着没有（CGEventSourceKeyState 查硬件那份状态，吞掉的键也查得准）；测试里换成假的
     private let stillDown: (Int) -> Bool
 
     /// 按住的键 → 什么时候按下的（毫秒）
@@ -85,6 +85,12 @@ final class Matcher {
     }
 
     func setCapturing(_ on: Bool) { capturing = on }
+
+    /// 这个键现在按着没有（按匹配器记着的算）
+    func isHeld(_ code: Int) -> Bool { held[code] != nil }
+
+    /// 吞了按下、还要吞松开的键（含截着时按下的取消键）：它们松开之前，吞的那个 tap 要一直开着
+    var pendingSwallow: Set<Int> { swallowed.union(capturingDown.keys) }
 
     /// 监听停了又打开（tap 被系统停用、安全输入关掉、锁屏回来）：这段时间的松开多半丢了。
     /// 按着的绑定补报松开，按住的普通键和吞了一半的都清掉

@@ -5,7 +5,7 @@ import { LocalizedError, msg, problemOf } from "../../i18n/index.mjs";
 import { keycapOf, localize, setLocale, t } from "../shared/i18n.mjs";
 import { createBarUi } from "./bar-ui.mjs";
 import { viewOf } from "./bar-view.mjs";
-import { Action, initialState, LONG_PRESS_MS, Phase, transition } from "./machine.mjs";
+import { Action, eventTypeOf, initialState, LONG_PRESS_MS, Phase, transition } from "./machine.mjs";
 import { startRecording } from "./recorder.mjs";
 import { VoiceSocket } from "./voice-socket.mjs";
 
@@ -144,21 +144,13 @@ async function stop() {
 
 // ---------- 来自主进程的事件 ----------
 
-/** 小帮手报上来的事 → 状态机的事件。click 的 id 是条上被点的那个按钮 */
-const INPUT_EVENTS = {
-  hotkey: (event) => (event.down ? "KEY_DOWN" : "KEY_UP"),
-  other_key: () => "OTHER_KEY",
-  escape: () => "USER_CANCEL",
-  click: (event) => ({ cancel: "USER_CANCEL", confirm: "USER_CONFIRM" })[event.id],
-};
-
-window.speakmore.onInput((event) => {
-  const type = Object.hasOwn(INPUT_EVENTS, event.event) ? INPUT_EVENTS[event.event](event) : undefined;
+window.speakmore.onInput((input) => {
+  const type = eventTypeOf(input);
   if (type === undefined) {
-    console.warn("不认识的输入事件", event);
+    console.warn("不认识的输入事件", input);
     return;
   }
-  dispatch({ type });
+  if (type !== null) dispatch({ type });
 });
 
 window.speakmore.onBarControls(ui.setControls);

@@ -18,6 +18,10 @@ import {
   Tray,
 } from "electron";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
+import { actionOf, defaultChords } from "../hotkeys/actions.mjs";
+import { actionOfBinding, bindingTable } from "../hotkeys/bindings.mjs";
+import { parseChord } from "../hotkeys/chord.mjs";
+import { legacyChord } from "../hotkeys/legacy.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale, SYSTEM_LOCALE } from "../i18n/index.mjs";
 import { createInstance } from "../instance.mjs";
 import { alsoLogTo, log } from "../log.mjs";
@@ -95,7 +99,7 @@ const PRELUDE = MOVE_TO
 
 let PATHS;
 let SETTINGS;
-/** 现在用哪个键。设置里可以当场换（setup:set-hotkey），换的时候重启小帮手 */
+/** 现在用哪个键（设置里的旧 id）。设置里可以当场换（setup:set-hotkey），换的时候给小帮手下发新的绑定表 */
 let hotkey;
 /**
  * 启动时用谁家的 key：原生链路是收音频的那家，本地转写链路是润色的那家；数据隐私模式不用 key，是 null。
@@ -659,6 +663,17 @@ async function main() {
   }
 
   /**
+   * 下发给小帮手的绑定表。设置里现在只有听写的一项（旧 id），用旧 id 对照表换成组合；取消用动作目录里的默认组合
+   */
+  function currentBindings() {
+    const chords = {
+      dictate: [parseChord(legacyChord(hotkey))],
+      cancel: defaultChords(actionOf("cancel"), process.platform),
+    };
+    return bindingTable(chords, process.platform);
+  }
+
+  /**
    * @param {{ prompt: boolean }} options prompt：两项权限没给时让不让系统弹授权框。只在应用启动时弹一次；
    *   之后重新检查权限靠的是重启小帮手，那时再弹的话每查一次弹一次
    */
@@ -668,12 +683,14 @@ async function main() {
     helperState = "starting";
     setBarControls(false);
     helper = startHelper(helperPaths(app.getAppPath()).binary, {
-      args: ["--key", hotkey, ...(prompt ? [] : ["--no-prompt"])],
+      args: prompt ? [] : ["--no-prompt"],
       onEvent: (event) => {
         if (generation === helperGeneration) onHelperEvent(event);
       },
       log,
     });
+    // 写进标准输入就行：它报完 ready 才开始读命令，读到之前的按键本来也没有绑定可认
+    helper.bind(currentBindings());
   }
 
   function onHelperEvent(event) {
@@ -686,24 +703,15 @@ async function main() {
         setupChanged();
         offerSettingsIfIncomplete();
         break;
-      case "hotkey":
-      case "other_key": {
-        // 首次引导正在测快捷键、人也正看着它：热键只送到引导窗口。
-        // 切到别的应用了就照常听写，不然热键在哪都按不出来，还没有任何提示；
-        // 悬浮条在屏幕上（切出去开了一段听写又切回来）时也给条，不然这一段停不下来
-        if (event.event === "hotkey" && hotkeyToOnboarding && onboardingWindow?.isFocused() && !bar.isVisible()) {
-          log.info("key_event", { event: event.event, down: event.down, to: "onboarding" });
-          onboardingWindow.webContents.send("onboarding:hotkey", { down: event.down });
-          break;
-        }
-        // 热键不灵时先看这条日志有没有：没有就是小帮手没收到按键（权限或键选错了）
-        log.info("key_event", { event: event.event, down: event.down });
-        const { blocker } = summarizeSetup(currentSetup());
-        if (blocker === null) tellBar("input", event);
-        else if (event.event === "hotkey" && event.down) notify(blocker);
+      case "bound":
+        // 装不上的绑定按了不会有反应：先看这条。没有辅助功能权限时取消装不上是预料之中的，悬浮条那时也不画按钮
+        if (event.rejected?.length) log.warn("helper_bound", { rejected: event.rejected });
+        else log.info("helper_bound", { rejected: [] });
         break;
-      }
-      case "escape":
+      case "binding":
+      case "interrupted":
+        onBindingEvent(event);
+        break;
       case "click":
         // 只在听写进行中才会有：那时页面让小帮手把它们截下来了
         // 字段不能叫 event：日志这一条的名字就记在 event 里，会被盖掉
@@ -721,6 +729,36 @@ async function main() {
       default:
         log.warn("helper_unknown_event", { event: event.event });
     }
+  }
+
+  /** 小帮手报的绑定按下、松开、被打断：认出是哪个动作，交给它的处理者（动作目录的 handler） */
+  function onBindingEvent(event) {
+    const action = actionOfBinding(event.id);
+    if (action === null) {
+      log.warn("helper_unknown_binding", { id: event.id });
+      return;
+    }
+    // 热键不灵时先看这条日志有没有：没有就是小帮手没收到按键（权限或键选错了）
+    const fields = { event: event.event, id: event.id, down: event.down, to: event.to };
+    const input = { event: event.event, action: action.id, down: event.down };
+    if (action.handler !== "session") {
+      // 只在说话时生效的（取消）：那时页面让小帮手截着，交给悬浮条
+      log.info("key_event", fields);
+      tellBar("input", input);
+      return;
+    }
+    // 首次引导正在测快捷键、人也正看着它：听写的按下松开只送到引导窗口。
+    // 切到别的应用了就照常听写，不然热键在哪都按不出来，还没有任何提示；
+    // 悬浮条在屏幕上（切出去开了一段听写又切回来）时也给条，不然这一段停不下来
+    if (event.event === "binding" && hotkeyToOnboarding && onboardingWindow?.isFocused() && !bar.isVisible()) {
+      log.info("key_event", { ...fields, to: "onboarding" });
+      onboardingWindow.webContents.send("onboarding:hotkey", { down: event.down });
+      return;
+    }
+    log.info("key_event", fields);
+    const { blocker } = summarizeSetup(currentSetup());
+    if (blocker === null) tellBar("input", input);
+    else if (event.event === "binding" && event.down) notify(blocker);
   }
 
   // 端到端测试时不启动小帮手：不听真键盘，也绝不往用户当前的窗口里贴字
@@ -1193,7 +1231,7 @@ async function main() {
   }
 
   /**
-   * 当场换热键：记进设置，重启小帮手让它听新的键，悬浮条的提示、菜单栏跟着换。不用重启整个应用
+   * 当场换热键：记进设置，给小帮手下发新的绑定表，悬浮条的提示、菜单栏跟着换。不用重启小帮手，更不用重启整个应用
    * @returns {{ note?: object }} 有话要交代时（被环境变量盖着）带一句（msg）
    */
   function setHotkey(wanted) {
@@ -1202,11 +1240,7 @@ async function main() {
     if (wanted !== hotkey) {
       hotkey = wanted;
       log.info("hotkey_changed", { hotkey });
-      // 和重新检查权限一样：先停旧的再起新的，旧的那个退出时的事件靠代数作废
-      if (!e2e) {
-        helper.stop();
-        launchHelper({ prompt: false });
-      }
+      helper.bind(currentBindings());
       tellBar("bar:hotkey", hotkey);
       historyChanged();
       setupChanged();

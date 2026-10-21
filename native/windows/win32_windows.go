@@ -23,6 +23,7 @@ var (
 	procCreateWindowExW         = user32.NewProc("CreateWindowExW")
 	procDefWindowProcW          = user32.NewProc("DefWindowProcW")
 	procSendInput               = user32.NewProc("SendInput")
+	procGetAsyncKeyState        = user32.NewProc("GetAsyncKeyState")
 	procOpenClipboard           = user32.NewProc("OpenClipboard")
 	procCloseClipboard          = user32.NewProc("CloseClipboard")
 	procEmptyClipboard          = user32.NewProc("EmptyClipboard")
@@ -59,6 +60,8 @@ const (
 	wmLButtonDown = 0x0201
 	wmLButtonUp   = 0x0202
 	wmApp         = 0x8000
+
+	llkhfExtended = 0x01 // KBDLLHOOKSTRUCT.flags：扫描码带 0xE0 前缀的键
 
 	inputKeyboard  = 1
 	keyEventFKeyUp = 0x0002
