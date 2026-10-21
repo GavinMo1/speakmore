@@ -208,20 +208,14 @@
                   <button type="button" class="segment" role="radio" aria-checked="false" data-period="total" data-i18n="periods.total">All time</button>
                 </div>
               </div>
-              <table class="spend-table">
-                <thead>
-                  <tr>
-                    <th scope="col" data-i18n="home.model">Model</th>
-                    <th scope="col" data-i18n="home.cost">Cost</th>
-                    <th scope="col" data-i18n="home.tokens">Tokens</th>
-                    <th scope="col" data-i18n="home.count">Count</th>
-                    <th scope="col" data-i18n="home.latency">Latency</th>
-                  </tr>
-                </thead>
-                <tbody id="spend-rows"></tbody>
-                <tfoot id="spend-sum"></tfoot>
-              </table>
-              <p class="spend-note" id="spend-note" hidden></p>
+              <div class="spend-chart" aria-hidden="true">
+                <div class="spend-plot" id="spend-plot"></div>
+                <div class="spend-ticks" id="spend-ticks"></div>
+                <p class="spend-blank" id="spend-blank" hidden></p>
+              </div>
+              <ul class="spend-models" id="spend-models"></ul>
+              <p class="spend-note" id="spend-note"></p>
+              <div class="spend-tip" id="spend-tip" aria-hidden="true" hidden></div>
             </div>
           </div>
         </section>

@@ -571,10 +571,13 @@
   margin-left: 0.2rem;
 }
 
-/* 花费（原版没有：它是包月的。放在原版"个性化"那张卡的位置）：上面是这段时间花了多少和选时段，下面按模型分开 */
+/* 花费（原版没有：它是包月的。放在原版"个性化"那张卡的位置）：上面是这段时间花了多少和选时段，
+   中间是花费随时间怎么走的柱子，下面每个型号一条（hub/spend.mjs）。
+   柱子和条只用 primary 一种颜色：型号靠图标和名字认，指着哪个型号，柱子里只亮它那一份 */
 .spend {
+  position: relative;
   display: grid;
-  gap: 0.9rem;
+  gap: 1.25rem;
 }
 
 .spend-head {
@@ -585,76 +588,299 @@
   gap: 0.75rem 1.5rem;
 }
 
-.spend-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-small);
-  font-variant-numeric: tabular-nums;
+.spend-chart {
+  position: relative;
 }
 
-.spend-table th,
-.spend-table td {
-  padding: 0.4rem 0 0.4rem 1.25rem;
-  text-align: right;
-  white-space: nowrap;
-  vertical-align: middle;
+/* 一格一列，列占满整格好指，柱子在列里居中、细一点，格子之间留出空。最高那根上面写数，留出一行的高度 */
+.spend-plot {
+  display: flex;
+  height: 8.5rem;
+  padding-top: 1rem;
 }
 
-.spend-table :is(th, td):first-child {
-  padding-left: 0;
-  text-align: left;
+.spend-col {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
-/* 表头是一行小字：比表里的数小一档，不和数抢 */
-.spend-table thead th {
-  padding-top: 0;
+/* 指着的那一格衬一道底，没花钱的日子也看得出指着哪天 */
+.spend-col[data-active]::before {
+  content: "";
+  position: absolute;
+  inset: 0 1px;
+  border-radius: calc(var(--radius-control) / 2);
+  background: var(--fill-hover);
+}
+
+/* 柱子：顶上圆角、贴着底的那头是方的。底色是淡的主题色，指着某个型号时只有它那一份（.spend-bar-part）是实的 */
+.spend-bar {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  width: min(50%, 0.75rem);
+  min-width: 2px;
+  border-radius: calc(var(--radius-control) / 2) calc(var(--radius-control) / 2) 0 0;
+  background: color-mix(in oklab, var(--primary) 22%, transparent);
+  transition:
+    height var(--dur-slow) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+
+@starting-style {
+  .spend-bar {
+    height: 0;
+  }
+}
+
+.spend-bar-part {
+  position: absolute;
+  inset: auto 0 0;
+  height: 100%;
+  background: var(--primary);
+  transition: height var(--dur-base) var(--ease-out);
+}
+
+/* 没花钱的那一格是贴底的一小截，连起来就是基线；还没到的格子更淡，看得出这段时间走到哪了 */
+.spend-col:is([data-zero], [data-future]) .spend-bar {
+  height: 2px;
+  border-radius: 0;
+  background: var(--line);
+}
+
+.spend-col[data-future] .spend-bar {
+  opacity: 0.5;
+}
+
+/* 指着一根柱子时，别的淡下去 */
+.spend-plot:has(> [data-active]) > :not([data-active]) .spend-bar {
+  opacity: 0.45;
+}
+
+/* 最高那根上面的数：在头一两格、最后一两格时贴着那一边，不出卡片 */
+.spend-peak {
+  flex: none;
+  margin-bottom: 0.25rem;
   font-size: var(--text-micro);
-  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.spend-peak[data-edge="start"] {
+  align-self: flex-start;
+}
+
+.spend-peak[data-edge="end"] {
+  align-self: flex-end;
+}
+
+.spend-plot[data-focus] .spend-peak {
+  opacity: 0;
+}
+
+/* 横轴：头一个靠左、最后一个靠右，别的对着它那根柱子的中间 */
+.spend-ticks {
+  position: relative;
+  height: 1rem;
+  margin-top: 0.5rem;
+  font-size: var(--text-micro);
+  line-height: 1rem;
   color: var(--ink-2);
 }
 
-/* 合计：和上面分开，字重一点 */
-.spend-table tfoot :is(th, td) {
-  border-top: 1px solid color-mix(in oklch, var(--ink) 16%, transparent);
-  font-weight: var(--weight-semibold);
+.spend-ticks > span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
-.spend-table tbody tr + tr :is(th, td) {
-  border-top: 1px solid var(--line);
+.spend-ticks > [data-edge="start"] {
+  left: 0;
+  transform: none;
 }
 
-.spend-table tbody th {
-  font-weight: var(--weight-medium);
+.spend-ticks > [data-edge="end"] {
+  right: 0;
+  transform: none;
 }
 
-.spend-model {
+/* 一分钱都没花时，柱子那块中间一行字 */
+.spend-blank {
+  position: absolute;
+  inset: 0 0 1.5rem;
+  display: grid;
+  place-items: center;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+/* 型号一行一个：名字、占几成、多少钱，下面一道细线是占几成（几行加起来正好铺满）。指着哪一行，柱子里只亮它那一份 */
+.spend-models:empty {
+  display: none;
+}
+
+.spend-models {
+  display: grid;
+  gap: 0.125rem;
+  margin: 0 -0.625rem;
+  padding: 0;
+  list-style: none;
+}
+
+.spend-item {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto 4.75rem;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0.625rem 0.625rem;
+  border-radius: var(--radius-control);
+  outline: none;
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.spend-item:is(:hover, :focus-visible) {
+  background: var(--fill-hover);
+}
+
+.spend-item:focus-visible {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.spend-meter {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--line);
+}
+
+.spend-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+/* 名字：图标、哪家、型号；放不下时型号先省略 */
+.spend-name {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.45rem;
-}
-
-/* 模型那一列可以折行（别的列是数，不折）：型号接在名字后面，放不下就整个折到下一行 */
-.spend-table tbody th {
-  white-space: normal;
-}
-
-.spend-model-text > * {
+  min-width: 0;
   white-space: nowrap;
 }
 
-.spend-model-id {
-  font-weight: var(--weight-regular);
-  color: var(--ink-2);
+.spend-name-text {
+  font-weight: var(--weight-medium);
 }
 
-.spend-empty {
+.spend-name-id {
+  overflow: hidden;
+  min-width: 0;
   color: var(--ink-2);
-  text-align: left;
+  text-overflow: ellipsis;
+}
+
+/* 细数：平时藏着，指着这一行时露出来；放不下时省略 */
+.spend-detail {
+  overflow: hidden;
+  font-size: var(--text-micro);
+  color: var(--ink-2);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.spend-item:is(:hover, :focus-visible) .spend-detail {
+  opacity: 1;
+}
+
+.spend-share {
+  font-size: var(--text-micro);
+  min-width: 2.5rem;
+  color: var(--ink-2);
+  text-align: right;
+}
+
+.spend-cost {
+  font-weight: var(--weight-semibold);
+  text-align: right;
+}
+
+.spend-cost[data-free] {
+  font-weight: var(--weight-regular);
+  color: var(--ink-2);
 }
 
 .spend-note {
   font-size: var(--text-micro);
   color: var(--ink-2);
+}
+
+/* 浮出来的小卡：玻璃，数在前、名字在后 */
+.spend-tip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.3rem;
+  min-width: 10rem;
+  max-width: 20rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-block);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-filter);
+  box-shadow: var(--edge), var(--lift);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.spend-tip[hidden] {
+  display: none;
+}
+
+.spend-tip-head {
+  color: var(--ink-2);
+}
+
+.spend-tip-value {
+  margin-bottom: 0.15rem;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.spend-tip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--ink-2);
+}
+
+.spend-tip-num {
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+}
+
+.spend-tip .provider-icon {
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
 /* ---------- 历史记录 ---------- */
@@ -1022,7 +1248,13 @@ code.setting-value {
   .menu-item .icon,
   .content::before,
   .entry,
-  .entry-actions {
+  .entry-actions,
+  .spend-bar,
+  .spend-bar-part,
+  .spend-peak,
+  .spend-fill,
+  .spend-item,
+  .spend-detail {
     transition: none;
   }
 
