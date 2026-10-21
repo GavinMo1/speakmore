@@ -275,7 +275,7 @@ src/usage/report.mjs                    今天、本月、累计、按型号分�
 | `src/storage/legacy.mjs` | 把 0.1 版放在别处的数据搬进现在的家目录 | |
 | `src/storage/history.mjs` | 历史库和账（每次调模型一笔）。后台应用写，命令只读着看 | `history_v2` 表的子集（[08](../targets/typeless/docs/08-local-data.md)）；账是原版没有的 |
 | `src/usage/` | 用量报表（今天、本月、累计、按型号）、首页的统计（字数、语速、连续天数、热力图）和数字的写法，命令和主窗口共用。见上面“记账” | 用量原版包月没有；首页统计照原版的"洞察" |
-| `native/main.swift` | 听热键（只听不改，不报是哪个键）、贴字；说话时截住 `esc` 和悬浮条上的点击 | 键盘子进程和 Swift 库（[07](../targets/typeless/docs/07-native-helpers.md)） |
+| `native/mac/` | 听热键（只听不改，不报是哪个键）、贴字；说话时截住 `esc` 和悬浮条上的点击 | 键盘子进程和 Swift 库（[07](../targets/typeless/docs/07-native-helpers.md)） |
 | `src/app/main.mjs` | 后台应用的主进程：窗口、菜单栏、和小帮手对接，把下面几样接起来 | 主进程（[03](../targets/typeless/docs/03-process-architecture.md)） |
 | `src/app/service.mjs` | 把 `src/server` 跑在主进程里；换路线当场生效，换 key 先验证再生效 | 原版的服务端在云上 |
 | `src/app/keys/key-manager.mjs` | 每家一把 key：正在用的那家用哪把、是什么状态，启动时去哪找，怎么换、怎么删；给别家存 key、查某个模型能不能用。启动时只是够不着那一家的话先用着 | 原版用登录态，没有这一项 |

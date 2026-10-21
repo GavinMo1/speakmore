@@ -6,7 +6,7 @@ import { helperPaths } from "../app/helper.mjs";
 import { LocalizedError, msg } from "../i18n/index.mjs";
 
 // 原生小帮手（听热键、贴字）的可执行文件从哪来。每个系统一份，和父进程说的话一样（src/app/helper.mjs）：
-//   macOS    native/main.swift  → build/key-helper      swiftc 编，发布时两种芯片合一
+//   macOS    native/mac/        → build/key-helper      swiftc 编，发布时两种芯片合一
 //   Windows  native/windows/    → build/key-helper.exe  Go 编（scripts/build/go.sh 在 Mac 上交叉编译）
 // 装好的程序里带着编好的，不带源码；从源码仓库跑的话，第一次启动和改过源码之后在本机现编。
 
@@ -38,16 +38,24 @@ function listOrNull(dir) {
 }
 
 /**
- * 源码的内容，用来算指纹：一个文件就是它本身（和 0.8 以前算的一样，编好的不用重编）；
- * 一个 Go 模块是 go.mod 和除了测试以外的 .go 文件，按名字排好、带着名字拼在一起。源码不在是 null
+ * 源码目录里要编进去的文件，按名字排好：Go 模块是 go.mod 和除了测试以外的 .go，Mac 的是 .swift（测试在 tests/ 里，不算）
  */
+const sourceFiles = (names) =>
+  names
+    .filter(
+      (name) => name === "go.mod" || name.endsWith(".swift") || (name.endsWith(".go") && !name.endsWith("_test.go")),
+    )
+    .sort();
+
+/** 源码的内容，用来算指纹：要编进去的文件带着名字拼在一起。源码不在是 null */
 function sourceContent(source, read, list) {
   const names = list(source);
-  if (names === null) return read(source);
-  const parts = names
-    .filter((name) => name === "go.mod" || (name.endsWith(".go") && !name.endsWith("_test.go")))
-    .sort()
-    .flatMap((name) => [Buffer.from(`${name}\0`), read(join(source, name)) ?? Buffer.alloc(0), Buffer.from("\0")]);
+  if (names === null) return null;
+  const parts = sourceFiles(names).flatMap((name) => [
+    Buffer.from(`${name}\0`),
+    read(join(source, name)) ?? Buffer.alloc(0),
+    Buffer.from("\0"),
+  ]);
   return parts.length === 0 ? null : Buffer.concat(parts);
 }
 
@@ -109,6 +117,7 @@ export function buildHelper(
 ) {
   const { source, binary, stamp } = helperPaths(packageDir, platform);
   mkdir(dirname(binary), { recursive: true });
+  const swiftFiles = () => sourceFiles(list(source) ?? []).map((name) => join(source, name));
   if (platform === "win32") {
     // -H windowsgui：不是控制台程序，被起来时不会闪出一个黑窗口；标准输入输出照样接得上
     compile(
@@ -124,7 +133,7 @@ export function buildHelper(
       compile(
         run,
         "swiftc",
-        ["-O", "-target", `${arch}-apple-macos${MIN_MACOS}`, "-o", slices[index], source],
+        ["-O", "-target", `${arch}-apple-macos${MIN_MACOS}`, "-o", slices[index], ...swiftFiles()],
         {},
         SWIFT,
       );
@@ -132,7 +141,7 @@ export function buildHelper(
     run("lipo", ["-create", "-output", binary, ...slices]);
     for (const slice of slices) remove(slice, { force: true });
   } else {
-    compile(run, "swiftc", ["-O", "-o", binary, source], {}, SWIFT);
+    compile(run, "swiftc", ["-O", "-o", binary, ...swiftFiles()], {}, SWIFT);
   }
   write(stamp, `${fingerprint(sourceContent(source, read, list))}\n`);
 }

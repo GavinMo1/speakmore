@@ -56,7 +56,7 @@ export function createDelivery({ recordingsDir, history, paste, writeClipboard, 
         const result = await paste(payload.text);
         if (result.ok) return { notice: null };
         log.warn("paste_not_permitted", { audio_id: payload.audioId, reason: result.reason });
-        // 小帮手贴不进去的几种原因（native/main.swift、native/windows/main_windows.go）：
+        // 小帮手贴不进去的几种原因（native/mac/main.swift、native/windows/main_windows.go）：
         //   not_trusted  macOS 没有辅助功能权限，文字已经留在剪贴板里
         //   elevated     Windows 上目标窗口以管理员身份运行，系统不让模拟的按键进去，文字已经留在剪贴板里
         //   clipboard    Windows 上文字没写进剪贴板（被别的程序占着）：这里再放一次，用户才有东西可贴

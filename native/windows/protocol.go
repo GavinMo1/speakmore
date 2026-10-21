@@ -1,5 +1,5 @@
 // Windows 上的原生小帮手：听热键、把文字贴进当前输入框、听写进行中截住 esc 和悬浮条上的点击。
-// 和父进程的约定与 macOS 版（native/main.swift）一字不差，父进程（src/app/helper.mjs）不分系统：
+// 和父进程的约定与 macOS 版（native/mac/main.swift）一字不差，父进程（src/app/helper.mjs）不分系统：
 //
 //	标准输出  {"event":"ready","listen":true,"trusted":true,"capture":true}
 //	          {"event":"hotkey","down":true}

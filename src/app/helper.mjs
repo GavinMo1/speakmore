@@ -15,8 +15,8 @@ export function helperPaths(packageDir, platform = process.platform) {
   const windows = platform === "win32";
   const binary = join(packageDir, "build", windows ? "key-helper.exe" : "key-helper");
   return {
-    // Windows 的是一个目录（Go 的模块），macOS 的是一个文件
-    source: windows ? join(packageDir, "native", "windows") : join(packageDir, "native", "main.swift"),
+    // 两个系统的都是一个目录：Windows 的是 Go 模块，macOS 的是几个 Swift 文件
+    source: join(packageDir, "native", windows ? "windows" : "mac"),
     binary,
     /** 可执行文件是从哪份源码编出来的：那份源码的 SHA-256 */
     stamp: `${binary}.source-sha256`,
@@ -24,7 +24,7 @@ export function helperPaths(packageDir, platform = process.platform) {
 }
 
 /**
- * 启动原生小帮手（native/main.swift）并和它对话。两边用"一行一个 JSON"通信。
+ * 启动原生小帮手（native/mac/、native/windows/）并和它对话。两边用"一行一个 JSON"通信。
  * @param {string} command 可执行文件
  * @param {object} options
  * @param {string[]} [options.args]
