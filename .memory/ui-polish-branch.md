@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c790f439-dd17-4af4-a34b-18711867efb4
-  modified: 2026-10-21T02:18:50.060Z
+  modified: 2026-10-21T05:26:33.341Z
 ---
 
 2026-10-21 引擎页做完后，他说"优化其他 ui，再开一个分支"，分支 `ui-polish` 从 `engine-tree` 开出（两批改动连着，最后一起审）。
@@ -23,6 +23,7 @@ metadata:
 **How to apply:** 接着在 ui-polish 上小步改、随做随提；改完在开发窗口给他看（[[ui-review-in-dev-window]]）。他没说审之前不开对抗性审查；审完再问合并主干。分段控件（首页时段、引擎页渠道）10-21 他点头后也改成胶囊了。相关：[[plaza-tree-prototype]]。
 
 **10-21 进入收尾**（他说"OK 了，进入收尾和审查"）：顺序是对抗性审查（workflow 一轮）→ 逐条核实、修 → README 和官网的图与说法（旧模型页、首页识别方式选单、推荐组合、密钥这几张要重截，docs/media.json、website 用的同一批）→ 版本号（打算 0.13.0）→ 照 [[speakmore-release-on-cos]] 先只推标签、他跑 ship、传完推 main、部署官网 → 线上包 Mac、Windows 真装真启动（[[acceptance-end-to-end]]）。合并、推送前仍要问他。
-- 审查 workflow 的 run id 是 wf_95000394-f9d（会话目录下 workflows/scripts/review-ui-polish-*.js，结果分 confirmed / disputed / refuted，disputed 要自己核）。
+- 审查已完（wf_95000394-f9d，按视角分组复核共 13 个 agent）：33 条确认 31、驳回 2，31 条全修并提交，开发窗口逐条核过；README（中英 16 张新图，多了一张花费卡）、官网文案和图已改、图已上桶；版本号 0.13.0 已提交（5b8d202）。下一步问他合并、推标签。
+- README 截图的家目录 /tmp/smr-zh、/tmp/smr-en（各带一份 850 MB 的本机模型、开发用密钥存在里面），GitHub 上查完 camo 后删掉。
 - Windows 从源码跑的验证已过：单测 1256 条 1193 过、0 失败；首页花费卡（墨主题深浅色）、引擎页、设置下拉框（base-select）、词典都看过。开发机的家目录 speakmore-dev\home 里灌了假用量，原库备份 data\history.db.before-ui-review；本机到开发机的调试隧道开在 19333。收尾时还原两边灌过假数据的库、关隧道。
 
