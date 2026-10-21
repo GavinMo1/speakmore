@@ -572,8 +572,8 @@
 }
 
 /* 花费（原版没有：它是包月的。放在原版"个性化"那张卡的位置）：上面是这段时间花了多少和选时段，
-   中间是花费随时间怎么走的柱子，下面每个型号一条（hub/spend.mjs）。
-   柱子和条只用 primary 一种颜色：型号靠图标和名字认，指着哪个型号，柱子里只亮它那一份 */
+   中间是花费随时间怎么走的柱子和趋势线，下面每个型号一条（hub/spend.mjs）。
+   只用 primary 一种颜色、分深浅：柱子是浅的底纹，趋势线是实的主角。型号靠图标和名字认，指着哪个型号，柱子里只加深它那一份 */
 .spend {
   position: relative;
   display: grid;
@@ -592,6 +592,10 @@
 .spend-chart {
   --plot-height: 7.5rem;
   --plot-headroom: 1rem;
+  /* 柱子的三档深浅：其余的那一份、平时、指着的。和底色混成实色，趋势线垫的边压上去是干净的 */
+  --bar-faint: color-mix(in oklab, var(--primary) 10%, var(--bg));
+  --bar: color-mix(in oklab, var(--primary) 24%, var(--bg));
+  --bar-strong: color-mix(in oklab, var(--primary) 55%, var(--bg));
   position: relative;
 }
 
@@ -621,7 +625,7 @@
   background: var(--fill-hover);
 }
 
-/* 柱子：顶上圆角、贴着底的那头是方的。底色是淡的主题色，指着某个型号时只有它那一份（.spend-bar-part）是实的 */
+/* 柱子：顶上圆角、贴着底的那头是方的。平时整根是 --bar；指着某个型号时它那一份（.spend-bar-part）加深，其余变得更淡 */
 .spend-bar {
   position: relative;
   flex: none;
@@ -629,10 +633,8 @@
   width: min(50%, 0.75rem);
   min-width: 2px;
   border-radius: calc(var(--radius-control) / 2) calc(var(--radius-control) / 2) 0 0;
-  background: color-mix(in oklab, var(--primary) 22%, transparent);
-  transition:
-    height var(--dur-slow) var(--ease-out),
-    opacity var(--dur-fast) var(--ease-out);
+  background: var(--bar-faint);
+  transition: height var(--dur-slow) var(--ease-out);
 }
 
 @starting-style {
@@ -645,8 +647,19 @@
   position: absolute;
   inset: auto 0 0;
   height: 100%;
+  background: var(--bar);
+  transition:
+    height var(--dur-base) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.spend-plot[data-focus] .spend-bar-part {
+  background: var(--bar-strong);
+}
+
+/* 指着的那一根实色 */
+.spend-col[data-active] .spend-bar-part {
   background: var(--primary);
-  transition: height var(--dur-base) var(--ease-out);
 }
 
 /* 没花钱的那一格是贴底的一小截，连起来就是基线；还没到的格子更淡，看得出这段时间走到哪了 */
@@ -660,12 +673,7 @@
   opacity: 0.5;
 }
 
-/* 指着一根柱子时，别的淡下去 */
-.spend-plot:has(> [data-active]) > :not([data-active]) .spend-bar {
-  opacity: 0.45;
-}
-
-/* 趋势线：叠在柱子上的一条淡线，下面垫一道底色的边，压在柱子上也看得清。拉伸的 viewBox 下线宽不跟着变 */
+/* 趋势线：主题色的实线，下面垫一道底色的边，从浅色柱子上干净地压过去。拉伸的 viewBox 下线宽不跟着变 */
 .spend-trend {
   position: absolute;
   top: var(--plot-headroom);
@@ -690,14 +698,35 @@
 
 .spend-trend-halo {
   stroke: var(--surface-solid);
-  stroke-opacity: 0.7;
   stroke-width: 4px;
 }
 
 .spend-trend-line {
-  stroke: var(--ink);
-  stroke-opacity: 0.45;
-  stroke-width: 1.5px;
+  stroke: var(--primary);
+  stroke-width: 2px;
+}
+
+/* 线的末端：现在。实心小圆点，一圈底色隔开，外面一圈淡的主题色 */
+.spend-now {
+  position: absolute;
+  top: calc(var(--plot-headroom) + var(--y, 0) * var(--plot-height));
+  left: calc(var(--x, 0) * 100%);
+  width: 0.5rem;
+  height: 0.5rem;
+  margin: -0.25rem 0 0 -0.25rem;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  box-shadow:
+    0 0 0 2.5px var(--surface-solid),
+    0 0 0 7px color-mix(in oklab, var(--primary) 16%, transparent);
+  pointer-events: none;
+  transition:
+    top var(--dur-base) var(--ease-out),
+    left var(--dur-base) var(--ease-out);
+}
+
+.spend-now[hidden] {
+  display: none;
 }
 
 /* 最高那根上面的数：在头一两格、最后一两格时贴着那一边，不出卡片 */
@@ -1293,7 +1322,8 @@ code.setting-value {
   .spend-fill,
   .spend-item,
   .spend-detail,
-  .spend-trend path {
+  .spend-trend path,
+  .spend-now {
     transition: none;
   }
 

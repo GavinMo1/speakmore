@@ -128,27 +128,33 @@ export function createSpend() {
   let peak = 0;
 
   /**
-   * 趋势线：到现在为止的每一格平滑一下，按柱子的比例画在柱子上（viewBox 横着一格一个单位、竖着 0–100）。
-   * 还没到的格子不画；不到两格、或者一分钱没花，就不画
+   * 趋势线：到现在为止的每一格平滑一下，按柱子的比例画在柱子上（viewBox 横着一格一个单位、竖着 0–100），
+   * 末端一个小圆点是"现在"。开始花钱之前的那一段不画（今天的凌晨），从花钱的前一格起笔；
+   * 起笔的地方按全部型号的算，换着指型号时点数不变，曲线从上一个样子滑过去。不到两格、或者一分钱没花，就不画
    * @param {string | null} key 只看哪个型号；null 是全部
    */
   function drawTrend(key) {
     const { buckets } = period().series;
     const past = buckets.filter(({ future }) => !future);
-    const values = past.map((bucket) => (key === null ? bucket.costUsd : (bucket.models[key] ?? 0)));
+    const first = past.findIndex(({ costUsd }) => costUsd > 0);
+    const from = Math.max(0, first - 1);
     const trend = $("spend-trend");
+    const now = $("spend-now");
     // SVG 元素没有 hidden 这个开关，直接增删属性
-    const hidden = past.length < 2 || peak === 0;
+    const hidden = peak === 0 || first === -1 || past.length - from < 2;
     trend.toggleAttribute("hidden", hidden);
+    now.hidden = hidden;
     if (hidden) return;
+    const values = past.map((bucket) => (key === null ? bucket.costUsd : (bucket.models[key] ?? 0)));
+    const points = smoothed(values, spreadFor(buckets.length))
+      .map((value, index) => [index + 0.5, 100 - (value / peak) * 100])
+      .slice(from);
     trend.setAttribute("viewBox", `0 0 ${buckets.length} 100`);
-    const points = smoothed(values, spreadFor(buckets.length)).map((value, index) => [
-      index + 0.5,
-      100 - (value / peak) * 100,
-    ]);
-    // 写成 CSS 的 d：点数不变时（换着指型号）曲线从上一个样子滑过去
     const d = `path("${curvePath(points)}")`;
     for (const path of trend.children) path.style.d = d;
+    const [x, y] = points.at(-1);
+    now.style.setProperty("--x", String(x / buckets.length));
+    now.style.setProperty("--y", String(y / 100));
   }
 
   function renderChart() {
