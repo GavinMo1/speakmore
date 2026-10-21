@@ -634,13 +634,6 @@
   min-width: 2px;
   border-radius: calc(var(--radius-control) / 2) calc(var(--radius-control) / 2) 0 0;
   background: var(--bar-faint);
-  transition: height var(--dur-slow) var(--ease-out);
-}
-
-@starting-style {
-  .spend-bar {
-    height: 0;
-  }
 }
 
 .spend-bar-part {
@@ -1319,7 +1312,6 @@ code.setting-value {
   .content::before,
   .entry,
   .entry-actions,
-  .spend-bar,
   .spend-bar-part,
   .spend-peak,
   .spend-fill,

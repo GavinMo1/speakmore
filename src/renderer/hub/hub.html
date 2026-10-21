@@ -191,7 +191,7 @@
               </p>
             </div>
 
-            <!-- 花费：选一段时间，按模型分开列，最后一行合计（home.mjs 的 renderSpend） -->
+            <!-- 花费：选一段时间；柱子加一条趋势线看花费怎么走，下面每个型号一行占几成（spend.mjs） -->
             <div class="card spend" id="spend" hidden>
               <div class="spend-head">
                 <div>
@@ -208,11 +208,12 @@
                   <button type="button" class="segment" role="radio" aria-checked="false" data-period="total" data-i18n="periods.total">All time</button>
                 </div>
               </div>
-              <div class="spend-chart" aria-hidden="true">
-                <div class="spend-plot" id="spend-plot"></div>
+              <!-- 柱子、线、刻度只能看不能读（细数在下面的型号行里）；一分钱没花时那一句读屏要读到 -->
+              <div class="spend-chart">
+                <div class="spend-plot" id="spend-plot" aria-hidden="true"></div>
                 <svg class="spend-trend" id="spend-trend" preserveAspectRatio="none" aria-hidden="true" hidden><path class="spend-trend-halo"></path><path class="spend-trend-line"></path></svg>
-                <span class="spend-now" id="spend-now" hidden></span>
-                <div class="spend-ticks" id="spend-ticks"></div>
+                <span class="spend-now" id="spend-now" aria-hidden="true" hidden></span>
+                <div class="spend-ticks" id="spend-ticks" aria-hidden="true"></div>
                 <p class="spend-blank" id="spend-blank" hidden></p>
               </div>
               <ul class="spend-models" id="spend-models"></ul>

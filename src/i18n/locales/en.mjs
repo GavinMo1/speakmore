@@ -560,6 +560,7 @@ export default {
     free: "Free",
     emptyPeriod: "Nothing used in this period",
     noCost: "On-device only · Nothing spent",
+    unpricedOnly: "Cloud models unpriced · Cost not counted",
     range: "{from} – {to}",
     dictations: { one: "{count} dictation", other: "{count} dictations" },
     tokenTotal: "{count} tokens",
@@ -568,7 +569,7 @@ export default {
     estimate: "Estimated at list prices",
     unpriced: "{models} unpriced; {count} not counted",
     dictate: "Press to talk",
-    // The recognition mode menu next to the title (renderer/hub/mode-picker.mjs); mode names live in plaza.modes
+    // Recognition mode: shown next to the home title (renderer/hub/mode-chip.mjs), changed in the first column of the Engine page, also used by onboarding; mode names live in plaza.modes
     mode: {
       label: "Recognition",
       open: "Change it on the Engine page",

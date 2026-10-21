@@ -546,6 +546,7 @@ export default {
     free: "免费",
     emptyPeriod: "这段时间还没用过",
     noCost: "均为本机转写 · 未产生费用",
+    unpricedOnly: "所用云端型号未标价 · 花费未计入",
     range: "{from}至{to}",
     dictations: { other: "{count} 次听写" },
     tokenTotal: "{count} token",

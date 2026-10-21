@@ -66,6 +66,12 @@ function modelName(row) {
   );
 }
 
+/** 一分钱都没花时那一句：还没用过；用的都是本机的，不花钱；还是用了没标价的云端，钱没算进去 */
+function blankKey({ calls, models }) {
+  if (calls === 0) return "home.emptyPeriod";
+  return models.every(({ local }) => local) ? "home.noCost" : "home.unpricedOnly";
+}
+
 /** 占了这段时间花费的几成：不到 1% 写"<1%" */
 function shareText(cost, total) {
   if (total <= 0 || cost <= 0) return "";
@@ -160,6 +166,8 @@ export function createSpend() {
   function renderChart() {
     const { unit, buckets } = period().series;
     peak = Math.max(0, ...buckets.map(({ costUsd }) => costUsd));
+    // 柱子整个重建，里面那一份都是满的：先回到"没指着型号"，指着的那一行重建后会再报一次
+    delete plot.dataset.focus;
     const peakIndex = peak > 0 ? buckets.findIndex(({ costUsd }) => costUsd === peak) : -1;
     plot.replaceChildren(
       ...buckets.map((bucket, index) => {
@@ -198,10 +206,9 @@ export function createSpend() {
       }),
     );
 
-    // 一分钱都没花：说清是还没用过，还是用的都不花钱（本机转写）
     const blank = $("spend-blank");
     blank.hidden = peak > 0;
-    blank.textContent = period().calls === 0 ? t("home.emptyPeriod") : t("home.noCost");
+    blank.textContent = t(blankKey(period()));
     drawTrend(null);
   }
 
@@ -252,14 +259,17 @@ export function createSpend() {
 
   function renderModels() {
     const { models, costUsd } = period();
-    $("spend-models").replaceChildren(
+    const list = $("spend-models");
+    // 每次刷新（调一次模型、切回窗口）都整个重建：键盘停在哪一行，重建后还停在同一个型号上
+    const focused = list.contains(document.activeElement) ? document.activeElement.dataset.key : null;
+    list.replaceChildren(
       ...models.map((row) => {
         // 名字下面一道细线，长短是占这段时间花费的几成：几条加起来正好铺满
         const fill = h("span", { class: "spend-fill" });
         if (costUsd > 0) fill.style.width = `${(row.costUsd / costUsd) * 100}%`;
         const item = h(
           "li",
-          { class: "spend-item", tabindex: "0" },
+          { class: "spend-item", tabindex: "0", "data-key": row.key },
           modelName(row),
           h("span", { class: "spend-detail" }, detailText(row)),
           h("span", { class: "spend-share" }, row.local ? "" : shareText(row.costUsd, costUsd)),
@@ -272,6 +282,7 @@ export function createSpend() {
         return item;
       }),
     );
+    [...list.children].find((item) => item.dataset.key === focused)?.focus({ preventScroll: true });
   }
 
   /** 底下一行小字：几次听写、多少 token、里面含了几次检查、多少是提示词缓存，有的型号没标价，钱是估算的 */

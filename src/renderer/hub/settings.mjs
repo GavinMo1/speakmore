@@ -5,7 +5,7 @@ import { describeError, keyMissing, permissionDenied, permissionText } from "../
 
 // 设置对话框：原版的"设置中心"，左边一列菜单。我们的三页：通用（热键、主题、语言、本机模型的下载源、开机启动、
 // 软件更新）、权限、关于。
-// 识别方式、模型和 key 不在这里：在侧栏的"模型"一页（models.mjs）。
+// 识别方式、模型和 key 不在这里：在侧栏的"引擎"一页（engine/）。
 // 状态都在主进程，这里只负责画出来和转达用户的操作。
 
 const $ = (id) => document.getElementById(id);

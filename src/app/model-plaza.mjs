@@ -14,8 +14,8 @@ import { DAILY_DICTATIONS, monthlyCost, TYPICAL } from "../usage/estimate.mjs";
 //   polish      润色：纯文字模型（server/chat/vendors.mjs），最后是自定义服务
 // 云端的货架按"谁做的"（maker）分组，一组里的模型可能有好几个平台卖（DeepSeek 官方和百炼都有 V4.1 Flash）：
 // 平台是这一组的渠道，同一个模型在各渠道的写法和价格各自记在 offers 里。用户一个平台只配一把 key。
-// 另外给首页的识别方式选单（renderer/hub/mode-picker.mjs）一份三种方式各自的样子：一路经过哪几个模型、切过去还差什么；
-// 模型页顶上的推荐组合（models/presets.mjs）也是同样的样子，再加上每月多少钱（usage/estimate.mjs）。
+// 另外给引擎页第一列的识别方式（renderer/hub/engine/）一份三种方式各自的样子：一路经过哪几个模型、切过去还差什么；
+// 引擎页的推荐组合（models/presets.mjs）也是同样的样子，再加上每月多少钱（usage/estimate.mjs）。
 // 模型信息只从各个登记处读，这里不另写；会变的（设置、key 在哪、本机模型的下载状态、价）由调用方给。
 
 /** 平台在密钥表里的先后：覆盖最广的在前，自定义服务总在最后，没列到的排在它们中间 */
