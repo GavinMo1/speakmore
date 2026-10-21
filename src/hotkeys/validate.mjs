@@ -125,31 +125,29 @@ export function checkBindings(bindings, platform) {
     if (chords.length === 0 && !action.clearable) {
       report(action, 0, "reject", msg("binding.required", { action: actionName(action) }));
     }
-    chords.forEach((codes, index) => {
-      if (index >= MAX_CHORDS) return report(action, index, "reject", msg("binding.tooMany", { count: MAX_CHORDS }));
+    // 这个动作的第 index 个组合为什么不能要；能要是 null
+    const rejectionOf = (codes, index) => {
+      if (index >= MAX_CHORDS) return msg("binding.tooMany", { count: MAX_CHORDS });
       const own = rejectReason(codes, { action, platform });
-      if (own !== null) return report(action, index, "reject", own);
-      const key = chordString(codes);
-      const holder = taken.get(key);
-      if (holder === action) return report(action, index, "reject", msg("binding.repeated"));
-      if (holder !== undefined)
-        return report(action, index, "reject", msg("binding.taken", { action: actionName(holder) }));
-      // 和取消那一个键一模一样的，归到下面的"已经给了"：那是重复，不是组合里夹带了它
-      if (action.when !== "capturing" && codes.length > 1) {
-        const clash = codes.find((code) => capturingKeys.has(code));
-        if (clash !== undefined) {
-          const owner = capturingKeys.get(clash);
-          return report(
-            action,
-            index,
-            "reject",
-            msg("binding.usesCapturingKey", { key: keyName(clash), action: actionName(owner) }),
-          );
-        }
+      if (own !== null) return own;
+      const holder = taken.get(chordString(codes));
+      if (holder === action) return msg("binding.repeated");
+      if (holder !== undefined) return msg("binding.taken", { action: actionName(holder) });
+      // 和取消那一个键一模一样的，归到上面的"已经给了"：那是重复，不是组合里夹带了它
+      if (action.when === "capturing" || codes.length === 1) return null;
+      const clash = codes.find((code) => capturingKeys.has(code));
+      if (clash === undefined) return null;
+      return msg("binding.usesCapturingKey", { key: keyName(clash), action: actionName(capturingKeys.get(clash)) });
+    };
+    for (const [index, codes] of chords.entries()) {
+      const rejection = rejectionOf(codes, index);
+      if (rejection !== null) {
+        report(action, index, "reject", rejection);
+        continue;
       }
-      taken.set(key, action);
+      taken.set(chordString(codes), action);
       accepted.push({ action, index, codes });
-    });
+    }
   }
 
   for (const { action, index, codes } of accepted) {
