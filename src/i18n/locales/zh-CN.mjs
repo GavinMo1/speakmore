@@ -113,6 +113,42 @@ export default {
     shiftTyping: "Shift 加打字的键会打出大写或符号，换一个修饰键",
   },
 
+  // 能按快捷键做的事（src/hotkeys/actions.mjs）：设置页、引导页每个动作一行，名字在左、说明在下
+  actions: {
+    dictate: { name: "语音输入", description: "按一下开始说话，再按一下结束。" },
+    cancel: { name: "取消", description: "说话时按下，取消这一次。" },
+  },
+
+  // 一个组合为什么不能绑、为什么要提醒（src/hotkeys/validate.mjs）
+  binding: {
+    notAvailable: "这个系统上没有{key}",
+    capturingSingle: "「{action}」只能绑一个非修饰键（F 键、菜单键或 esc）",
+    escapeOnlyCapturing: "单按 esc 只能给说话时才生效的动作用",
+    macCommandTyping: "⌘ 加打字的键是各个应用的快捷键（拷贝、粘贴、保存……）",
+    macControlTyping: "⌃ 加打字的键是系统和文本编辑的快捷键（切换输入法、移动光标……）",
+    macFnTyping: "地球仪键加字母、数字、符号是系统的快捷键",
+    macControlF: "⌃ 加 F1–F8 是系统的键盘导航快捷键",
+    macCommandF: "⌘ 加 F1–F12 是系统的快捷键（⌘F5 开关旁白）",
+    macF11: "F11 是系统的“显示桌面”",
+    winMeta: "Win 键和它的组合都归 Windows 自己用",
+    winControlTyping: "Ctrl 加打字的键是各个应用的快捷键（复制、粘贴、保存……）",
+    winAltSpace: "Alt+空格会打开窗口菜单",
+    winCloses: "这个组合会关掉窗口",
+    winShiftSwitch: "Ctrl+Shift、Alt+Shift 是 Windows 切换输入语言和键盘布局的快捷键",
+    winShiftF10: "Shift+F10 会打开右键菜单",
+    leftOnly: "平时的快捷键多从左边的修饰键按起（⌘C、⇧⌘Z），绑了会频繁误触发：换右边的修饰键，或者加上 fn",
+    required: "「{action}」至少要有一个组合",
+    tooMany: "一个动作最多 {count} 个组合",
+    repeated: "这个组合写了两遍",
+    taken: "已经给了「{action}」",
+    usesCapturingKey: "{key}是「{action}」的键：说话时按它只会取消",
+    fnSystem: "地球仪键在系统设置里若设了别的用途（切换输入法、表情、听写），按它时会一起触发；外接键盘多半没有 fn",
+    macOptionTyping: "⌥ 加打字的键平时会打出特殊字符（⌥空格是不换行空格），绑上以后就打不出来了",
+    altGr: "有些键盘布局（德语、法语等）把右 Alt 当 AltGr 打字用，按它时会一起触发",
+    winAltLetter: "Alt 加字母平时会打开应用的菜单（Alt+F 打开“文件”），绑上以后就打不开了",
+    prefix: "它是「{action}」的组合 {chord} 的一部分：按那个组合时会先触发这个",
+  },
+
   themes: {
     ink: { name: "墨", describe: "黑白。状态靠形状和动作来说，只有出错才出现颜色" },
     cinnabar: { name: "朱砂", describe: "一种暖红，用在声波和最主要的按钮上" },
@@ -1509,6 +1545,7 @@ speakmore help     全部命令`,
   windows: {
     // 组合用加号连（右 Alt+空格），修饰键叫 Ctrl、Alt、Win
     chord: { text: "{first}+{second}" },
+    binding: { leftOnly: "平时的快捷键多从左边的修饰键按起（Ctrl+C、Alt+Tab），绑了会频繁误触发：换右边的修饰键" },
     keys: {
       ControlLeft: { name: "左 Ctrl 键", short: "左 Ctrl", keycap: "左 Ctrl" },
       ControlRight: { name: "右 Ctrl 键", short: "右 Ctrl", keycap: "右 Ctrl" },

@@ -114,6 +114,46 @@ export default {
     shiftTyping: "Shift with a typing key types capitals or symbols; pick another modifier",
   },
 
+  // What a shortcut can do (src/hotkeys/actions.mjs): one row per action in Settings and onboarding, name and description
+  actions: {
+    dictate: { name: "Voice input", description: "Press to start talking; press again to finish." },
+    cancel: { name: "Cancel", description: "Press while talking to cancel this one." },
+  },
+
+  // Why a combination can't be bound, or what to watch out for (src/hotkeys/validate.mjs)
+  binding: {
+    notAvailable: "{key} isn't available on this system",
+    capturingSingle: "{action} takes a single key that isn't a modifier (an F key, the Menu key or esc)",
+    escapeOnlyCapturing: "esc on its own is only for actions that work while you talk",
+    macCommandTyping: "Command with a typing key is an app shortcut (copy, paste, save…)",
+    macControlTyping:
+      "Control with a typing key is a system or text-editing shortcut (switching input sources, moving the cursor…)",
+    macFnTyping: "Globe with a letter, digit or symbol is a system shortcut",
+    macControlF: "Control with F1–F8 is a system keyboard-navigation shortcut",
+    macCommandF: "Command with F1–F12 is a system shortcut (Command-F5 turns VoiceOver on and off)",
+    macF11: "F11 is the system's Show Desktop",
+    winMeta: "The Windows key and its combinations belong to Windows",
+    winControlTyping: "Ctrl with a typing key is an app shortcut (copy, paste, save…)",
+    winAltSpace: "Alt+Space opens the window menu",
+    winCloses: "This closes the window",
+    winShiftSwitch: "Ctrl+Shift and Alt+Shift switch input languages and keyboard layouts",
+    winShiftF10: "Shift+F10 opens the context menu",
+    leftOnly:
+      "Everyday shortcuts start with left-hand modifiers (Command-C, Shift-Command-Z), so this would fire by accident all the time: use a right-hand modifier, or add fn",
+    required: "{action} needs at least one combination",
+    tooMany: "An action takes {count} combinations at most",
+    repeated: "Listed twice",
+    taken: "Already used by {action}",
+    usesCapturingKey: "{key} is the key for {action}: while you talk, pressing it only cancels",
+    fnSystem:
+      "If the Globe key has another job in System Settings (switching input sources, emoji, dictation), that fires too; most external keyboards have no fn",
+    macOptionTyping:
+      "Option with a typing key normally types a special character (Option-Space is a non-breaking space); bound, it no longer will",
+    altGr: "Some keyboard layouts (German, French…) use Right Alt as AltGr for typing; pressing it fires this too",
+    winAltLetter: "Alt with a letter normally opens an app's menu (Alt+F for File); bound, it no longer will",
+    prefix: "It's part of {action}'s combination {chord}: pressing that one fires this first",
+  },
+
   themes: {
     ink: { name: "Ink", describe: "Black and white. Shape and motion show the state; color only for errors" },
     cinnabar: { name: "Cinnabar", describe: "A warm red on the wave and the main buttons" },
@@ -1597,6 +1637,10 @@ speakmore help     all commands`,
   windows: {
     // A combination is joined with a plus sign (Right Alt+Space)
     chord: { text: "{first}+{second}" },
+    binding: {
+      leftOnly:
+        "Everyday shortcuts start with left-hand modifiers (Ctrl+C, Alt+Tab), so this would fire by accident all the time: use a right-hand modifier",
+    },
     keys: {
       ControlLeft: { name: "Left Ctrl", short: "Left Ctrl", keycap: "Left Ctrl" },
       ControlRight: { name: "Right Ctrl", short: "Right Ctrl", keycap: "Right Ctrl" },
