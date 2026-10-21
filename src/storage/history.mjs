@@ -163,6 +163,14 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
     `SELECT provider, model, ${USAGE_COLUMNS} FROM model_calls WHERE created_at >= :since
      GROUP BY provider, model ORDER BY costUsd DESC, calls DESC`,
   );
+  // 花费随时间怎么走：按本机日历的哪一天（或哪个钟头）、哪个型号分开加。'localtime' 用的是这台机器的时区，
+  // 和同一个进程里 Date 认的一致；在库里先分好组，不把每一笔都搬出来
+  const usageSlots = db.prepare(
+    `SELECT strftime(:format, created_at, 'localtime') AS slot, provider, model, coalesce(sum(cost_usd), 0) AS costUsd
+     FROM model_calls WHERE created_at >= :since
+     GROUP BY slot, provider, model ORDER BY slot, provider, model`,
+  );
+  const SLOT_FORMATS = { day: "%Y-%m-%d", hour: "%Y-%m-%d %H" };
   // 每次听写等了模型多久：夹着时间戳重来过的，几次加在一起才是用户等的；本机转写的两跳（local 那一笔加润色那一笔）
   // 也加在一起。按型号分开时各算各的
   const totalLatencies = db.prepare(
@@ -249,6 +257,17 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
           .all({ since })
           .map((row) => ({ ...row, latenciesMs: latenciesOf(row.provider, row.model) })),
       };
+    },
+    /**
+     * 花费随时间怎么走（首页花费卡的趋势图，src/usage/series.mjs 再分格）：每天或每个钟头、每个型号一行，
+     * slot 是本机日历上的 YYYY-MM-DD 或 YYYY-MM-DD HH，老的在前。不知道价的那几笔算 0
+     * @param {{ since?: string, unit: "day" | "hour" }} range 只数这个时刻（ISO 8601）之后的
+     * @returns {{ slot: string, provider: string, model: string, costUsd: number }[]}
+     */
+    usageOverTime({ since = "", unit }) {
+      const format = SLOT_FORMATS[unit];
+      if (!format) throw new Error(`usageOverTime 的 unit 只能是 day 或 hour，现在是 ${JSON.stringify(unit)}`);
+      return usageSlots.all({ format, since }).map((row) => ({ ...row }));
     },
     close() {
       db.close();
