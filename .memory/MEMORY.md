@@ -50,5 +50,6 @@
 - [分发重构](speakmore-distribution-rework.md) — 10-20 全部做完并随 0.11.0 发布：模型换魔搭、包压缩瘦身、分块差量更新，两台电脑验过，旧的模型源和旧版本已撤；还剩 Electron fuses
 - [重构要做干净](refactor-surgical-clean.md) — 定了重构就手术式、不给我们自己的旧做法留兼容；碰到用户手里旧版本的先说清影响
 - [目录可配置重构](speakmore-relocatable-home.md) — issue #10：只留定位文件、整个 .speakmore 可装别处并一键迁移；已随 0.12.0 发布、#10 已关
-- [引擎页（原模型页）改成树](plaza-tree-prototype.md) — 10-20 定稿未开工：改名"引擎"、识别方式挪进来、横向树加可拖动画布（不要网格、不要大圆圈图标）、详情二级、密钥单独面板、首页只显示；存档在 .playwright-mcp/plaza-tree/，开工先读那里的 README
+- [引擎页（原模型页）改成树](plaza-tree-prototype.md) — 10-21 在 engine-tree 分支做完、真窗口验过；没合并、没审查（他要等后面的改动一起审）；原型存档在 .playwright-mcp/plaza-tree/
 - [热键开放任意键](speakmore-hotkey-any-key.md) — 待做：任意键或组合键、配置驱动，目录重构发版后单独做
+- [界面改动在开发窗口给他看](ui-review-in-dev-window.md) — 从源码起的隔离 App 验完不关，他直接在上面提意见，不打包
