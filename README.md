@@ -27,8 +27,8 @@
 </p>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/home-dark.zh-CN.ded4c77a.webp?v=4" />
-  <img src="https://media.speakmore.zephyrxiang.com/readme/home.zh-CN.9f68edd4.webp" alt="SpeakMore 主窗口首页：字数、节省时间、语速、每日热力图、花费，右上角为当前识别方式" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/home-dark.zh-CN.16f1a72d.webp" />
+  <img src="https://media.speakmore.zephyrxiang.com/readme/home.zh-CN.4154445f.webp" alt="SpeakMore 主窗口首页：字数、节省时间、语速、每日热力图与花费走势，右上角为当前识别方式" />
 </picture>
 
 - 按下快捷键开始口述，再次按下结束，文字写入当前光标位置。
@@ -46,9 +46,9 @@
 ## 🚀 安装
 
 <p align="center">
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.12.0/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Apple%20芯片-111?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版（Apple 芯片）" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.12.0/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版（Intel）" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.12.0/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/下载-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="下载 Windows 版" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.13.0/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Apple%20芯片-111?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版（Apple 芯片）" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.13.0/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/下载-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="下载 Mac 版（Intel）" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.13.0/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/下载-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="下载 Windows 版" /></a>
 </p>
 
 **macOS**
@@ -113,32 +113,32 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-way.zh-CN.5017d754.webp" alt="引导第 1 步：在三种识别方式中选择一种" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-prepare-local.zh-CN.623b17ae.webp" alt="引导第 2 步：厂商逐行列出，选中后在原处填写密钥" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-way.zh-CN.35071dc4.webp" alt="引导第 1 步：在三种识别方式中选择一种" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-prepare-local.zh-CN.24539a27.webp" alt="引导第 2 步：厂商逐行列出，选中后在原处填写密钥" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>1</b> · 选择识别方式</sub></td>
     <td align="center"><sub><b>2</b> · 配置密钥（可跳过）</sub></td>
   </tr>
   <tr>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-prepare-private.zh-CN.4a564b9c.webp" alt="引导：本机模型在后台下载" /></td>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-permissions.zh-CN.6e365cdb.webp" alt="引导：麦克风、输入监控、辅助功能三项权限均已开启" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-prepare-private.zh-CN.2e780e36.webp" alt="引导：本机模型在后台下载" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-permissions.zh-CN.3c2e9993.webp" alt="引导：麦克风、输入监控、辅助功能三项权限均已开启" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>3</b> · 后台下载本机模型</sub></td>
     <td align="center"><sub><b>4</b> · 授予系统权限</sub></td>
   </tr>
   <tr>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-microphone.zh-CN.2fe10fdd.webp" alt="引导：音量条随声音变化" /></td>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-hotkey.zh-CN.24cd3419.webp" alt="引导：按下右 Option 后键帽高亮" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-microphone.zh-CN.ce912b28.webp" alt="引导：音量条随声音变化" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-hotkey.zh-CN.2f532fcd.webp" alt="引导：按下右 Option 后键帽高亮" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>5</b> · 测试麦克风</sub></td>
     <td align="center"><sub><b>6</b> · 测试快捷键</sub></td>
   </tr>
   <tr>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-try.zh-CN.2c6bb356.webp" alt="引导：含语气词与改口的口述整理为一句完整的文字" /></td>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-done.zh-CN.1ddd286f.webp" alt="引导完成：识别方式、快捷键与麦克风状态汇总" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-try.zh-CN.c707b20b.webp" alt="引导：含语气词与改口的口述整理为一句完整的文字" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-done.zh-CN.64e131f9.webp" alt="引导完成：识别方式、快捷键与麦克风状态汇总" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>7</b> · 口述测试</sub></td>
@@ -155,15 +155,15 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 <sub>上述名称与标志归各自权利人所有，仅用于说明 SpeakMore 支持对接的服务。</sub>
 
-**模型页**按用途列出全部模型：
+**引擎页**把识别方式、环节、厂商、型号排成一棵树：
 
 - **原生识别 7 个**：音频输入，文字输出。
 - **转写 10 个**：本机 4 个，云端 6 个。
 - **润色 12 个**：通义千问、DeepSeek、Kimi、智谱、MiniMax 与自定义服务。
-- 每个模型标注官方价格与实测得分。
-- 同一模型由多个平台提供时合并为一行，可选渠道。
+- 点开型号查看官方价格、实测得分与渠道，正在使用的一路以主题色标出。
+- 同一模型由多个平台提供时合并为一项，在详情中切换渠道。
 
-**密钥**按平台管理：
+**密钥**在标题行右侧的面板中按平台管理：
 
 - 一把阿里云百炼密钥可调用 14 个模型。
 - DeepSeek、Kimi、智谱、MiniMax、Gemini、OpenAI 的官方密钥均可直接使用。
@@ -171,11 +171,11 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/polish.zh-CN.8dfd259a.webp" alt="模型页润色分类：通义千问、DeepSeek、Kimi、智谱、MiniMax 的模型、价格与渠道" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/keys.zh-CN.9d3a7c4f.webp" alt="模型页密钥分类：八个平台的配置状态及各自可调用的模型数量" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/polish.zh-CN.3c017769.webp" alt="引擎页：润色环节展开到 DeepSeek，详情中为渠道、价格与检测" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/keys.zh-CN.8399cdb3.webp" alt="密钥面板：八个平台的配置状态及各自可调用的模型数量" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>全部模型与渠道</sub></td>
+    <td align="center"><sub>引擎页与模型详情</sub></td>
     <td align="center"><sub>按平台管理密钥</sub></td>
   </tr>
 </table>
@@ -184,6 +184,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 - 三种识别方式并列可选。
 - 各方式独立保存模型配置，切换时无需重新设置。
+- 在引擎页第一列切换，首页标题右侧显示当前方式。
 
 | 方式 | 处理流程 | 上传内容 | 密钥 |
 | --- | --- | --- | --- |
@@ -193,11 +194,11 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/mode-picker.zh-CN.99d72560.webp" alt="首页的识别方式选单：三种方式及各自使用的模型" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/presets.zh-CN.ecd31b60.webp" alt="推荐组合：四套完整配置，含月成本、检测与一键启用" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/engine.zh-CN.060309dc.webp" alt="引擎页：识别方式、环节、厂商、型号排成一棵树，正在使用的一路以主题色标出" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/presets.zh-CN.620f1ad4.webp" alt="推荐组合：四套完整配置，含月成本、检测与一键启用" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>首页切换识别方式</sub></td>
+    <td align="center"><sub>在引擎页切换识别方式</sub></td>
     <td align="center"><sub>推荐组合一键启用</sub></td>
   </tr>
 </table>
@@ -232,7 +233,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 <sub>单条耗时为 97 条真实口述的转写耗时中位数；Windows 显卡为 RTX 4060 Ti。Vulkan 支持 NVIDIA、AMD 与 Intel 显卡。</sub>
 
-<img src="https://media.speakmore.zephyrxiang.com/readme/transcribe.zh-CN.643d66f5.webp" alt="模型页转写分类：四个本机模型的中文与中英混合得分、每分钟音频耗时、内存与体积，各列最优值以绿色标出；其下为云端转写模型" />
+<img src="https://media.speakmore.zephyrxiang.com/readme/transcribe.zh-CN.5c94af6b.webp" alt="引擎页转写环节：本机模型 Qwen3-ASR 0.6B 的中文与中英混合得分、每分钟音频耗时、内存与体积，绿色为同组最佳" />
 
 ## 🔒 隐私自由
 
@@ -255,7 +256,9 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 - SpeakMore 本身免费。
 - 模型费用按实际用量，直接结算给厂商。
-- 首页逐项统计花费。
+- 首页按今天、本月、累计统计花费：柱状图与趋势线看走势，下方列出各模型的花费与占比。
+
+<img src="https://media.speakmore.zephyrxiang.com/readme/spend.zh-CN.fad0fb5c.webp" alt="首页花费卡：本月每天的花费柱状图与趋势线，下方为各模型的花费与占比" />
 
 与 Typeless 各档套餐对比（重度使用，每日 100 次）：
 
@@ -452,7 +455,7 @@ flowchart LR
 <summary><b>💰 花费统计</b></summary>
 
 - 每次模型调用均记录 token（含音频与思考）、模型、花费与耗时。
-- 首页按模型分列今日、本月与累计数据。
+- 首页按今天、本月、累计显示花费走势与各模型占比，悬停柱子查看那一段的细数。
 - 本机转写单列，不计费。
 - `speakmore usage` 提供更详细的数据。
 - 花费为按各厂商官方价格估算的美元金额；以人民币计价的平台按 6.71 折算。
