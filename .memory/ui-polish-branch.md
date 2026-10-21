@@ -21,3 +21,8 @@ metadata:
 
 **Why:** 他要逐页把"AI 味"和"初学者味"去掉，改完一起审。
 **How to apply:** 接着在 ui-polish 上小步改、随做随提；改完在开发窗口给他看（[[ui-review-in-dev-window]]）。他没说审之前不开对抗性审查；审完再问合并主干。分段控件（首页时段、引擎页渠道）10-21 他点头后也改成胶囊了。相关：[[plaza-tree-prototype]]。
+
+**10-21 进入收尾**（他说"OK 了，进入收尾和审查"）：顺序是对抗性审查（workflow 一轮）→ 逐条核实、修 → README 和官网的图与说法（旧模型页、首页识别方式选单、推荐组合、密钥这几张要重截，docs/media.json、website 用的同一批）→ 版本号（打算 0.13.0）→ 照 [[speakmore-release-on-cos]] 先只推标签、他跑 ship、传完推 main、部署官网 → 线上包 Mac、Windows 真装真启动（[[acceptance-end-to-end]]）。合并、推送前仍要问他。
+- 审查 workflow 的 run id 是 wf_95000394-f9d（会话目录下 workflows/scripts/review-ui-polish-*.js，结果分 confirmed / disputed / refuted，disputed 要自己核）。
+- Windows 从源码跑的验证已过：单测 1256 条 1193 过、0 失败；首页花费卡（墨主题深浅色）、引擎页、设置下拉框（base-select）、词典都看过。开发机的家目录 speakmore-dev\home 里灌了假用量，原库备份 data\history.db.before-ui-review；本机到开发机的调试隧道开在 19333。收尾时还原两边灌过假数据的库、关隧道。
+
