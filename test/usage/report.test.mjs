@@ -17,14 +17,20 @@ const totals = (overrides = {}) => ({
   ...overrides,
 });
 
-/** 假的历史库：记下问的是哪个时刻之后的，按时刻给不同的汇总 */
-function fakeHistory(bySince) {
+/** 假的历史库：记下问的是哪个时刻之后的，按时刻给不同的汇总；随时间怎么走按天、按钟头各给一份 */
+function fakeHistory(bySince, overTime = { day: [], hour: [] }) {
   const asked = [];
+  const askedOverTime = [];
   return {
     asked,
+    askedOverTime,
     usage({ since = "" } = {}) {
       asked.push(since);
       return bySince[since] ?? { ...totals(), models: [] };
+    },
+    usageOverTime({ since = "", unit }) {
+      askedOverTime.push({ since, unit });
+      return overTime[unit];
     },
   };
 }
@@ -45,6 +51,22 @@ test("今天从本机时区的零点算，本月从 1 号零点算，累计不�
     history.asked.sort(),
     ["", new Date(2026, 9, 1).toISOString(), new Date(2026, 9, 14).toISOString()].sort(),
   );
+});
+
+test("当天零点因夏令时不存在（圣地亚哥九月初）时，本月仍从 1 号零点算，和本月的柱子同一个起点", () => {
+  const before = process.env.TZ;
+  process.env.TZ = "America/Santiago";
+  try {
+    // 2026-09-06 这天 00:00 跳到 01:00；1 号那天没有跳
+    const history = fakeHistory({});
+    const report = usageReport(history, { now: new Date(2026, 8, 6, 20) });
+    const firstOfMonth = new Date(2026, 8, 1).toISOString();
+    assert.ok(history.asked.includes(firstOfMonth), `本月问的是 ${history.asked}，应从 ${firstOfMonth} 起`);
+    assert.equal(report.month.series.buckets[0].start, firstOfMonth);
+  } finally {
+    if (before === undefined) delete process.env.TZ;
+    else process.env.TZ = before;
+  }
 });
 
 test("每段给出 token 合计和模型一般多久回话（中位数）、慢的时候多久（九成都比它快）；最外面按型号分开的是累计的", () => {
@@ -70,7 +92,7 @@ test("每段给出 token 合计和模型一般多久回话（中位数）、慢�
   const report = usageReport(fakeHistory({ "": all }), { now: new Date(2026, 9, 14, 15, 30) });
 
   const { latenciesMs: _raw, models: _models, ...expectedTotals } = all;
-  const { models: _totalModels, ...reportedTotals } = report.total;
+  const { models: _totalModels, series: _series, ...reportedTotals } = report.total;
   assert.deepEqual(reportedTotals, {
     ...expectedTotals,
     tokens: 15_400,
@@ -133,4 +155,39 @@ test("每一段都按型号分开，每个型号说清是谁家的、本机的�
   assert.deepEqual(report.today.models, []);
   // 累计的那份照旧也放在最外面
   assert.equal(report.models, report.total.models);
+});
+
+test("每一段带上随时间怎么走：今天按钟头、本月按天排满整个月、累计按用了多久；每个型号有个键对得上格子里的钱", () => {
+  const now = new Date(2026, 9, 14, 15, 30);
+  const month = {
+    ...totals({ calls: 1, dictations: 1, costUsd: 0.002 }),
+    models: [{ provider: "gemini", model: "gemini-3.6-flash", ...totals({ calls: 1, dictations: 1, costUsd: 0.002 }) }],
+  };
+  const history = fakeHistory(
+    { [new Date(2026, 9, 1).toISOString()]: month },
+    {
+      day: [{ slot: "2026-10-14", provider: "gemini", model: "gemini-3.6-flash", costUsd: 0.002 }],
+      hour: [{ slot: "2026-10-14 09", provider: "gemini", model: "gemini-3.6-flash", costUsd: 0.002 }],
+    },
+  );
+  const report = usageReport(history, { now });
+  // 按钟头的只要今天的；按天的一份给本月和累计共用
+  assert.deepEqual(
+    history.askedOverTime.sort((a, b) => a.unit.localeCompare(b.unit)),
+    [
+      { since: "", unit: "day" },
+      { since: new Date(2026, 9, 14).toISOString(), unit: "hour" },
+    ],
+  );
+  assert.equal(report.today.series.unit, "hour");
+  assert.equal(report.today.series.buckets.length, 24);
+  assert.equal(report.today.series.buckets[9].costUsd, 0.002);
+  assert.equal(report.month.series.unit, "day");
+  assert.equal(report.month.series.buckets.length, 31);
+  assert.equal(report.month.series.buckets[13].costUsd, 0.002);
+  assert.equal(report.total.series.unit, "day");
+  assert.equal(report.total.series.buckets.at(-1).costUsd, 0.002);
+  const [gemini] = report.month.models;
+  assert.equal(gemini.key, "gemini/gemini-3.6-flash");
+  assert.equal(report.month.series.buckets[13].models[gemini.key], 0.002);
 });

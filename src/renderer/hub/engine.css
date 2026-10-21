@@ -1,0 +1,1233 @@
+/* 侧栏"引擎"一页（engine/page.mjs，路由名还是 models）：一棵从左往右长的树，排在一块可拖动、可缩放的画布上。
+   列：识别方式 · 环节 · 厂商 · 型号，点型号在画布右边出详情；密钥是从窗口右边滑出的一张面板。
+   只用 tokens.css 和主题给的变量，控件来自 shared/window.css（界面规范，见 docs/desktop-ui-spec.md），这里只排版。
+   主窗口默认 1080×750、最小 988×685：两档下树都整棵放得进画布（默认约 85%，最窄约 72%）。 */
+
+/* ---------- 整页：画布占满标题行下面剩下的地方，不让内容区滚动 ---------- */
+
+.content:has(> .page[data-route="models"]:not([hidden])) {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 内容区成了一列以后，顶上的横幅照样居中、最宽 66rem */
+.content:has(> .page[data-route="models"]:not([hidden])) > .banner {
+  width: 100%;
+}
+
+.page[data-route="models"] {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  max-width: none;
+}
+
+.page[data-route="models"] .page-tools {
+  gap: 0.625rem;
+}
+
+.page[data-route="models"] .search {
+  flex-basis: 15rem;
+  min-width: 12rem;
+}
+
+/* 提示条抬高一点，别压在图例上 */
+body:has(.page[data-route="models"]:not([hidden])) .toast {
+  bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* ---------- 搜索结果：搜索框下面一列，点一个就沿树展开 ---------- */
+
+.search-results {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max(100%, 19rem);
+  padding: 0.375rem;
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-filter);
+  border-radius: var(--radius-block);
+  box-shadow: var(--edge), var(--lift);
+}
+
+.search-hit {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 0.5rem;
+  text-align: left;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.search-hit[aria-selected="true"],
+.search-hit:hover {
+  background: var(--fill-hover);
+}
+
+.search-hit-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.search-hit-name {
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+}
+
+.search-hit-meta {
+  font-size: var(--text-micro);
+  color: var(--ink-2);
+}
+
+.search-hit-go {
+  width: 0.75rem;
+  height: 0.75rem;
+  color: var(--ink-2);
+  rotate: 180deg;
+}
+
+.search-empty {
+  padding: 0.5rem 0.625rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+/* ---------- 画布：不带框、没有网格，往左右、下面铺到窗口边（抵掉内容区的内边距） ---------- */
+
+.canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 24rem;
+  margin: 0 -3.5rem -3rem -3rem;
+  /* clip 而不是 hidden：hidden 还能被程序滚动，键盘走到画布外的节点时浏览器会把整块滚走，
+     缩放条、图例、详情跟着错位。露出焦点由 canvas.mjs 挪树来做 */
+  overflow: clip;
+  /* 里面几层的先后自己排，不和标题行的搜索结果抢 */
+  isolation: isolate;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.canvas[data-dragging] {
+  cursor: grabbing;
+}
+
+.canvas[data-dragging] :is(.node, .leaf, .mode-node) {
+  cursor: grabbing;
+}
+
+.world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.world[data-animate] {
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+/* ---------- 树：四列，列宽跟着最长的名字走，名字一律不折行 ---------- */
+
+.tree {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, max-content);
+  grid-template-rows: auto 1fr;
+  gap: 1rem 3.5rem;
+  padding: 1rem;
+}
+
+/* 每列上面一行小字：这一列是什么 */
+.col-label {
+  grid-row: 1;
+  padding-left: 0.25rem;
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+}
+
+.col-label[data-col="1"] {
+  grid-column: 1;
+}
+
+.col-label[data-col="2"] {
+  grid-column: 2;
+}
+
+.col-label[data-col="3"] {
+  grid-column: 3;
+}
+
+.col-label[data-col="4"] {
+  grid-column: 4;
+}
+
+.tree-col {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  grid-row: 2;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.tree-col[data-level="mode"] {
+  grid-column: 1;
+  min-width: 12rem;
+}
+
+.tree-col[data-level="role"] {
+  grid-column: 2;
+  min-width: 13rem;
+}
+
+.tree-col[data-level="maker"] {
+  grid-column: 3;
+  min-width: 10.5rem;
+}
+
+.tree-col[data-level="model"] {
+  grid-column: 4;
+  min-width: 14rem;
+}
+
+.tree-links {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* ---------- 连线：正在用的那一路主题色、线上一小段光往右走；已选定、方式没在用的是虚线；其余淡线 ---------- */
+
+.link {
+  fill: none;
+  stroke: color-mix(in oklch, var(--ink) 14%, transparent);
+  stroke-width: 1.5;
+  transition: stroke var(--dur-base) var(--ease-out);
+}
+
+.link.open {
+  stroke: color-mix(in oklch, var(--ink) 40%, transparent);
+}
+
+.link.standby {
+  stroke: color-mix(in oklch, var(--ink) 36%, transparent);
+  stroke-dasharray: 3 4;
+}
+
+.link.live {
+  stroke: color-mix(in oklch, var(--primary) 78%, transparent);
+  stroke-width: 2;
+}
+
+/* 一圈 2.6 秒，和 engine/tree.mjs 的 FLOW_MS 一致。颜色往底色那边提：
+   墨色主题里 glow 和线几乎一个颜色，直接用 glow 看不出光在走 */
+.flow {
+  fill: none;
+  stroke: color-mix(in oklch, var(--glow) 45%, var(--bg));
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 10 320;
+  animation: flow 2.6s linear infinite;
+}
+
+@keyframes flow {
+  from {
+    stroke-dashoffset: 330;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ---------- 节点里共用的：名字、计数、下面那一行状态、小圆点 ---------- */
+
+.node-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.node-name-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.node-name {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.node[data-level="role"] .node-name {
+  font-size: var(--text-heading);
+}
+
+.node-count {
+  font-size: var(--text-micro);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.node-line {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--text-small);
+  line-height: 1.35;
+  color: var(--ink-2);
+}
+
+.node-line .icon {
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  color: var(--line-icon, currentColor);
+}
+
+.node-line-text {
+  white-space: nowrap;
+}
+
+/* ---------- 识别方式：树的第一列，三选一；正在用的那一种实底、描主题色边 ---------- */
+
+.mode-node {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 3.75rem;
+  padding: 0.625rem 0.875rem 0.625rem 0.75rem;
+  text-align: left;
+  border-radius: var(--radius-block);
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.mode-node:hover:not(:disabled) {
+  background: var(--fill-hover);
+}
+
+.mode-node:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.mode-node:disabled {
+  cursor: default;
+}
+
+.mode-node:disabled:not([aria-busy]) > * {
+  opacity: 0.55;
+}
+
+.mode-node[aria-checked="true"] {
+  background: var(--surface-solid);
+  box-shadow:
+    0 0 0 1.5px color-mix(in oklch, var(--primary) 70%, transparent),
+    0 0 0 5px color-mix(in oklch, var(--primary) 10%, transparent),
+    var(--lift);
+}
+
+.mode-node[aria-checked="true"] .node-name {
+  color: color-mix(in oklch, var(--primary) 80%, var(--ink));
+}
+
+.mode-node[aria-checked="true"] .node-line {
+  font-weight: var(--weight-medium);
+  color: var(--ink);
+}
+
+/* 还差的东西、没切成的原因：图标标成问题色；太长的截断，悬停看全 */
+.mode-node .node-line:is([data-kind="key"], [data-kind="url"], [data-kind="download"], [data-kind="problem"]) {
+  --line-icon: var(--problem);
+}
+
+.mode-node .node-line[data-kind="problem"] .node-line-text {
+  max-width: 15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- 环节、厂商的节点 ---------- */
+
+.node {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0.5rem 0.75rem 0.5rem 0.5rem;
+  text-align: left;
+  background: var(--surface);
+  border-radius: var(--radius-block);
+  box-shadow: var(--edge);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.node:hover {
+  background: var(--surface-solid);
+}
+
+.node:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* 展开着的那一个：实底，描一圈；正在用的描主题色 */
+.node[aria-expanded="true"] {
+  background: var(--surface-solid);
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--ink) 26%, transparent),
+    var(--lift);
+}
+
+.node[aria-expanded="true"][data-tone="live"] {
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--primary) 55%, transparent),
+    0 0 0 4px color-mix(in oklch, var(--primary) 10%, transparent),
+    var(--lift);
+}
+
+/* 环节只有字，没有标志：左边和字的边距照右边 */
+.node[data-level="role"] {
+  min-height: 4rem;
+  padding-left: 1rem;
+}
+
+/* 品牌标志的底座：大一号的（详情）、小一号的（搜索结果），缺密钥的变淡 */
+.logo-tile[data-size="lg"] {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.logo-tile[data-size="sm"] {
+  width: var(--control-sm);
+  height: var(--control-sm);
+}
+
+.logo-tile[data-dim] {
+  opacity: 0.55;
+}
+
+/* 缺密钥的厂商颜色变淡 */
+.node[data-dim] .node-name {
+  color: var(--ink-2);
+}
+
+/* 环节下面那一行写的是选定的模型：正在用的写正文色 */
+.node[data-level="role"][data-tone="live"] .node-line {
+  font-weight: var(--weight-medium);
+  color: var(--ink);
+}
+
+.node[data-level="maker"][data-tone="live"] .node-line {
+  font-weight: var(--weight-medium);
+  color: color-mix(in oklch, var(--primary) 84%, var(--ink));
+}
+
+/* ---------- 型号：树叶 ---------- */
+
+.leaf {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0.5rem 0.625rem 0.5rem 0.75rem;
+  text-align: left;
+  background: var(--surface);
+  border-radius: var(--radius-block);
+  box-shadow: var(--edge);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.leaf:hover {
+  background: var(--surface-solid);
+}
+
+.leaf:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.leaf[data-tone="live"] {
+  background: color-mix(in oklch, var(--primary) 6%, var(--surface-solid));
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--primary) 40%, transparent),
+    inset 0 1px 0 var(--sheen);
+}
+
+.leaf[aria-expanded="true"] {
+  background: var(--surface-solid);
+  box-shadow:
+    0 0 0 1.5px color-mix(in oklch, var(--ink) 40%, transparent),
+    var(--lift);
+}
+
+.leaf[aria-expanded="true"][data-tone="live"] {
+  box-shadow:
+    0 0 0 1.5px var(--primary),
+    0 0 0 5px color-mix(in oklch, var(--primary) 10%, transparent),
+    var(--lift);
+}
+
+.leaf-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.leaf-name {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.leaf[data-dim] .leaf-name {
+  color: var(--ink-2);
+}
+
+.leaf-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.leaf-sub {
+  font-size: var(--text-small);
+  line-height: 1.35;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* 型号右边：正在用、已选定写成带点的字；没下载、下载中、缺密钥只放一个小图标 */
+.leaf-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.leaf-state[data-tone="live"] {
+  color: color-mix(in oklch, var(--primary) 84%, var(--ink));
+}
+
+.leaf-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--ink-2);
+}
+
+.leaf-icon[data-tone="problem"] {
+  color: var(--problem);
+}
+
+.leaf-icon .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.leaf-percent {
+  font-size: var(--text-micro);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 浮在画布上的：详情、它和型号之间的那条线、图例、缩放条（都不跟着拖） ---------- */
+
+.canvas-links {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.link-end {
+  fill: var(--ink-2);
+}
+
+.link-end.live {
+  fill: var(--primary);
+}
+
+.detail-dock {
+  position: absolute;
+  top: 0.75rem;
+  right: 1.5rem;
+  z-index: 3;
+  display: flex;
+  width: 20rem;
+  max-height: calc(100% - 4.5rem);
+  cursor: auto;
+  user-select: text;
+  transition: top var(--dur-slow) var(--ease-out);
+}
+
+.detail-dock:empty {
+  display: none;
+}
+
+.canvas-legend {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 3rem;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  max-width: calc(100% - 12rem);
+  padding: 0.375rem 0.75rem;
+  font-size: var(--text-micro);
+  color: var(--ink-2);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-filter);
+  border-radius: var(--radius-full);
+  box-shadow: var(--edge);
+  pointer-events: none;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.legend-item .icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.legend-line {
+  width: 1.25rem;
+  border-top: 2px solid var(--primary);
+}
+
+.legend-line[data-tone="standby"] {
+  border-top: 1.5px dashed var(--ink-2);
+}
+
+.zoom {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.25rem;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-filter);
+  border-radius: var(--radius-full);
+  box-shadow: var(--edge), var(--lift);
+  cursor: auto;
+}
+
+.zoom .icon-button {
+  width: var(--control-sm);
+  height: var(--control-sm);
+}
+
+.zoom .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.zoom-value {
+  min-width: 3rem;
+  height: var(--control-sm);
+  padding: 0 0.25rem;
+  font-size: var(--text-micro);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.zoom-value:hover {
+  color: var(--ink);
+  background: var(--fill-hover);
+}
+
+.zoom-value:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* ---------- 详情：树的最后一节，点型号才出来 ---------- */
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 1rem 1.125rem;
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-filter);
+  border-radius: var(--radius-card);
+  box-shadow: var(--edge), var(--lift);
+}
+
+/* 换了一项才放进场：重画（下载进度、检测结果）时不再放 */
+.detail[data-enter] {
+  animation: detail-in var(--dur-slow) var(--ease-out) both;
+}
+
+@keyframes detail-in {
+  from {
+    opacity: 0;
+    translate: 0.75rem 0;
+  }
+}
+
+.detail[data-tone="live"] {
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--primary) 35%, transparent),
+    inset 0 1px 0 var(--sheen),
+    var(--lift);
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.detail-titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-name {
+  margin: 0;
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.detail-sub {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.detail-close {
+  width: var(--control-sm);
+  height: var(--control-sm);
+  margin: -0.125rem -0.375rem 0 0;
+}
+
+.detail-close .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: -0.25rem;
+}
+
+/* 不在正在用的识别方式里：启用会连方式一起换 */
+.detail-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  font-size: var(--text-small);
+  line-height: 1.45;
+  color: var(--ink-2);
+  background: var(--fill-hover);
+  border-radius: var(--radius-control);
+}
+
+.detail-note .icon {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: 0.15rem;
+}
+
+.detail-note-meta {
+  margin-left: auto;
+  font-size: var(--text-micro);
+  white-space: nowrap;
+}
+
+.detail-channel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+}
+
+.detail-label {
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+}
+
+.detail .segmented {
+  max-width: 100%;
+}
+
+.detail-custom {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* 价格或规格：一格一项，名目在上、数在下；五项规格排成三列 */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.875rem 1rem;
+  margin: 0;
+  padding: 0.875rem 0;
+  border-block: 1px solid var(--line);
+}
+
+.facts[data-count="1"] {
+  grid-template-columns: 1fr;
+}
+
+.facts[data-count="5"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.fact-label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.fact-value {
+  display: flex;
+  align-items: baseline;
+  gap: 0.125rem;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.fact-num {
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
+  line-height: 1.2;
+}
+
+.fact-cur {
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+}
+
+.fact-unit {
+  margin-left: 0.25rem;
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.fact[data-best] .fact-num {
+  color: var(--ok);
+}
+
+.meter {
+  --v: 0;
+  position: relative;
+  display: block;
+  height: 0.25rem;
+  overflow: hidden;
+  background: var(--fill-hover);
+  border-radius: var(--radius-full);
+}
+
+.meter::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--v) * 100%);
+  background: color-mix(in oklch, var(--primary) 70%, transparent);
+  border-radius: var(--radius-full);
+}
+
+.fact[data-best] .meter::before {
+  background: var(--ok);
+}
+
+/* 数据去哪：录音、文字离不离开本机 */
+.detail-path {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.detail-path .icon {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--path-icon, currentColor);
+}
+
+.detail-path[data-tone="local"] {
+  --path-icon: var(--ok);
+}
+
+/* 还差什么：一行说明加一个去补的按钮 */
+.detail-need {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--control-lg);
+  padding: 0.375rem 0.375rem 0.375rem 0.75rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  background: color-mix(in oklch, var(--problem) 8%, transparent);
+  border-radius: var(--radius-control);
+}
+
+.detail-need > .icon {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--problem);
+}
+
+.detail-need b {
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+}
+
+.detail-need .button {
+  flex: none;
+  margin-left: auto;
+}
+
+/* 左边检测或下载进度（状态列那么宽），右边主操作（操作列那么宽） */
+.detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.detail-actions > :first-child {
+  width: var(--col-status);
+}
+
+/* 主操作至少操作列那么宽，字长的（"下载 253 MB"、英文）按字撑宽，不溢出胶囊（.block 的撑满在这里不要） */
+.detail-actions > :last-child {
+  width: auto;
+  min-width: var(--col-action);
+}
+
+.detail-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: -0.25rem;
+  font-size: var(--text-micro);
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.detail-link {
+  flex: none;
+  font-size: var(--text-micro);
+  color: var(--ink-2);
+}
+
+.detail-link:disabled {
+  opacity: 0.5;
+}
+
+/* ---------- 密钥面板：从窗口右边滑出 ---------- */
+
+.sheet {
+  position: fixed;
+  inset: 0.5rem 0.5rem 0.5rem auto;
+  /* 它盖在内容区顶上的拖动条上。拖动区只认 app-region，不管上面盖着什么：不写这一句，面板顶上一截点下去是在拖窗口 */
+  -webkit-app-region: no-drag;
+  flex-direction: column;
+  width: min(30rem, 100vw - 4rem);
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-filter);
+  border: none;
+  border-radius: var(--radius-card);
+  box-shadow: var(--edge), var(--lift);
+  transition:
+    translate var(--dur-slow) var(--ease-out),
+    opacity var(--dur-slow) var(--ease-out),
+    display var(--dur-slow) allow-discrete,
+    overlay var(--dur-slow) allow-discrete;
+}
+
+/* Windows 上右上角那条是系统的三个按钮（app/main.mjs 的 CAPTION_HEIGHT）：面板从它下面开始 */
+:root[data-platform="win32"] .sheet {
+  top: calc(2.75rem + 0.5rem);
+}
+
+.sheet[open] {
+  display: flex;
+}
+
+.sheet:not([open]) {
+  translate: 2rem 0;
+  opacity: 0;
+}
+
+@starting-style {
+  .sheet[open] {
+    translate: 2rem 0;
+    opacity: 0;
+  }
+}
+
+/* 和设置、词典对话框一样压暗：用 --ink 的话深色下变成一层白雾 */
+.sheet::backdrop {
+  background: oklch(0 0 0 / 0.18);
+}
+
+.sheet-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 1.25rem 1.25rem 0.75rem 1.5rem;
+}
+
+.sheet-title {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+}
+
+.sheet-meta {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.sheet-close {
+  align-self: center;
+  margin-left: auto;
+}
+
+.sheet-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0 0.75rem;
+}
+
+.sheet-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.5rem 1.125rem;
+  font-size: var(--text-micro);
+  color: var(--ink-2);
+  box-shadow: 0 -1px 0 var(--line);
+}
+
+.sheet-foot .icon {
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.key-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 5.25rem var(--col-action);
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.key-row:first-child,
+.key-row[data-open],
+.key-row[data-open] + .key-row {
+  border-top-color: transparent;
+}
+
+.key-row[data-open] {
+  background: var(--fill-hover);
+  border-radius: var(--radius-block);
+}
+
+.key-row > .button {
+  width: 100%;
+}
+
+.key-row > :is(.callout, .key-entry) {
+  grid-column: 2 / -1;
+}
+
+.key-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.key-name-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.key-name {
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.key-cover {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.key-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.key-state[data-tone="ok"] {
+  color: var(--ink);
+}
+
+.key-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.125rem;
+}
+
+.key-entry .input {
+  width: 100%;
+  font-family: var(--font-mono);
+}
+
+.key-entry .input::placeholder {
+  font-family: var(--font);
+}
+
+.key-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.key-entry-gap {
+  flex: 1;
+}
+
+.key-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.key-link:hover {
+  color: var(--ink);
+}
+
+.key-link .icon {
+  width: 0.8125rem;
+  height: 0.8125rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow {
+    display: none;
+  }
+
+  /* .world 的过渡写在 .world[data-animate] 上，这里要同样的优先级才压得住 */
+  .world[data-animate],
+  .node,
+  .leaf,
+  .mode-node,
+  .detail-dock,
+  .sheet {
+    transition: none;
+  }
+
+  .detail[data-enter] {
+    animation: none;
+  }
+}

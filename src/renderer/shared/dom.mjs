@@ -30,6 +30,20 @@ export function drawnCheck() {
   return node;
 }
 
+/**
+ * 填下拉框（window.css 的 .select，用 appearance: base-select 画）：最前面一个按钮，里面是选中那一项的字
+ * （selectedcontent 跟着选中的变）和箭头；后面是选项。打开后的单子也由样式画，Mac、Windows 一个样子
+ * @param {HTMLSelectElement} select
+ * @param {Array<[string, string]>} choices [值, 写什么]
+ * @param {string} current 选中的那个值
+ */
+export function fillSelect(select, choices, current) {
+  select.replaceChildren(
+    h("button", { type: "button" }, document.createElement("selectedcontent"), svg("i-chevron", "icon chevron")),
+    ...choices.map(([value, label]) => new Option(label, value, false, value === current)),
+  );
+}
+
 /** 品牌图标：认识的家用它的图标，不认识的用一朵云 */
 export const brand = (id) => providerIcon(id) ?? svg("i-cloud");
 

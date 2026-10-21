@@ -22,7 +22,7 @@ export default {
     title: "Speak more.\nType less.",
     lead: "Voice dictation for Mac and Windows.\nYour model, your mode, your cost.",
     shotAlt:
-      "SpeakMore's home window: words, time saved, pace, dictation time and a daily heatmap, with the mode picker at the top right",
+      "SpeakMore's home window: words, time saved, pace, dictation time and a daily heatmap, with the active mode at the top right",
     barAlt: "The floating bar during dictation: cancel, a live waveform, done",
   },
   demo: {
@@ -65,12 +65,11 @@ export default {
       { title: "Measured, not guessed", text: "Benchmarked models show their scores." },
       { title: "Switch instantly", text: "No restart needed." },
     ],
-    shotAlt:
-      "The Polish tab of the Models page: DeepSeek, Qwen, Kimi, Zhipu, MiniMax and more, with prices and benchmark scores",
+    shotAlt: "The Engine page: the Polish role expanded to DeepSeek, with channels, prices and a check in the details",
   },
   ways: {
     title: "Three modes.\nSwitch anytime.",
-    lead: "Switch from the home window. Each mode keeps its own models.",
+    lead: "Switch on the Engine page. Each mode keeps its own models.",
     lanes: { cloud: "Cloud", device: "Device", offline: "Offline" },
     items: [
       {

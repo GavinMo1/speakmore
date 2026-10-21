@@ -1,6 +1,7 @@
-/* 侧栏"词典"一页（vocabulary.mjs）。结构照原版的词典页：一格一个词，三列铺开，鼠标移上去才出现编辑和删除。
-   标题下面多一栏原版没有的：词典只存在本机、当前方式每一步怎么收、"支持的模型"浮层。
-   按钮、标签、搜索框、浮层都是规范里的那几样（shared/window.css、models.css、picker.css），这里只排版。 */
+/* 侧栏"词典"一页（vocabulary.mjs）。结构照原版的词典页：一个词一格，几列铺开，鼠标移上去才出现编辑、删除和多选的勾。
+   原版没有的两处：标题下面一行写词典只存在本机；搜索那一行的右边是"支持的模型"浮层。
+   整页只靠字和细线分层：不给图标垫色块，词前面不放图标，状态用字的颜色说。
+   按钮、标签、搜索框、浮层都是规范里的那几样（shared/window.css、hub.css、picker.css），这里只排版。 */
 
 #vocabulary-support-trigger {
   anchor-name: --vocabulary-support;
@@ -10,119 +11,26 @@
   position-anchor: --vocabulary-support;
 }
 
-/* ---------- 标题下面那一栏：两件事各一格，右边是浮层的按钮 ---------- */
-
-/* 三列：存在哪 · 当前方式（占剩下的宽，窄了标签折行）· 浮层的按钮。窗口最窄时也排在一行 */
-.vocab-about {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.75rem 2rem;
-  padding: 0.875rem 0.875rem 0.875rem 1rem;
-  background: var(--surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--edge);
-}
-
-/* 一件事：左边一个带底色的图标，右边一行标题、一行小字 */
-.vocab-fact {
+/* 浮层一屏放不下时只滚模型那一段：高度跟着按钮下面还剩多少走（锚点定位时 100% 是按钮下面那一块），标题不跟着滚。
+   只在打开时设 display，关着时要留给 popover 自己的 display: none */
+#vocabulary-support:popover-open {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
+  flex-direction: column;
+  max-height: calc(100% - 1rem);
 }
 
-.vocab-fact-glyph {
-  display: inline-grid;
-  flex: none;
-  place-items: center;
-  width: var(--control-lg);
-  aspect-ratio: 1;
-  border-radius: var(--radius-block);
-}
-
-.vocab-fact-glyph .icon {
-  width: 1.125rem;
-  height: 1.125rem;
-}
-
-.vocab-fact-glyph[data-tone="ok"] {
-  color: var(--ok);
-  background: color-mix(in oklch, var(--ok) 13%, transparent);
-}
-
-.vocab-fact-glyph[data-tone="accent"] {
-  color: var(--on-primary);
-  background: var(--gradient);
-  box-shadow: inset 0 1px 0 var(--sheen);
-}
-
-.vocab-fact-glyph[data-tone="problem"] {
-  color: var(--problem);
-  background: color-mix(in oklch, var(--problem) 13%, transparent);
-}
-
-.vocab-fact-body {
-  display: grid;
-  gap: 0.125rem;
-  min-width: 0;
-}
-
-.vocab-fact-title {
-  font-size: var(--text-small);
-  font-weight: var(--weight-semibold);
-  line-height: 1.4;
-}
-
-.vocab-fact-meta {
-  font-size: var(--text-micro);
-  line-height: 1.5;
-  color: var(--ink-2);
-}
+/* ---------- 标题下面那一行：锁加"仅保存在本机 · …"，悬停看文件在哪 ---------- */
 
 #vocabulary-local {
+  font-size: var(--text-small);
   cursor: help;
 }
 
-.vocab-route[data-tone="problem"] .vocab-fact-meta {
-  font-weight: var(--weight-medium);
-  color: var(--problem);
-}
-
-/* 当前方式经过的每一步一个小标签："转写 · 热词"。悬停看是哪个模型、这种收法怎么回事 */
-.vocab-steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
-}
-
-.vocab-step {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.0625rem 0.5rem;
-  font-size: var(--text-micro);
-  font-weight: var(--weight-medium);
-  line-height: 1.5;
-  white-space: nowrap;
-  color: color-mix(in oklch, var(--primary) 82%, var(--ink));
-  background: color-mix(in oklch, var(--primary) 11%, transparent);
-  border-radius: var(--radius-full);
-  cursor: help;
-}
-
-.vocab-step-role {
-  color: var(--ink-2);
-}
-
-.vocab-step-role::after {
-  content: "·";
-  margin-left: 0.375rem;
-}
-
-.vocab-step[data-off] {
-  color: var(--problem);
-  background: color-mix(in oklch, var(--problem) 12%, transparent);
+.vocab-local-icon {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: -0.25rem;
 }
 
 /* ---------- 支持的模型（浮层） ---------- */
@@ -130,8 +38,7 @@
 .vocab-support {
   display: grid;
   gap: 0.25rem;
-  /* 浮层在标题下面那一栏的下方展开：留出上面的距离，整张单子一屏放得下就不滚 */
-  max-height: min(40rem, 100vh - 14rem);
+  min-height: 0;
   overflow-y: auto;
   padding: 0 0.25rem 0.25rem;
 }
@@ -149,7 +56,7 @@
   list-style: none;
 }
 
-/* 一行：图标、名字（下面一小行是在哪）、收多少、做法。后两列各行对齐 */
+/* 一行：厂商标志、名字、收多少、做法。后两列各行对齐；原生识别、润色那一行"全部模型"不带标志 */
 .vocab-support-row {
   display: grid;
   grid-template-columns: 1rem minmax(0, 1fr) 6.5rem 4.5rem;
@@ -165,13 +72,9 @@
   background: var(--fill-hover);
 }
 
-.vocab-support-row > :is(.provider-icon, .icon) {
+.vocab-support-row > .provider-icon {
   width: 1rem;
   height: 1rem;
-}
-
-.vocab-support-row > .icon {
-  color: var(--ink-2);
 }
 
 .vocab-support-row > .tag {
@@ -199,6 +102,16 @@
 }
 
 /* ---------- 搜索和个数 ---------- */
+
+/* 搜索、个数挨着，"支持的模型"靠右 */
+.vocab-toolbar {
+  justify-content: flex-start;
+  gap: 0.75rem 1.25rem;
+}
+
+.vocab-toolbar > .picker-trigger {
+  margin-left: auto;
+}
 
 .vocab-count {
   font-size: var(--text-small);
@@ -231,16 +144,10 @@
     var(--lift);
 }
 
-.vocab-composer-glyph {
-  display: inline-grid;
+.vocab-composer-icon {
   flex: none;
-  place-items: center;
-  width: var(--control-md);
-  aspect-ratio: 1;
-  color: var(--on-primary);
-  background: var(--gradient);
-  border-radius: var(--radius-control);
-  box-shadow: inset 0 1px 0 var(--sheen);
+  margin-left: 0.375rem;
+  color: var(--ink-2);
 }
 
 .vocab-composer-input {
@@ -288,7 +195,7 @@
 
 .vocab-composer-problem {
   flex-basis: 100%;
-  padding: 0.25rem 0 0.25rem 2.75rem;
+  padding: 0.25rem 0 0.25rem 2.125rem;
   font-size: var(--text-small);
 }
 
@@ -319,28 +226,9 @@
 .vocab-empty {
   display: grid;
   justify-items: center;
-  gap: 0.25rem;
-  padding: 4rem 1rem 3rem;
+  gap: 0.375rem;
+  padding: 5rem 1rem 3rem;
   text-align: center;
-}
-
-.vocab-empty-glyph {
-  display: inline-grid;
-  place-items: center;
-  width: 3.5rem;
-  aspect-ratio: 1;
-  margin-bottom: 0.75rem;
-  color: var(--on-primary);
-  background: var(--gradient);
-  border-radius: var(--radius-card);
-  box-shadow:
-    inset 0 1px 0 var(--sheen),
-    0 10px 24px -12px var(--primary);
-}
-
-.vocab-empty-glyph .icon {
-  width: 1.5rem;
-  height: 1.5rem;
 }
 
 .vocab-empty-title {
@@ -359,13 +247,9 @@
   margin-top: 1.25rem;
 }
 
-/* 搜不到时只有一句，不要大图标 */
+/* 搜不到时只有一句 */
 .vocab-empty[data-kind="search"] {
   padding-top: 2.5rem;
-}
-
-.vocab-empty[data-kind="search"] .vocab-empty-glyph {
-  display: none;
 }
 
 .vocab-empty[data-kind="search"] .vocab-empty-title {
@@ -374,12 +258,12 @@
   color: var(--ink-2);
 }
 
-/* ---------- 词：三列铺开，窄了自动少几列；长词换行，不截断 ---------- */
+/* ---------- 词：像词典的索引，几列铺开、每个词下面一道细线，不套卡片；窄了自动少几列，长词换行不截断 ---------- */
 
 .vocab-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  column-gap: 1.5rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -389,40 +273,41 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.625rem;
   min-width: 0;
   min-height: var(--control-lg);
-  padding: 0.5rem 0.875rem;
-  background: var(--surface);
-  border-radius: var(--radius-block);
-  box-shadow: var(--edge);
+  padding: 0.375rem 0.625rem;
+  border-radius: var(--radius-control);
   transition:
     background-color var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out);
 }
 
+/* 底下的细线从字的左边起，和字对齐 */
+.vocab-term::after {
+  position: absolute;
+  inset: auto 0.625rem 0;
+  height: 1px;
+  content: "";
+  background: var(--line);
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+/* 悬停、选上、正在改：铺一层底色，细线让位 */
+.vocab-term:is(:hover, [data-selected], [data-editing])::after {
+  opacity: 0;
+}
+
 .vocab-term:hover {
-  background: var(--surface-solid);
-  box-shadow: var(--edge), var(--lift);
+  background: var(--fill-hover);
 }
 
 .vocab-term[data-selected] {
-  background: color-mix(in oklch, var(--primary) 7%, var(--surface-solid));
-  box-shadow:
-    0 0 0 1px color-mix(in oklch, var(--primary) 55%, transparent),
-    inset 0 1px 0 var(--sheen);
+  background: color-mix(in oklch, var(--primary) 10%, transparent);
 }
 
 /* 刚加进来、刚改过的那一个亮一下 */
 .vocab-term[data-fresh] {
   animation: vocab-fresh 1.2s var(--ease-out);
-}
-
-.vocab-term-icon {
-  flex: none;
-  width: 0.875rem;
-  height: 0.875rem;
-  color: color-mix(in oklch, var(--primary) 78%, var(--ink-2));
 }
 
 .vocab-term-text {
@@ -433,36 +318,73 @@
   user-select: text;
 }
 
+/* 多选时勾一直在右边：字给它让出地方 */
 .vocab-grid[data-selecting] .vocab-term-text {
+  padding-right: 1.5rem;
   cursor: pointer;
 }
 
-/* 多选的勾：平时看不见（但键盘 Tab 得到），鼠标移上去、焦点在格子里、或者已经在多选时，盖在图标的位置上 */
-.vocab-check {
+/* 编辑、删除、勾：浮在格子右边，平时不占地方（长词不会因为它们被挤短）。出来时长词的右边淡出去让位，
+   不给按钮垫底色：格子底下是带光晕的窗口底，垫什么颜色都对不上 */
+.vocab-term-tools {
   position: absolute;
-  top: 50%;
-  left: 0.875rem;
+  inset: 0.25rem 0.375rem 0.25rem auto;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.vocab-grid:not([data-selecting]) .vocab-term:is(:hover, :focus-within) .vocab-term-text {
+  mask-image: linear-gradient(to left, transparent 5.25rem, currentColor 6.5rem);
+}
+
+.vocab-term:is(:hover, :focus-within) .vocab-term-tools,
+.vocab-grid[data-selecting] .vocab-term-tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.vocab-term-tools .icon-button {
+  width: var(--control-sm);
+  height: var(--control-sm);
+}
+
+/* 已经在多选时只留勾 */
+.vocab-grid[data-selecting] .vocab-term-tools > .icon-button {
+  display: none;
+}
+
+.vocab-term-tools .icon-button[data-focus^="delete:"]:hover {
+  color: var(--problem);
+  background: color-mix(in oklch, var(--problem) 10%, transparent);
+}
+
+/* 多选的勾：小方框，勾上实心主题色 */
+.vocab-check {
+  position: relative;
   display: inline-grid;
+  flex: none;
   place-items: center;
-  width: 0.875rem;
-  height: 0.875rem;
+  width: 1rem;
+  height: 1rem;
+  margin: 0 0.375rem 0 0.25rem;
   padding: 0;
   color: var(--on-primary);
   background: var(--surface-solid);
   border: none;
-  border-radius: var(--radius-full);
-  box-shadow: var(--ring-strong);
+  border-radius: calc(var(--radius-control) / 2);
+  box-shadow: inset 0 0 0 1.5px var(--border);
   cursor: pointer;
-  opacity: 0;
-  translate: 0 -50%;
 }
 
-/* 勾本身只有 14px：点击范围往外扩一圈 */
+/* 勾本身只有 16px：点击范围往外扩一圈 */
 .vocab-check::before {
   position: absolute;
   inset: -0.375rem;
   content: "";
-  border-radius: var(--radius-full);
 }
 
 .vocab-check .icon {
@@ -473,7 +395,7 @@
 }
 
 .vocab-check[aria-checked="true"] {
-  background: var(--gradient);
+  background: var(--primary);
   box-shadow: none;
 }
 
@@ -484,63 +406,6 @@
 .vocab-check:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
-}
-
-.vocab-term:is(:hover, :focus-within) .vocab-check,
-.vocab-grid[data-selecting] .vocab-check {
-  opacity: 1;
-}
-
-/* 勾出现时图标让位，但占着地方：字不跟着挪 */
-.vocab-term:is(:hover, :focus-within) .vocab-term-icon,
-.vocab-grid[data-selecting] .vocab-term-icon {
-  visibility: hidden;
-}
-
-.vocab-term[data-editing] .vocab-term-icon {
-  visibility: visible;
-}
-
-/* 编辑、删除：浮在格子右边，平时不占地方（长词不会因为它们被挤短）；底色和格子一样，盖住下面的字 */
-.vocab-term-actions {
-  position: absolute;
-  inset: 0.25rem 0.25rem 0.25rem auto;
-  display: flex;
-  align-items: center;
-  gap: 0.125rem;
-  padding-left: 1.25rem;
-  background: linear-gradient(to right, transparent, var(--surface-solid) 1.25rem);
-  border-radius: var(--radius-control);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--dur-fast) var(--ease-out);
-}
-
-.vocab-term[data-selected] .vocab-term-actions {
-  background: linear-gradient(
-    to right,
-    transparent,
-    color-mix(in oklch, var(--primary) 7%, var(--surface-solid)) 1.25rem
-  );
-}
-
-.vocab-term:is(:hover, :focus-within) .vocab-term-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.vocab-grid[data-selecting] .vocab-term-actions {
-  display: none;
-}
-
-.vocab-term-actions .icon-button {
-  width: var(--control-sm);
-  height: var(--control-sm);
-}
-
-.vocab-term-actions .icon-button:last-child:hover {
-  color: var(--problem);
-  background: color-mix(in oklch, var(--problem) 10%, transparent);
 }
 
 /* 就地编辑：格子描主题色的边，里面是一个没有框的输入框 */
@@ -601,25 +466,11 @@
   padding: 1.5rem 1.5rem 1.25rem;
 }
 
-.vocab-dialog-head {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.25rem;
-}
-
 .vocab-dialog-title {
-  margin: 0;
+  margin: 0 0 0.25rem;
   font-size: var(--text-heading);
   font-weight: var(--weight-bold);
   line-height: 1.35;
-}
-
-/* 说明和补充对齐到标题的字，不顶着图标 */
-.vocab-dialog-text,
-.vocab-dialog-note,
-.vocab-dialog-problem {
-  padding-left: calc(var(--control-lg) + 0.75rem);
 }
 
 .vocab-dialog-text {
@@ -633,8 +484,7 @@
   gap: 0.375rem;
   max-height: 7.5rem;
   margin: 0.25rem 0;
-  /* 和说明一样对齐到标题的字 */
-  padding: 0 0 0 calc(var(--control-lg) + 0.75rem);
+  padding: 0;
   overflow-y: auto;
   list-style: none;
 }
@@ -688,7 +538,7 @@
   }
 
   .vocab-term,
-  .vocab-term-actions,
+  .vocab-term-tools,
   .vocab-support-row {
     transition: none;
   }

@@ -1,4 +1,4 @@
-import { h, progressBadge, svg } from "../shared/dom.mjs";
+import { fillSelect, h, progressBadge, svg } from "../shared/dom.mjs";
 import { keycapOf, localize, t } from "../shared/i18n.mjs";
 import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
@@ -15,7 +15,6 @@ import { firstStepOf, groupStates, STEPS, startStep, stepDone } from "./steps.mj
 const $ = (id) => document.getElementById(id);
 /** 测麦克风时画几根条，中间的高、两边的矮 */
 const METER_BARS = [0.45, 0.7, 0.9, 1, 0.9, 0.7, 0.45];
-const ICONS = { native: "i-sparkles", local: "i-wand-sparkles", private: "i-shield-check" };
 
 // 页面上写死的字先按界面语言填上
 localize();
@@ -127,7 +126,8 @@ function renderWays() {
       const button = h(
         "button",
         { type: "button", class: "choice", role: "radio", onclick: () => changePlan({ mode }) },
-        h("span", { class: "choice-icon" }, svg(ICONS[mode])),
+        // 同引擎页第一列：左边一个小号的单选标记，不垫图标方砖（界面规范第 3、5 节）
+        h("span", { class: "radio-mark", "aria-hidden": "true" }, svg("i-check")),
         h(
           "span",
           { class: "choice-body" },
@@ -147,7 +147,6 @@ function renderWays() {
             ? [tile("local", "mini-tile")]
             : vendorsFor(setup, mode).map(({ id }) => tile(id, "mini-tile"))),
         ),
-        h("span", { class: "radio-mark" }, svg("i-check")),
       );
       wayRows.set(mode, { button, needs });
     }
@@ -441,7 +440,7 @@ function renderSummary() {
   const mode = state ? state.text : t("onboarding.prepare.status.enabled", { mode: modeName(plan.mode) });
   const mic = permissionGranted("microphone", setup.permissions.microphone);
   $("summary").replaceChildren(
-    item(ICONS[plan.mode], t("onboarding.done.mode"), mode, state ? state.tone : "ok"),
+    item("i-audio-lines", t("onboarding.done.mode"), mode, state ? state.tone : "ok"),
     item("i-keyboard", t("onboarding.done.hotkey"), keycapOf(setup.hotkey.value), "ok"),
     item(
       "i-mic",
@@ -478,8 +477,10 @@ function render() {
 
   const keycap = keycapOf(setup.hotkey.value);
   $("big-keycap").textContent = keycap;
-  $("hotkey-select").replaceChildren(
-    ...setup.hotkey.choices.map((id) => new Option(t(`hotkeys.${id}.name`), id, false, id === setup.hotkey.value)),
+  fillSelect(
+    $("hotkey-select"),
+    setup.hotkey.choices.map((id) => [id, t(`hotkeys.${id}.name`)]),
+    setup.hotkey.value,
   );
   $("try-text").placeholder = t("onboarding.try.placeholder", { keycap });
 

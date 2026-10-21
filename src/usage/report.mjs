@@ -1,9 +1,11 @@
 // 用量报表：今天、本月、累计各调了几次模型、多少 token、花了多少钱、模型一般多久回话，每一段再按型号分开。
 // 命令行（speakmore usage）和主窗口首页用的是同一份。数据是历史库里的账（src/storage/history.mjs 的 usage），
 // 钱是按官方标准价估算的美元（src/server/providers/prices）。本机转写那一跳也有一笔（provider 是 local），不花钱。
+// 每一段还带着花费随时间怎么走（series，src/usage/series.mjs）：首页画成柱子，命令行用不上。
 
 import { findModel, makerOf } from "../models/catalog.mjs";
 import { findVendor } from "../server/vendors.mjs";
+import { modelKey, spanSeries, timeSeries } from "./series.mjs";
 
 /** 从快到慢排好的一串数里取第 p 分位（最近秩法：至少 p 那么多的数不比它大）。空的是 null */
 export function percentile(sorted, p) {
@@ -37,28 +39,41 @@ function whoIs({ provider, model }) {
   return { name: findVendor(provider)?.name ?? provider, icon: provider, local: false };
 }
 
-/** 一段时间 → 报表里的一项，连同按型号分开的几行（花得多的在前） */
-function period(usage) {
+/** 一段时间 → 报表里的一项，连同按型号分开的几行（花得多的在前）；key 对得上 series 每一格里按型号分开的钱 */
+function period(usage, series) {
   return {
     ...summarize(usage),
-    models: usage.models.map((row) => ({ ...summarize(row), ...whoIs(row) })),
+    models: usage.models.map((row) => ({ ...summarize(row), ...whoIs(row), key: modelKey(row) })),
+    series,
   };
 }
 
 /**
  * @param {{ usage(range?: { since?: string }): object }} history 打开着的历史库
  * @param {{ now: Date }} options 今天、本月按本机的时区算
- * @returns {{ today: object, month: object, total: object, models: object[] }} models 是累计的按型号分开（同 total.models）
+ * @returns {{ today: object, month: object, total: object, models: object[] }} models 是累计的按型号分开（同 total.models）；
+ *   series：今天按钟头（0 点到 23 点），本月按天（1 号到月底），累计按用了多久（spanSeries）
  */
 export function usageReport(history, { now }) {
-  const midnight = new Date(now);
-  midnight.setHours(0, 0, 0, 0);
-  const firstOfMonth = new Date(midnight);
-  firstOfMonth.setDate(1);
-  const total = period(history.usage());
+  // 按年月日现拼，和柱子的格子（series.mjs 的 startOf）同一个算法：
+  // 当天零点因夏令时不存在、顺延到 01:00 时，不能再拿它推 1 号，不然 1 号也从 01:00 算起
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastOfMonth = new Date(firstOfMonth.getFullYear(), firstOfMonth.getMonth() + 1, 0);
+  const lastHour = new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate(), 23);
+  // 按天分的一份本月、累计共用：series 只取落在自己范围里的
+  const days = history.usageOverTime({ unit: "day" });
+  const hours = history.usageOverTime({ since: midnight.toISOString(), unit: "hour" });
+  const total = period(history.usage(), spanSeries(days, { now }));
   return {
-    today: period(history.usage({ since: midnight.toISOString() })),
-    month: period(history.usage({ since: firstOfMonth.toISOString() })),
+    today: period(
+      history.usage({ since: midnight.toISOString() }),
+      timeSeries(hours, { unit: "hour", from: midnight, to: lastHour, now }),
+    ),
+    month: period(
+      history.usage({ since: firstOfMonth.toISOString() }),
+      timeSeries(days, { unit: "day", from: firstOfMonth, to: lastOfMonth, now }),
+    ),
     total,
     models: total.models,
   };

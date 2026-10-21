@@ -362,6 +362,27 @@ test("今天花了多少钱也在统计里，验证 key 的那几次也算", () 
   history.close();
 });
 
+test("花费随时间怎么走：按本机日历的哪一天、或者哪个钟头，每个型号各加各的；不知道价的那几笔算 0", () => {
+  const history = openHistory(join(dir, "history.db"));
+  // 按本机时间写：跨过本机的午夜就是另一天，不管 UTC 那边是几号
+  const at = (...parts) => new Date(...parts).toISOString();
+  history.addCall(call({ audioId: "a", createdAt: at(2026, 9, 13, 23, 50), costUsd: 0.001 }));
+  history.addCall(call({ audioId: "b", createdAt: at(2026, 9, 14, 0, 10), costUsd: 0.002 }));
+  history.addCall(call({ audioId: "c", createdAt: at(2026, 9, 14, 0, 40), costUsd: 0.004 }));
+  const deepseek = { provider: "deepseek", model: "deepseek-flash" };
+  history.addCall(call({ audioId: "d", createdAt: at(2026, 9, 14, 9, 5), ...deepseek, costUsd: null }));
+  assert.deepEqual(history.usageOverTime({ unit: "day" }), [
+    { slot: "2026-10-13", provider: "gemini", model: "gemini-3.6-flash", costUsd: 0.001 },
+    { slot: "2026-10-14", ...deepseek, costUsd: 0 },
+    { slot: "2026-10-14", provider: "gemini", model: "gemini-3.6-flash", costUsd: 0.006 },
+  ]);
+  assert.deepEqual(history.usageOverTime({ since: at(2026, 9, 14), unit: "hour" }), [
+    { slot: "2026-10-14 00", provider: "gemini", model: "gemini-3.6-flash", costUsd: 0.006 },
+    { slot: "2026-10-14 09", ...deepseek, costUsd: 0 },
+  ]);
+  history.close();
+});
+
 test("还没记过账时用量全是 0，等待时间是空的", () => {
   const history = openHistory(join(dir, "history.db"));
   assert.deepEqual(history.usage(), {

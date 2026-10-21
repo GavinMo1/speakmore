@@ -56,6 +56,11 @@
     --glass-strong: var(--bg);
     --glass-filter: none;
   }
+
+  /* 平时悬停是从半透明换成实底，这里两者一样：叠一层淡的墨色，悬停才看得出来（引擎页的节点同理，见 engine.css） */
+  :where(.button, .select, .picker-trigger, .node, .leaf):hover:not(:disabled) {
+    background-image: linear-gradient(var(--fill-hover), var(--fill-hover));
+  }
 }
 
 *,
@@ -159,6 +164,25 @@ p {
   fill: currentColor;
 }
 
+/* ---------- 胶囊：按钮、下拉框、标题行的胶囊按钮（hub/picker.css）共用一个外形 ----------
+   全圆、无描边、半透明的面浮起一点、字加粗；悬停时实底。主要按钮换成主题渐变，幽灵按钮没有面。
+   用 :where 写、不占优先级，各自的样式（主要、幽灵、置灰、展开着）照常盖过它。
+   以后加按钮一类的东西都用这个外形，别再写圆角矩形（测试守着：按钮一类的圆角只能是全圆） */
+
+:where(.button, .select, .picker-trigger) {
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-full);
+  box-shadow: var(--edge), var(--lift);
+}
+
+:where(.button, .select, .picker-trigger):hover {
+  background: var(--surface-solid);
+}
+
 /* ---------- 按钮：次要（默认）、主要、幽灵、小号；撑满列宽用 .block ---------- */
 
 .button {
@@ -168,16 +192,9 @@ p {
   gap: 0.375rem;
   height: var(--control-md);
   padding: 0 0.875rem;
-  font: inherit;
   font-size: var(--text-small);
-  font-weight: var(--weight-medium);
   line-height: 1;
-  color: var(--ink);
   white-space: nowrap;
-  background: var(--surface-solid);
-  border: none;
-  border-radius: var(--radius-control);
-  box-shadow: var(--ring), var(--shadow-control);
   cursor: pointer;
   transition:
     box-shadow var(--dur-fast) var(--ease-out),
@@ -192,13 +209,6 @@ p {
   height: 0.875rem;
 }
 
-.button:hover {
-  background-color: var(--surface-solid);
-  box-shadow:
-    var(--ring-strong),
-    0 1px 3px oklch(0 0 0 / 0.08);
-}
-
 .button:active:not(:disabled) {
   scale: 0.97;
 }
@@ -206,7 +216,8 @@ p {
 .button:disabled {
   color: var(--ink-2);
   cursor: default;
-  box-shadow: 0 0 0 1px var(--line);
+  background: var(--surface);
+  box-shadow: var(--edge);
 }
 
 .button.primary {
@@ -259,7 +270,7 @@ p {
   color: var(--ink-2);
   background: transparent;
   border: none;
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-full);
   cursor: pointer;
   transition:
     background-color var(--dur-fast) var(--ease-out),
@@ -284,8 +295,14 @@ p {
   text-underline-offset: 0.25em;
 }
 
-.link:hover {
+.link:hover:not(:disabled) {
   text-decoration-color: currentColor;
+}
+
+/* 等别的事回话时不让点：置灰，悬停也不加深 */
+.link:disabled {
+  color: var(--ink-2);
+  cursor: default;
 }
 
 :is(.button, .icon-button, .link, .input, .select, .switch):focus-visible {
@@ -293,8 +310,7 @@ p {
   outline-offset: 2px;
 }
 
-.input,
-.select {
+.input {
   height: var(--control-md);
   min-width: 0;
   padding: 0.35rem 0.7rem;
@@ -308,6 +324,122 @@ p {
 
 .input::placeholder {
   color: var(--ink-2);
+}
+
+/* ---------- 下拉框：外形是上面的胶囊，右边一个箭头。
+   用 appearance: base-select 画，打开后的单子是锚在下面的玻璃浮层，和"支持的模型"那种浮层一样，
+   Mac、Windows 一个样子。里面的按钮、箭头由 dom.mjs 的 fillSelect 放进去 ---------- */
+
+.select,
+.select::picker(select) {
+  appearance: base-select;
+}
+
+.select {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-md);
+  min-width: 0;
+  padding: 0 0.625rem 0 0.875rem;
+  font-size: var(--text-small);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.select:open {
+  background: var(--surface-solid);
+}
+
+/* 箭头用自己的（和胶囊按钮同一个），不要自带的 */
+.select::picker-icon {
+  display: none;
+}
+
+.select > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.select > button > .chevron {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--ink-2);
+  rotate: -90deg;
+  transition: rotate var(--dur-base) var(--ease-out);
+}
+
+.select:open > button > .chevron {
+  rotate: 90deg;
+}
+
+/* 打开后的单子：右边和下拉框对齐、往左展开，至少和它一样宽；下面放不下翻到上面，左边放不下改成往右展开 */
+.select::picker(select) {
+  position-area: block-end span-inline-start;
+  position-try-fallbacks:
+    flip-block,
+    flip-inline,
+    flip-block flip-inline;
+  min-width: anchor-size(width);
+  margin: 0.375rem 0;
+  padding: 0.3125rem;
+  color: var(--ink);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-filter);
+  border: none;
+  border-radius: var(--radius-block);
+  box-shadow:
+    var(--edge),
+    0 24px 60px -20px oklch(0 0 0 / 0.35);
+  /* 收起时淡出：收起的样子写在这里，打开的写在 :open 上；进场从 @starting-style 淡入 */
+  opacity: 0;
+  translate: 0 -0.25rem;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    translate var(--dur-fast) var(--ease-out),
+    display var(--dur-fast) allow-discrete,
+    overlay var(--dur-fast) allow-discrete;
+}
+
+.select:open::picker(select) {
+  opacity: 1;
+  translate: 0 0;
+}
+
+@starting-style {
+  .select:open::picker(select) {
+    opacity: 0;
+    translate: 0 -0.25rem;
+  }
+}
+
+/* 一项一行：选中的字加粗、右边一个主题色的勾 */
+.select option {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  min-height: var(--control-md);
+  padding: 0 0.625rem 0 0.75rem;
+  font-size: var(--text-small);
+  white-space: nowrap;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.select option:is(:hover, :focus-visible) {
+  background: var(--fill-hover);
+  outline: none;
+}
+
+.select option:checked {
+  font-weight: var(--weight-semibold);
+}
+
+.select option::checkmark {
+  order: 1;
+  margin-left: auto;
+  font-weight: var(--weight-bold);
+  color: var(--primary);
 }
 
 /* 开关：原版的布尔设置都是这种 */
@@ -351,8 +483,8 @@ p {
   cursor: default;
 }
 
-/* ---------- 下面是界面规范 v1 的控件：状态框、检测徽标、标签的语气、分类标签、分段控件、筛选胶囊、
-   开关的整行、单选标记、品牌图标的底座、列表。规范见 docs/desktop-ui-spec.md ---------- */
+/* ---------- 下面是界面规范 v1 的控件：状态框、检测徽标、标签的语气、单选标记、计数、分段控件、
+   品牌图标的底座。规范见 docs/desktop-ui-spec.md ---------- */
 
 /* 占着按钮位置、但不能点的状态框："使用中""已选定"。和按钮同高同圆角 */
 .state-box {
@@ -367,7 +499,7 @@ p {
   line-height: 1;
   color: var(--ink-2);
   white-space: nowrap;
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-full);
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
@@ -637,54 +769,7 @@ button.badge:focus-visible {
   scale: 1;
 }
 
-/* ---------- 分类标签：下划线随选中项滑动 ---------- */
-
-.tabs {
-  position: relative;
-  display: flex;
-  align-items: stretch;
-  gap: 1.75rem;
-  box-shadow: inset 0 -1px 0 var(--line);
-}
-
-.tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  height: var(--control-lg);
-  padding: 0 0.125rem;
-  font: inherit;
-  font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
-  color: var(--ink-2);
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out);
-}
-
-.tab > .icon {
-  transition: color var(--dur-fast) var(--ease-out);
-}
-
-.tab:hover,
-.tab[aria-selected="true"] {
-  color: var(--ink);
-}
-
-.tab[aria-selected="true"] > .icon {
-  color: var(--primary);
-}
-
-.tab:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: -2px;
-  border-radius: var(--radius-control);
-}
-
-.tab.end {
-  margin-left: auto;
-}
+/* ---------- 计数：名字后面的一个小数（引擎页标题行的密钥） ---------- */
 
 .count {
   display: inline-grid;
@@ -704,11 +789,6 @@ button.badge:focus-visible {
     color var(--dur-fast) var(--ease-out);
 }
 
-.tab[aria-selected="true"] .count {
-  color: color-mix(in oklch, var(--primary) 84%, var(--ink));
-  background: color-mix(in oklch, var(--primary) 13%, transparent);
-}
-
 /* 滑块的位置和宽度（--x、--w）由页面按选中的那一项写进来 */
 .indicator {
   --x: 0px;
@@ -723,14 +803,7 @@ button.badge:focus-visible {
     width var(--dur-slide) var(--ease-out);
 }
 
-.tabs > .indicator {
-  bottom: 0;
-  height: 2px;
-  background: var(--primary);
-  border-radius: 2px 2px 0 0;
-}
-
-/* ---------- 分段控件：二到四个互斥的选项，滑块跟着走 ---------- */
+/* ---------- 分段控件：二到四个互斥的选项，滑块跟着走。外形和按钮一样是胶囊：槽、每一段、滑块都全圆 ---------- */
 
 .segmented {
   position: relative;
@@ -739,7 +812,7 @@ button.badge:focus-visible {
   height: var(--control-md);
   padding: 3px;
   background: var(--fill-hover);
-  border-radius: calc(var(--radius-control) + 2px);
+  border-radius: var(--radius-full);
 }
 
 .segment {
@@ -748,7 +821,7 @@ button.badge:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0 0.75rem;
+  padding: 0 0.875rem;
   font: inherit;
   font-size: var(--text-small);
   font-weight: var(--weight-medium);
@@ -757,7 +830,7 @@ button.badge:focus-visible {
   white-space: nowrap;
   background: none;
   border: none;
-  border-radius: calc(var(--radius-control) - 1px);
+  border-radius: var(--radius-full);
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease-out);
 }
@@ -788,7 +861,7 @@ button.badge:focus-visible {
   top: 3px;
   bottom: 3px;
   background: var(--surface-solid);
-  border-radius: calc(var(--radius-control) - 1px);
+  border-radius: var(--radius-full);
   box-shadow:
     0 0 0 1px var(--line),
     0 1px 3px oklch(0 0 0 / 0.1);
@@ -799,76 +872,7 @@ button.badge:focus-visible {
   cursor: default;
 }
 
-/* ---------- 筛选胶囊：选中的反白 ---------- */
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  height: var(--control-sm);
-  padding: 0 0.75rem;
-  font: inherit;
-  font-size: var(--text-small);
-  font-weight: var(--weight-medium);
-  line-height: 1;
-  color: var(--ink);
-  white-space: nowrap;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-full);
-  box-shadow: inset 0 0 0 1px var(--border);
-  cursor: pointer;
-  transition:
-    background-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
-}
-
-.pill .provider-icon {
-  width: 0.875rem;
-  height: 0.875rem;
-}
-
-.pill-count {
-  font-size: var(--text-micro);
-  font-weight: var(--weight-semibold);
-  color: var(--ink-2);
-  font-variant-numeric: tabular-nums;
-}
-
-.pill:hover {
-  background: var(--fill-hover);
-}
-
-.pill[aria-pressed="true"] {
-  color: var(--bg);
-  background: var(--ink);
-  box-shadow: none;
-}
-
-.pill[aria-pressed="true"] .pill-count {
-  color: color-mix(in oklch, var(--bg) 66%, transparent);
-}
-
-.pill:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-/* ---------- 开关的整行：文字在左，正文色 ---------- */
-
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.625rem;
-  height: var(--control-sm);
-  font-size: var(--text-small);
-  font-weight: var(--weight-medium);
-  color: var(--ink);
-  cursor: pointer;
-}
-
-/* ---------- 品牌图标的底座：组标题、密钥列表 ---------- */
+/* ---------- 品牌图标的底座：引擎页的节点、详情、密钥面板 ---------- */
 
 .logo-tile {
   display: inline-grid;
@@ -889,109 +893,7 @@ button.badge:focus-visible {
   height: 1.125rem;
 }
 
-/* ---------- 列表：表头一行，每行同样多的格；数据列右对齐，状态、操作两列定宽 ---------- */
-
-.table {
-  display: grid;
-  column-gap: 0.75rem;
-  background: var(--surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--edge), var(--lift);
-}
-
-.row {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
-  align-items: center;
-  min-height: 3.5rem;
-  padding: 0.625rem 1rem;
-}
-
-.row + .row {
-  border-top: 1px solid var(--line);
-}
-
-.row:last-child {
-  border-radius: 0 0 var(--radius-card) var(--radius-card);
-}
-
-.row-head {
-  min-height: 0;
-  padding-block: 0.625rem 0.5rem;
-  font-size: var(--text-micro);
-  font-weight: var(--weight-medium);
-  color: var(--ink-2);
-}
-
-.row-head + .row {
-  border-top-color: var(--line);
-}
-
-.row[data-current] {
-  background: color-mix(in oklch, var(--primary) 5%, transparent);
-}
-
-.cell-end {
-  justify-self: end;
-  text-align: right;
-}
-
-.cell-fill {
-  display: flex;
-  min-width: 0;
-}
-
-.cell-fill > * {
-  width: 100%;
-}
-
-.row > .callout {
-  grid-column: 1 / -1;
-  margin-top: 0.125rem;
-}
-
-/* 数值：数加粗、单位和币种小一档；同列最佳的数标绿 */
-.metric {
-  display: inline-flex;
-  align-items: baseline;
-}
-
-.metric-line {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.15rem;
-  white-space: nowrap;
-}
-
-.metric-value {
-  font-family: var(--font-rounded);
-  font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
-}
-
-.metric-unit,
-.metric-cur {
-  font-size: var(--text-micro);
-  font-weight: var(--weight-medium);
-  color: var(--ink-2);
-}
-
-.metric-unit {
-  margin-left: 0.1rem;
-}
-
-.metric[data-best] .metric-value {
-  color: var(--ok);
-}
-
-.metric-none {
-  font-size: var(--text-small);
-  color: var(--ink-2);
-}
-
+/* 同组最佳的那一项：名目前面一个绿点（引擎页详情里的规格） */
 .best-dot {
   display: inline-block;
   width: 0.375rem;
@@ -1015,15 +917,15 @@ button.badge:focus-visible {
   .switch,
   .switch::before,
   .check,
-  .pill,
-  .tab,
-  .tab > .icon,
   .count,
   .segment,
   .indicator,
   .radio-mark,
   .radio-mark .icon,
-  .badge[data-tone="progress"]::before {
+  .badge[data-tone="progress"]::before,
+  .select,
+  .select > button > .chevron,
+  .select::picker(select) {
     transition: none;
   }
 

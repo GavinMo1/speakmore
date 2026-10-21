@@ -27,8 +27,8 @@
 </p>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/home-dark.en.d337323a.webp" />
-  <img src="https://media.speakmore.zephyrxiang.com/readme/home.en.2f8dbf53.webp" alt="SpeakMore home window: word count, time saved, speaking rate, daily heatmap, spend, and the active recognition mode" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/home-dark.en.3dacaeb8.webp" />
+  <img src="https://media.speakmore.zephyrxiang.com/readme/home.en.96b8c4aa.webp" alt="SpeakMore home window: word count, time saved, speaking rate, daily heatmap, spending trend, and the active recognition mode" />
 </picture>
 
 - Press the hotkey to start dictating; press it again to insert the text at the cursor.
@@ -46,9 +46,9 @@
 ## 🚀 Installation
 
 <p align="center">
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.12.0/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Apple%20silicon-111?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac with Apple silicon" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.12.0/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Intel Mac" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.12.0/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/Download-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.13.0/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Apple%20silicon-111?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac with Apple silicon" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.13.0/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Intel Mac" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.13.0/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/Download-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>
 </p>
 
 **macOS**
@@ -113,32 +113,32 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-way.en.965b5caa.webp" alt="Onboarding step 1: selecting one of three recognition modes" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-prepare-local.en.71619e6a.webp?v=3" alt="Onboarding step 2: vendors listed one per row, with the API key entered in place" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-way.en.61065828.webp" alt="Onboarding step 1: selecting one of three recognition modes" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-prepare-local.en.805b2018.webp" alt="Onboarding step 2: vendors listed one per row, with the API key entered in place" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>1</b> · Select a recognition mode</sub></td>
     <td align="center"><sub><b>2</b> · Configure an API key (optional)</sub></td>
   </tr>
   <tr>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-prepare-private.en.7b03b9d0.webp" alt="Onboarding: the on-device model downloading in the background" /></td>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-permissions.en.9dd71f2b.webp" alt="Onboarding: microphone, input monitoring and accessibility permissions granted" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-prepare-private.en.19caea51.webp" alt="Onboarding: the on-device model downloading in the background" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-permissions.en.9d77bee8.webp" alt="Onboarding: microphone, input monitoring and accessibility permissions granted" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>3</b> · Download an on-device model in the background</sub></td>
     <td align="center"><sub><b>4</b> · Grant system permissions</sub></td>
   </tr>
   <tr>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-microphone.en.3a101fd6.webp" alt="Onboarding: a level meter responding to the voice" /></td>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-hotkey.en.0c8fe2d1.webp" alt="Onboarding: the Right Option keycap highlighted when pressed" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-microphone.en.e2c1ebb7.webp" alt="Onboarding: a level meter responding to the voice" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-hotkey.en.cd353a72.webp" alt="Onboarding: the Right Option keycap highlighted when pressed" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>5</b> · Test the microphone</sub></td>
     <td align="center"><sub><b>6</b> · Test the hotkey</sub></td>
   </tr>
   <tr>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-try.en.63072883.webp" alt="Onboarding: a dictation with filler words and a self-correction rendered as one clean sentence" /></td>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-done.en.09239274.webp" alt="Onboarding complete: summary of the recognition mode, hotkey and microphone" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-try.en.75c07314.webp" alt="Onboarding: a dictation with filler words and a self-correction rendered as one clean sentence" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-done.en.33a16029.webp" alt="Onboarding complete: summary of the recognition mode, hotkey and microphone" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>7</b> · Dictation test</sub></td>
@@ -155,15 +155,15 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 <sub>All names and logos are the property of their respective owners and are shown solely to indicate supported services.</sub>
 
-The **Models** page lists every model by role:
+The **Engine** page lays out modes, roles, vendors and models as a tree:
 
 - **7 native models**: audio in, text out.
 - **10 transcription models**: 4 on-device, 6 cloud.
 - **12 polishing models**: Qwen, DeepSeek, Kimi, Zhipu, MiniMax, and custom services.
-- List prices and measured scores for each model.
-- A model offered by several platforms appears as one row, with a choice of channel.
+- Open a model to see its list prices, measured scores and channels; the route in use is highlighted.
+- A model offered by several platforms appears once, with its channel chosen in the details.
 
-**API keys** are managed per platform:
+**API keys** are managed per platform, in a panel at the top right:
 
 - One Alibaba Cloud Bailian key provides access to 14 models.
 - Official DeepSeek, Kimi, Zhipu, MiniMax, Gemini and OpenAI keys are supported directly.
@@ -171,11 +171,11 @@ The **Models** page lists every model by role:
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/polish.en.6aae6fba.webp?v=2" alt="Models page, Polish tab: Qwen, DeepSeek, Kimi, Zhipu and MiniMax models with prices and sales channels" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/keys.en.338414f2.webp" alt="Models page, Keys tab: configuration status of eight platforms and the number of models each provides" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/polish.en.fa538439.webp" alt="Engine page: the Polish role expanded to DeepSeek, with channels, prices and a check in the details" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/keys.en.b731b2b7.webp" alt="Keys panel: configuration status of eight platforms and the number of models each provides" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>All models and channels</sub></td>
+    <td align="center"><sub>Engine page and model details</sub></td>
     <td align="center"><sub>Keys managed per platform</sub></td>
   </tr>
 </table>
@@ -184,6 +184,7 @@ The **Models** page lists every model by role:
 
 - Three recognition modes of equal standing.
 - Each mode keeps its own model configuration; switching requires no reconfiguration.
+- Switch in the first column of the Engine page; the home window shows the active mode next to the title.
 
 | Mode | Pipeline | Data uploaded | API key |
 | --- | --- | --- | --- |
@@ -193,11 +194,11 @@ The **Models** page lists every model by role:
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/mode-picker.en.1f78639c.webp" alt="Home window recognition mode menu: the three modes and the models each uses" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/presets.en.6453ea2c.webp" alt="Recommended setups: four complete configurations with monthly cost, check and one-click enable" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/engine.en.632a006b.webp" alt="Engine page: modes, roles, vendors and models laid out as a tree, with the route in use highlighted" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/presets.en.1cf49fcf.webp" alt="Recommended setups: four complete configurations with monthly cost, check and one-click enable" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>Mode selection on the home window</sub></td>
+    <td align="center"><sub>Switching modes on the Engine page</sub></td>
     <td align="center"><sub>Recommended setups</sub></td>
   </tr>
 </table>
@@ -232,7 +233,7 @@ The **Models** page lists every model by role:
 
 <sub>Median transcription time across 97 real dictations; Windows GPU: RTX 4060 Ti. Vulkan supports NVIDIA, AMD and Intel graphics.</sub>
 
-<img src="https://media.speakmore.zephyrxiang.com/readme/transcribe.en.982f93e1.webp" alt="Models page, Transcribe tab: four on-device models with Chinese and mixed-language scores, seconds per minute of audio, memory and size, with the best value in each column highlighted; cloud transcription models below" />
+<img src="https://media.speakmore.zephyrxiang.com/readme/transcribe.en.f017b686.webp" alt="Engine page, Transcribe role: Chinese and mixed-language scores, time per minute of audio, memory and size of the on-device Qwen3-ASR 0.6B; green marks the best in its group" />
 
 ## 🔒 Privacy freedom
 
@@ -255,7 +256,9 @@ The **Models** page lists every model by role:
 
 - SpeakMore is free.
 - Model usage is billed directly by each vendor, according to actual use.
-- The home window itemizes all spending.
+- The home window tracks spending for today, this month and all time: bars and a trend line show the course, with each model's cost and share below.
+
+<img src="https://media.speakmore.zephyrxiang.com/readme/spend.en.204d8f4f.webp" alt="Home window spending card: daily spending this month as bars with a trend line, and each model's cost and share below" />
 
 Comparison with every Typeless plan (heavy use, 100 dictations a day):
 
@@ -452,7 +455,7 @@ flowchart LR
 <summary><b>💰 Cost accounting</b></summary>
 
 - Every model call is recorded with its tokens (including audio and thinking), model, cost and latency.
-- The home window breaks down today, this month and all time by model.
+- The home window shows the spending trend and each model's share for today, this month and all time; hover a bar for its breakdown.
 - On-device transcription appears as a separate, free entry.
 - `speakmore usage` provides further detail.
 - Costs are estimates in US dollars at each vendor's list price; platforms priced in yuan are converted at 6.71.

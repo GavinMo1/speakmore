@@ -110,10 +110,19 @@
 
 .sidebar-foot {
   display: flex;
+  align-items: center;
   gap: 0.25rem;
   margin-top: auto;
   padding-top: 0.75rem;
   border-top: 1px solid var(--line);
+}
+
+/* 版本号：侧栏底下，设置、关于两个图标的右边 */
+.app-version {
+  margin: 0 0.5rem 0 auto;
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
 }
 
 /* ---------- 内容区 ---------- */
@@ -157,7 +166,37 @@
   text-wrap: balance;
 }
 
-/* 标题行：大标题，右侧是这一页的一个控件（首页的识别方式、模型页的搜索） */
+/* 小圆点：正在用的实心主题色，已选定的空心，密钥已配置的绿色，还差什么的红色（引擎页、首页的识别方式） */
+.dot {
+  flex: none;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+}
+
+.dot[data-tone="live"] {
+  background: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 18%, transparent);
+}
+
+.dot[data-tone="standby"] {
+  box-shadow: inset 0 0 0 1.5px var(--ink-2);
+}
+
+.dot[data-tone="ok"] {
+  background: var(--ok);
+}
+
+.dot[data-tone="problem"] {
+  background: var(--problem);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--problem) 18%, transparent);
+}
+
+.dot[data-tone="none"] {
+  box-shadow: inset 0 0 0 1.5px var(--border);
+}
+
+/* 标题行：大标题（首页下面多一行热键），右侧是这一页的控件（首页的识别方式、引擎页的搜索、推荐组合和密钥） */
 .page-head {
   display: flex;
   flex-wrap: wrap;
@@ -169,6 +208,80 @@
 
 .page-head .page-title {
   margin: 0;
+}
+
+/* 首页标题下面多一行：右边的控件对着标题那一行，不对着两行的中间（标题 48px 高，控件 40px） */
+.page-head:has(> .page-heading) {
+  align-items: flex-start;
+}
+
+.page-head:has(> .page-heading) > .picker-trigger {
+  margin-top: 0.25rem;
+}
+
+/* 标题行右侧的一组控件（引擎页、词典页）：窄到放不下时整组折到标题下面 */
+.page-tools {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* 词典页：右边一组按钮也对着标题那一行，在标题的行高里居中 */
+.page-head:has(> .page-heading) > .page-tools {
+  min-height: calc(var(--text-display) * 1.2);
+}
+
+/* 搜索框（引擎页、词典页）：搜索框不再往窄里挤，提示字会被截断 */
+.search {
+  position: relative;
+  display: flex;
+  flex: 0 1 18rem;
+  min-width: 15rem;
+  align-items: center;
+}
+
+.search > .icon {
+  position: absolute;
+  left: 0.875rem;
+  color: var(--ink-2);
+  pointer-events: none;
+}
+
+.search .input {
+  width: 100%;
+  height: var(--control-lg);
+  padding: 0 1rem 0 2.5rem;
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-full);
+  box-shadow: var(--edge);
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.search .input:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px var(--primary),
+    0 0 0 4px color-mix(in oklch, var(--primary) 18%, transparent);
+}
+
+/* 列表上面的一条工具（词典页的搜索和计数） */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  min-height: var(--control-md);
+  margin: 1.25rem 0 1.5rem;
+}
+
+/* 数后面小一号的单位（首页的数、推荐组合的月成本） */
+.unit {
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
 }
 
 /* 还差什么才能用：原版断网时顶上也是这样一条 */
@@ -202,12 +315,30 @@
 
 /* ---------- 首页 ---------- */
 
-/* 右边一列至少 12rem；键帽和"按一下说话"在有的语言里更长（Right ⌥ / Press to talk），放不下就撑宽，不折行 */
-.home {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(12rem, max-content);
-  gap: 2rem;
-  align-items: start;
+/* 标题下面一行：热键的键帽加"按一下说话"。键帽照实体键的样子画（浅底、细边、底下厚一点），不铺主题色 */
+.page-lede {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-top: 0.625rem;
+  color: var(--ink-2);
+}
+
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  padding: 0.0625rem 0.5rem 0.125rem;
+  font: var(--weight-semibold) var(--text-small) / 1.5 var(--font-rounded);
+  white-space: nowrap;
+  color: var(--ink);
+  background: var(--surface-solid);
+  border-radius: var(--radius-control);
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    inset 0 -2px 0 var(--line),
+    0 1px 2px oklch(0 0 0 / 0.06);
 }
 
 .insights {
@@ -445,10 +576,13 @@
   margin-left: 0.2rem;
 }
 
-/* 花费（原版没有：它是包月的。放在原版"个性化"那张卡的位置）：上面是这段时间花了多少和选时段，下面按模型分开 */
+/* 花费（原版没有：它是包月的。放在原版"个性化"那张卡的位置）：上面是这段时间花了多少和选时段，
+   中间是花费随时间怎么走的柱子和趋势线，下面每个型号一条（hub/spend.mjs）。
+   只用 primary 一种颜色、分深浅：柱子是浅的底纹，趋势线是实的主角。型号靠图标和名字认，指着哪个型号，柱子里只加深它那一份 */
 .spend {
+  position: relative;
   display: grid;
-  gap: 0.9rem;
+  gap: 1.25rem;
 }
 
 .spend-head {
@@ -459,71 +593,306 @@
   gap: 0.75rem 1.5rem;
 }
 
-.spend-table {
+/* 柱子那块多高、上面给最高那根的数留多少：趋势线照着同一块画 */
+.spend-chart {
+  --plot-height: 7.5rem;
+  --plot-headroom: 1rem;
+  /* 柱子的三档深浅：其余的那一份、平时、指着的。和底色混成实色，趋势线垫的边压上去是干净的 */
+  --bar-faint: color-mix(in oklab, var(--primary) 10%, var(--bg));
+  --bar: color-mix(in oklab, var(--primary) 24%, var(--bg));
+  --bar-strong: color-mix(in oklab, var(--primary) 55%, var(--bg));
+  position: relative;
+}
+
+/* 一格一列，列占满整格好指，柱子在列里居中、细一点，格子之间留出空。最高那根上面写数，留出一行的高度 */
+.spend-plot {
+  display: flex;
+  height: calc(var(--plot-height) + var(--plot-headroom));
+  padding-top: var(--plot-headroom);
+}
+
+.spend-col {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* 指着的那一格衬一道底，没花钱的日子也看得出指着哪天 */
+.spend-col[data-active]::before {
+  content: "";
+  position: absolute;
+  inset: 0 1px;
+  border-radius: calc(var(--radius-control) / 2);
+  background: var(--fill-hover);
+}
+
+/* 柱子：顶上圆角、贴着底的那头是方的。平时整根是 --bar；指着某个型号时它那一份（.spend-bar-part）加深，其余变得更淡 */
+.spend-bar {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  width: min(50%, 0.75rem);
+  min-width: 2px;
+  border-radius: calc(var(--radius-control) / 2) calc(var(--radius-control) / 2) 0 0;
+  background: var(--bar-faint);
+}
+
+.spend-bar-part {
+  position: absolute;
+  inset: auto 0 0;
+  height: 100%;
+  background: var(--bar);
+  transition:
+    height var(--dur-base) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.spend-plot[data-focus] .spend-bar-part {
+  background: var(--bar-strong);
+}
+
+/* 指着的那一根实色 */
+.spend-col[data-active] .spend-bar-part {
+  background: var(--primary);
+}
+
+/* 没花钱的那一格是贴底的一小截，连起来就是基线；还没到的格子更淡，看得出这段时间走到哪了 */
+.spend-col:is([data-zero], [data-future]) .spend-bar {
+  height: 2px;
+  border-radius: 0;
+  background: var(--line);
+}
+
+.spend-col[data-future] .spend-bar {
+  opacity: 0.5;
+}
+
+/* 趋势线：主题色的实线，下面垫一道底色的边，从浅色柱子上干净地压过去。拉伸的 viewBox 下线宽不跟着变 */
+.spend-trend {
+  position: absolute;
+  top: var(--plot-headroom);
+  left: 0;
   width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-small);
-  font-variant-numeric: tabular-nums;
+  height: var(--plot-height);
+  overflow: visible;
+  pointer-events: none;
 }
 
-.spend-table th,
-.spend-table td {
-  padding: 0.4rem 0 0.4rem 1.25rem;
-  text-align: right;
-  white-space: nowrap;
-  vertical-align: middle;
+.spend-trend[hidden] {
+  display: none;
 }
 
-.spend-table :is(th, td):first-child {
-  padding-left: 0;
-  text-align: left;
+.spend-trend path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  transition: d var(--dur-base) var(--ease-out);
 }
 
-/* 表头是一行小字：比表里的数小一档，不和数抢 */
-.spend-table thead th {
-  padding-top: 0;
+.spend-trend-halo {
+  stroke: var(--surface-solid);
+  stroke-width: 4px;
+}
+
+.spend-trend-line {
+  stroke: var(--primary);
+  stroke-width: 2px;
+}
+
+/* 线的末端：现在。实心小圆点，一圈底色隔开，外面一圈淡的主题色 */
+/* --x、--y 是这一点在柱子那块里横竖占几成，由页面写进来 */
+.spend-now {
+  --x: 0;
+  --y: 0;
+  position: absolute;
+  top: calc(var(--plot-headroom) + var(--y) * var(--plot-height));
+  left: calc(var(--x) * 100%);
+  width: 0.5rem;
+  height: 0.5rem;
+  margin: -0.25rem 0 0 -0.25rem;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  box-shadow:
+    0 0 0 2.5px var(--surface-solid),
+    0 0 0 7px color-mix(in oklab, var(--primary) 16%, transparent);
+  pointer-events: none;
+  transition:
+    top var(--dur-base) var(--ease-out),
+    left var(--dur-base) var(--ease-out);
+}
+
+.spend-now[hidden] {
+  display: none;
+}
+
+/* 最高那根上面的数：在头一两格、最后一两格时贴着那一边，不出卡片 */
+.spend-peak {
+  flex: none;
+  margin-bottom: 0.25rem;
   font-size: var(--text-micro);
-  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.spend-peak[data-edge="start"] {
+  align-self: flex-start;
+}
+
+.spend-peak[data-edge="end"] {
+  align-self: flex-end;
+}
+
+.spend-plot[data-focus] .spend-peak {
+  opacity: 0;
+}
+
+/* 横轴：头一个靠左、最后一个靠右，别的对着它那根柱子的中间 */
+.spend-ticks {
+  position: relative;
+  height: 1rem;
+  margin-top: 0.5rem;
+  font-size: var(--text-micro);
+  line-height: 1rem;
   color: var(--ink-2);
 }
 
-/* 合计：和上面分开，字重一点 */
-.spend-table tfoot :is(th, td) {
-  border-top: 1px solid color-mix(in oklch, var(--ink) 16%, transparent);
-  font-weight: var(--weight-semibold);
+.spend-ticks > span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
-.spend-table tbody tr + tr :is(th, td) {
-  border-top: 1px solid var(--line);
+.spend-ticks > [data-edge="start"] {
+  left: 0;
+  transform: none;
 }
 
-.spend-table tbody th {
-  font-weight: var(--weight-medium);
+.spend-ticks > [data-edge="end"] {
+  right: 0;
+  transform: none;
 }
 
-.spend-model {
+/* 一分钱都没花时，柱子那块中间一行字 */
+.spend-blank {
+  position: absolute;
+  inset: 0 0 1.5rem;
+  display: grid;
+  place-items: center;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+/* 型号一行一个：名字、占几成、多少钱，下面一道细线是占几成（几行加起来正好铺满）。指着哪一行，柱子里只亮它那一份 */
+.spend-models:empty {
+  display: none;
+}
+
+.spend-models {
+  display: grid;
+  gap: 0.125rem;
+  margin: 0 -0.625rem;
+  padding: 0;
+  list-style: none;
+}
+
+.spend-item {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto 4.75rem;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0.625rem 0.625rem;
+  border-radius: var(--radius-control);
+  outline: none;
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.spend-item:is(:hover, :focus-visible) {
+  background: var(--fill-hover);
+}
+
+.spend-item:focus-visible {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.spend-meter {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--line);
+}
+
+.spend-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+/* 名字：图标、哪家、型号；放不下时型号先省略 */
+.spend-name {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.45rem;
-}
-
-/* 模型那一列可以折行（别的列是数，不折）：型号接在名字后面，放不下就整个折到下一行 */
-.spend-table tbody th {
-  white-space: normal;
-}
-
-.spend-model-text > * {
+  min-width: 0;
   white-space: nowrap;
 }
 
-.spend-model-id {
-  font-weight: var(--weight-regular);
-  color: var(--ink-2);
+.spend-name-text {
+  font-weight: var(--weight-medium);
 }
 
-.spend-empty {
+.spend-name-id {
+  overflow: hidden;
+  min-width: 0;
   color: var(--ink-2);
-  text-align: left;
+  text-overflow: ellipsis;
+}
+
+/* 细数：平时藏着，指着这一行时露出来；放不下时省略 */
+.spend-detail {
+  overflow: hidden;
+  font-size: var(--text-micro);
+  color: var(--ink-2);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.spend-item:is(:hover, :focus-visible) .spend-detail {
+  opacity: 1;
+}
+
+.spend-share {
+  font-size: var(--text-micro);
+  min-width: 2.5rem;
+  color: var(--ink-2);
+  text-align: right;
+}
+
+.spend-cost {
+  font-weight: var(--weight-semibold);
+  text-align: right;
+}
+
+.spend-cost[data-free] {
+  font-weight: var(--weight-regular);
+  color: var(--ink-2);
 }
 
 .spend-note {
@@ -531,47 +900,55 @@
   color: var(--ink-2);
 }
 
-.home-side {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+/* 浮出来的小卡：玻璃，数在前、名字在后 */
+.spend-tip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.3rem;
+  min-width: 10rem;
+  max-width: 20rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-block);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-filter);
+  box-shadow: var(--edge), var(--lift);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 
-/* 口述卡：和别的卡一样的面，主题渐变只铺在键帽上 */
-.dictate {
+.spend-tip[hidden] {
+  display: none;
+}
+
+.spend-tip-head {
+  color: var(--ink-2);
+}
+
+.spend-tip-value {
+  margin-bottom: 0.15rem;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.spend-tip-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.8rem 0.9rem;
-  background: var(--surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--edge), var(--lift);
-}
-
-.dictate-key {
-  flex: none;
-  min-width: 2.75rem;
-  padding: 0.3rem 0.55rem;
-  font: var(--weight-semibold) var(--text-body) / 1.3 var(--font-rounded);
-  text-align: center;
-  color: var(--on-primary);
-  background: var(--gradient);
-  border-radius: var(--radius-control);
-  box-shadow:
-    inset 0 1px 0 var(--sheen),
-    0 2px 6px -2px var(--primary);
-}
-
-.dictate-title {
-  white-space: nowrap;
-  font-weight: var(--weight-semibold);
-  line-height: 1.35;
-}
-
-.version {
-  font-size: var(--text-micro);
-  text-align: right;
+  justify-content: space-between;
+  gap: 1rem;
   color: var(--ink-2);
+}
+
+.spend-tip-num {
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+}
+
+.spend-tip .provider-icon {
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
 /* ---------- 历史记录 ---------- */
@@ -667,7 +1044,7 @@
   cursor: help;
 }
 
-/* ---------- 一路经过的模型（route-view.mjs）：首页的识别方式选单、模型页的推荐组合共用 ---------- */
+/* ---------- 一路经过的模型（route-view.mjs）：引擎页的推荐组合用 ---------- */
 
 /* 图标加名字，后一个带着前面的箭头一起折行（箭头不会落单在行尾）；不截断 */
 .hops {
@@ -939,7 +1316,14 @@ code.setting-value {
   .menu-item .icon,
   .content::before,
   .entry,
-  .entry-actions {
+  .entry-actions,
+  .spend-bar-part,
+  .spend-peak,
+  .spend-fill,
+  .spend-item,
+  .spend-detail,
+  .spend-trend path,
+  .spend-now {
     transition: none;
   }
 
@@ -948,7 +1332,8 @@ code.setting-value {
     animation: none;
   }
 
-  .toast {
+  .toast,
+  .search .input {
     transition: none;
   }
 }

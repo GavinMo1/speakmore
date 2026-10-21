@@ -138,7 +138,7 @@ export default {
     modelDownloading: "本地模型下载中（{percent}%），完成后即可使用",
     modelLoading: "本地模型正在装载，稍等几秒",
     modelFailed: "本地模型没装上：{reason}",
-    modelMissing: "本地模型 {model} 还没下载：在设置的“模型”页下载，或运行 speakmore transcriber download {id}",
+    modelMissing: "本地模型 {model} 还没下载：在引擎页下载，或运行 speakmore transcriber download {id}",
     undecodable: "录音解不开：{reason}",
     transcribeFailed: "本地转写失败：{reason}",
   },
@@ -314,7 +314,7 @@ export default {
   hub: {
     pages: "页面",
     home: "首页",
-    models: "模型",
+    models: "引擎",
     history: "历史",
     vocabulary: "词典",
     settings: "设置",
@@ -324,18 +324,44 @@ export default {
     switchWay: "换一种方式",
   },
 
-  // 侧栏"模型"一页（renderer/hub/models.mjs）。用词照界面规范的词表（docs/desktop-ui-spec.md）：书面语、短词，
+  // 侧栏"引擎"一页（renderer/hub/engine/）。用词照界面规范的词表（docs/desktop-ui-spec.md）：书面语、短词，
   // 说明写成名词短语、用" · "连起来，不写"能用"这类口语
   plaza: {
-    title: "模型",
+    title: "引擎",
     search: "搜索模型或厂商",
     modes: { native: "原生识别", local: "转写 + 润色", private: "数据隐私" },
-    facts: { upload: "音频上传至 {platform}" },
-    // 这一类不在正在用的识别方式里（模型页 toolbar 下面那一行）
-    standby: {
-      elsewhere: "当前识别方式为{current} · 启用此处的模型将一并切换至{mode}",
-      privateCloud: "数据隐私方式仅使用本机模型 · 启用云端模型将一并切换至{mode}",
-      pick: "更换识别方式",
+    // 树的三个环节，和每个环节做什么（悬停时看）
+    roles: { native: "原生", transcribe: "转写", polish: "润色" },
+    roleDesc: { native: "音频直接成稿", transcribe: "音频转成文字", polish: "文字整理成稿" },
+    // 树上每列上面那一行小字
+    columns: { modes: "识别方式", roles: "环节", makers: "厂商", models: "型号" },
+    unchosen: "未选定",
+    state: { notDownloaded: "未下载", downloading: "下载中", downloaded: "已下载 {done}/{total}" },
+    legend: { standby: "已选定 · 其他识别方式" },
+    zoom: {
+      in: "放大",
+      out: "缩小",
+      reset: "恢复 100%",
+      fit: "适应画布",
+      hint: "拖动平移 · 捏合或按住 ⌘ 滚动缩放",
+    },
+    // 点开型号后右边的详情（renderer/hub/engine/detail.mjs）
+    detail: {
+      label: "{model} 详情",
+      close: "收起详情",
+      switchTo: "启用即切换至{mode}",
+      current: "当前 · {mode}",
+      price: "价格",
+      perHour: "/ 小时音频",
+      listPrice: "{platform}标价",
+      listPriceTokens: "{platform}标价 · 每百万 tokens",
+      specsNote: "评分基于 97 条真实录音 · 绿色为同组最佳",
+      license: "{license} 许可",
+      audioLocal: "音频留存本机",
+      audioTo: "音频发送至 {platform}",
+      textTo: "文字发送至 {platform}",
+      textToCustom: "文字发送至自定义服务",
+      notOnChannel: "{platform}未提供此型号",
     },
     via: { local: "本机" },
     inUse: "使用中",
@@ -354,21 +380,7 @@ export default {
       localTip: "以系统朗读的样句转写验证",
       keyTip: "以该密钥发起一次最小请求",
     },
-    tabs: { label: "模型分类", native: "原生", transcribe: "转写", polish: "润色", keys: "密钥" },
-    toolbar: {
-      all: "全部",
-      makers: "按厂商筛选",
-      best: "同列最佳",
-      keysLocal: "密钥仅存于本机",
-      onlyUsable: "仅显示可用",
-      perMillion: "单价 · 每百万 tokens",
-    },
     cols: {
-      model: "型号",
-      platform: "平台",
-      status: "状态",
-      action: "操作",
-      key: "密钥",
       input: "输入",
       inputTip: "输入单价 · 每百万 tokens",
       output: "输出",
@@ -412,8 +424,6 @@ export default {
     groups: {
       local: "本机",
       custom: "自定义",
-      localMeta: "音频留存本机 · 已下载 {done}/{total}",
-      localMetaFree: "音频留存本机 · 已下载 {done}/{total} · 可用空间 {free}",
     },
     channel: {
       label: "渠道",
@@ -425,7 +435,7 @@ export default {
     notice: { noKey: "未配置密钥", custom: "未配置" },
     actions: {
       use: "启用",
-      download: "下载",
+      download: "下载 {size}",
       cancel: "取消",
       configure: "配置",
       configureKey: "配置密钥",
@@ -436,7 +446,7 @@ export default {
     custom: {
       name: "自定义服务",
       desc: "OpenAI 兼容接口 · 自填地址、模型名与密钥",
-      meta: "OpenRouter、硅基流动、Ollama 等",
+      kind: "OpenAI 兼容接口",
       url: "接口地址",
       urlPlaceholder: "接口地址，如 https://api.example.com/v1",
       model: "模型名",
@@ -447,8 +457,12 @@ export default {
       keyKept: "密钥已配置，留空则不更改",
       modelMissing: "请填写模型名",
     },
-    empty: { title: "无匹配模型", search: "搜索 “{query}”", clear: "清除筛选" },
+    empty: { title: "无匹配模型" },
+    // 标题行右边的密钥面板（renderer/hub/engine/keys.mjs）
     keys: {
+      title: "密钥",
+      meta: "已配置 {done}/{total}",
+      local: "密钥仅存于本机 · {home}",
       coverage: "可用",
       env: "环境变量",
       envTip: "来自环境变量 {variable}，优先于存着的密钥",
@@ -476,14 +490,9 @@ export default {
       canceled: "已取消下载",
       removed: "{model} 已删除",
     },
-    notes: {
-      keys: "存储位置 · {home}",
-      transcribe: "本机评分 · 97 条真实录音，Apple 芯片实测，2026-10-16 · 悬停列名查看口径",
-      prices: "标签 · 默认、已评测、已知问题、未验证 · 价格为各平台标价，¥ 人民币，$ 美元",
-    },
   },
 
-  // 模型页标题行右边的推荐组合（src/models/presets.mjs、renderer/hub/preset-picker.mjs）。月成本统一按每天 100 次、一个月 30 天
+  // 引擎页标题行右边的推荐组合（src/models/presets.mjs、renderer/hub/preset-picker.mjs）。月成本统一按每天 100 次、一个月 30 天
   presets: {
     title: "推荐组合",
     meta: "月成本以每天 {daily} 次计",
@@ -532,24 +541,24 @@ export default {
     },
     spend: { today: "今天花费", month: "本月花费", total: "累计花费" },
     spendPeriods: "看哪段时间",
-    model: "模型",
-    cost: "花费",
-    tokens: "token",
-    count: "次数",
-    latency: "耗时",
+    latencyIs: "耗时 {time}",
     local: "本机",
     free: "免费",
-    sum: "合计",
     emptyPeriod: "这段时间还没用过",
+    noCost: "均为本机转写 · 未产生费用",
+    unpricedOnly: "所用云端型号未标价 · 花费未计入",
+    range: "{from}至{to}",
+    dictations: { other: "{count} 次听写" },
+    tokenTotal: "{count} token",
     checks: { other: "含检查 {count} 次" },
     cache: "提示词缓存 {cost}",
     estimate: "按各家官方标准价估算",
     unpriced: "{models} 无标价，{count} 次未计入",
     dictate: "按一下说话",
-    // 标题右边的识别方式选单（renderer/hub/mode-picker.mjs）；三种方式的名字在 plaza.modes
+    // 识别方式：首页标题右边只显示（renderer/hub/mode-chip.mjs），在引擎页第一列换，首次引导也用；三种方式的名字在 plaza.modes
     mode: {
       label: "识别方式",
-      meta: "三选一 · 模型配置分别保存",
+      open: "在引擎页更换",
       desc: {
         native: "音频直达模型 · 单次成稿",
         local: "语音转写 · 文本润色",
@@ -561,11 +570,9 @@ export default {
         downloading: "{model} 下载中 {percent}%",
         url: "自定义服务地址未配置",
       },
-      fix: "前往配置",
       switching: "切换中",
       failed: "未切换",
       switched: "已切换至{mode}",
-      configure: "在模型页更换{mode}所用模型",
       locked: "识别方式由单独启动的服务端决定，此处不可更换",
     },
   },
@@ -594,13 +601,11 @@ export default {
     add: "新词",
     import: "导入",
     local: "仅保存在本机",
-    // 词典文件只在本机；当前方式里有收词典的云端模型时，听写时那部分词随请求发出去，照实说
-    localMeta: { device: "不上传 · 不离开本机", cloud: "不同步 · 随听写请求发出" },
+    // 跟在"仅保存在本机"后面。词典文件只在本机；当前方式里有收词典的云端模型时，听写时那部分词随请求发出去，照实说
+    localMeta: { device: "不上传", cloud: "随听写请求发出" },
     localTip:
       "词典保存在 {file}，不上传、不同步。听写时，所用模型收得下的那部分词随这次请求一并发出；数据隐私方式下不离开本机",
-    current: "当前 · {mode}",
     composer: { placeholder: "输入新词", add: "添加", close: "收起" },
-    unused: "不使用词典",
     supportTrigger: "支持的模型",
     support: {
       title: "支持的模型",
@@ -825,9 +830,9 @@ export default {
         sources: { cn: "国内源", original: "Hugging Face" },
       },
       nativeOnly: "仅这几家支持音频直达 · DeepSeek、Kimi、GLM 等见转写 + 润色",
-      later: "可跳过 · 进入后在模型页配置",
-      laterModel: "可跳过 · 进入后在模型页下载",
-      more: "云端转写、自定义服务见模型页",
+      later: "可跳过 · 进入后在引擎页配置",
+      laterModel: "可跳过 · 进入后在引擎页下载",
+      more: "云端转写、自定义服务见引擎页",
       status: {
         enabled: "已启用{mode}",
         enabling: "启用中",
@@ -1480,6 +1485,7 @@ speakmore help     全部命令`,
     },
     delivery: { pasteFailed: "没能自动粘贴：文字已复制，按 Ctrl+V 粘贴" },
     bar: { noMicPermission: "缺麦克风权限：设置 › 隐私和安全性 › 麦克风" },
+    plaza: { zoom: { hint: "拖动平移 · 捏合或按住 Ctrl 滚动缩放" } },
     onboarding: {
       // Windows 只有麦克风这一项
       permissions: { soft: "确认", title: "麦克风权限" },

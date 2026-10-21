@@ -7,7 +7,7 @@ import { toast } from "./toast.mjs";
 // 侧栏"词典"一页。结构照原版的词典页（targets/typeless/_work/ui-reference/typeless-dictionary.png）：
 // 标题右边是导入和新词，下面是搜索，再下面一格一个词，鼠标移上去出现编辑、删除和多选的勾。
 // 和原版不同的几处：
-//   - 原版的词典在它的服务端，我们的只存在本机：标题下面一栏写明这一点，并说清当前方式里每一跳怎么收词典；
+//   - 原版的词典在它的服务端，我们的只存在本机：标题下面一行写明这一点（当前方式里有收词典的云端模型时照实说随请求发出）；
 //     "支持的模型"点开是全部模型各怎么收（数据来自主进程 app/vocabulary.mjs，按模型清单里写的拼）
 //   - 新词就地输入、回车就加、接着输下一个；编辑在格子里直接改。删除、导入才弹对话框（要确认的事）
 // 增删改都交给主进程（storage/vocabulary.mjs），改完重读一遍。
@@ -122,7 +122,8 @@ export function createVocabulary() {
     $("vocabulary-local").title = t("vocabulary.localTip", { file: data.file });
     // 当前方式里有收词典的云端模型，词就会随听写的请求发出去：照实写
     const leaves = data.current.hops.some(({ platform, kind }) => platform !== "local" && kind !== null);
-    $("vocabulary-local-meta").textContent = t(`vocabulary.localMeta.${leaves ? "cloud" : "device"}`);
+    $("vocabulary-local-text").textContent =
+      `${t("vocabulary.local")} · ${t(`vocabulary.localMeta.${leaves ? "cloud" : "device"}`)}`;
     // 文件坏了不能改：先照提示修好文件，免得把它覆盖掉
     const full = data.terms.length >= data.limits.maxTerms;
     // 置灰的按钮悬停时说为什么
@@ -137,50 +138,12 @@ export function createVocabulary() {
       $(id).title = blocked ?? "";
     }
     if (full || data.problem) closeComposer();
-    renderCurrent();
     renderSupport();
     if (editing !== null) deferred = true;
     else renderTerms();
   }
 
-  /**
-   * 当前方式：标题写是哪种方式，下面一行每一跳一个小标签"转写 · 热词"。模型名不占地方，悬停在标签上看；
-   * 全部模型在"支持的模型"浮层里。一跳都不收时整栏是问题的语气
-   */
-  function renderCurrent() {
-    const { mode, hops } = data.current;
-    const unused = hops.every(({ kind }) => kind === null);
-    const node = $("vocabulary-current");
-    node.dataset.tone = unused ? "problem" : "";
-    const step = (hop) =>
-      h(
-        "span",
-        {
-          class: "vocab-step",
-          "data-off": hop.kind === null || null,
-          title: `${hop.name} · ${whereOf(hop.platform)}\n${t(`vocabulary.kindTips.${hop.kind ?? "none"}`)}`,
-        },
-        h("span", { class: "vocab-step-role", text: t(`vocabulary.support.roles.${hop.role}`) }),
-        h("span", { class: "vocab-step-kind", text: t(`vocabulary.kinds.${hop.kind ?? "none"}`) }),
-      );
-    node.replaceChildren(
-      h(
-        "span",
-        { class: "vocab-fact-glyph", "data-tone": unused ? "problem" : "accent" },
-        svg(unused ? "i-circle-alert" : "i-audio-lines"),
-      ),
-      h(
-        "div",
-        { class: "vocab-fact-body" },
-        h("p", { class: "vocab-fact-title", text: t("vocabulary.current", { mode: t(`plaza.modes.${mode}`) }) }),
-        unused
-          ? h("p", { class: "vocab-fact-meta", text: t("vocabulary.unused") })
-          : h("p", { class: "vocab-steps" }, hops.map(step)),
-      ),
-    );
-  }
-
-  /** "支持的模型"浮层：原生识别、转写、润色三段；转写按在哪分组（本机、各家平台），一个模型一行 */
+  /** "支持的模型"浮层：原生识别、转写、润色三段；转写按在哪分组（本机、各家平台），一个模型一行，前面是厂商的标志 */
   function renderSupport() {
     const { native, transcribe, polish } = data.support;
     const row = ({ icon, name, support }) =>
@@ -192,7 +155,9 @@ export function createVocabulary() {
         h("span", { class: "vocab-support-limit", text: limitText(support) ?? "", title: limitDetail(support) }),
         kindTag(support?.kind ?? null),
       );
-    const allModels = (support) => row({ icon: svg("i-layout-grid"), name: t("vocabulary.support.all"), support });
+    // 原生识别、润色不分模型，一行"全部模型"：标志那一格空着，名字和下面各行对齐
+    const allModels = (support) =>
+      row({ icon: h("span", { "aria-hidden": "true" }), name: t("vocabulary.support.all"), support });
     const section = (title, rows) =>
       h(
         "section",
@@ -222,8 +187,9 @@ export function createVocabulary() {
     deferred = false;
     const query = $("vocabulary-search").value;
     const shown = matchTerms(data.terms, query);
-    // 文件读不出时没有可数的
-    $("vocabulary-count").textContent = data.problem ? "" : t("vocabulary.count", { count: data.terms.length });
+    // 文件读不出时没有可数的；一个词都没有时下面有空的说明，不写"0 个词"
+    $("vocabulary-count").textContent =
+      data.problem || data.terms.length === 0 ? "" : t("vocabulary.count", { count: data.terms.length });
     const empty = data.problem === null && shown.length === 0;
     const searching = data.terms.length > 0;
     $("vocabulary-empty").hidden = !empty;
@@ -252,26 +218,25 @@ export function createVocabulary() {
     renderTerms();
   }
 
+  /** 编辑、删除、多选的勾：平时藏着，鼠标移上去、焦点在格子里才出来；已经在多选时只剩勾 */
   function termCard(term) {
     const checked = selected.has(term);
-    return h(
-      "li",
-      { class: "vocab-term", "data-selected": checked || null, "data-fresh": term === fresh || null },
+    const tool = (name, icon, onclick) =>
       h(
         "button",
         {
           type: "button",
-          class: "vocab-check",
-          role: "checkbox",
-          "aria-checked": String(checked),
-          "aria-label": `${t("vocabulary.select")} ${term}`,
-          "data-focus": `select:${term}`,
-          title: t("vocabulary.select"),
-          onclick: () => toggle(term),
+          class: "icon-button",
+          title: t(`vocabulary.${name}`),
+          "aria-label": `${t(`vocabulary.${name}`)} ${term}`,
+          "data-focus": `${name}:${term}`,
+          onclick,
         },
-        svg("i-check"),
-      ),
-      svg("i-feather", "icon vocab-term-icon"),
+        svg(icon),
+      );
+    return h(
+      "li",
+      { class: "vocab-term", "data-selected": checked || null, "data-fresh": term === fresh || null },
       h("span", {
         class: "vocab-term-text",
         text: term,
@@ -280,30 +245,22 @@ export function createVocabulary() {
       }),
       h(
         "span",
-        { class: "vocab-term-actions" },
+        { class: "vocab-term-tools" },
+        tool("edit", "i-pencil", () => startEdit(term)),
+        tool("delete", "i-trash", () => openRemove([term])),
         h(
           "button",
           {
             type: "button",
-            class: "icon-button",
-            title: t("vocabulary.edit"),
-            "aria-label": `${t("vocabulary.edit")} ${term}`,
-            "data-focus": `edit:${term}`,
-            onclick: () => startEdit(term),
+            class: "vocab-check",
+            role: "checkbox",
+            "aria-checked": String(checked),
+            "aria-label": `${t("vocabulary.select")} ${term}`,
+            "data-focus": `select:${term}`,
+            title: t("vocabulary.select"),
+            onclick: () => toggle(term),
           },
-          svg("i-pencil"),
-        ),
-        h(
-          "button",
-          {
-            type: "button",
-            class: "icon-button",
-            title: t("vocabulary.delete"),
-            "aria-label": `${t("vocabulary.delete")} ${term}`,
-            "data-focus": `delete:${term}`,
-            onclick: () => openRemove([term]),
-          },
-          svg("i-trash"),
+          svg("i-check"),
         ),
       ),
     );
@@ -342,7 +299,7 @@ export function createVocabulary() {
       "aria-label": `${t("vocabulary.edit")} ${term}`,
       title: t("vocabulary.editHint"),
     });
-    const card = h("li", { class: "vocab-term", "data-editing": true }, svg("i-pencil", "icon vocab-term-icon"), input);
+    const card = h("li", { class: "vocab-term", "data-editing": true }, input);
     let settled = false;
     /**
      * @param {boolean} save 存（回车、点别处）还是放弃（Esc）
@@ -465,7 +422,6 @@ export function createVocabulary() {
   /**
    * @param {object} options
    * @param {string} options.title
-   * @param {{ icon: string, tone: "problem" | "accent" }} options.glyph 标题前的图标：删除是问题的语气，导入是主题色
    * @param {string} [options.text] 标题下面的一句说明
    * @param {string[]} [options.preview] 要加的词（导入）：列出前面一些，看得出是不是把表头也当成了词
    * @param {string} [options.note] 灰字的补充
@@ -474,19 +430,7 @@ export function createVocabulary() {
    * @param {boolean} [options.disabled] 没有可确认的（导入的文件里没有新词）
    * @param {() => Promise<string>} options.run 确认时做的事，返回提示的那句话；出错时在对话框里说
    */
-  function openDialog({
-    title,
-    glyph,
-    text = "",
-    preview = [],
-    note = "",
-    problem = null,
-    confirm,
-    disabled = false,
-    run,
-  }) {
-    $("vocabulary-dialog-glyph").dataset.tone = glyph.tone;
-    $("vocabulary-dialog-glyph").replaceChildren(svg(glyph.icon));
+  function openDialog({ title, text = "", preview = [], note = "", problem = null, confirm, disabled = false, run }) {
     $("vocabulary-dialog-title").textContent = title;
     $("vocabulary-dialog-text").textContent = text;
     $("vocabulary-dialog-text").hidden = text === "";
@@ -540,7 +484,6 @@ export function createVocabulary() {
   function openRemove(terms) {
     const one = terms.length === 1;
     openDialog({
-      glyph: { icon: "i-trash", tone: "problem" },
       title: one
         ? t("vocabulary.dialogs.remove.title")
         : t("vocabulary.dialogs.removeMany.title", { count: terms.length }),
@@ -568,7 +511,6 @@ export function createVocabulary() {
     if (preview === null) return;
     const count = preview.terms.length;
     openDialog({
-      glyph: { icon: "i-file-up", tone: "accent" },
       title: t("vocabulary.dialogs.import.title"),
       text:
         count > 0

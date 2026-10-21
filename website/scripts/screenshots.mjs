@@ -17,6 +17,9 @@ const { themeCss } = await import(join(ROOT, "src/themes/contract.mjs"));
 const { findTheme, THEMES } = await import(join(ROOT, "src/themes/index.mjs"));
 const { usageReport } = await import(join(ROOT, "src/usage/report.mjs"));
 const { insights } = await import(join(ROOT, "src/usage/insights.mjs"));
+const { describePlaza, loadPriceBook } = await import(join(ROOT, "src/app/model-plaza.mjs"));
+const { resolveSettings, routeOf } = await import(join(ROOT, "src/storage/settings.mjs"));
+const { MODE_ORDER } = await import(join(ROOT, "src/renderer/hub/engine/plaza-view.mjs"));
 
 const out = resolve(process.argv[process.argv.indexOf("--") + 1] ?? "media-out");
 const VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
@@ -75,7 +78,7 @@ function seed(history, locale) {
         refinedText: texts[(day + i) % texts.length],
         error: null,
         duration: 3 + (i % 5) * 4.5,
-        audioLocalPath: null,
+        audioFile: null,
         createdAt: at,
       });
     }
@@ -107,6 +110,27 @@ ipcMain.handle("history:list", () => current.history.list());
 ipcMain.handle("usage:report", () => usageReport(current.history, { now: new Date() }));
 ipcMain.handle("insights:get", () => insights(current.history.dictations(), { now: new Date() }));
 ipcMain.handle("app:info", () => ({ version: VERSION, hotkey: "right_option" }));
+/** 首页标题右边的识别方式、引擎页按它画：出厂设置、原生识别、配了 Gemini 的密钥，拼法同 app/main.mjs 的 describePlazaNow */
+const settings = resolveSettings({ file: join(tmpdir(), "speakmore-shots-none", "settings.json"), env: {} });
+const plaza = describePlaza({
+  mode: "native",
+  chosen: {
+    native: settings.model.value,
+    transcriber: settings.transcriber.value,
+    privateTranscriber: settings.privateTranscriber.value,
+    polish: settings.polish.value,
+    customUrl: settings.customUrl.value,
+    customParams: settings.customParams.value,
+  },
+  keys: { gemini: "stored" },
+  status: {},
+  chip: "apple-silicon",
+  freeBytes: 1e11,
+  prices: await loadPriceBook(),
+  routes: Object.fromEntries(MODE_ORDER.map((id) => [id, routeOf(settings, id)])),
+  presets: [],
+  at: new Date(),
+});
 ipcMain.handle("setup:get", () => ({
   providerName: "Gemini",
   helper: "running",
@@ -128,12 +152,14 @@ ipcMain.handle("setup:get", () => ({
     transcribers: [],
     chip: "apple-silicon",
     source: { value: "cn", choices: ["cn", "original"] },
+    acceleration: { value: "auto", choices: ["auto", "cpu"] },
     polish: "deepseek/deepseek-flash",
     customUrl: "",
     vendors: [deepseek],
   },
   localModel: null,
   switchable: true,
+  plaza,
 }));
 ipcMain.handle("config:get", () => ({ serverUrl: "ws://127.0.0.1:9/none", hotkey: "right_option", barControls: true }));
 ipcMain.on("bar:set-visible", () => {});

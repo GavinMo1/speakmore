@@ -1,13 +1,11 @@
-import { formatCount, formatSeconds, formatSpan, formatTokens, formatUsd } from "../../usage/format.mjs";
+import { formatCount, formatSpan } from "../../usage/format.mjs";
 import { activityGrid } from "../../usage/insights.mjs";
-import { platformName } from "../shared/dom.mjs";
 import { keycapOf, t } from "../shared/i18n.mjs";
-import { providerIcon } from "../shared/provider-icons.mjs";
-import { slidingIndicators } from "./indicators.mjs";
+import { createSpend } from "./spend.mjs";
 
-// 首页：原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费；右边一列是口述卡和版本。
+// 首页：标题下面一行热键；原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费。版本号写在侧栏底下。
 // 数是主进程从全部历史里算好的（src/usage/insights.mjs、src/usage/report.mjs），这里只管画。
-// 花费按模型分开列：哪家、哪个型号、本机的那一跳各花了多少、用了多少次，选今天、本月或累计看。
+// 花费那张卡在 spend.mjs。
 
 const $ = (id) => document.getElementById(id);
 
@@ -118,110 +116,7 @@ export function createHome() {
     $("heatmap-back").disabled = latest.firstDay === null || first <= latest.firstDay;
   }
 
-  /** 花费那张卡选时段的分段控件，底块跟着选中的那一段滑 */
-  const indicators = slidingIndicators(document.querySelector('.page[data-route="home"]'));
-  /** 花费那张卡看的是哪一段：today / month / total。默认本月 */
-  let spendPeriod = "month";
-  /** 最近一次的用量报表，切换时段时重画用 */
-  let usage = null;
-
-  /** 表里的一行：头一格是名字（或"合计"），后面是花费、token、次数、一般多久 */
-  function spendRow(head, { cost, tokens, count, latency }, { tag = "tr" } = {}) {
-    const tr = document.createElement(tag === "tr" ? "tr" : tag);
-    const th = document.createElement("th");
-    th.scope = "row";
-    th.append(head);
-    const cells = [cost, tokens, count, latency].map((text) => {
-      const td = document.createElement("td");
-      td.textContent = text;
-      return td;
-    });
-    tr.append(th, ...cells);
-    return tr;
-  }
-
-  /** 一个型号叫什么：图标、名字；云上的跟着型号，本机的标"本机" */
-  function modelLabel(row) {
-    const label = document.createElement("span");
-    label.className = "spend-model";
-    const icon = row.icon ? providerIcon(row.icon) : null;
-    const name = document.createElement("span");
-    // 云上的那一行 icon 就是厂商 id：名字按界面语言写（阿里云百炼 / Alibaba Cloud Bailian）
-    name.textContent = row.local ? row.name : platformName({ id: row.icon, name: row.name });
-    const detail = document.createElement("span");
-    detail.className = row.local ? "tag" : "spend-model-id";
-    detail.textContent = row.local ? t("home.local") : row.model;
-    // 名字和型号放在一段字里：窗口窄时型号折到名字下面，和名字左对齐，不把表撑出卡片
-    const text = document.createElement("span");
-    text.className = "spend-model-text";
-    text.append(name, " ", detail);
-    label.append(...(icon ? [icon] : []), text);
-    return label;
-  }
-
-  const waited = (latency) => (latency ? formatSeconds(latency.medianMs, t) : "—");
-  /** 有的型号没有标价时，钱只加得上知道价的那几笔 */
-  const costText = (row) => (row.calls > 0 && row.unpricedCalls === row.calls ? "—" : formatUsd(row.costUsd));
-
-  function renderSpend() {
-    const card = $("spend");
-    card.hidden = usage === null || usage.total.calls === 0;
-    if (card.hidden) return;
-    const period = usage[spendPeriod];
-    for (const segment of $("spend-periods").querySelectorAll(".segment")) {
-      segment.setAttribute("aria-checked", String(segment.dataset.period === spendPeriod));
-    }
-    indicators.place();
-    $("spend-total").textContent = formatUsd(period.costUsd);
-    $("spend-label").textContent = t(`home.spend.${spendPeriod}`);
-    const rows = period.models.map((row) =>
-      spendRow(modelLabel(row), {
-        cost: row.local ? t("home.free") : costText(row),
-        tokens: row.local ? "—" : formatTokens(row.tokens),
-        count: String(row.dictations),
-        latency: waited(row.latency),
-      }),
-    );
-    if (rows.length === 0) {
-      const tr = document.createElement("tr");
-      const td = document.createElement("td");
-      td.colSpan = 5;
-      td.className = "spend-empty";
-      td.textContent = t("home.emptyPeriod");
-      tr.append(td);
-      rows.push(tr);
-    }
-    $("spend-rows").replaceChildren(...rows);
-    // 合计：次数是听写的次数（本机转写加润色的两跳算一次），耗时是整次听写等模型的时间
-    $("spend-sum").replaceChildren(
-      spendRow(t("home.sum"), {
-        cost: formatUsd(period.costUsd),
-        tokens: formatTokens(period.tokens),
-        count: String(period.dictations),
-        latency: waited(period.latency),
-      }),
-    );
-    // 底下一行小字：里面含了几次检查、多少是提示词缓存，有的型号没标价，钱是估算的
-    const notes = [];
-    if (period.checks > 0) notes.push(t("home.checks", { count: period.checks }));
-    if (period.cacheCostUsd > 0) notes.push(t("home.cache", { cost: formatUsd(period.cacheCostUsd) }));
-    const unpriced = period.models.filter(({ unpricedCalls }) => unpricedCalls > 0);
-    if (unpriced.length > 0) {
-      notes.push(
-        t("home.unpriced", { models: t.list(unpriced.map(({ model }) => model)), count: period.unpricedCalls }),
-      );
-    }
-    notes.push(t("home.estimate"));
-    $("spend-note").hidden = false;
-    $("spend-note").textContent = notes.join(" · ");
-  }
-
-  for (const segment of $("spend-periods").querySelectorAll(".segment")) {
-    segment.addEventListener("click", () => {
-      spendPeriod = segment.dataset.period;
-      renderSpend();
-    });
-  }
+  const spend = createSpend();
 
   $("heatmap-back").addEventListener("click", () => {
     pagesBack++;
@@ -238,20 +133,18 @@ export function createHome() {
     /**
      * @param {{ insights: object, usage: object, app: { version: string, hotkey: string } }} data
      */
-    render({ insights, usage: report, app }) {
+    render({ insights, usage, app }) {
       latest = insights;
       renderStats(insights);
       renderHeatmap();
-      usage = report;
-      renderSpend();
+      spend.render(usage);
       $("home-keycap").textContent = keycapOf(app.hotkey);
-      $("home-version").textContent = `v${app.version}`;
+      $("app-version").textContent = `v${app.version}`;
     },
 
     /** 页面切到前台时，分段控件的底块要按真实宽度重新放（藏着时量不出来） */
     shown() {
-      indicators.reset();
-      indicators.place();
+      spend.shown();
     },
   };
 }
