@@ -665,7 +665,6 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
 .zoom .icon-button {
   width: var(--control-sm);
   height: var(--control-sm);
-  border-radius: var(--radius-full);
 }
 
 .zoom .icon {
@@ -973,8 +972,10 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
   width: var(--col-status);
 }
 
+/* 主操作至少操作列那么宽，字长的（"下载 253 MB"、英文）按字撑宽，不溢出胶囊（.block 的撑满在这里不要） */
 .detail-actions > :last-child {
-  width: var(--col-action);
+  width: auto;
+  min-width: var(--col-action);
 }
 
 .detail-foot {

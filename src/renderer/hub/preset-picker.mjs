@@ -170,11 +170,7 @@ export function createPresetPicker({ refresh, configureKey }) {
     if (!setup?.plaza?.presets) return;
     const { presets } = setup.plaza;
     trigger.hidden = presets.length === 0;
-    trigger.replaceChildren(
-      svg("i-zap"),
-      h("span", { class: "picker-trigger-value", text: t("presets.title") }),
-      svg("i-chevron", "icon chevron"),
-    );
+    trigger.replaceChildren(svg("i-zap"), h("span", { text: t("presets.title") }), svg("i-chevron", "icon chevron"));
     $("preset-meta").textContent = t("presets.meta", { daily: setup.plaza.typical.daily });
     $("preset-options").replaceChildren(...presets.map(option));
   }

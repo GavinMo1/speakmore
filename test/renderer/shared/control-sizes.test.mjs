@@ -87,12 +87,45 @@ test("圆角只用 --radius-*（或者全圆的 50%），例外都写明了缘�
   assert.deepEqual(offenders, []);
 });
 
+/**
+ * 按钮一类的东西：外形一律是胶囊（全圆）。只看选择器最后那一段，同上；
+ * 伪元素是它的一部分（下拉框打开后的单子 ::picker），不算
+ */
+const CAPSULE = /\.(button|icon-button|select|picker-trigger|state-box|check|badge)(?![\w-])/;
+const isCapsule = (selector) =>
+  selector.split(",").some((part) => {
+    const last = part
+      .trim()
+      .split(/\s*[\s>+~]\s*/)
+      .pop();
+    return CAPSULE.test(last) && !last.includes("::");
+  });
+
+test("按钮一类的（按钮、图标按钮、下拉框、胶囊按钮、状态框、检测、徽标）写圆角时只能是全圆", () => {
+  const offenders = cssFiles(RENDERER)
+    .filter((path) => !relative(RENDERER, path).replaceAll("\\", "/").startsWith("bar/"))
+    .flatMap(rules)
+    .filter(({ selector }) => isCapsule(selector))
+    .flatMap(({ selector, body, at }) =>
+      [...body.matchAll(/(?:^|;)\s*border-radius:\s*([^;]+)/g)]
+        .map(([, value]) => value.trim())
+        .filter((value) => value !== "var(--radius-full)")
+        .map((value) => `${at}  ${selector} { border-radius: ${value} }`),
+    );
+  assert.deepEqual(offenders, []);
+});
+
 test("查得到违规的写法：控件认得准，写死的圆角认得出", () => {
   assert.ok(isControl(".row .button.block"));
   assert.ok(isControl(".search .input"));
   assert.ok(!isControl(".button .icon"));
   assert.ok(!isControl(".buttons-row"));
   assert.ok(!isControl(".tabs"));
+  assert.ok(isCapsule(".zoom .icon-button"));
+  assert.ok(isCapsule("#mode-chip.picker-trigger"));
+  assert.ok(!isCapsule(".vocab-check"));
+  assert.ok(!isCapsule(".picker-trigger > .chevron"));
+  assert.ok(!isCapsule(".select::picker(select)"));
   assert.ok(RADIUS_VALUE.test("var(--radius-card)"));
   assert.ok(!RADIUS_VALUE.test("6px"));
 });

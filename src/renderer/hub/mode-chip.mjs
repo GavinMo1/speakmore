@@ -24,7 +24,7 @@ export function createModeChip({ open }) {
       chip.replaceChildren(
         h("span", { class: "dot", "data-tone": ready ? "ok" : "problem", "aria-hidden": "true" }),
         h("span", { class: "picker-trigger-label", text: t("home.mode.label") }),
-        h("span", { class: "picker-trigger-value", text: modeName(mode) }),
+        h("span", { text: modeName(mode) }),
         svg("i-chevron", "icon chevron"),
       );
       chip.title = t("home.mode.open");

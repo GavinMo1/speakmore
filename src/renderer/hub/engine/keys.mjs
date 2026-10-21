@@ -248,7 +248,7 @@ export function createKeys(ctx) {
     const keyed = platforms.filter(({ key }) => key).length;
     $("keys-trigger").replaceChildren(
       svg("i-key-round"),
-      h("span", { class: "picker-trigger-value", text: t("plaza.keys.title") }),
+      h("span", { text: t("plaza.keys.title") }),
       h("span", { class: "count", text: `${keyed}/${platforms.length}` }),
     );
     $("keys-meta").textContent = t("plaza.keys.meta", { done: keyed, total: platforms.length });

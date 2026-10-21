@@ -1,5 +1,6 @@
 /* 主窗口标题行右边的胶囊按钮，和锚在它下面的浮层（引擎页的推荐组合 preset-picker.mjs、词典页的支持模型）。
    首页的识别方式（mode-chip.mjs）、引擎页的密钥也是这种胶囊，只是点了不出浮层。
+   外形（全圆、浮起一点的面、字加粗）是 shared/window.css 里按钮、下拉框共用的胶囊，这里只排里面的东西。
    胶囊里图标直接放在字前面，不加圆底座。浮层用原生的 popover（点外面、按 Esc 收起），位置用锚点定位：
    右边和按钮对齐、往左展开，下面放不下就翻到上面。标签、说明框、按钮都是 shared/window.css 里规范的那几样，这里只排版。 */
 
@@ -21,19 +22,12 @@
   gap: 0.5rem;
   height: var(--control-lg);
   padding: 0 0.75rem 0 0.875rem;
-  font: inherit;
   font-size: var(--text-small);
-  color: var(--ink);
-  background: var(--surface);
-  border: none;
-  border-radius: var(--radius-full);
-  box-shadow: var(--edge), var(--lift);
   cursor: pointer;
   -webkit-app-region: no-drag;
   transition: background-color var(--dur-fast) var(--ease-out);
 }
 
-.picker-trigger:hover,
 .picker-trigger[aria-expanded="true"] {
   background: var(--surface-solid);
 }
@@ -54,12 +48,10 @@
   color: var(--primary);
 }
 
+/* 前面那段淡的说明（"识别方式"）不加粗，后面的值照胶囊加粗 */
 .picker-trigger-label {
+  font-weight: var(--weight-regular);
   color: var(--ink-2);
-}
-
-.picker-trigger-value {
-  font-weight: var(--weight-semibold);
 }
 
 /* 点开浮层的箭头朝下，展开时朝上 */
