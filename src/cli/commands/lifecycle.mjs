@@ -1,6 +1,4 @@
 import { TimeoutError } from "../../control.mjs";
-import { legacyIdOf } from "../../hotkeys/legacy.mjs";
-import { chordsOf } from "../../hotkeys/settings.mjs";
 import { problemOf } from "../../i18n/index.mjs";
 import {
   currentSettings,
@@ -119,14 +117,11 @@ export async function status(args, io) {
   }
   if (values.json) {
     const newVersion = check.available ? check.latest : null;
-    // 0.13 以前的 settings.hotkey（旧 id）留一个版本给别人写的脚本读（D13）：听写是旧键之一时给旧 id，别的组合给 null。0.15 删
-    const dictate = settings["hotkey.dictate"];
-    const hotkey = { value: legacyIdOf(chordsOf(dictate.value), io.platform), source: dictate.source };
     io.out(
       JSON.stringify({
         running: current !== null,
         status: current,
-        settings: { ...settings, hotkey },
+        settings,
         stats: readStats(io),
         newVersion,
       }),

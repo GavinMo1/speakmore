@@ -1007,7 +1007,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 **D13 `status --json` 里的旧字段**
 
-**定：A，留一个版本再删。**
+**定：A，留一个版本再删。** 0.14 照旧给、README 标了弃用，0.15.0 删掉（2026-10-22）；命令行连着升级途中的旧后台时，仍认它报的 `hotkey`、`hotkeyLabel` 来说热键叫什么。
 
 - 现状：`speakmore status --json` 输出 `status.hotkey`（旧 id）、`status.hotkeyLabel`（它的名字）和 `settings.hotkey`（`src/cli/commands/lifecycle.mjs:120`），README 把 `--json` 当作对外功能写着（`README.md:347`、`386`），读它的是别人写的脚本。新设计里它们换成按动作目录生成的 `status["hotkey.dictate"]`、`settings["hotkey.dictate"]` 等。
 - 选项 A：保留一个版本。下一版里三个旧字段照旧给（听写是六个旧键之一时给旧 id，是新组合时给 `null`），README 标"已弃用，再下一版删除"；再下一版删掉。代价是输出那一处十来行，用的还是 `legacy.mjs` 那张对照表，写明删除的版本。

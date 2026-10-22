@@ -345,7 +345,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 ## 🧑‍💻 开发者
 
 - **命令行与 App 功能对等**：切换方式与模型、管理与检测密钥、下载模型、查询历史与花费。
-- **JSON 输出**：`status`、`history`、`usage` 支持 `--json`。`status --json` 中的快捷键为 `hotkey.dictate`、`hotkey.cancel`（`status`、`settings` 下各一份，为设置值），实际生效的组合见 `status.hotkeysInEffect`；旧字段 `status.hotkey`、`status.hotkeyLabel`、`settings.hotkey` 已弃用，0.15 起删除。
+- **JSON 输出**：`status`、`history`、`usage` 支持 `--json`。`status --json` 中的快捷键为 `hotkey.dictate`、`hotkey.cancel`（`status`、`settings` 下各一份，为设置值），实际生效的组合见 `status.hotkeysInEffect`。0.13 以前的旧字段 `status.hotkey`、`status.hotkeyLabel`、`settings.hotkey` 已于 0.15 删除。
 - **插件化架构**：各厂商以策略模式实现统一接口。
 - **统一输入输出**：录音统一为 16 kHz 单声道，转写结果统一为 `{ text }`。
 - **跨平台开发**：[`scripts/dev/win-*.sh`](scripts/dev) 经 SSH 同步工作区至 Windows 机器，在远端运行测试、以调试端口从源码重启 App、截取桌面画面。
