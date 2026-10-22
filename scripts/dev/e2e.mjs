@@ -14,6 +14,8 @@
 //   SPEAKMORE_E2E_ELECTRON=<SpeakMore.app>/Contents/MacOS/SpeakMore
 // 带词典跑：SPEAKMORE_E2E_VOCABULARY="词1,词2" 先在数据目录里放一份词典，SPEAKMORE_E2E_EXPECT=词 要求成品里有这个词（不分大小写）。
 // 不想每次都重下本地模型：SPEAKMORE_E2E_MODELS=<已装好的模型仓>（比如 bench/_work/models），开跑前克隆进数据目录（APFS 上不占空间）。
+// 听写几遍：SPEAKMORE_E2E_ROUNDS=2。本机模型按需加载时两遍之间等它空闲释放，第二遍验重新装载：
+//   SPEAKMORE_MODE=private SPEAKMORE_LOCAL_MODEL_MEMORY=on-demand SPEAKMORE_LOCAL_MODEL_IDLE_MINUTES=1 SPEAKMORE_E2E_ROUNDS=2 node scripts/dev/e2e.mjs <WAV>
 
 import { spawn } from "node:child_process";
 import {
@@ -80,7 +82,12 @@ const child = spawn(
 // 要本机模型的（local、private 模式）另给下载和装载模型的时间
 const recordMs = Number(process.env.SPEAKMORE_E2E_RECORD_MS ?? 7_500);
 const setupMs = ["local", "private"].includes(process.env.SPEAKMORE_MODE) ? 20 * 60_000 : 0;
-const watchdog = setTimeout(() => child.kill("SIGKILL"), setupMs + recordMs + 60_000);
+// 听写几遍；本机模型按需加载时，两遍之间等它空闲释放（最长 30 分钟，见 src/app/e2e.mjs）
+const rounds = Number(process.env.SPEAKMORE_E2E_ROUNDS ?? 1);
+const watchdog = setTimeout(
+  () => child.kill("SIGKILL"),
+  setupMs + rounds * (recordMs + 130_000) + (rounds - 1) * 31 * 60_000,
+);
 
 child.on("exit", (code) => {
   clearTimeout(watchdog);
@@ -92,37 +99,47 @@ child.on("exit", (code) => {
     result = JSON.parse(readFileSync(outPath, "utf8"));
     if (result.failed) problems.push(`听写失败：${result.failed}`);
     if (!result.delivered) problems.push("没有拿到成品文字");
-    if (result.pasted.length !== 1 || result.pasted[0] !== result.delivered) problems.push("贴出去的文字和成品不一致");
-    const [row] = result.history;
-    if (result.history.length !== 1 || row?.status !== "completed" || row?.refinedText !== result.delivered) {
-      problems.push("历史里应该正好有一条完成的记录，内容等于成品");
-    } else {
+    const delivered = result.rounds.map((round) => round.delivered);
+    if (result.pasted.length !== rounds || result.pasted.some((text, index) => text !== delivered[index]))
+      problems.push("贴出去的文字和成品不一致");
+    // 历史里新的在前
+    const rows = result.history.toReversed();
+    if (
+      rows.length !== rounds ||
+      rows.some((row, index) => row.status !== "completed" || row.refinedText !== delivered[index])
+    ) {
+      problems.push(`历史里应该正好有 ${rounds} 条完成的记录，内容等于成品`);
+    }
+    for (const [index, row] of rows.entries()) {
+      const round = rounds > 1 ? `第 ${index + 1} 遍：` : "";
+      if (result.rounds[index]) console.log(`${round}松开后 ${result.rounds[index].ms} 毫秒出字`);
       // 历史里只记录音的文件名，录音在家目录的 data/Recordings 下（storage/paths.mjs 的 recordingsDir）
       const recording = row.audioFile && join(home, "data", "Recordings", row.audioFile);
       if (!recording || !existsSync(recording) || statSync(recording).size === 0) {
-        problems.push("录音文件没有存下来");
+        problems.push(`${round}录音文件没有存下来`);
       } else {
-        console.log(`录音 ${row.duration.toFixed(1)} 秒，文件 ${statSync(recording).size} 字节`);
+        console.log(`${round}录音 ${row.duration.toFixed(1)} 秒，文件 ${statSync(recording).size} 字节`);
       }
-    }
-    // 记账：这一次听写调模型的账对得上这条历史。数据隐私模式只有本机转写那一笔：没有 token、不花钱
-    const { usage } = row ?? {};
-    const local = process.env.SPEAKMORE_MODE === "private";
-    const counted = local ? usage?.calls === 1 && usage.costUsd === 0 : usage?.inputTokens > 0;
-    if (!usage || usage.calls < 1 || !counted || !(usage.latencyMs > 0)) {
-      problems.push(`这条历史没有对上账：${JSON.stringify(usage)}`);
-    } else {
-      const cost = usage.costUsd === null ? "价格不明" : `$${usage.costUsd.toPrecision(2)}`;
-      console.log(
-        `调了 ${usage.calls} 次模型：输入 ${usage.inputTokens} token、输出 ${usage.outputTokens} token，${cost}，模型 ${usage.latencyMs} 毫秒`,
-      );
+      // 记账：这一次听写调模型的账对得上这条历史。数据隐私模式只有本机转写那一笔：没有 token、不花钱
+      const { usage } = row;
+      const local = process.env.SPEAKMORE_MODE === "private";
+      const counted = local ? usage?.calls === 1 && usage.costUsd === 0 : usage?.inputTokens > 0;
+      if (!usage || usage.calls < 1 || !counted || !(usage.latencyMs > 0)) {
+        problems.push(`${round}这条历史没有对上账：${JSON.stringify(usage)}`);
+      } else {
+        const cost = usage.costUsd === null ? "价格不明" : `$${usage.costUsd.toPrecision(2)}`;
+        console.log(
+          `${round}调了 ${usage.calls} 次模型：输入 ${usage.inputTokens} token、输出 ${usage.outputTokens} token，${cost}，模型 ${usage.latencyMs} 毫秒`,
+        );
+      }
     }
   }
   if (result?.localModel) {
     const { downloadMs, loadMs, backend } = result.localModel;
     console.log(`本地模型：下载 ${(downloadMs / 1000).toFixed(1)} 秒，装载 ${loadMs} 毫秒，跑在 ${backend}`);
   }
-  if (result?.delivered) console.log(`成品：${result.delivered}`);
+  for (const [index, round] of (result?.rounds ?? []).entries())
+    if (round.delivered) console.log(`${rounds > 1 ? `第 ${index + 1} 遍` : ""}成品：${round.delivered}`);
   const expected = process.env.SPEAKMORE_E2E_EXPECT;
   if (expected && !result?.delivered?.toLowerCase().includes(expected.toLowerCase()))
     problems.push(`成品里没有 ${expected}${vocabulary?.length ? `（词典里放了 ${vocabulary.length} 个词）` : ""}`);

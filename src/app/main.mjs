@@ -1862,6 +1862,7 @@ async function main() {
       bar,
       history,
       localModel: () => service?.localModel,
+      localModelMemory: () => localModelMemory,
       downloadModel: (id) => localModels.download(id),
       quit: (code) => app.exit(code),
     });
