@@ -1,6 +1,6 @@
 ---
 name: speakmore-translation-features
-description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格）；分支 translate-features，第一、二段 10-22 做完（两台电脑验过），下一段是划词翻译
+description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格）；分支 translate-features，第一、二段做完（两台电脑验过），第三段划词翻译做了大半（内核、小帮手、卡片），剩主窗口几页和 Windows 验收
 metadata:
   node_type: memory
   type: project
@@ -110,6 +110,24 @@ metadata:
   - 中英 README 第 449 行的"设置 → 通用 → 本机转写模型内存"，现在是"设置 → 本机模型 → 内存"。
   - 新叫法：直出、混合、离线，转文字、整理。
 - 开发窗口：家目录 `/tmp/smdev`，混合方式加 DeepSeek，造了 1105 条历史；调试端口 9333。
+
+- 第三段（划词翻译）10-22 做了大半，停下等他压缩。提交：
+  - `2aa1180` 热键：回车改成 typing、Windows 拦左 Alt+回车、Mac ⌥回车单独提醒；动作 lookup（右⌥回车，能清空）；
+    `app/session-gate.mjs` 语音输入是划词组合的一部分时按下先压住（松开或 250ms 再交悬浮条），右⌥回车时悬浮条不闪
+  - `125a514` 内核 `src/server/lookup/`（和语音任务互不引用），`chat/client.mjs` 共用；历史库版本 4（账的用途多 lookup，
+    退回办法在 history.mjs 文件头）；用量另数划词
+  - `ed8a3b4` 设置 lookup.to（默认 zh-CN）、lookup.model（默认 deepseek/deepseek-flash）、lookup.customUrl、lookup.customParams
+  - `02ba0e3` 两个小帮手的 selection 命令和 capture 的 outside；Windows 那块是分身写的，e2e.ps1 在他那台 61/61
+  - `438e2d2` App：`app/lookup/`（controller 流程、engine 找 key 装翻译器、card-window、place）、`renderer/lookup/` 卡片
+  - `93f4ba6` 提示词去翻译腔（他说一股机翻味）；"原文已是目标语言"改由代码判断（`server/lookup/source.mjs`），
+    评测 `scripts/dev/eval-lookup.mjs`，Flash 18 条×2 全对；V4 Pro 没更好
+  - `b867af2` 他报的 bug：语音翻译的语言选单往上移就收起（胶囊和选单之间有缝），已修，等他验
+- 他中途定的：划词的自定义服务和语音那边完全分开（地址、型号、参数、key 各存各的，key 文件 lookupcustom-key.bin，
+  环境变量 SPEAKMORE_LOOKUP_CUSTOM_API_KEY）。对抗性审查启动 workflow 之前先停下问他。
+- 第三段还没做：设置"划词翻译"栏（译成下拉框）；引擎页"划词"段（厂商、型号两列，含划词自己的自定义服务表单、检查）；
+  卡片"配置密钥"打开的是 showHub({ route: "models", engine: "lookup" })，主窗口那头还没接；历史页划词的标签和筛选、
+  首页三个功能的键、命令行历史；Windows 真机走一遍（右 Alt+回车、V28）；docs/implementation-notes.md 记划词一节和评测数字
+- Mac 开发窗口：他真按过，卡片位置、复制、替换都对。
 
 **参照**：
 - Typeless 的翻译是第三个热键（Fn + 左 Shift，Windows 是右 Alt + 右 Shift），和听写共用悬浮条和后端，只多一个 `output_language`（`targets/typeless/docs/04-voice-pipeline.md:99`）。目标语言在悬浮条上悬停切换，2.0 起能预存几个。
