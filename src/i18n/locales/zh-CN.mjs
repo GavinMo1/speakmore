@@ -112,7 +112,7 @@ export default {
   // 热键的设置项（src/hotkeys/settings.mjs）
   hotkeySetting: {
     describe: "「{action}」的快捷键：两键以内的任意组合，写法见 README",
-    notList: '要写一个组合（AltRight、ControlRight+Space），或者一组组合（["Fn","MetaRight"]）',
+    notList: '要写一个组合（AltRight、ControlRight+F9），或者一组组合（["AltRight","ControlRight"]）',
     problem: "{chord}：{reason}",
   },
 

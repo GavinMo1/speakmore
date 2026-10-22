@@ -101,6 +101,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 2. 开始口述，屏幕底部的悬浮条随音量变化。
 3. 再次按下快捷键，文字写入光标位置；按 `esc` 取消本次口述。
 
+- 快捷键可在设置中更换：点击后按下新的键或两键组合，即刻生效；语音输入至多可绑定 4 个组合。
 - SpeakMore 常驻菜单栏（Windows 为任务栏通知区域）。
 - 主窗口提供统计、历史记录、词典、模型与设置。
 - **词典**：常说的专有名词、产品名与术语加入词典后，听写时按词典的写法输出。词典仅保存在本机，随请求发送给所选模型；支持词典的模型列于词典页。
@@ -130,7 +131,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
   </tr>
   <tr>
     <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-microphone.zh-CN.ce912b28.webp" alt="引导：音量条随声音变化" /></td>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-hotkey.zh-CN.2f532fcd.webp" alt="引导：按下右 Option 后键帽高亮" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-hotkey.zh-CN.4a7ab798.webp" alt="引导：按下右 Option 后键帽高亮，左侧列出语音输入与取消的快捷键" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>5</b> · 测试麦克风</sub></td>
@@ -344,7 +345,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 ## 🧑‍💻 开发者
 
 - **命令行与 App 功能对等**：切换方式与模型、管理与检测密钥、下载模型、查询历史与花费。
-- **JSON 输出**：`status`、`history`、`usage` 支持 `--json`。
+- **JSON 输出**：`status`、`history`、`usage` 支持 `--json`。`status --json` 中的快捷键为 `hotkey.dictate`、`hotkey.cancel`（`status`、`settings` 下各一份）；旧字段 `status.hotkey`、`status.hotkeyLabel`、`settings.hotkey` 已弃用，0.15 起删除。
 - **插件化架构**：各厂商以策略模式实现统一接口。
 - **统一输入输出**：录音统一为 16 kHz 单声道，转写结果统一为 `{ text }`。
 - **跨平台开发**：[`scripts/dev/win-*.sh`](scripts/dev) 经 SSH 同步工作区至 Windows 机器，在远端运行测试、以调试端口从源码重启 App、截取桌面画面。
@@ -423,7 +424,8 @@ flowchart LR
 
 | 名称 | 默认值 | 说明 |
 | --- | --- | --- |
-| `hotkey` | `right_option` | 快捷键；Windows 默认 `right_alt` |
+| `hotkey.dictate` | `["AltRight"]` | 语音输入的快捷键 |
+| `hotkey.cancel` | `["Escape"]` | 口述中取消的快捷键 |
 | `mode` | `native` | 识别方式：`native` / `local` / `private` |
 | `model` | `gemini/gemini-3.6-flash` | 原生识别模型，`厂商/模型` |
 | `thinking` | `MINIMAL` | Gemini 思考档位 |
@@ -439,14 +441,16 @@ flowchart LR
 | `language` | `system` | 语言：`system` / `en` / `zh-CN` |
 
 - 设置保存于 `~/.speakmore/settings.json`。
-- 快捷键可选：macOS `right_option` / `right_command` / `right_control` / `fn`；Windows `right_alt` / `right_ctrl`。
+- 快捷键的值为组合列表，键名采用 [`KeyboardEvent.code`](https://developer.mozilla.org/docs/Web/API/UI_Events/Keyboard_event_code_values)（如 `AltRight`、`MetaRight`、`ControlRight`、`Fn`、`Space`、`KeyK`、`F13`），两键以 `+` 相连。单个组合可直接写：`speakmore config set hotkey.dictate ControlRight+F9`；多个组合写作 JSON 数组：`'["AltRight","ControlRight"]'`。
+- 组合至多两键；取消只接受单个非修饰键。与系统或常用快捷键冲突的组合不可绑定（如 ⌘、⌃ 加字母，Windows 键），只含左侧修饰键的组合、单独的 Shift 与 CapsLock 亦不可。
+- 0.13 及以前的 `hotkey` 设置在升级时自动换算；`config set hotkey right_command` 等旧写法仍然有效。
 - Gemini 思考档位可选：`MINIMAL` / `LOW` / `MEDIUM` / `HIGH`。
 - 自建服务的润色模型写作 `custom/<模型>`，地址示例 `http://127.0.0.1:11434/v1`。
 - 自定义服务需要额外参数时写入 `customParams`，例如 `{"reasoning_effort": "minimal"}`；检测与润色请求均附带，`model`、`messages`、`stream` 不可覆盖。推理模型限制输出长度时留足思考的余量（如 `{"max_completion_tokens": 4096}`），否则长段落会被截断。
 - Windows PowerShell 中 `--params` 的双引号前需加反斜杠：`--params '{\"reasoning_effort\": \"minimal\"}'`。
 - 通过 App 或 `speakmore mode`、`model`、`transcriber`、`polish` 切换时先行检测，立即生效。
 - `config set` 直接写入，不做检测。
-- 临时覆盖：启动时设置 `SPEAKMORE_HOTKEY`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL` 等环境变量。
+- 临时覆盖：启动时设置 `SPEAKMORE_HOTKEY_DICTATE`、`SPEAKMORE_HOTKEY_CANCEL`、`SPEAKMORE_MODE`、`SPEAKMORE_MODEL` 等环境变量；快捷键的写法同设置文件，旧的 `SPEAKMORE_HOTKEY` 等同于 `SPEAKMORE_HOTKEY_DICTATE`。
 - 环境变量中的密钥优先于已保存的密钥：`GEMINI_API_KEY`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`BAILIAN_API_KEY`、`MOONSHOT_API_KEY`（Kimi）、`ZHIPU_API_KEY`、`MINIMAX_API_KEY`、`SPEAKMORE_CUSTOM_API_KEY`。
 
 </details>
@@ -469,8 +473,8 @@ flowchart LR
 | macOS 权限 | 用途 |
 | --- | --- |
 | 麦克风 | 录音 |
-| 输入监控 | 监听快捷键，仅限该按键 |
-| 辅助功能 | 模拟 ⌘V 写入文字，响应 `esc` |
+| 输入监控 | 监听快捷键，仅响应所设按键；录制快捷键时读取所按的键 |
+| 辅助功能 | 模拟 ⌘V 写入文字；拦下 `esc`、组合快捷键与录制中的按键，不传给前台应用 |
 
 - App 在首次引导中申请上述权限。
 - 终端安装时，权限授予运行 SpeakMore 的终端。
@@ -510,6 +514,8 @@ flowchart LR
 | 密钥显示"未验证" | 联网后执行 `speakmore status` |
 | 检测未通过，密钥无误 | `speakmore model check` 查看返回内容 |
 | 按快捷键无响应 | `speakmore status` 查看缺失项，`speakmore restart` 重启 |
+| macOS 上部分组合快捷键暂时无效 | 有应用开着安全输入（如密码框、终端的安全键盘输入），关闭后恢复；悬浮条会提示 |
+| Windows 上快捷键在个别窗口中无效 | 该窗口以管理员身份运行，系统不向普通程序转发按键；悬浮条会提示 |
 | 命令提示"没有在 5 秒内回话" | 执行 `speakmore stop`，再执行 `speakmore` |
 | 菜单栏中无图标 | 按住 ⌘ 将部分图标拖出菜单栏，或执行 `speakmore settings` |
 | 提示找不到 SpeakMore 的目录 | 存储位置在移动硬盘上时，先连接该磁盘 |

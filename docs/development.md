@@ -12,7 +12,8 @@ cd speakmore
 npm install
 npm start                     # 就是 speakmore；子命令写在 -- 后面，比如 npm start -- status
 npm run check                 # 代码检查 + 全部测试（不联网、不开窗口），含两个原生小帮手的测试（npm run test:native）
-node scripts/dev/mac-hotkeys.mjs   # Mac 小帮手的回归：真的 tap 和 Carbon，合成按键全在末尾接住、不到任何应用；改了 native/mac/ 跑一遍
+node scripts/dev/mac-hotkeys.mjs   # Mac 小帮手的回归：真的 tap 和 Carbon，合成按键全在末尾接住、不到任何应用；改了 native/mac/ 跑一遍（锁屏、别的应用开着安全输入时不发键）
+node scripts/build/hotkey-fixtures.mjs   # 改了按键轨迹样例或键表后重新生成两个系统各一份（npm test 会查生成的和提交的一样）
 npm run release               # 打发布：dist/release/ 下是更新用的块和清单、首次安装用的包和两个安装脚本，摆成下载地址上的样子
 ```
 
@@ -58,6 +59,8 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 
 加一种界面语言：照着 `src/i18n/locales/en.mjs` 写一个文件，在 `src/i18n/index.mjs` 的 `LOCALES` 里登记一行（并列几样时不想用 `Intl` 的写法，比如中文全用顿号，登记时给 `separator`）。缺了哪句、参数对不上、单复数写法这种语言没有，`test/i18n/` 会指出来；设置、菜单栏、窗口、命令行都从这份清单里取，不用再改别处。只管界面：提示词和整理出来的文字不跟着变。
 
+加一个能按快捷键做的动作：在 `src/hotkeys/actions.mjs` 加一行（两个系统都要有默认组合，引导页会列出来），文案加 `actions.<动作>.name` 和 `description`，中英各一份，再写它自己的处理代码。设置项 `hotkey.<动作>`、环境变量 `SPEAKMORE_HOTKEY_<动作>`、命令行、设置页和引导页的那一行、状态、下发给小帮手的绑定表都按这张表生成，不用另改；漏了哪一处，`test/hotkeys/` 里按目录逐个动作查的测试会红。默认组合和已有的撞了的话，用户自己绑的优先，新动作这个组合不装、提示一句。
+
 加一个推荐组合（引擎页标题行右边那个下拉）：在 `src/models/presets.mjs` 加一项（方式、带的设置、适合哪类芯片，排在哪按推荐的先后），文案加 `presets.items.<id>` 的名字和说明，中英各一份；删一个就删这两处。月成本不手写，按"每天 100 次、一个月 30 天"和一次典型口述的用量（`src/usage/estimate.mjs` 的 `TYPICAL`）现算，价目改了跟着变。用到还没量过用量的那一家时，`test/models/presets.test.mjs` 会说算不出月成本：用 `scripts/dev/measure-dictation.mjs` 在评测语料上量一下，把平均数填进 `TYPICAL`。那个测试还查引用的模型在不在清单里、设置属不属于那种方式、文案齐不齐。
 
 词典（`src/vocabulary/`）：用户的词存在 `~/.speakmore/vocabulary.json`，每次听写开头读一次，交给识别的每一跳（原生、云端转写、本机转写、润色）。一个模型怎么收词分三层，各管一块：
@@ -80,7 +83,8 @@ node scripts/dev/replay.mjs 块1.ogg 块2.ogg                         # 把现�
 | `src/server/` | 听写服务：`protocol/` 收分块音频，`refine/` 交给模型整理（各家共用的流程，每次调用记一笔账），`providers/` 每家模型一个适配器（`prices/` 是各家的价目表），`audio/` 把录音解成识别用的统一格式（16 kHz 单声道）、转成别家收的格式，`asr/` 是本地转写（每个运行库一个适配器、长录音分段、装着模型的转写进程），`modes.mjs` 是三种识别模式。平时跑在后台应用的进程里 |
 | `src/models/` | 本地模型的配置表 `catalog.mjs`：全局只有这一份，下载源（国内源、原始地址）、每个模型的文件和校验值、许可、标签和实测数字都在这里，别处不另写；`store.mjs` 下载、校验、列出、删除模型；`describe.mjs` 把标签和实测写成话；`presets.mjs` 是引擎页的推荐组合 |
 | `src/usage/` | 用量报表（今天、本月、累计、按型号）、首页的统计（字数、语速、连续天数、热力图）和数字的写法，命令和主窗口共用；`estimate.mjs` 估推荐组合的月成本 |
-| `native/` | 听热键、贴字、说话时截住 `esc` 和悬浮条上点击的小程序：macOS 的是 Swift，`windows/` 是 Go（只用标准库，在 Mac 上交叉编译） |
+| `native/` | 按绑定表匹配热键、录键、贴字、说话时截住取消键和悬浮条上点击的小程序：`mac/` 是 Swift（纯逻辑和入口分开，`tests/` 直接用 `swiftc` 编出来跑），`windows/` 是 Go（只用标准库，在 Mac 上交叉编译）；`fixtures/hotkeys/` 是两边共用的按键轨迹样例 |
+| `src/hotkeys/` | 快捷键：动作目录 `actions.mjs`（有哪些动作、默认组合，别处都按它生成）、键表、组合的写法、哪些组合不让绑、录键的定稿规则、下发前的校验 |
 | `assets/` | 图标：`icon.svg` 是那方印，`tray.svg` 是菜单栏上的五道；`.icns`、Windows 用的 `icon.ico` 和 `trayTemplate*.png` 由 `scripts/build/make-icon.sh` 从它们生成 |
 | `src/storage/` | 家目录里的东西：放在哪（`paths.mjs`、定位文件 `location.mjs`）、设置、历史库、词典、旧数据的迁移。命令和后台应用共用 |
 | `src/move/` | 搬家：检查新位置（`target.mjs`）、试盘（`probe.mjs`）、只拷我们的（`copy.mjs`）、交给安装脚本换家（`installer.mjs`）、整个流程和断在半路的收拾（`index.mjs`）。命令行 `speakmore move` 和 App 的"存储位置"只调这里 |
@@ -129,7 +133,7 @@ node scripts/build/build-native.mjs --windows # 交叉编译小帮手 build/key-
 node scripts/release/release.mjs windows      # 只打 Windows 的（更新清单、zip 和 Setup.exe），连同 install.ps1 摆进 dist/release
 ```
 
-不发布也可以在开发机上试安装：把 `dist/release` 传过去，`$env:SPEAKMORE_INSTALL_BASE = '<那个目录>'` 后照 README 那一行跑（`SPEAKMORE_NO_START=1` 只装不启动，`SPEAKMORE_VERSION` 指定版本）。小帮手的真机检查是 `native/windows/e2e.ps1`（要在桌面会话里跑）。
+不发布也可以在开发机上试安装：把 `dist/release` 传过去，`$env:SPEAKMORE_INSTALL_BASE = '<那个目录>'` 后照 README 那一行跑（`SPEAKMORE_NO_START=1` 只装不启动，`SPEAKMORE_VERSION` 指定版本）。小帮手的真机检查是 `native/windows/e2e.ps1`，要在桌面会话里跑：`WAIT=150 scripts/dev/win-desktop.sh - < native/windows/e2e.ps1`。它用 SendInput 按扫描码合成按键，没被吞掉的会落到前台窗口，跑之前确认那台电脑没人在用。
 
 真机上踩过的坑，改相关代码前先看一眼：
 

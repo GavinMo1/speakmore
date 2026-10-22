@@ -297,9 +297,19 @@ async function shootBar(locale) {
       b.dataset.view = "recording";
       b.dataset.shown = "true";
       b.dataset.controls = "true";
-      const kbd = (text) => Object.assign(document.createElement("kbd"), { textContent: text });
-      const parts = hintFor("recording", { keycap: t("keys.AltRight.keycap"), cancellable: true }, t);
-      document.getElementById("hint").replaceChildren(...parts.map((p) => (typeof p === "string" ? p : kbd(p.key))));
+      // 键帽一组一组的，画法同 bar-ui.mjs 的 drawHint
+      const group = (keys) => {
+        const span = Object.assign(document.createElement("span"), { className: "keys" });
+        span.append(...keys.map((key) => Object.assign(document.createElement("kbd"), { textContent: key })));
+        return span;
+      };
+      // 键帽的字照 bar.mjs 的 keycapsOf 算：默认的听写（右 Option）和取消（esc）
+      const { chordKeycaps } = await import("../../hotkeys/chord.mjs");
+      const keycapsOf = (codes) => chordKeycaps(codes).map((cap) => t.text(cap));
+      const keys = keycapsOf(${JSON.stringify(HOTKEYS.dictate[0])});
+      const escKeys = keycapsOf(${JSON.stringify(HOTKEYS.cancel[0])});
+      const parts = hintFor("recording", { keys, escKeys, cancellable: true }, t);
+      document.getElementById("hint").replaceChildren(...parts.map((p) => (typeof p === "string" ? p : group(p.keys))));
       [...document.querySelectorAll("#wave i")].forEach((i, n) => i.style.setProperty("--h", ${JSON.stringify(WAVE)}[n]));
     })()`);
     await wait(1200);

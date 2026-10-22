@@ -114,7 +114,7 @@ export default {
   // The shortcut settings (src/hotkeys/settings.mjs)
   hotkeySetting: {
     describe: "Shortcut for {action}: any combination of up to two keys; see the README for how to write it",
-    notList: 'must be one combination (AltRight, ControlRight+Space) or a list of them (["Fn","MetaRight"])',
+    notList: 'must be one combination (AltRight, ControlRight+F9) or a list of them (["AltRight","ControlRight"])',
     problem: "{chord}: {reason}",
   },
 
