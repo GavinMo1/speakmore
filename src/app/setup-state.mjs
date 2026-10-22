@@ -58,7 +58,7 @@ export function summarizeSetup({ key, permissions, helper, providerName = "Gemin
           model: findModel(localModel.model)?.name ?? localModel.model,
           id: localModel.model,
         });
-  } else if (localModel?.state === "loading") {
+  } else if (localModel?.state === "loading" && !localModel.onDemand) {
     blocker ??= msg("local.modelLoading");
   }
 

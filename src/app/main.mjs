@@ -27,7 +27,7 @@ import { createLocalModels, freeBytesAt } from "../models/library.mjs";
 import { presetsFor } from "../models/presets.mjs";
 import { createMove, settleMove } from "../move/index.mjs";
 import { CHAT_VENDORS, formatChatChoice } from "../server/chat/vendors.mjs";
-import { describeRoute, keyVendorOf, MODES } from "../server/modes.mjs";
+import { describeRoute, keyVendorOf, MODES, usesLocalModel } from "../server/modes.mjs";
 import { formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
 import { findVendor, VENDORS } from "../server/vendors.mjs";
 import { adoptAppKeys } from "../storage/app-keys.mjs";
@@ -38,6 +38,8 @@ import {
   ACCELERATIONS,
   HOTKEY_IDS,
   hotkeyName,
+  LOCAL_MODEL_MEMORY,
+  MODEL_IDLE_MINUTES,
   overridingEnv,
   patchSettings,
   resolveSettings,
@@ -106,6 +108,8 @@ let PROVIDER;
 let ROUTE;
 /** 本机模型用不用显卡（设置里的 acceleration）。在设置里换了当场生效（service.setAcceleration） */
 let acceleration;
+let localModelMemory;
+let localModelIdleMinutes;
 /**
  * 启动时就出错了（家目录找不到、定位文件坏了、设置读不出）：照实说出来再退出，不留一个按了热键没反应的进程。
  * 写在标准错误上的，speakmore 命令起的会在终端里转述（它接着日志）；从程序坞、开始菜单、开机启动起的没有终端，
@@ -137,6 +141,8 @@ if (PRELUDE === null) {
     SETTINGS = resolveSettings({ file: PATHS.settingsFile, env: process.env });
     ROUTE = routeOf(SETTINGS);
     acceleration = SETTINGS.acceleration.value;
+    localModelMemory = SETTINGS.localModelMemory.value;
+    localModelIdleMinutes = SETTINGS.localModelIdleMinutes.value;
     hotkey = SETTINGS.hotkey.value;
     PROVIDER = keyVendorOf(ROUTE) ?? null;
   } catch (error) {
@@ -427,6 +433,8 @@ async function main() {
         },
         onLocalModel: () => localModelChanged(),
         acceleration,
+        localModelMemory,
+        localModelIdleMinutes,
         vocabulary: vocabulary.terms,
       });
   const serverUrl = EXTERNAL_SERVER_URL ?? service.url;
@@ -477,6 +485,7 @@ async function main() {
     thinking: ROUTE.mode === "native" ? thinkingFor(PROVIDER) : null,
     theme: SETTINGS.theme.value,
     acceleration,
+    localModelMemory,
     language: languageSetting,
     locale,
     system_languages: app.getPreferredSystemLanguages(),
@@ -699,7 +708,7 @@ async function main() {
         // 热键不灵时先看这条日志有没有：没有就是小帮手没收到按键（权限或键选错了）
         log.info("key_event", { event: event.event, down: event.down });
         const { blocker } = summarizeSetup(currentSetup());
-        if (blocker === null) tellBar("input", event);
+        if (bar.isVisible() || blocker === null) tellBar("input", event);
         else if (event.event === "hotkey" && event.down) notify(blocker);
         break;
       }
@@ -755,7 +764,20 @@ async function main() {
     });
   }
 
-  handle("config:get", () => ({ serverUrl, hotkey, barControls, barHint: currentBarHint() }));
+  handle("config:get", () => ({
+    serverUrl,
+    hotkey,
+    barControls,
+    barHint: currentBarHint(),
+    // 冷启动可能超过原有的二十秒，只有启用了按需模式的本机链路放宽等待。
+    onDemandModels: Boolean(
+      service &&
+        ((usesLocalModel(service.route) && localModelMemory === "on-demand") ||
+          (service.route.mode === "local" &&
+            service.route.polish.vendor === "custom" &&
+            service.route.customModelMemory === "on-demand")),
+    ),
+  }));
   handle("dictation:deliver", async (_event, payload) => {
     const result = await delivery.completed(payload);
     // 只记长度：成品是用户说的话，不进日志
@@ -948,6 +970,8 @@ async function main() {
         polish: settings.polish.value,
         customUrl: settings.customUrl.value,
         customParams: settings.customParams.value,
+        customModelMemory: settings.customModelMemory.value,
+        customModelIdleMinutes: settings.customModelIdleMinutes.value,
       },
       keys: service ? keys.sources() : {},
       status: Object.fromEntries(MODELS.map(({ id }) => [id, localModels.status(id)])),
@@ -1028,9 +1052,13 @@ async function main() {
         source: { value: settings.modelSource.value, choices: SOURCES.map(({ id }) => id) },
         // 本机模型用不用显卡：正在用的那个（被环境变量盖着时是环境变量里的）
         acceleration: { value: acceleration, choices: ACCELERATIONS },
+        memory: { value: localModelMemory, choices: LOCAL_MODEL_MEMORY },
+        idleMinutes: { value: localModelIdleMinutes, choices: MODEL_IDLE_MINUTES },
         polish: settings.polish.value,
         customUrl: settings.customUrl.value,
         customParams: settings.customParams.value,
+        customModelMemory: settings.customModelMemory.value,
+        customModelIdleMinutes: settings.customModelIdleMinutes.value,
         vendors: CHAT_VENDORS.map(describeVendor),
       },
     };
@@ -1134,6 +1162,24 @@ async function main() {
     service?.setAcceleration(acceleration);
     setupChanged();
     const variable = overridingEnv("acceleration", process.env);
+    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
+  });
+  handle("setup:set-local-model-memory", (_event, wanted) => {
+    saveSetting(PATHS.settingsFile, "localModelMemory", wanted);
+    localModelMemory = resolveSettings({ file: PATHS.settingsFile, env: process.env }).localModelMemory.value;
+    log.info("local_model_memory_changed", { localModelMemory });
+    service?.setLocalModelMemory(localModelMemory);
+    setupChanged();
+    const variable = overridingEnv("localModelMemory", process.env);
+    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
+  });
+  handle("setup:set-local-model-idle-minutes", (_event, wanted) => {
+    saveSetting(PATHS.settingsFile, "localModelIdleMinutes", wanted);
+    localModelIdleMinutes = resolveSettings({ file: PATHS.settingsFile, env: process.env }).localModelIdleMinutes.value;
+    log.info("local_model_idle_minutes_changed", { localModelIdleMinutes });
+    service?.setLocalModelIdleMinutes(localModelIdleMinutes);
+    setupChanged();
+    const variable = overridingEnv("localModelIdleMinutes", process.env);
     return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
   });
   // 悬浮条上方的操作提示开不开：存下来，开着的悬浮条当场跟着变
@@ -1411,6 +1457,8 @@ async function main() {
       polish: route?.mode === "local" ? formatChatChoice(route.polish) : null,
       theme: theme.id,
       acceleration,
+      localModelMemory,
+      localModelIdleMinutes,
       // 设置里的语言（system 是跟随系统）和实际用的那种
       language: languageSetting,
       locale,
@@ -1461,9 +1509,18 @@ async function main() {
             withProblemText(await viaModes((m) => m.setModel(model)), translatorFor(wanted)),
           "set-transcriber": async ({ transcriber, locale: wanted }) =>
             withProblemText(await viaModes((m) => m.setTranscriber(transcriber)), translatorFor(wanted)),
-          "set-polish": async ({ polish, customUrl, customParams, locale: wanted }) =>
+          "set-polish": async ({
+            polish,
+            customUrl,
+            customParams,
+            customModelMemory,
+            customModelIdleMinutes,
+            locale: wanted,
+          }) =>
             withProblemText(
-              await viaModes((m) => m.setPolish(polish, { customUrl, customParams })),
+              await viaModes((m) =>
+                m.setPolish(polish, { customUrl, customParams, customModelMemory, customModelIdleMinutes }),
+              ),
               translatorFor(wanted),
             ),
           "forget-key": ({ provider } = {}) => keys.forget({ provider }),
@@ -1473,9 +1530,18 @@ async function main() {
           // 某种模式按改后的设置能不能用（云端的第一跳、数据隐私模式）
           "check-mode": async ({ mode, changes, locale: wanted }) =>
             withProblemText(await viaModes((m) => m.check(mode, changes ?? {})), translatorFor(wanted)),
-          "check-polish": async ({ polish, customUrl, customParams, locale: wanted }) =>
+          "check-polish": async ({
+            polish,
+            customUrl,
+            customParams,
+            customModelMemory,
+            customModelIdleMinutes,
+            locale: wanted,
+          }) =>
             withProblemText(
-              await viaModes((m) => m.checkPolish(polish, { customUrl, customParams })),
+              await viaModes((m) =>
+                m.checkPolish(polish, { customUrl, customParams, customModelMemory, customModelIdleMinutes }),
+              ),
               translatorFor(wanted),
             ),
           "reload-theme": reloadTheme,

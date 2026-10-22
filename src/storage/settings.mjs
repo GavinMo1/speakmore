@@ -59,8 +59,12 @@ const CLOUD_MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 const SOURCE_IDS = SOURCES.map((source) => source.id);
 /** 本机模型用不用显卡：auto 有显卡就用、在显卡上没装起来就退回 CPU（asr/start.mjs）；cpu 只用 CPU */
 export const ACCELERATIONS = Object.freeze(["auto", "cpu"]);
+/** 默认常驻；按需加载在录音时预热，达到设定空闲时间后释放模型。两种策略适用于所有平台 */
+export const LOCAL_MODEL_MEMORY = Object.freeze(["resident", "on-demand"]);
 /** 悬浮条上方的操作提示（"再按一下 右⌥ 完成 · esc 取消"）显示不显示：熟练了的人嫌它一直挂着（GitHub issue #3） */
 export const BAR_HINTS = Object.freeze(["on", "off"]);
+export const CUSTOM_MODEL_MEMORY = Object.freeze(["server", "on-demand"]);
+export const MODEL_IDLE_MINUTES = Object.freeze(["1", "5", "10", "30"]);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
 
@@ -181,6 +185,18 @@ export const SETTINGS = {
     choices: null,
     parse: (value) => formatCustomParams(parseCustomParams(value)),
   },
+  customModelMemory: {
+    ofMode: "local",
+    env: "SPEAKMORE_CUSTOM_MODEL_MEMORY",
+    default: "server",
+    choices: CUSTOM_MODEL_MEMORY,
+    parse(value) {
+      const id = value.trim().toLowerCase();
+      if (!CUSTOM_MODEL_MEMORY.includes(id)) throw oneOf(CUSTOM_MODEL_MEMORY);
+      return id;
+    },
+    label: (value) => msg(`customModelMemories.${value}`),
+  },
   modelSource: {
     // 本地模型没下载过时先从哪下，哪种模式里都能改（切到 local 之前先选好）。选的那个下不动会换另一个，只影响快慢
     env: "SPEAKMORE_MODEL_SOURCE",
@@ -204,6 +220,40 @@ export const SETTINGS = {
       return id;
     },
     label: (value) => msg(`accelerations.${value}`),
+  },
+  localModelIdleMinutes: {
+    env: "SPEAKMORE_LOCAL_MODEL_IDLE_MINUTES",
+    default: "5",
+    choices: MODEL_IDLE_MINUTES,
+    parse(value) {
+      const minutes = value.trim();
+      if (!MODEL_IDLE_MINUTES.includes(minutes)) throw oneOf(MODEL_IDLE_MINUTES);
+      return minutes;
+    },
+    label: (value) => msg("idleRelease.minutes", { minutes: value }),
+  },
+  customModelIdleMinutes: {
+    ofMode: "local",
+    env: "SPEAKMORE_CUSTOM_MODEL_IDLE_MINUTES",
+    default: "5",
+    choices: MODEL_IDLE_MINUTES,
+    parse(value) {
+      const minutes = value.trim();
+      if (!MODEL_IDLE_MINUTES.includes(minutes)) throw oneOf(MODEL_IDLE_MINUTES);
+      return minutes;
+    },
+    label: (value) => msg("idleRelease.minutes", { minutes: value }),
+  },
+  localModelMemory: {
+    env: "SPEAKMORE_LOCAL_MODEL_MEMORY",
+    default: "resident",
+    choices: LOCAL_MODEL_MEMORY,
+    parse(value) {
+      const id = value.trim().toLowerCase();
+      if (!LOCAL_MODEL_MEMORY.includes(id)) throw oneOf(LOCAL_MODEL_MEMORY);
+      return id;
+    },
+    label: (value) => msg(`localModelMemories.${value}`),
   },
   barHint: {
     env: "SPEAKMORE_BAR_HINT",
@@ -375,6 +425,8 @@ const ROUTES = {
     polish: parseChatChoice(settings.polish.value),
     customUrl: settings.customUrl.value || null,
     customParams: settings.customParams.value ? parseCustomParams(settings.customParams.value) : null,
+    customModelMemory: settings.customModelMemory.value,
+    customModelIdleMinutes: settings.customModelIdleMinutes.value,
   }),
   private: (settings) => ({ mode: "private", transcriber: settings.privateTranscriber.value }),
 };

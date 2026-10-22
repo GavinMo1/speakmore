@@ -36,10 +36,12 @@ import {
 // 拦下的只有写错的（不认识的模式、模型、厂商，不是那种模式的设置）。正在用的本机模型不能删。
 
 /** 换润色时一起给的自定义服务的两项（地址、额外参数）：没给的不算改，照设置里的 */
-const polishChanges = (polish, { customUrl, customParams } = {}) => ({
+const polishChanges = (polish, { customUrl, customParams, customModelMemory, customModelIdleMinutes } = {}) => ({
   polish,
   ...(customUrl === undefined ? {} : { customUrl }),
   ...(customParams === undefined ? {} : { customParams }),
+  ...(customModelMemory === undefined ? {} : { customModelMemory }),
+  ...(customModelIdleMinutes === undefined ? {} : { customModelIdleMinutes }),
 });
 
 /**
@@ -205,17 +207,22 @@ export function createModeSwitch({ service, keys, models, settingsFile, env, log
     /**
      * local 第二跳：润色的厂商和模型，写法同设置里的 polish（厂商、厂商/模型、custom/模型名）
      * @param {string} polish
-     * @param {{ customUrl?: string, customParams?: string }} [options] 自定义服务的地址和额外参数（一段 JSON），
+     * @param {{ customUrl?: string, customParams?: string, customModelMemory?: string, customModelIdleMinutes?: string }} [options] 自定义服务的地址和额外参数（一段 JSON），
      *   和模型一起验证、一起存；没给的照设置里的
      */
-    setPolish(polish, { customUrl, customParams } = {}) {
-      return within("local", "polish", polishChanges(polish, { customUrl, customParams }), useRoute);
+    setPolish(polish, { customUrl, customParams, customModelMemory, customModelIdleMinutes } = {}) {
+      return within(
+        "local",
+        "polish",
+        polishChanges(polish, { customUrl, customParams, customModelMemory, customModelIdleMinutes }),
+        useRoute,
+      );
     },
 
     /**
      * 第二跳的某个润色模型能不能用，写法同 setPolish：只是试一下，不换掉正在用的（见 check）
      * @param {string} polish
-     * @param {{ customUrl?: string, customParams?: string }} [options]
+     * @param {{ customUrl?: string, customParams?: string, customModelMemory?: string, customModelIdleMinutes?: string }} [options]
      */
     checkPolish(polish, options = {}) {
       return this.check("local", polishChanges(polish, options));

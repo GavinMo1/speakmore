@@ -1,4 +1,4 @@
-import { $, brand, h, platformName, svg } from "../../shared/dom.mjs";
+import { $, brand, fillSelect, h, platformName, svg } from "../../shared/dom.mjs";
 import { t } from "../../shared/i18n.mjs";
 import { roleName } from "./plaza-view.mjs";
 
@@ -76,17 +76,30 @@ export function createKeys(ctx) {
             url: $("plaza-custom-url").value.trim(),
             model: $("plaza-custom-model").value.trim(),
             params: $("plaza-custom-params").value.trim(),
+            memory: $("plaza-custom-memory").value,
+            idleMinutes: $("plaza-custom-idle-minutes").value,
           }
         : null;
       if (custom) ui.custom.form = typed;
       const changes =
         custom && typed.model
-          ? { polish: `custom/${typed.model}`, customUrl: typed.url, customParams: typed.params }
+          ? {
+              polish: `custom/${typed.model}`,
+              customUrl: typed.url,
+              customParams: typed.params,
+              customModelMemory: typed.memory,
+              customModelIdleMinutes: typed.idleMinutes,
+            }
           : undefined;
       /** 验证过了：和设置里存的不一样就记成草稿，等启用；一样就没有要换的 */
       const accept = () => {
         const stored = view.storedCustom();
-        const same = typed.model === stored.model && typed.url === stored.url && typed.params === stored.params;
+        const same =
+          typed.model === stored.model &&
+          typed.url === stored.url &&
+          typed.params === stored.params &&
+          typed.memory === stored.memory &&
+          typed.idleMinutes === stored.idleMinutes;
         ui.custom = { form: null, draft: same ? null : typed };
       };
       // 自定义服务已经有密钥、这次没填：只改地址、模型名或额外参数，不用再贴一遍密钥
@@ -116,6 +129,38 @@ export function createKeys(ctx) {
           const count = newlyUsable(platform);
           ctx.toast(count > 0 ? t("plaza.toast.keySaved", { count }) : t("plaza.toast.keySavedOnly"));
         },
+      });
+    }
+
+    const memory = custom
+      ? h("select", {
+          class: "select",
+          id: "plaza-custom-memory",
+          "aria-describedby": "plaza-custom-memory-help",
+        })
+      : null;
+    if (memory)
+      fillSelect(
+        memory,
+        ["server", "on-demand"].map((value) => [value, t(`customModelMemories.${value}`)]),
+        shown.memory,
+      );
+
+    const idleMinutes = custom
+      ? h("select", {
+          class: "select",
+          id: "plaza-custom-idle-minutes",
+          disabled: shown.memory !== "on-demand",
+        })
+      : null;
+    if (idleMinutes) {
+      fillSelect(
+        idleMinutes,
+        ["1", "5", "10", "30"].map((minutes) => [minutes, t("idleRelease.minutes", { minutes })]),
+        shown.idleMinutes ?? "5",
+      );
+      memory.addEventListener("change", () => {
+        idleMinutes.disabled = memory.value !== "on-demand";
       });
     }
 
@@ -150,6 +195,17 @@ export function createKeys(ctx) {
           "aria-label": t("plaza.custom.params"),
           title: t("plaza.custom.paramsTip"),
         }),
+      custom && h("label", { class: "setting-title", for: "plaza-custom-memory", text: t("plaza.custom.memory") }),
+      memory,
+      custom &&
+        h("p", {
+          class: "setting-note",
+          id: "plaza-custom-memory-help",
+          text: t("plaza.custom.memoryHelp"),
+          title: t("plaza.custom.memoryTip"),
+        }),
+      custom && h("label", { class: "setting-title", for: "plaza-custom-idle-minutes", text: t("idleRelease.label") }),
+      idleMinutes,
       h(
         "div",
         { class: "key-entry-actions" },

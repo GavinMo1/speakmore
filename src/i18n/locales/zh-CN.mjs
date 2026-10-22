@@ -94,10 +94,15 @@ export default {
       customUrl: "自定义润色服务的地址（兼容 OpenAI 接口的那种），比如 https://api.example.com/v1",
       customParams:
         '发给自定义服务的额外请求参数，一段 JSON 对象，比如 {"reasoning_effort": "minimal"}；验证和润色都带上，不能写 model、messages、stream',
+      customModelMemory:
+        "本机 Ollama 润色内存：server 由服务管理；on-demand 达到设定空闲时间后释放。仅支持经验证的本机 Ollama 接口",
+      localModelIdleMinutes: "本机转写模型空闲释放时间（分钟），仅按需加载时生效",
+      customModelIdleMinutes: "本机 Ollama 润色模型空闲释放时间（分钟），仅空闲释放时生效",
       modelSource:
         "本机模型从哪下载：cn 是国内源（魔搭 ModelScope），original 是 Hugging Face 原始地址。选的那个下不动会自动换另一个，下了一截的接着下",
       acceleration:
         "本机模型用不用显卡：auto 有显卡就用，出问题自动退回 CPU；cpu 只用 CPU（显卡驱动有问题、或者想把显卡让给别的程序时）",
+      localModelMemory: "本机模型是否常驻内存：resident 保持就绪；on-demand 开始录音时加载，达到设定空闲时间后释放",
       barHint: "悬浮条上方那行操作提示（再按一下 … 完成 · esc 取消）显示不显示：on 显示，off 不显示",
       theme: "界面用哪套主题",
       language: "界面用哪种语言；system 是跟随系统",
@@ -150,6 +155,19 @@ export default {
     auto: "自动（有显卡就用）",
     cpu: "只用 CPU",
   },
+  localModelMemories: {
+    resident: "常驻内存（默认）",
+    "on-demand": "按需加载",
+  },
+  customModelMemories: {
+    server: "由服务管理（默认）",
+    "on-demand": "空闲释放（仅 Ollama）",
+  },
+  idleRelease: {
+    label: "空闲释放时间",
+    minutes: "{minutes} 分钟",
+    failed: "空闲释放时间未能更换：{reason}",
+  },
   barHints: {
     on: "显示",
     off: "不显示",
@@ -186,6 +204,7 @@ export default {
     checkEmpty: "{model} 一个字都没转出来",
   },
   chat: {
+    memoryUnsupported: "空闲释放仅支持本机 Ollama；请检查地址或选择由服务管理。",
     modelRequired: "{vendor} 没有默认模型，要写成 {vendor}/模型名",
     badModelName: "模型名 {model} 不对：只能有字母、数字和 . _ : / @ + -",
     urlEmpty: "地址是空的",
@@ -454,6 +473,10 @@ export default {
       params: "额外参数",
       paramsPlaceholder: "额外参数（JSON，选填）",
       paramsTip: '发给这个服务的额外请求参数，如 {"reasoning_effort": "minimal"}，检测和润色都会带上',
+      memory: "本机润色模型内存",
+      memoryHelp: "仅本机 Ollama · 按需空闲释放",
+      memoryTip:
+        "空闲释放仅支持本机 Ollama。达到设定空闲时间后释放，下次请求可能更慢；其他应用共用的同一模型也可能被卸载。",
       keyKept: "密钥已配置，留空则不更改",
       modelMissing: "请填写模型名",
     },
@@ -689,6 +712,10 @@ export default {
     language: "语言",
     modelSource: "本地模型下载源",
     acceleration: "本机模型加速",
+    localModelMemory: "本机转写模型内存",
+    localModelMemoryHelp: "选择按需加载后，空闲时释放模型；再次使用首次加载较慢",
+    localModelMemoryTip: "按需加载：开始录音时加载，达到设定空闲时间后释放。首次转写可能需要多等几秒。",
+    localModelMemoryFailed: "内存策略未能更换：{reason}",
     barHint: "悬浮条操作提示",
     openAtLogin: "开机启动",
     hotkeyFailed: "没改成：{reason}",

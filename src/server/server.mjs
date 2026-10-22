@@ -31,6 +31,7 @@ export function startServer({
   log,
   maxAudioBytes = DEFAULT_MAX_AUDIO_BYTES,
   vocabulary = () => [],
+  onRecordingChange = () => {},
 }) {
   return new Promise((resolve, reject) => {
     const wss = new WebSocketServer({
@@ -55,7 +56,9 @@ export function startServer({
         return [];
       }
     };
-    wss.on("connection", (socket) => handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor }));
+    wss.on("connection", (socket) =>
+      handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor, onRecordingChange }),
+    );
   });
 }
 
@@ -72,7 +75,7 @@ function closeServer(wss) {
   return new Promise((resolve, reject) => wss.close((error) => (error ? reject(error) : resolve())));
 }
 
-function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor }) {
+function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor, onRecordingChange }) {
   /** 正在收音频的那一次录音；end_audio 之后清空，整理在后台继续 */
   let session = null;
   /** 正在进行的整理，连接断开时用来取消 */
@@ -102,6 +105,7 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor }
           // 客户端取消录音时不发 end_audio，直接开始下一次
           log.info("session_abandoned", { audio_id: session.audioId, chunks: session.chunkCount });
         }
+        if (!session) onRecordingChange(1);
         session = new RecordingSession(message.audioId, { maxTotalBytes: maxAudioBytes });
         // 用户开口了：让模型那边先备好要用的东西（Gemini 建提示词缓存），说完整理时就用得上。
         // 不等它；备不好只是这一次贵一点，记一笔就算了
@@ -109,6 +113,11 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor }
           .then(() => refiner.prepare?.({ vocabulary: vocabularyFor(message.audioId) }))
           .catch((error) => log.warn("prepare_failed", { audio_id: message.audioId, error: String(error?.message) }));
         send(ServerType.STARTED, { audio_id: message.audioId, start_time: Date.now() });
+        break;
+      case ClientType.CANCEL:
+        requireSession(message.audioId);
+        session = null;
+        onRecordingChange(-1);
         break;
       case ClientType.CHUNK_INFO:
         requireSession(message.audioId).announceChunk(message);
@@ -118,6 +127,7 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor }
         session = null;
         // 整理要等上游一两秒，不能卡住这条连接上后面的消息
         finish(finished).catch((error) => failConnection(error));
+        onRecordingChange(-1);
         break;
       }
     }
@@ -227,6 +237,7 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor }
 
   socket.on("close", (code) => {
     if (session) log.info("session_abandoned", { audio_id: session.audioId, chunks: session.chunkCount, code });
+    if (session) onRecordingChange(-1);
     session = null;
     for (const abort of refining) abort.abort();
   });

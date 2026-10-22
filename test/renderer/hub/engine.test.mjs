@@ -31,6 +31,8 @@ function plaza({ mode = "local", changes = {}, keys = { deepseek: "stored" }, st
       polish: value("polish"),
       customUrl: value("customUrl"),
       customParams: value("customParams"),
+      customModelMemory: value("customModelMemory"),
+      customModelIdleMinutes: value("customModelIdleMinutes"),
     },
     keys,
     status,
@@ -151,7 +153,12 @@ test("自定义服务：验证过、还没换上的草稿不算选定，留着�
   const drafted = plazaView(data, { custom: { form: null, draft } });
   assert.equal(drafted.isChosen("polish", custom, item), false);
   assert.equal(drafted.choiceOf("polish", custom, item), "custom/glm");
-  assert.deepEqual(drafted.customExtra(), { customUrl: draft.url, customParams: "" });
+  assert.deepEqual(drafted.customExtra(), {
+    customUrl: draft.url,
+    customParams: "",
+    customModelMemory: draft.memory,
+    customModelIdleMinutes: "5",
+  });
 });
 
 test("搜索：名字、厂商、型号的写法都算，大小写不论；一个结果带着它在哪一环、哪一家", () => {
@@ -209,4 +216,17 @@ test("连线是两头水平的三次曲线：分叉自然往右上、右、右�
   assert.match(d, /^M0\.0,10\.0 C50\.0,10\.0 50\.0,50\.0 100\.0,50\.0$/);
   // 两头挨得很近时，控制点也至少拉开一点，不画成折线
   assert.match(curve(0, 0, 10, 40), /C16\.0,0\.0 -6\.0,40\.0/);
+});
+
+test("自定义服务内存策略随草稿传递，未启用时不改当前模型", () => {
+  const data = plaza({ changes: { customModelMemory: "on-demand", customModelIdleMinutes: "30" } });
+  const view = plazaView(data);
+  assert.equal(view.storedCustom().memory, "on-demand");
+  assert.equal(view.storedCustom().idleMinutes, "30");
+  assert.equal(data.chosen.polish, defaults.polish.value);
+  const draft = { model: "qwen3:8b", url: "http://127.0.0.1:11434/v1", params: "", memory: "server", idleMinutes: "1" };
+  const drafted = plazaView(data, { custom: { form: null, draft } });
+  assert.equal(drafted.customExtra().customModelMemory, "server");
+  assert.equal(drafted.customExtra().customModelIdleMinutes, "1");
+  assert.equal(view.storedCustom().memory, "on-demand");
 });

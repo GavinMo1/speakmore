@@ -118,8 +118,11 @@ export class VoiceSocket {
     }
   }
 
-  /** 丢弃当前这次录音。服务端在下一个 start_audio 或断开时清掉它那边的状态 */
+  /** 取消也通知服务端，空闲模型才能释放；连接继续复用。 */
   abandon() {
+    if (this.#current && this.#socket?.readyState === WebSocket.OPEN) {
+      this.#socket.send(JSON.stringify({ type: "cancel_audio", audio_id: this.#current.audioId }));
+    }
     this.#current = null;
   }
 

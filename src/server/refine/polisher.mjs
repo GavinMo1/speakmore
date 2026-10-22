@@ -3,6 +3,7 @@ import { fitTerms, PROMPT_VOCABULARY } from "../../vocabulary/support.mjs";
 import { chatEndpoint, findChatVendor, PROTOCOLS, requestFor } from "../chat/vendors.mjs";
 import { toModelError } from "../providers/errors.mjs";
 import { createMeter } from "./meter.mjs";
+import { withOllamaIdleRelease } from "./ollama-memory.mjs";
 import { textFromModelOutput } from "./output.mjs";
 import { POLISH_PROMPT, polishInput, polishPromptWith } from "./polish-prompt.mjs";
 
@@ -43,6 +44,8 @@ export function createPolisher({
   };
 
   return {
+    dispose: () => client.dispose?.(),
+
     /** 启动、换 key 时发一个最小的请求：key、地址、模型名不对在这里就暴露，也让之后的第一次润色不慢 */
     async warmUp() {
       try {
@@ -88,6 +91,8 @@ export function createPolisher({
  * @param {{ vendor: string, model: string }} options.choice
  * @param {string | null} [options.customUrl] 自定义服务的地址（设置里的 customUrl）
  * @param {Record<string, unknown> | null} [options.customParams] 自定义服务的额外参数（设置里的 customParams）
+ * @param {"server" | "on-demand"} [options.customModelMemory] 本机 Ollama 的空闲释放策略，默认由服务管理
+ * @param {"1" | "5" | "10" | "30"} [options.customModelIdleMinutes] 空闲多少分钟后释放
  * @param {string} options.apiKey
  * @param {typeof fetch} [options.fetch] 测试时换成假的
  * @param {string} [options.prompt] 见 createPolisher
@@ -96,6 +101,8 @@ export async function createChatPolisher({
   choice,
   customUrl = null,
   customParams = null,
+  customModelMemory = "server",
+  customModelIdleMinutes = "5",
   apiKey,
   timeoutMs,
   log,
@@ -108,7 +115,7 @@ export async function createChatPolisher({
   const { baseUrl, name } = chatEndpoint(vendor, { customUrl });
   const protocol = await PROTOCOLS[vendor.protocol].load();
   const costOf = vendor.prices ? (await vendor.prices()).costOf : null;
-  const client = protocol.createClient({
+  let client = protocol.createClient({
     baseUrl,
     apiKey,
     model: choice.model,
@@ -117,12 +124,23 @@ export async function createChatPolisher({
     costOf,
     ...(fetch ? { fetch } : {}),
   });
+  if (vendor.id === "custom" && customModelMemory === "on-demand") {
+    client = withOllamaIdleRelease({
+      client,
+      baseUrl,
+      model: choice.model,
+      apiKey,
+      log,
+      idleMinutes: customModelIdleMinutes,
+      fetch,
+    });
+  }
   return createPolisher({
     endpoint: { id: vendor.id, name },
     client,
     classify: (error) => protocol.classifyError(error, { name }),
     apiKey,
-    timeoutMs,
+    timeoutMs: timeoutMs ?? (vendor.id === "custom" && customModelMemory === "on-demand" ? 120_000 : undefined),
     log,
     onCall,
     prompt,

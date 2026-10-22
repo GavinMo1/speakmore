@@ -434,9 +434,19 @@ flowchart LR
 | `customParams` | 空 | 自定义服务的额外请求参数，JSON 对象 |
 | `modelSource` | `cn` | 下载源：`cn` / `original` |
 | `acceleration` | `auto` | 加速：`auto` / `cpu` |
+| `localModelMemory` | `resident` | 本机 ASR 内存：`resident` / `on-demand` |
+| `customModelMemory` | `server` | 自定义本机 Ollama 润色内存：`server` / `on-demand` |
+| `localModelIdleMinutes` | `5` | ASR 空闲释放时间：`1` / `5` / `10` / `30` 分钟，仅按需加载时生效 |
+| `customModelIdleMinutes` | `5` | 独立的本机 Ollama 润色空闲释放时间，可选值同上 |
 | `barHint` | `on` | 悬浮条操作提示：`on` / `off` |
 | `theme` | `ink` | 主题：`ink` / `cinnabar` / `indigo` |
 | `language` | `system` | 语言：`system` / `en` / `zh-CN` |
+
+可选节省内存：在**设置 → 通用 → 本机模型内存**选择按需加载，ASR 会在开始录音时加载，达到所选空闲时间后释放。录音和整理期间不释放；下一次听写可能需要等待冷启动。默认仍为常驻。
+
+自定义润色服务的密钥表单中有独立的内存选项，仅支持本机 Ollama（`localhost`、`127.0.0.1` 或 `[::1]` 的 `/v1` 地址）。验证原生接口后，达到所选空闲时间后释放该模型；默认由服务管理。这不会修改 Ollama 全局设置，但共用同一模型的其他应用也可能需要等待下次冷启动。其他兼容服务和云端服务保留原有行为。
+
+转写与润色分别可选 1、5（默认）、10、30 分钟。只有对应的按需策略启用时，释放时间才能修改；关闭按需策略仍保留已选时间。较短时间更早归还内存，较长时间减少间歇听写时的重复加载。退出或切走自定义服务时会取消 SpeakMore 的计时，后续驻留由 Ollama 服务策略管理。
 
 - 设置保存于 `~/.speakmore/settings.json`。
 - 快捷键可选：macOS `right_option` / `right_command` / `right_control` / `fn`；Windows `right_alt` / `right_ctrl`。

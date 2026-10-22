@@ -346,6 +346,13 @@ p {
   transition: background-color var(--dur-fast) var(--ease-out);
 }
 
+.select:disabled {
+  color: var(--ink-2);
+  cursor: default;
+  background: var(--surface);
+  box-shadow: var(--edge);
+}
+
 .select:open {
   background: var(--surface-solid);
 }

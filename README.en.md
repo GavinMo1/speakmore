@@ -434,9 +434,19 @@ flowchart LR
 | `customParams` | empty | Extra request parameters for the custom service, as a JSON object |
 | `modelSource` | `cn` | Download source: `cn` / `original` |
 | `acceleration` | `auto` | Acceleration: `auto` / `cpu` |
+| `localModelMemory` | `resident` | Local ASR memory: `resident` / `on-demand` |
+| `customModelMemory` | `server` | Custom local Ollama polish memory: `server` / `on-demand` |
+| `localModelIdleMinutes` | `5` | ASR idle release time: `1` / `5` / `10` / `30` minutes; only used on demand |
+| `customModelIdleMinutes` | `5` | Independent local Ollama polish idle release time; same choices |
 | `barHint` | `on` | Hint line above the voice bar: `on` / `off` |
 | `theme` | `ink` | Theme: `ink` / `cinnabar` / `indigo` |
 | `language` | `system` | Language: `system` / `en` / `zh-CN` |
+
+Optional memory saving: in **Settings → General → Local model memory**, choose on-demand loading to load ASR when recording starts and release it after the selected idle time. Recording and processing keep it loaded; the next dictation may wait for a cold start. The default remains resident.
+
+For a custom polish service, the separate memory option in its key form supports only local Ollama (`localhost`, `127.0.0.1`, or `[::1]`, with a `/v1` endpoint). It verifies the native Ollama API and releases that model after the selected idle time. The default leaves memory management to the service. This does not change global Ollama settings, but other apps sharing the same model may also incur a cold start. Other compatible services and cloud providers keep their existing behavior.
+
+Idle release time is selectable separately for ASR and Ollama: 1, 5 (default), 10, or 30 minutes. Each control is disabled unless that model's on-demand policy is selected; its saved duration is retained. Shorter times reclaim memory sooner; longer times reduce reloads during intermittent dictation. Leaving or closing the custom service cancels SpeakMore's timer, and Ollama's server policy then controls retention.
 
 - Settings are stored in `~/.speakmore/settings.json`.
 - Hotkey values: macOS `right_option` / `right_command` / `right_control` / `fn`; Windows `right_alt` / `right_ctrl`.

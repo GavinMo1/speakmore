@@ -66,6 +66,8 @@ export const MODES = Object.freeze([
         choice: route.polish,
         customUrl: route.customUrl,
         customParams: route.customParams,
+        customModelMemory: route.customModelMemory,
+        customModelIdleMinutes: route.customModelIdleMinutes,
         apiKey: keys[route.polish.vendor],
         log,
         onCall,

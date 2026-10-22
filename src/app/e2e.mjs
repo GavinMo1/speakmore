@@ -54,6 +54,7 @@ async function waitForLocalModel(localModel, downloadModel) {
       if (percent !== reported) console.log(`本地模型下载中 ${percent}%`);
       reported = percent;
     } else if (local.state !== "missing" && downloadedAt === null) downloadedAt = performance.now();
+    if (local.state === "idle") return null;
     if (local.state === "ready") {
       return {
         downloadMs: Math.round(downloadedAt - startedAt),

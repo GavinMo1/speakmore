@@ -99,10 +99,17 @@ export default {
       customUrl: "Address of your custom polishing service (OpenAI-compatible), e.g. https://api.example.com/v1",
       customParams:
         'Extra request parameters for the custom service, as one JSON object, e.g. {"reasoning_effort": "minimal"}; sent with checks and polishing alike. model, messages, and stream can\'t be set',
+      customModelMemory:
+        "Local Ollama polishing memory: server keeps the service default; on-demand releases the model after the selected idle time. Only verified loopback Ollama endpoints support this",
+      localModelIdleMinutes: "Idle minutes before releasing the on-device ASR model; applies only to on-demand mode",
+      customModelIdleMinutes:
+        "Idle minutes before releasing the custom local Ollama polish model; applies only to on-demand mode",
       modelSource:
         "Where on-device models download from: cn is the mirror in China (ModelScope), original is Hugging Face. If the chosen one stalls, the other is tried, picking up where the download stopped",
       acceleration:
         "Whether on-device models use the GPU: auto uses it when there is one and falls back to the CPU if it fails; cpu uses only the CPU (for GPU driver trouble, or to leave the GPU to other programs)",
+      localModelMemory:
+        "Whether on-device models stay loaded: resident keeps them ready; on-demand loads when recording starts and releases after the selected idle time",
       barHint: "Whether the hint line above the voice bar (press … to finish · esc to cancel) shows: on or off",
       theme: "Which theme the windows use",
       language: "Interface language; system follows your Mac",
@@ -156,6 +163,19 @@ export default {
     auto: "Automatic (GPU if available)",
     cpu: "CPU only",
   },
+  localModelMemories: {
+    resident: "Keep loaded (default)",
+    "on-demand": "Load on demand",
+  },
+  customModelMemories: {
+    server: "Managed by server (default)",
+    "on-demand": "Release when idle (Ollama only)",
+  },
+  idleRelease: {
+    label: "Idle release time",
+    minutes: "{minutes} min",
+    failed: "Idle release time not changed: {reason}",
+  },
   barHints: {
     on: "Shown",
     off: "Hidden",
@@ -192,6 +212,7 @@ export default {
     checkEmpty: "{model} didn't transcribe a single word",
   },
   chat: {
+    memoryUnsupported: "Idle release requires local Ollama. Check the address or choose Managed by server.",
     modelRequired: "{vendor} has no default model; write it as {vendor}/<model name>",
     badModelName: "model name {model} is invalid: only letters, digits, and . _ : / @ + - are allowed",
     urlEmpty: "the address is empty",
@@ -468,6 +489,10 @@ export default {
       paramsPlaceholder: "Extra parameters (JSON, optional)",
       paramsTip:
         'Extra request parameters for this service, e.g. {"reasoning_effort": "minimal"}; sent with checks and polishing',
+      memory: "Local polishing model memory",
+      memoryHelp: "Local Ollama only · Release when idle",
+      memoryTip:
+        "Only local Ollama supports idle release. Releases after the selected idle time; the next request may take longer. A model shared with other apps may also be unloaded.",
       keyKept: "Key configured; leave blank to keep it",
       modelMissing: "Enter a model name",
     },
@@ -721,6 +746,11 @@ export default {
     language: "Language",
     modelSource: "Model download source",
     acceleration: "On-device model acceleration",
+    localModelMemory: "On-device model memory",
+    localModelMemoryHelp: "On demand releases idle models; loading again may take longer",
+    localModelMemoryTip:
+      "On demand loads when recording starts and releases after the selected idle time. The first transcription may take longer.",
+    localModelMemoryFailed: "Memory setting not changed: {reason}",
     barHint: "Hints above the voice bar",
     openAtLogin: "Launch at login",
     hotkeyFailed: "Not changed: {reason}",

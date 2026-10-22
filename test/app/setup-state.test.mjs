@@ -169,3 +169,10 @@ test("交给命令行的结论：每句都按它的语言翻成字（0.5 的命�
     degraded: null,
   });
 });
+
+test("按需加载时允许热键开始和停止录音，常驻模式仍等待启动加载", () => {
+  for (const state of ["idle", "loading"]) {
+    assert.equal(summarize({ ...allGood, localModel: { state, onDemand: true } }).blocker, null);
+  }
+  assert.notEqual(summarize({ ...allGood, localModel: { state: "loading" } }).blocker, null);
+});

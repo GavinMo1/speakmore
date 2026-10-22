@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { startService } from "../../src/app/service.mjs";
 import { createTranslator } from "../../src/i18n/index.mjs";
+import { VoiceSocket } from "../../src/renderer/bar/voice-socket.mjs";
 import { ModelError } from "../../src/server/providers/errors.mjs";
 
 const zh = createTranslator("zh-CN");
@@ -357,7 +358,14 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 /** 走本地转写链路的服务，本地模型和模型库都是假的 */
 async function localService(
   t,
-  { models = fakeModels(), onLocalModel, createRefiner = throughTranscriber, acceleration } = {},
+  {
+    models = fakeModels(),
+    onLocalModel,
+    createRefiner = throughTranscriber,
+    acceleration,
+    localModelMemory,
+    localModelIdleMinutes,
+  } = {},
 ) {
   const { control, startLocal } = fakeLocal();
   const service = await startService({
@@ -368,6 +376,8 @@ async function localService(
     createRefiner,
     onLocalModel,
     acceleration,
+    localModelMemory,
+    localModelIdleMinutes,
   });
   t.after(() => service.close());
   return { service, control, models };
@@ -577,4 +587,170 @@ test("检查时装不上：照实抛出来，正在用的照旧", async (t) => {
   control.fail(new Error("模型文件坏了"));
   await assert.rejects(pending, /模型文件坏了/);
   assert.equal(service.localModel.state, "ready");
+});
+
+/** 保持录音，直到测试主动断开；开始应立即确认，不被冷启动卡住。 */
+async function beginRecording(url) {
+  const socket = new WebSocket(url);
+  await new Promise((resolve, reject) => {
+    socket.onerror = reject;
+    socket.onopen = () => socket.send(JSON.stringify({ type: "start_audio", audio_id: "idle-test" }));
+    socket.onmessage = resolve;
+  });
+  return socket;
+}
+
+test("按需模式：启动不装载，录音时预加载，录音期间不释放，断开五分钟后卸载", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { service, control } = await localService(t, { localModelMemory: "on-demand" });
+  assert.equal(service.localModel.state, "idle");
+  assert.deepEqual(control.started, []);
+  await service.useKey("key");
+  const socket = await beginRecording(service.url);
+  assert.equal(control.started.length, 1);
+  control.finish();
+  await tick();
+  t.mock.timers.tick(300001);
+  assert.equal(control.disposed, 0);
+  await new Promise((resolve) => {
+    socket.onclose = resolve;
+    socket.close();
+  });
+  await tick();
+  for (let i = 0; i < 10; i++) await tick();
+  t.mock.timers.tick(299999);
+  assert.equal(control.disposed, 0);
+  t.mock.timers.tick(1);
+  assert.equal(control.disposed, 1);
+  assert.equal(service.localModel.state, "idle");
+});
+
+test("按需模式：短录音等待冷启动，释放后再次听写能重载；关闭选项恢复常驻", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { service, control } = await localService(t, { localModelMemory: "on-demand" });
+  await service.useKey("key");
+  for (let count = 1; count <= 2; count++) {
+    const reply = dictateOnce(service.url);
+    while (control.started.length < count) await tick();
+    control.finish();
+    assert.equal((await reply).V.refined_text, "转写了 3");
+    await tick();
+    t.mock.timers.tick(300000);
+    assert.equal(service.localModel.state, "idle");
+  }
+  service.setLocalModelMemory("resident");
+  control.finish();
+  await tick();
+  t.mock.timers.tick(600000);
+  assert.equal(service.localModel.state, "ready");
+  assert.equal(control.disposed, 2);
+});
+
+test("开启按需释放不打断当前模型，失败的加载也不伪装成已就绪", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { service, control } = await localService(t);
+  control.finish();
+  await tick();
+  service.setLocalModelMemory("on-demand");
+  assert.equal(control.disposed, 0);
+  t.mock.timers.tick(300000);
+  assert.equal(service.localModel.state, "idle");
+  await service.useKey("key");
+  const pending = dictateOnce(service.url);
+  while (control.started.length < 2) await tick();
+  control.fail(new Error("模型无法加载"));
+  assert.equal((await pending).K, "audio_processing_error");
+  assert.equal(service.localModel.state, "failed");
+});
+
+test("按需加载尚未结束就换路线：旧模型装好后释放，不影响新路线", async (t) => {
+  const { service, control } = await localService(t, { localModelMemory: "on-demand" });
+  const socket = await beginRecording(service.url);
+  service.setRoute(GEMINI);
+  control.finish();
+  await tick();
+  assert.equal(control.disposed, 1);
+  assert.equal(service.localModel.state, "off");
+  socket.close();
+});
+
+test("整理超过五分钟不释放模型，结束后才开始空闲计时", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let finishRefine;
+  let entered;
+  const started = new Promise((resolve) => {
+    entered = resolve;
+  });
+  const gate = new Promise((resolve) => {
+    finishRefine = resolve;
+  });
+  const { service, control } = await localService(t, {
+    localModelMemory: "on-demand",
+    createRefiner: async ({ transcriber }) => ({
+      warmUp: async () => {},
+      refine: async () => {
+        const result = await transcriber.transcribe(new Float32Array(3));
+        entered();
+        await gate;
+        return result.text;
+      },
+    }),
+  });
+  await service.useKey("key");
+  const pending = dictateOnce(service.url);
+  while (!control.started.length) await tick();
+  control.finish();
+  await started;
+  t.mock.timers.tick(600000);
+  assert.equal(control.disposed, 0);
+  finishRefine();
+  assert.equal((await pending).V.refined_text, "转写了 3");
+  t.mock.timers.tick(300000);
+  assert.equal(control.disposed, 1);
+});
+
+test("真实客户端取消录音后也释放模型，连接复用不会让录音状态永久占用", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { service, control } = await localService(t, { localModelMemory: "on-demand" });
+  const voice = new VoiceSocket(service.url);
+  t.after(() => voice.close());
+  await voice.begin("cancel-test");
+  while (!control.started.length) await tick();
+  control.finish();
+  await tick();
+  voice.abandon();
+  for (let i = 0; i < 10; i++) await tick();
+  t.mock.timers.tick(300000);
+  assert.equal(service.localModel.state, "idle");
+  assert.equal(control.disposed, 1);
+  await voice.begin("again");
+  while (control.started.length < 2) await tick();
+  control.finish();
+});
+
+test("按需待机切换到云端路线不会加载旧 ASR", async (t) => {
+  const { service, control } = await localService(t, { localModelMemory: "on-demand" });
+  service.setRoute(GEMINI);
+  assert.equal(service.localModel.state, "off");
+  const socket = await beginRecording(service.url);
+  assert.deepEqual(control.started, []);
+  socket.close();
+});
+
+test("空闲释放时间可选，修改立即重新计时且不重载模型", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { service, control } = await localService(t, { localModelMemory: "on-demand", localModelIdleMinutes: "1" });
+  await service.useKey("key");
+  const pending = dictateOnce(service.url);
+  while (!control.started.length) await tick();
+  control.finish();
+  await pending;
+  t.mock.timers.tick(59999);
+  assert.equal(control.disposed, 0);
+  service.setLocalModelIdleMinutes("10");
+  t.mock.timers.tick(599999);
+  assert.equal(control.disposed, 0);
+  t.mock.timers.tick(1);
+  assert.equal(control.disposed, 1);
+  assert.equal(control.started.length, 1);
 });

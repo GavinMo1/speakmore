@@ -23,6 +23,8 @@ import { startServer, WS_PATH } from "../server/server.mjs";
  *   见 ../server/refine/meter.mjs
  * @param {() => void} [options.onLocalModel] 本地模型的状态变了（缺、装载中、装好了、出错）
  * @param {"auto" | "cpu"} [options.acceleration] 本地模型用不用显卡（设置里的 acceleration），换了调 setAcceleration
+ * @param {"resident" | "on-demand"} [options.localModelMemory] 常驻，或开口时装载、空闲后释放
+ * @param {string} [options.localModelIdleMinutes] 按需模式空闲多少分钟后释放，默认五分钟
  * @param {() => readonly string[]} [options.vocabulary] 用户的词典（storage/vocabulary.mjs 的 terms），服务端每次听写读一次
  * @param {typeof createModeRefiner} [options.createRefiner] 测试时换成假的
  * @param {typeof startTranscriber} [options.startLocal] 测试时换成假的
@@ -35,6 +37,8 @@ export async function startService({
   onModelCall,
   onLocalModel = () => {},
   acceleration: initialAcceleration = "auto",
+  localModelMemory: initialLocalModelMemory = "resident",
+  localModelIdleMinutes: initialLocalModelIdleMinutes = "5",
   vocabulary = () => [],
   createRefiner = createModeRefiner,
   startLocal = startTranscriber,
@@ -58,12 +62,40 @@ export async function startService({
 
   /**
    * 本地转写链路要的那个模型现在怎样：
-   *   off（没走本地转写）/ missing（还没下载）/ loading / ready / failed（problem 是原因）
+   *   off（没走本地转写）/ idle（按需等待）/ missing（还没下载）/ loading / ready / failed（problem 是原因）
    */
   let local = { state: "off" };
   let acceleration = initialAcceleration;
   /** 正在装载或已经装好的那一次：换模型时用 transcriber 卸掉模型；ready 是装载的那个 Promise，检查时等它 */
   let loading = null;
+  let localModelMemory = initialLocalModelMemory;
+  let localModelIdleMinutes = initialLocalModelIdleMinutes;
+  let idleTimer = null;
+  let recordings = 0;
+  let operations = 0;
+  let closed = false;
+
+  function clearIdleTimer() {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+
+  function scheduleRelease() {
+    clearIdleTimer();
+    if (closed || localModelMemory !== "on-demand" || recordings || operations || !loading?.transcriber) return;
+    idleTimer = setTimeout(() => {
+      const model = loading.model;
+      releaseLocal();
+      setLocal({ state: "idle", model });
+      log.info("local_model_idle_released", { model });
+    }, Number(localModelIdleMinutes) * 60_000);
+    idleTimer.unref();
+  }
+
+  function ensureLocal() {
+    if (!closed && local.state === "idle") loadLocal(local.model);
+    return loading;
+  }
 
   function setLocal(next) {
     local = next;
@@ -81,7 +113,10 @@ export async function startService({
     }
     if (loading?.model === wanted && local.state !== "failed") return;
     releaseLocal();
-    if (wanted) loadLocal(wanted);
+    if (wanted) {
+      if (localModelMemory === "on-demand") setLocal({ state: "idle", model: wanted });
+      else loadLocal(wanted);
+    }
   }
 
   function loadLocal(model) {
@@ -98,6 +133,7 @@ export async function startService({
         }
         job.transcriber = transcriber;
         setLocal({ state: "ready", model, backend: transcriber.backend });
+        scheduleRelease();
       },
       (error) => {
         if (loading !== job) return;
@@ -108,14 +144,15 @@ export async function startService({
   }
 
   function releaseLocal() {
-    if (!loading) return;
-    loading.transcriber?.dispose();
+    clearIdleTimer();
+    loading?.transcriber?.dispose();
     loading = null;
-    setLocal({ state: "off" });
+    if (local.state !== "off") setLocal({ state: "off" });
   }
 
   /** 给外面看的本地模型状态：还没下载、但用户正在下它时带上进度 */
   function localView() {
+    if (local.state === "loading" && localModelMemory === "on-demand") return { ...local, onDemand: true };
     if (local.state !== "missing") return local;
     const download = models.status(local.model).download;
     return download ? { ...local, received: download.received, total: download.total } : local;
@@ -123,7 +160,15 @@ export async function startService({
 
   /** 交给本地转写链路的转写器：模型还没装好时说清是怎么回事，不让这次听写干等。用户词典随 options 原样转过去 */
   const transcriber = {
-    transcribe(samples, options) {
+    async transcribe(samples, options) {
+      if (localModelMemory === "on-demand") {
+        const job = ensureLocal();
+        if (job && local.state !== "failed") {
+          const loaded = await job.ready;
+          if (closed || loading !== job) throw new LocalizedError(msg("local.modelLoading"));
+          return loaded.transcribe(samples, options);
+        }
+      }
       if (loading?.transcriber) return loading.transcriber.transcribe(samples, options);
       const view = localView();
       if (view.state === "missing" && view.total) {
@@ -147,14 +192,28 @@ export async function startService({
     port: 0,
     log,
     vocabulary,
+    onRecordingChange(delta) {
+      recordings += delta;
+      scheduleRelease();
+    },
     refiner: {
       async refine(audio, options) {
         if (!refiner) throw noKey();
-        return refiner.refine(audio, options);
+        operations++;
+        clearIdleTimer();
+        try {
+          return await refiner.refine(audio, options);
+        } finally {
+          operations--;
+          scheduleRelease();
+        }
       },
       /** 开口时先做的准备（Gemini 建提示词缓存，带着词典）。还没有 key 时没什么可准备的 */
       async prepare(options) {
-        await refiner?.prepare?.(options);
+        if (localModelMemory === "on-demand") {
+          const job = ensureLocal();
+          await Promise.all([job?.ready, refiner?.prepare?.(options)]);
+        } else await refiner?.prepare?.(options);
       },
     },
   });
@@ -180,6 +239,23 @@ export async function startService({
     modelsChanged() {
       followRoute();
       if (local.state === "missing") onLocalModel();
+    },
+
+    /** 按需模式只在使用后计时；恢复常驻时立即装载。 */
+    setLocalModelMemory(value) {
+      if (value === localModelMemory) return;
+      localModelMemory = value;
+      if (value === "resident") {
+        clearIdleTimer();
+        followRoute();
+      } else scheduleRelease();
+    },
+
+    /** 时间选项变更只重设计时，不打断录音或重新加载模型。 */
+    setLocalModelIdleMinutes(value) {
+      if (value === localModelIdleMinutes) return;
+      localModelIdleMinutes = value;
+      scheduleRelease();
     },
 
     /** 换加速设置：装着（或正在装）本地模型的话按新的设置重装一遍 */
@@ -211,10 +287,17 @@ export async function startService({
       try {
         await candidate.warmUp();
       } catch (error) {
-        if (!allowUnverified || error.kind !== "unavailable") throw error;
+        if (!allowUnverified || error.kind !== "unavailable") {
+          candidate.dispose?.();
+          throw error;
+        }
         verified = false;
       }
-      if (switches !== at) return { verified, stale: true };
+      if (switches !== at || closed) {
+        candidate.dispose?.();
+        return { verified, stale: true };
+      }
+      refiner?.dispose?.();
       refiner = candidate;
       missing = null;
       return { verified };
@@ -228,6 +311,7 @@ export async function startService({
      */
     setRoute(nextRoute) {
       switches += 1;
+      refiner?.dispose?.();
       refiner = null;
       missing = null;
       log.info("route_switched", { from: describeRoute(route), to: describeRoute(nextRoute) });
@@ -264,30 +348,37 @@ export async function startService({
      *   loadMs：临时装的那个装了多久；用的是已经装着的是 null
      */
     async checkTranscriber(model, samples) {
-      let transcriber;
-      let loadMs = null;
-      if (loading?.model === model) {
-        transcriber = loading.transcriber ?? (await loading.ready);
-      } else {
-        const startedAt = performance.now();
-        transcriber = await startLocal({ modelId: model, modelsDir, log });
-        loadMs = Math.round(performance.now() - startedAt);
-      }
+      operations++;
+      clearIdleTimer();
       try {
-        const startedAt = performance.now();
-        const { text } = await transcriber.transcribe(samples);
-        const transcribeMs = Math.round(performance.now() - startedAt);
-        // 只记长度和耗时：转出来的是念的那句检查用的话，不是用户说的，但也没必要进日志
-        log.info("transcriber_checked", {
-          model,
-          backend: transcriber.backend,
-          load_ms: loadMs,
-          transcribe_ms: transcribeMs,
-          text_length: text.length,
-        });
-        return { text, transcribeMs, loadMs, backend: transcriber.backend };
+        let transcriber;
+        let loadMs = null;
+        if (loading?.model === model) {
+          transcriber = loading.transcriber ?? (await loading.ready);
+        } else {
+          const startedAt = performance.now();
+          transcriber = await startLocal({ modelId: model, modelsDir, log });
+          loadMs = Math.round(performance.now() - startedAt);
+        }
+        try {
+          const startedAt = performance.now();
+          const { text } = await transcriber.transcribe(samples);
+          const transcribeMs = Math.round(performance.now() - startedAt);
+          // 只记长度和耗时：转出来的是念的那句检查用的话，不是用户说的，但也没必要进日志
+          log.info("transcriber_checked", {
+            model,
+            backend: transcriber.backend,
+            load_ms: loadMs,
+            transcribe_ms: transcribeMs,
+            text_length: text.length,
+          });
+          return { text, transcribeMs, loadMs, backend: transcriber.backend };
+        } finally {
+          if (loadMs !== null) transcriber.dispose();
+        }
       } finally {
-        if (loadMs !== null) transcriber.dispose();
+        operations--;
+        scheduleRelease();
       }
     },
 
@@ -302,7 +393,12 @@ export async function startService({
      * @param {{ route: object, apiKey: string, keys?: Record<string, string> }} options keys 同 useKey
      */
     async probe({ route: tried, apiKey, keys }) {
-      await (await build(tried, apiKey, keys)).warmUp();
+      const candidate = await build(tried, apiKey, keys);
+      try {
+        await candidate.warmUp();
+      } finally {
+        candidate.dispose?.();
+      }
     },
 
     /**
@@ -310,11 +406,14 @@ export async function startService({
      * @param {{ missing?: { id: string, name: string } }} [options]
      */
     forgetKey({ missing: vendor = null } = {}) {
+      refiner?.dispose?.();
       refiner = null;
       missing = vendor;
     },
 
     async close() {
+      closed = true;
+      refiner?.dispose?.();
       releaseLocal();
       await server.close();
     },
