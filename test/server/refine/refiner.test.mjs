@@ -2,36 +2,40 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createTranslator, msg } from "../../../src/i18n/index.mjs";
 import { ModelError } from "../../../src/server/providers/errors.mjs";
-import { nativePromptWith, SYSTEM_PROMPT, TASK_REMINDER } from "../../../src/server/refine/prompt.mjs";
 import { createModelRefiner, createRefiner, generateClean } from "../../../src/server/refine/refiner.mjs";
+import { nativePromptWith, SYSTEM_PROMPT, TASK_REMINDER } from "../../../src/server/tasks/dictate/prompt.mjs";
+import { findTask } from "../../../src/server/tasks/index.mjs";
 import { PROMPT_VOCABULARY } from "../../../src/vocabulary/support.mjs";
+
+/** 流水线不认任务的名字，测的时候拿语音输入这件事跑 */
+const DICTATION = findTask("dictate").bind({});
 
 const zh = createTranslator("zh-CN");
 
 function fakeGenerate(outputs) {
   const calls = { count: 0, warnings: [] };
-  const generateOnce = async () => outputs[calls.count++];
+  const generateOnce = async () => ({ text: outputs[calls.count++], source: null });
   const log = { warn: (event, fields) => calls.warnings.push({ event, ...fields }) };
   return { calls, generateOnce, log };
 }
 
 test("成品里夹着时间戳时重来一次，用第二次的结果，并记一条日志", async () => {
   const { calls, generateOnce, log } = fakeGenerate(["全面开干、 00:30 全面迁移", "全面开干、全面迁移"]);
-  assert.equal(await generateClean(generateOnce, log), "全面开干、全面迁移");
+  assert.equal((await generateClean(generateOnce, log)).text, "全面开干、全面迁移");
   assert.equal(calls.count, 2);
   assert.deepEqual(calls.warnings, [{ event: "refine_retry", reason: "成品里夹着时间戳" }]);
 });
 
 test("成品正常时只调一次；版本号和比例不算时间戳", async () => {
   const { calls, generateOnce, log } = fakeGenerate(["版本 1.5.0，比例 3:1，一共 12 条"]);
-  assert.equal(await generateClean(generateOnce, log), "版本 1.5.0，比例 3:1，一共 12 条");
+  assert.equal((await generateClean(generateOnce, log)).text, "版本 1.5.0，比例 3:1，一共 12 条");
   assert.equal(calls.count, 1);
   assert.deepEqual(calls.warnings, []);
 });
 
 test("重来一次还有钟点，就当是他真说了，不再重试", async () => {
   const { calls, generateOnce, log } = fakeGenerate(["明天 09:30 开会", "明天 09:30 开会"]);
-  assert.equal(await generateClean(generateOnce, log), "明天 09:30 开会");
+  assert.equal((await generateClean(generateOnce, log)).text, "明天 09:30 开会");
   assert.equal(calls.count, 2);
 });
 
@@ -86,7 +90,10 @@ function refinerWith(client, options = {}) {
 test("交给模型的是同一份提示词和同一句提醒，成品照样经过收尾（繁转简、去句末句号）", async () => {
   const client = fakeClient(["我們後天開會。"]);
   const { refiner } = refinerWith(client, { audioTypes: ["audio/webm"] });
-  assert.equal(await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm" }), "我们后天开会");
+  assert.equal(
+    (await refiner.refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm" })).text,
+    "我们后天开会",
+  );
   const [request] = client.calls;
   assert.equal(request.systemPrompt, SYSTEM_PROMPT);
   assert.equal(request.reminder, TASK_REMINDER);
@@ -97,7 +104,10 @@ test("交给模型的是同一份提示词和同一句提醒，成品照样经�
 test("这家不收录音的格式时先换好再交过去；夹着时间戳要重来时也只换一次", async () => {
   const client = fakeClient(["全面开干、 00:30 全面迁移", "全面开干、全面迁移"]);
   const { refiner, transcoded } = refinerWith(client);
-  assert.equal(await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm" }), "全面开干、全面迁移");
+  assert.equal(
+    (await refiner.refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm" })).text,
+    "全面开干、全面迁移",
+  );
   assert.deepEqual(transcoded, ["audio/webm"]);
   assert.deepEqual(
     client.calls.map(({ audio, mimeType }) => [String(audio), mimeType]),
@@ -117,7 +127,7 @@ test("客户端断开时取消请求：交给适配器的 signal 跟着断", asy
   };
   const { refiner } = refinerWith(client, { audioTypes: ["audio/webm"] });
   const abort = new AbortController();
-  const pending = refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", signal: abort.signal });
+  const pending = refiner.refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm", signal: abort.signal });
   abort.abort();
   await assert.rejects(pending);
   assert.equal(seen.aborted, true);
@@ -126,7 +136,9 @@ test("客户端断开时取消请求：交给适配器的 signal 跟着断", asy
 test("出错时报的是分好类的 ModelError：说得出是哪一家、该怎么办", async () => {
   const offline = new TypeError("fetch failed");
   const { refiner } = refinerWith(fakeClient([offline]), { audioTypes: ["audio/webm"] });
-  const error = await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm" }).catch((thrown) => thrown);
+  const error = await refiner
+    .refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm" })
+    .catch((thrown) => thrown);
   assert.ok(error instanceof ModelError);
   assert.equal(error.kind, "unavailable");
   assert.equal(zh.text(error.problem), "连不上 OpenAI，检查网络后再试");
@@ -138,7 +150,9 @@ test("录音换不了格式时也报 ModelError，不让原始的解码错误直
       throw new Error("录音解不出声音（audio/webm）：坏了");
     },
   });
-  const error = await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm" }).catch((thrown) => thrown);
+  const error = await refiner
+    .refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm" })
+    .catch((thrown) => thrown);
   assert.ok(error instanceof ModelError);
   assert.match(zh.text(error.problem), /解不出声音/);
 });
@@ -200,7 +214,7 @@ test("每次调用记一笔：哪次听写、哪家、按哪个型号、多少 t
   const { records, events, log, onCall } = recorder();
   const { refiner } = refinerWith(fakeClient(["好的"]), { audioTypes: ["audio/webm"], log, onCall });
   const before = Date.now();
-  await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a1" });
+  await refiner.refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm", audioId: "a1" });
 
   assert.equal(records.length, 1);
   const [{ latencyMs, createdAt, ...record }] = records;
@@ -219,7 +233,7 @@ test("每次调用记一笔：哪次听写、哪家、按哪个型号、多少 t
 test("夹着时间戳重来的那一次也记上，两笔是同一次听写的", async () => {
   const { records, onCall } = recorder();
   const { refiner } = refinerWith(fakeClient(["全面开干、 00:30 全面迁移", "全面开干、全面迁移"]), { onCall });
-  await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a2" });
+  await refiner.refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm", audioId: "a2" });
   assert.deepEqual(
     records.map(({ purpose, audioId }) => [purpose, audioId]),
     [
@@ -244,7 +258,7 @@ test("回了话但用不了（被截断）：先记账再报错，这一次是�
   const cut = { text: null, problem: msg("model.unfinished", { provider: "OpenAI", reason: "length" }), usage: USAGE };
   const { refiner } = refinerWith(fakeClient([cut]), { audioTypes: ["audio/webm"], onCall });
   const error = await refiner
-    .refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a3" })
+    .refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm", audioId: "a3" })
     .catch((thrown) => thrown);
   assert.ok(error instanceof ModelError);
   assert.equal(zh.text(error.problem), "OpenAI 没有正常结束：length");
@@ -254,7 +268,7 @@ test("回了话但用不了（被截断）：先记账再报错，这一次是�
 test("没回话的调用记不了账：拿不到用量", async () => {
   const { records, onCall } = recorder();
   const { refiner } = refinerWith(fakeClient([new TypeError("fetch failed")]), { audioTypes: ["audio/webm"], onCall });
-  await assert.rejects(refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a4" }));
+  await assert.rejects(refiner.refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm", audioId: "a4" }));
   assert.deepEqual(records, []);
 });
 
@@ -262,7 +276,7 @@ test("发出去了但等不到回话就断开的（超时、连接断了）：�
   const { records, events, log, onCall } = recorder();
   const timeout = Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
   const { refiner } = refinerWith(fakeClient([timeout]), { audioTypes: ["audio/webm"], log, onCall });
-  await assert.rejects(refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a7" }));
+  await assert.rejects(refiner.refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm", audioId: "a7" }));
   assert.deepEqual(records, []);
   const unmetered = events.find(({ event }) => event === "model_call_unmetered");
   assert.equal(unmetered?.level, "warn");
@@ -275,7 +289,9 @@ test("发出去了但等不到回话就断开的（超时、连接断了）：�
     audioTypes: ["audio/webm"],
     log: offline.log,
   });
-  await assert.rejects(unreachable.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a8" }));
+  await assert.rejects(
+    unreachable.refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm", audioId: "a8" }),
+  );
   assert.equal(
     offline.events.find(({ event }) => event === "model_call_unmetered"),
     undefined,
@@ -288,7 +304,10 @@ test("记账出错不连累这次听写：成品照常给，错误记进日志",
     throw new Error("database is locked");
   };
   const { refiner } = refinerWith(fakeClient(["好的"]), { audioTypes: ["audio/webm"], log, onCall });
-  assert.equal(await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a5" }), "好的");
+  assert.equal(
+    (await refiner.refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm", audioId: "a5" })).text,
+    "好的",
+  );
   const failed = events.find(({ event }) => event === "model_call_not_recorded");
   assert.equal(failed.level, "error");
   assert.equal(failed.audio_id, "a5");
@@ -302,7 +321,10 @@ test("适配器没带回用量（它自己的毛病）：成品照常给，记�
     log,
     onCall,
   });
-  assert.equal(await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", audioId: "a6" }), "好的");
+  assert.equal(
+    (await refiner.refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm", audioId: "a6" })).text,
+    "好的",
+  );
   assert.deepEqual(records, []);
   assert.equal(events.find(({ event }) => event === "usage_missing")?.level, "warn");
 });
@@ -325,8 +347,8 @@ test("词典：听写时按提示词的上限挑词写进系统提示词，开�
   };
   const { refiner } = refinerWith(client, { audioTypes: ["audio/webm"] });
   const vocabulary = Array.from({ length: PROMPT_VOCABULARY.maxTerms + 5 }, (_, i) => `term${i}`);
-  await refiner.prepare({ vocabulary });
-  await refiner.refine(Buffer.from("rec"), { mimeType: "audio/webm", vocabulary });
+  await refiner.prepare({ task: DICTATION, vocabulary });
+  await refiner.refine(Buffer.from("rec"), { task: DICTATION, mimeType: "audio/webm", vocabulary });
   const expected = nativePromptWith(vocabulary.slice(0, PROMPT_VOCABULARY.maxTerms));
   assert.equal(client.calls[0].systemPrompt, expected);
   assert.deepEqual(prepared, [{ systemPrompt: expected }]);
@@ -343,7 +365,7 @@ test("prepare：让适配器备好提示词缓存，花的钱记一笔，用途�
     return { usage: { ...USAGE, model: "gemini-3.6-flash", inputTokens: 1350, outputTokens: 0, costUsd: 0.0012 } };
   };
   const { refiner } = refinerWith(client, { onCall });
-  await refiner.prepare();
+  await refiner.prepare({ task: DICTATION });
   assert.deepEqual(prepared, [{ systemPrompt: SYSTEM_PROMPT }]);
   assert.deepEqual(
     records.map(({ purpose, audioId, inputTokens, costUsd }) => [purpose, audioId, inputTokens, costUsd]),
@@ -355,8 +377,8 @@ test("prepare：这一次没花钱（已经在建、型号不支持）就不记�
   const { records, onCall } = recorder();
   const client = fakeClient([]);
   client.prepare = async () => null;
-  await refinerWith(client, { onCall }).refiner.prepare();
-  await refinerWith(fakeClient([]), { onCall }).refiner.prepare();
+  await refinerWith(client, { onCall }).refiner.prepare({ task: DICTATION });
+  await refinerWith(fakeClient([]), { onCall }).refiner.prepare({ task: DICTATION });
   assert.deepEqual(records, []);
 });
 
@@ -366,7 +388,7 @@ test("prepare：建不好只记一条警告，不往外抛，也不带出 key", 
   client.prepare = async () => {
     throw new Error("fetch failed for key sk-secret");
   };
-  await refinerWith(client, { log, apiKey: "sk-secret" }).refiner.prepare();
+  await refinerWith(client, { log, apiKey: "sk-secret" }).refiner.prepare({ task: DICTATION });
   const failed = events.find(({ event }) => event === "prompt_cache_failed");
   assert.equal(failed.level, "warn");
   assert.doesNotMatch(JSON.stringify(failed), /sk-secret/);

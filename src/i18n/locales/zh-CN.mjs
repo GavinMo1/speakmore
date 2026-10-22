@@ -400,6 +400,8 @@ export default {
     disconnected: "和服务端的连接断了",
     timeout: "等了 {seconds} 秒没有等到成品",
     serverError: "服务端报错 {code}：{detail}",
+    // 识别方式做不了这件事（离线方式没有能翻译的模型）：离线方式不支持语音翻译
+    unsupported: "{mode}方式不支持{feature}",
   },
 
   delivery: {

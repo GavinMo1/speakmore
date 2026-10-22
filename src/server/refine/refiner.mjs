@@ -4,17 +4,19 @@ import { toWav } from "../audio/transcode.mjs";
 import { toModelError } from "../providers/errors.mjs";
 import { findProvider } from "../providers/index.mjs";
 import { createMeter } from "./meter.mjs";
-import { textFromModelOutput } from "./output.mjs";
-import { nativePromptWith, TASK_REMINDER } from "./prompt.mjs";
 
-// 原生链路：录音直接交给收音频的大模型，一次请求出成品。
+// 直出：录音直接交给收音频的大模型，一次请求出成品。让模型做什么（提示词、成品怎么收）由每次交进来的任务定
+// （../tasks，用它的 native 那一副），这里只管怎么交、怎么记账、出错怎么认。
 // 数字来自 scripts/dev/eval-prompt.mjs：同一批 60 条真实录音跑了 12 遍，共 720 条成品。
 
-/** 模型听音频时自带"几分几秒"的定位，偶尔会写进正文（720 条里 10 条，像"全面开干、 00:30 全面迁移"） */
+/**
+ * 模型听音频时自带"几分几秒"的定位，偶尔会写进正文（720 条里 10 条，像"全面开干、 00:30 全面迁移"）。
+ * 是听音频的模型的毛病，不管让它做什么，所以在这一层兜
+ */
 const STRAY_TIMESTAMP = /(?<!\d)\d{1,2}:\d{2}(?!\d)/;
 
-/** 这一次的系统提示词：用户词典按大模型提示词的上限挑好、接在最后 */
-const promptFor = (vocabulary) => nativePromptWith(fitTerms(vocabulary, PROMPT_VOCABULARY));
+/** 这一次的系统提示词：用户词典按大模型提示词的上限挑好，交给任务去接 */
+const promptFor = (task, vocabulary) => task.native.system(fitTerms(vocabulary, PROMPT_VOCABULARY));
 
 /** 一次请求最多等多久。Gemini 一两秒、OpenAI 一分半的录音七八秒，留足余量 */
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -34,9 +36,9 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * @param {string} [options.apiKey] 只用来从报错里抹掉它
  * @param {(audio: Buffer, mimeType: string) => Promise<{ audio: Buffer, mimeType: string }>} [options.transcode]
  * @param {(record: object) => void} [options.onCall] 记账，见 meter.mjs
- * @returns {{ warmUp(): Promise<void>, prepare(o?: { vocabulary?: readonly string[] }): Promise<void>,
- *   refine(audio: Buffer, o: { mimeType: string, signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }): Promise<string> }}
- *   出错时抛的都是 ModelError
+ * @returns {{ warmUp(): Promise<void>, prepare(o: { task: object, vocabulary?: readonly string[] }): Promise<void>,
+ *   refine(audio: Buffer, o: { task: object, mimeType: string, signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }): Promise<{ text: string, source: string | null }> }}
+ *   task 是定下了这一次做法的任务（../tasks 的 bind 回的）。出错时抛的都是 ModelError
  */
 export function createRefiner({
   provider,
@@ -74,25 +76,25 @@ export function createRefiner({
     /**
      * 用户开口说话了：让这一家先把要用的东西备好，说完整理时就用得上。现在只有 Gemini 有事做（建提示词缓存，
      * 见 providers/gemini-cache.mjs），花的钱记一笔"缓存"。备不好只是这一次贵一点，记一条警告，从不往外抛。
-     * 缓存的是带着词典的那份提示词：和说完整理时用的是同一份
-     * @param {{ vocabulary?: readonly string[] }} [options] 用户词典，按先后
+     * 缓存的是这个任务带着词典的那份提示词：和说完整理时用的是同一份
+     * @param {{ task: object, vocabulary?: readonly string[] }} options 这一次的任务；用户词典，按先后
      */
-    async prepare({ vocabulary = [] } = {}) {
+    async prepare({ task, vocabulary = [] }) {
       if (!client.prepare) return;
       try {
-        await metered("cache", null, () => client.prepare({ systemPrompt: promptFor(vocabulary) }));
+        await metered("cache", null, () => client.prepare({ systemPrompt: promptFor(task, vocabulary) }));
       } catch (error) {
         log.warn("prompt_cache_failed", { provider: provider.id, error: described(error).detail.slice(0, 300) });
       }
     },
 
     /**
-     * @param {{ mimeType: string, signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }} options
-     *   audioId：这是哪一次听写，记账时用；vocabulary：用户词典，按先后（写进系统提示词）
-     * @returns {Promise<string>} 整理好的文字；没有人声时是空字符串
+     * @param {{ task: object, mimeType: string, signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }} options
+     *   task：这一次的任务；audioId：这是哪一次听写，记账时用；vocabulary：用户词典，按先后（写进系统提示词）
+     * @returns {Promise<{ text: string, source: string | null }>} 任务收好的成品；没有人声时 text 是空字符串
      */
-    async refine(audio, { mimeType, signal, audioId = null, vocabulary = [] }) {
-      const systemPrompt = promptFor(vocabulary);
+    async refine(audio, { task, mimeType, signal, audioId = null, vocabulary = [] }) {
+      const systemPrompt = promptFor(task, vocabulary);
       if (vocabulary.length > 0) {
         const sent = fitTerms(vocabulary, PROMPT_VOCABULARY).length;
         log.info("vocabulary_fitted", { audio_id: audioId, hop: "native", sent, of: vocabulary.length });
@@ -107,13 +109,13 @@ export function createRefiner({
             client.generate({
               ...input,
               systemPrompt,
-              reminder: TASK_REMINDER,
+              reminder: task.native.reminder,
               signal: withTimeout(signal),
             }),
           );
           // 被拦下、被截断：适配器说了原因（一句 msg），照它说的报
           if (reply.problem) throw new LocalizedError(reply.problem);
-          return textFromModelOutput(reply.text);
+          return task.native.finish(reply.text ?? "");
         };
         return await generateClean(generateOnce, log);
       } catch (error) {
@@ -160,12 +162,12 @@ export async function createModelRefiner({ choice, apiKey, thinkingLevel, timeou
  * 不直接把时间戳删掉，是因为他也可能真的说了钟点：重来一遍还有，就当是他说的。
  * 原版 2853 条成品里没有一条带这种写法，所以多出来的这一次请求几乎只落在写坏的成品上。
  *
- * @param {() => Promise<string>} generateOnce
+ * @param {() => Promise<{ text: string }>} generateOnce 拿一次任务收好的成品
  * @param {{ warn: (event: string, fields: object) => void }} log
  */
 export async function generateClean(generateOnce, log) {
   const first = await generateOnce();
-  if (!STRAY_TIMESTAMP.test(first)) return first;
+  if (!STRAY_TIMESTAMP.test(first.text)) return first;
   log.warn("refine_retry", { reason: "成品里夹着时间戳" });
   return generateOnce();
 }

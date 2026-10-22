@@ -28,7 +28,12 @@ import { loadConfig } from "../../src/server/config.mjs";
 import { describeRoute } from "../../src/server/modes.mjs";
 import { createChatPolisher } from "../../src/server/refine/polisher.mjs";
 import { createModelRefiner } from "../../src/server/refine/refiner.mjs";
+import { polishPromptWith } from "../../src/server/tasks/dictate/polish-prompt.mjs";
+import { findTask } from "../../src/server/tasks/index.mjs";
 import { resolvePaths } from "../../src/storage/paths.mjs";
+
+/** 语音输入这件事（src/server/tasks）：评测、量时间都是拿它跑 */
+const DICTATION = findTask("dictate").bind({});
 
 const TYPELESS_DB = join(homedir(), "Library/Application Support/Typeless/typeless.db");
 const QUIET = { info() {}, warn() {}, error() {} };
@@ -147,7 +152,9 @@ async function nativeRunner({ route, apiKey }) {
   });
   return {
     warmUp: () => refiner.warmUp(),
-    run: async (sample) => ({ text: await refiner.refine(readFileSync(sample.audioPath), { mimeType: "audio/ogg" }) }),
+    run: async (sample) => ({
+      text: (await refiner.refine(readFileSync(sample.audioPath), { task: DICTATION, mimeType: "audio/ogg" })).text,
+    }),
     summarize: () => console.log(`因为成品写坏而重试：${retries} 次`),
   };
 }
@@ -179,11 +186,17 @@ async function localRunner({ route, apiKey }, samples, out, prompt) {
     customUrl: route.customUrl,
     apiKey,
     log: QUIET,
-    prompt,
   });
+  // 候选的提示词换掉语音输入整理那一步的系统提示词，别的照旧
+  const task = prompt
+    ? { ...DICTATION, polish: { ...DICTATION.polish, system: (terms) => polishPromptWith(terms, prompt) } }
+    : DICTATION;
   return {
     warmUp: () => polisher.warmUp(),
-    run: async ({ id }) => ({ transcript: transcripts[id], text: await polisher.polish(transcripts[id]) }),
+    run: async ({ id }) => ({
+      transcript: transcripts[id],
+      text: (await polisher.polish(transcripts[id], { task })).text,
+    }),
     summarize: () => console.log("耗时只算润色那一跳"),
   };
 }

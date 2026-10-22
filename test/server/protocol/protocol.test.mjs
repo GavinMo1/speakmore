@@ -27,7 +27,38 @@ test("start_audio：只取用得到的字段，多余的字段不报错", () => 
   const message = parseClientMessage(
     JSON.stringify({ type: "start_audio", audio_id: "abc", audio_chunk_time: 3, mode: "voice_transcript" }),
   );
-  assert.deepEqual(message, { type: "start_audio", audioId: "abc" });
+  assert.deepEqual(message, { type: "start_audio", audioId: "abc", mode: "voice_transcript" });
+  // mode 可以不写（老的页面只发 audio_id），写了要是不长的字符串；认不认识由服务端按任务表查
+  assert.equal(parseClientMessage(JSON.stringify({ type: "start_audio", audio_id: "abc" })).mode, null);
+  for (const mode of ["", 3, "x".repeat(65)]) {
+    assert.throws(
+      () => parseClientMessage(JSON.stringify({ type: "start_audio", audio_id: "abc", mode })),
+      (error) => error instanceof ProtocolError && error.code === "invalid_field",
+    );
+  }
+});
+
+test("set_mode_config：照原版写发给服务端的模式名和参数；参数不写是空的，写了要是 JSON 对象", () => {
+  const message = {
+    type: "set_mode_config",
+    audio_id: "abc",
+    mode: "translation",
+    parameters: { output_language: "en" },
+  };
+  assert.deepEqual(parseClientMessage(JSON.stringify(message)), {
+    type: "set_mode_config",
+    audioId: "abc",
+    mode: "translation",
+    parameters: { output_language: "en" },
+  });
+  const bare = parseClientMessage(JSON.stringify({ type: "set_mode_config", audio_id: "abc", mode: "transcript" }));
+  assert.deepEqual(bare.parameters, {});
+  for (const broken of [{ mode: "translation", parameters: [] }, { mode: "translation", parameters: "en" }, {}]) {
+    assert.throws(
+      () => parseClientMessage(JSON.stringify({ type: "set_mode_config", audio_id: "abc", ...broken })),
+      (error) => error instanceof ProtocolError && error.code === "invalid_field",
+    );
+  }
 });
 
 test("set_audio_chunk_info：序号和字节数必须是正整数", () => {

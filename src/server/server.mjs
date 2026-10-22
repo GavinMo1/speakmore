@@ -9,16 +9,20 @@ import {
   ServerType,
 } from "./protocol/protocol.mjs";
 import { RecordingSession } from "./protocol/session.mjs";
+import { findTask, taskOfMode } from "./tasks/index.mjs";
 
 export const WS_PATH = "/ws/rt_voice_flow";
 
 /** 约 25 分钟的录音；Gemini 内联音频的请求上限是 20 MB，base64 之后仍有余量 */
 const DEFAULT_MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 const ERROR_DETAIL_MAX_LENGTH = 300;
+/** start_audio 里没写 mode 时当语音输入：0.15 以前的页面、只发 audio_id 的工具 */
+const DEFAULT_MODE = findTask("dictate").mode;
 
 /**
  * 启动听写服务。refiner 是"音频进、文字出"的那一步（refine），可以带一个开口时先做准备的 prepare，
- * 由调用方传入，测试时换成假的。
+ * 由调用方传入，测试时换成假的。两个都带上这一次的任务（tasks/：语音输入、语音翻译），refine 回的是任务收好的成品
+ * { text, source }。
  * vocabulary 交出用户的词典（storage/vocabulary.mjs 的 terms）：开口时、整理时各读一次，交给 prepare 和 refine，
  * 各个模型按自己的收法用（原版的词典在它的服务端，我们的在本机，读的地方也在这一层）
  * onActivity 在页面每发来一条消息（开口、每一块音频、说完）时调用：按需装载的本机模型从最后一次动静起算空闲（app/service.mjs）
@@ -101,19 +105,33 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor, 
   const onText = (text) => {
     const message = parseClientMessage(text);
     switch (message.type) {
-      case ClientType.START:
+      case ClientType.START: {
         if (session) {
           // 客户端取消录音时不发 end_audio，直接开始下一次
           log.info("session_abandoned", { audio_id: session.audioId, chunks: session.chunkCount });
         }
-        session = new RecordingSession(message.audioId, { maxTotalBytes: maxAudioBytes });
-        // 用户开口了：让模型那边先备好要用的东西（Gemini 建提示词缓存），说完整理时就用得上。
-        // 不等它；备不好只是这一次贵一点，记一笔就算了
-        Promise.resolve()
-          .then(() => refiner.prepare?.({ vocabulary: vocabularyFor(message.audioId) }))
-          .catch((error) => log.warn("prepare_failed", { audio_id: message.audioId, error: String(error?.message) }));
+        const definition = taskOfMode(message.mode ?? DEFAULT_MODE);
+        if (!definition) {
+          session = null;
+          throw new ProtocolError("unknown_mode", `不认识的模式：${message.mode}`);
+        }
+        session = new RecordingSession(message.audioId, { maxTotalBytes: maxAudioBytes, definition });
+        // 不要参数的任务开口就定下来；要参数的（翻译要目标语言）等紧跟着的 set_mode_config
+        if (definition.parameters.length === 0) settle(session, {});
         send(ServerType.STARTED, { audio_id: message.audioId, start_time: Date.now() });
         break;
+      }
+      case ClientType.MODE_CONFIG: {
+        const current = requireSession(message.audioId);
+        if (message.mode !== current.definition.configMode) {
+          throw new ProtocolError(
+            "mode_mismatch",
+            `这次录音是 ${current.definition.mode}，set_mode_config 写的是 ${message.mode}`,
+          );
+        }
+        settle(current, message.parameters);
+        break;
+      }
       case ClientType.CHUNK_INFO:
         requireSession(message.audioId).announceChunk(message);
         break;
@@ -127,13 +145,34 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor, 
     }
   };
 
+  /**
+   * 按参数定下这一次的做法，并让模型那边先备好要用的东西（Gemini 建提示词缓存），说完整理时就用得上。
+   * 参数不对（翻译写了不认识的语言）是协议错误。准备不等它；备不好只是这一次贵一点，记一笔就算了
+   */
+  const settle = (current, parameters) => {
+    try {
+      current.task = current.definition.bind(parameters);
+    } catch (error) {
+      throw new ProtocolError("invalid_parameters", String(error?.message ?? error));
+    }
+    const { task } = current;
+    Promise.resolve()
+      .then(() => refiner.prepare?.({ task, vocabulary: vocabularyFor(current.audioId) }))
+      .catch((error) => log.warn("prepare_failed", { audio_id: current.audioId, error: String(error?.message) }));
+  };
+
   const onChunk = (data) => {
     const { index, size } = requireSession().addChunk(data);
     send(ServerType.CHUNK_RECEIVED, { index, server_t: Date.now(), size });
   };
 
   const finish = async (finished) => {
-    const context = { audio_id: finished.audioId, chunks: finished.chunkCount, bytes: finished.totalBytes };
+    const context = {
+      audio_id: finished.audioId,
+      task: finished.definition.id,
+      chunks: finished.chunkCount,
+      bytes: finished.totalBytes,
+    };
     if (finished.chunkCount === 0) {
       log.warn("no_audio", context);
       send(ServerType.PROCESSING_ERROR, {
@@ -141,6 +180,16 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor, 
         code: "no_audio",
         detail: "no audio received",
         problem: msg("voice.noAudio"),
+      });
+      return;
+    }
+    if (finished.task === null) {
+      // 要参数的模式（翻译）没等到 set_mode_config：客户端的毛病，说清楚，不拿默认的参数硬做
+      log.warn("mode_config_missing", context);
+      send(ServerType.PROCESSING_ERROR, {
+        audio_id: finished.audioId,
+        code: "mode_config_missing",
+        detail: `${finished.definition.mode} 要先发 set_mode_config（${finished.definition.parameters.join("、")}）`,
       });
       return;
     }
@@ -156,7 +205,8 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor, 
     const startedAt = performance.now();
     const vocabulary = vocabularyFor(finished.audioId);
     try {
-      const refinedText = await refiner.refine(finished.merge(), {
+      const result = await refiner.refine(finished.merge(), {
+        task: finished.task,
         mimeType: finished.mimeType,
         signal: abort.signal,
         audioId: finished.audioId,
@@ -166,14 +216,17 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor, 
       log.info("refined", {
         ...context,
         refine_ms: Math.round(performance.now() - startedAt),
-        text_length: refinedText.length,
+        text_length: result.text.length,
+        ...(result.source === null ? {} : { source_length: result.source.length }),
         // 词典里有几个词（每一跳送了几个记在各跳的 vocabulary_fitted）
         vocabulary_terms: vocabulary.length,
       });
-      // 后五项在普通听写里实测都是 null，照原样带上，客户端按同一套字段解析
+      // 后五项在普通听写里实测都是 null，照原样带上，客户端按同一套字段解析。
+      // source_text 是我们加的：翻译时他说的那段话（存进历史），语音输入是 null
       send(ServerType.COMPLETED, {
         audio_id: finished.audioId,
-        refined_text: refinedText,
+        refined_text: result.text,
+        source_text: result.source,
         status: true,
         run_index: 1,
         web_metadata: null,

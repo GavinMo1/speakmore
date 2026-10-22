@@ -5,6 +5,8 @@ import WebSocket from "ws";
 import { LocalizedError, msg } from "../../src/i18n/index.mjs";
 import { startServer, WS_PATH } from "../../src/server/server.mjs";
 
+/** 任务收好的成品：语音输入只有一段字 */
+const done = (text) => ({ text, source: null });
 const ogg = (payload) => Buffer.concat([Buffer.from("OggS"), Buffer.from(payload)]);
 const silentLog = { info() {}, warn() {}, error() {} };
 
@@ -50,9 +52,9 @@ async function sendChunk(client, audioId, index, buffer) {
 test("一次完整的听写：消息顺序和成品字段与抓包一致；整理时带上是哪一次录音，记账要用", async () => {
   const received = [];
   const port = await start({
-    async refine(audio, { mimeType, audioId }) {
-      received.push({ audio, mimeType, audioId });
-      return "整理好的文字";
+    async refine(audio, { task, mimeType, audioId }) {
+      received.push({ audio, task: task.id, mimeType, audioId });
+      return done("整理好的文字");
     },
   });
   const client = await connect(port, { path: `${WS_PATH}?v=clone_0.1.0&m=0` });
@@ -85,6 +87,7 @@ test("一次完整的听写：消息顺序和成品字段与抓包一致；整�
   assert.deepEqual(completed.V, {
     audio_id: "a1",
     refined_text: "整理好的文字",
+    source_text: null,
     status: true,
     run_index: 1,
     web_metadata: null,
@@ -96,11 +99,16 @@ test("一次完整的听写：消息顺序和成品字段与抓包一致；整�
   assert.equal(completed.K, "audio_processing_completed");
 
   assert.equal(received.length, 1);
-  assert.deepEqual(received[0], { audio: Buffer.concat(chunks), mimeType: "audio/ogg", audioId: "a1" });
+  assert.deepEqual(received[0], {
+    audio: Buffer.concat(chunks),
+    task: "dictate",
+    mimeType: "audio/ogg",
+    audioId: "a1",
+  });
 });
 
 test("同一条连接上可以接着做第二次听写", async () => {
-  const port = await start({ refine: async (audio) => `共 ${audio.length} 字节` });
+  const port = await start({ refine: async (audio) => done(`共 ${audio.length} 字节`) });
   const client = await connect(port);
   for (const audioId of ["a1", "a2"]) {
     client.sendJson({ type: "start_audio", audio_id: audioId });
@@ -120,7 +128,7 @@ test("整理失败时回 audio_processing_error，连接不断", async () => {
     async refine() {
       calls += 1;
       if (calls === 1) throw new Error("上游 503");
-      return "第二次成功";
+      return done("第二次成功");
     },
   });
   const client = await connect(port);
@@ -151,7 +159,7 @@ test("一块音频都没有就结束：不去调模型，回 no_audio", async ()
   const port = await start({
     async refine() {
       calls += 1;
-      return "不该走到这里";
+      return done("不该走到这里");
     },
   });
   const client = await connect(port);
@@ -185,7 +193,7 @@ test("整理失败时带上给人看的那句话（problem），由悬浮条按�
 });
 
 test("顺序不对的消息回 error，并说明原因", async () => {
-  const port = await start({ refine: async () => "" });
+  const port = await start({ refine: async () => done("") });
   const client = await connect(port);
 
   client.sendBinary(ogg("x"));
@@ -206,7 +214,7 @@ test("顺序不对的消息回 error，并说明原因", async () => {
 });
 
 test("网页发起的连接和别的路径都拒绝", async () => {
-  const port = await start({ refine: async () => "" });
+  const port = await start({ refine: async () => done("") });
   for (const options of [{ origin: "https://evil.example" }, { path: "/other" }]) {
     const socket = new WebSocket(`ws://127.0.0.1:${port}${options.path ?? WS_PATH}`, {
       origin: options.origin,
@@ -226,7 +234,7 @@ test("一开始录音就让模型那边先备好（Gemini 建提示词缓存）�
       prepared++;
       throw new Error("建缓存失败");
     },
-    refine: async () => "整理好的文字",
+    refine: async () => done("整理好的文字"),
   });
   const client = await connect(port);
   client.sendJson({ type: "start_audio", audio_id: "p1" });
@@ -239,7 +247,7 @@ test("一开始录音就让模型那边先备好（Gemini 建提示词缓存）�
 });
 
 test("整理的那一步不做准备（没有 prepare）也照常听写", async () => {
-  const port = await start({ refine: async () => "文字" });
+  const port = await start({ refine: async () => done("文字") });
   const client = await connect(port);
   client.sendJson({ type: "start_audio", audio_id: "p2" });
   assert.equal((await client.next()).K, "audio_session_started");
@@ -254,7 +262,7 @@ test("用户词典：开口时和整理时各读一次，交给 prepare 和 refi
       },
       async refine(_audio, options) {
         seen.push(["refine", options.vocabulary]);
-        return "Runzo";
+        return done("Runzo");
       },
     },
     { vocabulary: () => ["Runzo", "埋点"] },
@@ -280,7 +288,7 @@ test("用户词典读不出来（文件坏了）：记一条警告，这次照�
     refiner: {
       async refine(_audio, options) {
         seen.push(options.vocabulary);
-        return "文字";
+        return done("文字");
       },
     },
     log: { ...silentLog, warn: (event, fields) => warnings.push({ event, ...fields }) },
@@ -297,4 +305,63 @@ test("用户词典读不出来（文件坏了）：记一条警告，这次照�
   assert.equal((await client.next()).V.refined_text, "文字");
   assert.deepEqual(seen, [[]]);
   assert.ok(warnings.some(({ event, audio_id }) => event === "vocabulary_unavailable" && audio_id === "v2"));
+});
+
+// ---------- 模式：start_audio 写内部名，要参数的紧跟 set_mode_config（照原版，docs/04-voice-pipeline.md） ----------
+
+test("开口时按模式找任务：准备和整理拿到的是同一个定好的任务；没写模式的当语音输入", async () => {
+  const seen = [];
+  const port = await start({
+    async prepare({ task }) {
+      seen.push(["prepare", task]);
+    },
+    async refine(_audio, { task }) {
+      seen.push(["refine", task]);
+      return done("好");
+    },
+  });
+  const client = await connect(port);
+  for (const [audioId, mode] of [
+    ["m1", "voice_transcript"],
+    ["m2", undefined],
+  ]) {
+    client.sendJson({ type: "start_audio", audio_id: audioId, ...(mode ? { mode } : {}) });
+    await client.next();
+    await sendChunk(client, audioId, 1, ogg("x"));
+    client.sendJson({ type: "end_audio", audio_id: audioId });
+    await client.next();
+    assert.equal((await client.next()).V.refined_text, "好");
+  }
+  assert.deepEqual(
+    seen.map(([step, task]) => [step, task.id]),
+    [
+      ["prepare", "dictate"],
+      ["refine", "dictate"],
+      ["prepare", "dictate"],
+      ["refine", "dictate"],
+    ],
+  );
+  assert.equal(seen[0][1], seen[1][1]);
+});
+
+test("不认识的模式、set_mode_config 和这次录音的模式对不上：回协议错误，不调模型", async () => {
+  let calls = 0;
+  const port = await start({
+    async refine() {
+      calls += 1;
+      return done("不该走到这里");
+    },
+  });
+  const client = await connect(port);
+  client.sendJson({ type: "start_audio", audio_id: "x1", mode: "voice_command" });
+  const unknown = await client.next();
+  assert.equal(unknown.K, "error");
+  assert.equal(unknown.V.code, "unknown_mode");
+
+  client.sendJson({ type: "start_audio", audio_id: "x2", mode: "voice_transcript" });
+  await client.next();
+  client.sendJson({ type: "set_mode_config", audio_id: "x2", mode: "translation", parameters: {} });
+  const mismatch = await client.next();
+  assert.equal(mismatch.V.code, "mode_mismatch");
+  assert.equal(calls, 0);
 });

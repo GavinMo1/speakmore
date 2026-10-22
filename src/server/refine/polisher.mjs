@@ -3,11 +3,10 @@ import { fitTerms, PROMPT_VOCABULARY } from "../../vocabulary/support.mjs";
 import { chatEndpoint, findChatVendor, PROTOCOLS, requestFor } from "../chat/vendors.mjs";
 import { toModelError } from "../providers/errors.mjs";
 import { createMeter } from "./meter.mjs";
-import { textFromModelOutput } from "./output.mjs";
-import { POLISH_PROMPT, polishInput, polishPromptWith } from "./polish-prompt.mjs";
 
-// 润色：本地转写出的原文 → 成品文字。本地转写链路的第二跳，交给哪一家的哪个纯文字模型由用户选（chat/vendors.mjs）。
-// 和原生链路的 refiner.mjs 是兄弟：记账（meter.mjs）和收尾（output.mjs）共用，提示词各用各的。
+// 整理：转出来的原文 → 成品。混合方式的第二步，交给哪一家的哪个纯文字模型由用户选（chat/vendors.mjs）。
+// 让模型做什么（系统提示词、用户消息、成品怎么收）由每次交进来的任务定（../tasks，用它的 polish 那一副），
+// 这里只管怎么交、怎么记账、出错怎么认。和直出的 refiner.mjs 是兄弟，记账（meter.mjs）共用。
 
 /** 一次请求最多等多久。实测 DeepSeek 关掉思考后一两句话 0.7 秒，长段落几秒，留足余量 */
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -20,10 +19,9 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * @param {(error: unknown, detail: string) => object | null} [options.classify] 这个协议的报错怎么认
  * @param {string} [options.apiKey] 只用来从报错里抹掉它
  * @param {(record: object) => void} [options.onCall] 记账，见 meter.mjs
- * @param {string} [options.prompt] 系统提示词。调提示词时评测脚本（scripts/dev/eval-prompt.mjs）换成候选的版本
  * @returns {{ warmUp(): Promise<void>,
- *   polish(transcript: string, o: { signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }): Promise<string> }}
- *   出错时抛的都是 ModelError
+ *   polish(transcript: string, o: { task: object, signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }): Promise<{ text: string, source: string | null }> }}
+ *   task 是定下了这一次做法的任务（../tasks 的 bind 回的）。出错时抛的都是 ModelError
  */
 export function createPolisher({
   endpoint,
@@ -33,7 +31,6 @@ export function createPolisher({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   log,
   onCall = () => {},
-  prompt = POLISH_PROMPT,
 }) {
   const described = (error) => toModelError(error, { provider: endpoint, apiKey, classify });
   const metered = createMeter({ provider: endpoint, log, onCall });
@@ -53,14 +50,15 @@ export function createPolisher({
     },
 
     /**
-     * @param {string} transcript 本地转写出的原文
-     * @param {{ signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }} [options]
-     *   vocabulary：用户词典，按先后（按大模型提示词的上限挑好、写进系统提示词）
-     * @returns {Promise<string>} 成品文字；原文是空的、或者模型判断没有要输入的内容时是空字符串
+     * @param {string} transcript 转出来的原文
+     * @param {{ task: object, signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }} options
+     *   task：这一次的任务；vocabulary：用户词典，按先后（按大模型提示词的上限挑好，交给任务写进系统提示词）
+     * @returns {Promise<{ text: string, source: string | null }>} 任务收好的成品；原文是空的、
+     *   或者模型判断没有要输入的内容时 text 是空字符串
      */
-    async polish(transcript, { signal, audioId = null, vocabulary = [] } = {}) {
+    async polish(transcript, { task, signal, audioId = null, vocabulary = [] }) {
       // 没转出字（静音、只有噪声）就不必花这一次请求
-      if (transcript.trim() === "") return "";
+      if (transcript.trim() === "") return { text: "", source: null };
       const terms = fitTerms(vocabulary, PROMPT_VOCABULARY);
       if (vocabulary.length > 0) {
         log.info("vocabulary_fitted", { audio_id: audioId, hop: "polish", sent: terms.length, of: vocabulary.length });
@@ -68,13 +66,13 @@ export function createPolisher({
       try {
         const reply = await metered("dictation", audioId, () =>
           client.complete({
-            system: polishPromptWith(terms, prompt),
-            user: polishInput(transcript),
+            system: task.polish.system(terms),
+            user: task.polish.input(transcript),
             signal: withTimeout(signal),
           }),
         );
         if (reply.problem) throw new LocalizedError(reply.problem);
-        return textFromModelOutput(reply.text);
+        return task.polish.finish(reply.text ?? "", transcript);
       } catch (error) {
         throw described(error);
       }
@@ -90,7 +88,6 @@ export function createPolisher({
  * @param {Record<string, unknown> | null} [options.customParams] 自定义服务的额外参数（设置里的 customParams）
  * @param {string} options.apiKey
  * @param {typeof fetch} [options.fetch] 测试时换成假的
- * @param {string} [options.prompt] 见 createPolisher
  */
 export async function createChatPolisher({
   choice,
@@ -101,7 +98,6 @@ export async function createChatPolisher({
   log,
   onCall,
   fetch,
-  prompt,
 }) {
   const vendor = findChatVendor(choice.vendor);
   if (!vendor) throw new LocalizedError(msg("key.unknownProvider", { id: choice.vendor }));
@@ -125,6 +121,5 @@ export async function createChatPolisher({
     timeoutMs,
     log,
     onCall,
-    prompt,
   });
 }

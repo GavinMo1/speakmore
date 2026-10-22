@@ -24,8 +24,12 @@ import { findChatVendor } from "../../src/server/chat/vendors.mjs";
 import { findProvider } from "../../src/server/providers/index.mjs";
 import { createChatPolisher } from "../../src/server/refine/polisher.mjs";
 import { createModelRefiner } from "../../src/server/refine/refiner.mjs";
+import { findTask } from "../../src/server/tasks/index.mjs";
 import { findVendor } from "../../src/server/vendors.mjs";
 import { resolvePaths } from "../../src/storage/paths.mjs";
+
+/** 语音输入这件事（src/server/tasks）：评测、量时间都是拿它跑 */
+const DICTATION = findTask("dictate").bind({});
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const QUIET = { info() {}, warn() {}, error() {} };
@@ -111,7 +115,7 @@ if (roles.includes("native")) {
           log: QUIET,
           onCall,
         });
-        return refiner.refine(audio, { mimeType: "audio/webm" });
+        return (await refiner.refine(audio, { task: DICTATION, mimeType: "audio/webm" })).text;
       }),
     );
   }
@@ -135,7 +139,7 @@ if (roles.includes("transcribe")) {
         log: QUIET,
         onCall,
       });
-      return polisher.polish(transcript);
+      return (await polisher.polish(transcript, { task: DICTATION })).text;
     });
     report({ ...result, transcript, polishedBy: `${FIXED_POLISH.vendor}/${FIXED_POLISH.model}` });
   }
@@ -163,7 +167,7 @@ if (roles.includes("polish")) {
           log: QUIET,
           onCall,
         });
-        return polisher.polish(transcript);
+        return (await polisher.polish(transcript, { task: DICTATION })).text;
       });
       report({ ...result, transcript, transcribedBy: FIXED_TRANSCRIBER });
     }

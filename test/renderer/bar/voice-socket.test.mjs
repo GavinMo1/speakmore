@@ -22,8 +22,10 @@ afterEach(async () => {
   server = undefined;
 });
 
+/** refine 给出成品的那段字：服务端要的是任务收好的成品 { text, source }，语音输入的 source 是 null */
 async function start(refine) {
-  server = await startServer({ port: 0, refiner: { refine }, log: silentLog });
+  const refiner = { refine: async (...args) => ({ text: await refine(...args), source: null }) };
+  server = await startServer({ port: 0, refiner, log: silentLog });
   voice = new VoiceSocket(`ws://127.0.0.1:${server.port}${WS_PATH}`);
   return voice;
 }

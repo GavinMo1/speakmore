@@ -5,11 +5,15 @@ import {
   DEFAULT_THINKING_LEVEL,
   formatModelChoice,
 } from "../../../src/server/providers/index.mjs";
-import { SYSTEM_PROMPT, TASK_REMINDER } from "../../../src/server/refine/prompt.mjs";
 import { createModelRefiner } from "../../../src/server/refine/refiner.mjs";
+import { SYSTEM_PROMPT, TASK_REMINDER } from "../../../src/server/tasks/dictate/prompt.mjs";
+import { findTask } from "../../../src/server/tasks/index.mjs";
 import { mapWithLimit } from "../concurrency.mjs";
 import { fingerprint } from "../results.mjs";
 import { findSource } from "../sources.mjs";
+
+/** 语音输入这件事（src/server/tasks）：评测、量时间都是拿它跑 */
+const DICTATION = findTask("dictate").bind({});
 
 // 参照：App 现在的原生链路——录音直接交给 Gemini 3.6 Flash（思考档位 MINIMAL），用 App 的提示词和收尾出成品。
 // 作者 2026-10-16 定的：本地模型转出来的字拿去和它比。它也是原生链路的耗时基线。
@@ -47,7 +51,7 @@ export async function runReference({ clips, results, datasetDir, apiKey, concurr
     const audio = readFileSync(join(datasetDir, clip.file));
     const startedAt = performance.now();
     try {
-      const text = await refiner.refine(audio, { mimeType: "audio/wav" });
+      const { text } = await refiner.refine(audio, { task: DICTATION, mimeType: "audio/wav" });
       const ms = Math.round(performance.now() - startedAt);
       results.put("reference", referenceKey(clip), { clip: clip.id, subject, output: { text, ms } });
     } catch (error) {

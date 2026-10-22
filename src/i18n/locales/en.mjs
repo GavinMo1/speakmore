@@ -415,6 +415,7 @@ export default {
     disconnected: "Lost the connection to the server",
     timeout: "No result after {seconds} seconds",
     serverError: "Server error {code}: {detail}",
+    unsupported: "{feature} isn't available in {mode} mode",
   },
 
   delivery: {

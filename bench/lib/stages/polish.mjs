@@ -1,8 +1,12 @@
 import { findChatVendor, formatChatChoice, parseChatChoice } from "../../../src/server/chat/vendors.mjs";
-import { POLISH_PROMPT, polishInput } from "../../../src/server/refine/polish-prompt.mjs";
 import { createChatPolisher } from "../../../src/server/refine/polisher.mjs";
+import { POLISH_PROMPT, polishInput } from "../../../src/server/tasks/dictate/polish-prompt.mjs";
+import { findTask } from "../../../src/server/tasks/index.mjs";
 import { mapWithLimit } from "../concurrency.mjs";
 import { fingerprint } from "../results.mjs";
+
+/** 语音输入这件事（src/server/tasks）：评测、量时间都是拿它跑 */
+const DICTATION = findTask("dictate").bind({});
 
 // 润色：本地转写链路的第二跳。拿各个候选转出的原文交给纯文字大模型，出成品，用的是 App 里同一个润色器
 // （src/server/refine/polisher.mjs，提示词、参数、收尾都一样）。成品拿去和参照（原生链路的成品）比，
@@ -56,7 +60,7 @@ export async function runPolish({ cells, choice, results, apiKey, concurrency, f
   await mapWithLimit([...todo], concurrency, async ([key, cell]) => {
     const startedAt = performance.now();
     try {
-      const text = await polisher.polish(cell.transcript.text, { audioId: key });
+      const { text } = await polisher.polish(cell.transcript.text, { task: DICTATION, audioId: key });
       const ms = Math.round(performance.now() - startedAt);
       const call = usage.get(key);
       results.put("polish", key, {
