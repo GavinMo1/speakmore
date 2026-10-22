@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'" />
+    <title>SpeakMore</title>
+    <link rel="stylesheet" href="../shared/tokens.css" />
+    <link rel="stylesheet" href="../shared/window.css" />
+    <link rel="stylesheet" href="card.css" />
+  </head>
+  <body data-phase="hidden">
+    <!-- 图标：lucide（ISC 许可），线宽 2，跟着字的颜色走 -->
+    <svg class="sprite" aria-hidden="true">
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" /></symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24">
+        <path d="M12 17v5" />
+        <path
+          d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+        />
+      </symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24">
+        <rect width="14" height="14" x="8" y="8" rx="2" />
+        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+      </symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" /></symbol>
+      <symbol id="i-replace" viewBox="0 0 24 24">
+        <path d="M14 4a2 2 0 0 1 2-2m0 8a2 2 0 0 1-2-2m6-6a2 2 0 0 1 2 2m0 4a2 2 0 0 1-2 2M3 7l3 3 3-3M6 10V5a3 3 0 0 1 3-3h1" />
+        <rect x="2" y="14" width="8" height="8" rx="2" />
+      </symbol>
+      <symbol id="i-key-round" viewBox="0 0 24 24">
+        <path
+          d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+        />
+        <circle cx="16.5" cy="7.5" r=".5" />
+      </symbol>
+      <symbol id="i-rotate-cw" viewBox="0 0 24 24">
+        <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+        <path d="M21 3v5h-5" />
+      </symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 8v4m0 4h.01" />
+      </symbol>
+    </svg>
+
+    <article class="card" id="card" role="dialog" aria-live="polite">
+      <header class="head">
+        <span class="choice" id="language" data-region="language">
+          <span id="language-name"></span>
+          <svg class="icon" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+        </span>
+        <span class="spacer"></span>
+        <button type="button" class="icon-button" id="pin" tabindex="-1" data-region="pin">
+          <svg class="icon" aria-hidden="true"><use href="#i-pin" /></svg>
+        </button>
+        <button
+          type="button"
+          class="icon-button"
+          id="close"
+          tabindex="-1"
+          data-region="close"
+          aria-label="Close"
+          data-i18n-aria-label="lookup.card.close"
+        >
+          <svg class="icon" aria-hidden="true"><use href="#i-close" /></svg>
+        </button>
+      </header>
+      <div class="menu" id="menu" hidden></div>
+      <div class="loading" id="loading" role="status" aria-label="Translating" data-i18n-aria-label="lookup.card.translating"><i></i><i></i><i></i></div>
+      <p class="text" id="text"></p>
+      <p class="problem" id="problem">
+        <svg class="icon problem-icon" aria-hidden="true"><use href="#i-alert" /></svg>
+        <span id="problem-text"></span>
+      </p>
+      <footer class="foot" id="foot">
+        <span class="button small" id="copy" data-region="copy">
+          <svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg>
+          <span id="copy-label" data-i18n="lookup.card.copy">Copy</span>
+        </span>
+        <span class="button small primary" id="replace" data-region="replace">
+          <svg class="icon" aria-hidden="true"><use href="#i-replace" /></svg>
+          <span data-i18n="lookup.card.replace">Replace selection</span>
+        </span>
+        <span class="button small primary" id="keys" data-region="keys">
+          <svg class="icon" aria-hidden="true"><use href="#i-key-round" /></svg>
+          <span data-i18n="lookup.card.keys">Set up key</span>
+        </span>
+        <span class="button small primary" id="retry" data-region="retry">
+          <svg class="icon" aria-hidden="true"><use href="#i-rotate-cw" /></svg>
+          <span data-i18n="lookup.card.retry">Retry</span>
+        </span>
+      </footer>
+    </article>
+    <script type="module" src="card.mjs"></script>
+  </body>
+</html>

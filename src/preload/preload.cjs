@@ -34,6 +34,14 @@ contextBridge.exposeInMainWorld("speakmore", {
   deliver: (payload) => ipcRenderer.invoke("dictation:deliver", payload),
   reportFailure: (payload) => ipcRenderer.invoke("dictation:failed", payload),
 
+  // 划词卡片（src/app/lookup/card-window.mjs）：主进程交来这一次的样子、截到的点击；页面报卡片多高、要截哪几块，
+  // 点了什么，指针在不在要滚动的译文上
+  onLookupView: (callback) => ipcRenderer.on("lookup:view", (_event, view) => callback(view)),
+  onLookupClick: (callback) => ipcRenderer.on("lookup:click", (_event, id) => callback(id)),
+  lookupLayout: (layout) => ipcRenderer.send("lookup:layout", layout),
+  lookupAct: (action) => ipcRenderer.send("lookup:act", action),
+  lookupScroll: (on) => ipcRenderer.send("lookup:scroll", on),
+
   onHotkeysChanged: (callback) => ipcRenderer.on("bar:hotkeys", (_event, hotkeys) => callback(hotkeys)),
   onBarHint: (callback) => ipcRenderer.on("bar:hint", (_event, value) => callback(value)),
 

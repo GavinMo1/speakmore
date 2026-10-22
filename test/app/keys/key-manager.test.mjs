@@ -743,3 +743,21 @@ test("删掉正在走的路线里另一家的 key：整条路线停下，状态�
   assert.equal(keys.current.vendor.id, "bailian");
   assert.equal(service.using, null);
 });
+
+// ---------- 别的功能按厂商取 key（划词翻译：和语音那边同一家用同一把） ----------
+
+test("keyOf：环境变量优先，其次存着的；没有是 null；存着的解不开照样抛；正在用的那家给的是这次运行实际在用的那把", async () => {
+  const { keys } = setup({ provider: "gemini", stored: "gemini-stored", storedDeepseek: "deepseek-stored" });
+  assert.deepEqual(keys.keyOf("deepseek"), { apiKey: "deepseek-stored", source: "stored" });
+  assert.equal(keys.keyOf("bailian"), null);
+  assert.throws(() => keys.keyOf("nope"), LocalizedError);
+  const fromEnv = setup({ env: { DEEPSEEK_API_KEY: " env-key " }, storedDeepseek: "deepseek-stored" });
+  assert.deepEqual(fromEnv.keys.keyOf("deepseek"), { apiKey: "env-key", source: "env" });
+  const broken = setup({ storedDeepseek: new Error("钥匙串里的密钥没了") });
+  assert.throws(() => broken.keys.keyOf("deepseek"), /钥匙串/);
+  // 正在用的那家：启动时装上的那把（中途存了新的就是新的）
+  const { keys: running } = setup({ stored: "gemini-stored" });
+  await running.loadAtStartup();
+  await running.save("gemini-new");
+  assert.deepEqual(running.keyOf("gemini"), { apiKey: "gemini-new", source: "stored" });
+});

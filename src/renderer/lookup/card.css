@@ -1,0 +1,196 @@
+/* 划词卡片（card.html）。窗口是透明的、比卡片大一圈（四周给阴影留 --pad，和 app/lookup/card-window.mjs 的 PAD 一样）。
+   卡片单独一个窗口，背后是别的应用：毛玻璃糊不了窗口外面的东西，透出来反而难读，所以用实底。
+   按钮的外形照共用的胶囊（window.css）；字号、间距只用 tokens.css 里的几档 */
+
+:root {
+  --pad: 24px;
+}
+
+html,
+body {
+  background: transparent;
+}
+
+body {
+  padding: var(--pad);
+  overflow: hidden;
+  user-select: none;
+}
+
+.sprite {
+  display: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  /* 和 card-window.mjs 的 CARD_WIDTH 一样 */
+  width: 24rem;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  color: var(--ink);
+  background: var(--surface-solid);
+  border-radius: var(--radius-card);
+  box-shadow:
+    var(--edge),
+    0 18px 48px -18px oklch(0 0 0 / 0.38);
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+body[data-phase="hidden"] .card {
+  opacity: 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2)) 0 calc(-1 * var(--space-2));
+}
+
+/* 目标语言：点开换一种 */
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: var(--control-sm);
+  padding: 0 var(--space-2);
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  border-radius: var(--radius-full);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.choice:hover,
+.choice[aria-expanded="true"] {
+  background: var(--fill-hover);
+}
+
+.choice .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--ink-2);
+  transition: rotate var(--dur-fast) var(--ease-out);
+}
+
+.choice[aria-expanded="true"] .icon {
+  rotate: 180deg;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.head .icon-button {
+  width: var(--control-sm);
+  height: var(--control-sm);
+}
+
+.head .icon-button .icon {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.head .icon-button[aria-pressed="true"] {
+  color: var(--primary);
+  background: var(--fill-selected);
+}
+
+/* 语言选单：一格一种，四列，不用滚 */
+.menu {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-1);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--line);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-sm);
+  padding: 0 var(--space-1);
+  overflow: hidden;
+  font-size: var(--text-small);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: var(--radius-full);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.menu-item:hover {
+  background: var(--fill-hover);
+}
+
+.menu-item[aria-selected="true"] {
+  font-weight: var(--weight-semibold);
+  color: var(--primary);
+  background: var(--fill-selected);
+}
+
+.text {
+  max-height: 18rem;
+  margin: 0;
+  overflow-y: auto;
+  font-size: var(--text-heading);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.loading {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.loading i {
+  height: 0.8rem;
+  background: linear-gradient(90deg, var(--fill-hover), var(--fill-selected), var(--fill-hover));
+  background-size: 200% 100%;
+  border-radius: var(--radius-full);
+  animation: shimmer 1.2s linear infinite;
+}
+
+.loading i:last-child {
+  width: 58%;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.problem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  color: var(--problem);
+}
+
+.problem-icon {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.2rem;
+}
+
+.foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .choice .icon,
+  .loading i {
+    transition: none;
+    animation: none;
+  }
+}

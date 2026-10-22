@@ -74,6 +74,9 @@ import { helperPaths, startHelper } from "./helper.mjs";
 import { createHotkeyRecording } from "./hotkey-recording.mjs";
 import { createKeyManager } from "./keys/key-manager.mjs";
 import { createKeyStore } from "./keys/key-store.mjs";
+import { createCardWindow } from "./lookup/card-window.mjs";
+import { createLookup } from "./lookup/controller.mjs";
+import { createLookupEngine } from "./lookup/engine.mjs";
 import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
 import { createModeSwitch } from "./modes.mjs";
 import { MOVE_TO, startMoveWindow } from "./move-window.mjs";
@@ -206,6 +209,9 @@ const WINDOW_ICON = join(import.meta.dirname, "../../assets/icon.ico");
  * 和主窗口内容区最上面那条拖动区（hub.css 的 .content::before，2.75rem）一样高
  */
 const CAPTION_HEIGHT = 44;
+/** 划词翻译自己的自定义服务的 key 存在哪（keyFile 的厂商 id）、从哪个环境变量来：和语音那边的 custom 分开 */
+const LOOKUP_CUSTOM_KEY = "lookupcustom";
+const LOOKUP_CUSTOM_KEY_ENV = "SPEAKMORE_LOOKUP_CUSTOM_API_KEY";
 /** 关于里"在 GitHub 上看"打开的地方 */
 const HOMEPAGE = "https://github.com/zephyr4123/speakmore";
 /** 这台机器是哪类芯片：本地模型的实测按它挑（models/catalog.mjs 的 CHIPS） */
@@ -675,26 +681,37 @@ async function main() {
   /** 语音翻译译成哪几种（设置里的 translate.to），第一种是默认。同样每次现读 */
   const currentTranslateTo = () =>
     JSON.parse(resolveSettings({ file: PATHS.settingsFile, env: process.env })["translate.to"].value);
+  /**
+   * 小帮手现在替谁截着 esc 和点击：bar（悬浮条，说话时）、lookup（划词卡片开着时）或 null。同一时间只有一个：
+   * 开始说话时卡片收起；正在说话时不理划词。esc、截到的点击按它转给谁
+   */
+  let captureOwner = null;
+  /** 悬浮条不截了：只松开它自己截的，卡片截着的不动 */
+  function releaseBarCapture() {
+    if (captureOwner !== "bar") return;
+    captureOwner = null;
+    helper.release();
+  }
   ipcMain.on("bar:set-visible", (_event, visible) => {
     if (visible) {
       bar.showInactive();
       return;
     }
     bar.hide();
-    // 条不在屏幕上时什么都不该截着。页面自己会说"不截了"，这里再说一遍是保险：
+    // 条不在屏幕上时它不该截着。页面自己会说"不截了"，这里再说一遍是保险：
     // 万一它漏说了，esc 会一直被吞掉，在哪个应用里都按不出来
-    helper.release();
+    releaseBarCapture();
   });
   // 页面崩了就更没人说"不截了"
   bar.webContents.on("render-process-gone", (_event, details) => {
     log.error("bar_gone", { reason: details.reason });
-    helper.release();
+    releaseBarCapture();
   });
   // 听写进行中，页面让小帮手把 esc 和条上两个按钮的点击截下来（null 是不截了）。
   // 页面给的是按钮在窗口里的位置，小帮手要的是在屏幕上的位置
   ipcMain.on("bar:capture", (_event, regions) => {
     if (regions === null) {
-      helper.release();
+      releaseBarCapture();
       return;
     }
     if (!Array.isArray(regions)) {
@@ -709,6 +726,9 @@ async function main() {
     });
     // "点了按钮没反应"时先看这条：位置对不对得上屏幕上画的那两个圆
     log.info("bar_capture", { regions: onScreen });
+    // 开始说话了：划词卡片收起，截取归悬浮条
+    if (captureOwner === "lookup") lookup.close("dictation");
+    captureOwner = "bar";
     helper.capture(onScreen);
   });
 
@@ -760,8 +780,13 @@ async function main() {
    *   之后重新检查权限靠的是重启小帮手，那时再弹的话每查一次弹一次
    */
   function launchHelper({ prompt }) {
-    // 换小帮手（重查权限）时正在录的那次跟着结束：旧的那个的回执、退出都按代数丢掉了，不说的话页面一直停在"请按键"
-    if (helperGeneration > 0) recording.helperGone();
+    // 换小帮手（重查权限）时正在录的那次跟着结束：旧的那个的回执、退出都按代数丢掉了，不说的话页面一直停在"请按键"。
+    // 新的小帮手没在截：开着的划词卡片收起
+    if (helperGeneration > 0) {
+      recording.helperGone();
+      lookup.close("helper");
+      captureOwner = null;
+    }
     const generation = ++helperGeneration;
     helperPermissions = null;
     helperState = "starting";
@@ -845,15 +870,20 @@ async function main() {
         recording.onRecording(event);
         break;
       case "click":
-        // 只在听写进行中才会有：那时页面让小帮手把它们截下来了
+        // 只在截着时才会有：听写进行中的悬浮条，或者开着的划词卡片
         // 字段不能叫 event：日志这一条的名字就记在 event 里，会被盖掉
-        log.info("bar_input", { input: event.event, id: event.id });
-        tellBar("input", event);
+        log.info("captured_click", { id: event.id, to: captureOwner });
+        if (captureOwner !== "lookup") tellBar("input", event);
+        else if (event.id === "outside") lookup.outside();
+        else card.click(event.id);
         break;
       case "exit":
         helperState = "stopped";
         helperPermissions = null;
         recording.helperGone();
+        // 没有小帮手就截不住卡片上的点击，也贴不回去：卡片收起
+        lookup.close("helper");
+        captureOwner = null;
         setBarControls(false);
         log.error("helper_exited", { code: event.code, signal: event.signal });
         setupChanged();
@@ -881,13 +911,16 @@ async function main() {
   /** 动作目录里的每种处理者（handler）：绑定事件交给谁 */
   const BINDING_HANDLERS = {
     session: onSessionKey,
-    // 只在说话时生效的（取消）：那时页面让小帮手截着，交给悬浮条
-    cancel: ({ fields, input }) => {
-      log.info("key_event", fields);
-      tellBar("input", input);
+    // 只在截着时生效的（取消）：交给正在截的那一个，悬浮条或者划词卡片
+    cancel: ({ event, fields, input }) => {
+      log.info("key_event", { ...fields, to: captureOwner });
+      if (captureOwner !== "lookup") tellBar("input", input);
+      else if (event.event === "binding" && event.down) lookup.cancel();
     },
-    lookup: ({ fields }) => {
+    // 划词翻译：按下就取选区、弹卡片（lookup/controller.mjs）
+    lookup: ({ event, fields }) => {
       log.info("key_event", fields);
+      if (event.event === "binding" && event.down) lookup.press();
     },
   };
 
@@ -940,6 +973,65 @@ async function main() {
     send: (contents, payload) => {
       if (!contents.isDestroyed()) contents.send("hotkey:recording", payload);
     },
+    log,
+  });
+
+  // ---------- 划词翻译（lookup/） ----------
+
+  /** 划词自己的自定义服务的 key：和语音那边的自定义服务分开存（他定的）。环境变量优先 */
+  const lookupCustomKeys = createKeyStore({ file: keyFile(PATHS, LOOKUP_CUSTOM_KEY), safeStorage });
+  function lookupCustomKey() {
+    const fromEnv = process.env[LOOKUP_CUSTOM_KEY_ENV]?.trim();
+    if (fromEnv) return { apiKey: fromEnv, source: "env" };
+    const stored = lookupCustomKeys.load();
+    return stored ? { apiKey: stored, source: "stored" } : null;
+  }
+  const lookupEngine = createLookupEngine({
+    readSettings: () => resolveSettings({ file: PATHS.settingsFile, env: process.env }),
+    keyOf: (id) => keys.keyOf(id),
+    customKey: lookupCustomKey,
+    log,
+    // 划词的每一笔账也记上，开着的历史窗口跟着更新花费
+    onCall: (call) => {
+      history.addCall(call);
+      historyChanged();
+    },
+  });
+  const card = createCardWindow({
+    BrowserWindow,
+    screen,
+    ipcMain,
+    sourceDir,
+    webPreferences,
+    windows: WINDOWS,
+    capture: (regions) => {
+      if (regions === null) {
+        if (captureOwner !== "lookup") return;
+        captureOwner = null;
+        helper.release();
+        return;
+      }
+      captureOwner = "lookup";
+      helper.capture(regions, { outside: true });
+    },
+    onAct: (action) => lookup.act(action),
+    log,
+  });
+  const lookup = createLookup({
+    selection: () => helper.selection(),
+    engine: lookupEngine,
+    card,
+    paste: (text) => helper.paste(text),
+    copy: (text) => clipboard.writeText(text),
+    notify,
+    record: (entry) => {
+      history.add(entry);
+      historyChanged();
+    },
+    // 正在说话（悬浮条截着键）时不理划词
+    busy: () => captureOwner === "bar",
+    openKeys: () => showHub({ route: "models", engine: "lookup" }),
+    newId: () => crypto.randomUUID(),
     log,
   });
 
@@ -1458,6 +1550,7 @@ async function main() {
       t = createTranslator(locale);
       refreshTrayMenu();
       tellBar("locale:changed", locale);
+      card.localeChanged(locale);
       if (hubWindow !== null) {
         if (hubTarget) hubWindow.loadFile(join(sourceDir, "renderer", "hub", "hub.html"), { query: hubTarget });
         else hubWindow.webContents.reload();

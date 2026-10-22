@@ -456,6 +456,29 @@ export default {
     unsupported: "{feature} isn't available in {mode} mode",
   },
 
+  // Selection translation (src/app/lookup)
+  lookup: {
+    noKey: "No key set for {provider}",
+    customUrlMissing: "The custom service has no address yet",
+    noSelection: "Select some text first",
+    noAccessibility: "Selection translation needs Accessibility: System Settings › Privacy & Security › Accessibility",
+    elevated: "That window runs as administrator, so its selection can't be read",
+    selectionFailed: "Couldn't read the selection; press again",
+    tooLong: "That's too long: {max} characters at a time",
+    empty: "The model returned no translation; try again",
+    card: {
+      copy: "Copy",
+      copied: "Copied",
+      replace: "Replace selection",
+      pin: "Pin",
+      unpin: "Unpin",
+      close: "Close",
+      keys: "Set up key",
+      retry: "Retry",
+      translating: "Translating",
+    },
+  },
+
   delivery: {
     silent: "Didn't hear anything",
     noAccessibility: "No Accessibility access: text copied, press ⌘V to paste",

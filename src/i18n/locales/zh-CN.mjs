@@ -438,6 +438,29 @@ export default {
     unsupported: "{mode}方式不支持{feature}",
   },
 
+  // 划词翻译（src/app/lookup）
+  lookup: {
+    noKey: "{provider} 未配置密钥",
+    customUrlMissing: "自定义服务还没填地址",
+    noSelection: "先选中要翻译的文字",
+    noAccessibility: "划词翻译要辅助功能权限：系统设置 › 隐私与安全性 › 辅助功能",
+    elevated: "那个窗口是以管理员身份运行的，取不到选中的文字",
+    selectionFailed: "没取到选中的文字，再按一次试试",
+    tooLong: "选中的太长了：一次最多 {max} 字",
+    empty: "模型没有回译文，再试一次",
+    card: {
+      copy: "复制",
+      copied: "已复制",
+      replace: "替换选中文字",
+      pin: "固定",
+      unpin: "取消固定",
+      close: "关闭",
+      keys: "配置密钥",
+      retry: "重试",
+      translating: "翻译中",
+    },
+  },
+
   delivery: {
     silent: "没有听到声音",
     noAccessibility: "没有辅助功能权限：文字已复制，按 ⌘V 粘贴",
