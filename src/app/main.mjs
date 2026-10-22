@@ -943,13 +943,7 @@ async function main() {
     barControls,
     barHint: currentBarHint(),
     // 冷启动可能超过原有的二十秒，只有启用了按需模式的本机链路放宽等待。
-    onDemandModels: Boolean(
-      service &&
-        ((usesLocalModel(service.route) && localModelMemory === "on-demand") ||
-          (service.route.mode === "local" &&
-            service.route.polish.vendor === "custom" &&
-            service.route.customModelMemory === "on-demand")),
-    ),
+    onDemandModels: Boolean(service && usesLocalModel(service.route) && localModelMemory === "on-demand"),
   }));
   handle("dictation:deliver", async (_event, payload) => {
     const result = await delivery.completed(payload);
@@ -1143,8 +1137,6 @@ async function main() {
         polish: settings.polish.value,
         customUrl: settings.customUrl.value,
         customParams: settings.customParams.value,
-        customModelMemory: settings.customModelMemory.value,
-        customModelIdleMinutes: settings.customModelIdleMinutes.value,
       },
       keys: service ? keys.sources() : {},
       status: Object.fromEntries(MODELS.map(({ id }) => [id, localModels.status(id)])),
@@ -1230,8 +1222,6 @@ async function main() {
         polish: settings.polish.value,
         customUrl: settings.customUrl.value,
         customParams: settings.customParams.value,
-        customModelMemory: settings.customModelMemory.value,
-        customModelIdleMinutes: settings.customModelIdleMinutes.value,
         vendors: CHAT_VENDORS.map(describeVendor),
       },
     };
@@ -1788,18 +1778,9 @@ async function main() {
             withProblemText(await viaModes((m) => m.setModel(model)), translatorFor(wanted)),
           "set-transcriber": async ({ transcriber, locale: wanted }) =>
             withProblemText(await viaModes((m) => m.setTranscriber(transcriber)), translatorFor(wanted)),
-          "set-polish": async ({
-            polish,
-            customUrl,
-            customParams,
-            customModelMemory,
-            customModelIdleMinutes,
-            locale: wanted,
-          }) =>
+          "set-polish": async ({ polish, customUrl, customParams, locale: wanted }) =>
             withProblemText(
-              await viaModes((m) =>
-                m.setPolish(polish, { customUrl, customParams, customModelMemory, customModelIdleMinutes }),
-              ),
+              await viaModes((m) => m.setPolish(polish, { customUrl, customParams })),
               translatorFor(wanted),
             ),
           "forget-key": ({ provider } = {}) => keys.forget({ provider }),
@@ -1809,18 +1790,9 @@ async function main() {
           // 某种模式按改后的设置能不能用（云端的第一跳、数据隐私模式）
           "check-mode": async ({ mode, changes, locale: wanted }) =>
             withProblemText(await viaModes((m) => m.check(mode, changes ?? {})), translatorFor(wanted)),
-          "check-polish": async ({
-            polish,
-            customUrl,
-            customParams,
-            customModelMemory,
-            customModelIdleMinutes,
-            locale: wanted,
-          }) =>
+          "check-polish": async ({ polish, customUrl, customParams, locale: wanted }) =>
             withProblemText(
-              await viaModes((m) =>
-                m.checkPolish(polish, { customUrl, customParams, customModelMemory, customModelIdleMinutes }),
-              ),
+              await viaModes((m) => m.checkPolish(polish, { customUrl, customParams })),
               translatorFor(wanted),
             ),
           "reload-theme": reloadTheme,

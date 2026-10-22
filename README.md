@@ -437,18 +437,14 @@ flowchart LR
 | `modelSource` | `cn` | 下载源：`cn` / `original` |
 | `acceleration` | `auto` | 加速：`auto` / `cpu` |
 | `localModelMemory` | `resident` | 本机 ASR 内存：`resident` / `on-demand` |
-| `customModelMemory` | `server` | 自定义本机 Ollama 润色内存：`server` / `on-demand` |
 | `localModelIdleMinutes` | `5` | ASR 空闲释放时间：`1` / `5` / `10` / `30` 分钟，仅按需加载时生效 |
-| `customModelIdleMinutes` | `5` | 独立的本机 Ollama 润色空闲释放时间，可选值同上 |
 | `barHint` | `on` | 悬浮条操作提示：`on` / `off` |
 | `theme` | `ink` | 主题：`ink` / `cinnabar` / `indigo` |
 | `language` | `system` | 语言：`system` / `en` / `zh-CN` |
 
 可选节省内存：在**设置 → 通用 → 本机转写模型内存**选择按需加载，ASR 会在开始录音时加载，达到所选空闲时间后释放。录音和整理期间不释放；下一次听写可能需要等待冷启动。默认仍为常驻。
 
-自定义润色服务的密钥表单中有独立的内存选项，仅支持本机 Ollama（`localhost`、`127.0.0.1` 或 `[::1]` 的 `/v1` 地址）。验证原生接口后，达到所选空闲时间后释放该模型；默认由服务管理。这不会修改 Ollama 全局设置，但共用同一模型的其他应用也可能需要等待下次冷启动。其他兼容服务和云端服务保留原有行为。
-
-转写与润色分别可选 1、5（默认）、10、30 分钟。只有对应的按需策略启用时，释放时间才能修改；关闭按需策略仍保留已选时间。较短时间更早归还内存，较长时间减少间歇听写时的重复加载。退出或切走自定义服务时会取消 SpeakMore 的计时，后续驻留由 Ollama 服务策略管理。
+转写模型可选 1、5（默认）、10、30 分钟后释放。较短时间更早归还内存，较长时间减少间歇听写时的重复装载。
 
 - 设置保存于 `~/.speakmore/settings.json`。
 - 快捷键的值为组合列表，键名采用 [`KeyboardEvent.code`](https://developer.mozilla.org/docs/Web/API/UI_Events/Keyboard_event_code_values)（如 `AltRight`、`MetaRight`、`ControlRight`、`Fn`、`Space`、`KeyK`、`F13`），两键以 `+` 相连。单个组合可直接写：`speakmore config set hotkey.dictate ControlRight+F9`；多个组合写作 JSON 数组：`'["AltRight","ControlRight"]'`。
@@ -457,6 +453,7 @@ flowchart LR
 - Gemini 思考档位可选：`MINIMAL` / `LOW` / `MEDIUM` / `HIGH`。
 - 自建服务的润色模型写作 `custom/<模型>`，地址示例 `http://127.0.0.1:11434/v1`。
 - 自定义服务需要额外参数时写入 `customParams`，例如 `{"reasoning_effort": "minimal"}`；检测与润色请求均附带，`model`、`messages`、`stream` 不可覆盖。推理模型限制输出长度时留足思考的余量（如 `{"max_completion_tokens": 4096}`），否则长段落会被截断。
+- 本机的 Ollama、LM Studio 也能空闲后释放模型，写在 `customParams` 里：Ollama（0.35 起）用 `{"keep_alive": "5m"}`，LM Studio 用 `{"ttl": 300}`（秒）。
 - Windows PowerShell 中 `--params` 的双引号前需加反斜杠：`--params '{\"reasoning_effort\": \"minimal\"}'`。
 - 通过 App 或 `speakmore mode`、`model`、`transcriber`、`polish` 切换时先行检测，立即生效。
 - `config set` 直接写入，不做检测。

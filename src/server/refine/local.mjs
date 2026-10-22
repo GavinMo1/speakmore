@@ -51,14 +51,12 @@ export function createLocalRefiner({ transcriber, polisher, log, model, onCall =
   }
 
   return {
-    dispose: () => polisher?.dispose?.(),
-
     /** 验证润色那一家的 key、地址和模型名，也让第一次润色不慢。转写器在装上的时候已经验过了；不润色时没什么要验的 */
     warmUp: async () => {
       await polisher?.warmUp();
     },
 
-    /** 转写模型的预加载由内置服务管理，这里不重复准备 */
+    /** 开口时没什么要先备的：转写模型装在转写进程里，按需装载时由内置服务在开口那一刻装上（app/service.mjs） */
     async prepare() {},
 
     async refine(audio, { mimeType, signal, audioId = null, vocabulary = [] }) {

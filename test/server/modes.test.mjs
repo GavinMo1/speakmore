@@ -169,39 +169,3 @@ test("第一跳交给云端：不用交转写器，按路线装；两家各用�
     new Set(["dashscope.aliyuncs.com", "api.deepseek.com"]),
   );
 });
-
-test("Ollama 的空闲时长从路线传到润色器，不跟随本地转写的时长", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const requests = [];
-  const refiner = await createModeRefiner({
-    route: {
-      ...LOCAL,
-      polish: { vendor: "custom", model: "example" },
-      customUrl: "http://localhost:11434/v1",
-      customModelMemory: "on-demand",
-      customModelIdleMinutes: "1",
-      localModelIdleMinutes: "10",
-    },
-    apiKey: "test",
-    transcriber: { transcribe: async () => ({ text: "好的" }) },
-    log: quiet,
-    fetch: async (url) => {
-      requests.push(url);
-      return Response.json(
-        url.endsWith("/api/version")
-          ? { version: "0.33.2" }
-          : url.endsWith("/api/generate")
-            ? { done: true }
-            : { choices: [{ finish_reason: "stop", message: { content: "好的" } }] },
-      );
-    },
-  });
-  t.after(() => refiner.dispose());
-  await refiner.warmUp();
-  t.mock.timers.tick(59_999);
-  assert.equal(requests.length, 3);
-  t.mock.timers.tick(1);
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(requests.at(-1), "http://localhost:11434/api/generate");
-  assert.equal(requests.length, 4);
-});

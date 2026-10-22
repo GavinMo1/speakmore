@@ -47,12 +47,10 @@ test("没有文件也没有环境变量时全用默认值", () => {
     polish: { value: "deepseek/deepseek-flash", source: "default" },
     customUrl: { value: "", source: "default" },
     customParams: { value: "", source: "default" },
-    customModelMemory: { value: "server", source: "default" },
     modelSource: { value: "cn", source: "default" },
     acceleration: { value: "auto", source: "default" },
     localModelMemory: { value: "resident", source: "default" },
     localModelIdleMinutes: { value: "5", source: "default" },
-    customModelIdleMinutes: { value: "5", source: "default" },
     barHint: { value: "on", source: "default" },
     theme: { value: "ink", source: "default" },
     language: { value: "system", source: "default" },
@@ -104,17 +102,8 @@ test("本机模型默认常驻，可选按需加载，环境变量优先且拒�
   assert.deepEqual(resolveSettings({ file, env: {} }).localModelMemory, { value: "resident", source: "default" });
 });
 
-test("本机润色内存策略独立保存，默认由服务管理，不能写任意值", () => {
-  assert.equal(resolveSettings({ file, env: {} }).customModelMemory.value, "server");
-  saveSetting(file, "customModelMemory", "ON-DEMAND");
-  const settings = resolveSettings({ file, env: {} });
-  assert.equal(routeOf(settings, "local").customModelMemory, "on-demand");
-  assert.equal(settings.localModelMemory.value, "resident");
-  assert.throws(() => saveSetting(file, "customModelMemory", "resident"), /server \/ on-demand/);
-});
-
-test("转写与润色的空闲释放时间独立保存，只接受 1、5、10、30 分钟", () => {
-  for (const name of ["localModelIdleMinutes", "customModelIdleMinutes"]) {
+test("转写的空闲释放时间只接受 1、5、10、30 分钟", () => {
+  for (const name of ["localModelIdleMinutes"]) {
     assert.equal(resolveSettings({ file, env: {} })[name].value, "5");
     for (const value of ["1", "5", "10", "30"]) {
       saveSetting(file, name, value);
@@ -124,13 +113,6 @@ test("转写与润色的空闲释放时间独立保存，只接受 1、5、10、
       assert.throws(() => saveSetting(file, name, value), /1 \/ 5 \/ 10 \/ 30/);
     }
   }
-  saveSetting(file, "localModelIdleMinutes", "1");
-  saveSetting(file, "customModelIdleMinutes", "10");
-  const settings = resolveSettings({ file, env: {} });
-  assert.equal(settings.localModelIdleMinutes.value, "1");
-  assert.equal(routeOf(settings, "local").customModelIdleMinutes, "10");
-  assert.equal(settings.localModelMemory.value, "resident");
-  assert.equal(settings.customModelMemory.value, "server");
 });
 
 test("悬浮条上方的操作提示能关掉（GitHub issue #3）：on 或 off，大小写都认，别的不收", () => {
@@ -341,8 +323,6 @@ test("识别链路：默认是原生的；改成 local 后，路线里是本地�
     polish: { vendor: "custom", model: "Qwen/Qwen3-8B" },
     customUrl: "https://api.siliconflow.cn/v1",
     customParams: null,
-    customModelMemory: "server",
-    customModelIdleMinutes: "5",
   });
   // 环境变量也能换，和单独启动服务端时同名
   const env = {
@@ -367,8 +347,6 @@ test("每种模式的路线只看它自己那几项：可以拼出不是正在�
     polish: { vendor: "deepseek", model: "deepseek-v4-pro" },
     customUrl: null,
     customParams: null,
-    customModelMemory: "server",
-    customModelIdleMinutes: "5",
   });
   assert.deepEqual(routeOf(settings, "native").model, { provider: "openai", model: "gpt-audio-mini" });
 });
@@ -376,7 +354,7 @@ test("每种模式的路线只看它自己那几项：可以拼出不是正在�
 test("每种模式自己的那几项：native 是模型和思考档位，local 是两跳的，private 是它自己的本机模型", () => {
   assert.deepEqual(MODE_SETTINGS, {
     native: ["model", "thinking"],
-    local: ["transcriber", "polish", "customUrl", "customParams", "customModelMemory", "customModelIdleMinutes"],
+    local: ["transcriber", "polish", "customUrl", "customParams"],
     private: ["privateTranscriber"],
   });
 });

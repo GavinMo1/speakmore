@@ -103,20 +103,8 @@ export function plazaView(plaza, { via = {}, custom = { form: null, draft: null 
 
   /** 设置里存的自定义服务：模型名（润色没选它时是空的）、地址、额外参数 */
   function storedCustom() {
-    const {
-      polish,
-      customUrl: url,
-      customParams: params,
-      customModelMemory: memory = "server",
-      customModelIdleMinutes: idleMinutes = "5",
-    } = plaza.chosen;
-    return {
-      model: polish.startsWith("custom/") ? polish.slice("custom/".length) : "",
-      url,
-      params,
-      memory,
-      idleMinutes,
-    };
+    const { polish, customUrl: url, customParams: params } = plaza.chosen;
+    return { model: polish.startsWith("custom/") ? polish.slice("custom/".length) : "", url, params };
   }
   /** 启用、检测时交的：验证过还没换上的草稿，没有就是设置里存的 */
   const customNow = () => custom.draft ?? storedCustom();
@@ -124,13 +112,8 @@ export function plazaView(plaza, { via = {}, custom = { form: null, draft: null 
     const { model } = customNow();
     return model ? `custom/${model}` : null;
   }
-  /** 自定义服务随模型一起验证、启用的配置 */
-  const customExtra = () => ({
-    customUrl: customNow().url,
-    customParams: customNow().params,
-    customModelMemory: customNow().memory,
-    customModelIdleMinutes: customNow().idleMinutes ?? "5",
-  });
+  /** 自定义服务除了模型名还要一起交的两项 */
+  const customExtra = () => ({ customUrl: customNow().url, customParams: customNow().params });
   const customReady = () => hasKey("custom") && customChoice() !== null && customNow().url !== "";
 
   // ---------- 选定、在用 ----------

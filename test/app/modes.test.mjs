@@ -85,8 +85,6 @@ test("切模式：按设置里那种模式自己的几项拼出路线，当场�
         polish: { vendor: "deepseek", model: "deepseek-v4-pro" },
         customUrl: null,
         customParams: null,
-        customModelMemory: "server",
-        customModelIdleMinutes: "5",
       },
     },
   ]);
@@ -182,25 +180,6 @@ test("local 第二跳换润色：当场换上；自定义服务连地址一起�
   assert.equal(service.route.customUrl, "http://127.0.0.1:11434/v1");
   assert.equal(saved("polish"), "custom/qwen3:8b");
   assert.equal(saved("customUrl"), "http://127.0.0.1:11434/v1");
-});
-
-test("本机润色的内存策略随自定义模型一起保存，不改变转写策略", async () => {
-  saveSetting(file, "mode", "local");
-  const { modes, service } = setup();
-  assert.deepEqual(
-    await modes.setPolish("custom/qwen3:8b", {
-      customUrl: "http://127.0.0.1:11434/v1",
-      customModelMemory: "on-demand",
-      customModelIdleMinutes: "10",
-    }),
-    { ok: true },
-  );
-  assert.equal(service.route.customModelMemory, "on-demand");
-  assert.equal(saved("customModelMemory"), "on-demand");
-  assert.equal(saved("customModelIdleMinutes"), "10");
-  assert.equal(service.route.customModelIdleMinutes, "10");
-  assert.equal(saved("localModelIdleMinutes"), "5");
-  assert.equal(saved("localModelMemory"), "resident");
 });
 
 test("local 第二跳换成自定义服务：额外参数和地址一起换、一起存；写错了不换不存，说哪里不对", async () => {

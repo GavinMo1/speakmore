@@ -437,18 +437,14 @@ flowchart LR
 | `modelSource` | `cn` | Download source: `cn` / `original` |
 | `acceleration` | `auto` | Acceleration: `auto` / `cpu` |
 | `localModelMemory` | `resident` | Local ASR memory: `resident` / `on-demand` |
-| `customModelMemory` | `server` | Custom local Ollama polish memory: `server` / `on-demand` |
 | `localModelIdleMinutes` | `5` | ASR idle release time: `1` / `5` / `10` / `30` minutes; only used on demand |
-| `customModelIdleMinutes` | `5` | Independent local Ollama polish idle release time; same choices |
 | `barHint` | `on` | Hint line above the voice bar: `on` / `off` |
 | `theme` | `ink` | Theme: `ink` / `cinnabar` / `indigo` |
 | `language` | `system` | Language: `system` / `en` / `zh-CN` |
 
 Optional memory saving: in **Settings → General → Local model memory**, choose on-demand loading to load ASR when recording starts and release it after the selected idle time. Recording and processing keep it loaded; the next dictation may wait for a cold start. The default remains resident.
 
-For a custom polish service, the separate memory option in its key form supports only local Ollama (`localhost`, `127.0.0.1`, or `[::1]`, with a `/v1` endpoint). It verifies the native Ollama API and releases that model after the selected idle time. The default leaves memory management to the service. This does not change global Ollama settings, but other apps sharing the same model may also incur a cold start. Other compatible services and cloud providers keep their existing behavior.
-
-Idle release time is selectable separately for ASR and Ollama: 1, 5 (default), 10, or 30 minutes. Each control is disabled unless that model's on-demand policy is selected; its saved duration is retained. Shorter times reclaim memory sooner; longer times reduce reloads during intermittent dictation. Leaving or closing the custom service cancels SpeakMore's timer, and Ollama's server policy then controls retention.
+The transcription model can be released after 1, 5 (default), 10, or 30 idle minutes. Shorter times reclaim memory sooner; longer times mean fewer reloads during intermittent dictation.
 
 - Settings are stored in `~/.speakmore/settings.json`.
 - A hotkey value is a list of combinations. Keys use [`KeyboardEvent.code`](https://developer.mozilla.org/docs/Web/API/UI_Events/Keyboard_event_code_values) names (e.g. `AltRight`, `MetaRight`, `ControlRight`, `Fn`, `Space`, `KeyK`, `F13`), with two keys joined by `+`. A single combination can be written as is: `speakmore config set hotkey.dictate ControlRight+F9`; several go in a JSON array: `'["AltRight","ControlRight"]'`.
@@ -457,6 +453,7 @@ Idle release time is selectable separately for ASR and Ollama: 1, 5 (default), 1
 - Gemini thinking levels: `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`.
 - A self-hosted polishing model is written as `custom/<model>`, e.g. at `http://127.0.0.1:11434/v1`.
 - Extra parameters a custom service needs go in `customParams`, e.g. `{"reasoning_effort": "minimal"}`. They are sent with both checks and polishing; `model`, `messages`, and `stream` cannot be overridden. When capping a reasoning model's output, leave room for its thinking (e.g. `{"max_completion_tokens": 4096}`), or long passages get cut off.
+- A local Ollama or LM Studio can also release its model when idle, set through `customParams`: `{"keep_alive": "5m"}` for Ollama (0.35 or newer), `{"ttl": 300}` (seconds) for LM Studio.
 - In Windows PowerShell, put a backslash before each double quote in `--params`: `--params '{\"reasoning_effort\": \"minimal\"}'`.
 - Switching through the app or `speakmore mode`, `model`, `transcriber` and `polish` is checked first and takes effect immediately.
 - `config set` writes values directly, without checks.

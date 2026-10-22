@@ -41,7 +41,6 @@ export const ACCELERATIONS = Object.freeze(["auto", "cpu"]);
 export const LOCAL_MODEL_MEMORY = Object.freeze(["resident", "on-demand"]);
 /** 悬浮条上方的操作提示（"再按一下 右⌥ 完成 · esc 取消"）显示不显示：熟练了的人嫌它一直挂着（GitHub issue #3） */
 export const BAR_HINTS = Object.freeze(["on", "off"]);
-export const CUSTOM_MODEL_MEMORY = Object.freeze(["server", "on-demand"]);
 export const MODEL_IDLE_MINUTES = Object.freeze(["1", "5", "10", "30"]);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
@@ -159,18 +158,6 @@ export const SETTINGS = {
     choices: null,
     parse: (value) => formatCustomParams(parseCustomParams(value)),
   },
-  customModelMemory: {
-    ofMode: "local",
-    env: "SPEAKMORE_CUSTOM_MODEL_MEMORY",
-    default: "server",
-    choices: CUSTOM_MODEL_MEMORY,
-    parse(value) {
-      const id = value.trim().toLowerCase();
-      if (!CUSTOM_MODEL_MEMORY.includes(id)) throw oneOf(CUSTOM_MODEL_MEMORY);
-      return id;
-    },
-    label: (value) => msg(`customModelMemories.${value}`),
-  },
   modelSource: {
     // 本地模型没下载过时先从哪下，哪种模式里都能改（切到 local 之前先选好）。选的那个下不动会换另一个，只影响快慢
     env: "SPEAKMORE_MODEL_SOURCE",
@@ -197,18 +184,6 @@ export const SETTINGS = {
   },
   localModelIdleMinutes: {
     env: "SPEAKMORE_LOCAL_MODEL_IDLE_MINUTES",
-    default: "5",
-    choices: MODEL_IDLE_MINUTES,
-    parse(value) {
-      const minutes = value.trim();
-      if (!MODEL_IDLE_MINUTES.includes(minutes)) throw oneOf(MODEL_IDLE_MINUTES);
-      return minutes;
-    },
-    label: (value) => msg("idleRelease.minutes", { minutes: value }),
-  },
-  customModelIdleMinutes: {
-    ofMode: "local",
-    env: "SPEAKMORE_CUSTOM_MODEL_IDLE_MINUTES",
     default: "5",
     choices: MODEL_IDLE_MINUTES,
     parse(value) {
@@ -431,8 +406,6 @@ const ROUTES = {
     polish: parseChatChoice(settings.polish.value),
     customUrl: settings.customUrl.value || null,
     customParams: settings.customParams.value ? parseCustomParams(settings.customParams.value) : null,
-    customModelMemory: settings.customModelMemory.value,
-    customModelIdleMinutes: settings.customModelIdleMinutes.value,
   }),
   private: (settings) => ({ mode: "private", transcriber: settings.privateTranscriber.value }),
 };

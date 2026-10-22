@@ -287,17 +287,10 @@ export async function startService({
       try {
         await candidate.warmUp();
       } catch (error) {
-        if (!allowUnverified || error.kind !== "unavailable") {
-          candidate.dispose?.();
-          throw error;
-        }
+        if (!allowUnverified || error.kind !== "unavailable") throw error;
         verified = false;
       }
-      if (switches !== at || closed) {
-        candidate.dispose?.();
-        return { verified, stale: true };
-      }
-      refiner?.dispose?.();
+      if (switches !== at) return { verified, stale: true };
       refiner = candidate;
       missing = null;
       return { verified };
@@ -311,7 +304,6 @@ export async function startService({
      */
     setRoute(nextRoute) {
       switches += 1;
-      refiner?.dispose?.();
       refiner = null;
       missing = null;
       log.info("route_switched", { from: describeRoute(route), to: describeRoute(nextRoute) });
@@ -393,12 +385,7 @@ export async function startService({
      * @param {{ route: object, apiKey: string, keys?: Record<string, string> }} options keys 同 useKey
      */
     async probe({ route: tried, apiKey, keys }) {
-      const candidate = await build(tried, apiKey, keys);
-      try {
-        await candidate.warmUp();
-      } finally {
-        candidate.dispose?.();
-      }
+      await (await build(tried, apiKey, keys)).warmUp();
     },
 
     /**
@@ -406,14 +393,12 @@ export async function startService({
      * @param {{ missing?: { id: string, name: string } }} [options]
      */
     forgetKey({ missing: vendor = null } = {}) {
-      refiner?.dispose?.();
       refiner = null;
       missing = vendor;
     },
 
     async close() {
       closed = true;
-      refiner?.dispose?.();
       releaseLocal();
       await server.close();
     },
