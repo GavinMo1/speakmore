@@ -244,12 +244,16 @@ export default {
       localModelMemory:
         "本机转文字的模型常驻内存，还是空闲多久后释放：resident 一直装着；1m、5m、10m、30m 空闲这么久后释放，下次开口时再装（隔久了第一句慢一两秒）",
       barHint: "悬浮条上方那行操作提示（再按一下 … 完成 · esc 取消）显示不显示：on 显示，off 不显示",
+      translate: {
+        to: "语音翻译译成什么：一种或几种语言（en、ja，逗号隔开），第一种是默认，悬浮条上能临时换成别的几种",
+      },
       theme: "界面用哪套主题",
       language: "界面用哪种语言；system 是跟随系统",
     },
     unknown: "没有 {name} 这项设置。能改的有：{names}",
     notText: "要是一段文字",
     oneOf: "要是 {choices} 之一",
+    translateTargets: "要写 1 到 {max} 种语言，比如 en 或 en,ja",
     invalid: "{where} 写的是 {value}，{reason}",
     whereEnv: "环境变量 {variable}",
     whereFile: "设置文件 {file} 里的 {name}",

@@ -254,12 +254,16 @@ export default {
       localModelMemory:
         "Whether the on-device speech-to-text model stays in memory: resident keeps it loaded; 1m, 5m, 10m, or 30m releases it after that much idle time and loads it again when you next speak (the first sentence after a long pause takes a second or two longer)",
       barHint: "Whether the hint line above the voice bar (press … to finish · esc to cancel) shows: on or off",
+      translate: {
+        to: "What voice translation translates into: one or more languages (en, ja, comma-separated); the first is the default, and the voice bar can switch to the others for one go",
+      },
       theme: "Which theme the windows use",
       language: "Interface language; system follows your Mac",
     },
     unknown: "There's no setting called {name}. You can change: {names}",
     notText: "must be text",
     oneOf: "must be one of {choices}",
+    translateTargets: "must list 1 to {max} languages, like en or en,ja",
     invalid: "{where} is {value}: {reason}",
     whereEnv: "The {variable} env var",
     whereFile: "{name} in the settings file {file}",

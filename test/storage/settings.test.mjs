@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { createTranslator } from "../../src/i18n/index.mjs";
+import { createTranslator, LocalizedError } from "../../src/i18n/index.mjs";
 import {
   MODE_SETTINGS,
   overridingEnv,
@@ -51,10 +51,28 @@ test("没有文件也没有环境变量时全用默认值", () => {
     modelSource: { value: "cn", source: "default" },
     acceleration: { value: "auto", source: "default" },
     localModelMemory: { value: "resident", source: "default" },
+    "translate.to": { value: '["en"]', source: "default" },
     barHint: { value: "on", source: "default" },
     theme: { value: "ink", source: "default" },
     language: { value: "system", source: "default" },
   });
+});
+
+test("语音翻译译成什么：一个、逗号隔开的几个、JSON 数组都认，规整成去重的 id 列表、文件里存成数组；第一种是默认", () => {
+  assert.equal(saveSetting(file, "translate.to", "ja").value, '["ja"]');
+  assert.equal(saveSetting(file, "translate.to", "EN, ja ,en").value, '["en","ja"]');
+  assert.equal(saveSetting(file, "translate.to", '["zh-tw","en"]').value, '["zh-TW","en"]');
+  // PowerShell 去掉了引号
+  assert.equal(saveSetting(file, "translate.to", "[ko,fr]").value, '["ko","fr"]');
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8"))["translate.to"], ["ko", "fr"]);
+  assert.equal(resolveSettings({ file, env: {} })["translate.to"].value, '["ko","fr"]');
+  assert.equal(resolveSettings({ file, env: { SPEAKMORE_TRANSLATE_TO: "de" } })["translate.to"].value, '["de"]');
+  // 手改文件写成数组也认
+  writeFileSync(file, JSON.stringify({ "translate.to": ["vi"] }));
+  assert.equal(resolveSettings({ file, env: {} })["translate.to"].value, '["vi"]');
+  for (const bad of ["", "[]", "klingon", "en,xx", "en,ja,ko,fr,de,es,it", '{"en":1}']) {
+    assert.throws(() => saveSetting(file, "translate.to", bad), LocalizedError, bad);
+  }
 });
 
 test("存下来的值下次读得到，没动过的仍是默认值", () => {

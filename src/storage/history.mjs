@@ -13,6 +13,9 @@ import { LocalizedError, msg } from "../i18n/index.mjs";
  * 退回旧版本前要先把库降回去，旧版本见到比自己新的库不敢动、启动不了。从 2（记账）退回 1（0.4.2 及以前）：
  *   sqlite3 ~/.speakmore/data/history.db "DROP TABLE model_calls; PRAGMA user_version = 1;"
  * 只丢掉账，说过的话都在。
+ * 从 3（语音翻译）退回 2（0.15 及以前）：
+ *   sqlite3 ~/.speakmore/data/history.db "ALTER TABLE history DROP COLUMN kind; ALTER TABLE history DROP COLUMN source_text; ALTER TABLE history DROP COLUMN output_language; PRAGMA user_version = 2;"
+ * 翻译的那几条只剩译文，看起来像普通的听写；别的都在。家目录搬过的照 speakmore status 里写的位置换路径。
  */
 const MIGRATIONS = [
   `CREATE TABLE history (
@@ -44,6 +47,11 @@ const MIGRATIONS = [
    );
    CREATE INDEX model_calls_created_at ON model_calls (created_at);
    CREATE INDEX model_calls_audio_id ON model_calls (audio_id);`,
+  // 语音翻译也进历史。原版在 history_v2 里用 mode（voice_transcript…）和一段 JSON（mode_meta）记，我们按功能分开：
+  // kind 是动作目录的 id，老记录都是语音输入；翻译的原文和目标语言各一列，划词翻译以后也用这两列
+  `ALTER TABLE history ADD COLUMN kind TEXT NOT NULL DEFAULT 'dictate';   -- 哪个功能：dictate、translate
+   ALTER TABLE history ADD COLUMN source_text TEXT;                         -- 翻译的原文（refined_text 是译文）；不是翻译的为空
+   ALTER TABLE history ADD COLUMN output_language TEXT;                     -- 翻译的目标语言（src/languages.mjs 的 id）`,
 ];
 
 function migrate(db) {
@@ -107,8 +115,9 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
   db.exec("PRAGMA busy_timeout = 2000");
 
   const insert = db.prepare(
-    `INSERT INTO history (id, status, refined_text, error, duration, audio_local_path, created_at)
-     VALUES (:id, :status, :refinedText, :error, :duration, :audioFile, :createdAt)`,
+    `INSERT INTO history (id, kind, status, refined_text, source_text, output_language, error, duration,
+                         audio_local_path, created_at)
+     VALUES (:id, :kind, :status, :refinedText, :sourceText, :outputLanguage, :error, :duration, :audioFile, :createdAt)`,
   );
   const insertCall = db.prepare(
     `INSERT INTO model_calls (audio_id, purpose, provider, model, input_tokens, audio_tokens, cached_tokens,
@@ -122,7 +131,8 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
     `WITH recent AS (
        SELECT * FROM history ORDER BY created_at DESC LIMIT :limit
      )
-     SELECT recent.id, recent.status, recent.refined_text AS refinedText, recent.error, recent.duration,
+     SELECT recent.id, recent.kind, recent.status, recent.refined_text AS refinedText, recent.source_text AS sourceText,
+            recent.output_language AS outputLanguage, recent.error, recent.duration,
             recent.audio_local_path AS audioFile, recent.created_at AS createdAt,
             count(call.id) AS calls,
             sum(call.input_tokens) AS inputTokens,
@@ -142,8 +152,9 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
             (SELECT count(*) - count(cost_usd) FROM model_calls WHERE created_at >= :since) AS unpricedCalls
      FROM history WHERE created_at >= :since`,
   );
+  // 说了什么：翻译的是原文（他说的那段话），别的是成品
   const completed = db.prepare(
-    `SELECT created_at AS createdAt, refined_text AS text, duration FROM history
+    `SELECT created_at AS createdAt, kind, coalesce(source_text, refined_text) AS text, duration FROM history
      WHERE status = 'completed' AND refined_text <> '' ORDER BY created_at`,
   );
   // 用量汇总的各列，总数和按型号分开的两处共用
@@ -186,11 +197,13 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
 
   return {
     /**
-     * @param {{ id: string, status: "completed" | "failed", refinedText: string, error: string | null, duration: number, audioFile: string | null, createdAt: string }} entry
+     * @param {{ id: string, kind?: string, status: "completed" | "failed", refinedText: string, sourceText?: string | null,
+     *   outputLanguage?: string | null, error: string | null, duration: number, audioFile: string | null, createdAt: string }} entry
+     *   kind：哪个功能（动作目录的 id），不写是语音输入；sourceText、outputLanguage：翻译的原文和目标语言，不是翻译的不写；
      *   audioFile：录音在录音目录（paths.recordingsDir）里的文件名，没存录音是 null
      */
-    add(entry) {
-      insert.run(entry);
+    add({ kind = "dictate", sourceText = null, outputLanguage = null, ...entry }) {
+      insert.run({ ...entry, kind, sourceText, outputLanguage });
     },
     /**
      * 最近的记录，新的在前。每一条带上它的用量 usage：{ calls, inputTokens, outputTokens, costUsd, latencyMs }，
@@ -213,12 +226,14 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
       return { ...summarize.get({ since }) };
     },
     /**
-     * 所有完成了的听写，老的在前，只带首页统计要的几项（src/usage/insights.mjs）：字数、哪天说的要从文字和时间里数。
-     * 没听到声音的（模型回了空文字）不算：误按一下不该算一天活跃，也不该拉低语速。
-     * 一条百来个字，几千条也就几百 KB，不在库里预先汇总
+     * 所有完成了的记录，老的在前，只带首页统计要的几项（src/usage/insights.mjs）：字数、哪天说的要从文字和时间里数。
+     * text 是他说的那段话：翻译的是原文，别的是成品。没听到声音的（模型回了空文字）不算：误按一下不该算一天活跃，
+     * 也不该拉低语速。一条百来个字，几千条也就几百 KB，不在库里预先汇总
+     * @param {{ kinds?: readonly string[] }} [filter] 只要这几个功能的（首页只数说话的那几个）；不写是全部
      */
-    dictations() {
-      return completed.all().map((row) => ({ ...row }));
+    dictations({ kinds } = {}) {
+      const rows = completed.all().map((row) => ({ ...row }));
+      return kinds ? rows.filter((row) => kinds.includes(row.kind)) : rows;
     },
     /**
      * 记一笔账：一次回了话的模型调用（src/server/refine/refiner.mjs 的 onCall 给的样子）。

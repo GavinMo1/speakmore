@@ -1,6 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { actionOf } from "../hotkeys/actions.mjs";
 import { msg } from "../i18n/index.mjs";
+import { findLanguage } from "../languages.mjs";
 
 // 一次听写结束后主进程要做的事：存录音、记历史、把文字贴出去。
 // 和原版一样，录音存在 Recordings/<audio_id> 下，失败的也存（docs/08-local-data.md）。
@@ -15,6 +17,19 @@ function checkRecording({ audioId, durationSeconds, audio }) {
 }
 
 /**
+ * 这一次是哪个功能、翻译的原文和目标语言（存进历史）。页面不写功能的是语音输入；
+ * 功能要是录音会话的动作（语音输入、语音翻译），语言要是语言表里的
+ */
+function featureOf({ kind = "dictate", sourceText = null, outputLanguage = null }) {
+  if (actionOf(kind)?.handler !== "session") throw new TypeError(`kind 不是说话的功能：${JSON.stringify(kind)}`);
+  if (sourceText !== null && typeof sourceText !== "string") throw new TypeError("sourceText 不是文字");
+  if (outputLanguage !== null && findLanguage(outputLanguage)?.id !== outputLanguage) {
+    throw new TypeError(`outputLanguage 不是能译成的语言：${JSON.stringify(outputLanguage)}`);
+  }
+  return { kind, sourceText, outputLanguage };
+}
+
+/**
  * @param {object} deps
  * @param {string} deps.recordingsDir
  * @param {{ add: Function }} deps.history
@@ -25,6 +40,7 @@ function checkRecording({ audioId, durationSeconds, audio }) {
 export function createDelivery({ recordingsDir, history, paste, writeClipboard, log, now = () => new Date() }) {
   const record = (payload, fields) => {
     checkRecording(payload);
+    const feature = featureOf(payload);
     mkdirSync(recordingsDir, { recursive: true });
     // 历史里只记文件名，不记完整路径：家目录整个搬了家也对得上
     const audioFile = `${payload.audioId}.webm`;
@@ -36,6 +52,7 @@ export function createDelivery({ recordingsDir, history, paste, writeClipboard, 
     writeFileSync(join(recordingsDir, audioFile), bytes);
     history.add({
       id: payload.audioId,
+      ...feature,
       duration: payload.durationSeconds,
       audioFile,
       createdAt: now().toISOString(),
@@ -46,6 +63,7 @@ export function createDelivery({ recordingsDir, history, paste, writeClipboard, 
   return {
     /**
      * 成品回来了：先落盘，再贴。贴不进去时把文字放进剪贴板，用户不会丢字。
+     * 语音翻译贴的是译文（text），原文（sourceText）和目标语言（outputLanguage）只进历史
      * @returns {Promise<{ notice: object | null }>} notice 是要在悬浮条上告诉用户的话（msg，悬浮条按界面语言翻）
      */
     async completed(payload) {

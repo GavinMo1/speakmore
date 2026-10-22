@@ -19,7 +19,10 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 const entry = (overrides = {}) => ({
   id: "a1",
+  kind: "dictate",
   status: "completed",
+  sourceText: null,
+  outputLanguage: null,
   refinedText: "我们后天开会。",
   error: null,
   duration: 4.2,
@@ -153,10 +156,77 @@ test("首页统计要的：所有完成了的听写，只带时间、文字、�
   // 误按了一下、没说话：模型回了空文字，也记成完成了，但不算说过话
   history.add(entry({ id: "d", createdAt: "2026-10-14T09:00:00.000Z", refinedText: "", duration: 3 }));
   assert.deepEqual(history.dictations(), [
-    { createdAt: "2026-10-12T09:00:00.000Z", text: "第一句", duration: 1 },
-    { createdAt: "2026-10-13T09:00:00.000Z", text: "第二句", duration: 2 },
+    { createdAt: "2026-10-12T09:00:00.000Z", kind: "dictate", text: "第一句", duration: 1 },
+    { createdAt: "2026-10-13T09:00:00.000Z", kind: "dictate", text: "第二句", duration: 2 },
   ]);
   history.close();
+});
+
+test("语音翻译也进历史：正文是译文，另存原文和目标语言；不写功能的是语音输入", () => {
+  const history = openHistory(join(dir, "history.db"));
+  history.add({
+    id: "t1",
+    kind: "translate",
+    status: "completed",
+    refinedText: "Let's meet the day after tomorrow.",
+    sourceText: "我们后天开会。",
+    outputLanguage: "en",
+    error: null,
+    duration: 3,
+    audioFile: "t1.webm",
+    createdAt: "2026-10-14T09:00:00.000Z",
+  });
+  // 0.15 以前的写法（不带这三项）照样能存，存成语音输入
+  const { kind, sourceText, outputLanguage, ...old } = entry();
+  history.add(old);
+  const [translated, dictated] = history.list();
+  assert.deepEqual(
+    [translated.kind, translated.refinedText, translated.sourceText, translated.outputLanguage],
+    ["translate", "Let's meet the day after tomorrow.", "我们后天开会。", "en"],
+  );
+  assert.deepEqual([dictated.kind, dictated.sourceText, dictated.outputLanguage], ["dictate", null, null]);
+  // 首页数的是他说的那段话：翻译的是原文；可以只要某几个功能的
+  assert.deepEqual(
+    history.dictations().map(({ kind, text }) => [kind, text]),
+    [
+      ["dictate", "我们后天开会。"],
+      ["translate", "我们后天开会。"],
+    ],
+  );
+  assert.deepEqual(
+    history.dictations({ kinds: ["translate"] }).map(({ kind }) => kind),
+    ["translate"],
+  );
+  history.close();
+});
+
+test("0.15 的库（版本 2）打开时升上来，老记录都是语音输入；照文件头写的退回办法降回去，库照样能读", () => {
+  const path = join(dir, "history.db");
+  const v2 = openHistory(path);
+  v2.close();
+  // 造一个版本 2 的库：先降回去（文件头写的那条命令），再存一条老版本的记录
+  const db = new DatabaseSync(path);
+  db.exec(
+    "ALTER TABLE history DROP COLUMN kind; ALTER TABLE history DROP COLUMN source_text; ALTER TABLE history DROP COLUMN output_language; PRAGMA user_version = 2;",
+  );
+  db.prepare(
+    "INSERT INTO history VALUES ('a1', 'completed', '我们后天开会。', NULL, 4.2, 'a1.webm', '2026-10-13T08:00:00.000Z')",
+  ).run();
+  assert.deepEqual(
+    db
+      .prepare("PRAGMA table_info(history)")
+      .all()
+      .map(({ name }) => name),
+    ["id", "status", "refined_text", "error", "duration", "audio_local_path", "created_at"],
+  );
+  db.close();
+
+  const history = openHistory(path);
+  assert.deepEqual(history.list(), [{ ...entry(), usage: null }]);
+  history.close();
+  const upgraded = new DatabaseSync(path);
+  assert.equal(upgraded.prepare("PRAGMA user_version").get().user_version, 3);
+  upgraded.close();
 });
 
 test("空的历史库统计出来全是 0", () => {

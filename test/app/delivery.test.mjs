@@ -53,6 +53,9 @@ test("成品：存录音、记历史、贴出去", async () => {
   assert.deepEqual(rows, [
     {
       id: AUDIO_ID,
+      kind: "dictate",
+      sourceText: null,
+      outputLanguage: null,
       status: "completed",
       refinedText: "我们后天开会。",
       error: null,
@@ -113,6 +116,25 @@ test("粘贴出错：文字放进剪贴板，历史照样记上", async () => {
   assert.equal(rows.length, 1);
 });
 
+test("语音翻译：贴的是译文，原文和目标语言只进历史", async () => {
+  const { delivery, rows, pasted } = setup();
+  const translated = payload({
+    kind: "translate",
+    text: "Let's meet the day after tomorrow.",
+    sourceText: "我们后天开会。",
+    outputLanguage: "en",
+  });
+  assert.deepEqual(await delivery.completed(translated), { notice: null });
+  assert.deepEqual(pasted, ["Let's meet the day after tomorrow."]);
+  assert.deepEqual(
+    [rows[0].kind, rows[0].refinedText, rows[0].sourceText, rows[0].outputLanguage],
+    ["translate", "Let's meet the day after tomorrow.", "我们后天开会。", "en"],
+  );
+  // 翻译失败的也记是哪个功能
+  delivery.failed({ ...translated, audioId: "1b6f1c1e-5a44-4f0e-9d0b-2f9f3a1c7e55", error: "超时", sourceText: null });
+  assert.deepEqual([rows[1].kind, rows[1].status, rows[1].outputLanguage], ["translate", "failed", "en"]);
+});
+
 test("失败的听写：录音和原因都留下", () => {
   const { delivery, rows, pasted } = setup();
   delivery.failed({ audioId: AUDIO_ID, error: "等了 20 秒没有等到成品", durationSeconds: 9, audio: audio() });
@@ -138,6 +160,11 @@ test("来自页面的参数不合格时拒绝，不落任何文件", async () =>
     payload({ durationSeconds: Number.NaN }),
     payload({ audio: "不是二进制" }),
     payload({ text: 42 }),
+    // 不是说话的功能、不认识的语言、原文不是字
+    payload({ kind: "cancel" }),
+    payload({ kind: "nope" }),
+    payload({ kind: "translate", outputLanguage: "klingon" }),
+    payload({ kind: "translate", sourceText: 42 }),
   ];
   for (const item of bad) await assert.rejects(delivery.completed(item), TypeError);
   assert.throws(() => delivery.failed(payload({ error: undefined })), TypeError);

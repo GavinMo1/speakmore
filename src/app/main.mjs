@@ -950,7 +950,9 @@ async function main() {
   });
   handle("history:list", () => history.list());
   handle("usage:report", () => usageReport(history, { now: new Date() }));
-  handle("insights:get", () => insights(history.dictations(), { now: new Date() }));
+  // 首页的口述统计只数说话的功能（录音会话的动作：语音输入、语音翻译），花费另算、都记
+  const spokenKinds = ACTIONS.filter((action) => action.handler === "session").map(({ id }) => id);
+  handle("insights:get", () => insights(history.dictations({ kinds: spokenKinds }), { now: new Date() }));
   handle("app:info", () => ({ version: app.getVersion(), hotkeys: hotkeys.chords }));
   handle("app:open-homepage", () => shell.openExternal(HOMEPAGE));
   // 设置 › 通用的"软件更新"：检查、开始更新。进行到哪了跟着 setup:get 一起给（update）

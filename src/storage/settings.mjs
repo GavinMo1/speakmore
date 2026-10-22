@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { hotkeySettings } from "../hotkeys/settings.mjs";
-import { findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
+import { alternatives, findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
+import { languageName, parseLanguage } from "../languages.mjs";
 import { DEFAULT_SOURCE, DEFAULT_TRANSCRIBER, MODELS, SOURCES } from "../models/catalog.mjs";
 import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../server/asr/cloud/vendors.mjs";
 import {
@@ -42,6 +43,8 @@ export const LOCAL_MODEL_MEMORY = Object.freeze(["resident", "1m", "5m", "10m", 
 /** 悬浮条上方的操作提示（"再按一下 右⌥ 完成 · esc 取消"）显示不显示：熟练了的人嫌它一直挂着（GitHub issue #3） */
 export const BAR_HINTS = Object.freeze(["on", "off"]);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
+/** 语音翻译最多列几种目标语言：悬浮条上的语言选单一种一行，再多放不下，也挑不过来 */
+export const MAX_TRANSLATE_TARGETS = 6;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
 
 const oneOf = (choices) => new LocalizedError(msg("settings.oneOf", { choices: choices.join(" / ") }));
@@ -193,6 +196,17 @@ export const SETTINGS = {
     },
     label: (value) => msg(`localModelMemories.${value}`),
   },
+  "translate.to": {
+    // 语音翻译译成什么：一种或几种，第一种是默认，悬浮条上能临时换成别的几种（只管那一次）。
+    // 值是规整过的 id 列表写成 JSON（["en","ja"]），文件里存成数组；也认一个 id、逗号隔开的几个
+    env: "SPEAKMORE_TRANSLATE_TO",
+    default: JSON.stringify(["en"]),
+    choices: null,
+    json: true,
+    parse: parseTranslateTargets,
+    store: (value) => JSON.parse(value),
+    label: (value) => alternatives(JSON.parse(value).map(languageName)),
+  },
   barHint: {
     env: "SPEAKMORE_BAR_HINT",
     default: "on",
@@ -232,6 +246,35 @@ export const SETTINGS = {
     label: (value) => (value === SYSTEM_LOCALE ? msg("language.system") : findLocale(value).name),
   },
 };
+
+/** 语音翻译的目标语言：一个、逗号隔开的几个，或者 JSON 数组；规整成去重后的 id 列表。至少一种，最多 MAX_TRANSLATE_TARGETS 种 */
+function parseTranslateTargets(text) {
+  const trimmed = text.trim();
+  let items = trimmed.split(",");
+  if (trimmed.startsWith("[")) {
+    try {
+      items = JSON.parse(trimmed);
+    } catch {
+      // PowerShell 调 speakmore.cmd 时会去掉参数里的双引号（[en,ja]）。语言 id 里没有逗号和引号，照样拆得开
+      items = trimmed.slice(1, -1).split(",");
+    }
+    if (!Array.isArray(items) || items.some((item) => typeof item !== "string")) {
+      throw new LocalizedError(msg("settings.translateTargets", { max: MAX_TRANSLATE_TARGETS }));
+    }
+  }
+  const ids = [
+    ...new Set(
+      items
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map(parseLanguage),
+    ),
+  ];
+  if (ids.length === 0 || ids.length > MAX_TRANSLATE_TARGETS) {
+    throw new LocalizedError(msg("settings.translateTargets", { max: MAX_TRANSLATE_TARGETS }));
+  }
+  return JSON.stringify(ids);
+}
 
 /**
  * 命令行写的设置名 → 这一项现在的名字：改名之前的（legacyName）换成新的。不认识的抛错并列出能改的
