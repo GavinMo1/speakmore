@@ -35,8 +35,8 @@
 // （同 bind 的 key），各自升序。只算进入以后按下的键，自动重复不算；录到的键整段吞掉，修饰键也吞，离开时还按着的吞到松开为止。
 // 录了 30 秒还没停，先报 {"event":"error"} 再照离开处理。截不截、悬浮条上的点击录键都不管，照截的规矩来。
 //
-// probe（docs/hotkey-research.md 5.5）：只有"修饰键 + 普通键"会去试登记（RegisterHotKey 必须有普通键，修饰键不分左右），
-// 只有修饰键的、单个普通键的直接回 conflict:false。id 是整数就一定回一条 probed：形状不对、试登记出了别的错，
+// probe（docs/hotkey-research.md 5.5）：有普通键的都去试登记，单个普通键也算（RegisterHotKey 必须有普通键、修饰键可以没有，
+// 修饰键不分左右），只有修饰键的直接回 conflict:false。id 是整数就一定回一条 probed：形状不对、试登记出了别的错，
 // 都回 conflict:false，另报一条 error 说为什么；没有 id 的只报 error。
 //
 // 隐私：除了录键模式，只报绑定的按下、松开、被打断，不报按的是哪个键。录键是一个有边界的例外：只在父进程说"录"之后、
@@ -221,8 +221,9 @@ func parseProbe(c command) (id int, combo binding, reply []event) {
 	if err != nil {
 		return id, binding{}, []event{noConflict(id), {"event": "error", "message": err.Error()}}
 	}
-	// RegisterHotKey 必须有一个普通键：只有修饰键的、单个普通键的，别的程序用它登记不了，也就占不了
-	if len(combo.Mods) == 0 || !combo.HasKey {
+	// RegisterHotKey 必须有一个普通键：只有修饰键的，别的程序用它登记不了，也就占不了。
+	// 单个普通键要试：别的程序可以不带修饰键登记 F14 这类键（修饰键传 0）
+	if !combo.HasKey {
 		return id, binding{}, []event{noConflict(id)}
 	}
 	return id, combo, nil

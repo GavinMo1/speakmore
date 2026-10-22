@@ -6,10 +6,11 @@ package main
 //   - 只有按下能凑成组合；组合里的键全部松开才算松开。按着时组合里的某个键松开又按回去，不算新的一下。
 //   - 按着时来了组合外的键：新的集合恰好是另一个绑定就是"升级"，先报打断（带 to）再报新绑定按下；否则报一次打断，
 //     之后不报松开，组合里的键全松开之前不再触发任何东西。
-//   - 修饰键一律不吞；凑成组合的那个普通键整段吞掉（按下、自动重复、松开）。
+//   - 修饰键一律不吞；凑成组合的那个普通键整段吞掉（按下、自动重复、松开），按着时它松开又按回去的那一下也整段吞。
 //   - 只在说话时生效的绑定（取消）不按集合认：截着的时候它那个键一按下就算，吞掉，也不进按住的键。
 //   - 松开的事件可能丢（UIPI、管理员窗口、Win+L）：每次按下前用系统接口核对按住的别的键，普通键按下超过 10 秒的也当丢了。
-//     我们吞掉的键系统接口查不准，只按 10 秒算；修饰键也核对（Mac 每个 flagsChanged 都从标志位重新读，不用）。见 prune。
+//     我们吞掉的键系统接口查不准，只按 10 秒算；修饰键也核对（Mac 每个 flagsChanged 都从标志位重新读，不用），
+//     驱动补了假松开的修饰键除外（见 fakeReleased）。见 prune。
 // 只有 Windows 有的：Alt 或 Win 按住期间，我们第一次触发绑定或吞键时插一下掩码键（见 settleMask）。
 // 只报绑定的按下、松开、被打断，不报是哪个键（录键模式是有边界的例外，在 record.go，录键期间不喂这里）。
 
@@ -74,6 +75,13 @@ type matcher struct {
 	held map[keyID]heldKey
 	// 吞了按下、还要吞松开的普通键
 	swallowed map[keyID]bool
+	// 按着的修饰键里，系统补过一个假松开、之后这个键还没有真的按下松开、也没有补回来按下的。假事件匹配器不看，
+	// 系统照样改了状态，GetAsyncKeyState 这时说它松开了，可用户还按着，核对时问系统就会把它清掉。两种情况：
+	//   - NumLock 开着时按着 Shift 按小键盘的双功能键：先补一个假的 Shift 松开。补回来的按下，中间又按了别的键时是假的，
+	//     没按别的键时用正常扫描码（AutoHotkey keyboard_mouse.h 的 SC_FAKE_*），还按着的 Shift 照自动重复处理，不凑组合；
+	//   - AltGr 布局上按着真的左 Ctrl 点一下右 Alt：松开右 Alt 时补的假左 Ctrl 松开，之后不补回来（这条没在真机上看过）。
+	// 核对时不问系统；这个键下一次真的按下、松开，或补回来按下，就清掉
+	fakeReleased map[keyID]bool
 	// 截着时按下、还没松开的取消键：松开时报它的松开
 	capturingDown map[keyID]*binding
 	capturing     bool
@@ -90,6 +98,7 @@ func newMatcher(stillDown func(keyID, heldKey) bool) *matcher {
 		stillDown:     stillDown,
 		held:          map[keyID]heldKey{},
 		swallowed:     map[keyID]bool{},
+		fakeReleased:  map[keyID]bool{},
 		capturingDown: map[keyID]*binding{},
 	}
 }
@@ -131,6 +140,8 @@ func (m *matcher) setCapturing(on bool) { m.capturing = on }
 // 修饰键问一遍系统（Win+L 锁屏时 Win 的松开到不了钩子，留着的话回来以后什么绑定都凑不上）
 func (m *matcher) reset() []event {
 	events := m.release()
+	// 停着的这段时间真的松开也可能丢了，补过假松开的照样问系统
+	m.fakeReleased = map[keyID]bool{}
 	for id, key := range m.held {
 		if !id.isModifier() || !m.stillDown(id, key) {
 			delete(m.held, id)
@@ -171,10 +182,16 @@ func (m *matcher) release() []event {
 
 func (m *matcher) onKey(in keyInput) outcome {
 	// 自己模拟的（插的掩码键、贴字时的 Ctrl+V）、驱动补的假修饰键（AltGr 的假左 Ctrl、小键盘的假 Shift）：不是用户按的键
-	if in.ours || in.scan&fakeScanBit != 0 {
+	if in.ours {
 		return outcome{}
 	}
 	id := keyIDOf(in)
+	if in.scan&fakeScanBit != 0 {
+		m.onFake(id, in.down)
+		return outcome{}
+	}
+	// 真的按下、松开以后，系统的状态和用户按着的又对得上了
+	delete(m.fakeReleased, id)
 	var out outcome
 	if in.down {
 		out = m.onDown(id, in)
@@ -183,6 +200,21 @@ func (m *matcher) onKey(in keyInput) outcome {
 	}
 	m.settleMask(&out)
 	return out
+}
+
+// 驱动补的假修饰键不参与匹配，只记下它让系统的状态和实际按着的对不上（见 fakeReleased）
+func (m *matcher) onFake(id keyID, down bool) {
+	if !id.isModifier() {
+		return
+	}
+	if down {
+		delete(m.fakeReleased, id)
+		return
+	}
+	// 没按着的不记：AltGr 自己补的那个假左 Ctrl 的按下、松开都和按住的键无关
+	if _, ok := m.held[id]; ok {
+		m.fakeReleased[id] = true
+	}
 }
 
 // 掩码：Alt 或 Win 按住期间，我们触发了绑定或吞了键，系统看到的就是"Alt、Win 单按了一下"，松开时会开菜单。
@@ -239,8 +271,17 @@ func (m *matcher) onDown(id keyID, in keyInput) outcome {
 	m.held[id] = heldKey{since: in.time, vk: in.vk}
 
 	if m.current != nil {
-		if m.interrupted || m.current.has(id) {
+		if m.interrupted {
 			return outcome{}
+		}
+		if m.current.has(id) {
+			// 组合里的键松开又按回去：不算新的一下，不报事件。普通键这一下照样整段吞，不然按着右 Alt 再点一下空格，
+			// 前台收到 Alt+Space，弹出窗口的系统菜单、抢走焦点，之后贴字贴进菜单里。掩码照常由 onKey 的 settleMask 管
+			if id.isModifier() {
+				return outcome{}
+			}
+			m.swallowed[id] = true
+			return outcome{swallow: true}
 		}
 		if next := m.match(id); next != nil {
 			// 升级：两键以内最多一次
@@ -337,7 +378,7 @@ func (m *matcher) prune(now uint32) {
 		// （所有低级钩子都放行了才改：https://devblogs.microsoft.com/oldnewthing/20140213-00/?p=1773 ）。
 		// 它的松开要是丢了，只靠 10 秒清。修饰键从来不吞。无符号相减：钩子的时间 49 天绕一圈也算得对
 		stale := !id.isModifier() && now-key.since > staleAfterMs
-		if stale || (!m.swallowed[id] && !m.stillDown(id, key)) {
+		if stale || (!m.swallowed[id] && !m.fakeReleased[id] && !m.stillDown(id, key)) {
 			delete(m.held, id)
 		}
 	}

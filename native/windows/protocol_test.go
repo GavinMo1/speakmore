@@ -247,11 +247,12 @@ func probeCommand(t *testing.T, line string) command {
 	return cmd
 }
 
-// 修饰键 + 普通键：交给系统去试登记，mods、key 的写法同 bind
-func TestProbeOfAModifierPlusKeyIsAskedOfTheSystem(t *testing.T) {
+// 有普通键的：交给系统去试登记，mods、key 的写法同 bind。单个普通键也试（F14 这类别的程序也会不带修饰键登记）
+func TestProbeOfAComboWithAKeyIsAskedOfTheSystem(t *testing.T) {
 	for line, want := range map[string]binding{
 		`{"cmd":"probe","id":7,"mods":[163],"key":100}`:  {Mods: []uint32{0xA3}, Key: 0x64, HasKey: true},
 		`{"cmd":"probe","id":7,"mods":[91],"key":57416}`: {Mods: []uint32{0x5B}, Key: 0xE048, HasKey: true},
+		`{"cmd":"probe","id":7,"mods":[],"key":101}`:     {Mods: []uint32{}, Key: 0x65, HasKey: true},
 	} {
 		id, combo, reply := parseProbe(probeCommand(t, line))
 		if reply != nil || id != 7 || !reflect.DeepEqual(combo, want) {
@@ -260,13 +261,12 @@ func TestProbeOfAModifierPlusKeyIsAskedOfTheSystem(t *testing.T) {
 	}
 }
 
-// 只有修饰键的、单个普通键的：RegisterHotKey 登记不了这种，别的程序也就占不了，当场回 conflict:false
-func TestProbeOfOtherShapesAnswersNoConflictAtOnce(t *testing.T) {
+// 只有修饰键的：RegisterHotKey 登记不了这种，别的程序也就占不了，当场回 conflict:false
+func TestProbeOfModifiersOnlyAnswersNoConflictAtOnce(t *testing.T) {
 	for _, line := range []string{
 		`{"cmd":"probe","id":7,"mods":[163]}`,
 		`{"cmd":"probe","id":7,"mods":[163,161]}`,
 		`{"cmd":"probe","id":7,"mods":[163],"key":null}`,
-		`{"cmd":"probe","id":7,"mods":[],"key":100}`,
 	} {
 		_, _, reply := parseProbe(probeCommand(t, line))
 		expectEvents(t, line, reply, event{"event": "probed", "id": 7, "conflict": false})
@@ -313,12 +313,13 @@ func TestProbeWithoutAnIDOnlyReportsAnError(t *testing.T) {
 	}
 }
 
-// RegisterHotKey 的修饰键不分左右：左右合并成 MOD_*，一律带 MOD_NOREPEAT
+// RegisterHotKey 的修饰键不分左右：左右合并成 MOD_*，一律带 MOD_NOREPEAT；单个普通键只有 MOD_NOREPEAT
 func TestProbeMergesBothSidesIntoRegisterHotKeyModifiers(t *testing.T) {
 	for _, c := range []struct {
 		mods []uint32
 		want uint32
 	}{
+		{[]uint32{}, 0x4000},
 		{[]uint32{vkLShift}, 0x4004},
 		{[]uint32{vkRShift}, 0x4004},
 		{[]uint32{vkLControl}, 0x4002},

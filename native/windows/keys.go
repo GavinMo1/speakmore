@@ -29,7 +29,8 @@ var virtualVKs = map[uint32]bool{0xE7: true, 0xE5: true, 0xFF: true, 0x07: true,
 
 // 驱动补的假修饰键，扫描码带这一位，不是用户按的（AutoHotkey keyboard_mouse.h 的 SC_FAKE_*）：
 //   - 用了 AltGr 的布局（德语等）上按右 Alt，先补一个假的左 Ctrl（0x21D）；
-//   - NumLock 开着时按着 Shift 按小键盘的双功能键，前后补一对假的 Shift 松开、按下（0x22A、0x236）
+//   - NumLock 开着时按着 Shift 按小键盘的双功能键，先补一个假的 Shift 松开（0x22A、0x236）；补回来的按下只有中间
+//     又按了别的键时是假的，没按别的键时用正常扫描码（匹配器怎么对付这一对，见 matcher.fakeReleased）
 const fakeScanBit = 0x200
 
 // 一个键盘事件

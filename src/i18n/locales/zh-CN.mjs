@@ -165,6 +165,7 @@ export default {
     winAltSpace: "Alt+空格会打开窗口菜单",
     winCloses: "这个组合会关掉窗口",
     winShiftSwitch: "Ctrl+Shift、Alt+Shift 是 Windows 切换输入语言和键盘布局的快捷键",
+    winF12: "Windows 把单独的 F12 留给调试器",
     winShiftF10: "Shift+F10 会打开右键菜单",
     leftOnly: "平时的快捷键多从左边的修饰键按起（⌘C、⇧⌘Z），绑了会频繁误触发：换右边的修饰键，或者加上 fn",
     required: "「{action}」至少要有一个组合",

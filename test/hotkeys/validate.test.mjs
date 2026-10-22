@@ -102,6 +102,7 @@ test("Windows 上和系统、各应用的快捷键撞的，一律不让绑", () 
     "ControlRight+ShiftRight": "Ctrl+Shift and Alt+Shift switch input languages and keyboard layouts",
     "AltRight+ShiftLeft": "Ctrl+Shift and Alt+Shift switch input languages and keyboard layouts",
     "ShiftRight+F10": "Shift+F10 opens the context menu",
+    F12: "Windows reserves F12 on its own for debuggers",
   };
   for (const [text, reason] of Object.entries(cases)) assert.equal(rejected(text, "win32"), reason, text);
   // Mac 上这几个是可以的

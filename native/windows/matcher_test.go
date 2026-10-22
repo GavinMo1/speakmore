@@ -182,3 +182,72 @@ func TestSwallowedKeyIsNotCheckedAgainstTheSystemState(t *testing.T) {
 		t.Fatalf("Space 的松开丢了 10 秒以上，单按右 Ctrl 应该照常按下：%+v", got)
 	}
 }
+
+// 系统的异步状态（GetAsyncKeyState）只跟着放行给系统的事件走：吞掉的不改，驱动补的假修饰键匹配器不看、系统照改
+type asyncKeys struct {
+	*matcher
+	state map[keyID]bool
+}
+
+func newAsyncKeys(bindings ...binding) *asyncKeys {
+	k := &asyncKeys{state: map[keyID]bool{}}
+	k.matcher = newMatcher(func(id keyID, _ heldKey) bool { return k.state[id] })
+	k.bind(bindings)
+	return k
+}
+
+func (k *asyncKeys) press(in keyInput, down bool, t uint32) outcome {
+	in.down, in.time = down, t
+	out := k.onKey(in)
+	if !out.swallow {
+		k.state[keyIDOf(in)] = down
+	}
+	return out
+}
+
+// NumLock 开着时按着右 Shift 按小键盘 7：驱动先补一个假的 Shift 松开，系统就当 Shift 松开了，Home 按下时核对会把真按着的
+// 右 Shift 清掉。补回来的按下有两种写法（AutoHotkey keyboard_mouse.h：小键盘键松开后没按别的键时，系统用正常的扫描码），
+// 都不能让右 Shift 掉出按住的键：之后按右 Ctrl 要凑成右 Ctrl+右 Shift，不是单按右 Ctrl
+func TestNumLockFakeShiftUpDoesNotDropTheHeldShift(t *testing.T) {
+	fakeRShift := keyInput{vk: vkRShift, scan: 0x236}
+	home := keyInput{vk: 0x24, scan: 0x47}
+	for _, c := range []struct {
+		name    string
+		restore keyInput
+	}{
+		{"补回来的按下是假的", fakeRShift},
+		{"补回来的按下用正常扫描码", rShift},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			k := newAsyncKeys(
+				binding{ID: "dictate#0", Mods: []uint32{vkRControl}},
+				binding{ID: "x#0", Mods: []uint32{vkRControl, vkRShift}},
+			)
+			k.press(rShift, true, 1)
+			k.press(fakeRShift, false, 2)
+			expectOutcome(t, "Home 按下", k.press(home, true, 3), false)
+			expectOutcome(t, "Home 松开", k.press(home, false, 4), false)
+			expectOutcome(t, "补回来的 Shift 按下", k.press(c.restore, true, 5), false)
+			expectOutcome(t, "按下右 Ctrl", k.press(rCtrl, true, 6), false, event{"event": "binding", "id": "x#0", "down": true})
+		})
+	}
+}
+
+// AltGr 布局：按着真的左 Ctrl 按一下右 Alt，松开右 Alt 时驱动补一个假的左 Ctrl 松开，之后没有补回来的按下。
+// 左 Ctrl 还按着，再按 K 要凑成左 Ctrl+K
+func TestAltGrFakeControlUpDoesNotDropTheHeldControl(t *testing.T) {
+	lCtrl := keyInput{vk: vkLControl, scan: 0x1D}
+	fakeLCtrl := keyInput{vk: vkLControl, scan: 0x21D}
+	keyK := keyInput{vk: 'K', scan: 0x25}
+	k := newAsyncKeys(binding{ID: "y#0", Mods: []uint32{vkLControl}, Key: 0x25, HasKey: true})
+	k.press(lCtrl, true, 1)
+	k.press(fakeLCtrl, true, 2)
+	k.press(rAlt, true, 3)
+	k.press(fakeLCtrl, false, 4)
+	k.press(rAlt, false, 5)
+	expectOutcome(t, "按下 K", k.press(keyK, true, 6), true, event{"event": "binding", "id": "y#0", "down": true})
+	expectOutcome(t, "松开 K", k.press(keyK, false, 7), true)
+	// 真的左 Ctrl 松开了，系统的状态和按住的键又对得上：之后单按 K 什么也不凑
+	expectOutcome(t, "松开左 Ctrl", k.press(lCtrl, false, 8), false, event{"event": "binding", "id": "y#0", "down": false})
+	expectOutcome(t, "左 Ctrl 松开后按 K", k.press(keyK, true, 9), false)
+}

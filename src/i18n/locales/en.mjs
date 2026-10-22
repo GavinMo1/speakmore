@@ -168,6 +168,7 @@ export default {
     winAltSpace: "Alt+Space opens the window menu",
     winCloses: "This closes the window",
     winShiftSwitch: "Ctrl+Shift and Alt+Shift switch input languages and keyboard layouts",
+    winF12: "Windows reserves F12 on its own for debuggers",
     winShiftF10: "Shift+F10 opens the context menu",
     leftOnly:
       "Everyday shortcuts start with left-hand modifiers (Command-C, Shift-Command-Z), so this would fire by accident all the time: use a right-hand modifier, or add fn",

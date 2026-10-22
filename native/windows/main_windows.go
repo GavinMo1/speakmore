@@ -278,12 +278,18 @@ func probe(id int, combo binding) []event {
 	if vk == 0 {
 		return []event{noConflict(id), {"event": "error", "message": fmt.Sprintf("扫描码 0x%X 在当前键盘布局里换不出键码，试登记不了", combo.Key)}}
 	}
+	// 单个普通键时修饰键只有 MOD_NOREPEAT，RegisterHotKey 认这种
 	ok, _, lastError := procRegisterHotKey.Call(0, probeHotkeyID, uintptr(registerModifiers(combo.Mods)), vk)
-	if ok != 0 {
-		procUnregisterHotKey.Call(0, probeHotkeyID)
-	}
 	errno, _ := lastError.(syscall.Errno)
-	return probeResult(id, ok != 0, uint32(errno))
+	events := probeResult(id, ok != 0, uint32(errno))
+	if ok != 0 {
+		// 注销不掉的话，这个组合一直挂在我们线程上：别的程序登记不了，钩子放行的这个键也会被系统当热键吃掉。照实报
+		if done, _, unregisterError := procUnregisterHotKey.Call(0, probeHotkeyID); done == 0 {
+			code, _ := unregisterError.(syscall.Errno)
+			events = append(events, event{"event": "error", "message": fmt.Sprintf("试登记的组合注销不掉（错误码 %d），这个组合可能一直被占着：重启 SpeakMore 试试", uint32(code))})
+		}
+	}
+	return events
 }
 
 // 存剪贴板 → 写入文字 → 模拟 Ctrl+V → 等一会儿 → 还原剪贴板。只有粘贴这一条路，同 macOS 版

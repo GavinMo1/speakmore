@@ -47,6 +47,8 @@ const SYSTEM_RULES = {
     // 默认的输入语言热键是左 Alt+Shift，切换键盘布局是 Ctrl+Shift（设置 › 时间和语言 › 输入 › 高级键盘设置）
     [(codes) => only(codes, SHIFT, CONTROL) || only(codes, SHIFT, ALT), "binding.winShiftSwitch"],
     [(codes) => only(codes, SHIFT, ["F10"]), "binding.winShiftF10"],
+    // 单独的 F12 留给调试器（RegisterHotKey 文档；开发机上试登记一律报 1409），录键时也会被说成"被别的程序占用"
+    [(codes) => codes.length === 1 && codes[0] === "F12", "binding.winF12"],
   ],
 };
 

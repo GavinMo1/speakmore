@@ -463,7 +463,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - 时限：回调超过 `LowLevelHooksTimeout`，"on Windows 7 and later, the hook is silently removed without being called. There is no way for the application to know whether the hook is removed"；Windows 10 1709 起最长 1000 ms（LowLevelKeyboardProc 页）。所以匹配必须在小帮手里，不能每个键问一次父进程。node-global-key-listener 就是每个事件回 Node 问一遍、等 30 ms，是反面例子。
 - 先修 3.3 里的两处阻塞发送。
 - 睡眠唤醒、解锁后重装钩子：先装新的再卸旧的，并校正修饰键状态（handy-keys：`listener.rs:54-60, 120-160`，注释写明 "Windows can silently drop LL hooks across a suspend"）。
-- 漏掉的松开：Win+L 锁屏以后 Win 的松开到不了钩子；管理员窗口在前台时松开被 UIPI 挡掉（见下文）也一样。每次可能凑成组合的时刻，先用 `GetAsyncKeyState` 核对集合里的其他键，再做匹配（5.3 第 8 条）；它查不准"触发本次回调的这个键"，查别的键是准的（OpenWhispr `windows-key-listener.c:83-97` 的注释）。
+- 漏掉的松开：Win+L 锁屏以后 Win 的松开到不了钩子；管理员窗口在前台时松开被 UIPI 挡掉（见下文）也一样。每次可能凑成组合的时刻，先用 `GetAsyncKeyState` 核对集合里的**修饰键**，再做匹配（5.3 第 8 条）；它查不准"触发本次回调的这个键"，查别的键是准的（OpenWhispr `windows-key-listener.c:83-97` 的注释）。被钩子吞掉的普通键不能这样核对：吞掉的按下不更新系统的按键状态，`GetAsyncKeyState` 永远读成松开，只能靠 10 秒清理（实施时改的，见 5.3 第 8 条）。NumLock 开着时驱动在小键盘键前插的假 Shift 松开（扫描码带 0x200；AltGr 布局上补的假左 Ctrl 松开同理）同样会让系统状态读成松开：记下来，补回来按下、或这个键真的按下松开之前不核对它。
 - 看门狗（可选，未验证）：同一消息窗口注册 Raw Input（`RIDEV_INPUTSINK`）。Raw Input 不受钩子时限影响，它持续收到按键而钩子一个都没看到，就判定钩子没了，重装并报 error。需要真机验证"被别的钩子吞掉的键 Raw Input 还收不收得到"和先后顺序。不要用"定时注入一个键"当心跳，注入的键会进前台程序。
 
 **UIPI：管理员窗口在前台时**
@@ -607,7 +607,9 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
    - 两键以内，升级最多发生一次（一键升到两键），不需要 Typeless 的"第三次起忽略"计数。
 7. 自动重复：已在集合里的键再来按下事件，就是自动重复，不参与匹配；它的按下被吞了，重复也吞。
 8. 丢失松开事件。精确匹配让这件事比现在要紧：现在的代码只看热键自己的键码（`native/main.swift:128-140`、`native/windows/keys.go:91-99`），别的键丢了松开不受影响；新规则下集合里多一个残留的键，所有绑定都凑不上。安全输入（4.1）和 UIPI（4.2）都会吞掉松开，例如用 Tab 切进密码框，Tab 的按下收到了、松开没收到。所以：
-   - 每次可能凑成组合的时刻（任何修饰键变化、任何 keyDown），先用系统接口核对集合里的**非修饰键**还按没按着（Mac `CGEventSourceKeyState(.hidSystemState, key)`，Windows `GetAsyncKeyState`），没按着的移出集合，再做匹配。修饰键不用核对，Mac 每次都从 flags 里重新解出来（4.1），Windows 的修饰键状态也由同一个钩子维护。
+   - 每次可能凑成组合的时刻（任何修饰键变化、任何 keyDown），先用系统接口核对集合里的键还按没按着，没按着的移出集合，再做匹配。两个系统核对的对象不同（实施时按实测改的）：
+     - Mac 核对**非修饰键**（`CGEventSourceKeyState(.hidSystemState, key)`），修饰键每次都从 flags 里重新解出来（4.1），不用核对。修饰键松开时也核对按着的绑定里的普通键：它的松开丢了的话，照样报松开。
+     - Windows 核对**修饰键**（`GetAsyncKeyState`）：Alt+Tab 切进管理员窗口后 Alt 的松开被 UIPI 挡掉，靠这个补上。被钩子吞掉的普通键不核对，吞掉的按下不更新系统状态，问了永远是松开；它们只靠下面的 10 秒清理。
    - 安全输入从开到关、tap 停用后重新打开、钩子重装、锁屏回来时，清掉集合里的非修饰键，对按着的绑定补报松开。
    - 10 秒清理必做：按下超过 10 秒还没松开的非修饰键移出集合（Typeless 的 `cleanupStaleKeys`）。
    - 安全输入期间 `CGEventSourceKeyState` 准不准，未验证（V24）。
@@ -763,7 +765,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 - 一个绑定分成 `mods`（修饰键，0 到 2 个，一定带，没有就是空数组）和 `key`（普通键，最多 1 个，可以不带）两栏，形状规则（5.3）直接写在结构里，小帮手不用自己猜哪个码是修饰键。小帮手再查一遍形状：整条不对（不是一组对象、少了 `id`/`mods`/`when`、类型不对）报 `error`、绑定表不动；单个不合规矩的（含重复的 id，两个都不装）在回执里退回，原因 `invalid`。
 - `bind` 整表替换，可以随时再发。上例是 Mac 的原生码；Windows 上 `mods` 发 vk，`key` 发扫描码（4.2），所以 `AltRight` 是 165（0xA5），`Escape` 是 1，`F13` 是 100（0x64）。
-- `probe` 查系统冲突，结果见下面的 `probed`。Mac 上调 `CopySymbolicHotKeys`（Carbon 接口，只有 Swift 小帮手能调）；Windows 上用 `RegisterHotKey` 试登记，它要 vk，小帮手按前台窗口的布局用 `MapVirtualKeyEx` 把扫描码换成 vk。只对"修饰键 + 普通键"有意义，别的形状直接回 `conflict: false`。
+- `probe` 查系统冲突，结果见下面的 `probed`。Mac 上调 `CopySymbolicHotKeys`（Carbon 接口，只有 Swift 小帮手能调）；Windows 上用 `RegisterHotKey` 试登记，它要 vk，小帮手按前台窗口的布局用 `MapVirtualKeyEx` 把扫描码换成 vk。带普通键的都查（Mac 的系统快捷键表里也有单个 F12、F14 这种，修饰位只有合成的 fn 位）；单个修饰键、只由修饰键组成的直接回 `conflict: false`。只在说话时生效的动作（取消）不查：那时小帮手先截住了它。
 - `info` 问一次系统设置里和热键相关的值，第一版只有 Mac 的 `AppleFnUsageType`（4.1）。也可以由主进程用 `defaults read com.apple.HIToolbox AppleFnUsageType` 自己读，那样协议里就不需要 `info`；放在小帮手里，是为了和 `CFPreferencesCopyAppValue` 读到的同一份值一致。
 - `when` 只有 `always` 和 `capturing` 两种。`capturing` 跟着现有的 `capture`、`release` 切换。悬浮条按钮的点击仍走 `regions`。
 - 吞不吞不设开关：修饰键不吞，非修饰键吞，规则固定。笔记 05 草案里的 `swallow` 字段去掉，少一个可能配错的旋钮。

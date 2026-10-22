@@ -462,6 +462,124 @@
       ]
     },
     {
+      "name": "修饰键加普通键按着时普通键松开又按回去：不报事件，但这一下的按下、自动重复、松开照样吞（不然 ⌥ 空格打出不换行空格）",
+      "bindings": [
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": 57
+        }
+      ],
+      "steps": [
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": true,
+            "mask": true
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 7,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
       "name": "修饰键先松开、普通键后松开：普通键松开时才算松开，它的松开照样吞",
       "bindings": [
         {
