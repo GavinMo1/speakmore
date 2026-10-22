@@ -1529,6 +1529,7 @@ speakmore help     全部命令`,
       failed: "✗ 没有成功：{reason}",
       recording: "录音 {seconds} 秒，留在 {path}",
       notSaved: "（没存下来）",
+      source: "{label}：{text}",
       more: "显示最近 {shown} 条，共 {total} 条。speakmore history -n {total} 看全部。",
     },
     usage: {

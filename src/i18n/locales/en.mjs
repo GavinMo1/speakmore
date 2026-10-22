@@ -1610,6 +1610,7 @@ speakmore help     all commands`,
       failed: "✗ Failed: {reason}",
       recording: "Recording {seconds}s, kept at {path}",
       notSaved: "(not saved)",
+      source: "{label}: {text}",
       more: "Showing the latest {shown} of {total}. Run speakmore history -n {total} to see all.",
     },
     usage: {

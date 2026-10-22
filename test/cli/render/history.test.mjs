@@ -58,6 +58,45 @@ test("多段的文字后面几行缩进对齐，段落之间的空行留着", ()
   assert.deepEqual(lines.slice(1, 6), ["  14:32  第一段", "", "         第二段", "         1. 一", "         2. 二"]);
 });
 
+test("翻译的那条正文是译文，下面一行淡色写功能、目标语言和原文，多行的原文续行对齐", () => {
+  const rows = [
+    row({
+      kind: "translate",
+      refinedText: "Let's meet the day after tomorrow.",
+      sourceText: "我们后天下午开会。\n\n别迟到。",
+      outputLanguage: "en",
+    }),
+  ];
+  assert.deepEqual(renderHistory({ rows, total: 1 }, plain).split("\n").slice(1, 5), [
+    "  14:32  Let's meet the day after tomorrow.",
+    "         语音翻译 · 英文：我们后天下午开会。",
+    "",
+    "         别迟到。",
+  ]);
+  assert.match(renderHistory({ rows, total: 1 }, english), /^ {9}Voice translation · English: 我们后天下午开会。$/m);
+  // 语音输入的那条（没有目标语言）只有正文
+  assert.equal(
+    renderHistory({ rows: [row({ kind: "dictate", sourceText: null })], total: 1 }, plain).split("\n")[2],
+    "",
+  );
+});
+
+test("翻译失败的那条也写上是译成哪种的，原文没有就不写", () => {
+  const rows = [
+    row({
+      kind: "translate",
+      status: "failed",
+      refinedText: "",
+      error: "超时",
+      sourceText: null,
+      outputLanguage: "ja",
+    }),
+  ];
+  const text = renderHistory({ rows, total: 1 }, plain);
+  assert.match(text, /✗ 没有成功：超时/);
+  assert.match(text, /^ {9}语音翻译 · 日文$/m);
+});
+
 test("失败的那条说明原因，并指出录音还留着", () => {
   const rows = [row({ status: "failed", refinedText: "", error: "连不上 Gemini", duration: 7.2 })];
   const text = renderHistory({ rows, total: 1 }, plain);
