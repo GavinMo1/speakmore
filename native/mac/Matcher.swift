@@ -2,12 +2,13 @@
 // 规矩和 Windows 版（native/windows/matcher.go）一字不差，由两边共用的按键轨迹样例约束
 // （native/fixtures/hotkeys/，docs/hotkey-research.md 5.3）：
 //   - 按住的键集合恰好等于某个绑定才算，多一个键都不算。修饰键之间不分先后；有普通键的，普通键要最后按。
-//   - 只有按下能凑成组合；组合里的键全部松开才算松开。按着时组合里的某个键松开又按回去，不算新的一下。
+//   - 只有按下能凑成组合；组合里的键全部松开才算松开。按着时组合里的某个键松开又按回去，不算新的一下（不报事件，普通键照样吞）。
 //   - 按着时来了组合外的键：新的集合恰好是另一个绑定就是"升级"，先报打断（带 to）再报新绑定按下；否则报一次打断，
 //     之后不报松开，组合里的键全松开之前不再触发任何东西。
 //   - 修饰键一律不吞；凑成组合的那个普通键整段吞掉（按下、自动重复、松开）。
 //   - 只在说话时生效的绑定（取消）不按集合认：截着的时候它那个键一按下就算，吞掉，也不进按住的键。
-//   - 松开的事件可能丢（安全输入会吞掉松开）：每次按下前用系统接口核对按住的普通键，按下超过 10 秒的也当丢了。
+//   - 松开的事件可能丢（安全输入会吞掉松开）：每次按下前用系统接口核对按住的普通键，按下超过 10 秒的也当丢了；
+//     松开时判断绑定松开没有之前，再核对一次组合里的普通键。
 //   - MacBook 上 fn 按着再按 F 键才是 F 键：这时把 fn 当成没按。
 // 只报绑定的按下、松开、被打断，不报是哪个键。键都用 kVK 键码（HIToolbox/Events.h），修饰键和别的键的码不重叠。
 
@@ -130,7 +131,10 @@ final class Matcher {
         held[code] = timeMs
 
         if let binding = current {
-            if interrupted || binding.keys.contains(code) { return Outcome() }
+            if interrupted { return Outcome() }
+            // 组合里的键松开又按回去：不算新的一下、不报事件；但普通键照样整段吞，不然 ⌥ 按着再按一下空格，
+            // 前台应用会收到 ⌥空格、打出一个不换行空格
+            if binding.keys.contains(code) { return Outcome(swallow: swallowWhole(code)) }
             if let next = match(code) {
                 // 升级：两键以内最多一次
                 current = next
@@ -148,9 +152,14 @@ final class Matcher {
 
     /// 绑定刚被 code 这个键凑成：报按下；凑成它的是普通键的话整段吞掉
     private func pressed(_ code: Int, _ binding: Binding, before: [HotkeyEvent] = []) -> Outcome {
+        Outcome(swallow: swallowWhole(code), events: before + [.binding(id: binding.id, down: true)])
+    }
+
+    /// 组合里的普通键从这一下按下起整段吞（自动重复、松开都吞）；修饰键不吞。返回这一下吞不吞
+    private func swallowWhole(_ code: Int) -> Bool {
         let swallow = !modifierKeyCodes.contains(code)
         if swallow { swallowed.insert(code) }
-        return Outcome(swallow: swallow, events: before + [.binding(id: binding.id, down: true)])
+        return swallow
     }
 
     private func onUp(_ code: Int) -> Outcome {
@@ -160,7 +169,15 @@ final class Matcher {
         let swallow = swallowed.remove(code) != nil
         guard held.removeValue(forKey: code) != nil else { return Outcome(swallow: swallow) }
         var events: [HotkeyEvent] = []
-        if let binding = current, !binding.keys.contains(where: { held[$0] != nil }) { events = release() }
+        if let binding = current {
+            // 组合里普通键的松开可能丢了（按着时开了安全输入之类）：先照系统接口核对，已经松开的不再算按着、也不再等着吞
+            // （5.3 第 8 条"任何修饰键变化"）。不核对的话这次修饰键松开报不出绑定松开，吞键 tap 也一直为它开着
+            if let key = binding.key, held[key] != nil, !stillDown(key) {
+                held.removeValue(forKey: key)
+                swallowed.remove(key)
+            }
+            if !binding.keys.contains(where: { held[$0] != nil }) { events = release() }
+        }
         return Outcome(swallow: swallow, events: events)
     }
 

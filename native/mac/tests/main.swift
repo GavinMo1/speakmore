@@ -75,6 +75,23 @@ func runCase(_ entry: [String: Any], file: String) {
     }
 }
 
+/// 组合里的普通键松开丢了，修饰键松开时要核对（5.3 第 8 条"任何修饰键变化"）：照样报松开，也不再留着要吞的键——
+/// 留着的话吞键 tap 一直开着，下一次随便按个键还会被报成打断。pendingSwallow 只有 Mac 有，所以不进共用样例
+func testLostKeyUpAtModifierUp() {
+    let rightOption = 0x3D, space = 0x31
+    var lost: Set<Int> = []
+    let matcher = Matcher(stillDown: { !lost.contains($0) })
+    _ = matcher.bind([Binding(id: "x#0", mods: [rightOption], key: space, capturing: false)])
+    _ = matcher.onKey(rightOption, down: true, timeMs: 1)
+    let down = matcher.onKey(space, down: true, timeMs: 2)
+    check(down == Outcome(swallow: true, events: [.binding(id: "x#0", down: true)]), "⌥空格按下：\(down)")
+    check(matcher.pendingSwallow == [space], "⌥空格按着：空格的松开要吞 \(matcher.pendingSwallow)")
+    lost.insert(space)
+    let up = matcher.onKey(rightOption, down: false, timeMs: 3)
+    check(up == Outcome(swallow: false, events: [.binding(id: "x#0", down: false)]), "空格松开丢了、⌥ 松开：要报松开 \(up)")
+    check(matcher.pendingSwallow.isEmpty, "空格松开丢了、⌥ 松开以后：不再有要吞的键 \(matcher.pendingSwallow)")
+}
+
 /// bind 命令的绑定表（规矩同 Windows 版的 protocol_test.go）：正例原样装上；每条规矩各一个反例，只退回那一个（invalid）；
 /// 整条形状不对是 nil
 func testParseBindings() {
@@ -257,10 +274,11 @@ func testRecorder() {
     check(!recorder.swallowWanted, "A 不再吞着：吞键 tap 不用为录键开着")
 }
 
-/// probe、info（Probe.swift）：id 是整数一定回一条 probed；只有修饰键 + 普通键才查系统表；
+/// probe、info（Probe.swift）：id 是整数一定回一条 probed；有普通键的组合才查系统表（单个 F 键也查）；
 /// 修饰键左右合并，F 键、方向键上的 fn 位是系统表自己带的，不比
 func testProbe() {
-    // 本机 CopySymbolicHotKeys 里摘的几条（2026-10-21）：⌘空格、⌃空格、⌃⇧空格（关着）、⌃F2、地球仪+A、⌃←
+    // 本机 CopySymbolicHotKeys 里摘的几条（2026-10-21）：⌘空格、⌃空格、⌃⇧空格（关着）、⌃F2、地球仪+A、⌃←、
+    // 单个 F12、单个 F7（关着）。单个 F 键的条目只带合成的 fn 位
     let table = [
         SymbolicHotKey(code: 0x31, modifiers: 0x100, enabled: true),
         SymbolicHotKey(code: 0x31, modifiers: 0x1000, enabled: true),
@@ -268,6 +286,8 @@ func testProbe() {
         SymbolicHotKey(code: 0x78, modifiers: 0x21000, enabled: true),
         SymbolicHotKey(code: 0x00, modifiers: 0x20000, enabled: true),
         SymbolicHotKey(code: 0x7B, modifiers: 0x21000, enabled: true),
+        SymbolicHotKey(code: 0x6F, modifiers: 0x20000, enabled: true),
+        SymbolicHotKey(code: 0x62, modifiers: 0x20000, enabled: false),
     ]
     let conflicts: [(String, [Int], Int, Bool)] = [
         ("左 ⌘空格", [0x37], 0x31, true),
@@ -282,6 +302,11 @@ func testProbe() {
         ("⌘A", [0x37], 0x00, false),
         ("fn+空格", [fnKeyCode], 0x31, false),
         ("右 Option+F13", [0x3D], 0x69, false),
+        ("单个 F12（F 键的 fn 位不比）", [], 0x6F, true),
+        ("单个 F7（系统表里关着）", [], 0x62, false),
+        ("单个 F13（系统表里没有）", [], 0x69, false),
+        ("单个 F2（系统表里的是 ⌃F2）", [], 0x78, false),
+        ("单个 A（系统表里的是地球仪+A）", [], 0x00, false),
     ]
     for (what, mods, key, want) in conflicts {
         check(symbolicConflict(mods: mods, key: key, in: table) == want, "冲突「\(what)」应为 \(want)")
@@ -305,10 +330,13 @@ func testProbe() {
     check(got.events == [probed(7, true)] && got.asked, "⌘空格：\(got)")
     got = answer(#"{"cmd":"probe","id":-2,"mods":[61],"key":105}"#)
     check(got.events == [probed(-2, false)], "右 Option+F13，id 是负数：\(got)")
+    got = answer(#"{"cmd":"probe","id":5,"mods":[],"key":111}"#)
+    check(got.events == [probed(5, true)] && got.asked, "单个 F12：要查系统表，被占了 \(got)")
+    got = answer(#"{"cmd":"probe","id":6,"mods":[],"key":105}"#)
+    check(got.events == [probed(6, false)] && got.asked, "单个 F13：要查系统表，没被占 \(got)")
     for (what, json) in [
         ("只有修饰键", #"{"cmd":"probe","id":3,"mods":[61]}"#),
         ("两个修饰键", #"{"cmd":"probe","id":3,"mods":[61,60]}"#),
-        ("单个普通键", #"{"cmd":"probe","id":3,"mods":[],"key":105}"#),
         ("key 是 null", #"{"cmd":"probe","id":3,"mods":[61],"key":null}"#),
     ] {
         got = answer(json)
@@ -366,6 +394,7 @@ guard CommandLine.arguments.count == 2 else {
     exit(2)
 }
 runFixtures(in: CommandLine.arguments[1])
+testLostKeyUpAtModifierUp()
 testParseBindings()
 testRecorder()
 testProbe()

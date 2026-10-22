@@ -27,10 +27,19 @@ private func register(_ key: Int, modifiers: Int, signature: OSType, id: UInt32)
     return (status == noErr ? ref : nil, status)
 }
 
+/// 安全输入期间顶着的一个组合：Carbon 分不了左右，左右两边的同一个组合在它眼里是一个
+private struct ShadowCombo: Hashable {
+    let key: Int
+    /// Carbon 的修饰位，左右已经合成一个
+    let modifiers: Int
+}
+
 final class HotKeys {
     private var singles: [Int: EventHotKeyRef] = [:]
-    private var shadows: [EventHotKeyRef] = []
+    private var shadows: [ShadowCombo: (ref: EventHotKeyRef, id: UInt32)] = [:]
     private var shadowKeys: [UInt32: Int] = [:]
+    /// 下一个顶着的注册用的 id：留着的注册不换 id，新加的不能和它们撞
+    private var nextShadowID: UInt32 = 1
     private var installed = false
 
     /// 现在一直注册着的单个键
@@ -52,36 +61,42 @@ final class HotKeys {
     }
 
     /// 安全输入期间顶着的注册换成这几个绑定的（空的就是全注销）。单个键已经一直注册着，不再注册一遍。
+    /// 只注销不再要的、只注册新加的，没变的原样留着：capture、release 每次都走到这里，那时组合里的键多半还按着，
+    /// 注销重注的话，新的注册没见过这次按下，它的松开很可能报不过来（推断，没在真机上验过）。
     /// 返回顶不了的绑定 id：带 fn 的、注册不上的（被别的应用占了）
     func replaceShadows(with bindings: [Binding]) -> [String] {
         installHandler()
-        for ref in shadows { UnregisterEventHotKey(ref) }
-        shadows = []
-        shadowKeys = [:]
-        var registered: [String: Bool] = [:]
+        // 每个要顶的绑定对应的组合；nil 是顶不了的（带 fn，Carbon 没有对应的位）
+        let wanted: [(id: String, combo: ShadowCombo?)] = bindings.compactMap { binding in
+            guard let key = binding.key, binding.capturing || !binding.mods.isEmpty else { return nil }
+            let mods = binding.mods.compactMap { carbonModifiers[$0] }
+            guard mods.count == binding.mods.count else { return (binding.id, nil) }
+            return (binding.id, ShadowCombo(key: key, modifiers: mods.reduce(0, |)))
+        }
+        let combos = Set(wanted.compactMap(\.combo))
+        for (combo, shadow) in shadows where !combos.contains(combo) {
+            UnregisterEventHotKey(shadow.ref)
+            shadows.removeValue(forKey: combo)
+            shadowKeys.removeValue(forKey: shadow.id)
+        }
+        var failed: Set<ShadowCombo> = []
         var unavailable: [String] = []
-        for binding in bindings {
-            guard let key = binding.key, binding.capturing || !binding.mods.isEmpty else { continue }
-            let mods = binding.mods.map { carbonModifiers[$0] }
-            guard !mods.contains(where: { $0 == nil }) else {
-                unavailable.append(binding.id)
+        for (id, combo) in wanted {
+            guard let combo, !failed.contains(combo) else {
+                unavailable.append(id)
                 continue
             }
-            let modifiers = mods.compactMap { $0 }.reduce(0, |)
-            // 左右两边的同一个组合在 Carbon 眼里是一个：注册过就不再注册
-            let combo = "\(key)/\(modifiers)"
-            if let ok = registered[combo] {
-                if !ok { unavailable.append(binding.id) }
-                continue
-            }
-            let id = UInt32(shadowKeys.count + 1)
-            let (ref, _) = register(key, modifiers: modifiers, signature: shadowSignature, id: id)
-            registered[combo] = ref != nil
+            // 注册过的（留着的，或者这一轮左右另一边刚注册的）不再注册
+            guard shadows[combo] == nil else { continue }
+            let shadowID = nextShadowID
+            let (ref, _) = register(combo.key, modifiers: combo.modifiers, signature: shadowSignature, id: shadowID)
             if let ref {
-                shadows.append(ref)
-                shadowKeys[id] = key
+                nextShadowID &+= 1
+                shadows[combo] = (ref, shadowID)
+                shadowKeys[shadowID] = combo.key
             } else {
-                unavailable.append(binding.id)
+                failed.insert(combo)
+                unavailable.append(id)
             }
         }
         return unavailable

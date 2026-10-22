@@ -182,6 +182,15 @@ private func settleSuspended() {
     setSuspended(screenLocked || sessionInactive)
 }
 
+/// 起来时屏幕已经锁着、会话已经不在前台（锁屏期间被拉起，比如远程登录上去重查权限）：通知只报变化，起来时得自己查一次，
+/// 不然锁屏界面上单按修饰键照样能起听写。CGSSessionScreenIsLocked 不是公开的键（VoiceInk 也这么查），解锁时没有这一项；
+/// 写法同 scripts/dev/mac-hotkeys-poster.swift 的 screenUnavailable
+private func readSessionState() {
+    let session = CGSessionCopyCurrentDictionary() as? [String: Any] ?? [:]
+    screenLocked = session["CGSSessionScreenIsLocked"] as? Bool == true
+    sessionInactive = session[kCGSessionOnConsoleKey] as? Bool == false
+}
+
 // MARK: - 开始盯着
 
 /// 启动时调一次。listen、trusted 是启动时查到的两项权限，之后有变化才报
@@ -216,5 +225,8 @@ func startWatching(listen: Bool, trusted: Bool) {
         sessionInactive = false
         settleSuspended()
     }
+    // 订好通知再查初值：查完以后的变化一定有通知跟上
+    readSessionState()
+    settleSuspended()
     checkSecureInput()
 }

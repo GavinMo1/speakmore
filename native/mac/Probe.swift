@@ -1,7 +1,8 @@
 // probe、info 两条命令的纯逻辑（只用 Foundation）：系统快捷键表、系统设置由 Control.swift 读来交给这里
 // （docs/hotkey-research.md 5.5、5.8）。
-//   probe  查一个组合是不是已经被系统快捷键（CopySymbolicHotKeys）占了。只有"修饰键 + 普通键"才可能冲突：
-//          只有修饰键的、单个普通键的，系统表里没有对应的形状，直接不冲突。
+//   probe  查一个组合是不是已经被系统快捷键（CopySymbolicHotKeys）占了。有普通键的才可能冲突："修饰键 + 普通键"，
+//          和单个普通键——本机表里单个 F11、F12、F14、F15 都是启用的系统快捷键，修饰位只有合成的 fn 位（2026-10-21）。
+//          只有修饰键的，系统表里没有对应的形状，直接不冲突。
 //   info   系统设置里和热键相关的值，第一版只有地球仪键的用途（AppleFnUsageType）。
 
 import Foundation
@@ -35,7 +36,7 @@ private let symbolicFnBit = 0x20000
 /// 字母键上的 fn 位是真的（地球仪+A、地球仪+F 之类，记成 0x20000），照比
 private let keysWithSyntheticFn: Set<Int> = functionKeyCodes.union([0x7B, 0x7C, 0x7D, 0x7E, 0x72, 0x73, 0x74, 0x75, 0x77, 0x79])
 
-/// 修饰键 + 普通键和系统表里启用的哪一条一样：键码相同、修饰位相同
+/// 修饰键 + 普通键（或单个普通键，mods 为空）和系统表里启用的哪一条一样：键码相同、修饰位相同
 func symbolicConflict(mods: [Int], key: Int, in table: [SymbolicHotKey]) -> Bool {
     let ignored = keysWithSyntheticFn.contains(key) ? symbolicFnBit : 0
     let wanted = mods.reduce(0) { $0 | (symbolicModifierBits[$1] ?? 0) } & ~ignored
@@ -43,7 +44,7 @@ func symbolicConflict(mods: [Int], key: Int, in table: [SymbolicHotKey]) -> Bool
 }
 
 /// probe 要报的事件，按顺序：形状不对先报 error；id 是整数时一定有一条 probed，不是整数就只有 error。
-/// symbolic 只在真要比（修饰键 + 普通键、形状对、有 id）时才调：系统表要 O(条数) 去读，头文件说别多调
+/// symbolic 只在真要比（有普通键、形状对、有 id）时才调：系统表要 O(条数) 去读，头文件说别多调
 func answerProbe(_ object: [String: Any], symbolic: () -> Result<[SymbolicHotKey], SymbolicFailure>) -> [[String: Any]] {
     var problems: [String] = []
     let id = integer(object["id"])
@@ -63,7 +64,7 @@ func answerProbe(_ object: [String: Any], symbolic: () -> Result<[SymbolicHotKey
     if !problems.isEmpty { events.append(["event": "error", "message": problems.joined(separator: "；")]) }
     guard let id else { return events }
     var conflict = false
-    if problems.isEmpty, let mods, !mods.isEmpty, let key {
+    if problems.isEmpty, let mods, let key {
         switch symbolic() {
         case let .success(table):
             conflict = symbolicConflict(mods: mods, key: key, in: table)

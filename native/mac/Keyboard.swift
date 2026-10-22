@@ -271,22 +271,30 @@ var tapsReady: (listen: Bool, swallow: Bool) { (listenTap != nil, swallowTap != 
 /// 权限变了：没了的那项立刻作废它的 tap。辅助功能没了还留着能改事件的 tap，有报告说整机键盘鼠标会冻住（V26），
 /// 所以吞键、触发两个一起作废，退回只听。又给了就重新建。返回现在截不截得住取消键和点击
 func refreshTaps(listen: Bool, trusted: Bool) -> Bool {
-    if !trusted {
+    // 三个 tap 一定按只听、吞键、触发的顺序建（后建的排在前面，V8）。运行中才给了输入监控时吞键 tap 已经在：
+    // 只听 tap 这时才建就排到了它前面，事件先被只听 tap 记下，到吞键 tap 时认作重复、一律放行，什么都吞不住。
+    // 所以先把吞键、触发两个作废，建完只听的再按顺序重建
+    let reorder = trusted && listen && listenTap == nil && (swallowTap != nil || triggerTap != nil)
+    let modifiers = triggerModifiers
+    if !trusted || reorder {
         triggerTap?.invalidate()
         triggerTap = nil
         triggerModifiers = []
         swallowTap?.invalidate()
         swallowTap = nil
         swallowOn = false
-        pressedRegion = nil
-    } else {
-        _ = startSwallowTap()
     }
+    // 只是重建的话按下的那一块留着：按下已经被旧的吞键 tap 吞掉，松开会到新建的这个，照样吞掉、照样认点了哪块
+    if !trusted { pressedRegion = nil }
     if !listen {
         listenTap?.invalidate()
         listenTap = nil
     } else {
         _ = startListenTap()
+    }
+    if trusted {
+        _ = startSwallowTap()
+        if reorder { _ = settleTriggerTap(modifiers) }
     }
     // 作废的 tap 上可能还有按着的键：照没看到松开处理
     resetMatcher()
