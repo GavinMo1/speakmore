@@ -3,7 +3,8 @@ import { createChatClient } from "../chat/client.mjs";
 import { toModelError } from "../providers/errors.mjs";
 import { createMeter } from "../refine/meter.mjs";
 import { translationOf } from "./output.mjs";
-import { lookupInput, lookupPrompt } from "./prompt.mjs";
+import { fallbackOf, lookupInput, lookupPrompt } from "./prompt.mjs";
+import { looksUntranslated, sourceIs } from "./source.mjs";
 
 // 划词翻译：选中的字 → 译文。交给用户在引擎页"划词"那一段单独选的纯文字模型（和语音那边的整理模型毫不相干）。
 // 怎么连、怎么记账、报错怎么认，和混合方式的整理那一步共用底层（../chat/client.mjs、../refine/meter.mjs）；
@@ -20,7 +21,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * @param {string} [options.apiKey] 只用来从报错里抹掉它
  * @param {(record: object) => void} [options.onCall] 记账，见 ../refine/meter.mjs
  * @returns {{ warmUp(): Promise<void>,
- *   translate(text: string, o: { language: object, lookupId: string, signal?: AbortSignal }): Promise<{ text: string }> }}
+ *   translate(text: string, o: { language: object, lookupId: string, signal?: AbortSignal }): Promise<{ text: string, language: string }> }}
  *   出错时抛的都是 ModelError
  */
 export function createTranslator({
@@ -50,18 +51,33 @@ export function createTranslator({
     },
 
     /**
+     * 译成目标语言；选中的已经是目标语言时改译成另一种（prompt.mjs 的 fallbackOf）：认得出的直接改，
+     * 认不出、译回来和原文几乎一样的再译一遍（source.mjs）。两遍都记在这一次的 id 上
      * @param {string} text 选中的字
      * @param {{ language: { id: string, prompt: string }, lookupId: string, signal?: AbortSignal }} options
      *   language：目标语言（src/languages.mjs 的一项）；lookupId：这一次的 id，记账和历史按它对上
+     * @returns {Promise<{ text: string, language: string }>} language 是实际译成的语言 id
      */
     async translate(text, { language, lookupId, signal }) {
-      if (text.trim() === "") return { text: "" };
-      try {
+      if (text.trim() === "") return { text: "", language: language.id };
+      const once = async (target) => {
         const reply = await metered("lookup", lookupId, () =>
-          client.complete({ system: lookupPrompt(language), user: lookupInput(text), signal: withTimeout(signal) }),
+          client.complete({
+            system: lookupPrompt(target),
+            user: lookupInput(text, target),
+            signal: withTimeout(signal),
+          }),
         );
         if (reply.problem) throw new LocalizedError(reply.problem);
-        return { text: translationOf(reply.text, language) };
+        return translationOf(reply.text, target);
+      };
+      try {
+        const already = sourceIs(text, language.id);
+        const target = already ? fallbackOf(language) : language;
+        const translated = await once(target);
+        if (already || !looksUntranslated(text, translated)) return { text: translated, language: target.id };
+        log.info("lookup_retargeted", { lookup_id: lookupId, from: language.id, to: fallbackOf(language).id });
+        return { text: await once(fallbackOf(language)), language: fallbackOf(language).id };
       } catch (error) {
         throw described(error);
       }

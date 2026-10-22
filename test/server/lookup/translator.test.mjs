@@ -46,20 +46,47 @@ function fakeClient(...replies) {
 const translatorWith = (client, extra = {}) =>
   createTranslator({ endpoint: { id: "deepseek", name: "DeepSeek" }, client, log: quiet, ...extra });
 
-test("提示词：最上面一行是目标语言；已经是目标语言时改译成哪种也写明（英语改译成简体中文，别的改译成英语）", () => {
+test("提示词：最上面一行是目标语言；选中的字放在标签里，标签外再点名译成哪种。已是目标语言时改译成哪种：英语改成简体中文，别的改成英语", () => {
   assert.equal(lookupPrompt(zhCN).split("\n")[0], "目标语言：简体中文（Simplified Chinese）");
   assert.equal(fallbackOf(zhCN), en);
   assert.equal(fallbackOf(ja), en);
   assert.equal(fallbackOf(en), zhCN);
-  assert.equal(
-    lookupPrompt(zhCN).split("\n")[1],
-    "原文已经是简体中文（Simplified Chinese）时，改译成英语（English）。",
-  );
-  assert.equal(lookupPrompt(en).split("\n")[1], "原文已经是英语（English）时，改译成简体中文（Simplified Chinese）。");
-  // 选中的字放在标签里交过去，标签外再说一遍只输出译文
-  const input = lookupInput("Hello\nworld");
+  const input = lookupInput("Hello\nworld", ja);
   assert.ok(input.startsWith("<选中文字>\nHello\nworld\n</选中文字>\n"));
-  assert.match(input, /只输出译文/);
+  assert.match(input, /译成日语（Japanese），只输出译文/);
+});
+
+test("原文已经是目标语言（认得出的）：不问模型就改译成另一种，交回实际译成的语言", async () => {
+  const { client, requests } = fakeClient({ text: "Our legal team has reviewed it.", problem: null, usage: USAGE });
+  const result = await translatorWith(client).translate("我们这边法务已经看过了。", { language: zhCN, lookupId: "l" });
+  assert.deepEqual(result, { text: "Our legal team has reviewed it.", language: "en" });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].system, lookupPrompt(en));
+  assert.equal(requests[0].user, lookupInput("我们这边法务已经看过了。", en));
+});
+
+test("认不出、模型照抄回来（拉丁字母的语言）：再按另一种译一遍，两笔都记在这一次上", async () => {
+  const calls = [];
+  const { client, requests } = fakeClient(
+    { text: "pipeline", problem: null, usage: USAGE },
+    { text: "流水线；管道", problem: null, usage: USAGE },
+  );
+  const result = await translatorWith(client, { onCall: (call) => calls.push(call) }).translate("pipeline", {
+    language: en,
+    lookupId: "l-9",
+  });
+  assert.deepEqual(result, { text: "流水线；管道", language: "zh-CN" });
+  assert.deepEqual(
+    requests.map(({ user }) => user),
+    [lookupInput("pipeline", en), lookupInput("pipeline", zhCN)],
+  );
+  assert.deepEqual(
+    calls.map(({ purpose, audioId }) => [purpose, audioId]),
+    [
+      ["lookup", "l-9"],
+      ["lookup", "l-9"],
+    ],
+  );
 });
 
 test("收尾：去掉首尾空白和模型多写的标签；译成简体中文时繁体字转简体，别的语言照写的", () => {
@@ -78,9 +105,9 @@ test("翻译：系统提示词按这一次的语言现拼，选中的字放进�
     language: zhCN,
     lookupId: "l-1",
   });
-  assert.deepEqual(result, { text: "模型把音频留在你的设备上。" });
+  assert.deepEqual(result, { text: "模型把音频留在你的设备上。", language: "zh-CN" });
   assert.equal(requests[0].system, lookupPrompt(zhCN));
-  assert.equal(requests[0].user, lookupInput("The model keeps the audio on your device."));
+  assert.equal(requests[0].user, lookupInput("The model keeps the audio on your device.", zhCN));
   assert.ok(requests[0].signal instanceof AbortSignal);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].purpose, "lookup");
@@ -90,7 +117,10 @@ test("翻译：系统提示词按这一次的语言现拼，选中的字放进�
 
 test("选中的是空白：不调模型", async () => {
   const { client, requests } = fakeClient();
-  assert.deepEqual(await translatorWith(client).translate(" \n ", { language: zhCN, lookupId: "l-2" }), { text: "" });
+  assert.deepEqual(await translatorWith(client).translate(" \n ", { language: zhCN, lookupId: "l-2" }), {
+    text: "",
+    language: "zh-CN",
+  });
   assert.equal(requests.length, 0);
 });
 
