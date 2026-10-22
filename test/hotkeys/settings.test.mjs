@@ -21,12 +21,13 @@ const settingsWith = (settings, values = {}) =>
   );
 
 test("动作目录里每个动作一项 hotkey.<动作>，环境变量 SPEAKMORE_HOTKEY_<动作>；听写另认旧名字和旧环境变量", () => {
-  assert.deepEqual(Object.keys(mac), ["hotkey.dictate", "hotkey.translate", "hotkey.cancel"]);
+  assert.deepEqual(Object.keys(mac), ["hotkey.dictate", "hotkey.translate", "hotkey.lookup", "hotkey.cancel"]);
   assert.deepEqual(
     ACTIONS.map((action) => [settingNameOf(action), envOf(action)]),
     [
       ["hotkey.dictate", "SPEAKMORE_HOTKEY_DICTATE"],
       ["hotkey.translate", "SPEAKMORE_HOTKEY_TRANSLATE"],
+      ["hotkey.lookup", "SPEAKMORE_HOTKEY_LOOKUP"],
       ["hotkey.cancel", "SPEAKMORE_HOTKEY_CANCEL"],
     ],
   );

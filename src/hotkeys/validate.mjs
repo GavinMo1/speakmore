@@ -45,6 +45,9 @@ const SYSTEM_RULES = {
     // 左 Alt+空格打开窗口菜单。右 Alt+空格不拦：语音翻译的默认键就是它（Typeless 的 Windows 默认键里也有它），
     // 小帮手吞掉空格，窗口菜单不弹（10-22 在 Windows 开发机的记事本里验过，docs/hotkey-research.md V27）
     [(codes) => only(codes, ["AltLeft"], ["Space"]), "binding.winAltSpace"],
+    // 左 Alt+回车在 Excel、WPS 表格里是单元格内换行，资源管理器里是属性。右 Alt+回车不拦：划词翻译的默认键就是它，
+    // 小帮手吞掉回车、补掩码，菜单栏不会被选中（同右 Alt+空格）
+    [(codes) => only(codes, ["AltLeft"], ["Enter"]), "binding.winAltEnter"],
     [(codes) => only(codes, ALT, ["F4"]) || only(codes, CONTROL, ["F4"]), "binding.winCloses"],
     // 默认的输入语言热键是左 Alt+Shift，切换键盘布局是 Ctrl+Shift（设置 › 时间和语言 › 输入 › 高级键盘设置）
     [(codes) => only(codes, SHIFT, CONTROL) || only(codes, SHIFT, ALT), "binding.winShiftSwitch"],
@@ -58,7 +61,9 @@ const SYSTEM_RULES = {
 const WARNING_RULES = {
   darwin: [
     [(codes) => codes.length === 1 && codes[0] === "Fn", "binding.fnSystem"],
-    [(codes) => has(codes, ALT) && typing(codes), "binding.macOptionTyping"],
+    // ⌥ 加回车不打字：Excel、Numbers 里是单元格内换行。两边的 ⌥ 是同一个键，绑了右边的，那里就得按左边的
+    [(codes) => has(codes, ALT) && codes.includes("Enter"), "binding.macOptionEnter"],
+    [(codes) => has(codes, ALT) && typing(codes) && !codes.includes("Enter"), "binding.macOptionTyping"],
   ],
   win32: [
     [(codes) => codes.includes("AltRight"), "binding.altGr"],
@@ -169,8 +174,9 @@ export function checkBindings(bindings, platform) {
   for (const { action, index, codes } of accepted) {
     for (const reason of warningsOf(codes, { platform })) report(action, index, "warn", reason);
     for (const other of accepted) {
-      // 两个都是录音会话（语音输入和语音翻译）时不提醒：按长的那个时，悬浮条把已经开始的这一次直接升级过去，录音不断
-      if (isPart(codes, other.codes) && !(action.handler === "session" && other.action.handler === "session")) {
+      // 短的那个是录音会话（语音输入）时不提醒：长的也是录音会话（语音翻译）的，悬浮条把已经开始的这一次直接升级过去，
+      // 录音不断；长的是别的（划词翻译）的，主进程先压住这一下，凑成长的就不交给悬浮条（app/session-gate.mjs）
+      if (isPart(codes, other.codes) && action.handler !== "session") {
         report(
           action,
           index,

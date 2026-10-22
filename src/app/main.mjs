@@ -78,6 +78,7 @@ import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
 import { createModeSwitch } from "./modes.mjs";
 import { MOVE_TO, startMoveWindow } from "./move-window.mjs";
 import { startService } from "./service.mjs";
+import { createSessionGate } from "./session-gate.mjs";
 import { summarizeSetup, summaryAsText } from "./setup-state.mjs";
 import { createAppUpdates } from "./updates.mjs";
 import { describeVocabularySupport, vocabularyHops } from "./vocabulary.mjs";
@@ -729,9 +730,15 @@ async function main() {
     tellBar("bar:controls", enabled);
   }
 
+  /**
+   * 小帮手报的绑定事件先过这一道：语音输入的组合是划词翻译的一部分时，按下先压住，凑成划词就不交给悬浮条（session-gate.mjs）
+   */
+  const sessionGate = createSessionGate({ deliver: (event) => onBindingEvent(event) });
+
   /** 把现在要装的热键下发给小帮手（hotkeys 已经查过，这个系统上绑不了的不在里面） */
   function sendHotkeys() {
     sentHotkeys.push(hotkeys.chords);
+    sessionGate.setChords(hotkeys.chords);
     helper.bind(bindingTable(hotkeys.chords, process.platform));
   }
 
@@ -831,7 +838,7 @@ async function main() {
         break;
       case "binding":
       case "interrupted":
-        onBindingEvent(event);
+        sessionGate.accept(event);
         break;
       case "recording":
         // 录键模式里按住的键（设置页、引导页在录）：只交给录键那边，不进日志
@@ -868,12 +875,24 @@ async function main() {
     const fields = { event: event.event, id: event.id, down: event.down, to: event.to };
     // chord：这个动作的第几个组合（绑定 id 的序号），悬浮条的提示里写按下的那一个
     const input = { event: event.event, action: action.id, down: event.down, chord: Number(event.id.split("#")[1]) };
-    if (action.handler !== "session") {
-      // 只在说话时生效的（取消）：那时页面让小帮手截着，交给悬浮条
+    BINDING_HANDLERS[action.handler]({ event, action, fields, input });
+  }
+
+  /** 动作目录里的每种处理者（handler）：绑定事件交给谁 */
+  const BINDING_HANDLERS = {
+    session: onSessionKey,
+    // 只在说话时生效的（取消）：那时页面让小帮手截着，交给悬浮条
+    cancel: ({ fields, input }) => {
       log.info("key_event", fields);
       tellBar("input", input);
-      return;
-    }
+    },
+    lookup: ({ fields }) => {
+      log.info("key_event", fields);
+    },
+  };
+
+  /** 录音会话的动作（语音输入、语音翻译）：交给悬浮条开始、结束、升级 */
+  function onSessionKey({ event, action, fields, input }) {
     // 首次引导正在测快捷键、人也正看着它：听写的按下松开只送到引导窗口。
     // 切到别的应用了就照常听写，不然热键在哪都按不出来，还没有任何提示；
     // 悬浮条在屏幕上（切出去开了一段听写又切回来）时也给条，不然这一段停不下来

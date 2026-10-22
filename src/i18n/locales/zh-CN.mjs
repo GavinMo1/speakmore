@@ -107,6 +107,7 @@ export default {
   actions: {
     dictate: { name: "语音输入" },
     translate: { name: "语音翻译" },
+    lookup: { name: "划词翻译" },
     cancel: { name: "取消" },
   },
 
@@ -164,6 +165,7 @@ export default {
     winMeta: "Win 键和它的组合都归 Windows 自己用",
     winControlTyping: "Ctrl 加打字的键是各个应用的快捷键（复制、粘贴、保存……）",
     winAltSpace: "左 Alt+空格会打开窗口菜单",
+    winAltEnter: "左 Alt+回车在表格软件里是单元格内换行",
     winCloses: "这个组合会关掉窗口",
     winShiftSwitch: "Ctrl+Shift、Alt+Shift 是 Windows 切换输入语言和键盘布局的快捷键",
     winF12: "Windows 把单独的 F12 留给调试器",
@@ -180,6 +182,7 @@ export default {
     fnSystemUse: "按地球仪键时系统还会{use}：可在系统设置 › 键盘里改成“无操作”",
     fnUses: { inputSource: "切换输入法", emoji: "显示表情与符号", dictation: "开始听写" },
     macOptionTyping: "⌥ 加打字的键平时会打出特殊字符（⌥空格是不换行空格），绑上以后就打不出来了",
+    macOptionEnter: "表格软件里 ⌥回车是单元格内换行，绑上以后那里要按另一边的 ⌥",
     altGr: "有些键盘布局（德语、法语等）把右 Alt 当 AltGr 打字用，按它时会一起触发",
     winAltLetter: "Alt 加字母平时会打开应用的菜单（Alt+F 打开“文件”），绑上以后就打不开了",
     prefix: "它是「{action}」的组合 {chord} 的一部分：按那个组合时会先触发这个",

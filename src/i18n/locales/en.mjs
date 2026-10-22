@@ -109,6 +109,7 @@ export default {
   actions: {
     dictate: { name: "Voice input" },
     translate: { name: "Voice translation" },
+    lookup: { name: "Selection translation" },
     cancel: { name: "Cancel" },
   },
 
@@ -167,6 +168,7 @@ export default {
     winMeta: "The Windows key and its combinations belong to Windows",
     winControlTyping: "Ctrl with a typing key is an app shortcut (copy, paste, save…)",
     winAltSpace: "Left Alt+Space opens the window menu",
+    winAltEnter: "Left Alt+Enter adds a line break inside a spreadsheet cell",
     winCloses: "This closes the window",
     winShiftSwitch: "Ctrl+Shift and Alt+Shift switch input languages and keyboard layouts",
     winF12: "Windows reserves F12 on its own for debuggers",
@@ -186,6 +188,8 @@ export default {
     fnUses: { inputSource: "changes the input source", emoji: "shows Emoji & Symbols", dictation: "starts Dictation" },
     macOptionTyping:
       "Option with a typing key normally types a special character (Option-Space is a non-breaking space); bound, it no longer will",
+    macOptionEnter:
+      "In spreadsheets Option-Return adds a line break inside a cell; bound, it takes the Option key on the other side",
     altGr: "Some keyboard layouts (German, French…) use Right Alt as AltGr for typing; pressing it fires this too",
     winAltLetter: "Alt with a letter normally opens an app's menu (Alt+F for File); bound, it no longer will",
     prefix: "It's part of {action}'s combination {chord}: pressing that one fires this first",

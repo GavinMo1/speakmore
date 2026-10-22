@@ -187,8 +187,8 @@ test("认不出来的输入是 undefined（页面记一条警告），不是 nul
   }
 });
 
-test("动作目录里每个动作的处理者，悬浮条都认得它的按下", () => {
-  for (const action of ACTIONS) {
+test("动作目录里交给悬浮条的处理者（录音会话、取消），悬浮条都认得它的按下；划词翻译归主进程，不到悬浮条", () => {
+  for (const action of ACTIONS.filter(({ handler }) => handler === "session" || handler === "cancel")) {
     assert.notEqual(eventTypeOf({ event: "binding", action: action.id, down: true }), undefined, action.id);
   }
 });

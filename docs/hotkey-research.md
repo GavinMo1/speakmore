@@ -589,7 +589,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | 修饰键 + 修饰键 | `ControlRight+ShiftRight`、`Fn+ShiftLeft`、`ControlLeft+MetaLeft` | 允许 |
 | 修饰键 + 普通键 | `AltRight+Space`、`ControlRight+F13` | 允许，普通键要吞（Mac 需辅助功能权限）；两边系统保留的组合除外（5.5） |
 | 单个非打字键 | `F13`、`F5`、`ContextMenu` | 允许，要吞 |
-| 单个打字键 | `KeyA`、`Space`、`Enter` | 禁止 |
+| 单个打字键 | `KeyA`、`Space`、`Enter` | 禁止。回车 10-22 起和别的打字键一样，能和修饰键一起绑（划词翻译的默认键右⌥回车）；之前连组合也不让绑 |
 | 普通键 + 普通键 | `KeyA+KeyS` | 禁止 |
 | `Shift` + 打字键 | `ShiftLeft+KeyA` | 禁止：会打出大写或符号，两键以内无法再加修饰键 |
 | 单按 Shift | `ShiftLeft`、`ShiftRight` | 禁止（D11）：微软拼音单按 Shift 切中英文，连按可能弹粘滞键；和别的修饰键、F 键组合仍允许 |
@@ -627,6 +627,8 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | 按下后等一小段时间看有没有第二个键 | Alfred（等修饰键松开） | 每次都多一段延迟 |
 
 建议沿用第一种。它和 Typeless 一致，也和我们已经验收过的"按下即开始"一致。还有一个副作用要写进文档：说话进行中按带前缀的长组合，前缀那一下会先被当成"再按一下"，直接结束这次听写。保存时对前缀关系给警告，文案参考 Wispr："Your Hands-free mode shortcut is a part of a Push-to-talk shortcut. This may lead to conflicts."（https://docs.wisprflow.ai/articles/2612050838-supported-unsupported-keyboard-hotkey-shortcuts ）。第一版的两个动作之间不会有前缀关系："取消"是单键，别的动作的组合按 5.5 不能含它的键。前缀问题要到第三个动作出现时才真正出现，但匹配器从一开始就支持升级，代价很小。
+
+2026-10-22 加划词翻译（默认右⌥回车）时补了第三种做法的一个窄版：语音输入的某个组合是别的动作（不是录音会话的，现在只有划词翻译）某个组合的一部分时，主进程把这个组合的按下先压住（`src/app/session-gate.mjs`），松开了、或者 250 ms 到了还没等来第二个键，再交给悬浮条；等来的是被打断（凑成了划词，或者是别的组合键）就整个丢掉，悬浮条什么都没看见，不会闪、不开麦克风。凑成语音翻译的也丢掉压住的那一下，紧跟着的语音翻译自己的按下照常开始。代价是点按语音输入要等到松开才开始，多出来的是一次点按的时长（一百毫秒上下）；没绑划词、或者划词的组合不含语音输入的键时不压。所以保存时的前缀提醒只对"短的那个不是录音会话"的报。
 
 **点按、按住与 600 ms**
 
@@ -681,7 +683,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - 只在截取中生效的动作只按自己那一个键认（5.3），所以别的动作的组合里不能含它的键：取消绑了 `F13`，听写就不能绑 `ControlRight+F13`，否则说话时按这个组合只会取消。
 - 系统保留组合，按系统分别建表、按 code 写、左右都列：
   - macOS：⌘ + `Space`、`Tab`、常用编辑键（C V X Z A S W Q N O P F H M T 和逗号）；`Control` + `Space`（切换输入法，对中文用户尤其要紧）；⌃ + F1–F5；⌘ + `Backspace`（来源：Apple HIG https://developer.apple.com/design/human-interface-guidelines/keyboards ，以及 Wispr 文档）。另外用 `CopySymbolicHotKeys()` 动态查启用的系统快捷键。
-  - Windows：Alt+Tab、Alt+F4、左 Alt+Space（右 Alt+Space 留给语音翻译，Typeless 的 Windows 默认键里也有它；小帮手吞掉空格后窗口菜单不弹，V27 已验）、Ctrl + 常用编辑键、Win + 字母数字 Tab 方向键、Win+Space、Ctrl+Alt+Del、Win+L、`Shift + Space`（微软拼音全角半角）。另外对"修饰键 + 普通键"用 `RegisterHotKey` 试登记一次。
+  - Windows：Alt+Tab、Alt+F4、左 Alt+Space（右 Alt+Space 留给语音翻译，Typeless 的 Windows 默认键里也有它；小帮手吞掉空格后窗口菜单不弹，V27 已验）、左 Alt+Enter（Excel、WPS 表格里是单元格内换行；右 Alt+Enter 留给划词翻译，V28）、Ctrl + 常用编辑键、Win + 字母数字 Tab 方向键、Win+Space、Ctrl+Alt+Del、Win+L、`Shift + Space`（微软拼音全角半角）。另外对"修饰键 + 普通键"用 `RegisterHotKey` 试登记一次。
 - Mac 上 `Fn` + 方向键、删除、回车。
 - 和自家另一个动作的绑定规范化后相同：拒绝，并写明"已被「某动作」占用"。"任何时候"和别的场景都算重叠，所以现在任意两个动作都不能同键；以后有了互不重叠的场景，才按场景放开。
 
@@ -699,7 +701,8 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | Windows 上 `AltLeft+ShiftLeft`、`AltLeft+ShiftRight` | 默认在输入语言之间切换（4.2，V23） |
 | Windows 上 `Ctrl+Shift` | 装了多个布局时会切换布局 |
 | Mac 上 Control 作修饰键 | Apple HIG："Avoid using the Control key as a modifier" |
-| 组合是另一个绑定的前缀 | 见 5.3。两个都是录音会话（语音输入和语音翻译）时不提醒：按长的那个时悬浮条把这一次直接升级过去，录音不断（2026-10-22 加语音翻译时改） |
+| 组合是另一个绑定的前缀 | 见 5.3。短的那个是录音会话时不提醒：长的也是录音会话（语音翻译）的，悬浮条把这一次直接升级过去，录音不断；长的是划词翻译的，主进程先压住这一下（2026-10-22 加语音翻译、划词翻译时改） |
+| Mac 上 `⌥` + 回车 | Excel、Numbers 里是单元格内换行；两边的 ⌥ 是同一个键，绑了右边的那里就要按左边的。提醒，不拦：划词翻译的默认键就是右⌥回车 |
 | Mac 修饰键 + 普通键 | 安全输入时改由 Carbon 顶替，顶替不上就失灵（4.1） |
 
 **做不到的事要说清楚**：别的应用用钩子或 tap 实现的热键，以及别的应用注册的 Carbon 热键，都没有通用接口能查出来。只能静态表加警告，用户撞上了自己改。
@@ -1047,6 +1050,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | V25 | Mac：录制中按 ⌘W、⌘Q、⌃Space 各会发生什么；渲染层 `preventDefault`、主进程 `before-input-event` 拦不拦得住默认菜单的快捷键 | 5.6 录制时吞键 | 开发窗口里分有、无辅助功能权限两种各按一遍 |
 | V26 | Mac：辅助功能权限在运行中被撤销时，常开的触发 tap 会不会冻住整机；监听到权限变化后立刻 `CFMachPortInvalidate`，能不能避免或解冻 | 第 7 步，D3 的缓解 | 只在随时可以重来的 macOS 虚拟机里做，不在主人的电脑上做：装一个带触发 tap 的测试应用、授权后用 `tccutil reset Accessibility` 撤销，看键盘鼠标 |
 | V27 | Windows：绑了右 Alt+空格，小帮手吞掉空格以后，系统的窗口菜单还弹不弹 | 5.5 只拦左 Alt+空格（语音翻译的默认键） | **10-22 已验：窗口菜单不弹。** 开发机记事本里真键盘按、合成按各两次，空格都吞住了。同时查出记事本的菜单栏被选中：掩码插早了，单按右 Alt 也一样（4.2 掩码），修好后 `e2e.ps1` 42/42 |
+| V28 | Windows：绑了右 Alt+回车，小帮手吞掉回车以后，记事本的菜单栏、资源管理器的属性窗口、表格的单元格换行还会不会跟着来 | 5.5 只拦左 Alt+回车（划词翻译的默认键） | 照 V27：开发机上真键盘、合成各按两次，焦点用 UI Automation 看 |
 
 ---
 

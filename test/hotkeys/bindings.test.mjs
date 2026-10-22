@@ -78,24 +78,33 @@ function settingsOn(platform, values = {}) {
 }
 const zhWin = createTranslator("zh-CN", "win32");
 /** 两个系统的默认组合一样 */
-const DEFAULTS = { dictate: [["AltRight"]], translate: [["AltRight", "Space"]], cancel: [["Escape"]] };
+const DEFAULTS = {
+  dictate: [["AltRight"]],
+  translate: [["AltRight", "Space"]],
+  lookup: [["AltRight", "Enter"]],
+  cancel: [["Escape"]],
+};
 const zhMac = createTranslator("zh-CN", "darwin");
 const texts = (problems, t) => problems.map((problem) => t.text(describeHotkeyProblem(problem)));
 
-test("都是默认的：照装，没有问题；Windows 的右 Alt 带 AltGr 的提醒，Mac 的右⌥空格带打不出不换行空格的提醒", () => {
+test("都是默认的：照装，没有问题；Windows 的右 Alt 带 AltGr 的提醒，Mac 的右⌥空格、右⌥回车各带一条提醒", () => {
   for (const platform of ["darwin", "win32"]) {
     const resolved = resolveHotkeys(settingsOn(platform), platform);
     assert.deepEqual(resolved.chords, DEFAULTS);
     assert.deepEqual(resolved.problems, []);
-    // 语音输入的键是语音翻译的前缀，但两个都是录音会话，按翻译时直接升级过去，不提醒
+    // 语音输入的键是语音翻译、划词翻译的前缀，不提醒：按翻译时直接升级过去，按划词时主进程把这一下压住
     assert.deepEqual(
       resolved.warnings.map(({ action, chord }) => [action, chord]),
       platform === "win32"
         ? [
             ["dictate", ["AltRight"]],
             ["translate", ["AltRight", "Space"]],
+            ["lookup", ["AltRight", "Enter"]],
           ]
-        : [["translate", ["AltRight", "Space"]]],
+        : [
+            ["translate", ["AltRight", "Space"]],
+            ["lookup", ["AltRight", "Enter"]],
+          ],
     );
   }
 });
