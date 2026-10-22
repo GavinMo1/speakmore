@@ -129,13 +129,16 @@ export default {
     appTaken: "Used by another app",
     saveFailed: "Couldn't save",
     add: "Add another",
+    addLabel: "Add another combination for {action}",
     reset: "Reset",
+    resetLabel: "Reset {action} to default",
     change: "Change {chord}",
     remove: "Remove {chord}",
     saved: "Saved",
     limit: "Up to {count}",
     needsListen: "Needs Input Monitoring permission",
-    envOverride: "{variable} takes precedence; changes here won't apply yet",
+    helperStopped: "Key listening isn't running, so shortcuts can't be recorded now",
+    envOverride: "{variable} takes precedence; remove it to change this here",
   },
 
   // Found before handing the shortcuts to the helper, or reported back by it (src/hotkeys/bindings.mjs); listed under what's missing
@@ -156,6 +159,7 @@ export default {
     macControlTyping:
       "Control with a typing key is a system or text-editing shortcut (switching input sources, moving the cursor…)",
     macFnTyping: "Globe with a letter, digit or symbol is a system shortcut",
+    macFnFKey: "fn with an F key is just that F key; bind the F key on its own",
     macControlF: "Control with F1–F8 is a system keyboard-navigation shortcut",
     macCommandF: "Command with F1–F12 is a system shortcut (Command-F5 turns VoiceOver on and off)",
     macF11: "F11 is the system's Show Desktop",

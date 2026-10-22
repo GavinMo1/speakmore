@@ -1,5 +1,5 @@
 import { h, progressBadge, svg } from "../shared/dom.mjs";
-import { createHotkeyEditor } from "../shared/hotkey-editor.mjs";
+import { createHotkeyEditor, recordBlocker } from "../shared/hotkey-editor.mjs";
 import { hotkeyText, localize, t } from "../shared/i18n.mjs";
 import { keycapRow } from "../shared/keycaps.mjs";
 import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
@@ -107,7 +107,8 @@ const goBy = (offset) => go(STEPS[Math.min(STEPS.length - 1, Math.max(0, STEPS.i
 
 const hotkeyEditor = createHotkeyEditor($("hotkey-editor"), {
   onChanged: refresh,
-  savedNote: "onboarding.hotkey.switched",
+  // 只有听写在这一步按得出效果（大键帽亮）；取消要说话时才有用，存好了就只说"已保存"
+  savedNote: (actionId) => (actionId === "dictate" ? "onboarding.hotkey.switched" : "hotkeyRecord.saved"),
 });
 /** 听写现在装着的组合（大键帽、完成页、体验一下的提示里写的） */
 const dictateChords = () => setup.hotkeyActions.find((action) => action.id === "dictate").inEffect;
@@ -490,9 +491,7 @@ function render() {
   const keycap = hotkeyText(dictateChords());
   // 大键帽：听写的第一个组合，一个键一块
   $("big-keycap").replaceChildren(...keycapRow(dictateChords()[0] ?? [], "big-keycap"));
-  hotkeyEditor.render(setup.hotkeyActions, {
-    canRecord: setup.helper === "running" && setup.permissions.listen !== false,
-  });
+  hotkeyEditor.render(setup.hotkeyActions, { blocker: recordBlocker(setup) });
   $("try-text").placeholder = t("onboarding.try.placeholder", { keycap });
 
   // 底下：返回（第一步没有）、跳过引导、继续。这一步做完了"继续"是主按钮，没做完是次要的（照样能往下走）

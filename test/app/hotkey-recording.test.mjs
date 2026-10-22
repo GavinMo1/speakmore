@@ -115,6 +115,33 @@ test("修饰键加普通键先问小帮手有没有被系统占了：占了就�
   assert.equal(sent.at(-1)[1].reason.key, "hotkeyRecord.systemTaken");
 });
 
+test("单个 F 键也问（Mac 的系统快捷键表里有单个 F12、F14）；单个修饰键、只在说话时生效的取消不问", async () => {
+  const asked = [];
+  const { recording } = setup({
+    probe: async (codes) => {
+      asked.push(codes);
+      return { conflict: false };
+    },
+  });
+  const F14 = 0x6b;
+  recording.start("hub", "dictate", null);
+  recording.onRecording(snapshot());
+  recording.onRecording(snapshot([], [F14]));
+  recording.onRecording(snapshot());
+  await flush();
+  recording.start("hub", "dictate", null);
+  recording.onRecording(snapshot());
+  recording.onRecording(snapshot([RIGHT_OPTION]));
+  recording.onRecording(snapshot());
+  await flush();
+  recording.start("hub", "cancel", 0);
+  recording.onRecording(snapshot());
+  recording.onRecording(snapshot([], [F14]));
+  recording.onRecording(snapshot());
+  await flush();
+  assert.deepEqual(asked, [["F14"]]);
+});
+
 test("Windows 上被别的程序登记了：说是别的程序占的", async () => {
   const { recording, sent } = setup({ probe: async () => ({ conflict: true, source: "registered" }) });
   recording.start("hub", "dictate", null);
@@ -222,6 +249,17 @@ test("结束的原因照页面说的记（再点一下、点了别处、离开�
   recording.start("hub", "dictate", null);
   recording.stop("hub", "<script>");
   assert.equal(sent.at(-1)[1].reason, "page");
+});
+
+test("页面给的号原样带回去：另一处开始时，旧那次的结束带的是旧号", () => {
+  const { recording, sent } = setup();
+  recording.start("hub", "dictate", 0, 7);
+  recording.onRecording(snapshot());
+  assert.equal(sent.at(-1)[1].token, 7);
+  recording.start("hub", "dictate", null, 8);
+  assert.deepEqual(sent.at(-1), ["hub", { action: "dictate", index: 0, token: 7, state: "ended", reason: "replaced" }]);
+  recording.onRecording(snapshot());
+  assert.equal(sent.at(-1)[1].token, 8);
 });
 
 test("不认识的动作直接报错", () => {

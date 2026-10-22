@@ -4,7 +4,7 @@ import { createRecordRound } from "../hotkeys/record.mjs";
 import { LocalizedError, msg } from "../i18n/index.mjs";
 
 // 设置页、引导页录键（docs/hotkey-research.md 5.6）：页面说"给这个动作录一个"，这里让小帮手进录键模式，
-// 它报的按住集合按 src/hotkeys/record.mjs 的规则定稿，修饰键加普通键的先问它有没有被系统或别的程序占了，
+// 它报的按住集合按 src/hotkeys/record.mjs 的规则定稿，带普通键的先问它有没有被系统或别的程序占了，
 // 再交给保存（和命令行 config set 同一套校验），结果告诉那个页面。同一时刻只有一处在录：新的开始，旧的那处收到结束。
 //
 // 告诉页面的（payload.state）：
@@ -42,7 +42,7 @@ function reasonOf(error) {
  * @param {{ info: Function, warn: Function }} deps.log
  */
 export function createHotkeyRecording({ platform, record, probe, chordsOf, save, send, log }) {
-  /** @type {null | { target: unknown, action: object, index: number, round: object, armed: boolean }} */
+  /** @type {null | { target: unknown, action: object, index: number, token?: number, round: object, armed: boolean }} */
   let session = null;
   /** 让小帮手停了、还没收到它 on:false 回执的次数：回执晚到时不能当成下一轮到点了 */
   let pendingOffs = 0;
@@ -51,8 +51,14 @@ export function createHotkeyRecording({ platform, record, probe, chordsOf, save,
     record(false);
   };
 
+  // token 是页面开始录时给的号，原样带回去：页面靠它认出这是哪一次（上一次晚到的结束不算到新的一次头上）
   const tell = (current, payload) =>
-    send(current.target, { action: current.action.id, index: current.index, ...payload });
+    send(current.target, {
+      action: current.action.id,
+      index: current.index,
+      ...(current.token === undefined ? {} : { token: current.token }),
+      ...payload,
+    });
 
   function end(reason, { quiet = false } = {}) {
     const current = session;
@@ -66,7 +72,9 @@ export function createHotkeyRecording({ platform, record, probe, chordsOf, save,
   async function settle(current, codes) {
     const chords = chordsOf(current.action.id).slice();
     chords.splice(current.index, 1, codes);
-    if (codes.some(isModifier) && codes.some((code) => !isModifier(code))) {
+    // 带普通键的都问（Mac 的系统快捷键表里也有单个 F12、F14 这种）；单个修饰键没有可问的。只在说话时生效的动作（取消）
+    // 那时小帮手先截住了这个键，系统和别的程序收不到，不用问
+    if (current.action.when !== "capturing" && codes.some((code) => !isModifier(code))) {
       const found = await probe(codes);
       if (session !== current) return;
       if (found.conflict) {
@@ -94,8 +102,9 @@ export function createHotkeyRecording({ platform, record, probe, chordsOf, save,
      * @param {unknown} target 发起的页面（webContents），结果只告诉它
      * @param {string} actionId
      * @param {number | null} index 换掉第几个组合；null 是加一个
+     * @param {number} [token] 页面给这一次的号，结果都带着它
      */
-    start(target, actionId, index) {
+    start(target, actionId, index, token) {
       const action = actionOf(actionId);
       if (action === null) throw new TypeError(`不认识的动作：${actionId}`);
       // 另一处在录：告诉它结束，但不让小帮手停——再发一次 on:true 它会从头录。先停再开的话，停的那条回执晚到，
@@ -106,6 +115,7 @@ export function createHotkeyRecording({ platform, record, probe, chordsOf, save,
         target,
         action,
         index: index === null || index === undefined || index >= count ? count : index,
+        token,
         round: createRecordRound({ platform, cancelable: action.when !== "capturing" }),
         // 小帮手进录键模式时先报一份空的；那之前到的是上一轮晚到的快照，不算
         armed: false,

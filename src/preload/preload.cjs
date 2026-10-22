@@ -91,7 +91,7 @@ contextBridge.exposeInMainWorld("speakmore", {
   recheckPermissions: () => ipcRenderer.invoke("setup:recheck"),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke("setup:set-open-at-login", enabled),
   // 录键（docs/hotkey-research.md 5.6）：index 是换掉第几个组合，null 是加一个；结果经 onHotkeyRecording 报回来
-  recordHotkey: (action, index) => ipcRenderer.invoke("hotkey:record", action, index),
+  recordHotkey: (action, index, token) => ipcRenderer.invoke("hotkey:record", action, index, token),
   stopRecordingHotkey: (reason) => ipcRenderer.invoke("hotkey:record-stop", reason),
   onHotkeyRecording: (callback) => ipcRenderer.on("hotkey:recording", (_event, payload) => callback(payload)),
   removeHotkey: (action, index) => ipcRenderer.invoke("setup:remove-hotkey", action, index),

@@ -1,6 +1,6 @@
 import { LOCALES, SYSTEM_LOCALE } from "../../i18n/index.mjs";
 import { fillSelect } from "../shared/dom.mjs";
-import { createHotkeyEditor } from "../shared/hotkey-editor.mjs";
+import { createHotkeyEditor, recordBlocker } from "../shared/hotkey-editor.mjs";
 import { t } from "../shared/i18n.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
 
@@ -126,10 +126,7 @@ export function createSettings({ refresh }) {
   const hotkeyEditor = createHotkeyEditor($("hotkey-editor"), { onChanged: refresh });
 
   function renderGeneral(setup) {
-    // 录键要小帮手在跑、收得到按键（Mac 上要输入监控权限）
-    hotkeyEditor.render(setup.hotkeyActions, {
-      canRecord: setup.helper === "running" && setup.permissions.listen !== false,
-    });
+    hotkeyEditor.render(setup.hotkeyActions, { blocker: recordBlocker(setup) });
     fillSelect(
       $("theme"),
       setup.theme.choices.map((id) => [id, t(`themes.${id}.name`)]),
