@@ -8,6 +8,10 @@ import { writeFileSync } from "node:fs";
 const OUT_PATH = process.env.SPEAKMORE_E2E_OUT;
 const RECORD_MS = Number(process.env.SPEAKMORE_E2E_RECORD_MS ?? 7_500);
 const GIVE_UP_MS = RECORD_MS + 40_000;
+// 听写几遍（SPEAKMORE_E2E_ROUNDS）。本机模型按需装载时，两遍之间等它空闲释放，下一遍就验了重新装载
+const ROUNDS = Number(process.env.SPEAKMORE_E2E_ROUNDS ?? 1);
+// 空闲释放最长 30 分钟（设置里的 localModelMemory），再多等一会儿
+const RELEASE_GIVE_UP_MS = 31 * 60_000;
 
 const pasted = [];
 let finish = null;
@@ -58,6 +62,7 @@ async function waitForLocalModel(localModel, downloadModel) {
       if (percent !== reported) console.log(`本地模型下载中 ${percent}%`);
       reported = percent;
     } else if (local.state !== "missing" && downloadedAt === null) downloadedAt = performance.now();
+    if (local.state === "idle") return null;
     if (local.state === "ready") {
       return {
         downloadMs: Math.round(downloadedAt - startedAt),
@@ -69,17 +74,28 @@ async function waitForLocalModel(localModel, downloadModel) {
   }
 }
 
-export async function run({ bar, history, localModel, downloadModel, quit }) {
+/** 按需装载的本机模型空闲释放之前一直等，返回等了多久；等不到是 null */
+async function waitForRelease(localModel) {
+  const startedAt = performance.now();
+  while (performance.now() - startedAt < RELEASE_GIVE_UP_MS) {
+    if (localModel()?.state === "idle") return Math.round(performance.now() - startedAt);
+    await sleep(500);
+  }
+  return null;
+}
+
+/**
+ * @param {object} options
+ * @param {() => string} options.localModelMemory 本机模型常驻还是按需装载（main.mjs 里正在用的那个）
+ */
+export async function run({ bar, history, localModel, localModelMemory, downloadModel, quit }) {
+  const rounds = [];
   const done = (result, code) => {
-    writeFileSync(OUT_PATH, JSON.stringify({ ...result, pasted, history: history.list() }, null, 2));
+    writeFileSync(OUT_PATH, JSON.stringify({ ...result, rounds, pasted, history: history.list() }, null, 2));
     quit(code);
   };
   const local = await waitForLocalModel(localModel, downloadModel);
   if (local?.failed) return done({ failed: `本地模型没装上：${local.failed}` }, 1);
-  const giveUp = setTimeout(() => done({ failed: `等了 ${GIVE_UP_MS / 1000} 秒没有结局` }, 1), GIVE_UP_MS);
-  const outcome = new Promise((resolve) => {
-    finish = resolve;
-  });
 
   // 走到这里时页面可能已经加载完了，那样就等不到 did-finish-load
   if (bar.webContents.isLoading()) {
@@ -92,11 +108,31 @@ export async function run({ bar, history, localModel, downloadModel, quit }) {
     bar.webContents.send("input", { event: "binding", action: "dictate", down: false });
   };
   await sleep(500);
-  await press();
-  await sleep(RECORD_MS);
-  await press();
 
-  const result = await outcome;
-  clearTimeout(giveUp);
-  done({ ...result, ...(local ? { localModel: local } : {}) }, result.failed ? 1 : 0);
+  for (let round = 1; round <= ROUNDS; round++) {
+    // 主进程收到成品就报了结局，悬浮条要等交付的回话才回到空闲：这时按下会被当成整理中按的，不算数
+    if (round > 1) await sleep(1_000);
+    if (round > 1 && localModelMemory() !== "resident") {
+      const releasedMs = await waitForRelease(localModel);
+      if (releasedMs === null) return done({ failed: `第 ${round - 1} 遍之后本机模型一直没释放` }, 1);
+      console.log(`第 ${round - 1} 遍之后 ${(releasedMs / 1000).toFixed(1)} 秒，本机模型释放了`);
+    }
+    const giveUp = setTimeout(
+      () => done({ failed: `第 ${round} 遍等了 ${GIVE_UP_MS / 1000} 秒没有结局` }, 1),
+      GIVE_UP_MS,
+    );
+    const outcome = new Promise((resolve) => {
+      finish = resolve;
+    });
+    await press();
+    await sleep(RECORD_MS);
+    await press();
+    const stoppedAt = performance.now();
+    const result = await outcome;
+    clearTimeout(giveUp);
+    // 松开到出字：按需装载时第一遍里含冷启动
+    rounds.push({ ...result, ms: Math.round(performance.now() - stoppedAt) });
+    if (result.failed) return done({ failed: `第 ${round} 遍：${result.failed}` }, 1);
+  }
+  done({ ...rounds.at(-1), ...(local ? { localModel: local } : {}) }, 0);
 }

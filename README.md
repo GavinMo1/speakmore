@@ -436,6 +436,7 @@ flowchart LR
 | `customParams` | 空 | 自定义服务的额外请求参数，JSON 对象 |
 | `modelSource` | `cn` | 下载源：`cn` / `original` |
 | `acceleration` | `auto` | 加速：`auto` / `cpu` |
+| `localModelMemory` | `resident` | 本机转写模型的内存：`resident` / `1m` / `5m` / `10m` / `30m` |
 | `barHint` | `on` | 悬浮条操作提示：`on` / `off` |
 | `theme` | `ink` | 主题：`ink` / `cinnabar` / `indigo` |
 | `language` | `system` | 语言：`system` / `en` / `zh-CN` |
@@ -445,8 +446,10 @@ flowchart LR
 - 组合至多两键；取消只接受单个非修饰键。与系统或常用快捷键冲突的组合不可绑定（如 ⌘、⌃ 加字母，Windows 键），只含左侧修饰键的组合、单独的 Shift 与 CapsLock 亦不可。
 - 0.13 及以前的 `hotkey` 设置在升级时自动换算；`config set hotkey right_command` 等旧写法仍然有效。
 - Gemini 思考档位可选：`MINIMAL` / `LOW` / `MEDIUM` / `HIGH`。
+- 内存紧的电脑可把 `localModelMemory` 设为空闲 1、5、10 或 30 分钟后释放（设置 → 通用 → 本机转写模型内存）：开口时装载转写模型，与说话同时进行；录音和整理期间不释放，空闲到点即归还内存。默认常驻。
 - 自建服务的润色模型写作 `custom/<模型>`，地址示例 `http://127.0.0.1:11434/v1`。
 - 自定义服务需要额外参数时写入 `customParams`，例如 `{"reasoning_effort": "minimal"}`；检测与润色请求均附带，`model`、`messages`、`stream` 不可覆盖。推理模型限制输出长度时留足思考的余量（如 `{"max_completion_tokens": 4096}`），否则长段落会被截断。
+- 本机的 Ollama、LM Studio 也能空闲后释放模型，写在 `customParams` 里：Ollama（0.35 起）用 `{"keep_alive": "5m"}`，LM Studio 用 `{"ttl": 300}`（秒）。
 - Windows PowerShell 中 `--params` 的双引号前需加反斜杠：`--params '{\"reasoning_effort\": \"minimal\"}'`。
 - 通过 App 或 `speakmore mode`、`model`、`transcriber`、`polish` 切换时先行检测，立即生效。
 - `config set` 直接写入，不做检测。

@@ -21,7 +21,8 @@ const ERROR_DETAIL_MAX_LENGTH = 300;
  * 由调用方传入，测试时换成假的。
  * vocabulary 交出用户的词典（storage/vocabulary.mjs 的 terms）：开口时、整理时各读一次，交给 prepare 和 refine，
  * 各个模型按自己的收法用（原版的词典在它的服务端，我们的在本机，读的地方也在这一层）
- * @param {{ vocabulary?: () => readonly string[] }} options
+ * onActivity 在页面每发来一条消息（开口、每一块音频、说完）时调用：按需装载的本机模型从最后一次动静起算空闲（app/service.mjs）
+ * @param {{ vocabulary?: () => readonly string[], onActivity?: () => void }} options
  * @returns {Promise<{ port: number, close: () => Promise<void> }>}
  */
 export function startServer({
@@ -31,6 +32,7 @@ export function startServer({
   log,
   maxAudioBytes = DEFAULT_MAX_AUDIO_BYTES,
   vocabulary = () => [],
+  onActivity = () => {},
 }) {
   return new Promise((resolve, reject) => {
     const wss = new WebSocketServer({
@@ -55,7 +57,9 @@ export function startServer({
         return [];
       }
     };
-    wss.on("connection", (socket) => handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor }));
+    wss.on("connection", (socket) =>
+      handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor, onActivity }),
+    );
   });
 }
 
@@ -72,7 +76,7 @@ function closeServer(wss) {
   return new Promise((resolve, reject) => wss.close((error) => (error ? reject(error) : resolve())));
 }
 
-function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor }) {
+function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor, onActivity }) {
   /** 正在收音频的那一次录音；end_audio 之后清空，整理在后台继续 */
   let session = null;
   /** 正在进行的整理，连接断开时用来取消 */
@@ -210,6 +214,7 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor }
   };
 
   socket.on("message", (data, isBinary) => {
+    onActivity();
     try {
       if (isBinary) onChunk(data);
       else onText(data.toString("utf8"));

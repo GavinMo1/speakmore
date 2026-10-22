@@ -37,6 +37,8 @@ const CLOUD_MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 const SOURCE_IDS = SOURCES.map((source) => source.id);
 /** 本机模型用不用显卡：auto 有显卡就用、在显卡上没装起来就退回 CPU（asr/start.mjs）；cpu 只用 CPU */
 export const ACCELERATIONS = Object.freeze(["auto", "cpu"]);
+/** 本机模型常驻内存，还是开口时装载、空闲这么久后释放（app/service.mjs）。内存紧的电脑选后几种，代价是隔久了第一句慢一两秒 */
+export const LOCAL_MODEL_MEMORY = Object.freeze(["resident", "1m", "5m", "10m", "30m"]);
 /** 悬浮条上方的操作提示（"再按一下 右⌥ 完成 · esc 取消"）显示不显示：熟练了的人嫌它一直挂着（GitHub issue #3） */
 export const BAR_HINTS = Object.freeze(["on", "off"]);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
@@ -178,6 +180,18 @@ export const SETTINGS = {
       return id;
     },
     label: (value) => msg(`accelerations.${value}`),
+  },
+  localModelMemory: {
+    // 哪种模式里都能改，和 acceleration 一样管的是本机模型。App 里当场换
+    env: "SPEAKMORE_LOCAL_MODEL_MEMORY",
+    default: "resident",
+    choices: LOCAL_MODEL_MEMORY,
+    parse(value) {
+      const id = value.trim().toLowerCase();
+      if (!LOCAL_MODEL_MEMORY.includes(id)) throw oneOf(LOCAL_MODEL_MEMORY);
+      return id;
+    },
+    label: (value) => msg(`localModelMemories.${value}`),
   },
   barHint: {
     env: "SPEAKMORE_BAR_HINT",

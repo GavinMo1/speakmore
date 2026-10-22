@@ -56,7 +56,7 @@ export function createLocalRefiner({ transcriber, polisher, log, model, onCall =
       await polisher?.warmUp();
     },
 
-    /** 开口时没什么要先备的：模型一直装在转写进程里 */
+    /** 开口时没什么要先备的：转写模型装在转写进程里，按需装载时由内置服务在开口那一刻装上（app/service.mjs） */
     async prepare() {},
 
     async refine(audio, { mimeType, signal, audioId = null, vocabulary = [] }) {

@@ -220,6 +220,8 @@ export default {
         "本机模型从哪下载：cn 是国内源（魔搭 ModelScope），original 是 Hugging Face 原始地址。选的那个下不动会自动换另一个，下了一截的接着下",
       acceleration:
         "本机模型用不用显卡：auto 有显卡就用，出问题自动退回 CPU；cpu 只用 CPU（显卡驱动有问题、或者想把显卡让给别的程序时）",
+      localModelMemory:
+        "本机转写模型常驻内存，还是空闲多久后释放：resident 一直装着；1m、5m、10m、30m 空闲这么久后释放，下次开口时再装（隔久了第一句慢一两秒）",
       barHint: "悬浮条上方那行操作提示（再按一下 … 完成 · esc 取消）显示不显示：on 显示，off 不显示",
       theme: "界面用哪套主题",
       language: "界面用哪种语言；system 是跟随系统",
@@ -271,6 +273,13 @@ export default {
   accelerations: {
     auto: "自动（有显卡就用）",
     cpu: "只用 CPU",
+  },
+  localModelMemories: {
+    resident: "常驻内存",
+    "1m": "空闲 1 分钟后释放",
+    "5m": "空闲 5 分钟后释放",
+    "10m": "空闲 10 分钟后释放",
+    "30m": "空闲 30 分钟后释放",
   },
   barHints: {
     on: "显示",
@@ -814,6 +823,8 @@ export default {
     language: "语言",
     modelSource: "本地模型下载源",
     acceleration: "本机模型加速",
+    localModelMemory: "本机转写模型内存",
+    localModelMemoryFailed: "内存设置未能更换：{reason}",
     barHint: "悬浮条操作提示",
     openAtLogin: "开机启动",
     themeFailed: "主题没换成：{reason}",
@@ -1441,6 +1452,7 @@ export default {
       localReady: "就绪 · {backend}",
       localDownloading: "下载中 {percent}%（{received} / {total} MB）",
       localLoading: "装载中",
+      localIdle: "空闲时已释放，开口时再装",
       localMissing: "还没下载：speakmore transcriber download {id}",
       modelInUse: "{provider} 的 {model}",
       modelWithThinking: "{provider} 的 {model}（{thinking}）",

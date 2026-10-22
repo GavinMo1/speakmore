@@ -54,9 +54,10 @@ export function summarizeSetup({
   }
 
   // 还没下载、没装上都要人去处理（下载由用户点；装不上多半是文件坏了），算缺；装载会自己做完，不算
+  // 按需装载的（onDemand）装载是开口才开始的，没装上的下次开口再装：都不拦着按热键，没装上时那一次照样说清原因
   if (localModel?.state === "failed") {
     missing.push(msg("setup.missing.localModel"));
-    blocker ??= localModel.problem;
+    if (!localModel.onDemand) blocker ??= localModel.problem;
   } else if (localModel?.state === "missing") {
     missing.push(
       localModel.total
@@ -71,7 +72,7 @@ export function summarizeSetup({
           model: findModel(localModel.model)?.name ?? localModel.model,
           id: localModel.model,
         });
-  } else if (localModel?.state === "loading") {
+  } else if (localModel?.state === "loading" && !localModel.onDemand) {
     blocker ??= msg("local.modelLoading");
   }
 

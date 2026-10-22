@@ -42,6 +42,7 @@ SPEAKMORE_MODEL=openai scripts/dev/with-key.sh openai node scripts/dev/e2e.mjs �
 SPEAKMORE_MODE=local scripts/dev/with-key.sh deepseek node scripts/dev/e2e.mjs 一段录音.wav   # 本地转写加 DeepSeek 润色：新的数据目录，模型真从下载源下
 SPEAKMORE_E2E_ELECTRON=dist/SpeakMore-darwin-arm64/SpeakMore.app/Contents/MacOS/SpeakMore …   # 同上，用打好的应用跑（npm run dist 打的，签了名时开着 hardened runtime）
 SPEAKMORE_E2E_VOCABULARY="词1,词2" SPEAKMORE_E2E_EXPECT=词1 …   # 同上，带一份词典跑，成品里要有那个词；SPEAKMORE_E2E_MODELS=<已装好的模型仓> 免得每次重下本机模型
+SPEAKMORE_MODE=private SPEAKMORE_LOCAL_MODEL_MEMORY=1m SPEAKMORE_E2E_ROUNDS=2 node scripts/dev/e2e.mjs 一段录音.wav   # 本机模型按需装载：听写两遍，中间等它空闲释放，第二遍验重新装载
 scripts/dev/with-key.sh gemini node scripts/dev/eval-prompt.mjs --label v1   # 拿自己 Typeless 的历史录音评估提示词
 SPEAKMORE_MODE=local scripts/dev/with-key.sh deepseek node scripts/dev/eval-prompt.mjs --label v1 --polish-prompt=候选.txt   # 评估润色的提示词：本机转写一次、存下原文，之后只调润色
 scripts/dev/with-key.sh bailian scripts/dev/with-key.sh deepseek node scripts/dev/smoke-models.mjs --platform bailian --recording 一段录音.webm   # 跑通一个平台的每个模型：原生单独跑，转写后面固定 DeepSeek，润色前面固定本机 Qwen3 Q8
@@ -325,3 +326,11 @@ README 里的图不进仓库，和官网的截图放在同一个 COS 图片桶�
   - 真人在开发窗口里按：Mac 右⌥ 空格听写贴字；录键时按 ⌘W、⌘Q 被拦下（窗口没关、App 没退）；Windows 锁屏再解锁后钩子重装（`helper_relistened`，原因 unlock），右 Alt 听写、本机模型转写贴进记事本。
   - 对抗性审查一轮（五个方面 32 条，按方面分组复核：确认 21、可能 6、驳回 5），修了 24 条：确认的全修，可能的修了改起来便宜的三条（安全输入下顶替注册只动变了的、NumLock 假 Shift、退出时往小帮手写）。纯逻辑的都先写失败的测试；录键界面的几处在 Mac 开发窗口里用合成键核过（被拒的原因全部松开后还在、存好显示"已保存"）。单个 F12 在 Windows 上试登记一律报 1409（留给调试器，开发机实测），改成不让单绑。
   - **没验证的**：安全输入开着时按住组合、同时注销重注 Carbon 会不会丢掉松开（改成只动变了的，没在真机上造出这个时机）；权限在运行中被撤销会不会冻住整机（V26，只在虚拟机里做，这次没做）；管理员窗口在前台的提示（开发机的账户本身是管理员，触发不了）；锁屏期间拉起小帮手；NumLock 假 Shift、AltGr 假左 Ctrl 只在单测里按文档模拟；Intel 的 Mac；签了名、过了公证的正式包。
+
+- 本机转写模型按需装载（2026-10-22，GitHub PR #14，外部贡献；审查后收成一项设置 `localModelMemory`，自定义服务的那套删掉，见[实现笔记](implementation-notes.md)）：
+  - 单测 1384 条：Mac 上 1377 过、7 条跳过；Windows 开发机上 1319 过、65 条跳过。安装脚本 54 条在 Mac 上 50 过、4 条跳过。原生：Go 全过，Swift 292 条全过。
+  - 端到端（`scripts/dev/e2e.mjs`，`SPEAKMORE_E2E_ROUNDS=2`，空闲 1 分钟释放，录音是 bench 里的一段真人录音）：Mac 数据隐私模式开口时装载 0.38 秒，最后一条消息后 60 秒释放（1.4 GB 的转写进程退出，下一遍换了新进程），第二遍重新装载 0.37 秒，两遍松开后 0.11、0.10 秒出字；常驻对照两遍都是 0.1 秒、中间不释放。Windows 开发机（i5-13400F，Vulkan）同样两遍：装载 1.29、1.27 秒，60 秒释放，松开后 0.35、0.40 秒出字。
+  - 本机转写加本机 Ollama 润色（Ollama 0.40.8 装在 `.tools/ollama`，Qwen2.5 1.5B 用魔搭的 GGUF 导入）：额外参数写 `{"keep_alive":"1m"}`，每次润色后 Ollama 把模型留一分钟，到点自己卸掉，下一遍再装上，两遍都出字。LM Studio 1.0.7 的请求带 `"ttl": 10`，模型 10 秒后卸掉。
+  - 开发窗口（隔离的家目录）：设置 → 通用里切到常驻，模型当场装上（0.37 秒）；切回空闲 1 分钟，60 秒后释放，`speakmore status` 那一行写"空闲时已释放，开口时再装"。
+  - 对抗性审查一轮（三个方面 33 条，按方面复核：确认 31、可能 1、驳回 1）：自定义服务的空闲释放和四项设置整块删掉、收成一项；其余确认的都修了（悬浮条显示时热键绕过拦截、每次停止都读设置文件、计数漏减、按需装载没装上一直拦着热键、下载进度让状态来回翻、命令行状态少一行、文案用词）。服务的几条先改测试、看它失败再改代码；测试一次发完三条消息时碰出一个转写比开口准备先跑的顺序，改成说完时没装着也装一次。
+  - **没验证的**：Intel 的 Mac 上冷启动多久；0.35 以前的 Ollama（只从源码看到它的 `/v1` 不认 `keep_alive`）；签了名、过了公证的正式包；真人在开发窗口里按热键听写。

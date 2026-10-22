@@ -49,6 +49,7 @@ test("没有文件也没有环境变量时全用默认值", () => {
     customParams: { value: "", source: "default" },
     modelSource: { value: "cn", source: "default" },
     acceleration: { value: "auto", source: "default" },
+    localModelMemory: { value: "resident", source: "default" },
     barHint: { value: "on", source: "default" },
     theme: { value: "ink", source: "default" },
     language: { value: "system", source: "default" },
@@ -86,6 +87,23 @@ test("本机模型的加速：auto（有显卡就用，出问题退回 CPU）或
     source: "env",
   });
   assert.throws(() => saveSetting(file, "acceleration", "gpu"), /auto \/ cpu/);
+});
+
+test("本机模型常驻内存，或空闲 1、5、10、30 分钟后释放：大小写都认，环境变量优先，别的不收", () => {
+  assert.deepEqual(resolveSettings({ file, env: {} }).localModelMemory, { value: "resident", source: "default" });
+  for (const value of ["1m", "5m", "10m", "30m", "resident"]) {
+    saveSetting(file, "localModelMemory", value);
+    assert.equal(resolveSettings({ file, env: {} }).localModelMemory.value, value);
+  }
+  saveSetting(file, "localModelMemory", " 5M ");
+  assert.deepEqual(resolveSettings({ file, env: {} }).localModelMemory, { value: "5m", source: "file" });
+  assert.deepEqual(resolveSettings({ file, env: { SPEAKMORE_LOCAL_MODEL_MEMORY: "resident" } }).localModelMemory, {
+    value: "resident",
+    source: "env",
+  });
+  for (const value of ["on-demand", "5", "2m", "0m"]) {
+    assert.throws(() => saveSetting(file, "localModelMemory", value), /resident \/ 1m \/ 5m \/ 10m \/ 30m/);
+  }
 });
 
 test("悬浮条上方的操作提示能关掉（GitHub issue #3）：on 或 off，大小写都认，别的不收", () => {

@@ -194,3 +194,30 @@ test("交给命令行的结论：每句都按它的语言翻成字（0.5 的命�
     degraded: null,
   });
 });
+
+test("按需装载的本机模型不拦着按热键：等着开口、装载中、上次没装上（下次开口再装）；常驻的装载中、没装上照旧拦着", () => {
+  assert.equal(summarize({ ...allGood, localModel: { state: "idle", model: "qwen3-asr-0.6b-q8" } }).blocker, null);
+  for (const state of ["loading", "failed"]) {
+    const onDemand = summarize({
+      ...allGood,
+      localModel: {
+        state,
+        model: "qwen3-asr-0.6b-q8",
+        onDemand: true,
+        problem: msg("local.modelFailed", { reason: "坏了" }),
+      },
+    });
+    assert.equal(onDemand.blocker, null, state);
+  }
+  // 没装上的还是算缺，主窗口照样提醒
+  assert.equal(
+    summarize({ ...allGood, localModel: { state: "failed", onDemand: true, problem: msg("local.modelLoading") } })
+      .missing.length,
+    1,
+  );
+  assert.notEqual(summarize({ ...allGood, localModel: { state: "loading" } }).blocker, null);
+  assert.notEqual(
+    summarize({ ...allGood, localModel: { state: "failed", problem: msg("local.modelLoading") } }).blocker,
+    null,
+  );
+});

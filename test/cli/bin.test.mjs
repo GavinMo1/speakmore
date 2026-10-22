@@ -103,7 +103,14 @@ test("0.13 以前的设置文件（热键存的是旧 id）：直接跑命令，
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const settingsFile = resolvePaths({ SPEAKMORE_HOME: dir }).settingsFile;
   writeFileSync(settingsFile, '{"hotkey":"right_control","theme":"indigo"}\n');
-  const { SPEAKMORE_HOTKEY: _old, SPEAKMORE_HOTKEY_DICTATE: _new, ...base } = process.env;
+  // 终端的 LC_ALL、LC_MESSAGES 会盖过下面指定的 LANG，拿掉它们，免得输出换成别的语言
+  const {
+    SPEAKMORE_HOTKEY: _old,
+    SPEAKMORE_HOTKEY_DICTATE: _new,
+    LC_ALL: _all,
+    LC_MESSAGES: _messages,
+    ...base
+  } = process.env;
   const result = spawnSync(process.execPath, [BIN, "config"], {
     encoding: "utf8",
     env: { ...base, SPEAKMORE_HOME: dir, LANG: "zh_CN.UTF-8" },

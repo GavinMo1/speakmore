@@ -148,6 +148,11 @@ export function createSettings({ refresh }) {
       setup.local.acceleration.choices.map((id) => [id, t(`accelerations.${id}`)]),
       setup.local.acceleration.value,
     );
+    fillSelect(
+      $("local-model-memory"),
+      setup.local.memory.choices.map((id) => [id, t(`localModelMemories.${id}`)]),
+      setup.local.memory.value,
+    );
     $("bar-hint").checked = setup.barHint === "on";
     $("open-at-login").checked = setup.openAtLogin.enabled;
     $("open-at-login-row").hidden = !setup.openAtLogin.supported;
@@ -204,6 +209,18 @@ export function createSettings({ refresh }) {
       showNote("acceleration-note", result.note ?? null);
     } catch (error) {
       showNote("general-problem", t("preferences.accelerationFailed", { reason: describeError(error) }), "problem");
+    }
+    await refresh();
+  });
+
+  $("local-model-memory").addEventListener("change", async (event) => {
+    showNote("general-problem", null);
+    showNote("local-model-memory-note", null);
+    try {
+      const result = await window.speakmore.setLocalModelMemory(event.target.value);
+      showNote("local-model-memory-note", result.note ?? null);
+    } catch (error) {
+      showNote("general-problem", t("preferences.localModelMemoryFailed", { reason: describeError(error) }), "problem");
     }
     await refresh();
   });
