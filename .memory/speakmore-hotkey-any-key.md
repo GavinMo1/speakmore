@@ -1,6 +1,6 @@
 ---
 name: speakmore-hotkey-any-key
-description: 热键开放成任意键或两键组合（配置驱动、内部做干净、老用户无感）；报告 docs/hotkey-research.md，D1–D13 10-21 已拍板；feat/hotkey-any-key 上第 0–10 步已提交（10-21），剩第 11 步文档、第 12 步真机验收，之后统一审一轮
+description: 热键开放成任意键或两键组合（配置驱动、内部做干净、老用户无感）；报告 docs/hotkey-research.md，D1–D13 10-21 已拍板；feat/hotkey-any-key 上第 0–12 步做完（10-21），统一审查在跑
 metadata:
   node_type: memory
   type: project
@@ -20,7 +20,7 @@ metadata:
 
 10-21 真机实验（程序和数据在本机 .playwright-mcp/hotkey-research/experiments/）：V1 不通过，只听 tap 事后打开吞键 tap 会漏键（人同时按能按出 0.4 ms 间隔）；他在选项里选了"同步触发"：有修饰键+普通键绑定时常开一个只收 flagsChanged 的主动 tap，同步回调里打开吞键 tap，实测 0 漏。V19：小帮手要改用 NSApplication（.prohibited）跑，只跑 RunLoop 时 Carbon 会吃键不回调。V8、V20 通过。权限撤销冻住整机的风险只在虚拟机里验（V26），别在他电脑上试。
 
-10-21 实施进度：第 0–10 步已提交（第 8 步 924d8f4 Windows 掩码/假修饰键/睡眠解锁重装/管理员窗口提示；第 9 步 4edb3d5 录键；第 10 步 026fc47 键帽成组）。第 7 步实测推翻了报告里"tap 挪到独立线程"（独立线程漏 57/200 个空格），tap 留在主线程。回归：Mac `node scripts/dev/mac-hotkeys.mjs --secure-input`（42 项），Windows `WAIT=150 scripts/dev/win-desktop.sh - < native/windows/e2e.ps1`（39 项）。第 11 步要改 README 的设置表、环境变量、`status --json`（D13）、权限说明里"仅限该按键"加录键例外，并重拍截图。留给统一审查的：小帮手在锁屏时启动不知道屏幕锁着（第 7 步遗留）。10-21 子 agent 在锁屏时跑过一次合成按键，安全输入那几下可能进了锁屏密码框；之后发键程序在锁屏、切走用户、别的应用开着安全输入时拒发。
+10-21 实施进度：第 0–10 步已提交（第 8 步 924d8f4 Windows 掩码/假修饰键/睡眠解锁重装/管理员窗口提示；第 9 步 4edb3d5 录键；第 10 步 026fc47 键帽成组）。第 7 步实测推翻了报告里"tap 挪到独立线程"（独立线程漏 57/200 个空格），tap 留在主线程。回归：Mac `node scripts/dev/mac-hotkeys.mjs --secure-input`（42 项），Windows `WAIT=150 scripts/dev/win-desktop.sh - < native/windows/e2e.ps1`（39 项）。第 11 步 a9b88b4（README、文档、引导页截图；首页、官网图不用换）；录键结束原因分开记 27ec5db。第 12 步：两台各装线上 0.13.1、设右 Control/右 Ctrl，用 0.14.0-e2e.1 测试包升级（换算、热键、状态都对），退回 0.13.1 用默认键起来，再升回照旧；Mac 打包 App 直接打开会换算并记 settings_migrated。命令行先换算时不记日志，留给审查。留给统一审查的：小帮手在锁屏时启动不知道屏幕锁着（第 7 步遗留）。10-21 子 agent 在锁屏时跑过一次合成按键，安全输入那几下可能进了锁屏密码框；之后发键程序在锁屏、切走用户、别的应用开着安全输入时拒发。
 
 **Why:** 顺着目录重构"写死的都改成配置驱动"的思路提的；以后加功能要绑新热键。
 **How to apply:** 决定都定了，不要再重议；在 feat/hotkey-any-key 上按第 6 节的步骤一步一提交。
