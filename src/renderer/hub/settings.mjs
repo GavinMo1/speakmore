@@ -3,15 +3,17 @@ import { fillSelect } from "../shared/dom.mjs";
 import { createHotkeyEditor, recordBlocker } from "../shared/hotkey-editor.mjs";
 import { t } from "../shared/i18n.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
+import { createTranslatePane } from "./translate-pane.mjs";
 
 // 设置对话框：原版的"设置中心"，左边一列菜单，按功能分栏：通用（主题、界面语言、开机启动、存储位置、软件更新）、
-// 快捷键（动作目录里的每个动作、悬浮条上的按键提示）、本机模型（下载源、加速、内存）、权限、关于。
+// 快捷键（动作目录里的每个动作、悬浮条上的按键提示）、语音翻译（译成哪几种，translate-pane.mjs）、
+// 本机模型（下载源、加速、内存）、权限、关于。
 // 识别方式、模型和 key 不在这里：在侧栏的"引擎"一页（engine/）。
 // 状态都在主进程，这里只负责画出来和转达用户的操作。
 
 const $ = (id) => document.getElementById(id);
 
-const PANES = ["general", "hotkeys", "local-models", "permissions", "about"];
+const PANES = ["general", "hotkeys", "voice-translate", "local-models", "permissions", "about"];
 
 /**
  * 还差的东西在哪补：key 在侧栏"引擎"一页的密钥表；权限、小帮手停了在设置的权限页（重新检查在那页）；
@@ -152,6 +154,10 @@ export function createSettings({ refresh }) {
     hotkeyEditor.render(setup.hotkeyActions, { blocker: recordBlocker(setup) });
     $("bar-hint").checked = setup.barHint === "on";
   }
+
+  // ---------- 语音翻译：译成哪几种 ----------
+
+  const translatePane = createTranslatePane({ refresh });
 
   // ---------- 本机模型：下载源、加速、内存 ----------
 
@@ -375,6 +381,7 @@ export function createSettings({ refresh }) {
     render(setup) {
       renderGeneral(setup);
       renderHotkeys(setup);
+      translatePane.render(setup);
       renderLocalModels(setup);
       renderPermissions(setup);
       $("about-version").textContent = `v${setup.version}`;

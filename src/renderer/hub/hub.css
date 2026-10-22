@@ -324,6 +324,18 @@
   color: var(--ink-2);
 }
 
+/* 首页标题下：几个功能并排，每个是键帽加名字 */
+.home-actions {
+  flex-wrap: wrap;
+  column-gap: 1.5rem;
+}
+
+.home-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
 .insights {
   container-type: inline-size;
   display: flex;
@@ -994,6 +1006,33 @@
   user-select: text;
 }
 
+/* 翻译的那几条：正文是译文，下面一行小标签（功能 · 目标语言）跟着原文，原文只占一行 */
+.entry-source {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  margin-top: 0.35rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.entry-source[hidden] {
+  display: none;
+}
+
+.entry-source .tag {
+  flex: none;
+}
+
+.entry-original {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+
 /* 失败了、没声音的：一句灰字说明 */
 .entry[data-kind="failed"] .entry-text,
 .entry[data-kind="silent"] .entry-text {
@@ -1280,6 +1319,60 @@ code.setting-value {
 
 .icon-dot[data-tone="problem"] {
   background: var(--problem);
+}
+
+/* 设置 › 语音翻译：一行一种语言，第一行是默认；别的行悬停时出现"设为默认"和 ×，底下一个"添加" */
+.setting-label {
+  margin: 0.25rem 0 0;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.language-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.language-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.language-default {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.language-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.language-row:is(:hover, :focus-within) .language-actions {
+  opacity: 1;
+}
+
+.language-add {
+  padding-top: 0.75rem;
+}
+
+/* "添加"是个下拉框，外形和小号胶囊按钮一样：前面一个加号，没有箭头 */
+.select.add-language {
+  height: var(--control-sm);
+  padding: 0 0.625rem;
+}
+
+.select.add-language .icon {
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
 .setting-note {

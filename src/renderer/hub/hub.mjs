@@ -45,6 +45,7 @@ function navigate(route) {
   else engine.hidden();
   if (name === "home") home.shown();
   if (name === "vocabulary") vocabulary.shown();
+  if (name === "history") history.shown();
   // 记在地址里：换语言时页面重新加载，回到的还是这一页。打开时带的 pane 也一并去掉，免得重新加载时设置又弹出来
   window.history.replaceState(null, "", `?route=${name}`);
 }
