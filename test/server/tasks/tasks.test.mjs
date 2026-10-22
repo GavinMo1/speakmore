@@ -54,3 +54,11 @@ test("语音输入：开口就能定，三种方式都能做；成品只有一�
   assert.deepEqual(bound.native.finish("我們後天開會。"), { text: "我们后天开会", source: null });
   assert.deepEqual(bound.polish.finish("好的。", "好的"), { text: "好的", source: null });
 });
+
+test("说话的任务都用词典：先要听懂他说的专有名词", () => {
+  assert.deepEqual(
+    TASKS.filter((task) => task.vocabulary).map(({ id }) => id),
+    ["dictate", "translate"],
+  );
+  for (const task of TASKS) assert.equal(typeof task.vocabulary, "boolean", task.id);
+});

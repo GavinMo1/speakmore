@@ -1277,17 +1277,17 @@ test("config set：这一项正被环境变量盖着时提醒一句（改名前�
 
 test("热键：config set hotkey.<动作> 存成列表，后台当场换（reload-hotkeys），不重启", macOnly, async () => {
   const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
-  assert.equal(await speakmore("config", "set", "hotkey.dictate", '["Fn","AltRight+Space"]'), 0);
+  assert.equal(await speakmore("config", "set", "hotkey.dictate", '["Fn","ControlRight+F13"]'), 0);
   assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), {
-    "hotkey.dictate": ["Fn", "AltRight+Space"],
+    "hotkey.dictate": ["Fn", "ControlRight+F13"],
   });
   assert.deepEqual(daemon.calls, ["reload-hotkeys"]);
-  assert.match(output.out, /hotkey\.dictate 改成了 \["Fn","AltRight\+Space"\]。\n注意：/);
+  assert.match(output.out, /hotkey\.dictate 改成了 \["Fn","ControlRight\+F13"\]。\n注意：/);
   assert.match(output.out, /已经生效，不用重启/);
   // 能存但要提醒的照存，把提醒说出来
   assert.match(output.out, /注意：fn：地球仪键在系统设置里/);
-  assert.equal(await speakmore("config", "set", "hotkey.cancel", "F13"), 0);
-  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8"))["hotkey.cancel"], ["F13"]);
+  assert.equal(await speakmore("config", "set", "hotkey.cancel", "F14"), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8"))["hotkey.cancel"], ["F14"]);
 });
 
 test("按动作目录逐个动作：config set hotkey.<动作> 都是当场换（LIVE 表里有它），不重启", async () => {

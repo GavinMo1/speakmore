@@ -77,24 +77,32 @@ function settingsOn(platform, values = {}) {
   );
 }
 const zhWin = createTranslator("zh-CN", "win32");
+/** 两个系统的默认组合一样 */
+const DEFAULTS = { dictate: [["AltRight"]], translate: [["AltRight", "Space"]], cancel: [["Escape"]] };
 const zhMac = createTranslator("zh-CN", "darwin");
 const texts = (problems, t) => problems.map((problem) => t.text(describeHotkeyProblem(problem)));
 
-test("都是默认的：照装，没有问题；Windows 的右 Alt 带一条 AltGr 的提醒", () => {
+test("都是默认的：照装，没有问题；Windows 的右 Alt 带 AltGr 的提醒，Mac 的右⌥空格带打不出不换行空格的提醒", () => {
   for (const platform of ["darwin", "win32"]) {
     const resolved = resolveHotkeys(settingsOn(platform), platform);
-    assert.deepEqual(resolved.chords, { dictate: [["AltRight"]], cancel: [["Escape"]] });
+    assert.deepEqual(resolved.chords, DEFAULTS);
     assert.deepEqual(resolved.problems, []);
+    // 语音输入的键是语音翻译的前缀，但两个都是录音会话，按翻译时直接升级过去，不提醒
     assert.deepEqual(
       resolved.warnings.map(({ action, chord }) => [action, chord]),
-      platform === "win32" ? [["dictate", ["AltRight"]]] : [],
+      platform === "win32"
+        ? [
+            ["dictate", ["AltRight"]],
+            ["translate", ["AltRight", "Space"]],
+          ]
+        : [["translate", ["AltRight", "Space"]]],
     );
   }
 });
 
 test("Mac 的设置搬到 Windows 上：fn 写法没错、绑不了，听写退回右 Alt 并说明；App 照样起得来（3.4 第 9 条）", () => {
   const resolved = resolveHotkeys(settingsOn("win32", { "hotkey.dictate": "Fn" }), "win32");
-  assert.deepEqual(resolved.chords, { dictate: [["AltRight"]], cancel: [["Escape"]] });
+  assert.deepEqual(resolved.chords, DEFAULTS);
   assert.deepEqual(texts(resolved.problems, zhWin), [
     "「语音输入」的 fn 用不了：这个系统上没有地球仪（fn）键",
     "「语音输入」先用默认的 右 Alt",
@@ -110,7 +118,7 @@ test('默认组合也装不上：不说"先用默认的"，只说为什么，同
   const settings = settingsOn("darwin");
   settings["hotkey.dictate"] = { value: '["AltRight+Escape"]', source: "file" };
   const resolved = resolveHotkeys(settings, "darwin");
-  assert.deepEqual(resolved.chords, { dictate: [["AltRight", "Escape"]], cancel: [] });
+  assert.deepEqual(resolved.chords, { ...DEFAULTS, dictate: [["AltRight", "Escape"]], cancel: [] });
   const said = texts(resolved.problems, zhMac);
   assert.equal(said.length, 1, said.join(" | "));
   assert.match(said[0], /^「取消」的 esc 用不了/);
@@ -132,7 +140,7 @@ test("两个都是自己设的、撞了：按动作目录的先后，后面的�
     settingsOn("darwin", { "hotkey.dictate": "ControlRight+F13", "hotkey.cancel": "F13" }),
     "darwin",
   );
-  assert.deepEqual(resolved.chords, { dictate: [["ControlRight", "F13"]], cancel: [["Escape"]] });
+  assert.deepEqual(resolved.chords, { ...DEFAULTS, dictate: [["ControlRight", "F13"]] });
   assert.match(texts(resolved.problems, zhMac)[0], /^「取消」的 F13 用不了：F13 键在「语音输入」的组合里/);
 });
 
@@ -140,9 +148,10 @@ test("能绑但要提醒的照装，提醒单独交出来写日志，不算问�
   const resolved = resolveHotkeys(settingsOn("darwin", { "hotkey.dictate": "Fn" }), "darwin");
   assert.deepEqual(resolved.chords.dictate, [["Fn"]]);
   assert.deepEqual(resolved.problems, []);
-  assert.equal(resolved.warnings.length, 1);
-  assert.deepEqual(resolved.warnings[0].chord, ["Fn"]);
-  assert.match(zhMac.text(resolved.warnings[0].reason), /^地球仪键在系统设置里/);
+  const own = resolved.warnings.filter(({ action }) => action === "dictate");
+  assert.equal(own.length, 1);
+  assert.deepEqual(own[0].chord, ["Fn"]);
+  assert.match(zhMac.text(own[0].reason), /^地球仪键在系统设置里/);
 });
 
 test("小帮手的 bound 回执：按绑定 id 认回是哪个组合，原因换成人话；没有输入监控权限的不重复报（那一项另有一条）", () => {

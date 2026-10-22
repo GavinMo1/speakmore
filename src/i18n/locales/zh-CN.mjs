@@ -106,6 +106,7 @@ export default {
   // 能按快捷键做的事（src/hotkeys/actions.mjs）：设置页、引导页每个动作一行，名字在左、组合在右
   actions: {
     dictate: { name: "语音输入" },
+    translate: { name: "语音翻译" },
     cancel: { name: "取消" },
   },
 
@@ -162,7 +163,7 @@ export default {
     macF11: "F11 是系统的“显示桌面”",
     winMeta: "Win 键和它的组合都归 Windows 自己用",
     winControlTyping: "Ctrl 加打字的键是各个应用的快捷键（复制、粘贴、保存……）",
-    winAltSpace: "Alt+空格会打开窗口菜单",
+    winAltSpace: "左 Alt+空格会打开窗口菜单",
     winCloses: "这个组合会关掉窗口",
     winShiftSwitch: "Ctrl+Shift、Alt+Shift 是 Windows 切换输入语言和键盘布局的快捷键",
     winF12: "Windows 把单独的 F12 留给调试器",
@@ -203,6 +204,26 @@ export default {
 
   language: {
     system: "跟随系统",
+  },
+
+  // 翻译能译成的语言（src/languages.mjs）：设置里的"译成"、悬浮条上的语言胶囊、历史里的标签
+  languages: {
+    en: "英文",
+    "zh-CN": "简体中文",
+    "zh-TW": "繁体中文",
+    ja: "日文",
+    ko: "韩文",
+    fr: "法文",
+    de: "德文",
+    es: "西班牙文",
+    pt: "葡萄牙文",
+    it: "意大利文",
+    ru: "俄文",
+    ar: "阿拉伯文",
+    vi: "越南文",
+    th: "泰文",
+    id: "印尼文",
+    tr: "土耳其文",
   },
 
   settings: {

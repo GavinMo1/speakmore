@@ -12,7 +12,8 @@ import { parseChord } from "./chord.mjs";
 //                不按集合精确匹配：说话时它一按下就算，不管还按着别的什么（5.3 的"esc 与取消"）
 //   clearable    能不能一个组合都不留
 //   longPressMs  按住超过这么久算"按住"、这次作废；null 是不管按多久
-//   handler      交给谁：session 悬浮条的录音会话（按下、松开、被打断），cancel 悬浮条的取消
+//   handler      交给谁：session 悬浮条的录音会话（按下、松开、被打断），cancel 悬浮条的取消。
+//                session 的动作各对应服务端的一个任务（id 一样，src/server/tasks）：说完让模型做成什么由任务定
 //   legacyName、legacyEnv  0.13 以前这一项设置叫什么、环境变量叫什么，入口照样认（5.9）
 
 export const ACTIONS = Object.freeze([
@@ -25,6 +26,15 @@ export const ACTIONS = Object.freeze([
     handler: "session",
     legacyName: "hotkey",
     legacyEnv: "SPEAKMORE_HOTKEY",
+  }),
+  Object.freeze({
+    id: "translate",
+    // 语音输入的键再加空格：按下右⌥时先开始语音输入，空格到了升级成翻译（docs/hotkey-research.md D2），录音不断
+    defaults: Object.freeze({ darwin: Object.freeze(["AltRight+Space"]), win32: Object.freeze(["AltRight+Space"]) }),
+    when: "always",
+    clearable: false,
+    longPressMs: 600,
+    handler: "session",
   }),
   Object.freeze({
     id: "cancel",

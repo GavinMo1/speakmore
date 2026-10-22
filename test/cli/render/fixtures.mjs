@@ -24,6 +24,7 @@ export const ready = {
   version: "0.1.0",
   starting: false,
   "hotkey.dictate": hotkey,
+  "hotkey.translate": '["AltRight+Space"]',
   "hotkey.cancel": '["Escape"]',
   provider: "gemini",
   model: "gemini/gemini-3.6-flash",
@@ -36,6 +37,7 @@ export const ready = {
 };
 export const settings = {
   "hotkey.dictate": { value: hotkey, source: "default" },
+  "hotkey.translate": { value: '["AltRight+Space"]', source: "default" },
   "hotkey.cancel": { value: '["Escape"]', source: "default" },
   mode: { value: "native", source: "default" },
   model: { value: "gemini/gemini-3.6-flash", source: "default" },

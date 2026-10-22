@@ -24,7 +24,8 @@ const DEFAULT_MODE = findTask("dictate").mode;
  * 由调用方传入，测试时换成假的。两个都带上这一次的任务（tasks/：语音输入、语音翻译），refine 回的是任务收好的成品
  * { text, source }。
  * vocabulary 交出用户的词典（storage/vocabulary.mjs 的 terms）：开口时、整理时各读一次，交给 prepare 和 refine，
- * 各个模型按自己的收法用（原版的词典在它的服务端，我们的在本机，读的地方也在这一层）
+ * 各个模型按自己的收法用（原版的词典在它的服务端，我们的在本机，读的地方也在这一层）。
+ * 任务说不用词典（tasks/ 的 vocabulary）时不读，交过去的是空的
  * onActivity 在页面每发来一条消息（开口、每一块音频、说完）时调用：按需装载的本机模型从最后一次动静起算空闲（app/service.mjs）
  * @param {{ vocabulary?: () => readonly string[], onActivity?: () => void }} options
  * @returns {Promise<{ port: number, close: () => Promise<void> }>}
@@ -157,9 +158,12 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor, 
     }
     const { task } = current;
     Promise.resolve()
-      .then(() => refiner.prepare?.({ task, vocabulary: vocabularyFor(current.audioId) }))
+      .then(() => refiner.prepare?.({ task, vocabulary: vocabularyOf(current) }))
       .catch((error) => log.warn("prepare_failed", { audio_id: current.audioId, error: String(error?.message) }));
   };
+
+  /** 这一次交给模型的词典：任务说不用就一个词都不给，连读都不读 */
+  const vocabularyOf = (current) => (current.definition.vocabulary ? vocabularyFor(current.audioId) : []);
 
   const onChunk = (data) => {
     const { index, size } = requireSession().addChunk(data);
@@ -203,7 +207,7 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor, 
     const abort = new AbortController();
     refining.add(abort);
     const startedAt = performance.now();
-    const vocabulary = vocabularyFor(finished.audioId);
+    const vocabulary = vocabularyOf(finished);
     try {
       const result = await refiner.refine(finished.merge(), {
         task: finished.task,

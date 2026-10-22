@@ -42,7 +42,9 @@ const SYSTEM_RULES = {
     // Win 单按开开始菜单，Win 加字母、数字、方向键、空格都是系统的
     [(codes) => has(codes, META), "binding.winMeta"],
     [(codes) => has(codes, CONTROL) && typing(codes), "binding.winControlTyping"],
-    [(codes) => only(codes, ALT, ["Space"]), "binding.winAltSpace"],
+    // 左 Alt+空格打开窗口菜单。右 Alt+空格不拦：语音翻译的默认键就是它（Typeless 的 Windows 默认键里也有它），
+    // 小帮手吞掉空格后窗口菜单还弹不弹要在 Windows 上实测（未验证，docs/hotkey-research.md 5.5）
+    [(codes) => only(codes, ["AltLeft"], ["Space"]), "binding.winAltSpace"],
     [(codes) => only(codes, ALT, ["F4"]) || only(codes, CONTROL, ["F4"]), "binding.winCloses"],
     // 默认的输入语言热键是左 Alt+Shift，切换键盘布局是 Ctrl+Shift（设置 › 时间和语言 › 输入 › 高级键盘设置）
     [(codes) => only(codes, SHIFT, CONTROL) || only(codes, SHIFT, ALT), "binding.winShiftSwitch"],
@@ -167,7 +169,8 @@ export function checkBindings(bindings, platform) {
   for (const { action, index, codes } of accepted) {
     for (const reason of warningsOf(codes, { platform })) report(action, index, "warn", reason);
     for (const other of accepted) {
-      if (isPart(codes, other.codes)) {
+      // 两个都是录音会话（语音输入和语音翻译）时不提醒：按长的那个时，悬浮条把已经开始的这一次直接升级过去，录音不断
+      if (isPart(codes, other.codes) && !(action.handler === "session" && other.action.handler === "session")) {
         report(
           action,
           index,

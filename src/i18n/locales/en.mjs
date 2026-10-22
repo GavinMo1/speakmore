@@ -108,6 +108,7 @@ export default {
   // What a shortcut can do (src/hotkeys/actions.mjs): one row per action in Settings and onboarding, name on the left, chords on the right
   actions: {
     dictate: { name: "Voice input" },
+    translate: { name: "Voice translation" },
     cancel: { name: "Cancel" },
   },
 
@@ -165,7 +166,7 @@ export default {
     macF11: "F11 is the system's Show Desktop",
     winMeta: "The Windows key and its combinations belong to Windows",
     winControlTyping: "Ctrl with a typing key is an app shortcut (copy, paste, save…)",
-    winAltSpace: "Alt+Space opens the window menu",
+    winAltSpace: "Left Alt+Space opens the window menu",
     winCloses: "This closes the window",
     winShiftSwitch: "Ctrl+Shift and Alt+Shift switch input languages and keyboard layouts",
     winF12: "Windows reserves F12 on its own for debuggers",
@@ -209,6 +210,26 @@ export default {
 
   language: {
     system: "System",
+  },
+
+  // Languages translation can target (src/languages.mjs)
+  languages: {
+    en: "English",
+    "zh-CN": "Simplified Chinese",
+    "zh-TW": "Traditional Chinese",
+    ja: "Japanese",
+    ko: "Korean",
+    fr: "French",
+    de: "German",
+    es: "Spanish",
+    pt: "Portuguese",
+    it: "Italian",
+    ru: "Russian",
+    ar: "Arabic",
+    vi: "Vietnamese",
+    th: "Thai",
+    id: "Indonesian",
+    tr: "Turkish",
   },
 
   settings: {

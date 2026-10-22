@@ -681,7 +681,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - 只在截取中生效的动作只按自己那一个键认（5.3），所以别的动作的组合里不能含它的键：取消绑了 `F13`，听写就不能绑 `ControlRight+F13`，否则说话时按这个组合只会取消。
 - 系统保留组合，按系统分别建表、按 code 写、左右都列：
   - macOS：⌘ + `Space`、`Tab`、常用编辑键（C V X Z A S W Q N O P F H M T 和逗号）；`Control` + `Space`（切换输入法，对中文用户尤其要紧）；⌃ + F1–F5；⌘ + `Backspace`（来源：Apple HIG https://developer.apple.com/design/human-interface-guidelines/keyboards ，以及 Wispr 文档）。另外用 `CopySymbolicHotKeys()` 动态查启用的系统快捷键。
-  - Windows：Alt+Tab、Alt+F4、Alt+Space、Ctrl + 常用编辑键、Win + 字母数字 Tab 方向键、Win+Space、Ctrl+Alt+Del、Win+L、`Shift + Space`（微软拼音全角半角）。另外对"修饰键 + 普通键"用 `RegisterHotKey` 试登记一次。
+  - Windows：Alt+Tab、Alt+F4、左 Alt+Space（右 Alt+Space 留给语音翻译，Typeless 的 Windows 默认键里也有它；小帮手吞掉空格后窗口菜单还弹不弹，见 V27）、Ctrl + 常用编辑键、Win + 字母数字 Tab 方向键、Win+Space、Ctrl+Alt+Del、Win+L、`Shift + Space`（微软拼音全角半角）。另外对"修饰键 + 普通键"用 `RegisterHotKey` 试登记一次。
 - Mac 上 `Fn` + 方向键、删除、回车。
 - 和自家另一个动作的绑定规范化后相同：拒绝，并写明"已被「某动作」占用"。"任何时候"和别的场景都算重叠，所以现在任意两个动作都不能同键；以后有了互不重叠的场景，才按场景放开。
 
@@ -699,7 +699,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | Windows 上 `AltLeft+ShiftLeft`、`AltLeft+ShiftRight` | 默认在输入语言之间切换（4.2，V23） |
 | Windows 上 `Ctrl+Shift` | 装了多个布局时会切换布局 |
 | Mac 上 Control 作修饰键 | Apple HIG："Avoid using the Control key as a modifier" |
-| 组合是另一个绑定的前缀 | 见 5.3 |
+| 组合是另一个绑定的前缀 | 见 5.3。两个都是录音会话（语音输入和语音翻译）时不提醒：按长的那个时悬浮条把这一次直接升级过去，录音不断（2026-10-22 加语音翻译时改） |
 | Mac 修饰键 + 普通键 | 安全输入时改由 Carbon 顶替，顶替不上就失灵（4.1） |
 
 **做不到的事要说清楚**：别的应用用钩子或 tap 实现的热键，以及别的应用注册的 Carbon 热键，都没有通用接口能查出来。只能静态表加警告，用户撞上了自己改。
@@ -1046,6 +1046,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | V24 | Mac：安全输入开着时 `CGEventSourceKeyState(.hidSystemState, key)` 准不准 | 5.3 第 8 条 | 密码框里按住 Tab 不放，轮询这个接口 |
 | V25 | Mac：录制中按 ⌘W、⌘Q、⌃Space 各会发生什么；渲染层 `preventDefault`、主进程 `before-input-event` 拦不拦得住默认菜单的快捷键 | 5.6 录制时吞键 | 开发窗口里分有、无辅助功能权限两种各按一遍 |
 | V26 | Mac：辅助功能权限在运行中被撤销时，常开的触发 tap 会不会冻住整机；监听到权限变化后立刻 `CFMachPortInvalidate`，能不能避免或解冻 | 第 7 步，D3 的缓解 | 只在随时可以重来的 macOS 虚拟机里做，不在主人的电脑上做：装一个带触发 tap 的测试应用、授权后用 `tccutil reset Accessibility` 撤销，看键盘鼠标 |
+| V27 | Windows：绑了右 Alt+空格，小帮手吞掉空格以后，系统的窗口菜单还弹不弹 | 5.5 只拦左 Alt+空格（语音翻译的默认键） | Windows 开发机上前台开记事本，按右 Alt+空格 |
 
 ---
 

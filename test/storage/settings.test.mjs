@@ -38,6 +38,7 @@ const OTHER_HOTKEY = '["ControlRight"]';
 test("没有文件也没有环境变量时全用默认值", () => {
   assert.deepEqual(resolveSettings({ file, env: {} }), {
     "hotkey.dictate": { value: DEFAULT_HOTKEY, source: "default" },
+    "hotkey.translate": { value: '["AltRight+Space"]', source: "default" },
     "hotkey.cancel": { value: '["Escape"]', source: "default" },
     mode: { value: "native", source: "default" },
     model: { value: "gemini/gemini-3.6-flash", source: "default" },

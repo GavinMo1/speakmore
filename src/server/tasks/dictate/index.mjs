@@ -36,6 +36,8 @@ export const dictate = Object.freeze({
   configMode: "transcript",
   /** 要客户端在 set_mode_config 里给的参数：没有，开口就能定 */
   parameters: Object.freeze([]),
+  /** 用词典：听写专有名词靠它 */
+  vocabulary: true,
   steps: Object.freeze(["native", "polish", "transcribe"]),
   bind: () => DICTATION,
 });

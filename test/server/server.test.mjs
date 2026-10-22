@@ -365,3 +365,76 @@ test("不认识的模式、set_mode_config 和这次录音的模式对不上：�
   assert.equal(mismatch.V.code, "mode_mismatch");
   assert.equal(calls, 0);
 });
+
+test("语音翻译：等 set_mode_config 给了目标语言才定下来；词典照样带；成品带着原文", async () => {
+  const seen = [];
+  let vocabularyReads = 0;
+  const port = await start(
+    {
+      async prepare({ task, vocabulary }) {
+        seen.push(["prepare", task.id, task.language, vocabulary]);
+      },
+      async refine(_audio, { task, vocabulary }) {
+        seen.push(["refine", task.id, task.language, vocabulary]);
+        return { text: "Let's meet tomorrow", source: "我们明天见" };
+      },
+    },
+    {
+      vocabulary: () => {
+        vocabularyReads += 1;
+        return ["Runzo"];
+      },
+    },
+  );
+  const client = await connect(port);
+  client.sendJson({ type: "start_audio", audio_id: "t1", mode: "voice_translation" });
+  await client.next();
+  client.sendJson({
+    type: "set_mode_config",
+    audio_id: "t1",
+    mode: "translation",
+    parameters: { output_language: "en" },
+  });
+  await sendChunk(client, "t1", 1, ogg("x"));
+  client.sendJson({ type: "end_audio", audio_id: "t1" });
+  await client.next();
+  const completed = await client.next();
+  assert.equal(completed.V.refined_text, "Let's meet tomorrow");
+  assert.equal(completed.V.source_text, "我们明天见");
+  assert.deepEqual(seen, [
+    ["prepare", "translate", "en", ["Runzo"]],
+    ["refine", "translate", "en", ["Runzo"]],
+  ]);
+  assert.equal(vocabularyReads, 2);
+});
+
+test("语音翻译没等到目标语言、写了不认识的语言：说清楚，不拿默认的语言硬译", async () => {
+  let calls = 0;
+  const port = await start({
+    async refine() {
+      calls += 1;
+      return done("不该走到这里");
+    },
+  });
+  const client = await connect(port);
+  client.sendJson({ type: "start_audio", audio_id: "t2", mode: "voice_translation" });
+  await client.next();
+  await sendChunk(client, "t2", 1, ogg("x"));
+  client.sendJson({ type: "end_audio", audio_id: "t2" });
+  const missing = await client.next();
+  assert.equal(missing.K, "audio_processing_error");
+  assert.equal(missing.V.code, "mode_config_missing");
+
+  client.sendJson({ type: "start_audio", audio_id: "t3", mode: "voice_translation" });
+  await client.next();
+  client.sendJson({
+    type: "set_mode_config",
+    audio_id: "t3",
+    mode: "translation",
+    parameters: { output_language: "xx" },
+  });
+  const invalid = await client.next();
+  assert.equal(invalid.K, "error");
+  assert.equal(invalid.V.code, "invalid_parameters");
+  assert.equal(calls, 0);
+});
