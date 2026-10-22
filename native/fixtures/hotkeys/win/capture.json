@@ -175,7 +175,7 @@
               }
             ],
             "swallow": false,
-            "mask": true
+            "mask": false
           }
         },
         {
@@ -202,7 +202,7 @@
               }
             ],
             "swallow": true,
-            "mask": false
+            "mask": true
           }
         },
         {
@@ -394,7 +394,7 @@
               }
             ],
             "swallow": false,
-            "mask": true
+            "mask": false
           }
         },
         {
@@ -412,7 +412,7 @@
               }
             ],
             "swallow": false,
-            "mask": false
+            "mask": true
           }
         },
         {

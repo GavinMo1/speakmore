@@ -43,7 +43,7 @@ const SYSTEM_RULES = {
     [(codes) => has(codes, META), "binding.winMeta"],
     [(codes) => has(codes, CONTROL) && typing(codes), "binding.winControlTyping"],
     // 左 Alt+空格打开窗口菜单。右 Alt+空格不拦：语音翻译的默认键就是它（Typeless 的 Windows 默认键里也有它），
-    // 小帮手吞掉空格后窗口菜单还弹不弹要在 Windows 上实测（未验证，docs/hotkey-research.md 5.5）
+    // 小帮手吞掉空格，窗口菜单不弹（10-22 在 Windows 开发机的记事本里验过，docs/hotkey-research.md V27）
     [(codes) => only(codes, ["AltLeft"], ["Space"]), "binding.winAltSpace"],
     [(codes) => only(codes, ALT, ["F4"]) || only(codes, CONTROL, ["F4"]), "binding.winCloses"],
     // 默认的输入语言热键是左 Alt+Shift，切换键盘布局是 Ctrl+Shift（设置 › 时间和语言 › 输入 › 高级键盘设置）

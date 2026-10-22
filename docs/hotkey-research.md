@@ -442,7 +442,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - Win 或 Alt 单独按下再松开、中间没有别的键，系统会弹开始菜单，或者激活前台窗口的菜单栏。对策是在中间插一个无效键，让系统以为是"Win/Alt + 某个键"。现在只有右 Alt 按下时插 0xE8（`keys.go:17-19, 98`）。
 - 新规则：本次 Win 或 Alt 按住期间，只要有绑定触发、或者有事件被我们吞掉，就插一次掩码。**被吞的键松开时也算**：handy-keys 实测"F20↓ Win↓ F20↑ Win↑ with Win+F20 blocked opens Start"（`handy-keys@e7d1b8e src/platform/windows/listener.rs:755-790`）。
 - Ctrl 或 Shift 按下，本身就会让之前按着的 Win、Alt 不再触发菜单（AutoHotkey `hook.cpp:2020` 的注释）。所以 `Ctrl+Win` 这类组合自带掩码，Wispr 也说 "Ctrl+Win suppresses the Start/Search action while that combination is held"。
-- 插的时机：第 8 步起改成在回调里同步 `SendInput`（AutoHotkey 和 handy-keys 也是），注入的事件靠记号放行。原来交回消息循环再插：消息循环先处理的是钩子回调（发来的消息排在投递的前面），点得快或者线程正忙时，Alt、Win 的松开可能抢在掩码前面。一次按住只插一次，Alt、Win 全松开再算下一次（`native/windows/matcher.go` 的 `settleMask`）。Win 键绑定点一下能不能挡住开始菜单，仍要真机试（第 12 步）。
+- 插的时机：第 8 步起改成在回调里同步 `SendInput`（AutoHotkey 和 handy-keys 也是），注入的事件靠记号放行。10-22 补：赶上的事件是 Alt、Win 自己的按下时（单按右 Alt 就触发的语音输入），在它的回调里插，效果和先插掩码、再按 Alt 一样，等于没插，Windows 11 记事本照样选中菜单栏；手动在 Alt 按下之后再插就挡住了。改成这时只记着，等下一个键事件（别的键，或 Alt、Win 自己的松开）再插（`matcher.go` 的 `settleMask`、样例 `windows.json` 最后一条），`e2e.ps1` 用 UI Automation 看焦点查这一项。原来交回消息循环再插：消息循环先处理的是钩子回调（发来的消息排在投递的前面），点得快或者线程正忙时，Alt、Win 的松开可能抢在掩码前面。一次按住只插一次，Alt、Win 全松开再算下一次（`native/windows/matcher.go` 的 `settleMask`）。Win 键绑定点一下能不能挡住开始菜单，仍要真机试（第 12 步）。
 - 0xE8 在微软 VK 表里仍标为 "Unassigned"（https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes ）。AutoHotkey 文档提醒，微软以后可能给未分配的码派用途，例如 0x07 从 1909 起被用来开 Game Bar（https://www.autohotkey.com/docs/v2/lib/A_MenuMaskKey.htm ）。另外 `keys.go:18` 的注释"AutoHotkey 用的也是它"不准确：AHK 的默认掩码键是左 Ctrl（`AutoHotkey@0b8e6fa source/globaldata.cpp:66-67`），0xE8 是文档推荐值。
 
 **其他修饰键自带的系统行为**
@@ -681,7 +681,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - 只在截取中生效的动作只按自己那一个键认（5.3），所以别的动作的组合里不能含它的键：取消绑了 `F13`，听写就不能绑 `ControlRight+F13`，否则说话时按这个组合只会取消。
 - 系统保留组合，按系统分别建表、按 code 写、左右都列：
   - macOS：⌘ + `Space`、`Tab`、常用编辑键（C V X Z A S W Q N O P F H M T 和逗号）；`Control` + `Space`（切换输入法，对中文用户尤其要紧）；⌃ + F1–F5；⌘ + `Backspace`（来源：Apple HIG https://developer.apple.com/design/human-interface-guidelines/keyboards ，以及 Wispr 文档）。另外用 `CopySymbolicHotKeys()` 动态查启用的系统快捷键。
-  - Windows：Alt+Tab、Alt+F4、左 Alt+Space（右 Alt+Space 留给语音翻译，Typeless 的 Windows 默认键里也有它；小帮手吞掉空格后窗口菜单还弹不弹，见 V27）、Ctrl + 常用编辑键、Win + 字母数字 Tab 方向键、Win+Space、Ctrl+Alt+Del、Win+L、`Shift + Space`（微软拼音全角半角）。另外对"修饰键 + 普通键"用 `RegisterHotKey` 试登记一次。
+  - Windows：Alt+Tab、Alt+F4、左 Alt+Space（右 Alt+Space 留给语音翻译，Typeless 的 Windows 默认键里也有它；小帮手吞掉空格后窗口菜单不弹，V27 已验）、Ctrl + 常用编辑键、Win + 字母数字 Tab 方向键、Win+Space、Ctrl+Alt+Del、Win+L、`Shift + Space`（微软拼音全角半角）。另外对"修饰键 + 普通键"用 `RegisterHotKey` 试登记一次。
 - Mac 上 `Fn` + 方向键、删除、回车。
 - 和自家另一个动作的绑定规范化后相同：拒绝，并写明"已被「某动作」占用"。"任何时候"和别的场景都算重叠，所以现在任意两个动作都不能同键；以后有了互不重叠的场景，才按场景放开。
 
@@ -1046,7 +1046,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | V24 | Mac：安全输入开着时 `CGEventSourceKeyState(.hidSystemState, key)` 准不准 | 5.3 第 8 条 | 密码框里按住 Tab 不放，轮询这个接口 |
 | V25 | Mac：录制中按 ⌘W、⌘Q、⌃Space 各会发生什么；渲染层 `preventDefault`、主进程 `before-input-event` 拦不拦得住默认菜单的快捷键 | 5.6 录制时吞键 | 开发窗口里分有、无辅助功能权限两种各按一遍 |
 | V26 | Mac：辅助功能权限在运行中被撤销时，常开的触发 tap 会不会冻住整机；监听到权限变化后立刻 `CFMachPortInvalidate`，能不能避免或解冻 | 第 7 步，D3 的缓解 | 只在随时可以重来的 macOS 虚拟机里做，不在主人的电脑上做：装一个带触发 tap 的测试应用、授权后用 `tccutil reset Accessibility` 撤销，看键盘鼠标 |
-| V27 | Windows：绑了右 Alt+空格，小帮手吞掉空格以后，系统的窗口菜单还弹不弹 | 5.5 只拦左 Alt+空格（语音翻译的默认键） | Windows 开发机上前台开记事本，按右 Alt+空格 |
+| V27 | Windows：绑了右 Alt+空格，小帮手吞掉空格以后，系统的窗口菜单还弹不弹 | 5.5 只拦左 Alt+空格（语音翻译的默认键） | **10-22 已验：窗口菜单不弹。** 开发机记事本里真键盘按、合成按各两次，空格都吞住了。同时查出记事本的菜单栏被选中：掩码插早了，单按右 Alt 也一样（4.2 掩码），修好后 `e2e.ps1` 42/42 |
 
 ---
 

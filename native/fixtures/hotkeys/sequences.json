@@ -17,13 +17,13 @@
         { "id": "x#0", "chord": "AltRight+Space" }
       ],
       "steps": [
-        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }] },
         {
           "key": "Space",
           "down": true,
           "events": [{ "interrupted": "dictate#0", "to": "x#0" }, { "down": "x#0" }],
           "swallow": true
-        },
+       , "mask": true },
         { "key": "Space", "down": false, "swallow": true },
         { "key": "AltRight", "down": false, "events": [{ "up": "x#0" }] }
       ]
@@ -45,14 +45,14 @@
       "name": "被打断：报一次打断，之后不报松开；组合里的键全松开之前不再触发任何东西",
       "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
       "steps": [
-        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
-        { "key": "KeyK", "down": true, "events": [{ "interrupted": "dictate#0" }] },
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "KeyK", "down": true, "events": [{ "interrupted": "dictate#0" }], "mask": true },
         { "key": "KeyK", "down": false },
         { "key": "KeyB", "down": true },
         { "key": "KeyB", "down": false },
         { "key": "AltRight", "down": false },
-        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
-        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }], "mask": true }
       ]
     },
     {
@@ -71,8 +71,8 @@
       "name": "按着热键又按别的修饰键也算打断，只报一次",
       "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
       "steps": [
-        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
-        { "key": "ShiftLeft", "down": true, "events": [{ "interrupted": "dictate#0" }] },
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "ShiftLeft", "down": true, "events": [{ "interrupted": "dictate#0" }], "mask": true },
         { "key": "ControlLeft", "down": true },
         { "key": "ShiftLeft", "down": false },
         { "key": "ControlLeft", "down": false },

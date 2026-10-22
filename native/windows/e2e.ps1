@@ -2,16 +2,19 @@
 # 看它报的事件对不对，再往记事本里贴一段字、读回来对一遍。要在有人登录的桌面上跑（scripts/dev/win-desktop.sh - < 这个文件）。
 # 会弹出一个记事本窗口、往里贴字，跑完自己关掉；剪贴板里原来的东西跑完还在。
 # 读回记事本里的字靠全选、复制（Ctrl 组合键不经过输入法）；不模拟敲字母：中文系统默认开着拼音，字母会进候选框。
-# 热键只用右 Ctrl、F13、esc：单按它们哪个应用都不会有反应，不碰 Alt、Win（会开菜单栏、开始菜单）。
+# 热键只用右 Ctrl、F13、esc：单按它们哪个应用都不会有反应；不碰 Win（会开开始菜单）。Alt 只在记事本里查菜单栏时按：
+# 那几下要的就是看它叫不叫出菜单栏。
 # 按键分三种模拟法各来一遍（docs/hotkey-research.md 4.2）：只给扫描码（KEYEVENTF_SCANCODE，最像真键盘）、
 # 只给 vk（别的工具常这么发，扫描码是 0）、两个都给。
 # 录键（record）、查组合有没有被占（probe）、info 也各查一遍：录键只按右 Ctrl、F13，录到的键整段吞掉，前台应用收不到。
 # 录键里有一段要等 30 秒（查到点自己停），整个脚本要多跑半分钟：win-desktop.sh 默认只等 60 秒，
 # 跑的时候写 WAIT=120 scripts/dev/win-desktop.sh - < 这个文件。
-# 没查的：右 Alt 单按之后菜单栏会不会被叫出来（新版记事本不是老式菜单，查不了），要人在 Office 这类应用里试一下。
+# 菜单栏叫没叫出来看 UI Automation 报的焦点：Win11 的记事本选中菜单栏时焦点在"文件"那个菜单项上（10-22 实测）。
+# 没查的：Office 这类应用、开始菜单（Win 键）。
 $ErrorActionPreference = 'Stop'
 $repo = "$HOME\speakmore-dev\repo"
 
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -94,6 +97,7 @@ function Send($helper, $object) {
 # 每个键：vk、扫描码、是不是扩展键
 $RCtrl = 0xA3, 0x1D, $true; $Esc = 0x1B, 0x01, $false; $KeyA = 0x41, 0x1E, $false; $KeyC = 0x43, 0x2E, $false
 $Ctrl = 0x11, 0x1D, $false; $Delete = 0x2E, 0x53, $true; $F13 = 0x7C, 0x64, $false; $F14 = 0x7D, 0x65, $false
+$LAlt = 0xA4, 0x38, $false; $RAlt = 0xA5, 0x38, $true; $Space = 0x20, 0x39, $false
 # 不分左右的 VK_CONTROL 加扩展位：有的工具这样模拟右 Ctrl，小帮手要自己分出是右边
 $GenericRCtrl = 0x11, 0x1D, $true
 function Press($key, $down, $mode = 'both') { [Fake]::Key($key[0], $key[1], $key[2], $down, $mode) }
@@ -266,6 +270,34 @@ try {
   Press $Ctrl $true; Press $KeyA $true; Press $KeyA $false; Press $Ctrl $false
   Press $Delete $true; Press $Delete $false
   Start-Sleep -Milliseconds 300
+
+  # 菜单栏（docs/hotkey-research.md 4.2 的掩码）：Alt 按着时我们触发了绑定、吞了空格，前台应用不该当成单按了一下 Alt。
+  # 掩码排到 Alt 按下前面和不插一样，记事本照样选中菜单栏：语音输入、语音翻译的默认键 10-22 在这里栽过。
+  # 左 Alt 没绑，是对照：它该选中菜单栏，不然后两项查不出东西。空格没吞住的话弹的是窗口菜单，焦点也在菜单项上
+  Send $helper @{ cmd = 'bind'; bindings = @(
+      @{ id = 'dictate#0'; mods = @(0xA5); when = 'always' },
+      @{ id = 'x#0'; mods = @(0xA5); key = 0x39; when = 'always' }) }
+  $null = Next-Event $helper
+  $menuCases = [ordered]@{
+    '对照：左 Alt 单按（没绑）选中了菜单栏' = @($true, { Press $LAlt $true 'scan'; Start-Sleep -Milliseconds 80; Press $LAlt $false 'scan' })
+    '右 Alt 单按触发绑定，菜单栏没被选中' = @($false, { Press $RAlt $true 'scan'; Start-Sleep -Milliseconds 80; Press $RAlt $false 'scan' })
+    '右 Alt 再补空格升级，菜单栏、窗口菜单都没出来' = @($false, {
+        Press $RAlt $true 'scan'; Start-Sleep -Milliseconds 120; Press $Space $true 'scan'; Press $Space $false 'scan'
+        Start-Sleep -Milliseconds 30; Press $RAlt $false 'scan' })
+  }
+  foreach ($name in $menuCases.Keys) {
+    [Fake]::SetForegroundWindow($window) | Out-Null
+    Start-Sleep -Milliseconds 300
+    & $menuCases[$name][1]
+    Start-Sleep -Milliseconds 500
+    $focused = [System.Windows.Automation.AutomationElement]::FocusedElement.Current
+    $onMenu = $focused.ControlType -eq [System.Windows.Automation.ControlType]::MenuItem
+    Check $name ($onMenu -eq $menuCases[$name][0]) "焦点在 $($focused.ControlType.ProgrammaticName) '$($focused.Name)'"
+    # 选中了菜单栏就退出来；没截着，esc 照常到记事本
+    Press $Esc $true 'scan'; Press $Esc $false 'scan'
+    Start-Sleep -Milliseconds 300
+    Drain $helper
+  }
   Set-Clipboard -Value '贴之前用户复制的字'
   Send $helper @{ cmd = 'paste'; id = 1; text = $text }
   $pasted = Next-Event $helper 3000

@@ -42,7 +42,7 @@
               }
             ],
             "swallow": false,
-            "mask": true
+            "mask": false
           }
         },
         {
@@ -74,7 +74,7 @@
               }
             ],
             "swallow": false,
-            "mask": false
+            "mask": true
           }
         }
       ]
@@ -428,7 +428,7 @@
               }
             ],
             "swallow": false,
-            "mask": true
+            "mask": false
           }
         },
         {
@@ -447,7 +447,7 @@
               }
             ],
             "swallow": false,
-            "mask": false
+            "mask": true
           }
         },
         {
@@ -466,7 +466,7 @@
               }
             ],
             "swallow": false,
-            "mask": true
+            "mask": false
           }
         },
         {
@@ -485,7 +485,7 @@
               }
             ],
             "swallow": false,
-            "mask": false
+            "mask": true
           }
         }
       ]
@@ -569,7 +569,7 @@
               }
             ],
             "swallow": false,
-            "mask": true
+            "mask": false
           }
         },
         {
@@ -588,7 +588,7 @@
               }
             ],
             "swallow": false,
-            "mask": false
+            "mask": true
           }
         }
       ]
@@ -622,7 +622,7 @@
               }
             ],
             "swallow": false,
-            "mask": true
+            "mask": false
           }
         },
         {
@@ -640,7 +640,7 @@
               }
             ],
             "swallow": false,
-            "mask": false
+            "mask": true
           }
         },
         {
@@ -691,7 +691,7 @@
               }
             ],
             "swallow": false,
-            "mask": true
+            "mask": false
           }
         },
         {
@@ -710,7 +710,7 @@
               }
             ],
             "swallow": false,
-            "mask": false
+            "mask": true
           }
         }
       ]
@@ -857,6 +857,117 @@
               {
                 "event": "binding",
                 "id": "y#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "掩码不插在 Alt、Win 自己按下的那一下（自动重复也算）：在它的回调里插，掩码排到它前面，系统照样当成单按了一下（Windows 11 记事本实测选中菜单栏），等下一个键事件再插。右 Alt 再补空格升级成语音翻译：插在空格上",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        },
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": 57
+        }
+      ],
+      "steps": [
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "dictate#0",
+                "to": "x#0"
+              },
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": true,
+            "mask": true
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
                 "down": false
               }
             ],

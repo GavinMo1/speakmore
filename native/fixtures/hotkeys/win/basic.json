@@ -29,7 +29,7 @@
               }
             ],
             "swallow": false,
-            "mask": true
+            "mask": false
           }
         },
         {
@@ -61,7 +61,7 @@
               }
             ],
             "swallow": false,
-            "mask": false
+            "mask": true
           }
         }
       ]

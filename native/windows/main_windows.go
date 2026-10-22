@@ -87,8 +87,9 @@ func keyboardProc(code int32, wParam, lParam uintptr) uintptr {
 			result := recording.onKey(in)
 			report(result)
 			if result.mask {
-				// 就在回调里插（AutoHotkey、handy-keys 也是）：排在这个事件后面、Alt 或 Win 的松开前面。
-				// 交回消息循环再插的话，消息循环先处理的是钩子回调，快速点按时松开可能抢在掩码前面
+				// 就在回调里插（AutoHotkey、handy-keys 也是）。在 Alt、Win 自己按下的回调里插，效果和插在它前面一样（记事本实测），
+				// 所以匹配器不在那一下要掩码（见 matcher.settleMask）。交回消息循环再插的话，消息循环先处理的是钩子回调，
+				// 快速点按时松开可能抢在掩码前面
 				sendKeys([]uint16{vkMask, vkMask}, []bool{true, false})
 			}
 			if result.swallow {

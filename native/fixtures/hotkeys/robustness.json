@@ -6,8 +6,8 @@
       "steps": [
         { "key": "Tab", "down": true },
         { "lostUp": "Tab" },
-        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
-        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }], "mask": true }
       ]
     },
     {
@@ -39,8 +39,8 @@
       "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
       "steps": [
         { "key": "Tab", "down": true, "t": 0 },
-        { "key": "AltRight", "down": true, "t": 10001, "events": [{ "down": "dictate#0" }], "mask": true },
-        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+        { "key": "AltRight", "down": true, "t": 10001, "events": [{ "down": "dictate#0" }] },
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }], "mask": true }
       ]
     },
     {
@@ -68,8 +68,8 @@
       "name": "被打断的绑定遇到监听重开：不再补报松开",
       "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
       "steps": [
-        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
-        { "key": "KeyK", "down": true, "events": [{ "interrupted": "dictate#0" }] },
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "KeyK", "down": true, "events": [{ "interrupted": "dictate#0" }], "mask": true },
         { "reset": true },
         { "key": "KeyK", "down": false },
         { "key": "AltRight", "down": false }
@@ -79,19 +79,19 @@
       "name": "自己模拟的按键（贴字时的 ⌘V/Ctrl+V、插的掩码键）：不算，原样放行",
       "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
       "steps": [
-        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }] },
         { "key": "KeyV", "down": true, "injected": true },
         { "key": "KeyV", "down": false, "injected": true },
-        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }], "mask": true }
       ]
     },
     {
       "name": "换了绑定表：按着的绑定补报松开，按住的键照旧记着",
       "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
       "steps": [
-        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }] },
         { "bind": [{ "id": "dictate#0", "chord": "ControlRight" }], "events": [{ "up": "dictate#0" }] },
-        { "key": "AltRight", "down": false },
+        { "key": "AltRight", "down": false, "mask": true },
         { "key": "ControlRight", "down": true, "events": [{ "down": "dictate#0" }] },
         { "key": "ControlRight", "down": false, "events": [{ "up": "dictate#0" }] }
       ]

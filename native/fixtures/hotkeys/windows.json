@@ -6,9 +6,9 @@
       "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
       "steps": [
         { "key": "ControlLeft", "down": true, "scan": 541 },
-        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }] },
         { "key": "ControlLeft", "down": false, "scan": 541 },
-        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }], "mask": true }
       ]
     },
     {
@@ -53,10 +53,10 @@
         { "key": "Escape", "down": false, "events": [{ "up": "cancel#0" }], "swallow": true },
         { "key": "AltLeft", "down": false },
         { "capture": false },
-        { "key": "MetaLeft", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
-        { "key": "MetaLeft", "down": false, "events": [{ "up": "dictate#0" }] },
-        { "key": "MetaLeft", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
-        { "key": "MetaLeft", "down": false, "events": [{ "up": "dictate#0" }] }
+        { "key": "MetaLeft", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "MetaLeft", "down": false, "events": [{ "up": "dictate#0" }], "mask": true },
+        { "key": "MetaLeft", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "MetaLeft", "down": false, "events": [{ "up": "dictate#0" }], "mask": true }
       ]
     },
     {
@@ -68,8 +68,8 @@
         { "key": "Tab", "down": true },
         { "lostUp": "Tab" },
         { "lostUp": "AltLeft" },
-        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
-        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }], "mask": true }
       ]
     },
     {
@@ -77,13 +77,13 @@
       "platforms": ["win32"],
       "bindings": [{ "id": "dictate#0", "chord": "MetaLeft" }],
       "steps": [
-        { "key": "MetaLeft", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
-        { "key": "KeyL", "down": true, "events": [{ "interrupted": "dictate#0" }] },
+        { "key": "MetaLeft", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "KeyL", "down": true, "events": [{ "interrupted": "dictate#0" }], "mask": true },
         { "lostUp": "KeyL" },
         { "lostUp": "MetaLeft" },
         { "reset": true },
-        { "key": "MetaLeft", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
-        { "key": "MetaLeft", "down": false, "events": [{ "up": "dictate#0" }] }
+        { "key": "MetaLeft", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "MetaLeft", "down": false, "events": [{ "up": "dictate#0" }], "mask": true }
       ]
     },
     {
@@ -102,6 +102,21 @@
         { "key": "KeyK", "down": true, "events": [{ "down": "y#0" }], "swallow": true, "mask": true },
         { "key": "KeyK", "down": false, "swallow": true },
         { "key": "AltLeft", "down": false, "events": [{ "up": "y#0" }] }
+      ]
+    },
+    {
+      "name": "掩码不插在 Alt、Win 自己按下的那一下（自动重复也算）：在它的回调里插，掩码排到它前面，系统照样当成单按了一下（Windows 11 记事本实测选中菜单栏），等下一个键事件再插。右 Alt 再补空格升级成语音翻译：插在空格上",
+      "platforms": ["win32"],
+      "bindings": [
+        { "id": "dictate#0", "chord": "AltRight" },
+        { "id": "x#0", "chord": "AltRight+Space" }
+      ],
+      "steps": [
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "AltRight", "down": true },
+        { "key": "Space", "down": true, "events": [{ "interrupted": "dictate#0", "to": "x#0" }, { "down": "x#0" }], "swallow": true, "mask": true },
+        { "key": "Space", "down": false, "swallow": true },
+        { "key": "AltRight", "down": false, "events": [{ "up": "x#0" }] }
       ]
     }
   ]
