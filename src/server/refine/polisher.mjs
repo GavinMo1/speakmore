@@ -1,6 +1,6 @@
-import { LocalizedError, msg } from "../../i18n/index.mjs";
+import { LocalizedError } from "../../i18n/index.mjs";
 import { fitTerms, PROMPT_VOCABULARY } from "../../vocabulary/support.mjs";
-import { chatEndpoint, findChatVendor, PROTOCOLS, requestFor } from "../chat/vendors.mjs";
+import { createChatClient } from "../chat/client.mjs";
 import { toModelError } from "../providers/errors.mjs";
 import { createMeter } from "./meter.mjs";
 
@@ -81,7 +81,7 @@ export function createPolisher({
 }
 
 /**
- * 按用户选的厂商和模型装出一个润色器：清单里找到那一家，加载它说的协议，带上它的地址、这个模型要的参数和价。
+ * 按用户选的厂商和模型装出一个润色器：客户端由 ../chat/client.mjs 装（地址、参数、价），这里接上整理的那一套。
  * @param {object} options
  * @param {{ vendor: string, model: string }} options.choice
  * @param {string | null} [options.customUrl] 自定义服务的地址（设置里的 customUrl）
@@ -99,27 +99,6 @@ export async function createChatPolisher({
   onCall,
   fetch,
 }) {
-  const vendor = findChatVendor(choice.vendor);
-  if (!vendor) throw new LocalizedError(msg("key.unknownProvider", { id: choice.vendor }));
-  const { baseUrl, name } = chatEndpoint(vendor, { customUrl });
-  const protocol = await PROTOCOLS[vendor.protocol].load();
-  const costOf = vendor.prices ? (await vendor.prices()).costOf : null;
-  const client = protocol.createClient({
-    baseUrl,
-    apiKey,
-    model: choice.model,
-    name,
-    request: requestFor(vendor, choice.model, { customParams }),
-    costOf,
-    ...(fetch ? { fetch } : {}),
-  });
-  return createPolisher({
-    endpoint: { id: vendor.id, name },
-    client,
-    classify: (error) => protocol.classifyError(error, { name }),
-    apiKey,
-    timeoutMs,
-    log,
-    onCall,
-  });
+  const { endpoint, client, classify } = await createChatClient({ choice, customUrl, customParams, apiKey, fetch });
+  return createPolisher({ endpoint, client, classify, apiKey, timeoutMs, log, onCall });
 }

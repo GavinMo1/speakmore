@@ -130,6 +130,7 @@ test("统计：只数完成的听写，可以只看某个时刻之后的", () =>
   );
 
   assert.deepEqual(history.stats(), {
+    entries: 4,
     dictations: 3,
     characters: 16,
     seconds: 15.5,
@@ -138,6 +139,7 @@ test("统计：只数完成的听写，可以只看某个时刻之后的", () =>
     unpricedCalls: 0,
   });
   assert.deepEqual(history.stats({ since: "2026-10-13T00:00:00.000Z" }), {
+    entries: 3,
     dictations: 2,
     characters: 11,
     seconds: 9.5,
@@ -145,6 +147,29 @@ test("统计：只数完成的听写，可以只看某个时刻之后的", () =>
     costUsd: 0,
     unpricedCalls: 0,
   });
+  history.close();
+});
+
+test('统计可以只数某几个功能的（命令行的"今天几次听写"只数说话的）；entries 总是所有记录的条数', () => {
+  const history = openHistory(join(dir, "history.db"));
+  history.add(entry({ id: "a", refinedText: "说的话", duration: 3 }));
+  history.add(
+    entry({
+      id: "l",
+      kind: "lookup",
+      refinedText: "译文",
+      sourceText: "text",
+      outputLanguage: "zh-CN",
+      duration: 0,
+      audioFile: null,
+    }),
+  );
+  const { entries, dictations, characters, seconds } = history.stats({ kinds: ["dictate", "translate"] });
+  assert.deepEqual(
+    { entries, dictations, characters, seconds },
+    { entries: 2, dictations: 1, characters: 3, seconds: 3 },
+  );
+  assert.equal(history.stats().dictations, 2);
   history.close();
 });
 
@@ -200,6 +225,28 @@ test("语音翻译也进历史：正文是译文，另存原文和目标语言�
   history.close();
 });
 
+test("划词翻译也进历史：正文是译文，原文、目标语言另存；没有录音，时长是 0；首页只数说话的功能时不算它", () => {
+  const history = openHistory(join(dir, "history.db"));
+  history.add(
+    entry({
+      id: "l1",
+      kind: "lookup",
+      refinedText: "模型把音频留在你的设备上。",
+      sourceText: "The model keeps the audio on your device.",
+      outputLanguage: "zh-CN",
+      duration: 0,
+      audioFile: null,
+    }),
+  );
+  const [row] = history.list();
+  assert.deepEqual(
+    [row.kind, row.refinedText, row.sourceText, row.outputLanguage, row.duration, row.audioFile],
+    ["lookup", "模型把音频留在你的设备上。", "The model keeps the audio on your device.", "zh-CN", 0, null],
+  );
+  assert.deepEqual(history.dictations({ kinds: ["dictate", "translate"] }), []);
+  history.close();
+});
+
 test("0.15 的库（版本 2）打开时升上来，老记录都是语音输入；照文件头写的退回办法降回去，库照样能读", () => {
   const path = join(dir, "history.db");
   const v2 = openHistory(path);
@@ -225,13 +272,53 @@ test("0.15 的库（版本 2）打开时升上来，老记录都是语音输入�
   assert.deepEqual(history.list(), [{ ...entry(), usage: null }]);
   history.close();
   const upgraded = new DatabaseSync(path);
-  assert.equal(upgraded.prepare("PRAGMA user_version").get().user_version, 3);
+  assert.equal(upgraded.prepare("PRAGMA user_version").get().user_version, 4);
+  upgraded.close();
+});
+
+test("版本 3 的库打开时升到 4：账原样搬过来，用途多认划词；照文件头写的退回办法降回 3，库照样能读", () => {
+  const path = join(dir, "history.db");
+  openHistory(path).close();
+  // 造一个版本 3 的库：账表照版本 3 的样子重建（用途只认三种），存一笔账
+  const db = new DatabaseSync(path);
+  db.exec(`DROP TABLE model_calls;
+    CREATE TABLE model_calls (
+      id INTEGER PRIMARY KEY, audio_id TEXT,
+      purpose TEXT NOT NULL CHECK (purpose IN ('dictation', 'check', 'cache')),
+      provider TEXT NOT NULL, model TEXT NOT NULL, input_tokens INTEGER NOT NULL, audio_tokens INTEGER NOT NULL,
+      cached_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL, thinking_tokens INTEGER NOT NULL,
+      cost_usd REAL, latency_ms INTEGER NOT NULL, created_at TEXT NOT NULL);
+    INSERT INTO model_calls VALUES (7, 'a1', 'dictation', 'gemini', 'gemini-3.6-flash', 1390, 25, 0, 4, 0, 0.001, 1700,
+      '2026-10-13T08:00:00.000Z');
+    PRAGMA user_version = 3;`);
+  db.close();
+
+  const history = openHistory(path);
+  history.add(entry());
+  history.addCall(call({ purpose: "lookup", audioId: "l1", provider: "deepseek", model: "deepseek-flash" }));
+  assert.equal(history.list()[0].usage.calls, 1);
+  assert.equal(history.usage().calls, 2);
+  history.close();
+  const upgraded = new DatabaseSync(path);
+  assert.equal(upgraded.prepare("PRAGMA user_version").get().user_version, 4);
+  // 索引跟着重建了
+  assert.deepEqual(
+    upgraded
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'model_calls' ORDER BY name")
+      .all()
+      .map(({ name }) => name),
+    ["model_calls_audio_id", "model_calls_created_at"],
+  );
+  // 文件头写的退回办法
+  upgraded.exec("DELETE FROM model_calls WHERE purpose = 'lookup'; PRAGMA user_version = 3;");
+  assert.equal(upgraded.prepare("SELECT count(*) AS n FROM model_calls").get().n, 1);
   upgraded.close();
 });
 
 test("空的历史库统计出来全是 0", () => {
   const history = openHistory(join(dir, "history.db"));
   assert.deepEqual(history.stats(), {
+    entries: 0,
     dictations: 0,
     characters: 0,
     seconds: 0,
@@ -333,6 +420,7 @@ test("用量汇总：几次听写、几次验证 key、token 分项、多少钱�
     calls: 5,
     checks: 1,
     dictations: 3,
+    lookups: 0,
     inputTokens: 1390 * 4 + 2,
     audioTokens: 25 * 4,
     cachedTokens: 1024,
@@ -389,6 +477,26 @@ test("用量汇总：几次听写、几次验证 key、token 分项、多少钱�
 
   assert.equal(history.usage().calls, 6);
   close(history.usage().costUsd, 0.504);
+  history.close();
+});
+
+test("划词的账单独一类：用量里另报几次划词，听写次数和等待时间不算它；钱、token 照样加进去", () => {
+  const history = openHistory(join(dir, "history.db"));
+  history.addCall(call({ audioId: "a", latencyMs: 1500 }));
+  history.addCall(
+    call({ purpose: "lookup", audioId: "l1", provider: "deepseek", model: "deepseek-flash", latencyMs: 800 }),
+  );
+  history.addCall(
+    call({ purpose: "lookup", audioId: "l2", provider: "deepseek", model: "deepseek-flash", latencyMs: 900 }),
+  );
+  const { dictations, lookups, calls, latenciesMs, costUsd, models } = history.usage();
+  assert.deepEqual(
+    { dictations, lookups, calls, latenciesMs },
+    { dictations: 1, lookups: 2, calls: 3, latenciesMs: [1500] },
+  );
+  close(costUsd, 0.003);
+  const deepseek = models.find(({ provider }) => provider === "deepseek");
+  assert.deepEqual([deepseek.dictations, deepseek.lookups, deepseek.latenciesMs], [0, 2, []]);
   history.close();
 });
 
@@ -459,6 +567,7 @@ test("还没记过账时用量全是 0，等待时间是空的", () => {
     calls: 0,
     checks: 0,
     dictations: 0,
+    lookups: 0,
     inputTokens: 0,
     audioTokens: 0,
     cachedTokens: 0,
@@ -495,7 +604,7 @@ test("提示词缓存的钱（建缓存、存着）记成单独的一类，汇�
   history.close();
 });
 
-test("账的用途只能是听写、验证 key 或者提示词缓存", () => {
+test("账的用途只能是听写、划词、验证 key 或者提示词缓存", () => {
   const history = openHistory(join(dir, "history.db"));
   assert.throws(() => history.addCall(call({ purpose: "other" })), /CHECK|constraint/i);
   history.close();

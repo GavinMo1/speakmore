@@ -1,4 +1,5 @@
 import { parseArgs } from "node:util";
+import { SPOKEN_ACTIONS } from "../hotkeys/actions.mjs";
 import { LocalizedError, msg, problemOf } from "../i18n/index.mjs";
 import { resolveSettings } from "../storage/settings.mjs";
 import { renderStatus } from "./render/status.mjs";
@@ -47,14 +48,17 @@ export const say = (io, message) => io.out(io.t.text(message));
 /** 后台应用启动途中要说的话（msg），按这一次的语言写出来 */
 export const progressOf = (io) => (message) => say(io, message);
 
-/** 今天和累计的统计。一次都没用过（库还不存在）时两项都是 null */
+/** 今天和累计的统计，只数说话的功能（划词翻译不算听写）。一次都没用过（库还不存在）时两项都是 null */
 export function readStats(io) {
   const history = io.openHistory(io.paths.historyDb, { readOnly: true });
   if (history === null) return { today: null, total: null };
   try {
     const midnight = io.now();
     midnight.setHours(0, 0, 0, 0);
-    return { today: history.stats({ since: midnight.toISOString() }), total: history.stats() };
+    return {
+      today: history.stats({ since: midnight.toISOString(), kinds: SPOKEN_ACTIONS }),
+      total: history.stats({ kinds: SPOKEN_ACTIONS }),
+    };
   } finally {
     history.close();
   }

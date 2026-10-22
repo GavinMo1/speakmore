@@ -64,7 +64,7 @@ export function renderUsage(report, { color, t }) {
       it.local ? t("cli.usage.localModel", { name: it.name }) : `${it.name} ${it.model}`,
       it.local ? t("cli.usage.free") : costOf(it, t),
       it.local ? "—" : formatTokens(it.tokens),
-      t("cli.usage.times", { count: it.dictations }),
+      t("cli.usage.times", { count: it.dictations + it.lookups }),
       it.latency ? t("cli.usage.usually", { median: formatSeconds(it.latency.medianMs, t) }) : "",
     ]),
     ["left", "right", "right", "right", "left"],
@@ -79,6 +79,7 @@ export function renderUsage(report, { color, t }) {
       thinking: formatTokens(total.thinkingTokens),
     }),
   ];
+  if (total.lookups > 0) notes.push(t("cli.usage.lookupsNote", { count: total.lookups }));
   if (total.checks > 0) notes.push(t("cli.usage.checksNote", { count: total.checks }));
   if (total.cacheCostUsd > 0) notes.push(t("cli.usage.cacheNote", { cost: formatUsd(total.cacheCostUsd) }));
   const unpriced = report.models.filter(({ unpricedCalls }) => unpricedCalls > 0);

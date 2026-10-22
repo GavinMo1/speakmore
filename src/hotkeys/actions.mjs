@@ -56,6 +56,9 @@ export const ACTIONS = Object.freeze([
   }),
 ]);
 
+/** 说话的功能（录音会话的动作：语音输入、语音翻译）：首页、命令行的口述统计只数它们，划词翻译不算 */
+export const SPOKEN_ACTIONS = Object.freeze(ACTIONS.filter(({ handler }) => handler === "session").map(({ id }) => id));
+
 /** 一个动作最多几个组合（D4，同 Typeless） */
 export const MAX_CHORDS = 4;
 
