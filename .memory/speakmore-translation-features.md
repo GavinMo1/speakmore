@@ -1,6 +1,6 @@
 ---
 name: speakmore-translation-features
-description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格）；分支 translate-features，第一段（叫法、砍字、设置分栏）10-22 做完，第二段语音翻译还没开工
+description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格）；分支 translate-features，第一段 10-22 做完；第二段语音翻译主体做完、提交了 7 个，还差真按键验收、Windows、命令行历史
 metadata:
   node_type: memory
   type: project
@@ -84,6 +84,24 @@ metadata:
   - `1713673`：砍说明小字。单子他照我推荐的定了。
     - 引导第一步选识别方式时三个选项下面那行留着。
     - 推荐组合"Gemini 直出"改叫 Gemini。
+- 第二段（语音翻译）10-22 主体做完，他中途让我停下压缩对话。提交：
+  - `4d40d9e` 内核按任务切开：`src/server/tasks/<任务>/` 管让模型做什么（提示词、成品怎么收），识别方式管交给谁；
+    方式声明成品出在哪一步（native / polish / transcribe），任务声明能在哪几步做，`supportsTask` 按这个判断，不按名字。
+  - `8e9ae84` Gemini 提示词缓存按提示词各存各的（翻译提示词不顶掉语音输入的）。
+  - `d03e629` 翻译任务、`src/languages.mjs`（16 种）、动作 translate（默认右⌥+空格）、Windows 只拦左 Alt+空格（V27 待实测）。
+  - `90718a4` 提示词调了一轮（`scripts/dev/eval-translate.mjs`，数字在 docs/implementation-notes.md）。
+  - `6da855f` 历史库版本 3（kind、source_text、output_language，退回命令在 history.mjs 文件头）、交付、设置项 `translate.to`。
+  - `917341b` 悬浮条：每个说话的功能一个模块（`src/renderer/bar/features/`），语言胶囊悬停展开（鼠标移动 forward），
+    升级不断录音（set_mode_config 以最后一条为准），离线按键就拦。
+  - `bb8e685` 设置"语音翻译"栏（translate-pane.mjs）、首页两组键、历史标签加原文和按功能筛。
+- 他中途定的：目标语言是提示词最上面的一行格式化输入，每次现拼，改了下一次就生效；**语音翻译也用词典**（先识别再整理，
+  他一度说不用、马上改口了），只有划词翻译不用——任务自己声明 `vocabulary`。
+- 验过的：单测 1416 全过；Mac 端到端四条（直出译英、升级、混合译日 0.9 秒、离线被服务端挡下）；开发窗口里三处页面画出来了。
+- **第二段还差（压缩后接着做）**：
+  1. 开发窗口真按键：右⌥+空格、悬停胶囊换语言、"翻译中"、历史行、设置栏，截图给他看；胶囊悬停（forward）在 Mac 上没实测。
+  2. Windows：win-sync 后跑端到端 + 开发窗口，请他按右 Alt+空格，看窗口菜单弹不弹（V27），按结果改 validate.mjs 注释和报告。
+  3. 命令行 `speakmore history` 还没画翻译的标签和原文（src/cli/render/history.mjs）。
+  4. 他看了以后按反馈再调提示词。
 - 留到最后改 README 时一起改：
   - 中英 README 第 449 行的"设置 → 通用 → 本机转写模型内存"，现在是"设置 → 本机模型 → 内存"。
   - 新叫法：直出、混合、离线，转文字、整理。
