@@ -266,7 +266,7 @@ src/usage/report.mjs                    今天、本月、累计、按型号分�
 - 录键也在小帮手里：只在主进程说"录"之后、到说"停"或 30 秒到点为止报按住了哪些键码，不报字符；按键吞掉，不进前台应用。什么时候定稿、定成什么在 `src/hotkeys/record.mjs`：按住的键数第一次变少时，定成此前按住最多的那一组。
 - 0.13 以前存的是一个键的 id（`right_option` 之类），只在入口认：第一次启动时换算设置文件，`SPEAKMORE_HOTKEY`、`config set hotkey` 照样能用。换算和对照表在 `src/storage/legacy.mjs`、`src/hotkeys/legacy.mjs`。退回旧版时它读不到新设置，用默认键起来。
 
-还没做的：设置文件开头带 BOM 时读不出来（Windows PowerShell 5.1 的 `Set-Content -Encoding utf8`、老版记事本存出来的都带），App 起不来，命令行报"设置文件读不出来"。0.13.1 也是这样，读之前去掉 BOM 就行（2026-10-21 发 0.14.0 后在 Windows 上验收时碰到）。
+设置文件开头带 BOM（Windows PowerShell 5.1 的 `Set-Content -Encoding utf8`、老版记事本存出来的都带）时，0.14 及以前读不出来、App 起不来（2026-10-21 在 Windows 上验收时碰到）；0.15 起读之前先去掉。
 
 还没做的：悬浮条固定在主屏幕底部（原版每 100 毫秒看一次鼠标在哪块屏幕上，跟着换）。
 

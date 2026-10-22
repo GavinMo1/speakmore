@@ -123,7 +123,8 @@ const LEGACY_HOTKEY = { from: "hotkey", to: "hotkey.dictate" };
 export function migrateLegacySettings(file) {
   let settings;
   try {
-    settings = JSON.parse(readFileSync(file, "utf8"));
+    // 开头的 BOM 去掉再读，同 settings.mjs 的 readFile
+    settings = JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
   } catch {
     return null;
   }

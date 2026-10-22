@@ -265,7 +265,8 @@ function readFile(file) {
   if (!existsSync(file)) return {};
   let stored;
   try {
-    stored = JSON.parse(readFileSync(file, "utf8"));
+    // 开头的 BOM 去掉再读：Windows PowerShell 5.1 的 Set-Content -Encoding utf8、老版记事本存出来的都带，JSON.parse 不认
+    stored = JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
   } catch (error) {
     throw new LocalizedError(msg("settings.unreadable", { file, reason: error.message }), { cause: error });
   }
