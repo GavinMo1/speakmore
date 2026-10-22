@@ -41,6 +41,19 @@ function write(stream, level, event, fields) {
   }
 }
 
+/**
+ * 只往这个文件里记一条，不走标准输出：命令行的标准输出是给人看的，又要留一条给排查的人（比如升级后命令行先跑、
+ * 换算了旧设置）。写不进去时在标准错误里说一句，不让命令失败
+ */
+export function logToFile(file, level, event, fields = {}) {
+  try {
+    rotateIfLarge(file);
+    appendFileSync(file, `${JSON.stringify({ t: new Date().toISOString(), level, event, ...fields })}\n`);
+  } catch (error) {
+    log.warn("log_file_failed", { file, error: String(error) });
+  }
+}
+
 export const log = {
   info: (event, fields = {}) => write(process.stdout, "info", event, fields),
   warn: (event, fields = {}) => write(process.stderr, "warn", event, fields),

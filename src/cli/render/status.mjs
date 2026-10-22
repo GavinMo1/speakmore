@@ -82,12 +82,13 @@ function localModelLine(localModel, t) {
 }
 
 /**
- * 听写的热键叫什么：后台报的 hotkey.dictate。0.13 以前的后台只报旧 id（hotkey），在这里换成组合；
+ * 听写的热键叫什么：后台实际装上的（hotkeysInEffect.dictate；设置里写的装不上时它退回了默认键），没报这一项的后台
+ * 用设置里的 hotkey.dictate。0.13 以前的后台只报旧 id（hotkey），在这里换成组合；
  * 都认不出（比这个命令新的版本）时用后台报的说法 hotkeyLabel
  */
 function hotkeyTitle(status, t) {
   try {
-    const value = SETTINGS["hotkey.dictate"].parse(String(status["hotkey.dictate"]));
+    const value = SETTINGS["hotkey.dictate"].parse(String(status.hotkeysInEffect?.dictate ?? status["hotkey.dictate"]));
     return t.text(chordsName(chordsOf(value)));
   } catch {
     const legacy = legacyChord(status.hotkey);

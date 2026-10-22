@@ -120,6 +120,12 @@ test("0.3 以前的写法照样认：设置文件里只写了 Gemini 的模型�
   );
 });
 
+test("热键写坏了也能用 config set 改回来：写入前的检查不读正要被换掉的那个旧值", () => {
+  writeFileSync(file, JSON.stringify({ "hotkey.dictate": ["AltRigth"], theme: "ink" }));
+  assert.equal(saveSetting(file, "hotkey.dictate", "ControlRight").value, OTHER_HOTKEY);
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { "hotkey.dictate": ["ControlRight"], theme: "ink" });
+});
+
 test("overridingEnv：这一项现在被哪个环境变量盖着；没有就是 null", () => {
   assert.equal(overridingEnv("model", {}), null);
   assert.equal(overridingEnv("model", { GEMINI_MODEL: "x" }), "GEMINI_MODEL");

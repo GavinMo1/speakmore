@@ -281,7 +281,11 @@ export function overridingEnv(name, env) {
  *   来自改名前的环境变量时，env 写着是哪一个
  */
 export function resolveSettings({ file, env }) {
-  const stored = readFile(file);
+  return resolveFrom(readFile(file), { file, env });
+}
+
+/** 按读出来的设置文件内容（stored）算，file 只用在报错里 */
+function resolveFrom(stored, { file, env }) {
   const resolved = {};
   for (const [name, setting] of Object.entries(SETTINGS)) {
     const variable = overridingEnv(name, env);
@@ -324,8 +328,10 @@ function checkValue(name, value, settings) {
 export function saveSetting(file, name, value) {
   const current = settingName(name);
   const parsed = parseValue(current, value, current);
-  const warnings = SETTINGS[current].check ? checkValue(current, parsed, resolveSettings({ file, env: {} })) : [];
-  writeFile(file, { ...readFile(file), [current]: SETTINGS[current].store?.(parsed) ?? parsed });
+  // 和别的项比的那份设置是换上新值以后的：文件里这一项原来写坏了，正是要用这一下改回来
+  const next = { ...readFile(file), [current]: SETTINGS[current].store?.(parsed) ?? parsed };
+  const warnings = SETTINGS[current].check ? checkValue(current, parsed, resolveFrom(next, { file, env: {} })) : [];
+  writeFile(file, next);
   return { value: parsed, warnings };
 }
 

@@ -105,6 +105,17 @@ test("Mac 的设置搬到 Windows 上：fn 写法没错、绑不了，听写退�
   assert.deepEqual(texts(partly.problems, zhWin), ["「语音输入」的 fn 用不了：这个系统上没有地球仪（fn）键"]);
 });
 
+test('默认组合也装不上：不说"先用默认的"，只说为什么，同一条不说两遍', () => {
+  // 现在的两个动作碰不到（写法上 esc 不能和别的键组合），以后加动作时默认组合可能撞上用户自己的：绕过写法检查造一个
+  const settings = settingsOn("darwin");
+  settings["hotkey.dictate"] = { value: '["AltRight+Escape"]', source: "file" };
+  const resolved = resolveHotkeys(settings, "darwin");
+  assert.deepEqual(resolved.chords, { dictate: [["AltRight", "Escape"]], cancel: [] });
+  const said = texts(resolved.problems, zhMac);
+  assert.equal(said.length, 1, said.join(" | "));
+  assert.match(said[0], /^「取消」的 esc 用不了/);
+});
+
 test("手改文件写了系统保留的、取消写成了修饰键、清空了不能清空的：那个不装，必须有键的退回默认", () => {
   const reserved = resolveHotkeys(settingsOn("darwin", { "hotkey.dictate": "MetaRight+KeyC" }), "darwin");
   assert.deepEqual(reserved.chords.dictate, [["AltRight"]]);

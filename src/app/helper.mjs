@@ -98,9 +98,11 @@ export function startHelper(command, { args = [], onEvent, log }) {
   });
   child.on("exit", (code, signal) => gone(new Error("原生小帮手退出了"), code, signal));
 
-  /** 写一行命令。小帮手不在了就什么也不做：那时热键本身也不灵，exit 已经往上报过了 */
+  /** 说过停（stdin 已关）：之后再来的命令不写。退出时窗口关了还会收尾一次录键，往关掉的流里写会抛错 */
+  let stopping = false;
+  /** 写一行命令。小帮手不在了、正在退就什么也不做：那时热键本身也不灵，exit 已经往上报过了 */
   const send = (command) => {
-    if (!exited) child.stdin.write(`${JSON.stringify(command)}\n`);
+    if (!exited && !stopping) child.stdin.write(`${JSON.stringify(command)}\n`);
   };
 
   return {
@@ -116,7 +118,7 @@ export function startHelper(command, { args = [], onEvent, log }) {
      * @returns {Promise<{ ok: boolean, reason: string | null }>} ok 为 false 时文字留在剪贴板里
      */
     paste(text) {
-      if (exited) return Promise.reject(new Error("原生小帮手没有在运行"));
+      if (exited || stopping) return Promise.reject(new Error("原生小帮手没有在运行"));
       const id = nextId++;
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -153,7 +155,7 @@ export function startHelper(command, { args = [], onEvent, log }) {
      * @returns {Promise<{ conflict: boolean, source?: string, timedOut?: true }>}
      */
     probe(chord, { timeoutMs = QUERY_TIMEOUT_MS } = {}) {
-      if (exited) return Promise.resolve({ conflict: false, timedOut: true });
+      if (exited || stopping) return Promise.resolve({ conflict: false, timedOut: true });
       const id = nextProbe++;
       return new Promise((resolve) => {
         const timer = setTimeout(() => answer(null), timeoutMs);
@@ -176,7 +178,7 @@ export function startHelper(command, { args = [], onEvent, log }) {
      * @returns {Promise<{ fnUsage?: number }>}
      */
     info({ timeoutMs = QUERY_TIMEOUT_MS } = {}) {
-      if (exited) return Promise.resolve({});
+      if (exited || stopping) return Promise.resolve({});
       return new Promise((resolve) => {
         const timer = setTimeout(() => {
           const index = infos.indexOf(answer);
@@ -193,6 +195,7 @@ export function startHelper(command, { args = [], onEvent, log }) {
     },
     /** 关掉标准输入，小帮手会自己退出 */
     stop() {
+      stopping = true;
       child.stdin.end();
     },
   };

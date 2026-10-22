@@ -75,6 +75,8 @@ test("Mac 上和系统、各应用的快捷键撞的，一律不让绑", () => {
     "ControlLeft+KeyA":
       "Control with a typing key is a system or text-editing shortcut (switching input sources, moving the cursor…)",
     "Fn+KeyE": "Globe with a letter, digit or symbol is a system shortcut",
+    "Fn+F5": "fn with an F key is just that F key; bind the F key on its own",
+    "Fn+F13": "fn with an F key is just that F key; bind the F key on its own",
     "ControlRight+F2": "Control with F1–F8 is a system keyboard-navigation shortcut",
     "ControlRight+F8": "Control with F1–F8 is a system keyboard-navigation shortcut",
     "MetaRight+F5": "Command with F1–F12 is a system shortcut (Command-F5 turns VoiceOver on and off)",

@@ -546,6 +546,11 @@ async function main() {
     localModel: service?.localModel ?? null,
     helper: helperState,
     hotkeys: [...hotkeys.problems, ...helperHotkeyProblems],
+    // 小帮手把听写的组合全退回了（回执里每个都在）：按哪个都没反应
+    dictateUsable:
+      hotkeys.chords.dictate.length >
+      new Set(helperHotkeyProblems.filter((problem) => problem.action === "dictate").map((p) => chordString(p.chord)))
+        .size,
     permissions: {
       microphone: systemPreferences.getMediaAccessStatus("microphone"),
       listen: helperPermissions?.listen ?? null,
@@ -733,6 +738,8 @@ async function main() {
    *   之后重新检查权限靠的是重启小帮手，那时再弹的话每查一次弹一次
    */
   function launchHelper({ prompt }) {
+    // 换小帮手（重查权限）时正在录的那次跟着结束：旧的那个的回执、退出都按代数丢掉了，不说的话页面一直停在"请按键"
+    if (helperGeneration > 0) recording.helperGone();
     const generation = ++helperGeneration;
     helperPermissions = null;
     helperState = "starting";
@@ -855,9 +862,15 @@ async function main() {
     // 首次引导正在测快捷键、人也正看着它：听写的按下松开只送到引导窗口。
     // 切到别的应用了就照常听写，不然热键在哪都按不出来，还没有任何提示；
     // 悬浮条在屏幕上（切出去开了一段听写又切回来）时也给条，不然这一段停不下来
-    if (event.event === "binding" && hotkeyToOnboarding && onboardingWindow?.isFocused() && !bar.isVisible()) {
+    // 被打断（按着时碰了别的键）以后小帮手不再报松开：也当松开送过去，不然大键帽一直亮着
+    if (
+      (event.event === "binding" || event.event === "interrupted") &&
+      hotkeyToOnboarding &&
+      onboardingWindow?.isFocused() &&
+      !bar.isVisible()
+    ) {
       log.info("key_event", { ...fields, to: "onboarding" });
-      onboardingWindow.webContents.send("onboarding:hotkey", { down: event.down });
+      onboardingWindow.webContents.send("onboarding:hotkey", { down: event.event === "binding" && event.down });
       return;
     }
     log.info("key_event", fields);
@@ -1272,27 +1285,41 @@ async function main() {
     setupChanged();
   });
   // 录键（docs/hotkey-research.md 5.6）：页面点了某个组合（换掉它）或者"添加"，结果经 hotkey:recording 报回那个页面
-  handle("hotkey:record", (event, action, index) => {
+  handle("hotkey:record", (event, action, index, token) => {
+    editableHotkey(action);
     blockKeysWhileRecording(event.sender);
-    recording.start(event.sender, action, Number.isInteger(index) ? index : null);
+    recording.start(
+      event.sender,
+      action,
+      Number.isInteger(index) && index >= 0 ? index : null,
+      Number.isInteger(token) ? token : undefined,
+    );
   });
   handle("hotkey:record-stop", (event, reason) => recording.stop(event.sender, reason));
   handle("setup:remove-hotkey", (_event, actionId, index) => {
-    const action = actionOf(actionId);
-    if (action === null) throw new TypeError(`不认识的动作：${actionId}`);
+    const action = editableHotkey(actionId);
     const chords = chordsOf(hotkeySettings[settingNameOf(action)]).filter((_, at) => at !== index);
     return setHotkey(action.id, chordsValue(chords));
   });
   handle("setup:reset-hotkey", (_event, actionId) => {
-    const action = actionOf(actionId);
-    if (action === null) throw new TypeError(`不认识的动作：${actionId}`);
+    const action = editableHotkey(actionId);
     const name = settingNameOf(action);
     unsetSetting(PATHS.settingsFile, name);
     log.info("hotkey_reset", { action: action.id });
     reloadHotkeys();
-    const variable = overridingEnv(name, process.env);
-    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
+    return {};
   });
+  /**
+   * 页面要改的这个动作：认得、没被环境变量盖着。盖着时页面上看到的是环境变量里的组合，在它上面改再写进设置文件，
+   * 会把文件里原来存的冲掉、把临时的值存成长期的；所以只让看，删掉环境变量才能改
+   */
+  function editableHotkey(actionId) {
+    const action = actionOf(actionId);
+    if (action === null) throw new TypeError(`不认识的动作：${actionId}`);
+    const variable = overridingEnv(settingNameOf(action), process.env);
+    if (variable !== null) throw new LocalizedError(msg("hotkeyRecord.envOverride", { variable }));
+    return action;
+  }
   handle("setup:set-theme", (_event, wanted) => {
     saveSetting(PATHS.settingsFile, "theme", wanted);
     reloadTheme();
@@ -1642,6 +1669,10 @@ async function main() {
       starting: !startupChecked,
       // 设置里热键那几项（hotkey.<动作>），命令行拿它和设置文件比，看改了还没生效的
       ...hotkeySettings,
+      // 实际装上的（写法同设置项）：设置里写的装不上时退回了默认键，告诉人按哪个要按这一份
+      hotkeysInEffect: Object.fromEntries(
+        ACTIONS.map((action) => [action.id, chordsValue(hotkeys.chords[action.id] ?? [])]),
+      ),
       // 0.13 以前的两项留一个版本（D13）：听写装着的是一个旧键时给旧 id、新组合给 null；hotkeyLabel 是它叫什么，
       // 0.5 及以前的命令行靠它说热键叫什么。0.15 删
       hotkey: legacyIdOf(hotkeys.chords.dictate, process.platform),

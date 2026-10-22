@@ -23,6 +23,9 @@ const only = (codes, ...wanted) => codes.length === wanted.length && wanted.ever
 /** 两个系统各自不让绑的：一条一条按顺序查，第一条对上的就是原因 */
 const SYSTEM_RULES = {
   darwin: [
+    // fn 按着按 F 键就是那个 F 键（MacBook 第一排要按着 fn 才是 F 键）：小帮手匹配时把 fn 去掉，绑成 fn+F5 永远对不上。
+    // 录键时 record.mjs 已经折掉了，这条拦的是命令行、环境变量、手改文件
+    [(codes) => codes.includes("Fn") && codes.some((code) => /^F\d+$/.test(code)), "binding.macFnFKey"],
     // ⌘ 加打字的键：拷贝、粘贴、保存、切标签页（⌘1）、切窗口（⌘`）……几乎全被占了
     [(codes) => has(codes, META) && typing(codes), "binding.macCommandTyping"],
     // ⌃ 加打字的键：⌃空格切输入法，⌃A ⌃E ⌃K 是文本框里挪光标、删行，终端里 ⌃C 是中断

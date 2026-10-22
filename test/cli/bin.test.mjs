@@ -114,6 +114,24 @@ test("0.13 以前的设置文件（热键存的是旧 id）：直接跑命令，
     theme: "indigo",
     "hotkey.dictate": ["MetaRight"],
   });
+  // 换算记进日志：升级后命令行往往比 App 先跑，App 那边就看不到旧设置了
+  const logFile = resolvePaths({ SPEAKMORE_HOME: dir }).logFile;
+  const logged = readFileSync(logFile, "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  assert.deepEqual(
+    logged.map(({ event, from, to, value, stored }) => ({ event, from, to, value, stored })),
+    [
+      {
+        event: "settings_migrated",
+        from: "hotkey",
+        to: "hotkey.dictate",
+        value: "right_command",
+        stored: ["MetaRight"],
+      },
+    ],
+  );
   // 只问帮助、版本时不动文件
   writeFileSync(settingsFile, '{"hotkey":"fn"}\n');
   spawnSync(process.execPath, [BIN, "--version"], { env: { ...base, SPEAKMORE_HOME: dir } });

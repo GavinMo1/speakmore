@@ -67,11 +67,21 @@ export function resolveHotkeys(settings, platform) {
       platform,
     );
     kept = second.kept;
+    // 默认组合也装不上的（比如取消的 esc 被用户自己的组合占了）不说"先用默认的"：它一个键都没有，原因在第二轮的问题里。
+    // 两轮查出的同一条只留一条
+    const seen = new Set();
     problems = [
       ...problems,
-      ...fallen.map((action) => ({ action: action.id, fallback: second.kept[action.id] })),
+      ...fallen
+        .filter((action) => second.kept[action.id].length > 0)
+        .map((action) => ({ action: action.id, fallback: second.kept[action.id] })),
       ...second.problems,
-    ];
+    ].filter((problem) => {
+      const key = JSON.stringify(problem);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     warnings = second.warnings;
   }
   return { chords: Object.fromEntries(ACTIONS.map((action) => [action.id, kept[action.id]])), problems, warnings };

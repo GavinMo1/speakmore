@@ -45,6 +45,14 @@ test("绑了几个组合：任一个都行，并列着说", () => {
   assert.match(text, /按一下地球仪（fn）键、右 Command 键开始说话/);
 });
 
+test("设置里写的装不上、退回了默认键：说的是实际装上的那个（hotkeysInEffect），不是设置里写的", () => {
+  const status = { ...ready, "hotkey.dictate": '["Fn"]', hotkeysInEffect: { dictate: '["AltRight"]' } };
+  const text = renderStatus({ status, version: "0.1.0", settings, stats: noStats }, plain);
+  assert.match(text, new RegExp(`按一下${hotkeyZh}开始说话`));
+  assert.match(text, new RegExp(`热键\\s+${hotkeyZh}`));
+  assert.doesNotMatch(text, /地球仪/);
+});
+
 test("能用、但有个热键组合装不上：照样说怎么用，再说还差什么", () => {
   const status = {
     ...ready,

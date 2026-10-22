@@ -345,7 +345,7 @@ Comparison with every Typeless plan (heavy use, 100 dictations a day):
 ## 🧑‍💻 For developers
 
 - **CLI and app parity**: switch modes and models, manage and check keys, download models, query history and spending.
-- **JSON output**: `status`, `history` and `usage` support `--json`. In `status --json` the hotkeys are `hotkey.dictate` and `hotkey.cancel` (under both `status` and `settings`); the old fields `status.hotkey`, `status.hotkeyLabel` and `settings.hotkey` are deprecated and will be removed in 0.15.
+- **JSON output**: `status`, `history` and `usage` support `--json`. In `status --json` the hotkeys are `hotkey.dictate` and `hotkey.cancel` (under both `status` and `settings`, as set), with the combinations in effect under `status.hotkeysInEffect`; the old fields `status.hotkey`, `status.hotkeyLabel` and `settings.hotkey` are deprecated and will be removed in 0.15.
 - **Plug-in architecture**: each vendor is a strategy behind a common interface.
 - **Unified I/O**: audio is normalized to 16 kHz mono; every transcriber returns `{ text }`.
 - **Cross-platform development**: [`scripts/dev/win-*.sh`](scripts/dev) synchronize the working tree to a Windows machine over SSH, run tests remotely, restart the app from source with a debugging port, and capture the desktop.

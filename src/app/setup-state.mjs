@@ -20,11 +20,21 @@ const OPEN_SETTINGS = msg("setup.openSettings");
  *   而用户正在下它时带着 received、total
  * @param {import("../hotkeys/bindings.mjs").HotkeyProblem[]} [setup.hotkeys] 装不上的热键组合、退回默认的动作
  *   （下发前查出来的、小帮手回执里的）。别的键照样能按，所以只算缺东西、不挡着用
+ * @param {boolean} [setup.dictateUsable] 听写还有没有装上的组合。都被退回了（没有辅助功能装不了带普通键的组合、
+ *   单个 F 键被别的程序占了）就按不出来，不算能用
  * @returns {{ ready: boolean, missing: object[], blocker: object | null, degraded: object | null }}
  *   ready：现在按热键能不能听写；missing：确定缺的东西；blocker：按了热键却不能用时提示的那句话；
  *   degraded：能用但打了折扣时的说明
  */
-export function summarizeSetup({ key, permissions, helper, providerName = "Gemini", localModel = null, hotkeys = [] }) {
+export function summarizeSetup({
+  key,
+  permissions,
+  helper,
+  providerName = "Gemini",
+  localModel = null,
+  hotkeys = [],
+  dictateUsable = true,
+}) {
   const missing = [];
   let blocker = null;
 
@@ -76,7 +86,7 @@ export function summarizeSetup({ key, permissions, helper, providerName = "Gemin
   missing.push(...hotkeys.map(describeHotkeyProblem));
 
   return {
-    ready: blocker === null && permissions.listen === true,
+    ready: blocker === null && permissions.listen === true && dictateUsable,
     missing,
     blocker,
     degraded: permissions.trusted === false ? msg("setup.degraded") : null,

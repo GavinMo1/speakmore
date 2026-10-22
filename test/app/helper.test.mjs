@@ -66,6 +66,16 @@ test("没有辅助功能权限时，paste 返回 ok 为 false 和原因", async 
   helper.stop();
 });
 
+test("说了停以后再发命令（退出时窗口关了、录键收尾）：不往关掉的标准输入里写，不抛错", async () => {
+  const { helper, events } = start();
+  await once(events, "ready");
+  helper.stop();
+  helper.record(false);
+  helper.bind([]);
+  const [exit] = await once(events, "exit");
+  assert.equal(exit.code, 0);
+});
+
 test("两次粘贴各回各的", async () => {
   const { helper } = start();
   const results = await Promise.all([helper.paste("甲"), helper.paste("没权限")]);

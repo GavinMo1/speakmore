@@ -151,6 +151,16 @@ test("热键装不上的、退回默认的：列进要补的，照样能用（�
   assert.deepEqual(summarize({ ...allGood, hotkeys: [] }).missing, []);
 });
 
+test("听写的组合一个都没装上（小帮手全退回了）：不算能用，原因列在要补的里", () => {
+  const hotkeys = [
+    { action: "dictate", chord: ["AltRight", "Space"], reason: msg("binding.notAvailable", { key: "x" }) },
+  ];
+  const summary = summarize({ ...allGood, hotkeys, dictateUsable: false });
+  assert.equal(summary.ready, false);
+  assert.equal(summary.missing.length, 1);
+  assert.equal(summarize({ ...allGood, hotkeys, dictateUsable: true }).ready, true);
+});
+
 test("同一个结论换成英文说：缺的东西、按热键时的那句、打了折扣的说明", () => {
   const setup = {
     ...withKey({ state: "missing" }),
