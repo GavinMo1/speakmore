@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderStatus } from "../../../src/cli/render/status.mjs";
-import { hotkeyZh, noStats, plain, ready, settings } from "./fixtures.mjs";
+import { hotkeyZh, namesZh, noStats, plain, ready, settings } from "./fixtures.mjs";
 
 test("没有在运行时只说一句怎么启动", () => {
   const text = renderStatus({ status: null, version: "0.1.0", settings, stats: noStats }, plain);
@@ -26,7 +26,7 @@ test("后台是 0.13 以前的版本（只报旧 id）：照样叫得出名字�
     { status: { ...old, hotkey: "right_command" }, version: "0.1.0", settings, stats: noStats },
     plain,
   );
-  assert.match(before, /热键\s+右 Command 键/);
+  assert.match(before, new RegExp(`热键\\s+${namesZh("MetaRight")}`));
   const newer = renderStatus(
     {
       status: { ...old, "hotkey.dictate": "MouseX", hotkey: null, hotkeyLabel: "鼠标侧键" },
@@ -42,7 +42,7 @@ test("后台是 0.13 以前的版本（只报旧 id）：照样叫得出名字�
 test("绑了几个组合：任一个都行，并列着说", () => {
   const status = { ...ready, "hotkey.dictate": '["Fn","MetaRight"]' };
   const text = renderStatus({ status, version: "0.1.0", settings, stats: noStats }, plain);
-  assert.match(text, /按一下地球仪（fn）键、右 Command 键开始说话/);
+  assert.match(text, new RegExp(`按一下${namesZh("Fn", "MetaRight").replace(/[()（）]/g, ".")}开始说话`));
 });
 
 test("设置里写的装不上、退回了默认键：说的是实际装上的那个（hotkeysInEffect），不是设置里写的", () => {

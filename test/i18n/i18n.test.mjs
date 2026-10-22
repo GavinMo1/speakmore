@@ -125,13 +125,16 @@ test("并列和数字按语言写；中文一律用顿号隔开（和原来的�
 });
 
 test("几句里任一句（alternatives）：翻的时候按“或”并列，能当参数，也能嵌在别的话里", () => {
+  // 键名按系统不同（Windows 上右⌘ 叫右 Win），这里按 Mac 的说
+  const zhMac = createTranslator("zh-CN", "darwin");
+  const enMac = createTranslator("en", "darwin");
   const keys = alternatives([msg("keys.Fn.keycap"), msg("keys.MetaRight.keycap")]);
-  assert.equal(zh.text(keys), "fn、右⌘");
-  assert.equal(en.text(keys), "fn or Right ⌘");
-  assert.equal(zh("tray.ready", { keycap: keys }), zh("tray.ready", { keycap: "fn、右⌘" }));
+  assert.equal(zhMac.text(keys), "fn、右⌘");
+  assert.equal(enMac.text(keys), "fn or Right ⌘");
+  assert.equal(zhMac("tray.ready", { keycap: keys }), zhMac("tray.ready", { keycap: "fn、右⌘" }));
   assert.equal(zh.text(alternatives([])), "");
   // 主进程交给页面、命令行的是普通对象，过一遍 JSON 还认得
-  assert.equal(en.text(JSON.parse(JSON.stringify(keys))), "fn or Right ⌘");
+  assert.equal(enMac.text(JSON.parse(JSON.stringify(keys))), "fn or Right ⌘");
 });
 
 test("t.parts 不拼起来：参数留在原位，调用方可以把它画成键帽", () => {

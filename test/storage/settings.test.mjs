@@ -31,6 +31,8 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 /** 听写的默认键两个系统都是右 Option / 右 Alt；另挑一个两个系统都能绑的 */
 const DEFAULT_HOTKEY = '["AltRight"]';
+/** 热键的设置项按这台机器的系统生成（SETTINGS），键名、能不能绑也按它：Windows 上没有 fn，⌘ 叫 Win 而且不让绑 */
+const WINDOWS = process.platform === "win32";
 const OTHER_HOTKEY = '["ControlRight"]';
 
 test("没有文件也没有环境变量时全用默认值", () => {
@@ -154,7 +156,7 @@ test("主题：写 id 或写名字都行，存下来的是 id；没有的那一�
 });
 
 test("带说明的设置项：热键给出键帽，主题给出主题的名字，按界面语言写；语言的名字用它自己的语言写", () => {
-  assert.equal(zh.text(SETTINGS["hotkey.dictate"].label('["Fn","MetaRight"]')), "fn、右⌘");
+  assert.equal(zh.text(SETTINGS["hotkey.dictate"].label('["Fn","MetaRight"]')), WINDOWS ? "fn、右 Win" : "fn、右⌘");
   assert.equal(zh.text(SETTINGS.theme.label("cinnabar")), "朱砂");
   assert.equal(en.text(SETTINGS.theme.label("cinnabar")), "Cinnabar");
   assert.equal(en.text(SETTINGS.language.label("zh-CN")), "简体中文");
@@ -165,8 +167,8 @@ test("改名前的名字（legacyName）：命令行 config set/unset hotkey 照
   assert.equal(settingName("hotkey"), "hotkey.dictate");
   assert.equal(settingName("theme"), "theme");
   assert.throws(() => settingName("volume"), said(/没有 "volume" 这项设置/));
-  assert.equal(saveSetting(file, "hotkey", "right_command").value, '["MetaRight"]');
-  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { "hotkey.dictate": ["MetaRight"] });
+  assert.equal(saveSetting(file, "hotkey", "right_control").value, '["ControlRight"]');
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { "hotkey.dictate": ["ControlRight"] });
   assert.equal(overridingEnv("hotkey", { SPEAKMORE_HOTKEY: "fn" }), "SPEAKMORE_HOTKEY");
   unsetSetting(file, "hotkey");
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), {});
@@ -198,13 +200,15 @@ test("热键的环境变量：每个动作一个；听写另认 0.13 以前的 S
 });
 
 test("写入前的检查（check）：不让存的照实说并且不写文件；只有提醒时照存，带回提醒；读文件、环境变量时不查", () => {
-  assert.throws(() => saveSetting(file, "hotkey.dictate", "MetaRight+KeyC"), said(/hotkey\.dictate.*⌘ 加打字的键/));
+  assert.throws(() => saveSetting(file, "hotkey.dictate", "ControlRight+KeyC"), said(/hotkey\.dictate.*加打字的键/));
   assert.equal(existsSync(file), false);
   saveSetting(file, "hotkey.cancel", "F13");
   // 和文件里另一个动作的撞了：要改的这个让位
   assert.throws(() => saveSetting(file, "hotkey.dictate", "F13"), said(/已经给了「取消」/));
-  const { value, warnings } = saveSetting(file, "hotkey.dictate", "Fn");
-  assert.equal(value, '["Fn"]');
+  // 只有提醒的：Mac 上单按 fn（地球仪键有系统功能），Windows 上右 Alt（AltGr 布局）
+  const warned = WINDOWS ? "AltRight" : "Fn";
+  const { value, warnings } = saveSetting(file, "hotkey.dictate", warned);
+  assert.equal(value, `["${warned}"]`);
   assert.equal(warnings.length, 1);
   assert.deepEqual(saveSetting(file, "theme", "ink").warnings, []);
   // 读的时候只查写法：系统保留的组合写在文件里也读得出来，由下发前那道兜住（bindings.mjs）
@@ -212,8 +216,8 @@ test("写入前的检查（check）：不让存的照实说并且不写文件；
   assert.equal(resolveSettings({ file, env: {} })["hotkey.dictate"].value, '["MetaRight+KeyC"]');
   // patchSettings 也查：先看改了之后走哪条路线的那些地方同样不能拼出存不下的设置
   const settings = resolveSettings({ file: join(dir, "none.json"), env: {} });
-  assert.throws(() => patchSettings(settings, { "hotkey.dictate": "MetaRight+KeyC" }), said(/⌘ 加打字的键/));
-  assert.equal(patchSettings(settings, { hotkey: "fn" })["hotkey.dictate"].value, '["Fn"]');
+  assert.throws(() => patchSettings(settings, { "hotkey.dictate": "ControlRight+KeyC" }), said(/加打字的键/));
+  assert.equal(patchSettings(settings, { hotkey: "right_control" })["hotkey.dictate"].value, '["ControlRight"]');
 });
 
 test("界面语言：默认跟随系统；写哪种都认（大小写、_ 不论），存下来是规整的 id；写了没有的说能填什么", () => {

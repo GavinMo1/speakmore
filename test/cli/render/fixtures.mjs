@@ -1,7 +1,7 @@
 // 几个画面的测试共用的：固定的时区和"现在"、一个就绪的状态、默认设置。
 // 画面按中文画（原来的断言都是中文的）；要看英文的另给 english。
 
-import { createTranslator } from "../../../src/i18n/index.mjs";
+import { createTranslator, msg } from "../../../src/i18n/index.mjs";
 
 export const zh = createTranslator("zh-CN");
 export const en = createTranslator("en");
@@ -9,6 +9,9 @@ export const en = createTranslator("en");
 /** 听写的默认热键（两个系统都是这个位置：Mac 叫右 Option，Windows 叫右 Alt），和它的中文名字 */
 export const hotkey = '["AltRight"]';
 export const hotkeyZh = process.platform === "win32" ? "右 Alt 键" : "右 Option 键";
+/** 几个键在这个系统上的中文键帽、名字（Windows 上右⌘ 叫右 Win），几个连起来用顿号 */
+export const keycapsZh = (...codes) => codes.map((code) => zh.text(msg(`keys.${code}.keycap`))).join("、");
+export const namesZh = (...codes) => codes.map((code) => zh.text(msg(`keys.${code}.name`))).join("、");
 
 export const timeZone = "Asia/Shanghai";
 // 上海时间 2026-10-13 15:00

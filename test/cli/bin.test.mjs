@@ -102,17 +102,18 @@ test("0.13 以前的设置文件（热键存的是旧 id）：直接跑命令，
   const dir = mkdtempSync(join(tmpdir(), "sm-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const settingsFile = resolvePaths({ SPEAKMORE_HOME: dir }).settingsFile;
-  writeFileSync(settingsFile, '{"hotkey":"right_command","theme":"indigo"}\n');
+  writeFileSync(settingsFile, '{"hotkey":"right_control","theme":"indigo"}\n');
   const { SPEAKMORE_HOTKEY: _old, SPEAKMORE_HOTKEY_DICTATE: _new, ...base } = process.env;
   const result = spawnSync(process.execPath, [BIN, "config"], {
     encoding: "utf8",
     env: { ...base, SPEAKMORE_HOME: dir, LANG: "zh_CN.UTF-8" },
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /hotkey\.dictate\s+\["MetaRight"\]\s+右⌘ · 存在设置文件里/);
+  // 键帽 Mac 上写右⌃，Windows 上写右 Ctrl
+  assert.match(result.stdout, /hotkey\.dictate\s+\["ControlRight"\]\s+右(⌃| Ctrl) · 存在设置文件里/);
   assert.deepEqual(JSON.parse(readFileSync(settingsFile, "utf8")), {
     theme: "indigo",
-    "hotkey.dictate": ["MetaRight"],
+    "hotkey.dictate": ["ControlRight"],
   });
   // 换算记进日志：升级后命令行往往比 App 先跑，App 那边就看不到旧设置了
   const logFile = resolvePaths({ SPEAKMORE_HOME: dir }).logFile;
@@ -127,8 +128,8 @@ test("0.13 以前的设置文件（热键存的是旧 id）：直接跑命令，
         event: "settings_migrated",
         from: "hotkey",
         to: "hotkey.dictate",
-        value: "right_command",
-        stored: ["MetaRight"],
+        value: "right_control",
+        stored: ["ControlRight"],
       },
     ],
   );

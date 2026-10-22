@@ -30,8 +30,13 @@ import { assertOwnerOnlyDir } from "../helpers/owner-only.mjs";
 /** 听写的默认键两个系统都是右 Option / 右 Alt；另挑一个两个系统都能绑的 */
 const DEFAULT_HOTKEY = '["AltRight"]';
 const OTHER_HOTKEY = "ControlRight";
-const zhHotkey = "右 Option 键";
-const enHotkey = "Right Option";
+// 默认的听写键：同一个位置，Mac 叫右 Option，Windows 叫右 Alt（键名跟着系统走）
+const WINDOWS = process.platform === "win32";
+const zhHotkey = WINDOWS ? "右 Alt 键" : "右 Option 键";
+const enHotkey = WINDOWS ? "Right Alt" : "Right Option";
+const zhKeycap = WINDOWS ? "右 Alt" : "右⌥";
+/** fn、⌘ 只有 Mac 有：写着它们的断言在 Windows 上不跑 */
+const macOnly = { skip: WINDOWS && "fn、⌘ 只有 Mac 有" };
 
 const READY = {
   pid: 4321,
@@ -1213,7 +1218,7 @@ test("key --forget：共用的那份和 0.7.0 及以前 App 另存的那份都�
 test("config：列出每一项和文件位置", async () => {
   const { speakmore, output } = harness();
   assert.equal(await speakmore("config"), 0);
-  assert.match(output.out, /hotkey\.dictate\s+\["AltRight"\]\s+右⌥ · 默认/);
+  assert.match(output.out, new RegExp(`hotkey\\.dictate\\s+\\["AltRight"\\]\\s+${zhKeycap} · 默认`));
   assert.match(output.out, /hotkey\.cancel\s+\["Escape"\]\s+esc · 默认/);
   assert.match(output.out, /「语音输入」的快捷键：两键以内的任意组合，写法见 README/);
   assert.ok(output.out.includes(paths.settingsFile), output.out);
@@ -1263,8 +1268,9 @@ test("config set：填错时说哪里不对，不动文件，以 2 退出", asyn
   assert.match(output.err, /hotkey\.dictate 写的是 "caps_lock"，不认识的键 "caps_lock"/);
   assert.equal(existsSync(paths.settingsFile), false);
   // 写法对、这个系统上不让绑的（check）：同样不存
-  assert.equal(await speakmore("config", "set", "hotkey.dictate", "MetaRight+KeyC"), 2);
-  assert.match(output.err, /右⌘ C：⌘ 加打字的键/);
+  assert.equal(await speakmore("config", "set", "hotkey.dictate", "ControlRight+KeyC"), 2);
+  // Mac 上写"右⌃ C"，Windows 上写"右 Ctrl+C"
+  assert.match(output.err, /右(⌃ | Ctrl\+)C：(⌃|Ctrl) 加打字的键/);
   assert.equal(existsSync(paths.settingsFile), false);
   assert.equal(await speakmore("config", "set", "hotkey"), 2);
   assert.equal(await speakmore("config", "dance"), 2);
@@ -1276,7 +1282,7 @@ test("config set：这一项正被环境变量盖着时提醒一句（改名前�
   assert.match(output.out, /环境变量 SPEAKMORE_HOTKEY 现在设着/);
 });
 
-test("热键：config set hotkey.<动作> 存成列表，后台当场换（reload-hotkeys），不重启", async () => {
+test("热键：config set hotkey.<动作> 存成列表，后台当场换（reload-hotkeys），不重启", macOnly, async () => {
   const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
   assert.equal(await speakmore("config", "set", "hotkey.dictate", '["Fn","AltRight+Space"]'), 0);
   assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), {
@@ -1302,9 +1308,9 @@ test("按动作目录逐个动作：config set hotkey.<动作> 都是当场换�
 
 test("热键：旧名字 hotkey 和旧 id 照样认（0.13 以前的写法），回话里写的是新名字和新写法", async () => {
   const { speakmore, output } = harness();
-  assert.equal(await speakmore("config", "set", "hotkey", "right_command"), 0);
-  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { "hotkey.dictate": ["MetaRight"] });
-  assert.match(output.out, /hotkey\.dictate 改成了 \["MetaRight"\]/);
+  assert.equal(await speakmore("config", "set", "hotkey", "right_control"), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { "hotkey.dictate": ["ControlRight"] });
+  assert.match(output.out, /hotkey\.dictate 改成了 \["ControlRight"\]/);
   assert.equal(await speakmore("config", "unset", "hotkey"), 0);
   assert.match(output.out, /hotkey\.dictate 回到了默认值 \["AltRight"\]/);
   assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), {});
@@ -1318,7 +1324,10 @@ test("热键当场换的时候：后台被环境变量盖着就说清楚；旧�
     }),
   });
   assert.equal(await overridden.speakmore("config", "set", "hotkey.dictate", "ControlRight"), 0);
-  assert.match(overridden.output.out, /正在运行的 SpeakMore 用的还是右⌥：启动它的环境里设着 SPEAKMORE_HOTKEY/);
+  assert.match(
+    overridden.output.out,
+    new RegExp(`正在运行的 SpeakMore 用的还是${zhKeycap}：启动它的环境里设着 SPEAKMORE_HOTKEY`),
+  );
 
   const old = harness({
     daemon: fakeDaemon({
