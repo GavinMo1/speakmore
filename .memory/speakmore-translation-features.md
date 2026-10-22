@@ -1,6 +1,6 @@
 ---
 name: speakmore-translation-features
-description: 语音翻译（说 A 语言出 B 语言）和划词翻译：10-22 定了壳的结构（功能是热键动作，引擎分两段）、名字（语音输入、语音翻译、划词翻译）、设置按功能分栏、划词只用热键、数据隐私下不提供；文案要讲人话；原型在画
+description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格），名字、默认键、引擎两段、设置七栏、卡片、历史都定了；还没开工
 metadata:
   node_type: memory
   type: project
@@ -50,9 +50,14 @@ metadata:
 - **划词的模型和语音的完全分开**：引擎页“划词”那一段只有厂商、型号两列，自己选一个，出厂 DeepSeek V4.1 Flash。不出现“同语音的整理模型”这种关联。
   - 他的原话：检查、密钥这些内核机制共用，只是适配器里放的提示词不同，“不能让用户有任何感觉”。
 
-**我提过、他还没表态的：**
-- 划词结果弹卡片，不贴字。卡片上放“复制”和“替换选中文字”。
-- 语音翻译照进历史，原文和译文都存；首页的口述统计不算划词；花费都记。
+**10-22 收尾定的：**
+- 划词卡片放选区下方，不出设置。
+- 悬浮条上临时换的语言只管这一次，下次回到设置里的默认。
+- 划词翻译进历史。
+- 老用户不专门提示：做出来以后改 README、官网，发宣传片。
+- 已定的：划词结果弹卡片不贴字；卡片上“复制”，选区可编辑时多“替换选中文字”；语音翻译进历史，原文译文都存；首页口述统计不算划词；花费都记。
+
+**原型定稿**：`.playwright-mcp/translate-proto/`，README 里有“定了什么”和“开发时要连带改的”，开工先读它。还没开工。
 
 **参照**：
 - Typeless 的翻译是第三个热键（Fn + 左 Shift，Windows 是右 Alt + 右 Shift），和听写共用悬浮条和后端，只多一个 `output_language`（`targets/typeless/docs/04-voice-pipeline.md:99`）。目标语言在悬浮条上悬停切换，2.0 起能预存几个。
@@ -60,6 +65,6 @@ metadata:
 
 **没验证**：原生方式那几个收音频的模型能不能纯文字进出。
 
-**原型**：放在 `.playwright-mcp/translate-proto/`（已 gitignore），做法照 [[plaza-tree-prototype]]：用真页面和造的数据，只在本机看（[[html-stays-local]]）。
+**原型的做法**照 [[plaza-tree-prototype]]：用真页面和造的数据，只在本机看（[[html-stays-local]]）。
 
 相关：[[typeless-clone-scope-dictation]] [[decisions-as-options]] [[speakmore-hotkey-any-key]]
