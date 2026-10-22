@@ -3,6 +3,7 @@ package main
 // 用到的 Win32 接口。只用标准库的 syscall 按名字取，不引第三方包。结构体照 WinUser.h 在 x64 上的布局。
 
 import (
+	"fmt"
 	"syscall"
 	"unsafe"
 )
@@ -237,4 +238,38 @@ func windowBlocksInput(window uintptr) (bool, uint32) {
 	}
 	defer procCloseHandle.Call(process)
 	return processElevated(process), pid
+}
+
+var (
+	procSetProcessDpiAwarenessContext   = user32.NewProc("SetProcessDpiAwarenessContext")
+	procGetThreadDpiAwarenessContext    = user32.NewProc("GetThreadDpiAwarenessContext")
+	procGetAwarenessFromDpiAwarenessCtx = user32.NewProc("GetAwarenessFromDpiAwarenessContext")
+	procSetProcessDPIAware              = user32.NewProc("SetProcessDPIAware")
+)
+
+// DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2，就是 (DPI_AWARENESS_CONTEXT)-4
+var dpiPerMonitorAwareV2 = ^uintptr(3)
+
+// DPI_AWARENESS 里的"按每块屏算"
+const dpiAwarenessPerMonitor = 2
+
+// 声明自己按每块屏的真实像素算：划词翻译要 UI Automation 报选区的位置，不声明的话系统会按 96 DPI 给这个进程换算一遍，
+// 缩放不是 100% 的屏上位置就偏了。低级鼠标钩子报的本来就是物理像素（MSLLHOOKSTRUCT 的文档），悬浮条的点击区域照旧对得上。
+// SetProcessDpiAwarenessContext 是 Windows 10 1703 起才有的，更老的系统退一步用 SetProcessDPIAware（按主屏算）。
+// 已经被定下来的（清单、兼容性设置）改不了，系统回"拒绝访问"：已经是按每块屏算的就不用说，不是的照实报
+func declareDPIAware() {
+	if procSetProcessDpiAwarenessContext.Find() != nil {
+		procSetProcessDPIAware.Call()
+		return
+	}
+	ok, _, err := procSetProcessDpiAwarenessContext.Call(dpiPerMonitorAwareV2)
+	if ok != 0 {
+		return
+	}
+	context, _, _ := procGetThreadDpiAwarenessContext.Call()
+	awareness, _, _ := procGetAwarenessFromDpiAwarenessCtx.Call(context)
+	if int32(awareness) == dpiAwarenessPerMonitor {
+		return
+	}
+	emit(event{"event": "error", "message": fmt.Sprintf("声明不了按每块屏的像素算（%v，现在是 %d），划词卡片在缩放过的屏上可能放偏", err, int32(awareness))})
 }

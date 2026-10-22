@@ -10,6 +10,11 @@
 # 录键里有一段要等 30 秒（查到点自己停），整个脚本要多跑半分钟：win-desktop.sh 默认只等 60 秒，
 # 跑的时候写 WAIT=120 scripts/dev/win-desktop.sh - < 这个文件。
 # 菜单栏叫没叫出来看 UI Automation 报的焦点：Win11 的记事本选中菜单栏时焦点在"文件"那个菜单项上（10-22 实测）。
+# 划词翻译要的两样也在这里查：selection（记事本里全选、什么都没选；有 Edge 的话再开一个只有一段正文、一个输入框的本地网页，
+# 用临时的用户目录、InPrivate 窗口，跑完关掉删掉），capture 带 outside（块外的点击报 outside 并放行、块里的照旧吞）。
+# 左键放没放行看 GetAsyncKeyState：钩子吞掉的按下系统不记，和键盘一样。
+# 模拟复制那条兜底路：记事本和 Edge 都支持 UIA 走不到它，另开一个自己画字的窗口（CopyWindow：UIA 里只是个 Pane，
+# 没有 TextPattern，只认 Ctrl+C 往剪贴板里放一段字），一分钟后自己关，跑完也会关掉。
 # 没查的：Office 这类应用、开始菜单（Win 键）。
 $ErrorActionPreference = 'Stop'
 $repo = "$HOME\speakmore-dev\repo"
@@ -60,6 +65,49 @@ public static class Fake {
 }
 '@
 
+# 模拟复制兜底用的窗口：控件自己画字，UIA 里没有 TextPattern、ValuePattern；按 Ctrl+C 把 Payload 放进剪贴板。
+# 跑在自己的 STA 线程上（剪贴板、窗口消息都要），所有回调在 C# 里自己接住异常，不弹出错框
+Add-Type -ReferencedAssemblies System.Windows.Forms, System.Drawing -TypeDefinition @'
+using System;
+using System.Drawing;
+using System.Threading;
+using System.Windows.Forms;
+public class CopyOnly : Control {
+  public string Payload = "";
+  public CopyOnly() { SetStyle(ControlStyles.Selectable, true); TabStop = true; }
+  protected override bool IsInputKey(Keys key) { return true; }
+  protected override void OnPaint(PaintEventArgs e) { try { e.Graphics.DrawString(Payload, Font, Brushes.Black, 8, 8); } catch { } }
+  protected override void OnKeyDown(KeyEventArgs e) { try { if (e.Control && e.KeyCode == Keys.C) Clipboard.SetText(Payload); } catch { } }
+}
+public static class CopyWindow {
+  static Form form;
+  public static IntPtr Handle = IntPtr.Zero;
+  public static void Open(string title, string payload) {
+    var ready = new ManualResetEvent(false);
+    var thread = new Thread(() => {
+      try {
+        form = new Form { Text = title, Width = 640, Height = 200, StartPosition = FormStartPosition.CenterScreen, TopMost = true };
+        var control = new CopyOnly { Payload = payload, Dock = DockStyle.Fill };
+        form.Controls.Add(control);
+        form.Shown += (s, e) => { try { control.Focus(); Handle = form.Handle; } catch { } ready.Set(); };
+        var timer = new System.Windows.Forms.Timer { Interval = 60000 };
+        timer.Tick += (s, e) => { try { form.Close(); } catch { } };
+        timer.Start();
+        Application.Run(form);
+      } catch { }
+      ready.Set();
+    });
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.IsBackground = true;
+    thread.Start();
+    ready.WaitOne(10000);
+  }
+  public static void Close() {
+    try { if (form != null && !form.IsDisposed) form.Invoke((Action)(() => form.Close())); } catch { }
+  }
+}
+'@
+
 [Fake]::SetProcessDPIAware() | Out-Null
 $results = [System.Collections.Generic.List[string]]::new()
 function Check($name, $ok, $detail) {
@@ -97,7 +145,7 @@ function Send($helper, $object) {
 # 每个键：vk、扫描码、是不是扩展键
 $RCtrl = 0xA3, 0x1D, $true; $Esc = 0x1B, 0x01, $false; $KeyA = 0x41, 0x1E, $false; $KeyC = 0x43, 0x2E, $false
 $Ctrl = 0x11, 0x1D, $false; $Delete = 0x2E, 0x53, $true; $F13 = 0x7C, 0x64, $false; $F14 = 0x7D, 0x65, $false
-$LAlt = 0xA4, 0x38, $false; $RAlt = 0xA5, 0x38, $true; $Space = 0x20, 0x39, $false
+$LAlt = 0xA4, 0x38, $false; $RAlt = 0xA5, 0x38, $true; $Space = 0x20, 0x39, $false; $End = 0x23, 0x4F, $true
 # 不分左右的 VK_CONTROL 加扩展位：有的工具这样模拟右 Ctrl，小帮手要自己分出是右边
 $GenericRCtrl = 0x11, 0x1D, $true
 function Press($key, $down, $mode = 'both') { [Fake]::Key($key[0], $key[1], $key[2], $down, $mode) }
@@ -309,12 +357,148 @@ try {
   $inNotepad = Get-Clipboard -Raw
   Check '记事本里是贴进去的那段字' ($inNotepad -eq $text) ($inNotepad)
 
+  # 划词翻译取选区（selection）。记事本里全选：UIA 拿到那段字，能改，位置在记事本窗口里。换行各家写法不一，比之前统一成 \n
+  $lines = { param($value) ("$value" -replace "`r`n", "`n") -replace "`r", "`n" }
+  $box = [System.Windows.Automation.AutomationElement]::FromHandle($window).Current.BoundingRectangle
+  [Fake]::SetForegroundWindow($window) | Out-Null
+  Start-Sleep -Milliseconds 300
+  Press $Ctrl $true; Press $KeyA $true; Press $KeyA $false; Press $Ctrl $false
+  Start-Sleep -Milliseconds 300
+  Drain $helper
+  Send $helper @{ cmd = 'selection'; id = 11 }
+  $sel = Next-Event $helper 4000
+  Check '记事本全选：selection 拿到那段字（UIA）' ($sel.event -eq 'selection' -and $sel.id -eq 11 -and (& $lines $sel.text) -eq (& $lines $text) -and $sel.via -eq 'uia') (Show $sel)
+  Check '记事本里能改' ($sel.editable -eq $true) ''
+  $inside = $null -ne $sel.rect -and $sel.rect.width -gt 0 -and $sel.rect.x -ge $box.Left - 1 -and $sel.rect.y -ge $box.Top - 1 -and
+    ($sel.rect.x + $sel.rect.width) -le $box.Right + 1 -and ($sel.rect.y + $sel.rect.height) -le $box.Bottom + 1
+  Check '选区位置在记事本窗口里' $inside "选区 $(Show $sel.rect)，窗口 $box"
+  # 什么都没选：UIA 拿到空的，再试模拟复制也没变化，回 reason none；剪贴板原样不动
+  Press $Ctrl $true; Press $End $true; Press $End $false; Press $Ctrl $false
+  Start-Sleep -Milliseconds 300
+  Set-Clipboard -Value '取选区之前的剪贴板'
+  Send $helper @{ cmd = 'selection'; id = 12 }
+  $sel = Next-Event $helper 4000
+  Check '什么都没选：text 空的、reason none' ($sel.event -eq 'selection' -and $sel.id -eq 12 -and $sel.text -eq '' -and $sel.reason -eq 'none' -and $sel.editable -eq $false -and $null -eq $sel.rect) (Show $sel)
+  Check '取选区以后剪贴板还是原来的' ((Get-Clipboard -Raw) -eq '取选区之前的剪贴板') (Get-Clipboard -Raw)
+  Check 'selection 只回一条，没报 error' ($null -eq (Next-Event $helper 300)) ''
+
+  # 划词卡片那种截法（capture 带 outside）：块外的左键按下报 outside、照常放行；块里的照旧吞、照旧报。点在记事本正文上，碰不到别的
+  $cx = [int](($box.Left + $box.Right) / 2); $cy = [int](($box.Top + $box.Bottom) / 2)
+  Send $helper @{ cmd = 'capture'; outside = $true; regions = @(@{ id = 'copy'; x = $cx + 100; y = $cy - 20; width = 40; height = 40 }) }
+  Start-Sleep -Milliseconds 200
+  [Fake]::Click($cx, $cy, $true); Start-Sleep -Milliseconds 50; $passed = [Fake]::KeyDown(0x01); [Fake]::Click($cx, $cy, $false)
+  $outside = Next-Event $helper; $extra = Next-Event $helper 300
+  Check '截着带 outside：块外按下报一次 outside' ($outside.event -eq 'click' -and $outside.id -eq 'outside' -and $null -eq $extra) (Show @($outside, $extra))
+  Check '块外那一下照常放行（系统看得到左键按下）' $passed ''
+  [Fake]::Click($cx + 120, $cy, $true); Start-Sleep -Milliseconds 50; $passed = [Fake]::KeyDown(0x01); [Fake]::Click($cx + 120, $cy, $false)
+  $click = Next-Event $helper
+  Check '块里照旧报 click、被吞（系统没看到左键按下）' ($click.event -eq 'click' -and $click.id -eq 'copy' -and -not $passed) (Show $click)
+  Send $helper @{ cmd = 'release' }
+  Start-Sleep -Milliseconds 200
+  [Fake]::Click($cx, $cy, $true); [Fake]::Click($cx, $cy, $false)
+  Check '不截了之后块外点击不报' ($null -eq (Next-Event $helper 400)) ''
+
+  # 模拟复制兜底：UIA 拿不到（没有 TextPattern），发 Ctrl+C 从剪贴板拿，拿完剪贴板还原；拿不到位置，不能改
+  $payload = 'Copied by the fallback 复制兜底'
+  [CopyWindow]::Open('SpeakMore copy fallback', $payload)
+  Check '复制兜底的窗口开起来了' ([CopyWindow]::Handle -ne [IntPtr]::Zero) ''
+  if ([CopyWindow]::Handle -ne [IntPtr]::Zero) {
+    [Fake]::SetForegroundWindow([CopyWindow]::Handle) | Out-Null
+    Start-Sleep -Milliseconds 400
+    $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
+    $results.Add("INFO 复制兜底窗口的焦点：$($focused.Current.ControlType.ProgrammaticName)，TextPattern $([bool]($focused.GetSupportedPatterns() | Where-Object { $_.ProgrammaticName -like 'TextPattern*' }))")
+    Set-Clipboard -Value '取选区之前的剪贴板'
+    Drain $helper
+    Send $helper @{ cmd = 'selection'; id = 31 }
+    $sel = Next-Event $helper 4000
+    Check '没有 TextPattern 的地方：模拟复制拿到字' ($sel.event -eq 'selection' -and $sel.id -eq 31 -and $sel.text -eq $payload -and $sel.via -eq 'copy' -and $null -eq $sel.reason) (Show $sel)
+    Check '模拟复制拿到的：不能改、不带位置' ($sel.editable -eq $false -and $null -eq $sel.rect) ''
+    Check '模拟复制以后剪贴板还原了' ((Get-Clipboard -Raw) -eq '取选区之前的剪贴板') (Get-Clipboard -Raw)
+    Check '模拟复制那次没报 error' ($null -eq (Next-Event $helper 300)) ''
+  }
+  [CopyWindow]::Close()
+
+  # 网页（有 Edge 才查）：正文选中不能改，输入框里的能改。临时的用户目录，不碰他的 Edge 资料
+  $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
+  if (-not $edge) {
+    $results.Add('INFO 没有 Edge，网页正文、输入框那几条没查')
+  } else {
+    $edgeProfile = "$env:TEMP\speakmore-e2e-edge"
+    $page = "$env:TEMP\speakmore-e2e-selection.html"
+    $paragraph = 'The model keeps the audio on your device.'
+    $typed = 'Editable words here'
+    Set-Content -Path $page -Encoding UTF8 -Value "<!doctype html><meta charset=`"utf-8`"><title>SpeakMore selection</title><body style=`"font:28px sans-serif;margin:40px`"><p>$paragraph</p><textarea rows=`"2`" cols=`"24`">$typed</textarea></body>"
+    # InPrivate：新的用户目录会被 Edge 拿系统登录的微软账号自动登录，弹"同步浏览数据"的框抢焦点（10-22 实测），InPrivate 不登录
+    Start-Process $edge -ArgumentList "--user-data-dir=`"$edgeProfile`"", '--no-first-run', '--no-default-browser-check', '--inprivate', '--new-window', "file:///$($page -replace '\\', '/')"
+    $edgeWindow = 0
+    for ($i = 0; $i -lt 50 -and $edgeWindow -eq 0; $i++) {
+      Start-Sleep -Milliseconds 200
+      $found = Get-Process msedge -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like 'SpeakMore selection*' } | Select-Object -First 1
+      if ($found) { $edgeWindow = $found.MainWindowHandle }
+    }
+    Check 'Edge 打开了本地网页' ($edgeWindow -ne 0) ''
+    if ($edgeWindow -ne 0) {
+      [Fake]::SetForegroundWindow($edgeWindow) | Out-Null
+      $edgeRoot = [System.Windows.Automation.AutomationElement]::FromHandle($edgeWindow)
+      # Chromium 有 UIA 客户端来问才建无障碍树，头几次可能找不到：多等几轮
+      # 只认有位置的（没排版好的、看不见的元素 BoundingRectangle 是空的）
+      $find = { param($type, $match)
+        $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, $type)
+        for ($i = 0; $i -lt 25; $i++) {
+          $hit = $edgeRoot.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition) |
+            Where-Object { -not $_.Current.BoundingRectangle.IsEmpty -and (& $match $_) } | Select-Object -First 1
+          if ($hit) { return $hit }
+          Start-Sleep -Milliseconds 200
+        }
+        $null }
+      $text = & $find ([System.Windows.Automation.ControlType]::Text) { param($e) $e.Current.Name -eq $paragraph }
+      # textarea 没有名字，按框里的字认（ValuePattern）
+      $edit = & $find ([System.Windows.Automation.ControlType]::Edit) { param($e)
+        $value = $null
+        $e.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$value) -and $value.Current.Value -eq $typed }
+      Check '网页里找到正文和输入框' ($null -ne $text -and $null -ne $edit) ''
+      if ($text -and $edit) {
+        $edgeBox = $edgeRoot.Current.BoundingRectangle
+        $at = $text.Current.BoundingRectangle
+        # 点一下正文（不聚焦任何东西），全选的是整页
+        [Fake]::Click([int]($at.Left + 10), [int](($at.Top + $at.Bottom) / 2), $true); [Fake]::Click([int]($at.Left + 10), [int](($at.Top + $at.Bottom) / 2), $false)
+        Start-Sleep -Milliseconds 200
+        Press $Ctrl $true; Press $KeyA $true; Press $KeyA $false; Press $Ctrl $false
+        Start-Sleep -Milliseconds 300
+        Drain $helper
+        Send $helper @{ cmd = 'selection'; id = 21 }
+        $sel = Next-Event $helper 4000
+        Check '网页正文：selection 拿到正文、不能改' ($sel.event -eq 'selection' -and $sel.id -eq 21 -and "$($sel.text)".Contains($paragraph) -and $sel.editable -eq $false) (Show $sel)
+        $at = $edit.Current.BoundingRectangle
+        [Fake]::Click([int](($at.Left + $at.Right) / 2), [int](($at.Top + $at.Bottom) / 2), $true); [Fake]::Click([int](($at.Left + $at.Right) / 2), [int](($at.Top + $at.Bottom) / 2), $false)
+        Start-Sleep -Milliseconds 200
+        Press $Ctrl $true; Press $KeyA $true; Press $KeyA $false; Press $Ctrl $false
+        Start-Sleep -Milliseconds 300
+        Drain $helper
+        Send $helper @{ cmd = 'selection'; id = 22 }
+        $sel = Next-Event $helper 4000
+        $inside = $null -ne $sel.rect -and $sel.rect.x -ge $edgeBox.Left - 1 -and $sel.rect.y -ge $edgeBox.Top - 1 -and
+          ($sel.rect.x + $sel.rect.width) -le $edgeBox.Right + 1 -and ($sel.rect.y + $sel.rect.height) -le $edgeBox.Bottom + 1
+        Check '网页输入框：selection 拿到框里的字、能改、位置在窗口里' ($sel.event -eq 'selection' -and $sel.id -eq 22 -and $sel.text -eq $typed -and $sel.editable -eq $true -and $inside) "$(Show $sel)，窗口 $edgeBox"
+      }
+    }
+  }
+
 } finally {
   $helper.Process.StandardInput.Close()
   if (-not $helper.Process.WaitForExit(2000)) { $helper.Process.Kill() }
   Check '关掉标准输入后自己退出' ($helper.Process.HasExited) ''
   # 只关这次开的（不碰用户自己开着的记事本）
   if ($startedAt) { Get-Process notepad -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -ge $startedAt } | Stop-Process -Force -ErrorAction SilentlyContinue }
+  [CopyWindow]::Close()
+  # 这次开的 Edge（认临时用户目录）关掉，网页和用户目录删掉
+  if ($edgeProfile) {
+    Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'msedge.exe' -and "$($_.CommandLine)".Contains('speakmore-e2e-edge') } |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Milliseconds 500
+    Remove-Item -Recurse -Force $edgeProfile, $page -ErrorAction SilentlyContinue
+  }
   if ($null -ne $saved) { Set-Clipboard -Value $saved }
 }
 $results

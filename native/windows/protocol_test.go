@@ -342,3 +342,47 @@ func TestProbeResultFollowsTheRegisterHotKeyError(t *testing.T) {
 		event{"event": "probed", "id": 7, "conflict": false},
 		event{"event": "error", "message": "试登记组合没成功（错误码 87），查不出是不是被别的程序占了"})
 }
+
+func TestCaptureReadsOutsideAndDefaultsItToOff(t *testing.T) {
+	plain, err := parseCommand([]byte(`{"cmd":"capture","regions":[{"id":"cancel","x":0,"y":0,"width":28,"height":28}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if regions, outside, err := parseCapture(plain); err != nil || outside || len(regions) != 1 {
+		t.Fatalf("不带 outside：%v %v %v", regions, outside, err)
+	}
+	card, _ := parseCommand([]byte(`{"cmd":"capture","regions":[],"outside":true}`))
+	if regions, outside, err := parseCapture(card); err != nil || !outside || len(regions) != 0 {
+		t.Fatalf("outside true：%v %v %v", regions, outside, err)
+	}
+	off, _ := parseCommand([]byte(`{"cmd":"capture","regions":[],"outside":false}`))
+	if _, outside, err := parseCapture(off); err != nil || outside {
+		t.Fatalf("outside false：%v %v", outside, err)
+	}
+	// outside 写成别的类型是父进程写错了，整条不认，免得该放行的点击被当成别的
+	bad, err := parseCommand([]byte(`{"cmd":"capture","regions":[],"outside":"yes"}`))
+	if err == nil {
+		if _, _, err := parseCapture(bad); err == nil {
+			t.Fatal("outside 是字符串也认了")
+		}
+	}
+}
+
+func TestSelectionNeedsAnIntegerID(t *testing.T) {
+	ok, err := parseCommand([]byte(`{"cmd":"selection","id":7}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id, err := parseSelection(ok); err != nil || id != 7 {
+		t.Fatalf("id 7：%v %v", id, err)
+	}
+	for _, line := range []string{`{"cmd":"selection"}`, `{"cmd":"selection","id":"7"}`, `{"cmd":"selection","id":1.5}`} {
+		cmd, err := parseCommand([]byte(line))
+		if err != nil {
+			continue
+		}
+		if _, err := parseSelection(cmd); err == nil {
+			t.Fatalf("%s 没被拒绝", line)
+		}
+	}
+}

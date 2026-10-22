@@ -12,14 +12,14 @@ private let restoreDelay: TimeInterval = 0.3
 
 typealias PasteboardSnapshot = [[(NSPasteboard.PasteboardType, Data)]]
 
-/// 存下剪贴板里每一项的每一种格式，这样图片、文件、富文本都能原样还回去
-private func snapshotPasteboard(_ pasteboard: NSPasteboard) -> PasteboardSnapshot {
+/// 存下剪贴板里每一项的每一种格式，这样图片、文件、富文本都能原样还回去（划词模拟 ⌘C 时也用，Selection.swift）
+func snapshotPasteboard(_ pasteboard: NSPasteboard) -> PasteboardSnapshot {
     (pasteboard.pasteboardItems ?? []).map { item in
         item.types.compactMap { type in item.data(forType: type).map { (type, $0) } }
     }
 }
 
-private func restorePasteboard(_ pasteboard: NSPasteboard, from snapshot: PasteboardSnapshot) {
+func restorePasteboard(_ pasteboard: NSPasteboard, from snapshot: PasteboardSnapshot) {
     pasteboard.clearContents()
     let items = snapshot.map { entries -> NSPasteboardItem in
         let item = NSPasteboardItem()

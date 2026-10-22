@@ -225,11 +225,12 @@ func settleMouseHook() {
 	}
 }
 
-// 截不截同时管两样：只在截着时生效的绑定（取消），和悬浮条上的点击
-func setCapturing(on bool, regions []region) {
+// 截不截同时管两样：只在截着时生效的绑定（取消），和悬浮条、划词卡片上的点击。
+// outside：块外的按下要不要报（划词卡片的"点别处收起"），见 capture.go
+func setCapturing(on bool, regions []region, outside bool) {
 	captureGeneration++
 	hotkeys.setCapturing(on)
-	clicks.setCapturing(on, regions)
+	clicks.setCapturing(on, regions, outside)
 	settleMouseHook()
 	if !on {
 		return
@@ -241,7 +242,7 @@ func setCapturing(on bool, regions []region) {
 				return
 			}
 			emit(event{"event": "error", "message": fmt.Sprintf("截了 %d 秒还没人说不截了，自己松开", int(captureLimit.Seconds()))})
-			setCapturing(false, nil)
+			setCapturing(false, nil, false)
 		})
 	})
 }
@@ -360,14 +361,21 @@ func handle(line []byte) {
 		id, text := *cmd.ID, *cmd.Text
 		onUIThread(func() { paste(id, text) })
 	case "capture":
-		regions, err := parseRegions(cmd.Regions)
+		regions, outside, err := parseCapture(cmd)
 		if err != nil {
 			emit(event{"event": "error", "message": err.Error()})
 			return
 		}
-		onUIThread(func() { setCapturing(true, regions) })
+		onUIThread(func() { setCapturing(true, regions, outside) })
 	case "release":
-		onUIThread(func() { setCapturing(false, nil) })
+		onUIThread(func() { setCapturing(false, nil, false) })
+	case "selection":
+		id, err := parseSelection(cmd)
+		if err != nil {
+			emit(event{"event": "error", "message": err.Error()})
+			return
+		}
+		handleSelection(id)
 	case "record":
 		on, err := parseRecord(cmd.On)
 		if err != nil {
@@ -473,6 +481,7 @@ func sameEntries(a, b []clipboardEntry) bool {
 
 func main() {
 	runtime.LockOSThread()
+	declareDPIAware()
 	go func() {
 		writer := bufio.NewWriter(os.Stdout)
 		for {

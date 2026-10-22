@@ -389,6 +389,38 @@ func testProbe() {
     }
 }
 
+/// 划词的选区（Selection.swift）：截断不劈开字、位置要像样、回执的拼法；capture 的 outside 只认布尔
+func testSelection() {
+    check(clipSelection("abc", limit: 3) == "abc", "不超的不截")
+    check(clipSelection("ab😀c", limit: 3) == "ab", "表情是一对代理，放不下就整个不要，不留半个")
+    check(clipSelection("你好世界", limit: 2) == "你好", "按 UTF-16 单元数截")
+    check(usableRect(CGRect(x: 0, y: 0, width: 0, height: 10)) == nil, "宽是 0 的框不要")
+    check(usableRect(CGRect(x: 10, y: 20, width: 30, height: 12)) == CGRect(x: 10, y: 20, width: 30, height: 12), "像样的框原样")
+
+    let found = selectionEvent(id: 7, text: "hello", editable: true, rect: CGRect(x: 1, y: 2, width: 3, height: 4),
+                               via: "ax", reason: nil, ms: 12)
+    check(found["event"] as? String == "selection" && found["id"] as? Int == 7, "回执的名字和 id")
+    check(found["text"] as? String == "hello" && found["editable"] as? Bool == true, "字和能不能改")
+    check((found["rect"] as? [String: CGFloat])?["width"] == 3, "带上位置")
+    check(found["reason"] == nil && found["via"] as? String == "ax" && found["ms"] as? Int == 12, "有字时不带 reason")
+
+    let empty = selectionEvent(id: 8, text: "", editable: true, rect: CGRect(x: 1, y: 2, width: 3, height: 4),
+                               via: "copy", reason: nil, ms: 400)
+    check(empty["editable"] as? Bool == false && empty["rect"] == nil, "没字时不能改、不带位置")
+    check(empty["reason"] as? String == "none", "没字时说为什么：默认是没选中")
+    let denied = selectionEvent(id: 9, text: "", editable: false, rect: nil, via: "ax", reason: "not_trusted", ms: 0)
+    check(denied["reason"] as? String == "not_trusted", "没权限照实说")
+    let noRect = selectionEvent(id: 10, text: "x", editable: false, rect: nil, via: "copy", reason: nil, ms: 30)
+    check(noRect["rect"] == nil, "复制拿不到位置就不带")
+
+    check(parseOutside(nil) == false, "outside 不写是 false")
+    check(parseOutside(true) == true, "outside 写 true")
+    let json = try! JSONSerialization.jsonObject(with: Data(#"{"a":true,"b":1,"c":"true"}"#.utf8)) as! [String: Any]
+    check(parseOutside(json["a"]) == true, "JSON 里的 true")
+    check(parseOutside(json["b"]) == nil, "JSON 里的 1 不算布尔")
+    check(parseOutside(json["c"]) == nil, "字符串不算布尔")
+}
+
 guard CommandLine.arguments.count == 2 else {
     FileHandle.standardError.write("用法：<测试程序> <样例目录 native/fixtures/hotkeys/mac>\n".data(using: .utf8)!)
     exit(2)
@@ -398,6 +430,7 @@ testLostKeyUpAtModifierUp()
 testParseBindings()
 testRecorder()
 testProbe()
+testSelection()
 
 for failure in failures { print("✖ \(failure)") }
 print("Swift：\(passed) 条过，\(failures.count) 条没过")

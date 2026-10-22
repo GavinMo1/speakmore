@@ -191,7 +191,12 @@ private let onSwallowEvent: CGEventTapCallBack = { _, type, event, _ in
     case .flagsChanged, .keyDown, .keyUp:
         return feed(type, event) ? nil : pass
     case .leftMouseDown:
-        guard capturing, let region = regionAt(event.location) else { return pass }
+        guard capturing else { return pass }
+        guard let region = regionAt(event.location) else {
+            // 划词卡片要"点别处收起"：块外按下报一次 outside，这一下照常放行
+            if reportOutside { emit(["event": "click", "id": "outside"]) }
+            return pass
+        }
         pressedRegion = region
         return nil
     case .leftMouseDragged:
@@ -354,7 +359,8 @@ func installBindings(_ candidates: [Binding], rejected: [Rejected], carbonKeys k
 
 // MARK: - 截住取消键和悬浮条上的点击
 //
-// 听写进行中，悬浮条上有"取消"和"完成"两个按钮，按取消的键（默认 esc）也能取消。这两样都不能让别的应用收到：
+// 听写进行中，悬浮条上有"取消"和"完成"两个按钮，按取消的键（默认 esc）也能取消；划词卡片开着时，卡片上的按钮和 esc
+// 也这样截（它还要块外的按下：点别处收起）。这两样都不能让别的应用收到：
 // 点击要是落到悬浮条的窗口上，我们的应用会被切到最前面，用户正在写的那个输入框就丢了焦点，文字贴不进去；
 // esc 要是也传给前台应用，取消听写的同时会顺手关掉它的对话框、打断它正在做的事。
 // 取消的键是一个"只在说话时生效"的绑定，由匹配器认；点击在吞键 tap 里认。
@@ -366,19 +372,30 @@ struct Region {
 
 private var capturing = false
 private var regions: [Region] = []
+/// 块外的按下要不要报（capture 的 outside）：划词卡片要，悬浮条不要
+private var reportOutside = false
 /// 按下已经被吞掉、还在等松开的那一块
 private var pressedRegion: String?
 
 /// 开始截或不截了（Control.swift 的 capture 调，限时也在那边管）
-func setCapturing(_ on: Bool, regions newRegions: [Region] = []) {
+func setCapturing(_ on: Bool, regions newRegions: [Region] = [], outside: Bool = false) {
     capturing = on
     regions = newRegions
+    reportOutside = on && outside
     matcher.setCapturing(on)
     settleSwallowTap()
 }
 
 private func regionAt(_ point: CGPoint) -> String? {
     regions.first { $0.rect.contains(point) }?.id
+}
+
+/// capture 的 outside：不写是 false，写了要是布尔值
+func parseOutside(_ value: Any?) -> Bool? {
+    guard let value else { return false }
+    // JSONSerialization 把 true/false 读成 NSNumber：0、1 这样的数也会被 as? Bool 认成布尔，先认准是布尔类型
+    guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+    return number.boolValue
 }
 
 func parseRegions(_ value: Any?) -> [Region]? {

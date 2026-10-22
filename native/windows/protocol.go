@@ -7,7 +7,11 @@
 //	          {"event":"interrupted","id":"dictate#0"}                       按着时又按了组合外的键；之后不报它的松开
 //	          {"event":"interrupted","id":"dictate#0","to":"x#0"}            升级成了另一个绑定，紧接着报 x#0 的按下
 //	          {"event":"pasted","id":1,"ok":true}     ok 为 false 时文字留在剪贴板里，reason 说为什么
-//	          {"event":"click","id":"cancel"}
+//	          {"event":"click","id":"cancel"}            截着时点了某一块；capture 带 outside 时块外的按下报 {"event":"click","id":"outside"}
+//	          {"event":"selection","id":7,"text":"…","editable":true,"rect":{"x":10,"y":20,"width":300,"height":40},"via":"uia","ms":35}
+//	                                                  selection 的答复，一定回一条（selection_windows.go）：rect 是选区的外接矩形（物理像素），
+//	                                                  不知道就不带；via 是 uia 或 copy；ms 是用了多久；text 是空的时 editable 是 false、
+//	                                                  不带 rect，带 reason：none（没选中）、elevated（前台是管理员窗口）、failed（出错了，另报 error）
 //	          {"event":"relistened","reason":"resume"}            睡眠唤醒（resume）、解锁或切回这个用户（unlock）以后重装了键盘钩子
 //	          {"event":"elevated_foreground","on":true,"pid":42}   前台换成了以管理员身份运行的窗口（换走了是 on:false，不带 pid）
 //	          {"event":"recording","on":true,"mods":[163],"keys":[100]}   录键模式里按住的键：进入时先报一次两个空的，之后每变一次报一次
@@ -18,6 +22,8 @@
 //	标准输入  {"cmd":"bind","bindings":[{"id":"dictate#0","mods":[165],"when":"always"},{"id":"cancel#0","mods":[],"key":1,"when":"capturing"}]}
 //	          {"cmd":"paste","id":1,"text":"…"}
 //	          {"cmd":"capture","regions":[{"id":"cancel","x":0,"y":0,"width":28,"height":28}]}   屏幕上的物理像素
+//	          {"cmd":"capture","regions":[…],"outside":true}   划词卡片：块外的左键按下另报 outside，这一下照常放行
+//	          {"cmd":"selection","id":7}                       取前台应用里选中的文字（划词翻译）
 //	          {"cmd":"release"}
 //	          {"cmd":"record","on":true}   进入录键模式，已经在录就从头录；on:false 离开，没在录时什么也不报
 //	          {"cmd":"probe","id":7,"mods":[163],"key":100}   mods、key 的写法同 bind 的一个绑定
@@ -78,6 +84,7 @@ type command struct {
 	ID       *int            `json:"id"`
 	Text     *string         `json:"text"`
 	Regions  json.RawMessage `json:"regions"`
+	Outside  json.RawMessage `json:"outside"`
 	Bindings json.RawMessage `json:"bindings"`
 	On       json.RawMessage `json:"on"`
 	Mods     json.RawMessage `json:"mods"`
@@ -115,6 +122,30 @@ func parseRegions(raw json.RawMessage) ([]region, error) {
 		regions = append(regions, region{ID: *item.ID, X: *item.X, Y: *item.Y, Width: *item.Width, Height: *item.Height})
 	}
 	return regions, nil
+}
+
+// capture 命令：几块要截的区域，和块外的按下要不要报 outside（划词卡片的"点别处收起"；不写是不报，悬浮条就是这种）
+func parseCapture(c command) ([]region, bool, error) {
+	regions, err := parseRegions(c.Regions)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(c.Outside) == 0 {
+		return regions, false, nil
+	}
+	var outside *bool
+	if json.Unmarshal(c.Outside, &outside) != nil || outside == nil {
+		return nil, false, errors.New("capture 的 outside 要是 true 或 false")
+	}
+	return regions, *outside, nil
+}
+
+// selection 命令只带一个整数 id，回的那条 selection 带着它
+func parseSelection(c command) (int, error) {
+	if c.ID == nil {
+		return 0, errors.New("selection 需要整数 id")
+	}
+	return *c.ID, nil
 }
 
 // 装不上的一个绑定和为什么：invalid 是它不合规矩，needs_listen 是键盘钩子没装上
