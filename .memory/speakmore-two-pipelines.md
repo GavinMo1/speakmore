@@ -38,3 +38,8 @@ metadata:
 相关：[[speakmore-model-providers]]、[[typeless-clone-open-source-panel]]、[[typeless-clone-scope-dictation]]。
 - 2026-10-17 加第三种模式 private（界面叫"数据隐私"）：有人反馈要纯本地、没有任何上传的。只用本机模型转写，原文直接交出，不润色、不要 key。设置 `privateTranscriber`（SPEAKMORE_PRIVATE_TRANSCRIBER），只认本机模型，和 local 的第一跳分开存；`speakmore mode private`，`speakmore transcriber` 在 private 里换它的那一项；key 状态是 ready、source none，存 key 要写明哪一家。他说之后再往外扩：把更多小模型放到 COS 上给用户下。
 
+- **2026-10-22 起名不许带优劣**：我给三种方式配了“最准 · 费用较高”“便宜”这类取舍，他说“这个你可别乱打标签啊”。他的依据：
+  - 两步那条（本机 Qwen3 0.6B Q8 加 DeepSeek 或任一 LLM）效果很好、最快，Windows 有显卡时几乎秒出。
+  - 一步那条里两家是国外 API，对国内用户几乎致命；国内能收音频的又比较蠢。
+  - 所以名字不能落在过程上，也不能落在优劣上。他要直观的短名，举的例子是“混合”“直出”“local”，或 high/low/medium 这类。
+  - **How to apply**：方式的名字和说明只写事实（音频、文字发到哪、要不要密钥、支不支持翻译），不写准不准、贵不贵，排名式的名字也不用。

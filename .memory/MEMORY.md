@@ -30,7 +30,7 @@
 - [官网不提 Typeless](website-no-typeless.md) — 不比价、不链逆向笔记、不写无关联声明，有测试守着；README 和逆向资料没说要动
 - [官网观感](website-look.md) — 不铺渐变光晕、按钮里不套胶囊、两种芯片入口同等；一句话的特色并成一排，不加小字；性能照顾只有 CPU 的电脑，费用别写成订阅套餐
 - [SpeakMore 宣传片](speakmore-promo-video.md) — 两支都已合进 kineto main（视频 id speakmore-promo、speakmore-promo-2）；发布会式、书面语字幕、不用合成人声；字幕不带人称；背景是他真屏幕的截图（程序坞抠掉了 Typeless）；第四章叫 App、从程序坞点开；88 秒成片 10-16 定稿，横竖封面已出，都在 kineto 的 out/speakmore-promo/；竖版片子待做；第二支 10-17 定稿并合进 kineto main（103 秒，多用 App 真截图，界面走精密仪器式；10-18 转场改成翻页、不用闪白），横竖封面是"大更新"海报，都在 out/speakmore-promo-2/
-- [三种识别模式平级](speakmore-two-pipelines.md) — native（音频直给模型）、local（转写加任意 API 润色）、private（数据隐私，纯本机转写、不要 key），用户选、不分主次；选了当场换上、不验 key 不等下载，还差的记成状态；含评测和端到端结果
+- [三种识别模式平级](speakmore-two-pipelines.md) — native（音频直给模型）、local（转写加任意 API 润色）、private（数据隐私，纯本机转写、不要 key），用户选、不分主次；选了当场换上、不验 key 不等下载，还差的记成状态；含评测和端到端结果；起名不许带优劣、不按过程（10-22）
 - [模型广场不替用户选](speakmore-model-plaza.md) — 有什么加什么、尽量全；跑通不打标签、评测过才打已评测、没调过的打未验证；按角色分原生/转写/润色，侧栏单独一页；选识别方式在首页选单；10-17 进度、还剩哪些在里面
 - [判官是 Claude 自己](bench-judge-is-claude.md) — 评测打分由 Claude 来，不调 Gemini 等接口；Gemini 3.6 Flash MINIMAL 的成品只当参照，参照听错时不扣分
 - [统一输入输出、策略模式](architecture-unified-io-strategy.md) — 插件化、可热插拔；录音先统一成 16 kHz 单声道，转写统一成 transcribe → { text }；不打补丁，从分层上根治
@@ -59,4 +59,4 @@
 - [热键敢做减法](hotkey-subtract-boldly.md) — 和系统按键、组合键冲突或实验里离谱的，直接不让绑，不用问；改方向才问
 - [他 Mac 上被占的键](mac-keys-taken.md) — Typeless 占着左 fn、右 ⌘，键盘没有右 Ctrl；开发版热键用右 ⌥（正式版不开时）
 - [PR #14 按需装载](speakmore-pr14-on-demand-model.md) — 外部贡献；自定义服务的空闲释放交给 customParams 的 keep_alive/ttl，本机转写合成一项 localModelMemory；10-22 已合并，跟下个版本发
-- [翻译功能的形态](speakmore-translation-features.md) — 翻译输入和划词翻译：功能是热键动作，引擎分语音、文字两段；划词只用热键；数据隐私下不提供；10-22 在画原型
+- [翻译功能的形态](speakmore-translation-features.md) — 语音输入、语音翻译、划词翻译；功能是热键动作，引擎分两段，设置按功能分栏；划词只用热键；数据隐私下不提供；文案讲人话；10-22 在画原型
