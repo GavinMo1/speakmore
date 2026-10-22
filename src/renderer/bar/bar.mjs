@@ -1,11 +1,14 @@
 // 悬浮条：把按键和点击喂给状态机，按状态机给出的动作去录音、上传、交付。
 // 画面不在这里：该是什么样子由 bar-view.mjs 算，画出来由 bar-ui.mjs 管。
+// 说话的功能不止一个（语音输入、语音翻译）：每个功能开口时发什么、提示行左边画什么、交给主进程存什么，
+// 都在 features/ 里各管各的，这里只认那个接口，不认功能的名字。
 
 import { chordKeycaps } from "../../hotkeys/chord.mjs";
 import { LocalizedError, msg, problemOf } from "../../i18n/index.mjs";
 import { localize, setLocale, t } from "../shared/i18n.mjs";
 import { createBarUi } from "./bar-ui.mjs";
 import { viewOf } from "./bar-view.mjs";
+import { featureOf } from "./features/index.mjs";
 import { Action, eventTypeOf, initialState, LONG_PRESS_MS, Phase, transition } from "./machine.mjs";
 import { startRecording } from "./recorder.mjs";
 import { VoiceSocket } from "./voice-socket.mjs";
@@ -16,28 +19,34 @@ const MAX_DURATION_MS = 540_000;
 // 页面的 lang 跟着界面语言：提示是 aria-live 的，读屏软件按它挑用哪种语言念
 localize();
 const { serverUrl, hotkeys: initialHotkeys, barControls, barHint } = await window.speakmore.config();
-/** 现在每个动作的热键（组合列表）。提示里写听写、取消的键帽，按界面语言写 */
+/** 现在每个动作的热键（组合列表）。提示里写开始这一次的那个组合、取消的键帽，按界面语言写 */
 let hotkeys = initialHotkeys;
-/** 这一次是按听写的第几个组合开始的：几个组合都能结束，提示里写按下的那个，不容易看糊涂 */
-let dictateChord = 0;
+let state = initialState;
+/**
+ * 开始这一次（或者升级到）的是哪个动作的第几个组合：几个组合都能结束，提示里写按下的那个，不容易看糊涂
+ */
+let pressed = { action: "dictate", index: 0 };
 const keycapsOf = (codes) => (codes ? chordKeycaps(codes).map((cap) => t.text(cap)) : []);
-const hintKeys = () => ({
-  keys: keycapsOf(hotkeys.dictate[dictateChord] ?? hotkeys.dictate[0]),
-  escKeys: keycapsOf(hotkeys.cancel?.[0]),
-});
+function hintKeys() {
+  const action = state.action ?? pressed.action;
+  const chords = hotkeys[action] ?? [];
+  const index = pressed.action === action ? pressed.index : 0;
+  return { keys: keycapsOf(chords[index] ?? chords[0]), escKeys: keycapsOf(hotkeys.cancel?.[0]) };
+}
 const voice = new VoiceSocket(serverUrl);
 const ui = createBarUi({
   document,
   host: { setVisible: window.speakmore.setBarVisible, capture: window.speakmore.captureBarInput },
   keys: hintKeys(),
   t,
+  onPick: pick,
 });
 ui.setControls(barControls);
 ui.setHintShown(barHint === "on");
 window.speakmore.onBarHint((value) => ui.setHintShown(value === "on"));
 window.speakmore.onHotkeysChanged((next) => {
   hotkeys = next;
-  dictateChord = 0;
+  pressed = { action: pressed.action, index: 0 };
   ui.setKeys(hintKeys());
 });
 // 设置里换了语言：悬浮条不重新加载（可能正在听写），换掉翻译，下一句就是新的语言
@@ -47,8 +56,11 @@ window.speakmore.onLocaleChanged((locale) => {
   ui.setTranslator(t, t.text(state.message));
 });
 
-let state = initialState;
-/** 正在进行的那一次：{ audioId, recording, cancelled } */
+/**
+ * 正在进行的那一次：{ audioId, recording, cancelled, feature, state, ready, begun }。
+ * feature 是这一次的功能（features/），state 是它这一次的状态（语音翻译译成哪种）；
+ * ready 是主进程现读的设置到了、功能定下来了，begun 是服务端那边开始了（之后才能换模式）
+ */
 let session = null;
 let holdTimer = null;
 let maxDurationTimer = null;
@@ -66,6 +78,7 @@ const ACTIONS = {
   [Action.START]: start,
   [Action.CANCEL]: cancel,
   [Action.STOP]: stop,
+  [Action.SWITCH]: switchFeature,
   [Action.ARM_HOLD_TIMER]: () => {
     holdTimer = setTimeout(() => dispatch({ type: "LONG_HOLD" }), LONG_PRESS_MS);
   },
@@ -75,11 +88,50 @@ const ACTIONS = {
 /** 一个错误给人看的那句话：一句 msg（到画出来时才按界面语言翻），或者现成的字 */
 const describe = problemOf;
 
+/** 这一次换成某个功能：按设置定下它的状态，提示行跟着换 */
+function adopt(current, action, config) {
+  const feature = featureOf(action);
+  if (feature === null) throw new Error(`悬浮条不认识的说话功能：${action}`);
+  current.feature = feature;
+  current.state = feature.open(config);
+  showFeature(current);
+}
+
+function showFeature(current) {
+  ui.setFeature({ chip: current.feature.chip(current.state), finishing: current.feature.finishing });
+}
+
+/** 把这一次的模式和参数告诉服务端（set_mode_config）：升级成别的功能、换了语言时 */
+function sendMode(current) {
+  const parameters = current.feature.parameters(current.state) ?? {};
+  voice.configure({ configMode: current.feature.configMode, parameters });
+}
+
 function start() {
-  const current = { audioId: crypto.randomUUID(), recording: null, cancelled: false };
+  const current = {
+    audioId: crypto.randomUUID(),
+    recording: null,
+    cancelled: false,
+    feature: null,
+    state: null,
+    ready: null,
+    begun: null,
+  };
   session = current;
+  // 设置每次开口时现读：设置里换了目标语言，下一次就按新的
+  current.ready = window.speakmore.sessionConfig().then((config) => {
+    current.config = config;
+    adopt(current, state.action, config);
+  });
+  current.begun = current.ready.then(() =>
+    voice.begin(current.audioId, {
+      mode: current.feature.mode,
+      configMode: current.feature.configMode,
+      parameters: current.feature.parameters(current.state),
+    }),
+  );
   (async () => {
-    await voice.begin(current.audioId);
+    await current.begun;
     const recording = await startRecording({
       onChunk: (chunk) => voice.sendChunk(chunk),
       onLevel: ui.level,
@@ -99,6 +151,38 @@ function start() {
   });
 }
 
+/** 按着语音输入的键又凑成了语音翻译的组合（升级）：这一次换成它，录音不断，告诉服务端换模式 */
+function switchFeature() {
+  const current = session;
+  if (!current) return;
+  const action = state.action;
+  current.ready
+    .then(() => {
+      if (session !== current) return;
+      adopt(current, action, current.config);
+      return current.begun.then(() => {
+        if (session === current) sendMode(current);
+      });
+    })
+    // 开始那一步失败了的，start 已经报过
+    .catch((error) => console.warn("换功能没成", error));
+}
+
+/** 在胶囊里选了一项（语音翻译临时换一种语言）：只管这一次 */
+function pick(id) {
+  const current = session;
+  if (!current?.feature) return;
+  const next = current.feature.pick(current.state, id);
+  if (next === current.state) return;
+  current.state = next;
+  showFeature(current);
+  current.begun
+    .then(() => {
+      if (session === current) sendMode(current);
+    })
+    .catch((error) => console.warn("换语言没发出去", error));
+}
+
 function describeStartError(error) {
   if (error?.name === "NotAllowedError") return msg("bar.noMicPermission");
   if (error?.name === "NotFoundError") return msg("bar.noMicrophone");
@@ -112,6 +196,7 @@ function cancel() {
   session.recording?.cancel();
   session = null;
   voice.abandon();
+  ui.setFeature({ chip: null, finishing: null });
 }
 
 async function stop() {
@@ -125,10 +210,12 @@ async function stop() {
       voice.abandon();
       throw new LocalizedError(msg("bar.noSignal"));
     }
-    const text = await voice.finish({ durationSeconds: recorded.durationSeconds });
+    const result = await voice.finish({ durationSeconds: recorded.durationSeconds });
     const { notice } = await window.speakmore.deliver({
       audioId: current.audioId,
-      text,
+      kind: current.feature.id,
+      text: result.text,
+      ...current.feature.delivered(current.state, result),
       durationSeconds: recorded.durationSeconds,
       audio: await recorded.blob.arrayBuffer(),
     });
@@ -141,6 +228,8 @@ async function stop() {
       await window.speakmore
         .reportFailure({
           audioId: current.audioId,
+          kind: current.feature.id,
+          ...current.feature.delivered(current.state, { text: "", source: null }),
           error: t.text(message),
           durationSeconds: recorded.durationSeconds,
           audio: await recorded.blob.arrayBuffer(),
@@ -154,17 +243,22 @@ async function stop() {
 // ---------- 来自主进程的事件 ----------
 
 window.speakmore.onInput((input) => {
-  // 主进程带着是听写的第几个组合按下的（绑定 id 的序号）
-  if (input.action === "dictate" && input.down && Number.isInteger(input.chord) && input.chord !== dictateChord) {
-    dictateChord = input.chord;
-    ui.setKeys(hintKeys());
-  }
+  // 胶囊上的点击（展开、选一项）由画面自己处理
+  if (input.event === "click" && ui.click(input.id)) return;
   const type = eventTypeOf(input);
   if (type === undefined) {
     console.warn("不认识的输入事件", input);
     return;
   }
-  if (type !== null) dispatch({ type });
+  if (type === null) return;
+  dispatch({ type, action: input.action, to: input.to });
+  // 开始这一次、或者升级到的那个组合（主进程带着是第几个）：提示里写它
+  if (type === "KEY_DOWN" && input.action === state.action && Number.isInteger(input.chord)) {
+    if (state.phase === Phase.STARTING || state.phase === Phase.RECORDING) {
+      pressed = { action: input.action, index: input.chord };
+      ui.setKeys(hintKeys());
+    }
+  }
 });
 
 window.speakmore.onBarControls(ui.setControls);

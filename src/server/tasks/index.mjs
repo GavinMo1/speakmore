@@ -32,3 +32,6 @@ export const findTask = (id) => TASKS.find((task) => task.id === id) ?? null;
 
 /** start_audio 里的 mode 对应的任务；不认识的是 null */
 export const taskOfMode = (mode) => TASKS.find((task) => task.mode === mode) ?? null;
+
+/** set_mode_config 里的 mode 对应的任务；不认识的是 null */
+export const taskOfConfigMode = (mode) => TASKS.find((task) => task.configMode === mode) ?? null;

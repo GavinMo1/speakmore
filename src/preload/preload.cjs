@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld("speakmore", {
   onBarControls: (callback) => ipcRenderer.on("bar:controls", (_event, enabled) => callback(enabled)),
   setBarVisible: (visible) => ipcRenderer.send("bar:set-visible", visible),
   captureBarInput: (regions) => ipcRenderer.send("bar:capture", regions),
+  // 每次开口时现读的设置（语音翻译译成哪几种）
+  sessionConfig: () => ipcRenderer.invoke("bar:session-config"),
   deliver: (payload) => ipcRenderer.invoke("dictation:deliver", payload),
   reportFailure: (payload) => ipcRenderer.invoke("dictation:failed", payload),
 
@@ -98,6 +100,8 @@ contextBridge.exposeInMainWorld("speakmore", {
   removeHotkey: (action, index) => ipcRenderer.invoke("setup:remove-hotkey", action, index),
   resetHotkey: (action) => ipcRenderer.invoke("setup:reset-hotkey", action),
   setBarHint: (value) => ipcRenderer.invoke("setup:set-bar-hint", value),
+  // 语音翻译译成哪几种（语言 id 的列表，第一种是默认）
+  setTranslateTo: (languages) => ipcRenderer.invoke("setup:set-translate-to", languages),
 
   // 首次引导
   captureHotkey: (capturing) => ipcRenderer.send("onboarding:capture-hotkey", capturing),

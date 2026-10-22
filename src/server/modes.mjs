@@ -149,11 +149,16 @@ export const usesLocalModel = (route) =>
  */
 export const supportsTask = (route, task) => task.steps.includes(findMode(route.mode).step);
 
-/** 这种模式做不了这个任务时说的话：离线方式不支持语音翻译 */
+/**
+ * 这条路线做不了这个任务时说的那句话（离线方式不支持语音翻译）；做得了是 null。按键时主进程拿它拦，服务端也拿它挡
+ * @param {object} route
+ * @param {{ id: string, steps: readonly string[] }} task 任务的定义
+ */
+export const taskProblem = (route, task) => (supportsTask(route, task) ? null : unsupported(route.mode, task.id));
+
+/** 某种模式不支持某件事：离线方式不支持语音翻译 */
 const unsupported = (mode, task) =>
-  new LocalizedError(
-    msg("voice.unsupported", { mode: msg(`plaza.modes.${mode.id}`), feature: msg(`actions.${task.id}.name`) }),
-  );
+  msg("voice.unsupported", { mode: msg(`plaza.modes.${mode}`), feature: msg(`actions.${task}.name`) });
 
 /** 一句话说清这条路线，给日志和状态用 */
 export const describeRoute = (route) => `${route.mode}: ${findMode(route.mode).describe(route)}`;
@@ -179,7 +184,7 @@ export async function createModeRefiner({ apiKey, keys, ...options }) {
       if (prepared.task[mode.step]) await refiner.prepare(prepared);
     },
     async refine(audio, refining) {
-      if (!refining.task[mode.step]) throw unsupported(mode, refining.task);
+      if (!refining.task[mode.step]) throw new LocalizedError(unsupported(mode.id, refining.task.id));
       return refiner.refine(audio, refining);
     },
   };

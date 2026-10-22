@@ -344,7 +344,7 @@ test("开口时按模式找任务：准备和整理拿到的是同一个定好�
   assert.equal(seen[0][1], seen[1][1]);
 });
 
-test("不认识的模式、set_mode_config 和这次录音的模式对不上：回协议错误，不调模型", async () => {
+test("不认识的模式：回协议错误，不调模型", async () => {
   let calls = 0;
   const port = await start({
     async refine() {
@@ -360,10 +360,43 @@ test("不认识的模式、set_mode_config 和这次录音的模式对不上：�
 
   client.sendJson({ type: "start_audio", audio_id: "x2", mode: "voice_transcript" });
   await client.next();
-  client.sendJson({ type: "set_mode_config", audio_id: "x2", mode: "translation", parameters: {} });
-  const mismatch = await client.next();
-  assert.equal(mismatch.V.code, "mode_mismatch");
+  client.sendJson({ type: "set_mode_config", audio_id: "x2", mode: "ask_anything", parameters: {} });
+  assert.equal((await client.next()).V.code, "unknown_mode");
   assert.equal(calls, 0);
+});
+
+test("说着话再发 set_mode_config：语音输入升级成翻译、换目标语言，都以最后一条为准", async () => {
+  const seen = [];
+  const port = await start({
+    async prepare({ task }) {
+      seen.push(["prepare", task.id, task.language ?? null]);
+    },
+    async refine(_audio, { task }) {
+      seen.push(["refine", task.id, task.language]);
+      return { text: "こんにちは", source: "你好" };
+    },
+  });
+  const client = await connect(port);
+  client.sendJson({ type: "start_audio", audio_id: "u1", mode: "voice_transcript" });
+  await client.next();
+  for (const language of ["en", "ja"]) {
+    client.sendJson({
+      type: "set_mode_config",
+      audio_id: "u1",
+      mode: "translation",
+      parameters: { output_language: language },
+    });
+  }
+  await sendChunk(client, "u1", 1, ogg("x"));
+  client.sendJson({ type: "end_audio", audio_id: "u1" });
+  await client.next();
+  assert.equal((await client.next()).V.source_text, "你好");
+  assert.deepEqual(seen, [
+    ["prepare", "dictate", null],
+    ["prepare", "translate", "en"],
+    ["prepare", "translate", "ja"],
+    ["refine", "translate", "ja"],
+  ]);
 });
 
 test("语音翻译：等 set_mode_config 给了目标语言才定下来；词典照样带；成品带着原文", async () => {

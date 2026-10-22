@@ -3,6 +3,8 @@
 // 这样仿刻的两端和逆向文档能一一对上。原版还有上下文等消息，这里没有发送方，就不实现。
 // 模式（语音输入、语音翻译）照原版：start_audio 里写内部名（voice_translation），要参数的紧跟一条 set_mode_config，
 // 写发给服务端的名字（translation）和参数（output_language）。认不认识这个模式、参数对不对由服务端按任务表查（../tasks）。
+// 说完之前可以再发 set_mode_config：按语音输入的键开始、又凑成语音翻译的组合时（升级），换成翻译；
+// 悬浮条上临时换了目标语言时，换参数。都以最后一条为准。
 
 /** 3 秒一块实测 14–15 KB，这里留足余量；也用作 WebSocket 单帧上限 */
 export const MAX_CHUNK_BYTES = 256 * 1024;

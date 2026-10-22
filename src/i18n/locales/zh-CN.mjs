@@ -442,6 +442,8 @@ export default {
     recording: "再按一下 {key} 完成 · {esc} 取消",
     recordingNoEsc: "再按一下 {key} 完成",
     finishing: "整理中",
+    // 语音翻译等成品时
+    translating: "翻译中",
     noHold: "不支持按住说话：按一下开始，再按一下结束",
     noMicPermission: "缺麦克风权限：系统设置 › 隐私与安全性 › 麦克风",
     noMicrophone: "找不到麦克风",
@@ -735,6 +737,9 @@ export default {
 
   history: {
     title: "历史",
+    // 标题右边按功能筛：全部，和每个功能的名字（actions.<动作>.name）
+    filter: "按功能筛选",
+    all: "全部",
     empty: "还没有记录",
     loadError: "读不出历史：{reason}",
     today: "今天",
@@ -854,6 +859,13 @@ export default {
     sourceFailed: "下载源未能更换：{reason}",
     accelerationFailed: "加速方式未能更换：{reason}",
     barHintFailed: "操作提示未能更改：{reason}",
+    // 设置 › 语音翻译（renderer/hub/translate-pane.mjs）
+    translateTo: "译成",
+    translateDefault: "默认",
+    translateMakeDefault: "设为默认",
+    translateRemove: "移除{language}",
+    translateAdd: "添加",
+    translateFailed: "语音翻译的语言未能更改：{reason}",
     recheck: "重新检查",
     version: "版本",
     source: "源代码",

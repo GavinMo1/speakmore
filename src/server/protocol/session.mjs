@@ -4,7 +4,8 @@ import { ProtocolError } from "./protocol.mjs";
 /**
  * 一次录音在服务端的状态：按序收下各个音频块，最后合并成一段。
  * 每一块由两帧组成：先是一条声明（序号、字节数），紧跟一个二进制帧。
- * 还记着这一次要做成什么：definition 是任务的定义（../tasks），task 是按参数定下的做法，参数还没到时是 null
+ * 还记着这一次要做成什么：definition 是任务的定义（../tasks），task 是按参数定下的做法，参数还没到时是 null。
+ * 两个都可能被后来的 set_mode_config 换掉（升级成翻译、换目标语言）
  */
 export class RecordingSession {
   #chunks = [];

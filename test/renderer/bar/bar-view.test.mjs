@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createTranslator } from "../../../src/i18n/index.mjs";
-import { controlsIn, hintFor, LINGER_MS, View, viewOf } from "../../../src/renderer/bar/bar-view.mjs";
+import { createTranslator, msg } from "../../../src/i18n/index.mjs";
+import { controlsIn, hintFor, LINGER_MS, showsChip, View, viewOf } from "../../../src/renderer/bar/bar-view.mjs";
 
 const zh = createTranslator("zh-CN");
 const en = createTranslator("en");
@@ -92,4 +92,14 @@ test("哪个样子下哪个按钮点得动：打开麦克风时只能取消，�
   for (const view of [View.FINISHING, View.DONE, View.NOTICE, View.ERROR, View.HIDDEN]) {
     assert.deepEqual(controlsIn(view), [], view);
   }
+});
+
+test("等成品时写功能自己的那句（语音翻译写翻译中）；功能的胶囊只在说话、等成品时画", () => {
+  const options = { keys: ["右⌥", "空格"], escKeys: ["esc"], cancellable: true, finishing: msg("bar.translating") };
+  assert.deepEqual(hintFor(View.FINISHING, options, zh), ["翻译中"]);
+  assert.deepEqual(hintFor(View.FINISHING, options, en), ["Translating"]);
+  assert.deepEqual(
+    [View.STARTING, View.RECORDING, View.FINISHING, View.DONE, View.NOTICE, View.ERROR, View.HIDDEN].map(showsChip),
+    [true, true, true, false, false, false, false],
+  );
 });

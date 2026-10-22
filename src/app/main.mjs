@@ -32,6 +32,7 @@ import { chordsOf, chordsValue, settingNameOf } from "../hotkeys/settings.mjs";
 import { refineWarning } from "../hotkeys/validate.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale, SYSTEM_LOCALE } from "../i18n/index.mjs";
 import { createInstance } from "../instance.mjs";
+import { LANGUAGES } from "../languages.mjs";
 import { alsoLogTo, log } from "../log.mjs";
 import { chipOf, downloadSize, MODELS, makerOf, measuredOn, SOURCES, tagsOn } from "../models/catalog.mjs";
 import { sizeText } from "../models/describe.mjs";
@@ -39,8 +40,9 @@ import { createLocalModels, freeBytesAt } from "../models/library.mjs";
 import { presetsFor } from "../models/presets.mjs";
 import { createMove, settleMove } from "../move/index.mjs";
 import { CHAT_VENDORS, formatChatChoice } from "../server/chat/vendors.mjs";
-import { describeRoute, keyVendorOf, MODES } from "../server/modes.mjs";
+import { describeRoute, keyVendorOf, MODES, taskProblem } from "../server/modes.mjs";
 import { formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
+import { findTask } from "../server/tasks/index.mjs";
 import { findVendor, VENDORS } from "../server/vendors.mjs";
 import { adoptAppKeys } from "../storage/app-keys.mjs";
 import { openHistory } from "../storage/history.mjs";
@@ -49,6 +51,7 @@ import { ensureHome, installedHomeOf, keyFile, oldAppKeyFile, resolvePaths } fro
 import {
   ACCELERATIONS,
   LOCAL_MODEL_MEMORY,
+  MAX_TRANSLATE_TARGETS,
   overridingEnv,
   patchSettings,
   resolveSettings,
@@ -208,8 +211,11 @@ const HOMEPAGE = "https://github.com/zephyr4123/speakmore";
 const CHIP = chipOf();
 /** 主窗口的大小，照原版（targets/typeless 的 hub 窗口：1080×750，最小 988×685） */
 const HUB_SIZE = { width: 1080, height: 750, minWidth: 988, minHeight: 685 };
-/** 悬浮条的窗口。比条本身大一圈：上面要放一行提示，四周要留出阴影，报错时条会变宽变高 */
-const BAR_SIZE = { width: 380, height: 124 };
+/**
+ * 悬浮条的窗口。比条本身大一圈：上面要放一行提示，四周要留出阴影，报错时条会变宽变高；
+ * 再往上留出语音翻译的语言选单（最多 MAX_TRANSLATE_TARGETS 种，一种一行）。窗口透明、点不到，多出来的地方看不见也挡不住
+ */
+const BAR_SIZE = { width: 380, height: 310 };
 /**
  * 系统设置里各项权限的页面。Windows 只有麦克风这一项：没有"输入监控""辅助功能"，
  * 小帮手装上钩子就能听键、能模拟按键（报上来的 listen、trusted 总是 true）
@@ -649,8 +655,9 @@ async function main() {
     });
     // 整个窗口都点不到，鼠标事件原样落到它下面的应用上。条上的两个按钮不靠这个窗口收点击：
     // 点击一旦落在我们的窗口上，系统就会把我们切到最前面（面板类型的窗口也一样，实测过），输入框照样丢焦点。
-    // 所以点击是原生小帮手在事件到达任何窗口之前截下来的，见下面的 bar:capture
-    bar.setIgnoreMouseEvents(true);
+    // 所以点击是原生小帮手在事件到达任何窗口之前截下来的，见下面的 bar:capture。
+    // 鼠标移动照样转给页面（forward）：语音翻译的语言胶囊要靠悬停展开，点选项还是小帮手截
+    bar.setIgnoreMouseEvents(true, { forward: true });
     bar.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     bar.loadFile(join(sourceDir, "renderer", "bar", "bar.html"));
     return bar;
@@ -664,6 +671,9 @@ async function main() {
   const notify = (message) => tellBar("notice", message);
   /** 悬浮条上方的操作提示开不开（设置里的 barHint，on / off）。每次现读：被环境变量盖着时是环境变量里的 */
   const currentBarHint = () => resolveSettings({ file: PATHS.settingsFile, env: process.env }).barHint.value;
+  /** 语音翻译译成哪几种（设置里的 translate.to），第一种是默认。同样每次现读 */
+  const currentTranslateTo = () =>
+    JSON.parse(resolveSettings({ file: PATHS.settingsFile, env: process.env })["translate.to"].value);
   ipcMain.on("bar:set-visible", (_event, visible) => {
     if (visible) {
       bar.showInactive();
@@ -879,9 +889,22 @@ async function main() {
       return;
     }
     log.info("key_event", fields);
-    const { blocker } = summarizeSetup(currentSetup());
-    if (blocker === null) tellBar("input", input);
+    const blocker = summarizeSetup(currentSetup()).blocker ?? featureProblem(action);
+    // 升级到另一个说话的功能（按着右⌥又按了空格）：带上是哪个，悬浮条把这一次直接换过去。
+    // 升级到的做不了（离线方式下的语音翻译）就不带：这一次作废，紧跟着它自己的按下会说为什么
+    const upgrade = event.to ? actionOfBinding(event.to) : null;
+    const to = upgrade?.handler === "session" && featureProblem(upgrade) === null ? { to: upgrade.id } : {};
+    if (blocker === null) tellBar("input", { ...input, ...to });
     else if (event.event === "binding" && event.down) notify(blocker);
+  }
+
+  /**
+   * 这个说话的功能，现在的识别方式做不做得了（离线方式没有能翻译的模型）：做不了是要说的那句话，做得了是 null。
+   * 连着单独启动的服务端时由那边判断
+   */
+  function featureProblem(action) {
+    const task = findTask(action.id);
+    return service && task ? taskProblem(service.route, task) : null;
   }
 
   // 设置页、引导页录键（hotkey-recording.mjs）：小帮手的录键模式、定稿、探测冲突、保存
@@ -934,6 +957,8 @@ async function main() {
   }
 
   handle("config:get", () => ({ serverUrl, hotkeys: hotkeys.chords, barControls, barHint: currentBarHint() }));
+  // 悬浮条每次开口时现读的设置：设置页、命令行、手改文件改了，下一次说话就按新的
+  handle("bar:session-config", () => ({ translateTo: currentTranslateTo() }));
   handle("dictation:deliver", async (_event, payload) => {
     const result = await delivery.completed(payload);
     // 只记长度：成品是用户说的话，不进日志
@@ -1091,6 +1116,8 @@ async function main() {
       hotkeyActions: describeHotkeyActions(),
       theme: { value: theme.id, choices: THEMES.map(({ id }) => id) },
       barHint: currentBarHint(),
+      // 语音翻译译成哪几种（第一种是默认）、能选哪些、最多几种
+      translate: { to: currentTranslateTo(), choices: LANGUAGES.map(({ id }) => id), max: MAX_TRANSLATE_TARGETS },
       language: { value: languageSetting, locale },
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
       openAtLogin: {
@@ -1370,6 +1397,15 @@ async function main() {
     tellBar("bar:hint", barHint);
     setupChanged();
     const variable = overridingEnv("barHint", process.env);
+    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
+  });
+  // 设置 › 语音翻译：译成哪几种，第一种是默认。悬浮条每次开口现读，下一次说话就按新的
+  handle("setup:set-translate-to", (_event, wanted) => {
+    if (!Array.isArray(wanted)) throw new TypeError("要译成的语言不是一组");
+    const { value } = saveSetting(PATHS.settingsFile, "translate.to", JSON.stringify(wanted));
+    log.info("translate_to_changed", { to: JSON.parse(value) });
+    setupChanged();
+    const variable = overridingEnv("translate.to", process.env);
     return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
   });
   handle("setup:set-language", (_event, wanted) => {

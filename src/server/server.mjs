@@ -9,7 +9,7 @@ import {
   ServerType,
 } from "./protocol/protocol.mjs";
 import { RecordingSession } from "./protocol/session.mjs";
-import { findTask, taskOfMode } from "./tasks/index.mjs";
+import { findTask, taskOfConfigMode, taskOfMode } from "./tasks/index.mjs";
 
 export const WS_PATH = "/ws/rt_voice_flow";
 
@@ -123,13 +123,13 @@ function handleConnection(socket, { refiner, log, maxAudioBytes, vocabularyFor, 
         break;
       }
       case ClientType.MODE_CONFIG: {
+        // 以 set_mode_config 写的为准（原版发给服务端的就是这一个）：开口时是语音输入、说着话升级成翻译的，
+        // 这里换成翻译；同一个模式再发一次是换参数（悬浮条上临时换了目标语言）
         const current = requireSession(message.audioId);
-        if (message.mode !== current.definition.configMode) {
-          throw new ProtocolError(
-            "mode_mismatch",
-            `这次录音是 ${current.definition.mode}，set_mode_config 写的是 ${message.mode}`,
-          );
-        }
+        const definition = taskOfConfigMode(message.mode);
+        if (!definition) throw new ProtocolError("unknown_mode", `不认识的模式：${message.mode}`);
+        current.definition = definition;
+        current.task = null;
         settle(current, message.parameters);
         break;
       }
