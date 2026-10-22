@@ -1,6 +1,6 @@
 ---
 name: speakmore-translation-features
-description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格），名字、默认键、引擎两段、设置七栏、卡片、历史都定了；还没开工
+description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格）；分支 translate-features，第一段（叫法、砍字、设置分栏）10-22 做完，第二段语音翻译还没开工
 metadata:
   node_type: memory
   type: project
@@ -74,6 +74,20 @@ metadata:
 - **翻译的提示词**：设置里选的目标语言注入在提示词最前面，其余让模型发挥。没有 Typeless 的记录可对照，只能靠感觉和用户反馈，后面慢慢调。他先给了两条：
   1. 照语音输入的格式：能分段就分段，能分点就分点，不要堆成一大段。
   2. 译得 native 一些。
+
+**进度**：
+- 分支 `translate-features`（从 main 23d8fab 开的，还没推）。
+- 第一段 10-22 做完、停下等他压缩：
+  - `8bfb4ed`：改叫法、设置分成通用 / 快捷键 / 本机模型 / 权限 / 关于。
+    - 文案词表加了旧叫法，命令行里也不许有（`test/i18n/copy-lexicon.test.mjs`）。
+    - 语音翻译、划词翻译两栏跟着第二、三段加。
+  - `1713673`：砍说明小字。单子他照我推荐的定了。
+    - 引导第一步选识别方式时三个选项下面那行留着。
+    - 推荐组合"Gemini 直出"改叫 Gemini。
+- 留到最后改 README 时一起改：
+  - 中英 README 第 449 行的"设置 → 通用 → 本机转写模型内存"，现在是"设置 → 本机模型 → 内存"。
+  - 新叫法：直出、混合、离线，转文字、整理。
+- 开发窗口：家目录 `/tmp/smdev`，混合方式加 DeepSeek，造了 1105 条历史；调试端口 9333。
 
 **参照**：
 - Typeless 的翻译是第三个热键（Fn + 左 Shift，Windows 是右 Alt + 右 Shift），和听写共用悬浮条和后端，只多一个 `output_language`（`targets/typeless/docs/04-voice-pipeline.md:99`）。目标语言在悬浮条上悬停切换，2.0 起能预存几个。

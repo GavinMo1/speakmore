@@ -59,4 +59,4 @@
 - [热键敢做减法](hotkey-subtract-boldly.md) — 和系统按键、组合键冲突或实验里离谱的，直接不让绑，不用问；改方向才问
 - [他 Mac 上被占的键](mac-keys-taken.md) — Typeless 占着左 fn、右 ⌘，键盘没有右 Ctrl；开发版热键用右 ⌥（正式版不开时）
 - [PR #14 按需装载](speakmore-pr14-on-demand-model.md) — 外部贡献；自定义服务的空闲释放交给 customParams 的 keep_alive/ttl，本机转写合成一项 localModelMemory；10-22 已合并，跟下个版本发
-- [翻译功能的形态](speakmore-translation-features.md) — 语音输入、语音翻译、划词翻译；10-22 原型定稿，规格在 .playwright-mcp/translate-proto/README.md，还没开工
+- [翻译功能的形态](speakmore-translation-features.md) — 语音输入、语音翻译、划词翻译；规格在 .playwright-mcp/translate-proto/README.md；分支 translate-features，第一段 10-22 做完，下一段是语音翻译
