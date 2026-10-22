@@ -884,7 +884,7 @@ async function main() {
     }
     log.info("key_event", fields);
     const { blocker } = summarizeSetup(currentSetup());
-    if (blocker === null) tellBar("input", input);
+    if (bar.isVisible() || blocker === null) tellBar("input", input);
     else if (event.event === "binding" && event.down) notify(blocker);
   }
 
