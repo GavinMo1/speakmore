@@ -27,6 +27,9 @@ const REDUCED_MOTION_MS = 200;
  * @param {Function} options.t 界面语言的翻译函数（src/i18n），提示按它写
  * @param {(id: string) => void} [options.onPick] 在胶囊里点了一项
  */
+/** 鼠标离开语言胶囊（和它展开的选项）后过多久收起选单 */
+const CHIP_CLOSE_DELAY_MS = 300;
+
 export function createBarUi({ document, host, keys: initialKeys, t: initialT, onPick = () => {} }) {
   /** 在设置里改了热键时跟着换 */
   let keys = initialKeys;
@@ -66,6 +69,8 @@ export function createBarUi({ document, host, keys: initialKeys, t: initialT, on
   let hideTimer = null;
   /** 提示行左边的胶囊：{ text, options: [{ id, text, selected }] }；这一次的功能没有是 null */
   let chip = null;
+  /** 鼠标离开胶囊后等着收起选单的那个计时器 */
+  let chipCloseTimer = null;
   /** 胶囊的选项展开着没有 */
   let chipOpen = false;
   /** 等成品时提示行写什么（功能自己的那句）；null 是默认的 */
@@ -121,6 +126,7 @@ export function createBarUi({ document, host, keys: initialKeys, t: initialT, on
     const visible = chip !== null && showsChip(view);
     chipHost.hidden = !visible;
     if (!visible) {
+      clearTimeout(chipCloseTimer);
       chipOpen = false;
       chipHost.replaceChildren();
       return;
@@ -163,9 +169,17 @@ export function createBarUi({ document, host, keys: initialKeys, t: initialT, on
     syncCapture();
   }
 
-  // 鼠标移上胶囊（或者展开的选项）就展开，移开就收起。鼠标事件是主进程转过来的，窗口本身仍然点不到
-  chipHost.addEventListener("mouseenter", () => setChipOpen(true));
-  chipHost.addEventListener("mouseleave", () => setChipOpen(false));
+  // 鼠标移上胶囊（或者展开的选项）就展开，移开一会儿才收起。鼠标事件是主进程转过来的，窗口本身仍然点不到。
+  // 不能一离开就收：从胶囊往上移到选项要经过两者之间的缝（bar.css 用 .menu::after 垫上了），转过来的鼠标事件也是隔一阵
+  // 一个，斜着移、移得快时会落在胶囊和选单外面一下。10-22 他用的时候一往上滑选单就收了，选不上
+  chipHost.addEventListener("mouseenter", () => {
+    clearTimeout(chipCloseTimer);
+    setChipOpen(true);
+  });
+  chipHost.addEventListener("mouseleave", () => {
+    clearTimeout(chipCloseTimer);
+    chipCloseTimer = setTimeout(() => setChipOpen(false), CHIP_CLOSE_DELAY_MS);
+  });
 
   /** 要截点击的那一块：条上的两个按钮，或者胶囊和它的选项（data-region） */
   const elementOf = (id) => buttons[id] ?? chipHost.querySelector(`[data-region="${CSS.escape(id)}"]`);

@@ -121,6 +121,16 @@ body[data-shown="false"] .shell {
   display: block;
 }
 
+/* 选单和胶囊之间那道缝也算选单：鼠标从胶囊往上移到选项时一直在里面，不会中途收起 */
+.feature-chip .menu::after {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 8px;
+  content: "";
+}
+
 .feature-chip .option {
   display: flex;
   align-items: center;
