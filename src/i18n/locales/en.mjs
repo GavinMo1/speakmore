@@ -213,25 +213,25 @@ export default {
 
   settings: {
     describe: {
-      mode: "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this Mac first, then has any LLM polish the text; private only transcribes on this Mac and uploads nothing",
+      mode: "Recognition mode: native (Direct) sends the recording to a model that takes audio; local (Hybrid) turns speech into text first, then has any LLM refine it; private (Offline) only transcribes on this Mac and uploads nothing",
       model:
         "Which provider and model refines your words, as provider/model; a provider alone uses its default. Switch with speakmore model",
       thinking: "Gemini's thinking level; higher is slower. Other providers don't use it",
       transcriber:
-        "On the local path, which on-device model transcribes; download it first (speakmore transcriber download)",
+        "In local (Hybrid) mode, which model turns speech into text; on-device models need downloading first (speakmore transcriber download)",
       privateTranscriber:
-        "On the private path, which on-device model transcribes; on-device models only, download it first",
+        "In private (Offline) mode, which on-device model transcribes; on-device models only, download it first",
       polish:
-        "On the local path, which provider and model polishes the text, as provider/model; for a custom service write custom/<model>",
-      customUrl: "Address of your custom polishing service (OpenAI-compatible), e.g. https://api.example.com/v1",
+        "In local (Hybrid) mode, which provider and model refines the text, as provider/model; for a custom service write custom/<model>",
+      customUrl: "Address of your custom service (OpenAI-compatible), e.g. https://api.example.com/v1",
       customParams:
-        'Extra request parameters for the custom service, as one JSON object, e.g. {"reasoning_effort": "minimal"}; sent with checks and polishing alike. model, messages, and stream can\'t be set',
+        'Extra request parameters for the custom service, as one JSON object, e.g. {"reasoning_effort": "minimal"}; sent with checks and refining alike. model, messages, and stream can\'t be set',
       modelSource:
         "Where on-device models download from: cn is the mirror in China (ModelScope), original is Hugging Face. If the chosen one stalls, the other is tried, picking up where the download stopped",
       acceleration:
         "Whether on-device models use the GPU: auto uses it when there is one and falls back to the CPU if it fails; cpu uses only the CPU (for GPU driver trouble, or to leave the GPU to other programs)",
       localModelMemory:
-        "Whether the on-device transcription model stays in memory: resident keeps it loaded; 1m, 5m, 10m, or 30m releases it after that much idle time and loads it again when you next speak (the first sentence after a long pause takes a second or two longer)",
+        "Whether the on-device speech-to-text model stays in memory: resident keeps it loaded; 1m, 5m, 10m, or 30m releases it after that much idle time and loads it again when you next speak (the first sentence after a long pause takes a second or two longer)",
       barHint: "Whether the hint line above the voice bar (press … to finish · esc to cancel) shows: on or off",
       theme: "Which theme the windows use",
       language: "Interface language; system follows your Mac",
@@ -254,18 +254,18 @@ export default {
     issues: { jsonWrapped: "Occasionally wraps the text in JSON or returns HTTP 500" },
   },
   modes: {
-    native: "Native: the recording goes straight to the model",
-    local: "Local: transcribed on this Mac, then polished by a model",
-    private: "Private: transcribed on this Mac only, nothing uploaded",
-    privateOnlyLocal: "Private mode only uses on-device models; {model} is a cloud model",
+    native: "Direct: the recording goes straight to the model",
+    local: "Hybrid: speech to text first, then a model refines it",
+    private: "Offline: on-device models only, nothing uploaded",
+    privateOnlyLocal: "Offline mode only uses on-device models; {model} is a cloud model",
     notIn: "You're in {current} mode; {what} can only be changed in {mode} mode",
     notOfMode: "{name} isn't a {mode} setting; switching to {mode} can also set {names}",
     notDownloaded: "{model} isn't downloaded yet ({size}): download it first",
     what: {
       model: "the audio model",
-      transcriber: "the on-device transcription model (step 1)",
-      polish: "the polishing model (step 2)",
-      privateTranscriber: "the private mode's on-device model",
+      transcriber: "the speech-to-text model",
+      polish: "the refining model",
+      privateTranscriber: "the Offline mode's on-device model",
     },
   },
   local: {
@@ -275,7 +275,7 @@ export default {
     modelMissing:
       "The local model {model} isn't downloaded: download it on the Engine page, or run speakmore transcriber download {id}",
     undecodable: "Couldn't read the recording: {reason}",
-    transcribeFailed: "Local transcription failed: {reason}",
+    transcribeFailed: "On-device transcription failed: {reason}",
   },
   modelSources: {
     cn: "China mirror (ModelScope)",
@@ -322,7 +322,7 @@ export default {
     unknown: "There's no model called {id}",
     noSpace: "Not enough disk space: {model} needs {need} more, and only {free} is free",
     downloadFailed: "{model} didn't download: {reason}",
-    inUse: "{model} is in use and can't be deleted: switch to another model or back to native first",
+    inUse: "{model} is in use and can't be deleted: switch to another model or back to Direct first",
     checkNoSpeech: "Couldn't speak the test sentence (uses the system voice): {reason}",
     checkFailed: "{model} failed to transcribe: {reason}",
     checkEmpty: "{model} didn't transcribe a single word",
@@ -384,7 +384,7 @@ export default {
     noKeyServiceFor:
       "No {provider} API key yet: run speakmore key {id} in a terminal, or open Settings from the SpeakMore menu bar icon",
     failedFor: "{provider} key failed: {reason}",
-    whichVendor: "Private mode doesn't use a key; to save one, say which provider it's for",
+    whichVendor: "Offline mode doesn't use a key; to save one, say which provider it's for",
   },
 
   model: {
@@ -477,16 +477,16 @@ export default {
   plaza: {
     title: "Engine",
     search: "Search models",
-    modes: { native: "Native", local: "Transcribe + Polish", private: "Data Privacy" },
-    // The tree's three stages, and what each one does (on hover)
-    roles: { native: "Native", transcribe: "Transcribe", polish: "Polish" },
+    modes: { native: "Direct", local: "Hybrid", private: "Offline" },
+    // The tree's three steps, and what each one does (on hover)
+    roles: { native: "Direct", transcribe: "Transcribe", polish: "Refine" },
     roleDesc: {
-      native: "Audio straight to finished text",
-      transcribe: "Audio to text",
-      polish: "Text to finished copy",
+      native: "Recording straight to text",
+      transcribe: "Recording to text",
+      polish: "Text made readable",
     },
     // The small line above each column of the tree
-    columns: { modes: "Mode", roles: "Stage", makers: "Maker", models: "Model" },
+    columns: { modes: "Mode", roles: "Step", makers: "Maker", models: "Model" },
     unchosen: "None selected",
     state: { notDownloaded: "Not downloaded", downloading: "Downloading", downloaded: "{done}/{total} downloaded" },
     legend: { standby: "Selected · another mode" },
@@ -606,7 +606,7 @@ export default {
       params: "Extra parameters",
       paramsPlaceholder: "Extra parameters (JSON, optional)",
       paramsTip:
-        'Extra request parameters for this service, e.g. {"reasoning_effort": "minimal"}; sent with checks and polishing',
+        'Extra request parameters for this service, e.g. {"reasoning_effort": "minimal"}; sent with checks and refining',
       keyKept: "Key configured; leave blank to keep it",
       modelMissing: "Enter a model name",
     },
@@ -660,7 +660,7 @@ export default {
     downloading: "Downloading {model}",
     items: {
       "local-deepseek": { name: "On-device + DeepSeek", desc: "Best results · Fast and stable · Very low cost" },
-      "native-gemini": { name: "Gemini Native", desc: "One step · One key" },
+      "native-gemini": { name: "Gemini Direct", desc: "One step · One key" },
       "bailian-cloud": { name: "Bailian Cloud", desc: "One key · No local compute" },
       "private-qwen": { name: "Fully On-device", desc: "Nothing uploaded · Free" },
       "local-deepseek-cpu": { name: "On-device + DeepSeek", desc: "CPU model · Very low cost" },
@@ -713,9 +713,9 @@ export default {
       label: "Recognition",
       open: "Change it on the Engine page",
       desc: {
-        native: "Audio straight to the model · One request",
-        local: "Speech transcription · Text polishing",
-        private: "On-device transcription · Nothing uploaded",
+        native: "Recording straight to the model",
+        local: "Speech to text, then a model refines it",
+        private: "On-device models only · Nothing uploaded",
       },
       needs: {
         key: "No {platform} key",
@@ -755,14 +755,14 @@ export default {
     local: "Stored on this device only",
     localMeta: { device: "Never uploaded", cloud: "Sent with dictation requests" },
     localTip:
-      "The dictionary is saved in {file} and is never uploaded or synced. When you dictate, the words your model can take are sent along with that request; in Privacy mode they never leave this device",
+      "The dictionary is saved in {file} and is never uploaded or synced. When you dictate, the words your model can take are sent along with that request; in Offline mode they never leave this device",
     composer: { placeholder: "Type a new word", add: "Add", close: "Close" },
     supportTrigger: "Supported models",
     support: {
       title: "Supported models",
       meta: "Each model takes the dictionary its own way",
       all: "All models",
-      roles: { native: "Native", transcribe: "Transcription", polish: "Polishing" },
+      roles: { native: "Direct", transcribe: "Transcribe", polish: "Refine" },
       limitTerms: "First {count} words",
       limitChars: "First {count} characters",
       limitAll: "All words",
@@ -857,12 +857,13 @@ export default {
     about: "About",
     hotkey: "Shortcut",
     theme: "Theme",
-    language: "Language",
-    modelSource: "Model download source",
-    acceleration: "On-device model acceleration",
-    localModelMemory: "On-device transcription memory",
+    language: "Interface language",
+    localModels: "On-device models",
+    modelSource: "Download source",
+    acceleration: "Acceleration",
+    localModelMemory: "Memory",
     localModelMemoryFailed: "Memory setting not changed: {reason}",
-    barHint: "Hints above the voice bar",
+    barHint: "Show key hints on the voice bar",
     openAtLogin: "Launch at login",
     themeFailed: "Theme not changed: {reason}",
     languageFailed: "Language not changed: {reason}",
@@ -989,11 +990,11 @@ export default {
       note: "Change it anytime in the main window · or skip and set it up later",
     },
     prepare: {
-      native: { soft: "Connect a ", title: "native model" },
-      local: { soft: "Transcribe on device, ", title: "polish in the cloud" },
+      native: { soft: "Connect a ", title: "direct model" },
+      local: { soft: "Transcribe on device, ", title: "refine in the cloud" },
       private: { soft: "Download an ", title: "on-device model" },
       route: { label: "Route", audio: "Audio", text: "Text", local: "On-device" },
-      sections: { model: "On-device model", native: "Native recognition", local: "Polish" },
+      sections: { model: "On-device model", native: "Direct", local: "Refine" },
       model: {
         download: "Download",
         retry: "Retry",
@@ -1001,7 +1002,7 @@ export default {
         background: "Downloads in the background · you can continue",
         sources: { cn: "China mirror", original: "Hugging Face" },
       },
-      nativeOnly: "Only these take audio directly · DeepSeek, Kimi, GLM and more are under Transcribe + Polish",
+      nativeOnly: "Only these take audio directly · DeepSeek, Kimi, GLM and more are under Hybrid",
       later: "Optional · set it up later on the Engine page",
       laterModel: "Optional · download it later on the Engine page",
       more: "Cloud transcription and custom services are on the Engine page",
@@ -1185,7 +1186,7 @@ export default {
   },
 
   cli: {
-    help: `SpeakMore: press a hotkey, speak, and polished text is pasted into the current text box.
+    help: `SpeakMore: press a hotkey, speak, and refined text is pasted into the current text box.
 
   speakmore                     Start (just shows status if already running). First run asks for an API key (Gemini by default)
   speakmore start               Same as above
@@ -1201,23 +1202,23 @@ export default {
                                 Add or delete words, several at once (quote words with spaces)
   speakmore dict import <file>  Import a one-column CSV or a one-word-per-line text file; existing words are skipped
   speakmore usage [--json]      What it cost: spend and tokens today, this month, and in total, model reply times, per model
-  speakmore mode                The three recognition modes and what each uses: native sends the recording to the model; local transcribes, then a model polishes it; private transcribes with an on-device model and uploads nothing
+  speakmore mode                The three recognition modes and what each uses: native (Direct) sends the recording to the model; local (Hybrid) transcribes, then a model refines it; private (Offline) transcribes with an on-device model and uploads nothing
   speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url … --params …]
                                 Switch mode, live. Can bring that mode's own settings, e.g. a custom service on first entering local
   speakmore model               Native mode: available providers ({providers}), whether each has a key, which one is in use
   speakmore model <provider>[/<model>]
                                 Switch provider or model in native mode, e.g. speakmore model openai. Asks for its key if missing
   speakmore transcriber [<model>]
-                                Local mode, step 1: list or switch the on-device transcription model. Asks before downloading one you don't have
+                                Local mode, speech to text: list or switch the on-device model. Asks before downloading one you don't have
   speakmore transcriber download|cancel|delete <model> [--yes]
                                 Download, stop downloading, or delete an on-device model (in any mode; the one in use can't be deleted)
   speakmore transcriber check [<model>]
                                 Check an on-device model: the system voice reads a sentence and the model transcribes it. Defaults to the selected one
   speakmore polish [<provider>[/<model>] [--url <url>] [--params <JSON>]]
-                                Local mode, step 2: list or switch the polishing model ({polishers}). custom is any OpenAI-compatible service;
+                                Local mode, refining: list or switch the refining model ({polishers}). custom is any OpenAI-compatible service;
                                 --params adds request parameters for it, e.g. '{"reasoning_effort": "minimal"}'
   speakmore polish check [<provider>[/<model>] [--url <url>] [--params <JSON>]]
-                                Check step 2 works
+                                Check the refining step works
   speakmore model check [<provider>[/<model>]]
                                 Check it works: sends that provider a minimal request with its key. Defaults to the current one
   speakmore key [<provider>]    Replace a key; defaults to the current provider (input is hidden; can also be piped in)
@@ -1310,13 +1311,13 @@ export default {
       notInline:
         "Don't put the key after the command: it would stay in your shell history. Run speakmore key and paste it, or pipe it in: pbpaste | speakmore key. To set one for a specific provider, add its name: {providers}",
       forgotten: "Deleted the saved {provider} key.",
-      whichVendor: "Private mode doesn't use a key. To set one for a provider, add its name: {providers}",
+      whichVendor: "Offline mode doesn't use a key. To set one for a provider, add its name: {providers}",
       cancelled: "Cancelled; the key is unchanged.",
       nothingRead: "No key read; the old one is unchanged.",
       badShapeUnchanged: "{problem}. The old one is unchanged.",
       switchHint: "To use it: {command}",
       needText:
-        "You need a {provider} API key: recordings are transcribed on this Mac, and only the text goes to {provider} for polishing.",
+        "You need a {provider} API key: recordings are transcribed on this Mac, and only the text goes to {provider} for refining.",
       customWithModel:
         "A custom service's key goes in together with its model and address: speakmore polish custom/<model> --url <url> (not in local mode yet: speakmore mode local --polish custom/<model> --url <url>)",
     },
@@ -1387,22 +1388,21 @@ export default {
       loading: "The local model is loading; a few seconds.",
       switch: "Switch: speakmore mode {mode} (takes effect right away)",
       nativeModels: "Change the model in native: speakmore model",
-      localHops:
-        "The two steps of local: speakmore transcriber (step 1, on-device) · speakmore polish (step 2, polishing)",
+      localHops: "The two steps of local: speakmore transcriber (speech to text) · speakmore polish (refining)",
       withSettings:
         "Use a custom service on first entering local: speakmore mode local --polish custom/<model> --url <url>",
       flagsFor: "{flag} isn't a {mode} setting; switching to {mode} can bring {flags}",
       already: "Already in {mode} mode: {route}.",
       switched: "Switched to {mode} mode: {route}.",
       localRoute: "{transcriber} → {polish}",
-      privateRoute: "{transcriber} on this Mac; no polishing, nothing uploaded",
+      privateRoute: "{transcriber} on this Mac; no refining, nothing uploaded",
       privateModel: "The on-device model in private: speakmore transcriber (on-device models only)",
     },
     local: {
       notInLocal: "You're in {current} mode, so these aren't in use: switch first (speakmore mode local or private)",
       cloudNoDownload: "{model} is a cloud model; there's nothing to download",
       cloudCheckOk: "{model} works; the request took {seconds}.",
-      transcribersTitle: "On-device transcription models (step 1 of local, the model of private)",
+      transcribersTitle: "On-device speech-to-text models (the first step of local, the model of private)",
       installed: "downloaded",
       notInstalled: "not downloaded",
       downloading: "downloading {percent}%",
@@ -1442,8 +1442,8 @@ export default {
       notDownloadedHint: "{model} isn't downloaded yet: run speakmore transcriber download {id} first",
       notDownloadedLater:
         "Nothing downloaded or switched. To download it later, run speakmore transcriber download {id}",
-      transcriberSwitched: "Step 1 is now {model}.",
-      polishTitle: "Polishing models (local mode, step 2)",
+      transcriberSwitched: "Speech to text now uses {model}.",
+      polishTitle: "Refining models (the second step of local mode)",
       customName: "Custom service",
       customModel: "your own model and address",
       alsoModels: "also: {models}",
@@ -1453,26 +1453,26 @@ export default {
         "Custom service (OpenAI-compatible): speakmore polish custom/<model> --url <url> [--params '<JSON>']",
       polishParams: "Extra parameters: {params}",
       polishCheck: "Check it works: speakmore polish check",
-      polishSwitched: "Step 2 is now {model}.",
-      urlNeeded: "A custom polishing service needs its address: --url <url> (OpenAI-compatible; most end in /v1)",
-      paramsCustomOnly: "--params is only for the custom service: use it when polishing goes to custom/<model>",
+      polishSwitched: "Refining now uses {model}.",
+      urlNeeded: "A custom refining service needs its address: --url <url> (OpenAI-compatible; most end in /v1)",
+      paramsCustomOnly: "--params is only for the custom service: use it when refining goes to custom/<model>",
       sourceCurrent: "Downloads from: {source}",
       sourceSwitch: "Change: speakmore config set modelSource {other} (falls back to the other if one stalls)",
     },
     choose: {
       question: "First, pick how recordings become text (change it later with speakmore mode or speakmore model):",
-      native: "native mode: the recording goes straight to the model",
+      native: "native (Direct) mode: the recording goes straight to the model",
       local:
-        "local mode: transcribed on this Mac, only the text goes to a model for polishing (first use downloads a {size} local model)",
+        "local (Hybrid) mode: transcribed on this Mac, only the text goes to a model for refining (first use downloads a {size} local model)",
       private:
-        "private mode: transcribed on this Mac only; no polishing, nothing uploaded (first use downloads a {size} local model)",
-      privateOption: "Private    no key needed",
+        "private (Offline) mode: transcribed on this Mac only; no refining, nothing uploaded (first use downloads a {size} local model)",
+      privateOption: "Offline    no key needed",
       custom:
         "  To use another service (OpenAI-compatible): after setup, run speakmore mode local --polish custom/<model> --url <url>",
     },
     model: {
       textOnly:
-        "{provider} only takes text; it's step 2 of local mode: speakmore polish {id} (not in local mode yet? speakmore mode local first)",
+        "{provider} only takes text; it refines in local mode: speakmore polish {id} (not in local mode yet? speakmore mode local first)",
       notInNative: "You're in {current} mode, so these models aren't in use: switch back first (speakmore mode native)",
       unknownProvider: "Unknown provider {name}; available: {providers}. To pick a model, write provider/model",
       invalid: "Model is {value}: {reason}",
@@ -1538,7 +1538,7 @@ export default {
       keyEnvUnverified:
         "Using the one in the {variable} env var this run, not saved; couldn't reach {provider} at launch, so it isn't verified yet",
       keyExternal: "Connected to a separately started server; the key is set there",
-      keyNone: "Not needed (private mode)",
+      keyNone: "Not needed (Offline mode)",
       keySaved: "Saved and verified",
       keySavedUnverified: "Saved; couldn't reach {provider} at launch, so it isn't verified yet",
       keyChecking: "Verifying…",
@@ -1733,13 +1733,13 @@ speakmore help     all commands`,
     },
     settings: {
       describe: {
-        mode: "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this PC first, then has any LLM polish the text; private only transcribes on this PC and uploads nothing",
+        mode: "Recognition mode: native (Direct) sends the recording to a model that takes audio; local (Hybrid) turns speech into text first, then has any LLM refine it; private (Offline) only transcribes on this PC and uploads nothing",
         language: "Interface language; system follows Windows",
       },
     },
     modes: {
-      local: "Local: transcribed on this PC, then polished by a model",
-      private: "Private: transcribed on this PC only, nothing uploaded",
+      local: "Hybrid: speech to text first, then a model refines it",
+      private: "Offline: on-device models only, nothing uploaded",
     },
     setup: { openSettings: "tray icon › Settings" },
     key: {

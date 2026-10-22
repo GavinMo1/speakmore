@@ -493,7 +493,7 @@ test("第一次用：按模式分组问用哪一家，选 DeepSeek 就进 local 
   assert.equal(code, 0, output.out + output.err);
   assert.match(
     questions[0],
-    /native 模式[\s\S]*1.*Gemini[\s\S]*2.*OpenAI[\s\S]*3.*Bailian[\s\S]*local 模式.*850 MB[\s\S]*4.*DeepSeek[\s\S]*5.*Bailian/,
+    /native（直出）模式[\s\S]*1.*Gemini[\s\S]*2.*OpenAI[\s\S]*3.*Bailian[\s\S]*local（混合）模式.*850 MB[\s\S]*4.*DeepSeek[\s\S]*5.*Bailian/,
   );
   assert.match(questions[0], /custom\/<模型名> --url/);
   assert.deepEqual([saved("mode"), saved("polish")], ["local", "deepseek/deepseek-flash"]);
@@ -2549,12 +2549,12 @@ test("speakmore mode private：不问 key，本机模型下好了就切；状态
   assert.equal(await speakmore("mode", "private"), 0);
   assert.deepEqual(asked, []);
   assert.deepEqual(daemon.requests.find(({ cmd }) => cmd === "set-mode").params, { mode: "private", changes: {} });
-  assert.match(output.out, /本机的 qwen3-asr-0\.6b-q8，不润色、不上传/);
+  assert.match(output.out, /本机的 qwen3-asr-0\.6b-q8，不整理、不上传/);
 
   const panel = harness({ daemon: fakeDaemon({ running: PRIVATE_READY }) });
   assert.equal(await panel.speakmore("status"), 0);
-  assert.match(panel.output.out, /不用 key（数据隐私模式）/);
-  assert.match(panel.output.out, /数据隐私：只用本机模型转写，什么都不上传/);
+  assert.match(panel.output.out, /不用 key（离线模式）/);
+  assert.match(panel.output.out, /离线：只用本机模型，什么都不上传/);
 });
 
 test("数据隐私模式里 speakmore transcriber 换的是它自己的那一项，local 的第一跳不动；云端的不收；key 要写明哪一家", async () => {
@@ -2567,9 +2567,9 @@ test("数据隐私模式里 speakmore transcriber 换的是它自己的那一项
   assert.equal(settings.transcriber.value, "qwen3-asr-0.6b-q8");
 
   assert.equal(await speakmore("transcriber", "bailian/qwen3-asr-flash"), 1);
-  assert.match(output.err, /数据隐私模式只用本机模型/);
+  assert.match(output.err, /离线方式只用本机模型/);
   assert.equal(await speakmore("key"), 2);
-  assert.match(output.err, /数据隐私模式不用 key/);
+  assert.match(output.err, /离线模式不用 key/);
 });
 
 test("第一跳交给云端（审查 4 号）：换成云端、检查、下载、切进 local、第一次启动，都照常说话，不崩", async () => {
@@ -2609,7 +2609,7 @@ test("第一次启动的选项里有数据隐私模式：选它不问 key，设�
     answers: ["private"],
   });
   assert.equal(await speakmore(), 0);
-  assert.match(questions.join("\n"), /private 模式：只用本机模型转写/);
+  assert.match(questions.join("\n"), /private（离线）模式：只用本机模型转文字/);
   assert.deepEqual(asked, []);
   assert.equal(resolveSettings({ file: paths.settingsFile, env: {} }).mode.value, "private");
 });
@@ -2617,8 +2617,11 @@ test("第一次启动的选项里有数据隐私模式：选它不问 key，设�
 test("mode：列出两种模式、各自用的模型，现在用的打一个点，说怎么切、两种模式里各自怎么换模型", async () => {
   const { speakmore, output } = harness();
   assert.equal(await speakmore("mode"), 0);
-  assert.match(output.out, /● native\s+原生：录音直接交给模型\s+Gemini 的 gemini-3\.6-flash/);
-  assert.match(output.out, /\n {4}local\s+本地转写，再交给模型润色\s+qwen3-asr-0\.6b-q8 → DeepSeek 的 deepseek-flash/);
+  assert.match(output.out, /● native\s+直出：录音直接交给模型\s+Gemini 的 gemini-3\.6-flash/);
+  assert.match(
+    output.out,
+    /\n {4}local\s+混合：先转文字，再交给模型整理\s+qwen3-asr-0\.6b-q8 → DeepSeek 的 deepseek-flash/,
+  );
   assert.match(output.out, /speakmore mode local/);
   assert.match(output.out, /speakmore model\b/);
   assert.match(output.out, /speakmore transcriber/);
@@ -2730,9 +2733,9 @@ test("在 native 模式时换 local 的两跳：不能换，说先切到 local�
   const daemon = fakeDaemon({ running: READY });
   const { speakmore, output } = harness({ daemon });
   assert.equal(await speakmore("transcriber", "sensevoice-small-q8"), 1);
-  assert.match(output.err, /现在是 native 模式.*本机转写模型（第一跳）.*local 模式.*speakmore mode local/);
+  assert.match(output.err, /现在是 native 模式.*转文字的模型.*local 模式.*speakmore mode local/);
   assert.equal(await speakmore("polish", "deepseek/deepseek-v4-pro"), 1);
-  assert.match(output.err, /润色模型（第二跳）/);
+  assert.match(output.err, /整理的模型要在 local 模式里才能换/);
   assert.ok(!daemon.calls.some((call) => call.startsWith("set-")));
 
   const list = harness({ daemon: fakeDaemon({ running: READY }) });
@@ -2783,7 +2786,7 @@ test("transcriber：列出本机转写模型（第一跳），大小、下载过
   haveModel("sensevoice-small-q8");
   const { speakmore, output } = harness();
   assert.equal(await speakmore("transcriber"), 0);
-  assert.match(output.out, /local 的第一跳、private 的模型/);
+  assert.match(output.out, /local 的第一步、private 的模型/);
   assert.match(output.out, /● qwen3-asr-0\.6b-q8\s+Qwen3-ASR 0\.6B \(Q8_0\)\s+850 MB\s+还没下载/);
   assert.match(output.out, /sensevoice-small-q8\s+SenseVoice Small \(Q8_0\)\s+253 MB\s+已下载/);
   assert.match(output.out, /本机已下载 1 \/ 4 个，共 253 MB · 磁盘剩余 /);
@@ -2824,7 +2827,7 @@ test("transcriber <模型>：不用 key，让在运行的那个当场换；写�
   assert.equal(await speakmore("transcriber", "sensevoice-small-q8"), 0);
   assert.deepEqual(daemon.requests.at(-1), { cmd: "set-transcriber", params: { transcriber: "sensevoice-small-q8" } });
   assert.equal(asked.length, 0);
-  assert.match(output.out, /第一跳换成了 sensevoice-small-q8/);
+  assert.match(output.out, /转文字的模型换成了 sensevoice-small-q8/);
 
   const wrong = harness();
   assert.equal(await wrong.speakmore("transcriber", "gemini"), 2);
@@ -2968,7 +2971,7 @@ test("transcriber check：交给后台念一句、转一次，说念的、转出
   assert.match(output.out, /正在检查 Qwen3-ASR 0\.6B \(Q8_0\)/);
   assert.match(
     output.out,
-    /能用。念的是「今天下午三点开会，记得带上电脑。」，转出来「今天下午三点开会，记得带上电脑。」，转写用了 0\.3 秒/,
+    /能用。念的是「今天下午三点开会，记得带上电脑。」，转出来「今天下午三点开会，记得带上电脑。」，用了 0\.3 秒/,
   );
   assert.match(output.out, /临时装上用了 1\.8 秒/);
 
@@ -3051,7 +3054,7 @@ test("polish：列出润色的那几家（第二跳），各家能挑的模型�
   haveDeepSeekKey();
   const { speakmore, output } = harness();
   assert.equal(await speakmore("polish"), 0);
-  assert.match(output.out, /local 模式的第二跳/);
+  assert.match(output.out, /local 模式的第二步/);
   assert.match(output.out, /● deepseek\s+DeepSeek\s+deepseek-flash\s+key 存着/);
   assert.match(output.out, /deepseek-v4-pro/);
   assert.match(output.out, /custom\s+自定义服务/);
@@ -3064,7 +3067,7 @@ test("polish <厂商>/<模型>：有 key 就让在运行的那个当场换", asy
   const { speakmore, output } = harness({ daemon });
   assert.equal(await speakmore("polish", "deepseek/deepseek-v4-pro"), 0);
   assert.deepEqual(daemon.requests.at(-1), { cmd: "set-polish", params: { polish: "deepseek/deepseek-v4-pro" } });
-  assert.match(output.out, /第二跳换成了 DeepSeek 的 deepseek-v4-pro/);
+  assert.match(output.out, /整理的模型换成了 DeepSeek 的 deepseek-v4-pro/);
 });
 
 test("polish custom/<模型> --url <地址>：先问自定义服务的 key，连模型和地址一起验证，再换", async () => {
@@ -3099,7 +3102,7 @@ test("polish custom/<模型> --url --params：额外参数规整后连模型和�
   };
   assert.deepEqual(daemon.requests.find(({ cmd }) => cmd === "set-key").params.changes, changes);
   assert.deepEqual(daemon.requests.at(-1), { cmd: "set-polish", params: changes });
-  assert.match(output.out, /第二跳换成了 router\.example 的 gpt-5-mini/);
+  assert.match(output.out, /整理的模型换成了 router\.example 的 gpt-5-mini/);
 });
 
 test("polish --params：写坏了、给的不是自定义服务，以 2 退出说清楚", async () => {

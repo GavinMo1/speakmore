@@ -55,7 +55,7 @@ test("数据隐私模式里换本机模型：存进它自己的那一项，local
 
   const cloud = await app.modes.setTranscriber("bailian/qwen3-asr-flash");
   assert.equal(cloud.ok, false);
-  assert.match(zh.text(cloud.problem), /数据隐私模式只用本机模型/);
+  assert.match(zh.text(cloud.problem), /离线方式只用本机模型/);
   assert.equal(app.service.route.transcriber, "sensevoice-small-q8");
 });
 

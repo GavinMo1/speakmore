@@ -1320,15 +1320,3 @@ code.setting-value {
     transition: none;
   }
 }
-
-/* 设置 › 通用里的快捷键一组：一个小标题，下面每个动作一行（shared/hotkey-editor.css） */
-.hotkey-group {
-  padding-top: 0.25rem;
-}
-
-.hotkey-group-title {
-  margin: 0;
-  font-size: var(--text-micro);
-  font-weight: var(--weight-medium);
-  color: var(--ink-2);
-}

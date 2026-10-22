@@ -213,9 +213,9 @@ test("local 的两跳在 native 模式时：不能换（没法选），不验证
   const { modes, calls } = setup();
   const first = await modes.setTranscriber("sensevoice-small-q8");
   assert.equal(first.ok, false);
-  assert.match(zh.text(first.problem), /本机转写模型（第一跳）.*local 模式/);
+  assert.match(zh.text(first.problem), /转文字的模型.*local 模式/);
   const second = await modes.setPolish("deepseek/deepseek-v4-pro");
-  assert.match(zh.text(second.problem), /润色模型（第二跳）.*local 模式/);
+  assert.match(zh.text(second.problem), /整理的模型.*local 模式/);
   assert.deepEqual(calls, []);
   assert.equal(saved("transcriber"), "qwen3-asr-0.6b-q8");
   assert.equal(saved("polish"), "deepseek/deepseek-flash");
@@ -374,7 +374,7 @@ test("检查本机模型：念不出来、转写出错、一个字都没转出�
     },
   });
   const failed = await broken.modes.checkTranscriber("qwen3-asr-0.6b-q8", { locale: "zh-CN" });
-  assert.match(zh.text(failed.problem), /Qwen3-ASR 0\.6B \(Q8_0\) 转写出错：转写进程退出了/);
+  assert.match(zh.text(failed.problem), /Qwen3-ASR 0\.6B \(Q8_0\) 转文字出错：转写进程退出了/);
 
   const silent = setup({ transcribe: async () => ({ text: "  ", transcribeMs: 1, loadMs: 9, backend: "cpu" }) });
   const empty = await silent.modes.checkTranscriber("qwen3-asr-0.6b-q8", { locale: "zh-CN" });

@@ -97,7 +97,7 @@ test("本地转写出错：报分好类的 ModelError，说是本地转写的事
   const error = await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm" }).catch((e) => e);
   assert.ok(error instanceof ModelError);
   assert.equal(error.kind, "other");
-  assert.match(zh.text(error.problem), /本地转写/);
+  assert.match(zh.text(error.problem), /本机转文字失败/);
   assert.match(error.detail, /code 3/);
 });
 
