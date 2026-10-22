@@ -140,6 +140,17 @@ test("0.3 以前的写法照样认：设置文件里只写了 Gemini 的模型�
   );
 });
 
+test("设置文件开头带 BOM（Windows PowerShell 5.1 的 Set-Content -Encoding utf8、老版记事本存的）：照样读，改一项后存成不带 BOM 的", () => {
+  writeFileSync(file, '\uFEFF{"theme":"indigo","localModelMemory":"5m"}\n');
+  const settings = resolveSettings({ file, env: {} });
+  assert.deepEqual(settings.theme, { value: "indigo", source: "file" });
+  assert.deepEqual(settings.localModelMemory, { value: "5m", source: "file" });
+  saveSetting(file, "barHint", "off");
+  const text = readFileSync(file, "utf8");
+  assert.equal(text.startsWith("\uFEFF"), false);
+  assert.deepEqual(JSON.parse(text), { theme: "indigo", localModelMemory: "5m", barHint: "off" });
+});
+
 test("热键写坏了也能用 config set 改回来：写入前的检查不读正要被换掉的那个旧值", () => {
   writeFileSync(file, JSON.stringify({ "hotkey.dictate": ["AltRigth"], theme: "ink" }));
   assert.equal(saveSetting(file, "hotkey.dictate", "ControlRight").value, OTHER_HOTKEY);

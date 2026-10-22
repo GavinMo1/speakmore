@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { chordKeycaps, chordName, chordString, chordText, parseChord } from "../../src/hotkeys/chord.mjs";
-import { LEGACY_HOTKEYS, legacyChord, legacyIdOf } from "../../src/hotkeys/legacy.mjs";
+import { LEGACY_HOTKEYS, legacyChord } from "../../src/hotkeys/legacy.mjs";
 import { createTranslator, problemOf } from "../../src/i18n/index.mjs";
 
 const zhMac = createTranslator("zh-CN", "darwin");
@@ -144,19 +144,4 @@ test("旧 id 对照：认得的六个换成组合，别的是 null", () => {
   assert.equal(legacyChord("right_ctrl"), "ControlRight");
   assert.equal(legacyChord("AltRight"), null);
   assert.equal(legacyChord("toString"), null);
-});
-
-test("反过来：听写只绑了一个旧键时给旧 id（status --json 的旧字段，D13），按系统分；别的组合是 null", () => {
-  assert.equal(legacyIdOf([["AltRight"]], "darwin"), "right_option");
-  assert.equal(legacyIdOf([["AltRight"]], "win32"), "right_alt");
-  assert.equal(legacyIdOf([["ControlRight"]], "darwin"), "right_control");
-  assert.equal(legacyIdOf([["ControlRight"]], "win32"), "right_ctrl");
-  assert.equal(legacyIdOf([["MetaRight"]], "darwin"), "right_command");
-  assert.equal(legacyIdOf([["Fn"]], "darwin"), "fn");
-  // Windows 上没有这两个旧 id
-  assert.equal(legacyIdOf([["MetaRight"]], "win32"), null);
-  assert.equal(legacyIdOf([["Fn"]], "win32"), null);
-  assert.equal(legacyIdOf([["AltRight", "Space"]], "darwin"), null);
-  assert.equal(legacyIdOf([["AltRight"], ["Fn"]], "darwin"), null);
-  assert.equal(legacyIdOf([], "darwin"), null);
 });

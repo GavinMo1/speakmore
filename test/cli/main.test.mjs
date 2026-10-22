@@ -44,9 +44,6 @@ const READY = {
   starting: false,
   "hotkey.dictate": DEFAULT_HOTKEY,
   "hotkey.cancel": '["Escape"]',
-  // 0.13 以前的两个字段，留一个版本（D13）
-  hotkey: "right_option",
-  hotkeyLabel: zhHotkey,
   provider: "gemini",
   mode: "native",
   model: "gemini/gemini-3.6-flash",
@@ -795,16 +792,12 @@ test("status --json：给程序读的，一行 JSON，带运行状态、设置�
   assert.deepEqual(parsed.stats, { today: null, total: null });
 });
 
-test("status --json 里 0.13 以前的 settings.hotkey 留一个版本（D13）：听写是旧键之一时给旧 id，按系统分；新组合给 null", async () => {
-  const json = async (platform) => {
-    const { speakmore, output } = harness({ daemon: fakeDaemon({ running: READY }), platform });
-    await speakmore("status", "--json");
-    return JSON.parse(output.out).settings.hotkey;
-  };
-  assert.deepEqual(await json("darwin"), { value: "right_option", source: "default" });
-  assert.deepEqual(await json("win32"), { value: "right_alt", source: "default" });
-  writeFileSync(paths.settingsFile, JSON.stringify({ "hotkey.dictate": ["AltRight+Space"] }));
-  assert.deepEqual(await json("darwin"), { value: null, source: "file" });
+test("status --json：0.13 以前的旧字段 settings.hotkey 留过一个版本（D13），0.15 起没有了，快捷键只看 hotkey.<动作>", async () => {
+  const { speakmore, output } = harness({ daemon: fakeDaemon({ running: READY }) });
+  await speakmore("status", "--json");
+  const { settings } = JSON.parse(output.out);
+  assert.equal(Object.hasOwn(settings, "hotkey"), false);
+  assert.deepEqual(settings["hotkey.dictate"], { value: DEFAULT_HOTKEY, source: "default" });
 });
 
 // ---------- 更新 ----------

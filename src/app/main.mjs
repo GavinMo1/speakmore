@@ -28,7 +28,6 @@ import {
 } from "../hotkeys/bindings.mjs";
 import { chordString, chordsName, chordsText } from "../hotkeys/chord.mjs";
 import { isModifier, nativeCode } from "../hotkeys/keys.mjs";
-import { legacyIdOf } from "../hotkeys/legacy.mjs";
 import { chordsOf, chordsValue, settingNameOf } from "../hotkeys/settings.mjs";
 import { refineWarning } from "../hotkeys/validate.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale, SYSTEM_LOCALE } from "../i18n/index.mjs";
@@ -1690,10 +1689,6 @@ async function main() {
       hotkeysInEffect: Object.fromEntries(
         ACTIONS.map((action) => [action.id, chordsValue(hotkeys.chords[action.id] ?? [])]),
       ),
-      // 0.13 以前的两项留一个版本（D13）：听写装着的是一个旧键时给旧 id、新组合给 null；hotkeyLabel 是它叫什么，
-      // 0.5 及以前的命令行靠它说热键叫什么。0.15 删
-      hotkey: legacyIdOf(hotkeys.chords.dictate, process.platform),
-      hotkeyLabel: say.text(chordsName(hotkeys.chords.dictate)),
       // 连着单独启动的服务端时，用哪个模型由那边定
       provider: service ? (keys.provider?.id ?? null) : null,
       // 每家的 key 在哪。装成应用的那个各存各的，命令行要靠这一项才知道

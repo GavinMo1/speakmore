@@ -86,8 +86,8 @@ function localModelLine(localModel, t) {
 
 /**
  * 听写的热键叫什么：后台实际装上的（hotkeysInEffect.dictate；设置里写的装不上时它退回了默认键），没报这一项的后台
- * 用设置里的 hotkey.dictate。0.13 以前的后台只报旧 id（hotkey），在这里换成组合；
- * 都认不出（比这个命令新的版本）时用后台报的说法 hotkeyLabel
+ * 用设置里的 hotkey.dictate。升级途中连着的旧后台：0.13 以前的只报旧 id（hotkey），在这里换成组合；
+ * 都认不出时用 0.14 及以前的后台报的说法 hotkeyLabel
  */
 function hotkeyTitle(status, t) {
   try {

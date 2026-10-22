@@ -177,6 +177,12 @@ test("旧设置换算：hotkey 的旧 id 换成 hotkey.dictate 的组合、删�
   assert.equal(readFileSync(settingsIn(), "utf8"), after);
 });
 
+test("旧设置文件开头带 BOM（Windows 上手改过的）：照样换算", () => {
+  writeFileSync(settingsIn(), '\uFEFF{"theme":"indigo","hotkey":"right_alt"}\n');
+  assert.equal(migrateLegacySettings(settingsIn())?.to, "hotkey.dictate");
+  assert.deepEqual(stored(), { theme: "indigo", "hotkey.dictate": ["AltRight"] });
+});
+
 test("六个旧 id 都换：两个系统的写在一起，Mac 的设置搬到 Windows 上照样换（绑不绑得上由下发前那道查）", () => {
   const cases = {
     right_option: "AltRight",
