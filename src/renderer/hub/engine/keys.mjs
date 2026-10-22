@@ -197,12 +197,7 @@ export function createKeys(ctx) {
       h(
         "div",
         { class: "key-text" },
-        h(
-          "span",
-          { class: "key-name-line" },
-          h("span", { class: "key-name", text: platformName(platform) }),
-          platform.id === "bailian" && h("span", { class: "tag", "data-tone": "accent", text: t("plaza.keys.widest") }),
-        ),
+        h("span", { class: "key-name-line" }, h("span", { class: "key-name", text: platformName(platform) })),
         h("span", { class: "key-cover", text: coverage(platform) }),
       ),
       h(

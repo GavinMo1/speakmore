@@ -105,7 +105,8 @@ export function createTree(ctx, els) {
     const needs = way.problem
       ? [{ kind: "problem", text: t.text(way.problem) }]
       : way.needs.map((need) => ({ kind: need.kind, text: needText(need, { ...way, platformOf, downloadOf }) }));
-    let status;
+    // 没在用、也不缺什么的方式只写名字，说明在悬停里
+    let status = null;
     if (busy) status = line("busy", t("home.mode.switching"));
     else if (ui.modeFailure?.mode === mode) {
       const text = `${t("home.mode.failed")} · ${t.text(ui.modeFailure.problem)}`;
@@ -113,7 +114,6 @@ export function createTree(ctx, els) {
     } else if (current) {
       status = line("live", [t("plaza.inUse"), ...needs.slice(0, 1).map(({ text }) => text)].join(" · "));
     } else if (needs.length > 0) status = line(needs[0].kind, needs[0].text, needs.map(({ text }) => text).join(" · "));
-    else status = line("plain", t(`home.mode.desc.${mode}`));
     return h(
       "button",
       {
@@ -206,7 +206,7 @@ export function createTree(ctx, els) {
     const { view } = ctx;
     const kind = view.groupLine(role, group);
     const block = view.groupBlocker(group);
-    let status;
+    let status = null;
     if (kind === "live") status = line("live", t("plaza.inUse"));
     else if (kind === "standby") status = line("standby", t("plaza.chosen"));
     else if (block === "key") status = line("key", t("plaza.notice.noKey"));
@@ -214,7 +214,7 @@ export function createTree(ctx, els) {
     else if (group.kind === "local") {
       const done = group.items.filter(({ installed }) => installed).length;
       status = line("local", t("plaza.state.downloaded", { done, total: group.items.length }));
-    } else status = line("plain", group.channels.map((id) => view.channelName(group, id)).join(" · "));
+    }
     return node({
       level: "maker",
       key: group.id,
@@ -286,12 +286,6 @@ export function createTree(ctx, els) {
     const block = view.blocker(role, group, item);
     const open = ui.detail && ui.item === key;
     const tags = badges(view, role, group, item);
-    const sub =
-      group.kind === "custom"
-        ? t("plaza.custom.kind")
-        : Object.keys(item.offers ?? {})
-            .map((id) => view.channelName(group, id))
-            .join(" · ");
     return h(
       "button",
       {
@@ -308,7 +302,7 @@ export function createTree(ctx, els) {
         "span",
         { class: "leaf-text" },
         h("span", { class: "leaf-name", text: itemName(group, item) }),
-        tags.length > 0 ? h("span", { class: "leaf-tags" }, tags) : sub && h("span", { class: "leaf-sub", text: sub }),
+        tags.length > 0 ? h("span", { class: "leaf-tags" }, tags) : null,
       ),
       leafMark(role, group, item),
     );

@@ -88,13 +88,12 @@ test("每个组合都算得出每月多少钱（没量过的家要先用 scripts
   }
 });
 
-test("文案中英都有名字和说明，没有删了组合还留着的文案", () => {
+test("文案中英都有名字，没有删了组合还留着的文案", () => {
   const ids = PRESETS.map(({ id }) => id).sort();
   for (const locale of ["zh-CN", "en"]) {
     const texts = findLocale(locale).messages.presets?.items ?? {};
     for (const id of ids) {
       assert.equal(typeof texts[id]?.name, "string", `${locale} 少了 presets.${id}.name`);
-      assert.equal(typeof texts[id]?.desc, "string", `${locale} 少了 presets.${id}.desc`);
     }
     const extra = Object.keys(texts).filter((key) => !ids.includes(key));
     assert.deepEqual(extra, [], `${locale} 里多出来的组合文案`);

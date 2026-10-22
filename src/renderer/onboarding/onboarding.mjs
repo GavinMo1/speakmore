@@ -175,10 +175,9 @@ function renderWays() {
       mode === "private" ? need("i-lock", t("onboarding.way.offline")) : need("i-key-round", t("onboarding.way.key")),
     );
   }
-  $("way-note").replaceChildren(
-    svg("i-circle-alert"),
-    t(setup.switchable ? "onboarding.way.note" : "home.mode.locked"),
-  );
+  // 只在换不了时说一句（识别方式由单独启动的服务端决定）
+  $("way-note").hidden = setup.switchable;
+  $("way-note").replaceChildren(svg("i-circle-alert"), t("home.mode.locked"));
 }
 
 /**
@@ -321,7 +320,6 @@ function modelSection() {
         svg("i-circle-alert"),
         h("span", {}, h("b", { text: t("plaza.actionFailed") }), ` · ${t.text(problem)}`),
       ),
-    !model.installed && h("p", { class: "section-hint", text: t("onboarding.prepare.model.background") }),
   );
 }
 
@@ -337,7 +335,6 @@ function keySection() {
         { class: "prepare-section key-section" },
         h("h2", { class: "section-label", text: t(`onboarding.prepare.sections.${mode}`) }),
         host,
-        mode === "native" && h("p", { class: "section-hint", text: t("onboarding.prepare.nativeOnly") }),
       ),
       panel: createKeyPanel(host, {
         mode,
@@ -377,13 +374,6 @@ function renderPrepare() {
     else if (model) host.prepend(model);
     else old?.remove();
   } else host.replaceChildren(...[model, key].filter(Boolean));
-  // 都齐了就不用再说"可跳过"
-  $("prepare-note").hidden = needsOf(plan, setup).length === 0;
-  $("prepare-note").replaceChildren(
-    svg("i-circle-alert"),
-    t(plan.mode === "private" ? "onboarding.prepare.laterModel" : "onboarding.prepare.later"),
-    plan.mode === "local" ? ` · ${t("onboarding.prepare.more")}` : "",
-  );
 }
 
 /**

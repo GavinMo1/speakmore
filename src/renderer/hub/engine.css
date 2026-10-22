@@ -527,13 +527,6 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
   gap: 0.25rem;
 }
 
-.leaf-sub {
-  font-size: var(--text-small);
-  line-height: 1.35;
-  color: var(--ink-2);
-  white-space: nowrap;
-}
-
 /* 型号右边：正在用、已选定写成带点的字；没下载、下载中、缺密钥只放一个小图标 */
 .leaf-state {
   display: inline-flex;
@@ -792,12 +785,6 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
   width: 0.875rem;
   height: 0.875rem;
   margin-top: 0.15rem;
-}
-
-.detail-note-meta {
-  margin-left: auto;
-  font-size: var(--text-micro);
-  white-space: nowrap;
 }
 
 .detail-channel {

@@ -144,7 +144,7 @@ body {
   margin-bottom: 1.25rem;
 }
 
-/* 页底的一句：能跳过、去哪改 */
+/* 页底的一句：识别方式换不了时说为什么 */
 .footnote {
   display: flex;
   align-items: flex-start;
@@ -342,12 +342,6 @@ body {
   margin: 0 0 0.625rem;
   font-size: var(--text-small);
   font-weight: var(--weight-semibold);
-  color: var(--ink-2);
-}
-
-.section-hint {
-  margin-top: 0.625rem;
-  font-size: var(--text-small);
   color: var(--ink-2);
 }
 

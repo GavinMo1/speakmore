@@ -285,7 +285,7 @@ export function createSpend() {
     [...list.children].find((item) => item.dataset.key === focused)?.focus({ preventScroll: true });
   }
 
-  /** 底下一行小字：几次听写、多少 token、里面含了几次检查、多少是提示词缓存，有的型号没标价，钱是估算的 */
+  /** 底下一行小字：几次听写、多少 token、里面含了几次检查、多少是提示词缓存，有的型号没标价；钱是估算的，口径在悬停里 */
   function renderNote() {
     const now = period();
     const notes = [];
@@ -297,8 +297,8 @@ export function createSpend() {
     if (unpriced.length > 0) {
       notes.push(t("home.unpriced", { models: t.list(unpriced.map(({ model }) => model)), count: now.unpricedCalls }));
     }
-    notes.push(t("home.estimate"));
     $("spend-note").textContent = notes.join(" · ");
+    $("spend-note").title = t("home.estimate");
   }
 
   function render() {

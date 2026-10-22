@@ -94,7 +94,7 @@ async function refreshData() {
       window.speakmore.appInfo(),
     ]);
     home.render({ insights, usage, app });
-    history.render({ rows, app });
+    history.render({ rows });
   } catch (error) {
     console.error("读历史失败", error);
     history.showError(error instanceof Error ? error.message : String(error));

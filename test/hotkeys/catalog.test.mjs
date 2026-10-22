@@ -50,12 +50,10 @@ test("每个动作：有设置项 hotkey.<动作> 和环境变量，config 列�
   }
 });
 
-test("每个动作：每种语言都有名字和说明", () => {
+test("每个动作：每种语言都有名字", () => {
   for (const { id, messages } of LOCALES) {
     for (const action of ACTIONS) {
-      for (const field of ["name", "description"]) {
-        assert.equal(typeof messages.actions?.[action.id]?.[field], "string", `${id} 的 actions.${action.id}.${field}`);
-      }
+      assert.equal(typeof messages.actions?.[action.id]?.name, "string", `${id} 的 actions.${action.id}.name`);
     }
   }
 });

@@ -129,13 +129,13 @@
           <button type="button" class="button" id="banner-action" data-i18n="hub.fix">Settings</button>
         </div>
 
-        <!-- 首页：标题下面一行是热键，标题右边写着正在用哪种识别方式，点一下去引擎页换（mode-chip.mjs）；
+        <!-- 首页：标题下面一行是功能和它的键，标题右边写着正在用哪种识别方式，点一下去引擎页换（mode-chip.mjs）；
              下面是原版"洞察"那一列，加上我们的花费，占满整宽 -->
         <section class="page" data-route="home" aria-labelledby="home-title">
           <header class="page-head">
             <div class="page-heading">
               <h1 class="page-title" id="home-title" data-i18n="home.title">Speak, don't type</h1>
-              <p class="page-lede"><span class="keycaps" id="home-keycap"></span><span data-i18n="home.dictate">Press to talk</span></p>
+              <p class="page-lede"><span class="keycaps" id="home-keycap"></span><span data-i18n="actions.dictate.name">Voice input</span></p>
             </div>
             <button type="button" class="picker-trigger" id="mode-chip"></button>
           </header>
@@ -244,7 +244,6 @@
           <div class="picker wide" id="preset-picker" popover role="dialog" aria-labelledby="preset-picker-title">
             <header class="picker-head">
               <h2 class="picker-title" id="preset-picker-title" data-i18n="presets.title">Recommended setups</h2>
-              <p class="picker-meta" id="preset-meta"></p>
             </header>
             <div class="picker-options" id="preset-options"></div>
           </div>
@@ -323,7 +322,6 @@
           <div class="picker wide" id="vocabulary-support" popover role="dialog" aria-labelledby="vocabulary-support-title">
             <header class="picker-head">
               <h2 class="picker-title" id="vocabulary-support-title" data-i18n="vocabulary.support.title">Supported models</h2>
-              <p class="picker-meta" data-i18n="vocabulary.support.meta">Each model takes the dictionary its own way</p>
             </header>
             <div class="vocab-support" id="vocabulary-support-list"></div>
           </div>
@@ -344,7 +342,6 @@
           <form class="vocab-composer" id="vocabulary-composer" novalidate hidden>
             <svg class="icon vocab-composer-icon" aria-hidden="true"><use href="#i-plus" /></svg>
             <input class="vocab-composer-input" id="vocabulary-composer-input" type="text" autocomplete="off" spellcheck="false" data-i18n-placeholder="vocabulary.composer.placeholder" data-i18n-aria-label="vocabulary.composer.placeholder" />
-            <span class="vocab-composer-hint" aria-hidden="true"><kbd>↵</kbd><span data-i18n="vocabulary.composer.add">Add</span><kbd>esc</kbd><span data-i18n="vocabulary.composer.close">Close</span></span>
             <button type="button" class="icon-button" id="vocabulary-composer-close" data-i18n-title="vocabulary.composer.close" data-i18n-aria-label="vocabulary.composer.close">
               <svg class="icon" aria-hidden="true"><use href="#i-close" /></svg>
             </button>
@@ -358,10 +355,9 @@
               <svg class="icon" aria-hidden="true"><use href="#i-trash" /></svg><span data-i18n="vocabulary.selection.delete">Delete</span>
             </button>
           </div>
-          <!-- 空的时候教怎么用：一句话加两个入口；搜不到时只有一句 -->
+          <!-- 空的时候一个标题加两个入口；搜不到时只有一句 -->
           <div class="vocab-empty" id="vocabulary-empty" hidden>
             <p class="vocab-empty-title" id="vocabulary-empty-title"></p>
-            <p class="vocab-empty-text" id="vocabulary-empty-text"></p>
             <div class="vocab-empty-actions" id="vocabulary-empty-actions">
               <button type="button" class="button" id="vocabulary-empty-import">
                 <svg class="icon" aria-hidden="true"><use href="#i-file-up" /></svg><span data-i18n="vocabulary.import">Import</span>

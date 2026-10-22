@@ -26,11 +26,11 @@ const money = (currency) => (currency === "CNY" ? "¥" : "$");
 /** 价保留到分：两位小数以内 */
 const amount = (value) => String(Math.round(value * 100) / 100);
 
-/** 一项数：名目在上、数在下；同组最佳的标绿，评分底下一根条 */
+/** 一项数：名目在上、数在下；同组最佳的标绿（悬停时也说），评分底下一根条。口径在悬停里 */
 function fact({ label, tip, cur, value, unit, best = false, meter = null }) {
   return h(
     "div",
-    { class: "fact", "data-best": best ? "" : null, title: tip },
+    { class: "fact", "data-best": best ? "" : null, title: best ? `${tip} · ${t("plaza.detail.best")}` : tip },
     h("dt", { class: "fact-label" }, best && h("i", { class: "best-dot" }), label),
     h(
       "dd",
@@ -140,7 +140,7 @@ export function createDetail(ctx, dock) {
           meter: col.outOf ? value / col.outOf : null,
         });
       });
-      return { facts, note: t("plaza.detail.specsNote") };
+      return { facts, note: null };
     }
     if (group.kind === "custom") return { facts: [], note: null };
     const via = view.viaOf(role, group);
@@ -394,10 +394,6 @@ export function createDetail(ctx, dock) {
             { class: "detail-note" },
             svg("i-info"),
             h("span", { text: t("plaza.detail.switchTo", { mode: modeName(target) }) }),
-            h("span", {
-              class: "detail-note-meta",
-              text: t("plaza.detail.current", { mode: modeName(setup.plaza.mode) }),
-            }),
           ),
         group.kind === "cloud" && channel(role, group),
         group.kind === "custom" && customLine(),

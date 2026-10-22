@@ -55,7 +55,7 @@
           <span class="soft" data-i18n="onboarding.way.soft">Pick a </span><span data-i18n="onboarding.way.title">recognition mode</span>
         </h1>
         <div class="choices" id="ways" role="radiogroup" aria-labelledby="way-title"></div>
-        <p class="footnote" id="way-note"></p>
+        <p class="footnote" id="way-note" hidden></p>
       </section>
 
       <!-- 准备：一路经过谁（上面一条），本机模型（要的话），选哪家、填密钥（要的话）。都能跳过，进去再配 -->
@@ -66,7 +66,6 @@
         <ol class="route" id="route" data-i18n-aria-label="onboarding.prepare.route.label"></ol>
         <div class="plan-status" id="plan-status" role="status"></div>
         <div class="prepare-sections" id="prepare-sections"></div>
-        <p class="footnote" id="prepare-note"></p>
       </section>
 
       <section class="step" data-step="permissions" aria-labelledby="permissions-title" hidden>

@@ -201,12 +201,7 @@ export function createHotkeyEditor(root, { onChanged, savedNote = () => "hotkeyR
     return h(
       "div",
       { class: "hotkey-row", "data-action": action.id },
-      h(
-        "div",
-        { class: "hotkey-label" },
-        h("span", { class: "hotkey-name", text: t(`actions.${action.id}.name`) }),
-        h("span", { class: "hotkey-description", text: t(`actions.${action.id}.description`) }),
-      ),
+      h("div", { class: "hotkey-label" }, h("span", { class: "hotkey-name", text: t(`actions.${action.id}.name`) })),
       h(
         "div",
         { class: "hotkey-chords" },

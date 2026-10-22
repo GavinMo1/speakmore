@@ -105,10 +105,10 @@ export default {
     shiftTyping: "Shift with a typing key types capitals or symbols; pick another modifier",
   },
 
-  // What a shortcut can do (src/hotkeys/actions.mjs): one row per action in Settings and onboarding, name and description
+  // What a shortcut can do (src/hotkeys/actions.mjs): one row per action in Settings and onboarding, name on the left, chords on the right
   actions: {
-    dictate: { name: "Voice input", description: "Press to start talking; press again to finish." },
-    cancel: { name: "Cancel", description: "Press while talking to cancel this one." },
+    dictate: { name: "Voice input" },
+    cancel: { name: "Cancel" },
   },
 
   // The shortcut settings (src/hotkeys/settings.mjs)
@@ -197,14 +197,14 @@ export default {
   },
 
   providers: {
-    gemini: { name: "Google Gemini", getKey: "Get one at Google AI Studio" },
-    openai: { name: "OpenAI", getKey: "Get one at OpenAI Platform" },
-    deepseek: { name: "DeepSeek", getKey: "Get one at DeepSeek Platform" },
+    gemini: { name: "Google Gemini" },
+    openai: { name: "OpenAI" },
+    deepseek: { name: "DeepSeek" },
     custom: { name: "Custom service" },
-    bailian: { name: "Alibaba Cloud Bailian", getKey: "Get one at the Bailian console" },
-    moonshot: { name: "Kimi", getKey: "Get one at Kimi API Platform" },
-    zhipu: { name: "Zhipu GLM", getKey: "Get one at Zhipu BigModel Platform" },
-    minimax: { name: "MiniMax", getKey: "Get one at MiniMax Platform" },
+    bailian: { name: "Alibaba Cloud Bailian" },
+    moonshot: { name: "Kimi" },
+    zhipu: { name: "Zhipu GLM" },
+    minimax: { name: "MiniMax" },
   },
 
   language: {
@@ -278,11 +278,11 @@ export default {
     transcribeFailed: "On-device transcription failed: {reason}",
   },
   modelSources: {
-    cn: "China mirror (ModelScope)",
-    original: "Original (Hugging Face)",
+    cn: "ModelScope",
+    original: "Hugging Face",
   },
   accelerations: {
-    auto: "Automatic (GPU if available)",
+    auto: "Automatic",
     cpu: "CPU only",
   },
   localModelMemories: {
@@ -502,12 +502,11 @@ export default {
       label: "{model} details",
       close: "Close details",
       switchTo: "Enabling switches to {mode}",
-      current: "Current · {mode}",
       price: "Price",
       perHour: "/ hour of audio",
       listPrice: "{platform} list price",
       listPriceTokens: "{platform} list price · per million tokens",
-      specsNote: "Scores from 97 real recordings · Green is best in group",
+      best: "Best in group",
       license: "{license} license",
       audioLocal: "Audio stays on this device",
       audioTo: "Audio sent to {platform}",
@@ -597,8 +596,7 @@ export default {
     },
     custom: {
       name: "Custom service",
-      desc: "OpenAI-compatible API · Your own address, model, and key",
-      kind: "OpenAI-compatible API",
+      desc: "OpenAI-compatible API",
       url: "API address",
       urlPlaceholder: "API address, e.g. https://api.example.com/v1",
       model: "Model name",
@@ -621,7 +619,6 @@ export default {
       envTip: "From the environment variable {variable}; takes precedence over a saved key",
       stored: "Configured",
       none: "Not configured",
-      widest: "Widest range",
       placeholder: "Paste your {platform} API key",
       label: "{platform} API key",
       save: "Save",
@@ -647,7 +644,6 @@ export default {
   // Recommended setups next to the Engine page title (src/models/presets.mjs, renderer/hub/preset-picker.mjs). Monthly cost at 100 a day, 30 days
   presets: {
     title: "Recommended setups",
-    meta: "Monthly cost at {daily} dictations a day",
     perMonth: "/ mo",
     costTip: "{daily} a day · about {seconds} s each · weekday peak prices",
     costUnknown: "Price unknown",
@@ -659,12 +655,12 @@ export default {
     download: "Download {size}",
     downloading: "Downloading {model}",
     items: {
-      "local-deepseek": { name: "On-device + DeepSeek", desc: "Best results · Fast and stable · Very low cost" },
-      "native-gemini": { name: "Gemini Direct", desc: "One step · One key" },
-      "bailian-cloud": { name: "Bailian Cloud", desc: "One key · No local compute" },
-      "private-qwen": { name: "Fully On-device", desc: "Nothing uploaded · Free" },
-      "local-deepseek-cpu": { name: "On-device + DeepSeek", desc: "CPU model · Very low cost" },
-      "private-sensevoice-cpu": { name: "Fully On-device", desc: "CPU model · Nothing uploaded" },
+      "local-deepseek": { name: "On-device + DeepSeek" },
+      "native-gemini": { name: "Gemini" },
+      "bailian-cloud": { name: "Bailian Cloud" },
+      "private-qwen": { name: "Fully On-device" },
+      "local-deepseek-cpu": { name: "On-device + DeepSeek" },
+      "private-sensevoice-cpu": { name: "Fully On-device" },
     },
   },
 
@@ -707,7 +703,6 @@ export default {
     cache: "Prompt cache {cost}",
     estimate: "Estimated at list prices",
     unpriced: "{models} unpriced; {count} not counted",
-    dictate: "Press to talk",
     // Recognition mode: shown next to the home title (renderer/hub/mode-chip.mjs), changed in the first column of the Engine page, also used by onboarding; mode names live in plaza.modes
     mode: {
       label: "Recognition",
@@ -732,7 +727,7 @@ export default {
 
   history: {
     title: "History",
-    empty: "Nothing yet · press {keycap} to say something",
+    empty: "Nothing yet",
     loadError: "Couldn't read history: {reason}",
     today: "Today",
     yesterday: "Yesterday",
@@ -756,11 +751,10 @@ export default {
     localMeta: { device: "Never uploaded", cloud: "Sent with dictation requests" },
     localTip:
       "The dictionary is saved in {file} and is never uploaded or synced. When you dictate, the words your model can take are sent along with that request; in Offline mode they never leave this device",
-    composer: { placeholder: "Type a new word", add: "Add", close: "Close" },
+    composer: { placeholder: "Type a new word", close: "Close" },
     supportTrigger: "Supported models",
     support: {
       title: "Supported models",
-      meta: "Each model takes the dictionary its own way",
       all: "All models",
       roles: { native: "Direct", transcribe: "Transcribe", polish: "Refine" },
       limitTerms: "First {count} words",
@@ -782,10 +776,7 @@ export default {
     },
     search: "Search",
     count: { one: "{count} word", other: "{count} words" },
-    empty: {
-      title: "No words yet",
-      description: "Names, products and terms you say often · spelled as written here",
-    },
+    empty: { title: "No words yet" },
     noResults: "No matching words",
     loadError: "Couldn't read the dictionary: {reason}",
     editHint: "Enter to save · Esc to cancel",
@@ -816,7 +807,6 @@ export default {
         },
         none: "No new words to add in {file}",
         confirm: "Add {count}",
-        hint: "A one-column CSV or text file, one word per line",
         more: "{count} more",
       },
     },
@@ -987,7 +977,6 @@ export default {
       key: "API key",
       local: "On-device model · {size}",
       offline: "No key",
-      note: "Change it anytime in the main window · or skip and set it up later",
     },
     prepare: {
       native: { soft: "Connect a ", title: "direct model" },
@@ -999,17 +988,12 @@ export default {
         download: "Download",
         retry: "Retry",
         ready: "Downloaded",
-        background: "Downloads in the background · you can continue",
         sources: { cn: "China mirror", original: "Hugging Face" },
       },
-      nativeOnly: "Only these take audio directly · DeepSeek, Kimi, GLM and more are under Hybrid",
-      later: "Optional · set it up later on the Engine page",
-      laterModel: "Optional · download it later on the Engine page",
-      more: "Cloud transcription and custom services are on the Engine page",
       status: {
         enabled: "{mode} enabled",
         enabling: "Enabling",
-        switched: "Switched to {mode} · ready once the items below are done",
+        switched: "Switched to {mode}",
         failed: "Not enabled",
         retry: "Retry",
       },
@@ -1046,7 +1030,7 @@ export default {
       title: "say something",
       sample: "Um, let's meet tomorrow at nine, no wait, nine thirty, and bring last week's numbers.",
       notes: "Notes",
-      placeholder: "Click here, press {keycap}, read the line on the left, then press it again",
+      placeholder: "Press {keycap} and read the line on the left",
       downloading: "Downloading {model} · {percent}%",
       needDownload: "{model} not downloaded ({size})",
       needKey: "{vendor} API key missing",

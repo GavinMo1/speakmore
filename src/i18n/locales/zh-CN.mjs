@@ -103,10 +103,10 @@ export default {
     shiftTyping: "Shift 加打字的键会打出大写或符号，换一个修饰键",
   },
 
-  // 能按快捷键做的事（src/hotkeys/actions.mjs）：设置页、引导页每个动作一行，名字在左、说明在下
+  // 能按快捷键做的事（src/hotkeys/actions.mjs）：设置页、引导页每个动作一行，名字在左、组合在右
   actions: {
-    dictate: { name: "语音输入", description: "按一下开始说话，再按一下结束。" },
-    cancel: { name: "取消", description: "说话时按下，取消这一次。" },
+    dictate: { name: "语音输入" },
+    cancel: { name: "取消" },
   },
 
   // 热键的设置项（src/hotkeys/settings.mjs）
@@ -191,14 +191,14 @@ export default {
   },
 
   providers: {
-    gemini: { name: "Google Gemini", getKey: "去 Google AI Studio 申请" },
-    openai: { name: "OpenAI", getKey: "去 OpenAI 开发者平台申请" },
-    deepseek: { name: "DeepSeek", getKey: "去 DeepSeek 开放平台申请" },
+    gemini: { name: "Google Gemini" },
+    openai: { name: "OpenAI" },
+    deepseek: { name: "DeepSeek" },
     custom: { name: "自定义服务" },
-    bailian: { name: "阿里云百炼", getKey: "去阿里云百炼控制台申请" },
-    moonshot: { name: "Kimi", getKey: "去 Kimi API 开放平台申请" },
-    zhipu: { name: "智谱", getKey: "去智谱开放平台申请" },
-    minimax: { name: "MiniMax", getKey: "去 MiniMax 开放平台申请" },
+    bailian: { name: "阿里云百炼" },
+    moonshot: { name: "Kimi" },
+    zhipu: { name: "智谱" },
+    minimax: { name: "MiniMax" },
   },
 
   language: {
@@ -267,11 +267,11 @@ export default {
     transcribeFailed: "本机转文字失败：{reason}",
   },
   modelSources: {
-    cn: "国内源（魔搭）",
-    original: "原始地址（Hugging Face）",
+    cn: "魔搭",
+    original: "Hugging Face",
   },
   accelerations: {
-    auto: "自动（有显卡就用）",
+    auto: "自动",
     cpu: "只用 CPU",
   },
   localModelMemories: {
@@ -484,12 +484,11 @@ export default {
       label: "{model} 详情",
       close: "收起详情",
       switchTo: "启用即切换至{mode}",
-      current: "当前 · {mode}",
       price: "价格",
       perHour: "/ 小时音频",
       listPrice: "{platform}标价",
       listPriceTokens: "{platform}标价 · 每百万 tokens",
-      specsNote: "评分基于 97 条真实录音 · 绿色为同组最佳",
+      best: "同组最佳",
       license: "{license} 许可",
       audioLocal: "音频留存本机",
       audioTo: "音频发送至 {platform}",
@@ -579,8 +578,7 @@ export default {
     },
     custom: {
       name: "自定义服务",
-      desc: "OpenAI 兼容接口 · 自填地址、模型名与密钥",
-      kind: "OpenAI 兼容接口",
+      desc: "OpenAI 兼容接口",
       url: "接口地址",
       urlPlaceholder: "接口地址，如 https://api.example.com/v1",
       model: "模型名",
@@ -602,7 +600,6 @@ export default {
       envTip: "来自环境变量 {variable}，优先于存着的密钥",
       stored: "已配置",
       none: "未配置",
-      widest: "覆盖最广",
       placeholder: "粘贴 {platform} API 密钥",
       label: "{platform} API 密钥",
       save: "保存",
@@ -629,7 +626,6 @@ export default {
   // 引擎页标题行右边的推荐组合（src/models/presets.mjs、renderer/hub/preset-picker.mjs）。月成本统一按每天 100 次、一个月 30 天
   presets: {
     title: "推荐组合",
-    meta: "月成本以每天 {daily} 次计",
     perMonth: "/ 月",
     costTip: "每天 {daily} 次 · 每次约 {seconds} 秒 · 工作日高峰价",
     costUnknown: "价格不明",
@@ -640,12 +636,12 @@ export default {
     download: "下载 {size}",
     downloading: "{model} 下载中",
     items: {
-      "local-deepseek": { name: "本机 + DeepSeek", desc: "效果最佳 · 快速稳定 · 成本极低" },
-      "native-gemini": { name: "Gemini 直出", desc: "一步出字 · 一把密钥" },
-      "bailian-cloud": { name: "百炼全云端", desc: "一把密钥 · 不占本机算力" },
-      "private-qwen": { name: "纯本机", desc: "不上传任何数据 · 零成本" },
-      "local-deepseek-cpu": { name: "本机 + DeepSeek", desc: "CPU 版本机模型 · 成本极低" },
-      "private-sensevoice-cpu": { name: "纯本机", desc: "CPU 版本机模型 · 不上传任何数据" },
+      "local-deepseek": { name: "本机 + DeepSeek" },
+      "native-gemini": { name: "Gemini" },
+      "bailian-cloud": { name: "百炼全云端" },
+      "private-qwen": { name: "纯本机" },
+      "local-deepseek-cpu": { name: "本机 + DeepSeek" },
+      "private-sensevoice-cpu": { name: "纯本机" },
     },
   },
 
@@ -688,7 +684,6 @@ export default {
     cache: "提示词缓存 {cost}",
     estimate: "按各家官方标准价估算",
     unpriced: "{models} 无标价，{count} 次未计入",
-    dictate: "按一下说话",
     // 识别方式：首页标题右边只显示（renderer/hub/mode-chip.mjs），在引擎页第一列换，首次引导也用；三种方式的名字在 plaza.modes
     mode: {
       label: "识别方式",
@@ -713,7 +708,7 @@ export default {
 
   history: {
     title: "历史",
-    empty: "还没有记录 · 按 {keycap} 说第一句",
+    empty: "还没有记录",
     loadError: "读不出历史：{reason}",
     today: "今天",
     yesterday: "昨天",
@@ -739,11 +734,10 @@ export default {
     localMeta: { device: "不上传", cloud: "随听写请求发出" },
     localTip:
       "词典保存在 {file}，不上传、不同步。听写时，所用模型收得下的那部分词随这次请求一并发出；离线方式下不离开本机",
-    composer: { placeholder: "输入新词", add: "添加", close: "收起" },
+    composer: { placeholder: "输入新词", close: "收起" },
     supportTrigger: "支持的模型",
     support: {
       title: "支持的模型",
-      meta: "各模型接收词典的方式不同",
       all: "全部模型",
       roles: { native: "直出", transcribe: "转文字", polish: "整理" },
       limitTerms: "前 {count} 个词",
@@ -765,7 +759,7 @@ export default {
     },
     search: "搜索",
     count: "{count} 个词",
-    empty: { title: "还没有词汇", description: "常说的人名、产品名和术语 · 识别时按此写法输出" },
+    empty: { title: "还没有词汇" },
     noResults: "没有匹配的词",
     loadError: "读不出词典：{reason}",
     editHint: "回车保存 · Esc 放弃",
@@ -784,7 +778,6 @@ export default {
         skipped: { existing: "已在词典中 {count} 个", duplicates: "文件内重复 {count} 个", invalid: "无效 {count} 个" },
         none: "{file} 中没有可添加的新词",
         confirm: "添加 {count} 个",
-        hint: "一列的 CSV 或文本文件，每行一个词",
         more: "还有 {count} 个",
       },
     },
@@ -950,7 +943,6 @@ export default {
       key: "需密钥",
       local: "本机模型 · {size}",
       offline: "无需密钥",
-      note: "随时可在主窗口更换 · 也可跳过，进入后配置",
     },
     prepare: {
       native: { soft: "接入", title: "直出模型" },
@@ -962,17 +954,12 @@ export default {
         download: "下载",
         retry: "重新下载",
         ready: "已下载",
-        background: "后台下载 · 可先继续",
         sources: { cn: "国内源", original: "Hugging Face" },
       },
-      nativeOnly: "仅这几家支持直出 · DeepSeek、Kimi、GLM 等见混合",
-      later: "可跳过 · 进入后在引擎页配置",
-      laterModel: "可跳过 · 进入后在引擎页下载",
-      more: "云端转文字、自定义服务见引擎页",
       status: {
         enabled: "已启用{mode}",
         enabling: "启用中",
-        switched: "已切换到{mode} · 补齐下列各项即可使用",
+        switched: "已切换至{mode}",
         failed: "未启用",
         retry: "重试",
       },
@@ -1009,7 +996,7 @@ export default {
       title: "说一句",
       sample: "嗯，我们明天上午九点开会，不对，九点半吧，记得把上周的数据带上。",
       notes: "笔记",
-      placeholder: "点这里，按 {keycap} 读左边那句，再按一下结束",
+      placeholder: "按 {keycap} 读左边那句",
       downloading: "{model} 下载中 · {percent}%",
       needDownload: "{model} 未下载（{size}）",
       needKey: "缺 {vendor} 密钥",
