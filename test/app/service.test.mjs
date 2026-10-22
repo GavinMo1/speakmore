@@ -358,14 +358,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 /** 走本地转写链路的服务，本地模型和模型库都是假的 */
 async function localService(
   t,
-  {
-    models = fakeModels(),
-    onLocalModel,
-    createRefiner = throughTranscriber,
-    acceleration,
-    localModelMemory,
-    localModelIdleMinutes,
-  } = {},
+  { models = fakeModels(), onLocalModel, createRefiner = throughTranscriber, acceleration, localModelMemory } = {},
 ) {
   const { control, startLocal } = fakeLocal();
   const service = await startService({
@@ -377,7 +370,6 @@ async function localService(
     onLocalModel,
     acceleration,
     localModelMemory,
-    localModelIdleMinutes,
   });
   t.after(() => service.close());
   return { service, control, models };
@@ -589,45 +581,44 @@ test("检查时装不上：照实抛出来，正在用的照旧", async (t) => {
   assert.equal(service.localModel.state, "ready");
 });
 
-/** 保持录音，直到测试主动断开；开始应立即确认，不被冷启动卡住。 */
-async function beginRecording(url) {
+// ---------- 按需装载（设置里的 localModelMemory 不是 resident） ----------
+
+/** 开口但不说完：服务端回了 started 就交出连接，测试自己决定之后发什么、什么时候断 */
+async function beginRecording(url, audioId = "idle-test") {
   const socket = new WebSocket(url);
   await new Promise((resolve, reject) => {
     socket.onerror = reject;
-    socket.onopen = () => socket.send(JSON.stringify({ type: "start_audio", audio_id: "idle-test" }));
+    socket.onopen = () => socket.send(JSON.stringify({ type: "start_audio", audio_id: audioId }));
     socket.onmessage = resolve;
   });
   return socket;
 }
 
-test("按需模式：启动不装载，录音时预加载，录音期间不释放，断开五分钟后卸载", async (t) => {
+test("按需装载：启动时不装，开口才装；页面每来一条消息就重新算空闲，最后一条之后五分钟释放", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { service, control } = await localService(t, { localModelMemory: "on-demand" });
+  const { service, control } = await localService(t, { localModelMemory: "5m" });
   assert.equal(service.localModel.state, "idle");
   assert.deepEqual(control.started, []);
   await service.useKey("key");
   const socket = await beginRecording(service.url);
-  assert.equal(control.started.length, 1);
+  assert.equal(control.started.length, 1, "开口时就开始装，不等说完");
   control.finish();
   await tick();
-  t.mock.timers.tick(300001);
+  // 说话途中的消息（录音时每三秒一块音频）都算动静
+  t.mock.timers.tick(240_000);
+  await beginRecording(service.url, "still-talking").then((other) => other.close());
+  t.mock.timers.tick(240_000);
   assert.equal(control.disposed, 0);
-  await new Promise((resolve) => {
-    socket.onclose = resolve;
-    socket.close();
-  });
-  await tick();
-  for (let i = 0; i < 10; i++) await tick();
-  t.mock.timers.tick(299999);
-  assert.equal(control.disposed, 0);
-  t.mock.timers.tick(1);
+  // 取消了、断开了都不用另说：没有消息了，到点自然释放
+  socket.close();
+  t.mock.timers.tick(60_000);
   assert.equal(control.disposed, 1);
   assert.equal(service.localModel.state, "idle");
 });
 
-test("按需模式：短录音等待冷启动，释放后再次听写能重载；关闭选项恢复常驻", async (t) => {
+test("按需装载：释放后再听写会重新装上；改回常驻当场装上，之后一直装着", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { service, control } = await localService(t, { localModelMemory: "on-demand" });
+  const { service, control } = await localService(t, { localModelMemory: "5m" });
   await service.useKey("key");
   for (let count = 1; count <= 2; count++) {
     const reply = dictateOnce(service.url);
@@ -635,36 +626,46 @@ test("按需模式：短录音等待冷启动，释放后再次听写能重载�
     control.finish();
     assert.equal((await reply).V.refined_text, "转写了 3");
     await tick();
-    t.mock.timers.tick(300000);
+    t.mock.timers.tick(300_000);
     assert.equal(service.localModel.state, "idle");
   }
   service.setLocalModelMemory("resident");
+  assert.equal(control.started.length, 3);
   control.finish();
   await tick();
-  t.mock.timers.tick(600000);
+  t.mock.timers.tick(3_600_000);
   assert.equal(service.localModel.state, "ready");
   assert.equal(control.disposed, 2);
 });
 
-test("开启按需释放不打断当前模型，失败的加载也不伪装成已就绪", async (t) => {
+test("常驻改成按需装载：装着的不打断，从现在起算空闲；开口时没装上，这次照实报、不拦热键，下次开口再装", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { service, control } = await localService(t);
   control.finish();
   await tick();
-  service.setLocalModelMemory("on-demand");
+  service.setLocalModelMemory("5m");
   assert.equal(control.disposed, 0);
-  t.mock.timers.tick(300000);
+  t.mock.timers.tick(300_000);
   assert.equal(service.localModel.state, "idle");
   await service.useKey("key");
-  const pending = dictateOnce(service.url);
+
+  const failing = dictateOnce(service.url);
   while (control.started.length < 2) await tick();
-  control.fail(new Error("模型无法加载"));
-  assert.equal((await pending).K, "audio_processing_error");
+  control.fail(new Error("模型文件坏了"));
+  const reply = await failing;
+  assert.equal(reply.K, "audio_processing_error");
+  assert.match(reply.V.detail, /couldn't be set up/, "和常驻模式装不上时是同一句话");
   assert.equal(service.localModel.state, "failed");
+  assert.equal(service.localModel.onDemand, true, "按需装载的没装上不当成拦着热键的问题");
+
+  const retried = dictateOnce(service.url);
+  while (control.started.length < 3) await tick();
+  control.finish();
+  assert.equal((await retried).V.refined_text, "转写了 3");
 });
 
-test("按需加载尚未结束就换路线：旧模型装好后释放，不影响新路线", async (t) => {
-  const { service, control } = await localService(t, { localModelMemory: "on-demand" });
+test("按需装载还没装好就换路线：旧模型装好后卸掉，不影响新路线", async (t) => {
+  const { service, control } = await localService(t, { localModelMemory: "5m" });
   const socket = await beginRecording(service.url);
   service.setRoute(GEMINI);
   control.finish();
@@ -674,7 +675,7 @@ test("按需加载尚未结束就换路线：旧模型装好后释放，不影�
   socket.close();
 });
 
-test("整理超过五分钟不释放模型，结束后才开始空闲计时", async (t) => {
+test("整理超过空闲时长也不释放模型，整理完才开始算空闲", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let finishRefine;
   let entered;
@@ -685,7 +686,7 @@ test("整理超过五分钟不释放模型，结束后才开始空闲计时", as
     finishRefine = resolve;
   });
   const { service, control } = await localService(t, {
-    localModelMemory: "on-demand",
+    localModelMemory: "5m",
     createRefiner: async ({ transcriber }) => ({
       warmUp: async () => {},
       refine: async () => {
@@ -701,17 +702,17 @@ test("整理超过五分钟不释放模型，结束后才开始空闲计时", as
   while (!control.started.length) await tick();
   control.finish();
   await started;
-  t.mock.timers.tick(600000);
+  t.mock.timers.tick(600_000);
   assert.equal(control.disposed, 0);
   finishRefine();
   assert.equal((await pending).V.refined_text, "转写了 3");
-  t.mock.timers.tick(300000);
+  t.mock.timers.tick(300_000);
   assert.equal(control.disposed, 1);
 });
 
-test("真实客户端取消录音后也释放模型，连接复用不会让录音状态永久占用", async (t) => {
+test("悬浮条取消录音（真的客户端）：不用另发消息，到点照样释放，下次开口再装", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { service, control } = await localService(t, { localModelMemory: "on-demand" });
+  const { service, control } = await localService(t, { localModelMemory: "5m" });
   const voice = new VoiceSocket(service.url);
   t.after(() => voice.close());
   await voice.begin("cancel-test");
@@ -719,8 +720,7 @@ test("真实客户端取消录音后也释放模型，连接复用不会让录�
   control.finish();
   await tick();
   voice.abandon();
-  for (let i = 0; i < 10; i++) await tick();
-  t.mock.timers.tick(300000);
+  t.mock.timers.tick(300_000);
   assert.equal(service.localModel.state, "idle");
   assert.equal(control.disposed, 1);
   await voice.begin("again");
@@ -728,8 +728,8 @@ test("真实客户端取消录音后也释放模型，连接复用不会让录�
   control.finish();
 });
 
-test("按需待机切换到云端路线不会加载旧 ASR", async (t) => {
-  const { service, control } = await localService(t, { localModelMemory: "on-demand" });
+test("按需装载等着开口时换成云端路线：开口也不装本机模型", async (t) => {
+  const { service, control } = await localService(t, { localModelMemory: "5m" });
   service.setRoute(GEMINI);
   assert.equal(service.localModel.state, "off");
   const socket = await beginRecording(service.url);
@@ -737,20 +737,36 @@ test("按需待机切换到云端路线不会加载旧 ASR", async (t) => {
   socket.close();
 });
 
-test("空闲释放时间可选，修改立即重新计时且不重载模型", async (t) => {
+test("换了空闲时长从现在起重新算，不重装模型", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { service, control } = await localService(t, { localModelMemory: "on-demand", localModelIdleMinutes: "1" });
+  const { service, control } = await localService(t, { localModelMemory: "1m" });
   await service.useKey("key");
   const pending = dictateOnce(service.url);
   while (!control.started.length) await tick();
   control.finish();
   await pending;
-  t.mock.timers.tick(59999);
+  t.mock.timers.tick(59_999);
   assert.equal(control.disposed, 0);
-  service.setLocalModelIdleMinutes("10");
-  t.mock.timers.tick(599999);
+  service.setLocalModelMemory("10m");
+  t.mock.timers.tick(599_999);
   assert.equal(control.disposed, 0);
   t.mock.timers.tick(1);
   assert.equal(control.disposed, 1);
   assert.equal(control.started.length, 1);
+});
+
+test("等着开口、或还没下载时，模型库的每次变化（下载进度）不让状态来回翻", async (t) => {
+  let changes = 0;
+  const { service, models } = await localService(t, { localModelMemory: "5m", onLocalModel: () => changes++ });
+  const before = changes;
+  for (let i = 0; i < 3; i++) service.modelsChanged();
+  assert.equal(changes, before);
+  assert.equal(service.localModel.state, "idle");
+
+  models.installed.delete("qwen3-asr-0.6b-q8");
+  service.modelsChanged();
+  assert.equal(service.localModel.state, "missing");
+  const missing = changes;
+  for (let i = 0; i < 3; i++) service.modelsChanged();
+  assert.equal(changes, missing + 3, "还没下载的只报进度那一次，不再多翻成 off");
 });

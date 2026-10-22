@@ -40,7 +40,7 @@ import { createLocalModels, freeBytesAt } from "../models/library.mjs";
 import { presetsFor } from "../models/presets.mjs";
 import { createMove, settleMove } from "../move/index.mjs";
 import { CHAT_VENDORS, formatChatChoice } from "../server/chat/vendors.mjs";
-import { describeRoute, keyVendorOf, MODES, usesLocalModel } from "../server/modes.mjs";
+import { describeRoute, keyVendorOf, MODES } from "../server/modes.mjs";
 import { formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
 import { findVendor, VENDORS } from "../server/vendors.mjs";
 import { adoptAppKeys } from "../storage/app-keys.mjs";
@@ -50,7 +50,6 @@ import { ensureHome, installedHomeOf, keyFile, oldAppKeyFile, resolvePaths } fro
 import {
   ACCELERATIONS,
   LOCAL_MODEL_MEMORY,
-  MODEL_IDLE_MINUTES,
   overridingEnv,
   patchSettings,
   resolveSettings,
@@ -128,8 +127,8 @@ let PROVIDER;
 let ROUTE;
 /** 本机模型用不用显卡（设置里的 acceleration）。在设置里换了当场生效（service.setAcceleration） */
 let acceleration;
+/** 本机模型常驻，还是开口时装载、空闲多久后释放（设置里的 localModelMemory）。换了当场生效（service.setLocalModelMemory） */
 let localModelMemory;
-let localModelIdleMinutes;
 /**
  * 启动时就出错了（家目录找不到、定位文件坏了、设置读不出）：照实说出来再退出，不留一个按了热键没反应的进程。
  * 写在标准错误上的，speakmore 命令起的会在终端里转述（它接着日志）；从程序坞、开始菜单、开机启动起的没有终端，
@@ -164,7 +163,6 @@ if (PRELUDE === null) {
     ROUTE = routeOf(SETTINGS);
     acceleration = SETTINGS.acceleration.value;
     localModelMemory = SETTINGS.localModelMemory.value;
-    localModelIdleMinutes = SETTINGS.localModelIdleMinutes.value;
     hotkeys = resolveHotkeys(SETTINGS, process.platform);
     hotkeySettings = hotkeySettingValues(SETTINGS);
     PROVIDER = keyVendorOf(ROUTE) ?? null;
@@ -474,7 +472,6 @@ async function main() {
         onLocalModel: () => localModelChanged(),
         acceleration,
         localModelMemory,
-        localModelIdleMinutes,
         vocabulary: vocabulary.terms,
       });
   const serverUrl = EXTERNAL_SERVER_URL ?? service.url;
@@ -884,7 +881,7 @@ async function main() {
     }
     log.info("key_event", fields);
     const { blocker } = summarizeSetup(currentSetup());
-    if (bar.isVisible() || blocker === null) tellBar("input", input);
+    if (blocker === null) tellBar("input", input);
     else if (event.event === "binding" && event.down) notify(blocker);
   }
 
@@ -937,14 +934,7 @@ async function main() {
     });
   }
 
-  handle("config:get", () => ({
-    serverUrl,
-    hotkeys: hotkeys.chords,
-    barControls,
-    barHint: currentBarHint(),
-    // 冷启动可能超过原有的二十秒，只有启用了按需模式的本机链路放宽等待。
-    onDemandModels: Boolean(service && usesLocalModel(service.route) && localModelMemory === "on-demand"),
-  }));
+  handle("config:get", () => ({ serverUrl, hotkeys: hotkeys.chords, barControls, barHint: currentBarHint() }));
   handle("dictation:deliver", async (_event, payload) => {
     const result = await delivery.completed(payload);
     // 只记长度：成品是用户说的话，不进日志
@@ -1218,7 +1208,6 @@ async function main() {
         // 本机模型用不用显卡：正在用的那个（被环境变量盖着时是环境变量里的）
         acceleration: { value: acceleration, choices: ACCELERATIONS },
         memory: { value: localModelMemory, choices: LOCAL_MODEL_MEMORY },
-        idleMinutes: { value: localModelIdleMinutes, choices: MODEL_IDLE_MINUTES },
         polish: settings.polish.value,
         customUrl: settings.customUrl.value,
         customParams: settings.customParams.value,
@@ -1366,18 +1355,10 @@ async function main() {
     saveSetting(PATHS.settingsFile, "localModelMemory", wanted);
     localModelMemory = resolveSettings({ file: PATHS.settingsFile, env: process.env }).localModelMemory.value;
     log.info("local_model_memory_changed", { localModelMemory });
+    // 改成常驻的当场装上；改成按需的从现在起算空闲
     service?.setLocalModelMemory(localModelMemory);
     setupChanged();
     const variable = overridingEnv("localModelMemory", process.env);
-    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
-  });
-  handle("setup:set-local-model-idle-minutes", (_event, wanted) => {
-    saveSetting(PATHS.settingsFile, "localModelIdleMinutes", wanted);
-    localModelIdleMinutes = resolveSettings({ file: PATHS.settingsFile, env: process.env }).localModelIdleMinutes.value;
-    log.info("local_model_idle_minutes_changed", { localModelIdleMinutes });
-    service?.setLocalModelIdleMinutes(localModelIdleMinutes);
-    setupChanged();
-    const variable = overridingEnv("localModelIdleMinutes", process.env);
     return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
   });
   // 悬浮条上方的操作提示开不开：存下来，开着的悬浮条当场跟着变
@@ -1727,7 +1708,6 @@ async function main() {
       theme: theme.id,
       acceleration,
       localModelMemory,
-      localModelIdleMinutes,
       // 设置里的语言（system 是跟随系统）和实际用的那种
       language: languageSetting,
       locale,

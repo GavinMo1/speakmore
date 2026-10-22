@@ -2,12 +2,16 @@
 // 页面和它之间仍然走 WebSocket，服务端照旧可以单独启动（调试、回放录音、评估提示词）。
 // 走哪条识别链路、用哪些模型由"路线"定（../server/modes.mjs），设置里改了当场换。
 // 本地转写链路要的本地模型由这里装卸：下载好了的装进转写进程，换模型或改走原生链路时卸掉。
+// 设置成按需装载的（localModelMemory 不是 resident）开口时才装，空闲到点就释放，省下转写进程占的那一两 GB 内存。
 // 下载不归这里：下不下由用户点（models/library.mjs），没下载的就停在 missing，说清楚去哪下。
 import { LocalizedError, msg, problemOf } from "../i18n/index.mjs";
 import { findModel } from "../models/catalog.mjs";
 import { startTranscriber } from "../server/asr/start.mjs";
 import { createModeRefiner, describeRoute, keyVendorOf, usesLocalModel } from "../server/modes.mjs";
 import { startServer, WS_PATH } from "../server/server.mjs";
+
+/** 设置里的 localModelMemory 换成空闲多久释放（毫秒）："5m" 是五分钟；常驻（resident）是 null */
+const releaseAfterMs = (memory) => (memory === "resident" ? null : Number.parseInt(memory, 10) * 60_000);
 
 /**
  * 启动内置服务。端口由系统分配，所以不会和别的程序（或单独启动的服务端）抢端口。
@@ -21,10 +25,10 @@ import { startServer, WS_PATH } from "../server/server.mjs";
  *   本机的模型库（models/library.mjs）：哪些下载好了、正在下的下到哪。它变了要调 modelsChanged
  * @param {(record: object) => void} [options.onModelCall] 记账：每一次回了话的模型调用（听写和验证 key 都算），
  *   见 ../server/refine/meter.mjs
- * @param {() => void} [options.onLocalModel] 本地模型的状态变了（缺、装载中、装好了、出错）
+ * @param {() => void} [options.onLocalModel] 本地模型的状态变了（缺、装载中、装好了、出错、空闲释放了）
  * @param {"auto" | "cpu"} [options.acceleration] 本地模型用不用显卡（设置里的 acceleration），换了调 setAcceleration
- * @param {"resident" | "on-demand"} [options.localModelMemory] 常驻，或开口时装载、空闲后释放
- * @param {string} [options.localModelIdleMinutes] 按需模式空闲多少分钟后释放，默认五分钟
+ * @param {string} [options.localModelMemory] 本地模型常驻（resident），还是开口时装载、空闲多久后释放（1m、5m、10m、30m），
+ *   设置里的 localModelMemory，换了调 setLocalModelMemory
  * @param {() => readonly string[]} [options.vocabulary] 用户的词典（storage/vocabulary.mjs 的 terms），服务端每次听写读一次
  * @param {typeof createModeRefiner} [options.createRefiner] 测试时换成假的
  * @param {typeof startTranscriber} [options.startLocal] 测试时换成假的
@@ -37,8 +41,7 @@ export async function startService({
   onModelCall,
   onLocalModel = () => {},
   acceleration: initialAcceleration = "auto",
-  localModelMemory: initialLocalModelMemory = "resident",
-  localModelIdleMinutes: initialLocalModelIdleMinutes = "5",
+  localModelMemory = "resident",
   vocabulary = () => [],
   createRefiner = createModeRefiner,
   startLocal = startTranscriber,
@@ -62,47 +65,28 @@ export async function startService({
 
   /**
    * 本地转写链路要的那个模型现在怎样：
-   *   off（没走本地转写）/ idle（按需等待）/ missing（还没下载）/ loading / ready / failed（problem 是原因）
+   *   off（没走本地转写）/ idle（按需装载，现在没装着，开口时再装）/ missing（还没下载）/ loading / ready /
+   *   failed（problem 是原因）
    */
   let local = { state: "off" };
   let acceleration = initialAcceleration;
   /** 正在装载或已经装好的那一次：换模型时用 transcriber 卸掉模型；ready 是装载的那个 Promise，检查时等它 */
   let loading = null;
-  let localModelMemory = initialLocalModelMemory;
-  let localModelIdleMinutes = initialLocalModelIdleMinutes;
+  /** 按需装载时空闲多久释放；常驻是 null */
+  let releaseMs = releaseAfterMs(localModelMemory);
   let idleTimer = null;
-  let recordings = 0;
-  let operations = 0;
-  let closed = false;
-
-  function clearIdleTimer() {
-    clearTimeout(idleTimer);
-    idleTimer = null;
-  }
-
-  function scheduleRelease() {
-    clearIdleTimer();
-    if (closed || localModelMemory !== "on-demand" || recordings || operations || !loading?.transcriber) return;
-    idleTimer = setTimeout(() => {
-      const model = loading.model;
-      releaseLocal();
-      setLocal({ state: "idle", model });
-      log.info("local_model_idle_released", { model });
-    }, Number(localModelIdleMinutes) * 60_000);
-    idleTimer.unref();
-  }
-
-  function ensureLocal() {
-    if (!closed && local.state === "idle") loadLocal(local.model);
-    return loading;
-  }
+  /** 正在用本地模型的几件事（整理、检查转写器）：用着的时候不释放 */
+  let busy = 0;
 
   function setLocal(next) {
     local = next;
     onLocalModel();
   }
 
-  /** 让本地模型跟着路线走：要的是别的模型就换，不走本地转写就卸掉；没下载的停在 missing；上次没装上的再装一次 */
+  /**
+   * 让本地模型跟着路线走：要的是别的模型就换，不走本地转写就卸掉；没下载的停在 missing；上次没装上的再装一次。
+   * 按需装载的不在这里装，停在 idle 等开口（loadOnDemand）
+   */
   function followRoute() {
     // 第一跳交给云端时没有本地模型要装
     const wanted = usesLocalModel(route) ? route.transcriber : null;
@@ -112,11 +96,29 @@ export async function startService({
       return;
     }
     if (loading?.model === wanted && local.state !== "failed") return;
+    if (releaseMs !== null && local.model === wanted && ["idle", "failed"].includes(local.state)) return;
     releaseLocal();
-    if (wanted) {
-      if (localModelMemory === "on-demand") setLocal({ state: "idle", model: wanted });
-      else loadLocal(wanted);
-    }
+    if (!wanted) return;
+    if (releaseMs === null) loadLocal(wanted);
+    else setLocal({ state: "idle", model: wanted });
+  }
+
+  /** 按需装载的开口时装上：空闲释放了的、上次没装上的都在这时再装 */
+  function loadOnDemand() {
+    if (releaseMs !== null && ["idle", "failed"].includes(local.state)) loadLocal(local.model);
+  }
+
+  /** 按需装载时从现在起重新算空闲，到点前没人用就释放。还没装好的、正用着的不算 */
+  function restartIdleTimer() {
+    clearTimeout(idleTimer);
+    if (releaseMs === null || busy > 0 || !loading?.transcriber) return;
+    idleTimer = setTimeout(() => {
+      const { model } = loading;
+      log.info("local_model_idle_released", { model, idle_ms: releaseMs });
+      releaseLocal({ state: "idle", model });
+    }, releaseMs);
+    // 只剩这个计时器时不拦着进程退出
+    idleTimer.unref();
   }
 
   function loadLocal(model) {
@@ -133,7 +135,7 @@ export async function startService({
         }
         job.transcriber = transcriber;
         setLocal({ state: "ready", model, backend: transcriber.backend });
-        scheduleRelease();
+        restartIdleTimer();
       },
       (error) => {
         if (loading !== job) return;
@@ -143,16 +145,21 @@ export async function startService({
     );
   }
 
-  function releaseLocal() {
-    clearIdleTimer();
+  /** 卸掉装着（或正在装）的模型，状态换成 next；什么都没装、也不在等开口时不动 */
+  function releaseLocal(next = { state: "off" }) {
+    clearTimeout(idleTimer);
+    if (!loading && local.state !== "idle") return;
     loading?.transcriber?.dispose();
     loading = null;
-    if (local.state !== "off") setLocal({ state: "off" });
+    setLocal(next);
   }
 
-  /** 给外面看的本地模型状态：还没下载、但用户正在下它时带上进度 */
+  /**
+   * 给外面看的本地模型状态：还没下载、但用户正在下它时带上进度。
+   * 按需装载的装载中、没装上带 onDemand：装载是开口才开始的，没装上的下次开口再装，都不该拦着按热键（app/setup-state.mjs）
+   */
   function localView() {
-    if (local.state === "loading" && localModelMemory === "on-demand") return { ...local, onDemand: true };
+    if (releaseMs !== null && ["loading", "failed"].includes(local.state)) return { ...local, onDemand: true };
     if (local.state !== "missing") return local;
     const download = models.status(local.model).download;
     return download ? { ...local, received: download.received, total: download.total } : local;
@@ -161,13 +168,11 @@ export async function startService({
   /** 交给本地转写链路的转写器：模型还没装好时说清是怎么回事，不让这次听写干等。用户词典随 options 原样转过去 */
   const transcriber = {
     async transcribe(samples, options) {
-      if (localModelMemory === "on-demand") {
-        const job = ensureLocal();
-        if (job && local.state !== "failed") {
-          const loaded = await job.ready;
-          if (closed || loading !== job) throw new LocalizedError(msg("local.modelLoading"));
-          return loaded.transcribe(samples, options);
-        }
+      // 按需装载的开口时就开始装了（prepare），这里等它装完；没装上的 loadLocal 已经记了日志、换成 failed，下面照常报。
+      // 说完时还没装着的（开口时还没下载完、开口时那次没装上）这时再装一次
+      if (releaseMs !== null) {
+        loadOnDemand();
+        if (loading && !loading.transcriber) await Promise.allSettled([loading.ready]);
       }
       if (loading?.transcriber) return loading.transcriber.transcribe(samples, options);
       const view = localView();
@@ -192,28 +197,28 @@ export async function startService({
     port: 0,
     log,
     vocabulary,
-    onRecordingChange(delta) {
-      recordings += delta;
-      scheduleRelease();
-    },
+    // 页面的每条消息都算动静：录音时每三秒一块音频，比最短的一分钟空闲短得多；取消了就不再有消息，到点自然释放
+    onActivity: () => restartIdleTimer(),
     refiner: {
       async refine(audio, options) {
         if (!refiner) throw noKey();
-        operations++;
-        clearIdleTimer();
+        // 整理里有本机转写，整理完才开始算空闲
+        busy++;
+        clearTimeout(idleTimer);
         try {
           return await refiner.refine(audio, options);
         } finally {
-          operations--;
-          scheduleRelease();
+          busy--;
+          restartIdleTimer();
         }
       },
-      /** 开口时先做的准备（Gemini 建提示词缓存，带着词典）。还没有 key 时没什么可准备的 */
+      /**
+       * 开口时先做的准备：按需装载的本机模型这时开始装（不等它，说完整理时再等），Gemini 建提示词缓存（带着词典）。
+       * 还没有 key 时只装模型
+       */
       async prepare(options) {
-        if (localModelMemory === "on-demand") {
-          const job = ensureLocal();
-          await Promise.all([job?.ready, refiner?.prepare?.(options)]);
-        } else await refiner?.prepare?.(options);
+        loadOnDemand();
+        await refiner?.prepare?.(options);
       },
     },
   });
@@ -241,24 +246,14 @@ export async function startService({
       if (local.state === "missing") onLocalModel();
     },
 
-    /** 按需模式只在使用后计时；恢复常驻时立即装载。 */
+    /** 换内存设置：改成常驻就当场装上；改成按需装载、换了时长的从现在起重新算空闲 */
     setLocalModelMemory(value) {
-      if (value === localModelMemory) return;
-      localModelMemory = value;
-      if (value === "resident") {
-        clearIdleTimer();
-        followRoute();
-      } else scheduleRelease();
+      releaseMs = releaseAfterMs(value);
+      if (releaseMs === null) followRoute();
+      else restartIdleTimer();
     },
 
-    /** 时间选项变更只重设计时，不打断录音或重新加载模型。 */
-    setLocalModelIdleMinutes(value) {
-      if (value === localModelIdleMinutes) return;
-      localModelIdleMinutes = value;
-      scheduleRelease();
-    },
-
-    /** 换加速设置：装着（或正在装）本地模型的话按新的设置重装一遍 */
+    /** 换加速设置：装着（或正在装）本地模型的话按新的设置重装一遍（按需装载的卸掉，下次开口按新的设置装） */
     setAcceleration(value) {
       if (value === acceleration) return;
       acceleration = value;
@@ -340,37 +335,35 @@ export async function startService({
      *   loadMs：临时装的那个装了多久；用的是已经装着的是 null
      */
     async checkTranscriber(model, samples) {
-      operations++;
-      clearIdleTimer();
+      let transcriber;
+      let loadMs = null;
+      if (loading?.model === model) {
+        transcriber = loading.transcriber ?? (await loading.ready);
+      } else {
+        const startedAt = performance.now();
+        transcriber = await startLocal({ modelId: model, modelsDir, log });
+        loadMs = Math.round(performance.now() - startedAt);
+      }
+      // 用的是装着的那个时，检查途中不能被空闲释放
+      busy++;
+      clearTimeout(idleTimer);
       try {
-        let transcriber;
-        let loadMs = null;
-        if (loading?.model === model) {
-          transcriber = loading.transcriber ?? (await loading.ready);
-        } else {
-          const startedAt = performance.now();
-          transcriber = await startLocal({ modelId: model, modelsDir, log });
-          loadMs = Math.round(performance.now() - startedAt);
-        }
-        try {
-          const startedAt = performance.now();
-          const { text } = await transcriber.transcribe(samples);
-          const transcribeMs = Math.round(performance.now() - startedAt);
-          // 只记长度和耗时：转出来的是念的那句检查用的话，不是用户说的，但也没必要进日志
-          log.info("transcriber_checked", {
-            model,
-            backend: transcriber.backend,
-            load_ms: loadMs,
-            transcribe_ms: transcribeMs,
-            text_length: text.length,
-          });
-          return { text, transcribeMs, loadMs, backend: transcriber.backend };
-        } finally {
-          if (loadMs !== null) transcriber.dispose();
-        }
+        const startedAt = performance.now();
+        const { text } = await transcriber.transcribe(samples);
+        const transcribeMs = Math.round(performance.now() - startedAt);
+        // 只记长度和耗时：转出来的是念的那句检查用的话，不是用户说的，但也没必要进日志
+        log.info("transcriber_checked", {
+          model,
+          backend: transcriber.backend,
+          load_ms: loadMs,
+          transcribe_ms: transcribeMs,
+          text_length: text.length,
+        });
+        return { text, transcribeMs, loadMs, backend: transcriber.backend };
       } finally {
-        operations--;
-        scheduleRelease();
+        if (loadMs !== null) transcriber.dispose();
+        busy--;
+        restartIdleTimer();
       }
     },
 
@@ -398,7 +391,6 @@ export async function startService({
     },
 
     async close() {
-      closed = true;
       releaseLocal();
       await server.close();
     },

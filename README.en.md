@@ -436,21 +436,17 @@ flowchart LR
 | `customParams` | empty | Extra request parameters for the custom service, as a JSON object |
 | `modelSource` | `cn` | Download source: `cn` / `original` |
 | `acceleration` | `auto` | Acceleration: `auto` / `cpu` |
-| `localModelMemory` | `resident` | Local ASR memory: `resident` / `on-demand` |
-| `localModelIdleMinutes` | `5` | ASR idle release time: `1` / `5` / `10` / `30` minutes; only used on demand |
+| `localModelMemory` | `resident` | On-device transcription model memory: `resident` / `1m` / `5m` / `10m` / `30m` |
 | `barHint` | `on` | Hint line above the voice bar: `on` / `off` |
 | `theme` | `ink` | Theme: `ink` / `cinnabar` / `indigo` |
 | `language` | `system` | Language: `system` / `en` / `zh-CN` |
-
-Optional memory saving: in **Settings → General → Local model memory**, choose on-demand loading to load ASR when recording starts and release it after the selected idle time. Recording and processing keep it loaded; the next dictation may wait for a cold start. The default remains resident.
-
-The transcription model can be released after 1, 5 (default), 10, or 30 idle minutes. Shorter times reclaim memory sooner; longer times mean fewer reloads during intermittent dictation.
 
 - Settings are stored in `~/.speakmore/settings.json`.
 - A hotkey value is a list of combinations. Keys use [`KeyboardEvent.code`](https://developer.mozilla.org/docs/Web/API/UI_Events/Keyboard_event_code_values) names (e.g. `AltRight`, `MetaRight`, `ControlRight`, `Fn`, `Space`, `KeyK`, `F13`), with two keys joined by `+`. A single combination can be written as is: `speakmore config set hotkey.dictate ControlRight+F9`; several go in a JSON array: `'["AltRight","ControlRight"]'`.
 - A combination has at most two keys; cancel takes a single non-modifier key. Combinations that clash with system or common shortcuts can't be bound (⌘ or ⌃ with a letter, the Windows key), nor can combinations of left-hand modifiers only, or Shift or Caps Lock on its own.
 - A `hotkey` setting from 0.13 or earlier is converted on upgrade; the old form, such as `config set hotkey right_command`, still works.
 - Gemini thinking levels: `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`.
+- On a machine short of memory, set `localModelMemory` to release the transcription model after 1, 5, 10, or 30 idle minutes (Settings → General → On-device transcription memory). The model loads when you start speaking, while you talk; it stays loaded through recording and polishing and is released once idle that long. The default keeps it in memory.
 - A self-hosted polishing model is written as `custom/<model>`, e.g. at `http://127.0.0.1:11434/v1`.
 - Extra parameters a custom service needs go in `customParams`, e.g. `{"reasoning_effort": "minimal"}`. They are sent with both checks and polishing; `model`, `messages`, and `stream` cannot be overridden. When capping a reasoning model's output, leave room for its thinking (e.g. `{"max_completion_tokens": 4096}`), or long passages get cut off.
 - A local Ollama or LM Studio can also release its model when idle, set through `customParams`: `{"keep_alive": "5m"}` for Ollama (0.35 or newer), `{"ttl": 300}` (seconds) for LM Studio.

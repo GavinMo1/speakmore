@@ -48,7 +48,6 @@ export const settings = {
   modelSource: { value: "cn", source: "default" },
   acceleration: { value: "auto", source: "default" },
   localModelMemory: { value: "resident", source: "default" },
-  localModelIdleMinutes: { value: "5", source: "default" },
   barHint: { value: "on", source: "default" },
   theme: { value: "ink", source: "default" },
   language: { value: "system", source: "default" },

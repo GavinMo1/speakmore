@@ -125,11 +125,7 @@ async function stop() {
       voice.abandon();
       throw new LocalizedError(msg("bar.noSignal"));
     }
-    const { onDemandModels } = await window.speakmore.config();
-    const text = await voice.finish({
-      durationSeconds: recorded.durationSeconds,
-      ...(onDemandModels ? { timeoutMs: 120_000 } : {}),
-    });
+    const text = await voice.finish({ durationSeconds: recorded.durationSeconds });
     const { notice } = await window.speakmore.deliver({
       audioId: current.audioId,
       text,

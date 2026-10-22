@@ -74,6 +74,9 @@ function localModelLine(localModel, t) {
       return downloadingLine(localModel, t);
     case "loading":
       return t("cli.status.localLoading");
+    // 按需装载的（设置里的 localModelMemory）空闲后释放了
+    case "idle":
+      return t("cli.status.localIdle");
     case "failed":
       return t.text(localModel.problem);
     default:

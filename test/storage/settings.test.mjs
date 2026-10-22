@@ -50,7 +50,6 @@ test("没有文件也没有环境变量时全用默认值", () => {
     modelSource: { value: "cn", source: "default" },
     acceleration: { value: "auto", source: "default" },
     localModelMemory: { value: "resident", source: "default" },
-    localModelIdleMinutes: { value: "5", source: "default" },
     barHint: { value: "on", source: "default" },
     theme: { value: "ink", source: "default" },
     language: { value: "system", source: "default" },
@@ -90,28 +89,20 @@ test("本机模型的加速：auto（有显卡就用，出问题退回 CPU）或
   assert.throws(() => saveSetting(file, "acceleration", "gpu"), /auto \/ cpu/);
 });
 
-test("本机模型默认常驻，可选按需加载，环境变量优先且拒绝无效策略", () => {
-  saveSetting(file, "localModelMemory", " ON-DEMAND ");
-  assert.deepEqual(resolveSettings({ file, env: {} }).localModelMemory, { value: "on-demand", source: "file" });
+test("本机模型常驻内存，或空闲 1、5、10、30 分钟后释放：大小写都认，环境变量优先，别的不收", () => {
+  assert.deepEqual(resolveSettings({ file, env: {} }).localModelMemory, { value: "resident", source: "default" });
+  for (const value of ["1m", "5m", "10m", "30m", "resident"]) {
+    saveSetting(file, "localModelMemory", value);
+    assert.equal(resolveSettings({ file, env: {} }).localModelMemory.value, value);
+  }
+  saveSetting(file, "localModelMemory", " 5M ");
+  assert.deepEqual(resolveSettings({ file, env: {} }).localModelMemory, { value: "5m", source: "file" });
   assert.deepEqual(resolveSettings({ file, env: { SPEAKMORE_LOCAL_MODEL_MEMORY: "resident" } }).localModelMemory, {
     value: "resident",
     source: "env",
   });
-  assert.throws(() => saveSetting(file, "localModelMemory", "off"), /resident \/ on-demand/);
-  unsetSetting(file, "localModelMemory");
-  assert.deepEqual(resolveSettings({ file, env: {} }).localModelMemory, { value: "resident", source: "default" });
-});
-
-test("转写的空闲释放时间只接受 1、5、10、30 分钟", () => {
-  for (const name of ["localModelIdleMinutes"]) {
-    assert.equal(resolveSettings({ file, env: {} })[name].value, "5");
-    for (const value of ["1", "5", "10", "30"]) {
-      saveSetting(file, name, value);
-      assert.equal(resolveSettings({ file, env: {} })[name].value, value);
-    }
-    for (const value of ["0", "2", "-1", "Infinity", "5.5"]) {
-      assert.throws(() => saveSetting(file, name, value), /1 \/ 5 \/ 10 \/ 30/);
-    }
+  for (const value of ["on-demand", "5", "2m", "0m"]) {
+    assert.throws(() => saveSetting(file, "localModelMemory", value), /resident \/ 1m \/ 5m \/ 10m \/ 30m/);
   }
 });
 

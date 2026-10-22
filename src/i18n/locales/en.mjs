@@ -226,13 +226,12 @@ export default {
       customUrl: "Address of your custom polishing service (OpenAI-compatible), e.g. https://api.example.com/v1",
       customParams:
         'Extra request parameters for the custom service, as one JSON object, e.g. {"reasoning_effort": "minimal"}; sent with checks and polishing alike. model, messages, and stream can\'t be set',
-      localModelIdleMinutes: "Idle minutes before releasing the on-device ASR model; applies only to on-demand mode",
       modelSource:
         "Where on-device models download from: cn is the mirror in China (ModelScope), original is Hugging Face. If the chosen one stalls, the other is tried, picking up where the download stopped",
       acceleration:
         "Whether on-device models use the GPU: auto uses it when there is one and falls back to the CPU if it fails; cpu uses only the CPU (for GPU driver trouble, or to leave the GPU to other programs)",
       localModelMemory:
-        "Whether on-device models stay loaded: resident keeps them ready; on-demand loads when recording starts and releases after the selected idle time",
+        "Whether the on-device transcription model stays in memory: resident keeps it loaded; 1m, 5m, 10m, or 30m releases it after that much idle time and loads it again when you next speak (the first sentence after a long pause takes a second or two longer)",
       barHint: "Whether the hint line above the voice bar (press … to finish · esc to cancel) shows: on or off",
       theme: "Which theme the windows use",
       language: "Interface language; system follows your Mac",
@@ -287,13 +286,11 @@ export default {
     cpu: "CPU only",
   },
   localModelMemories: {
-    resident: "Keep loaded (default)",
-    "on-demand": "Load on demand",
-  },
-  idleRelease: {
-    label: "Idle release time",
-    minutes: "{minutes} min",
-    failed: "Idle release time not changed: {reason}",
+    resident: "Keep in memory",
+    "1m": "Release after 1 min idle",
+    "5m": "Release after 5 min idle",
+    "10m": "Release after 10 min idle",
+    "30m": "Release after 30 min idle",
   },
   barHints: {
     on: "Shown",
@@ -863,10 +860,7 @@ export default {
     language: "Language",
     modelSource: "Model download source",
     acceleration: "On-device model acceleration",
-    localModelMemory: "On-device model memory",
-    localModelMemoryHelp: "On demand releases idle models; loading again may take longer",
-    localModelMemoryTip:
-      "On demand loads when recording starts and releases after the selected idle time. The first transcription may take longer.",
+    localModelMemory: "On-device transcription memory",
     localModelMemoryFailed: "Memory setting not changed: {reason}",
     barHint: "Hints above the voice bar",
     openAtLogin: "Launch at login",
@@ -1536,6 +1530,7 @@ export default {
       localReady: "ready · {backend}",
       localDownloading: "downloading {percent}% ({received} / {total} MB)",
       localLoading: "loading",
+      localIdle: "released while idle, loads when you speak",
       localMissing: "not downloaded: speakmore transcriber download {id}",
       modelInUse: "{provider} {model}",
       modelWithThinking: "{provider} {model} ({thinking})",

@@ -444,19 +444,12 @@
             <select class="select" id="acceleration"></select>
           </div>
           <p class="setting-note" id="acceleration-note" role="status" hidden></p>
+          <!-- 内存紧的电脑可以让本机转写模型空闲后释放，开口时再装（GitHub PR #14） -->
           <div class="setting">
-            <div class="setting-text">
-              <label class="setting-title" for="local-model-memory" data-i18n="preferences.localModelMemory">On-device model memory</label>
-              <p class="setting-note" id="local-model-memory-help" data-i18n="preferences.localModelMemoryHelp" data-i18n-title="preferences.localModelMemoryTip">On demand releases idle models; loading again may take longer</p>
-            </div>
-            <select class="select" id="local-model-memory" aria-describedby="local-model-memory-help"></select>
+            <label class="setting-title" for="local-model-memory" data-i18n="preferences.localModelMemory">On-device transcription memory</label>
+            <select class="select" id="local-model-memory"></select>
           </div>
           <p class="setting-note" id="local-model-memory-note" role="status" hidden></p>
-          <div class="setting">
-            <label class="setting-title" for="local-model-idle-minutes" data-i18n="idleRelease.label">Idle release time</label>
-            <select class="select" id="local-model-idle-minutes" disabled></select>
-          </div>
-          <p class="setting-note" id="local-model-idle-minutes-note" role="status" hidden></p>
           <!-- 悬浮条上方那行"再按一下 … 完成 · esc 取消"：熟练了可以关掉（GitHub issue #3） -->
           <div class="setting">
             <label class="setting-title" for="bar-hint" data-i18n="preferences.barHint">Hints above the voice bar</label>

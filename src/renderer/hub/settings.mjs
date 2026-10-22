@@ -153,12 +153,6 @@ export function createSettings({ refresh }) {
       setup.local.memory.choices.map((id) => [id, t(`localModelMemories.${id}`)]),
       setup.local.memory.value,
     );
-    fillSelect(
-      $("local-model-idle-minutes"),
-      setup.local.idleMinutes.choices.map((minutes) => [minutes, t("idleRelease.minutes", { minutes })]),
-      setup.local.idleMinutes.value,
-    );
-    $("local-model-idle-minutes").disabled = setup.local.memory.value !== "on-demand";
     $("bar-hint").checked = setup.barHint === "on";
     $("open-at-login").checked = setup.openAtLogin.enabled;
     $("open-at-login-row").hidden = !setup.openAtLogin.supported;
@@ -227,18 +221,6 @@ export function createSettings({ refresh }) {
       showNote("local-model-memory-note", result.note ?? null);
     } catch (error) {
       showNote("general-problem", t("preferences.localModelMemoryFailed", { reason: describeError(error) }), "problem");
-    }
-    await refresh();
-  });
-
-  $("local-model-idle-minutes").addEventListener("change", async (event) => {
-    showNote("general-problem", null);
-    showNote("local-model-idle-minutes-note", null);
-    try {
-      const result = await window.speakmore.setLocalModelIdleMinutes(event.target.value);
-      showNote("local-model-idle-minutes-note", result.note ?? null);
-    } catch (error) {
-      showNote("general-problem", t("idleRelease.failed", { reason: describeError(error) }), "problem");
     }
     await refresh();
   });

@@ -37,11 +37,10 @@ const CLOUD_MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 const SOURCE_IDS = SOURCES.map((source) => source.id);
 /** 本机模型用不用显卡：auto 有显卡就用、在显卡上没装起来就退回 CPU（asr/start.mjs）；cpu 只用 CPU */
 export const ACCELERATIONS = Object.freeze(["auto", "cpu"]);
-/** 默认常驻；按需加载在录音时预热，达到设定空闲时间后释放模型。两种策略适用于所有平台 */
-export const LOCAL_MODEL_MEMORY = Object.freeze(["resident", "on-demand"]);
+/** 本机模型常驻内存，还是开口时装载、空闲这么久后释放（app/service.mjs）。内存紧的电脑选后几种，代价是隔久了第一句慢一两秒 */
+export const LOCAL_MODEL_MEMORY = Object.freeze(["resident", "1m", "5m", "10m", "30m"]);
 /** 悬浮条上方的操作提示（"再按一下 右⌥ 完成 · esc 取消"）显示不显示：熟练了的人嫌它一直挂着（GitHub issue #3） */
 export const BAR_HINTS = Object.freeze(["on", "off"]);
-export const MODEL_IDLE_MINUTES = Object.freeze(["1", "5", "10", "30"]);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
 
@@ -182,18 +181,8 @@ export const SETTINGS = {
     },
     label: (value) => msg(`accelerations.${value}`),
   },
-  localModelIdleMinutes: {
-    env: "SPEAKMORE_LOCAL_MODEL_IDLE_MINUTES",
-    default: "5",
-    choices: MODEL_IDLE_MINUTES,
-    parse(value) {
-      const minutes = value.trim();
-      if (!MODEL_IDLE_MINUTES.includes(minutes)) throw oneOf(MODEL_IDLE_MINUTES);
-      return minutes;
-    },
-    label: (value) => msg("idleRelease.minutes", { minutes: value }),
-  },
   localModelMemory: {
+    // 哪种模式里都能改，和 acceleration 一样管的是本机模型。App 里当场换
     env: "SPEAKMORE_LOCAL_MODEL_MEMORY",
     default: "resident",
     choices: LOCAL_MODEL_MEMORY,

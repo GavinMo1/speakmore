@@ -7,11 +7,10 @@ import { writeFileSync } from "node:fs";
 
 const OUT_PATH = process.env.SPEAKMORE_E2E_OUT;
 const RECORD_MS = Number(process.env.SPEAKMORE_E2E_RECORD_MS ?? 7_500);
-// 按需加载时第一次要冷启动，给足时间
-const GIVE_UP_MS = RECORD_MS + 120_000;
-// 听写几遍（SPEAKMORE_E2E_ROUNDS）。本机模型按需加载时，两遍之间等它空闲释放，下一遍就验了重新装载
+const GIVE_UP_MS = RECORD_MS + 40_000;
+// 听写几遍（SPEAKMORE_E2E_ROUNDS）。本机模型按需装载时，两遍之间等它空闲释放，下一遍就验了重新装载
 const ROUNDS = Number(process.env.SPEAKMORE_E2E_ROUNDS ?? 1);
-// 空闲释放时间最长 30 分钟，再多等一会儿
+// 空闲释放最长 30 分钟（设置里的 localModelMemory），再多等一会儿
 const RELEASE_GIVE_UP_MS = 31 * 60_000;
 
 const pasted = [];
@@ -75,7 +74,7 @@ async function waitForLocalModel(localModel, downloadModel) {
   }
 }
 
-/** 按需加载的本机模型空闲释放之前一直等，返回等了多久；等不到是 null */
+/** 按需装载的本机模型空闲释放之前一直等，返回等了多久；等不到是 null */
 async function waitForRelease(localModel) {
   const startedAt = performance.now();
   while (performance.now() - startedAt < RELEASE_GIVE_UP_MS) {
@@ -87,7 +86,7 @@ async function waitForRelease(localModel) {
 
 /**
  * @param {object} options
- * @param {() => string} options.localModelMemory 本机模型常驻还是按需加载（main.mjs 里正在用的那个）
+ * @param {() => string} options.localModelMemory 本机模型常驻还是按需装载（main.mjs 里正在用的那个）
  */
 export async function run({ bar, history, localModel, localModelMemory, downloadModel, quit }) {
   const rounds = [];
@@ -113,7 +112,7 @@ export async function run({ bar, history, localModel, localModelMemory, download
   for (let round = 1; round <= ROUNDS; round++) {
     // 主进程收到成品就报了结局，悬浮条要等交付的回话才回到空闲：这时按下会被当成整理中按的，不算数
     if (round > 1) await sleep(1_000);
-    if (round > 1 && localModelMemory() === "on-demand") {
+    if (round > 1 && localModelMemory() !== "resident") {
       const releasedMs = await waitForRelease(localModel);
       if (releasedMs === null) return done({ failed: `第 ${round - 1} 遍之后本机模型一直没释放` }, 1);
       console.log(`第 ${round - 1} 遍之后 ${(releasedMs / 1000).toFixed(1)} 秒，本机模型释放了`);
@@ -131,7 +130,7 @@ export async function run({ bar, history, localModel, localModelMemory, download
     const stoppedAt = performance.now();
     const result = await outcome;
     clearTimeout(giveUp);
-    // 松开到出字：按需加载时第一遍里含冷启动
+    // 松开到出字：按需装载时第一遍里含冷启动
     rounds.push({ ...result, ms: Math.round(performance.now() - stoppedAt) });
     if (result.failed) return done({ failed: `第 ${round} 遍：${result.failed}` }, 1);
   }

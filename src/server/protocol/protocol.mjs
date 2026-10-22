@@ -10,7 +10,6 @@ export const ClientType = Object.freeze({
   START: "start_audio",
   CHUNK_INFO: "set_audio_chunk_info",
   END: "end_audio",
-  CANCEL: "cancel_audio",
 });
 
 export const ServerType = Object.freeze({
@@ -65,7 +64,6 @@ const PARSERS = new Map([
       size: positiveInteger(message, "size", MAX_CHUNK_BYTES),
     }),
   ],
-  [ClientType.CANCEL, (message) => ({ type: ClientType.CANCEL, audioId: audioIdOf(message) })],
   [ClientType.END, (message) => ({ type: ClientType.END, audioId: audioIdOf(message) })],
 ]);
 
