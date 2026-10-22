@@ -1,11 +1,12 @@
 // 悬浮条：把按键和点击喂给状态机，按状态机给出的动作去录音、上传、交付。
 // 画面不在这里：该是什么样子由 bar-view.mjs 算，画出来由 bar-ui.mjs 管。
 
+import { chordKeycaps } from "../../hotkeys/chord.mjs";
 import { LocalizedError, msg, problemOf } from "../../i18n/index.mjs";
-import { keycapOf, localize, setLocale, t } from "../shared/i18n.mjs";
+import { localize, setLocale, t } from "../shared/i18n.mjs";
 import { createBarUi } from "./bar-ui.mjs";
 import { viewOf } from "./bar-view.mjs";
-import { Action, initialState, LONG_PRESS_MS, Phase, transition } from "./machine.mjs";
+import { Action, eventTypeOf, initialState, LONG_PRESS_MS, Phase, transition } from "./machine.mjs";
 import { startRecording } from "./recorder.mjs";
 import { VoiceSocket } from "./voice-socket.mjs";
 
@@ -14,28 +15,36 @@ const MAX_DURATION_MS = 540_000;
 
 // 页面的 lang 跟着界面语言：提示是 aria-live 的，读屏软件按它挑用哪种语言念
 localize();
-const { serverUrl, hotkey: initialHotkey, barControls, barHint } = await window.speakmore.config();
-/** 现在的热键（id）。提示里写它的短名字，按界面语言写 */
-let hotkey = initialHotkey;
+const { serverUrl, hotkeys: initialHotkeys, barControls, barHint } = await window.speakmore.config();
+/** 现在每个动作的热键（组合列表）。提示里写听写、取消的键帽，按界面语言写 */
+let hotkeys = initialHotkeys;
+/** 这一次是按听写的第几个组合开始的：几个组合都能结束，提示里写按下的那个，不容易看糊涂 */
+let dictateChord = 0;
+const keycapsOf = (codes) => (codes ? chordKeycaps(codes).map((cap) => t.text(cap)) : []);
+const hintKeys = () => ({
+  keys: keycapsOf(hotkeys.dictate[dictateChord] ?? hotkeys.dictate[0]),
+  escKeys: keycapsOf(hotkeys.cancel?.[0]),
+});
 const voice = new VoiceSocket(serverUrl);
 const ui = createBarUi({
   document,
   host: { setVisible: window.speakmore.setBarVisible, capture: window.speakmore.captureBarInput },
-  keycap: keycapOf(hotkey),
+  keys: hintKeys(),
   t,
 });
 ui.setControls(barControls);
 ui.setHintShown(barHint === "on");
 window.speakmore.onBarHint((value) => ui.setHintShown(value === "on"));
-window.speakmore.onHotkeyChanged((next) => {
-  hotkey = next;
-  ui.setKeycap(keycapOf(hotkey));
+window.speakmore.onHotkeysChanged((next) => {
+  hotkeys = next;
+  dictateChord = 0;
+  ui.setKeys(hintKeys());
 });
 // 设置里换了语言：悬浮条不重新加载（可能正在听写），换掉翻译，下一句就是新的语言
 window.speakmore.onLocaleChanged((locale) => {
   setLocale(locale);
+  ui.setKeys(hintKeys());
   ui.setTranslator(t, t.text(state.message));
-  ui.setKeycap(keycapOf(hotkey));
 });
 
 let state = initialState;
@@ -144,21 +153,18 @@ async function stop() {
 
 // ---------- 来自主进程的事件 ----------
 
-/** 小帮手报上来的事 → 状态机的事件。click 的 id 是条上被点的那个按钮 */
-const INPUT_EVENTS = {
-  hotkey: (event) => (event.down ? "KEY_DOWN" : "KEY_UP"),
-  other_key: () => "OTHER_KEY",
-  escape: () => "USER_CANCEL",
-  click: (event) => ({ cancel: "USER_CANCEL", confirm: "USER_CONFIRM" })[event.id],
-};
-
-window.speakmore.onInput((event) => {
-  const type = Object.hasOwn(INPUT_EVENTS, event.event) ? INPUT_EVENTS[event.event](event) : undefined;
+window.speakmore.onInput((input) => {
+  // 主进程带着是听写的第几个组合按下的（绑定 id 的序号）
+  if (input.action === "dictate" && input.down && Number.isInteger(input.chord) && input.chord !== dictateChord) {
+    dictateChord = input.chord;
+    ui.setKeys(hintKeys());
+  }
+  const type = eventTypeOf(input);
   if (type === undefined) {
-    console.warn("不认识的输入事件", event);
+    console.warn("不认识的输入事件", input);
     return;
   }
-  dispatch({ type });
+  if (type !== null) dispatch({ type });
 });
 
 window.speakmore.onBarControls(ui.setControls);

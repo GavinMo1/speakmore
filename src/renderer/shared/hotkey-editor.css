@@ -1,0 +1,157 @@
+/* 快捷键编辑（shared/hotkey-editor.mjs），设置页和首次引导共用。每个动作一行：左边名字和说明，右边每个组合一个胶囊框，
+   里面一排键帽（.keycap 在 window.css）；录着的那个亮一圈主题色。颜色、尺寸只用 token。 */
+
+.hotkey-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.375rem 1.5rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.hotkey-label {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.hotkey-name {
+  font-weight: var(--weight-medium);
+}
+
+.hotkey-description {
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.hotkey-chords {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* 一个组合：和按钮同一个胶囊外形（window.css 的 :where(.button…) 那条），里面是"换掉它"和"删掉它"两个按钮 */
+.chord {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-md);
+  padding: 0 0.1875rem;
+  background: var(--surface);
+  border-radius: var(--radius-full);
+  box-shadow: var(--edge), var(--lift);
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.chord:hover {
+  background: var(--surface-solid);
+}
+
+.chord-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: var(--control-sm);
+  padding: 0 0.375rem;
+  font: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.chord-keys:disabled {
+  cursor: default;
+}
+
+.chord-remove {
+  display: inline-grid;
+  place-items: center;
+  width: var(--control-sm);
+  height: var(--control-sm);
+  padding: 0;
+  color: var(--ink-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.chord-remove .icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.chord-remove:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--fill-hover);
+}
+
+:is(.chord-keys, .chord-remove):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* 录着：主题色一圈，慢慢呼吸；按着的键实时出现在里面 */
+.chord[data-recording] {
+  box-shadow:
+    0 0 0 2px var(--primary),
+    var(--lift);
+  animation: chord-listening 1.6s var(--ease-out) infinite;
+}
+
+.chord[data-tone="problem"] {
+  box-shadow:
+    0 0 0 1px var(--problem),
+    var(--lift);
+}
+
+.chord[data-recording][data-tone="problem"] {
+  box-shadow:
+    0 0 0 2px var(--problem),
+    var(--lift);
+  animation: none;
+}
+
+.chord-prompt {
+  padding: 0 0.25rem;
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--ink-2);
+}
+
+.hotkey-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+  text-align: right;
+}
+
+.hotkey-note[data-tone="problem"] {
+  color: var(--problem);
+}
+
+.hotkey-note[data-tone="ok"] {
+  color: var(--ok);
+}
+
+@keyframes chord-listening {
+  50% {
+    box-shadow:
+      0 0 0 4px color-mix(in oklch, var(--primary) 35%, transparent),
+      var(--lift);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chord[data-recording] {
+    animation: none;
+  }
+}

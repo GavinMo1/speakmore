@@ -1,9 +1,11 @@
+import { ACTIONS } from "../../hotkeys/actions.mjs";
+import { settingNameOf } from "../../hotkeys/settings.mjs";
 import { findLocale, msg, problemOf, SYSTEM_LOCALE } from "../../i18n/index.mjs";
 import { findModel } from "../../models/catalog.mjs";
 import { findProvider, parseModelChoice } from "../../server/providers/index.mjs";
 import { findVendor } from "../../server/vendors.mjs";
 import { ensureHome } from "../../storage/paths.mjs";
-import { overridingEnv, SETTINGS, saveSetting, unsetSetting } from "../../storage/settings.mjs";
+import { overridingEnv, SETTINGS, saveSetting, settingName, unsetSetting } from "../../storage/settings.mjs";
 import { THEMES } from "../../themes/index.mjs";
 import {
   ConfigError,
@@ -18,7 +20,7 @@ import {
 import { renderConfig, renderThemes, themeTitle } from "../render/settings.mjs";
 
 // 设置：speakmore config、theme，以及打开设置的 speakmore settings。
-// 主题、语言、下载源改了当场生效（让正在运行的那个重新读一遍设置），别的要重启后台。
+// 主题、语言、下载源、热键改了当场生效（让正在运行的那个重新读一遍设置），别的要重启后台。
 // config set 是手动改设置的后门：只按存设置的规矩查写法，不经过模式那一层（app/modes.mjs）的检查，
 // 不在那种模式里的设置也照写、切过去时才用上。平时换模式、换模型走 mode、model、transcriber、polish。
 
@@ -93,11 +95,20 @@ const LIVE = {
     overridden: (t, applied, variable) =>
       t("cli.config.modelSourceOverridden", { source: t(`modelSources.${applied.modelSource}`), variable }),
   },
+  // 每个动作的热键：后台重读设置、重发绑定表、换上新键帽（docs/hotkey-research.md 5.2）
+  ...Object.fromEntries(
+    ACTIONS.map((action) => {
+      const name = settingNameOf(action);
+      const overridden = (t, applied, variable) =>
+        t("cli.config.hotkeyOverridden", { hotkey: t.text(SETTINGS[name].label(applied[name])), variable });
+      return [name, { command: "reload-hotkeys", overridden }];
+    }),
+  ),
 };
 
 /**
- * 主题、语言、下载源改完之后让它生效。这几项不用重启：让正在运行的那个重新读一遍设置，开着的窗口当场换。
- * @param {"theme" | "language" | "modelSource"} name
+ * 主题、语言、下载源、热键改完之后让它生效。这几项不用重启：让正在运行的那个重新读一遍设置，开着的窗口当场换。
+ * @param {keyof typeof LIVE} name
  * @param {string} wanted 设置里现在写的值
  * @returns {Promise<number>} 退出码
  */
@@ -116,7 +127,8 @@ async function applyLive(io, name, wanted) {
     return 0;
   }
   if (applied[name] === wanted) io.out(io.t("cli.config.appliedLive"));
-  else io.out(LIVE[name].overridden(io.t, applied, SETTINGS[name].env));
+  // 盖着它的是改名之前的环境变量时，回答里会说是哪一个（env）
+  else io.out(LIVE[name].overridden(io.t, applied, applied.env?.[name] ?? SETTINGS[name].env));
   return 0;
 }
 
@@ -138,7 +150,19 @@ function noteModeSetting(io, name) {
   if (ofMode && ofMode !== current) io.out(io.t("cli.config.otherMode", { current, mode: ofMode }));
 }
 
-/** 校验并存下一项设置。@returns {string} 规整后的值 */
+/** 命令行写的设置名换成现在的（改名之前的照样认，config set hotkey）。不认识的照 config 的规矩报错 */
+function currentName(name) {
+  try {
+    return settingName(name);
+  } catch (error) {
+    throw new ConfigError(problemOf(error), { cause: error });
+  }
+}
+
+/**
+ * 校验并存下一项设置
+ * @returns {{ value: string, warnings: object[] }} 规整后的值，和能存但要提醒的话（saveSetting）
+ */
 export function storeSetting(io, name, value) {
   try {
     // 可能是这个目录里的第一个文件
@@ -162,21 +186,25 @@ export async function config(args, io) {
     return 0;
   }
   if (action === "set" && name !== undefined && value !== undefined && extra.length === 0) {
-    const saved = storeSetting(io, name, value);
-    io.out(io.t("cli.config.changed", { name, value: saved }));
-    warnIfEnvOverrides(io, name);
-    noteModeSetting(io, name);
-    if (Object.hasOwn(LIVE, name)) return applyLive(io, name, saved);
-    return applySettings(io, `speakmore config unset ${name}`);
+    const current = currentName(name);
+    const { value: saved, warnings } = storeSetting(io, current, value);
+    io.out(io.t("cli.config.changed", { name: current, value: saved }));
+    for (const warning of warnings) io.out(io.t("cli.config.warning", { warning }));
+    warnIfEnvOverrides(io, current);
+    noteModeSetting(io, current);
+    if (Object.hasOwn(LIVE, current)) return applyLive(io, current, saved);
+    return applySettings(io, `speakmore config unset ${current}`);
   }
   if (action === "unset" && name !== undefined && value === undefined) {
+    const current = currentName(name);
     try {
-      unsetSetting(io.paths.settingsFile, name);
+      unsetSetting(io.paths.settingsFile, current);
     } catch (error) {
       throw new ConfigError(problemOf(error), { cause: error });
     }
-    io.out(io.t("cli.config.unset", { name, value: SETTINGS[name].default }));
-    return Object.hasOwn(LIVE, name) ? applyLive(io, name, SETTINGS[name].default) : applySettings(io, null);
+    const { default: initial } = SETTINGS[current];
+    io.out(io.t("cli.config.unset", { name: current, value: initial }));
+    return Object.hasOwn(LIVE, current) ? applyLive(io, current, initial) : applySettings(io, null);
   }
   throw new UsageError(msg("cli.syntax.config"));
 }
@@ -188,7 +216,7 @@ export async function theme(args, io) {
     io.out(renderThemes({ themes: THEMES, setting: currentSettings(io).theme }, renderOptions(io)));
     return 0;
   }
-  const saved = storeSetting(io, "theme", wanted);
+  const { value: saved } = storeSetting(io, "theme", wanted);
   io.out(io.t("cli.config.themeChanged", { theme: themeTitle(io.t, saved) }));
   warnIfEnvOverrides(io, "theme");
   return applyLive(io, "theme", saved);

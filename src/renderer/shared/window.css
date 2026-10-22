@@ -282,6 +282,37 @@ p {
   background: var(--fill-hover);
 }
 
+/* 键帽：一个键一块（首页的"按 右⌥ 说话"、快捷键编辑里的组合）。键帽之间不写加号（docs/hotkey-research.md 5.7） */
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  padding: 0.0625rem 0.5rem 0.125rem;
+  font: var(--weight-semibold) var(--text-small) / 1.5 var(--font-rounded);
+  white-space: nowrap;
+  color: var(--ink);
+  background: var(--surface-solid);
+  border-radius: var(--radius-control);
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    inset 0 -2px 0 var(--line),
+    0 1px 2px oklch(0 0 0 / 0.06);
+}
+
+/* 一个组合的一排键帽，和几个组合之间的"或"（shared/keycaps.mjs） */
+.keycaps {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.keycaps-or {
+  margin: 0 0.25rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
 .link {
   padding: 0;
   font: inherit;

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  alternatives,
   createTranslator,
   DEFAULT_LOCALE,
   findLocale,
@@ -123,6 +124,19 @@ test("并列和数字按语言写；中文一律用顿号隔开（和原来的�
   assert.equal(en.number(12345), "12,345");
 });
 
+test("几句里任一句（alternatives）：翻的时候按“或”并列，能当参数，也能嵌在别的话里", () => {
+  // 键名按系统不同（Windows 上右⌘ 叫右 Win），这里按 Mac 的说
+  const zhMac = createTranslator("zh-CN", "darwin");
+  const enMac = createTranslator("en", "darwin");
+  const keys = alternatives([msg("keys.Fn.keycap"), msg("keys.MetaRight.keycap")]);
+  assert.equal(zhMac.text(keys), "fn、右⌘");
+  assert.equal(enMac.text(keys), "fn or Right ⌘");
+  assert.equal(zhMac("tray.ready", { keycap: keys }), zhMac("tray.ready", { keycap: "fn、右⌘" }));
+  assert.equal(zh.text(alternatives([])), "");
+  // 主进程交给页面、命令行的是普通对象，过一遍 JSON 还认得
+  assert.equal(enMac.text(JSON.parse(JSON.stringify(keys))), "fn or Right ⌘");
+});
+
 test("t.parts 不拼起来：参数留在原位，调用方可以把它画成键帽", () => {
   const keycap = { key: "Right ⌥" };
   assert.deepEqual(en.parts("bar.recording", { key: keycap, esc: { key: "esc" } }), [
@@ -164,7 +178,7 @@ test("按系统说法不同的话：Windows 上先找 windows 那一节，没有
   assert.equal(winEn("plaza.via.local"), "This PC");
   assert.equal(winZh("plaza.via.local"), "本机");
   // 不分系统的照常
-  assert.equal(winZh("hotkeys.right_alt.name"), "右 Alt 键");
+  assert.equal(winZh("actions.dictate.name"), "语音输入");
 });
 
 test("命令行的语言：先看 LC_ALL、LC_MESSAGES、LANG；Windows 的终端一般都不设，这时用系统的显示语言", () => {

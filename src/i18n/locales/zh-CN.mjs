@@ -51,14 +51,137 @@ export default {
     request: "授权",
   },
 
-  // 名字要能直接嵌进句子里（"按一下右 Option 键开始说话"），所以以"键"结尾
-  hotkeys: {
-    right_option: { name: "右 Option 键", keycap: "右⌥" },
-    right_command: { name: "右 Command 键", keycap: "右⌘" },
-    right_control: { name: "右 Control 键", keycap: "右⌃" },
-    fn: { name: "地球仪（fn）键", keycap: "fn" },
-    right_alt: { name: "右 Alt 键", keycap: "右 Alt" },
-    right_ctrl: { name: "右 Ctrl 键", keycap: "右 Ctrl" },
+  // 键的名字、组合里的叫法、键帽（src/hotkeys/keys.mjs 里的 code）。字母、数字、F 键、标点的字和语言无关，写在键表里，
+  // 名字用 named 拼。名字要能嵌进句子（"按一下右 Option 键开始说话"），所以以"键"结尾。这里是 Mac 的说法，Windows 的在 windows 一节
+  keys: {
+    named: "{label} 键",
+    ControlLeft: { name: "左 Control 键", short: "左 Control", keycap: "左⌃" },
+    ControlRight: { name: "右 Control 键", short: "右 Control", keycap: "右⌃" },
+    ShiftLeft: { name: "左 Shift 键", short: "左 Shift", keycap: "左⇧" },
+    ShiftRight: { name: "右 Shift 键", short: "右 Shift", keycap: "右⇧" },
+    AltLeft: { name: "左 Option 键", short: "左 Option", keycap: "左⌥" },
+    AltRight: { name: "右 Option 键", short: "右 Option", keycap: "右⌥" },
+    MetaLeft: { name: "左 Command 键", short: "左 Command", keycap: "左⌘" },
+    MetaRight: { name: "右 Command 键", short: "右 Command", keycap: "右⌘" },
+    Fn: { name: "地球仪（fn）键", short: "fn", keycap: "fn" },
+    ContextMenu: { name: "菜单键", short: "菜单", keycap: "菜单" },
+    Space: { name: "空格键", short: "空格", keycap: "空格" },
+    Escape: { name: "esc 键", short: "esc", keycap: "esc" },
+    Enter: { name: "Return 键", short: "Return", keycap: "↩" },
+    Tab: { name: "Tab 键", short: "Tab", keycap: "⇥" },
+    Backspace: { name: "Delete 键", short: "Delete", keycap: "⌫" },
+    Delete: { name: "向前删除键", short: "向前删除", keycap: "⌦" },
+    Insert: { name: "Insert 键", short: "Insert", keycap: "Insert" },
+    Home: { name: "Home 键", short: "Home", keycap: "Home" },
+    End: { name: "End 键", short: "End", keycap: "End" },
+    PageUp: { name: "Page Up 键", short: "Page Up", keycap: "Page Up" },
+    PageDown: { name: "Page Down 键", short: "Page Down", keycap: "Page Down" },
+    ArrowUp: { name: "上方向键", short: "上", keycap: "↑" },
+    ArrowDown: { name: "下方向键", short: "下", keycap: "↓" },
+    ArrowLeft: { name: "左方向键", short: "左", keycap: "←" },
+    ArrowRight: { name: "右方向键", short: "右", keycap: "→" },
+    CapsLock: { name: "大写锁定键", short: "大写锁定", keycap: "⇪" },
+    NumLock: { name: "Num Lock 键", short: "Num Lock", keycap: "Num Lock" },
+    ScrollLock: { name: "Scroll Lock 键", short: "Scroll Lock", keycap: "Scroll Lock" },
+    Pause: { name: "Pause 键", short: "Pause", keycap: "Pause" },
+    PrintScreen: { name: "Print Screen 键", short: "Print Screen", keycap: "PrtSc" },
+  },
+
+  chord: {
+    named: "{first}+{second}",
+    // Mac 的菜单里修饰键和键之间不加号；我们的键帽带左右，挨在一起不好认，空一格
+    text: "{first} {second}",
+    empty: "没写键",
+    unknown: "不认识的键 {code}",
+    tooMany: "最多两个键",
+    twice: "{key}写了两次",
+    blocked: "{key}不能放进快捷键",
+    typingAlone: "{key}要和一个修饰键一起按：单按会打出字",
+    shiftAlone: "单按 Shift 不能当快捷键：输入法常用它切换中英文",
+    twoPlain: "两个键里要有一个是修饰键",
+    escapeCombo: "esc 不能和别的键组合",
+    shiftTyping: "Shift 加打字的键会打出大写或符号，换一个修饰键",
+  },
+
+  // 能按快捷键做的事（src/hotkeys/actions.mjs）：设置页、引导页每个动作一行，名字在左、说明在下
+  actions: {
+    dictate: { name: "语音输入", description: "按一下开始说话，再按一下结束。" },
+    cancel: { name: "取消", description: "说话时按下，取消这一次。" },
+  },
+
+  // 热键的设置项（src/hotkeys/settings.mjs）
+  hotkeySetting: {
+    describe: "「{action}」的快捷键：两键以内的任意组合，写法见 README",
+    notList: '要写一个组合（AltRight、ControlRight+F9），或者一组组合（["AltRight","ControlRight"]）',
+    problem: "{chord}：{reason}",
+  },
+
+  // 设置页、引导页录键（src/app/hotkey-recording.mjs、src/renderer/shared/hotkey-editor.mjs）
+  hotkeyRecord: {
+    prompt: "按下新组合",
+    hint: "两键以内 · esc 取消",
+    hintCapturing: "单个键 · 点别处取消",
+    tooMany: "最多两个键",
+    unknownKey: "无法识别此键",
+    systemTaken: "已被系统快捷键占用",
+    appTaken: "已被其他程序占用",
+    saveFailed: "保存失败",
+    add: "添加另一个",
+    addLabel: "为「{action}」添加另一个组合",
+    reset: "恢复默认",
+    resetLabel: "「{action}」恢复默认",
+    change: "更换 {chord}",
+    remove: "删除 {chord}",
+    saved: "已保存",
+    limit: "最多 {count} 个",
+    needsListen: "需先授予输入监控权限",
+    helperStopped: "按键监听未运行，暂时无法录制",
+    envOverride: "环境变量 {variable} 优先，删除后才能在此修改",
+  },
+
+  // 下发给小帮手之前查出来的、小帮手说装不上的（src/hotkeys/bindings.mjs），放进"还差什么"
+  hotkeyProblem: {
+    chord: "「{action}」的 {chord} 用不了：{reason}",
+    fallback: "「{action}」先用默认的 {chord}",
+    needsTrusted: "要先在系统设置里给 SpeakMore 辅助功能权限",
+    registerFailed: "系统没让注册，可能被别的应用占了",
+    invalid: "小帮手认不出这个组合",
+  },
+
+  // 一个组合为什么不能绑、为什么要提醒（src/hotkeys/validate.mjs）
+  binding: {
+    notAvailable: "这个系统上没有{key}",
+    capturingSingle: "「{action}」只能绑一个非修饰键（F 键、菜单键或 esc）",
+    escapeOnlyCapturing: "单按 esc 只能给说话时才生效的动作用",
+    macCommandTyping: "⌘ 加打字的键是各个应用的快捷键（拷贝、粘贴、保存……）",
+    macControlTyping: "⌃ 加打字的键是系统和文本编辑的快捷键（切换输入法、移动光标……）",
+    macFnTyping: "地球仪键加字母、数字、符号是系统的快捷键",
+    macFnFKey: "按着 fn 按 F 键就是这个 F 键，直接绑 F 键即可",
+    macControlF: "⌃ 加 F1–F8 是系统的键盘导航快捷键",
+    macCommandF: "⌘ 加 F1–F12 是系统的快捷键（⌘F5 开关旁白）",
+    macF11: "F11 是系统的“显示桌面”",
+    winMeta: "Win 键和它的组合都归 Windows 自己用",
+    winControlTyping: "Ctrl 加打字的键是各个应用的快捷键（复制、粘贴、保存……）",
+    winAltSpace: "Alt+空格会打开窗口菜单",
+    winCloses: "这个组合会关掉窗口",
+    winShiftSwitch: "Ctrl+Shift、Alt+Shift 是 Windows 切换输入语言和键盘布局的快捷键",
+    winF12: "Windows 把单独的 F12 留给调试器",
+    winShiftF10: "Shift+F10 会打开右键菜单",
+    leftOnly: "平时的快捷键多从左边的修饰键按起（⌘C、⇧⌘Z），绑了会频繁误触发：换右边的修饰键，或者加上 fn",
+    required: "「{action}」至少要有一个组合",
+    tooMany: "一个动作最多 {count} 个组合",
+    repeated: "这个组合写了两遍",
+    taken: "已经给了「{action}」",
+    usesCapturingKey: "{key}是「{action}」的键：说话时按它只会取消",
+    capturingKeyUsed: "{key}在「{action}」的组合里：只在说话时生效的动作不能再绑它",
+    fnSystem: "地球仪键在系统设置里若设了别的用途（切换输入法、表情、听写），按它时会一起触发；外接键盘多半没有 fn",
+    // 小帮手读得到系统设置时说具体（src/hotkeys/validate.mjs 的 refineWarning）
+    fnSystemUse: "按地球仪键时系统还会{use}：可在系统设置 › 键盘里改成“无操作”",
+    fnUses: { inputSource: "切换输入法", emoji: "显示表情与符号", dictation: "开始听写" },
+    macOptionTyping: "⌥ 加打字的键平时会打出特殊字符（⌥空格是不换行空格），绑上以后就打不出来了",
+    altGr: "有些键盘布局（德语、法语等）把右 Alt 当 AltGr 打字用，按它时会一起触发",
+    winAltLetter: "Alt 加字母平时会打开应用的菜单（Alt+F 打开“文件”），绑上以后就打不开了",
+    prefix: "它是「{action}」的组合 {chord} 的一部分：按那个组合时会先触发这个",
   },
 
   themes: {
@@ -84,7 +207,6 @@ export default {
 
   settings: {
     describe: {
-      hotkey: "按哪个键开始和结束说话",
       mode: "识别走哪条路：native 是录音直接交给收音频的模型，local 是本机的小模型先转成文字、再交给任意大模型润色，private 是只用本机模型转写、什么都不上传",
       model: "用哪一家的哪个模型整理，写成 厂商/模型；只写厂商就用它的默认模型。换模型用 speakmore model",
       thinking: "Gemini 的思考档位，越高越慢。别家的模型用不上",
@@ -290,6 +412,9 @@ export default {
     noSignal: "麦克风没信号：查输入设备、是否静音",
     recordError: "录音出错：{reason}",
     helperStopped: "按键监听停了，{hotkey}失效：重启 SpeakMore 试试",
+    secureInput: "有应用开着安全输入，部分组合键暂时用不了",
+    // 只有 Windows 有：系统不把发给管理员窗口的按键交给我们
+    elevatedForeground: "前台是以管理员身份运行的窗口，在它上面快捷键用不了",
   },
 
   tray: {
@@ -691,7 +816,6 @@ export default {
     acceleration: "本机模型加速",
     barHint: "悬浮条操作提示",
     openAtLogin: "开机启动",
-    hotkeyFailed: "没改成：{reason}",
     themeFailed: "主题没换成：{reason}",
     languageFailed: "语言没换成：{reason}",
     loginFailed: "开机启动没设上：{reason}",
@@ -866,9 +990,7 @@ export default {
       question: "键变色了吗？",
       yes: "变了，继续",
       no: "没变，换个键",
-      switchTo: "换成",
       switched: "已换，按一下试试",
-      failed: "没换成：{reason}",
     },
     try: {
       soft: "现在，",
@@ -997,6 +1119,7 @@ export default {
     historyTooNew: "历史库的版本是 {found}，比这个程序认识的 {known} 新，不敢动它",
     historyTooOld: "历史库的版本是 {found}，这个程序认识的是 {known}：先把 SpeakMore 启动一次，或者更新到新版",
     legacyRunning: "旧版本的 SpeakMore 还在运行，数据搬不过来。先把它退出（菜单栏“听写”→“退出”），再运行一次。",
+    settingsMigrateFailed: "设置文件 {file} 里的旧热键换不过来（{reason}）。让这个文件能写，再运行一次。",
   },
 
   cli: {
@@ -1144,7 +1267,9 @@ export default {
       themeOverridden: "正在运行的 SpeakMore 用的还是{theme}：启动它的环境里设着 {variable}，它盖过设置文件。",
       languageOverridden: "正在运行的 SpeakMore 用的还是{language}：启动它的环境里设着 {variable}，它盖过设置文件。",
       modelSourceOverridden: "正在运行的 SpeakMore 用的还是{source}：启动它的环境里设着 {variable}，它盖过设置文件。",
+      hotkeyOverridden: "正在运行的 SpeakMore 用的还是{hotkey}：启动它的环境里设着 {variable}，它盖过设置文件。",
       envWarning: "注意：环境变量 {variable} 现在设着，它会盖过这个值。",
+      warning: "注意：{warning}",
       changed: "{name} 改成了 {value}。",
       modeCommand: "这一项平时用 {command} 换：它先检查能不能用，不行就不换。config set 不检查，直接写进设置。",
       otherMode: "现在是 {current} 模式，这一项切到 {mode} 模式时才用上。",
@@ -1154,8 +1279,8 @@ export default {
       settingsOpened: "设置已经打开。",
       title: "设置",
       choices: "{describe}。能填：{choices}",
-      hintSet: "改一项：speakmore config set hotkey fn",
-      hintUnset: "回到默认：speakmore config unset hotkey",
+      hintSet: "改一项：speakmore config set hotkey.dictate Fn+Space",
+      hintUnset: "回到默认：speakmore config unset hotkey.dictate",
       hintKey: "换 key：speakmore key",
       hintTheme: "换主题：speakmore theme",
       folder: "目录",
@@ -1455,6 +1580,24 @@ speakmore help     全部命令`,
 
   // Windows 上说法不同的那几句，名字照抄通用的（见 src/i18n/index.mjs 开头）。"本机"这类不分系统的不写
   windows: {
+    // 组合用加号连（右 Alt+空格），修饰键叫 Ctrl、Alt、Win
+    chord: { text: "{first}+{second}" },
+    binding: { leftOnly: "平时的快捷键多从左边的修饰键按起（Ctrl+C、Alt+Tab），绑了会频繁误触发：换右边的修饰键" },
+    keys: {
+      ControlLeft: { name: "左 Ctrl 键", short: "左 Ctrl", keycap: "左 Ctrl" },
+      ControlRight: { name: "右 Ctrl 键", short: "右 Ctrl", keycap: "右 Ctrl" },
+      ShiftLeft: { name: "左 Shift 键", short: "左 Shift", keycap: "左 Shift" },
+      ShiftRight: { name: "右 Shift 键", short: "右 Shift", keycap: "右 Shift" },
+      AltLeft: { name: "左 Alt 键", short: "左 Alt", keycap: "左 Alt" },
+      AltRight: { name: "右 Alt 键", short: "右 Alt", keycap: "右 Alt" },
+      MetaLeft: { name: "左 Win 键", short: "左 Win", keycap: "左 Win" },
+      MetaRight: { name: "右 Win 键", short: "右 Win", keycap: "右 Win" },
+      Enter: { name: "回车键", short: "回车", keycap: "Enter" },
+      Tab: { name: "Tab 键", short: "Tab", keycap: "Tab" },
+      Backspace: { name: "退格键", short: "退格", keycap: "Backspace" },
+      Delete: { name: "Delete 键", short: "Delete", keycap: "Delete" },
+      CapsLock: { name: "大写锁定键", short: "大写锁定", keycap: "Caps Lock" },
+    },
     instance: {
       stuckNoPid: "SpeakMore 卡住了不答话，也认不出它的进程号。在“任务管理器”的“详细信息”里找到 electron.exe，结束它。",
       cantStop: "SpeakMore 停不掉（进程号 {pid}）。在“任务管理器”里结束它。",
@@ -1468,6 +1611,7 @@ speakmore help     全部命令`,
     },
     cli: {
       key: { storage: "它会用 Windows 的数据保护加密后存在这台电脑上，不会发到别处。" },
+      config: { hintSet: "改一项：speakmore config set hotkey.dictate ControlRight" },
     },
     permissions: { openSettings: "设置" },
     setup: { openSettings: "任务栏通知区域的图标 › 设置" },

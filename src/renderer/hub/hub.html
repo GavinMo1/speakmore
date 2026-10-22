@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="../shared/tokens.css" />
     <link rel="stylesheet" href="../shared/window.css" />
     <link rel="stylesheet" href="../shared/setup.css" />
+    <link rel="stylesheet" href="../shared/hotkey-editor.css" />
     <link rel="stylesheet" href="hub.css" />
     <link rel="stylesheet" href="engine.css" />
     <link rel="stylesheet" href="picker.css" />
@@ -133,7 +134,7 @@
           <header class="page-head">
             <div class="page-heading">
               <h1 class="page-title" id="home-title" data-i18n="home.title">Speak, don't type</h1>
-              <p class="page-lede"><kbd class="keycap" id="home-keycap"></kbd><span data-i18n="home.dictate">Press to talk</span></p>
+              <p class="page-lede"><span class="keycaps" id="home-keycap"></span><span data-i18n="home.dictate">Press to talk</span></p>
             </div>
             <button type="button" class="picker-trigger" id="mode-chip"></button>
           </header>
@@ -416,11 +417,11 @@
 
         <section class="pane" data-pane="general">
           <h3 class="pane-title" data-i18n="preferences.general">General</h3>
-          <div class="setting">
-            <label class="setting-title" for="hotkey" data-i18n="preferences.hotkey">Shortcut</label>
-            <select class="select" id="hotkey"></select>
-          </div>
-          <p class="setting-note" id="hotkey-note" role="status" hidden></p>
+          <!-- 快捷键：动作目录里每个动作一行（shared/hotkey-editor.mjs） -->
+          <section class="hotkey-group" aria-labelledby="hotkeys-title">
+            <h4 class="hotkey-group-title" id="hotkeys-title" data-i18n="preferences.hotkey">Shortcut</h4>
+            <div id="hotkey-editor"></div>
+          </section>
           <div class="setting">
             <label class="setting-title" for="theme" data-i18n="preferences.theme">Theme</label>
             <select class="select" id="theme"></select>

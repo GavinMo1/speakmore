@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderStatus } from "../../../src/cli/render/status.mjs";
-import { hotkeyZh, noStats, plain, ready, settings } from "./fixtures.mjs";
+import { hotkeyZh, namesZh, noStats, plain, ready, settings } from "./fixtures.mjs";
 
 test("没有在运行时只说一句怎么启动", () => {
   const text = renderStatus({ status: null, version: "0.1.0", settings, stats: noStats }, plain);
@@ -18,6 +18,50 @@ test("一切就绪时说怎么用，并列出 key、权限、热键、模型", (
   assert.match(text, /麦克风 ✓\s+输入监控 ✓\s+辅助功能 ✓/);
   assert.match(text, new RegExp(`热键\\s+${hotkeyZh}`));
   assert.match(text, /模型\s+Gemini 的 gemini-3\.6-flash（MINIMAL）/);
+});
+
+test("后台是 0.13 以前的版本（只报旧 id）：照样叫得出名字；更新的版本报了认不出的，用它自己的说法", () => {
+  const { "hotkey.dictate": _dictate, "hotkey.cancel": _cancel, ...old } = ready;
+  const before = renderStatus(
+    { status: { ...old, hotkey: "right_command" }, version: "0.1.0", settings, stats: noStats },
+    plain,
+  );
+  assert.match(before, new RegExp(`热键\\s+${namesZh("MetaRight")}`));
+  const newer = renderStatus(
+    {
+      status: { ...old, "hotkey.dictate": "MouseX", hotkey: null, hotkeyLabel: "鼠标侧键" },
+      version: "0.1.0",
+      settings,
+      stats: noStats,
+    },
+    plain,
+  );
+  assert.match(newer, /热键\s+鼠标侧键/);
+});
+
+test("绑了几个组合：任一个都行，并列着说", () => {
+  const status = { ...ready, "hotkey.dictate": '["Fn","MetaRight"]' };
+  const text = renderStatus({ status, version: "0.1.0", settings, stats: noStats }, plain);
+  assert.match(text, new RegExp(`按一下${namesZh("Fn", "MetaRight").replace(/[()（）]/g, ".")}开始说话`));
+});
+
+test("设置里写的装不上、退回了默认键：说的是实际装上的那个（hotkeysInEffect），不是设置里写的", () => {
+  const status = { ...ready, "hotkey.dictate": '["Fn"]', hotkeysInEffect: { dictate: '["AltRight"]' } };
+  const text = renderStatus({ status, version: "0.1.0", settings, stats: noStats }, plain);
+  assert.match(text, new RegExp(`按一下${hotkeyZh}开始说话`));
+  assert.match(text, new RegExp(`热键\\s+${hotkeyZh}`));
+  assert.doesNotMatch(text, /地球仪/);
+});
+
+test("能用、但有个热键组合装不上：照样说怎么用，再说还差什么", () => {
+  const status = {
+    ...ready,
+    summary: { ...ready.summary, missing: ["「语音输入」的 fn 用不了：这个系统上没有地球仪（fn）键"] },
+  };
+  const text = renderStatus({ status, version: "0.1.0", settings, stats: noStats }, plain);
+  assert.match(text, /运行中/);
+  assert.match(text, /开始说话/);
+  assert.match(text, /「语音输入」的 fn 用不了/);
 });
 
 test("缺东西时标题说还差几样，逐项标出，并说权限记在终端名下", () => {

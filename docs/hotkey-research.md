@@ -10,6 +10,8 @@
 >
 > D1–D13 主人已于 2026-10-21 拍板，结果见 1.2 和 7.1。和建议不同的五条：D1 改成全部松开才算松开；D4 界面照 Typeless 一个动作列多个组合、能添加能删；D9 只认键盘，鼠标键一律不做；D10 新动作必须带默认键并在引导页讲到；D11 单按 Shift 也不开放。相关章节已跟着改。
 >
+> 真机实验（2026-10-21）：V1、V8、V19、V20 在本机（MacBook 自带键盘，macOS 26.5.2）跑完。程序和原始数据在 `.playwright-mcp/hotkey-research/experiments/`，只在本机。V8、V20 通过；V19 通过，但要求小帮手改用 NSApplication 跑；V1 不通过，D3 经主人重选，改为"触发 tap 同步打开吞键 tap"。改了 1.1、1.2、4.1、5.3、第 6 节第 7 步、7.1、7.2 和附录 B。
+>
 > 引用约定：
 >
 > - `文件:行` 指仓库根目录下的源码。
@@ -25,11 +27,11 @@
 
 ### 1.1 推荐做法
 
-1. **底层机制不换。** macOS 继续用 CGEventTap，Windows 继续用 `WH_KEYBOARD_LL`。系统热键接口（Carbon `RegisterEventHotKey`、Win32 `RegisterHotKey`、Electron `globalShortcut`）做不了单独修饰键，也分不了左右；Win32 `RegisterHotKey` 和 Electron `globalShortcut` 还没有松开事件。所以它们只做辅助：`RegisterHotKey` 做冲突探测；Carbon 用来吞 Mac 上的单个 F 键，并在安全输入期间顶替带普通键的绑定（4.1，前提是 V19 验证通过）。第三方库一概不用。
+1. **底层机制不换。** macOS 继续用 CGEventTap，Windows 继续用 `WH_KEYBOARD_LL`。系统热键接口（Carbon `RegisterEventHotKey`、Win32 `RegisterHotKey`、Electron `globalShortcut`）做不了单独修饰键，也分不了左右；Win32 `RegisterHotKey` 和 Electron `globalShortcut` 还没有松开事件。所以它们只做辅助：`RegisterHotKey` 做冲突探测；Carbon 用来吞 Mac 上的单个 F 键，并在安全输入期间顶替带普通键的绑定（4.1；V19、V20 已验证，前提是小帮手改用 NSApplication 跑）。第三方库一概不用。
 2. **键用 W3C `KeyboardEvent.code` 名标识**，例如 `AltRight`、`MetaRight`、`Fn`、`Space`、`F13`。全项目只在 JS 里放一张键表，从 Chromium 的 `dom_code_data.inc`（BSD 许可）裁出子集，再补上 `Fn`。主进程把 code 换成原生码再下发，两个小帮手不再维护键名。现在的 4 份键表和 2 份按 id 写的文案，合并成这一处。
 3. **匹配和吞键在小帮手里做。** 主进程用一条 `bind` 命令下发绑定表，可以随时整表替换，换键不再重启小帮手。小帮手只报"哪个绑定按下、松开、被打断"，不报别的按键，现有的隐私约定不变。录快捷键是一个限时模式，只有这段时间报原始按键。
 4. **组合最多两个键，按集合精确匹配。** 修饰键之间不分先后。修饰键加普通键时，普通键必须最后按。只有按下能凑成组合，松开不能；组合里的键全部松开才算松开（D1）。组合按着时来了别的键，报 `interrupted`，取代今天的 `other_key`；新的键集合恰好是另一个绑定时，算一次"升级"。
-5. **修饰键一律不吞，组合里的普通键整段吞掉**（按下、自动重复、松开）。Windows 上有 Alt 或 Win 参与时插掩码键，规则从"只管右 Alt"推广到全部 Alt 和 Win。macOS 上吞普通键要用能改事件的 tap，需要辅助功能权限；这个 tap 按需打开，平时仍然关着。两个 tap 共用一个匹配器，按事件去重。
+5. **修饰键一律不吞，组合里的普通键整段吞掉**（按下、自动重复、松开）。Windows 上有 Alt 或 Win 参与时插掩码键，规则从"只管右 Alt"推广到全部 Alt 和 Win。macOS 上吞普通键要用能改事件的 tap，需要辅助功能权限。这个吞键 tap 平时关着，由一个只收修饰键事件的小主动 tap（触发 tap）在同步回调里打开：V1 实测，由只听 tap 事后再打开会漏键。触发 tap 只在存在"修饰键 + 普通键"绑定时才建。三个 tap 共用一个匹配器，按事件去重（V8）。
 6. **动作目录是唯一的出处**（`src/hotkeys/actions.mjs`）：每个动作一行，写默认组合（按系统分）、生效场景、能否清空、长按阈值、交给谁处理。设置项、环境变量、命令行、设置页、状态、下发给小帮手的绑定表，全都按这张表生成。除了各动作自己的处理代码（和引导页专门教听写的那一步），没有一处按动作写死。第一版两个动作："听写"和"取消（只在说话时）"，两个都能改键，每个动作能绑多个组合（D4）。以后加功能（比如翻译），只改三处：目录里加一行（必须带默认键，D10）、两份文案里加名字和说明、写这个功能本身；设置页和引导页自动带上它。有测试按目录逐个动作查，漏了哪处就红（5.4）。
 7. **一个动作一项设置**：`hotkey.dictate`、`hotkey.cancel`，设置文件里存成组合的列表（`["ControlRight+Space", "F13"]`，空列表是关掉），只存改过的。这正好落在现有设置框架的规矩里（一项一个键，读写列表用框架现成的 `json`、`store`），环境变量、`config set/unset`、"设置改了还没生效"都现成，不为热键开特例（5.2）。
 8. **老用户无感**（5.9）：存的、报的、显示的一律是新写法，旧写法只在入口认。第一次启动时把设置文件里的 `"hotkey": "right_command"` 换成 `"hotkey.dictate": ["MetaRight"]`；旧的环境变量 `SPEAKMORE_HOTKEY` 和旧命令 `config set hotkey` 照样能用；六个旧键的键帽和名字逐字不变，用法、权限都不变。退回旧版照样能起来，热键回到默认键。
@@ -43,7 +45,7 @@
 | --- | --- | --- |
 | D1 | 组合的"松开"按哪个键松开算 | 全部松开才算松开（同 Typeless） |
 | D2 | 前缀共享（如 `AltRight` 与 `AltRight+Space` 分给两个动作） | 允许，保存时警告；运行时按下即触发，第二个键到来时升级 |
-| D3 | macOS 上带普通键的绑定怎么做（修饰键 + 普通键、单个 F 键） | 修饰键 + 普通键走按需打开的吞键 tap；单个 F 键走 Carbon；安全输入期间由 Carbon 顶替。Carbon 在小帮手里收不到时，单个 F 键第一版在 Mac 上不开放 |
+| D3 | macOS 上带普通键的绑定怎么做（修饰键 + 普通键、单个 F 键） | 修饰键 + 普通键：存在这类绑定时，常开一个只收修饰键事件的触发 tap，在它的同步回调里打开吞键 tap（V1 不通过后，主人 2026-10-21 改定）；单个 F 键走 Carbon，小帮手改用 NSApplication 跑（V19）；安全输入期间由 Carbon 顶替（V20） |
 | D4 | 每个动作允许几个组合 | 多个，上限 4；设置页照 Typeless 列出每个组合，能删、能"添加另一个" |
 | D5 | 默认键 | 不变：Mac 右 Option，Windows 右 Alt |
 | D6 | 键帽上左右怎么标 | 一律标左右，单按和组合都标 |
@@ -191,8 +193,8 @@ settings.json {"hotkey":"right_option"} 或 SPEAKMORE_HOTKEY
 - `:28-41` 的 `Hotkey` 结构和字典、全局 `hotkey`：改成按原生码描述的绑定表。
 - `:119-154` 的 `hotkeyIsDown`、`reportedOtherKey`、`onKeyEvent`、`reportOtherKeyIfHeld`：改成按集合匹配的匹配器，抽成可单测的纯逻辑。
 - `:157-161` 只听 tap 的掩码：要加 `keyUp`。鼠标键不做（D9）。现在看不到普通键的松开，普通键当热键时算不了长按。
-- `:270-282` 截取 tap：推广成"吞键 tap"，打开条件从"截取中"扩成"截取中，或录键中，或某个'修饰键 + 普通键'绑定的修饰键正按着，或还有吞了一半的键"，掩码加上 flagsChanged。两个 tap 喂同一个匹配器，分工见 4.1。
-- 新增 Carbon 注册（单个 F 键、安全输入期间的顶替），见 4.1。
+- `:270-282` 截取 tap：推广成"吞键 tap"，打开条件从"截取中"扩成"截取中，或录键中，或某个'修饰键 + 普通键'绑定的修饰键正按着，或还有吞了一半的键"，掩码加上 flagsChanged。新增触发 tap（主动、只收 flagsChanged，有"修饰键 + 普通键"绑定时才建），由它同步打开吞键 tap；三个 tap 喂同一个匹配器，分工见 4.1。
+- 新增 Carbon 注册（单个 F 键、安全输入期间的顶替），见 4.1。入口从 `RunLoop.main.run()`（`:376`）改成 NSApplication（`.prohibited`）：只跑 RunLoop 时 Carbon 热键会把键吃掉、回调却不触发（V19）。
 - 新增标准输入命令 `bind`、`record`、`probe`、`info` 的处理（5.8）。
 - `:318-325` 的 `--key`：删掉，改成 stdin 的 `bind` 命令。顺带让 `--check` 不再依赖 `--key`（现在键名错时连 `--check` 也会 exit 2，`:318-329`）。
 - `:22-23` 的隐私说明：改写成"只有录键模式下报原始按键"。
@@ -304,20 +306,26 @@ settings.json {"hotkey":"right_option"} 或 SPEAKMORE_HOTKEY
   - 主动 tap 挡在每一次按键的路上，回调一慢全系统打字都卡，系统会补发 `kCGEventTapDisabledByTimeout`（`SDK:CGEventTypes.h:128-131`；超时是几秒没有公开文档）。
   - 2026-09 有报告：session 层、`.defaultTap`、事件原样放行的 tap，在辅助功能权限被撤销时整机键盘鼠标冻住，只能强制重启（https://developer.apple.com/forums/thread/844416 ）。
   - 现有代码注释的原则就是"平时关着：不在任何按键和点击的必经之路上"（`main.swift:279`）。
-- 按需打开的风险：修饰键的 flagsChanged 到达只听 tap、再打开吞键 tap，这中间有没有让紧跟的普通键漏出去的竞态，未验证（验证办法：测试程序在 flagsChanged 回调里打开主动 tap，用 `CGEventPost` 快速连发修饰键和 Space，看 Space 是否漏出）。如果有竞态，退回"存在这类绑定时常开吞键 tap，掩码只含 keyDown/keyUp，回调只查一个小集合"。
-- 线程：所有 tap 挪到同一条独立线程的 run loop 上。现在两个 tap 和贴字都在主线程（`main.swift:164, 278, 360`），贴字要先快照剪贴板，遇到大图会很久；吞键 tap 一旦打开，这段时间全系统按键都会被卡住。AltTab 就是单独一个键盘线程（`KeyboardEvents.swift:249-252`）。
+- 谁来打开（V1，2026-10-21 实测）：不能由只听 tap 打开。只听 tap 的回调是事后异步送到的，从修饰键事件发出到吞键 tap 打开要 0.3–9.5 ms（中位数约 0.35 ms），这段时间里按下的普通键会漏出去。合成按键每档 100 次，修饰键和空格的间隔与漏出比例：0 ms 漏 69%，0.1 ms 漏 31%，0.25–0.5 ms 漏 11%–18%，1 ms 漏 9%，2 ms 漏 1%，5 ms 起不漏。人"同时按"真按得出这种间隔：真键盘按右 Option+空格 13 次，3 次间隔不到 0.5 ms，2 次在 2.5–3.8 ms。把只听 tap 挪到 HID 层能抢到一点提前量，但 0–2 ms 仍漏 1%–2%，打开耗时最长 12 ms，同样不行。
+- 由触发 tap 打开（D3 改定）：存在"修饰键 + 普通键"绑定、且有辅助功能权限时，另建一个**触发 tap**。它是主动 tap，掩码只有 flagsChanged，常开，事件一律放行。主动 tap 的回调是同步的，系统等它返回才往下送事件；回调里解出修饰键，需要时打开吞键 tap，于是紧跟的普通键一定先经过吞键 tap。实测结果：
+  - 不漏：合成 800 次（间隔 0–10 ms）0 漏，真键盘 13 次 0 漏。
+  - 不拖慢：修饰键事件送到前台应用的时间看不出变化，中位数 7.8 ms 对 7.7 ms。这 7 ms 多是系统里别的环节本来就有的，没有被测进程时也是 6.6 ms。
+  - 回调里打开吞键 tap 的那次 `tapEnable` 中位数 50 µs、p99 1.4 ms，只在绑定用到的修饰键按下、松开时才发生。
+  - 字母键不经过它，只有修饰键事件经过，包括打大写字母时的 Shift。默认配置（单按右 Option）没有这类绑定，不建触发 tap，和现在一样。
+- 触发 tap 的代价：多一个常开的主动 tap。权限撤销时冻住整机的风险（上面第二条理由），现在的版本只在听写那几秒才有，改成这样后，绑了这类组合的用户会一直有。缓解：小帮手监听辅助功能权限的变化（`com.apple.accessibility.api` 分布式通知，外加每秒查一次 `AXIsProcessTrusted()`），一旦权限没了，立刻 `CFMachPortInvalidate` 掉所有主动 tap，退回只听。论坛报告里出事前没有任何停用通知，这样做救不救得回来未验证；验证会冻住本机，只能在随时可以重来的虚拟机里做（V26）。Typeless 常开 HID 层主动 tap，同样有这个风险。
+- 线程：原计划把所有 tap 挪到同一条独立线程的 run loop 上（AltTab 就是单独一个键盘线程，`KeyboardEvents.swift:249-252`），理由是贴字要先快照剪贴板，遇到大图会很久，主线程卡住时同步的触发 tap 也跟着卡。**10-21 实测后改定：tap 留在主线程。**独立线程上，从触发 tap 的回调里打开吞键 tap 生效得晚：右 Option+空格合成 200 次（间隔 0–5 ms）漏了 57 个空格；同一份代码只把 run loop 换回主线程，200 次 0 漏；独立线程上让吞键 tap 一直开着，100 次 0 漏，说明漏在"打开"这一步。贴字也挪不出主线程：NSPasteboard 只能在主线程用（文档没写，Apple 回复过开发者，https://mjtsai.com/blog/2026/08/03/nspasteboard-crashes-when-handling-file-promises/ ）。代价照实记着：剪贴板里有大图时，贴字快照那一下修饰键会慢，回调超时的话系统会停掉触发 tap，收到停用通知后重新打开。快照到底多慢未测。
 
-**两个 tap 怎么分工：一个匹配器，按事件去重**
+**三个 tap 怎么分工：一个匹配器，按事件去重**
 
-吞键 tap 后建，排在只听 tap 前面（`main.swift:342` 的注释；V8）。它吞掉的事件，只听 tap 根本收不到。所以"只听 tap 匹配、吞键 tap 只管吞"行不通：组合的第二个键被吞了，匹配器看不到，`binding down` 报不出来；被吞的 keyUp 也到不了，这个键会一直留在按住集合里。而且要决定吞不吞，本来就得先知道匹配结果。
+吞键 tap 后建，排在只听 tap 前面（`main.swift:342` 的注释）。V8 已验证：后建的排在前面，它吞掉的键只听 tap 0/80 收到；反过来建是 80/80。触发 tap 最后建，排在最前。它吞掉的事件，只听 tap 根本收不到。所以"只听 tap 匹配、吞键 tap 只管吞"行不通：组合的第二个键被吞了，匹配器看不到，`binding down` 报不出来；被吞的 keyUp 也到不了，这个键会一直留在按住集合里。而且要决定吞不吞，本来就得先知道匹配结果。
 
 做法如下：
 
-- 小帮手里只有一个匹配器实例。两个 tap 挂在同一条键盘线程上，回调串行执行，匹配器不需要加锁。
-- 两个 tap 都把事件交给匹配器。吞键 tap 开着时，它先拿到事件，当场得到匹配结果，按结果决定吞不吞。放行的事件随后到达只听 tap，匹配器按"时间戳 + 事件类型 + 键码"认出是同一个事件，跳过，不会算两次。吞掉的事件只听 tap 收不到，也不需要收到。吞键 tap 关着时，只有只听 tap 喂匹配器。
+- 小帮手里只有一个匹配器实例。三个 tap 挂在同一条键盘线程上，回调串行执行，匹配器不需要加锁。
+- 三个 tap 都把事件交给匹配器。修饰键事件最先到触发 tap（建了的话）。吞键 tap 开着时，它先拿到事件，当场得到匹配结果，按结果决定吞不吞。放行的事件随后到达只听 tap，匹配器按"时间戳 + 事件类型 + 键码"认出是同一个事件，跳过，不会算两次。吞掉的事件只听 tap 收不到，也不需要收到。吞键 tap 关着时，只有只听 tap 喂匹配器。
 - 吞键 tap 开着时，掩码要包含 flagsChanged、keyDown、keyUp，保证组合涉及的每个事件都先经过它。
 - 不选"吞键 tap 开着时只听 tap 一律不喂"：打开的那一刻，已经越过吞键 tap 位置、还没到只听 tap 的事件会漏记。也不选"给放行的事件打标记"：要改动送给前台应用的事件，`kCGEventSourceUserData` 可能被别的应用拿来认自己合成的事件。
-- 去重依赖"同一个事件先后经过两个 tap 时，时间戳不变"。这是推断（两个回调拿到的是同一个 `CGEvent`），未验证，并入 V8。
+- 去重依赖"同一个事件先后经过几个 tap 时，时间戳不变"。V8 已验证：放行的事件每个 tap 各收到一次，（时间戳，类型，键码）合成 160/160、真键盘 71/71 一致，只听 tap 这边没有重复；排在前面的回调总是先跑。
 - 共用样例要有这一条：吞键 tap 开着时按 `AltRight+Space`，同一个事件送两遍；绑定按下只报一次，Space 的按下、松开都被吞，全部松开后集合为空。
 
 **单个普通键（F 键等）怎么吞**
@@ -327,18 +335,18 @@ settings.json {"hotkey":"right_option"} 或 SPEAKMORE_HOTKEY
 | 做法 | 好处 | 代价 |
 | --- | --- | --- |
 | ① 有单键绑定时吞键 tap 常开，掩码只含 keyDown/keyUp，回调 O(1) 查表 | 只有一套机制 | 主动 tap 一直挡在每次按键的路上，正是上文要避免的；撤销辅助功能权限时整机冻住的风险也一直在 |
-| ② 单个 F 键改用 Carbon `RegisterEventHotKey`（修饰键传 0） | 系统自己吞；F 键没有左右之分，Carbon 不分左右在这里没有代价；不在打字路径上；不需要辅助功能权限；据 Handy 的说法安全输入下照样能用 | 两套机制并存；在只跑 `RunLoop`、没有 `NSApplication` 的小帮手里能不能收到 Carbon 热键，未验证（V19）；MacBook 上按 fn+F5 时事件带 fn 位，修饰键传 0 的注册还触不触发，未验证（V21） |
+| ② 单个 F 键改用 Carbon `RegisterEventHotKey`（修饰键传 0） | 系统自己吞；F 键没有左右之分，Carbon 不分左右在这里没有代价；不在打字路径上；不需要辅助功能权限；据 Handy 的说法安全输入下照样能用 | 两套机制并存；小帮手必须改用 NSApplication 跑（`setActivationPolicy(.prohibited)`，不出程序坞图标）。V19 实测：只跑 `RunLoop` 时键照样被系统接走，回调却一次都不触发（合成 5 次：0 次触发，0 次到达应用），比收不到更糟；改用 NSApplication 后合成 5/5、真键盘 3/3 触发。MacBook 上按 fn+F5 时事件带 fn 位，修饰键传 0 的注册还触不触发，未验证（V21） |
 | ③ 第一版 Mac 不开放单键绑定 | 最简单 | 少了 F13 这类最不打扰打字的选择 |
 
-建议 ②；V19 不通过就退回 ③，不选 ①。Carbon 回调只负责"吞"和在安全输入期间"报"，平时的按下松开仍以只听 tap 看到的为准：AltTab 的注释说被动 tap 照样能看到 Carbon 热键的 keyDown（`KeyboardEvents.swift:13-14`），这一点本机未验证（V21）。真机清单加一条：绑 F13、F5 后在浏览器里按，看前台应用有没有收到。
+定 ②（V19 通过，前提是 NSApplication 跑法），不选 ①。Carbon 回调只负责"吞"和在安全输入期间"报"，平时的按下松开仍以只听 tap 看到的为准：AltTab 的注释说被动 tap 照样能看到 Carbon 热键的 keyDown（`KeyboardEvents.swift:13-14`），本机已验证（合成 5/5）。系统匹配 Carbon 热键，是在 session 层所有 tap 之后、annotated session 层之前，所以 session 层的 tap 先看到这个键。真机清单加一条：绑 F13、F5 后在浏览器里按，看前台应用有没有收到。
 
 **另一种布置：带普通键的绑定全部走 Carbon**
 
 AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` 注册（`alt-tab-macos@240e3ff src/events/KeyboardEvents.swift:188-204`），常开的被动 tap 只用来看修饰键（同文件 `:13-14`）。照这个思路，单按修饰键、修饰键 + 修饰键走只听 tap；修饰键 + 普通键、单个 F 键、截取中的 esc 都走 Carbon。Carbon 分不了左右，可以在 Carbon 回调里用只听 tap 记下的设备位核对，核对不上就当没按。
 
-- 好处：不需要按需打开主动 tap，V1 竞态不存在；安全输入下照常可用；不需要辅助功能权限，`bound` 回执里的 `needs_trusted` 基本用不上。
-- 代价：Carbon 会把另一侧的同一组合也吞掉，核对不上时只能"当没按"，按键已经到不了前台应用。例如绑 `MetaRight+KeyK`，左 ⌘K 在所有应用里都会失灵；绑 `AltRight+Space`，用左 Option 打不换行空格也会失灵。另外 V19、V20 都未验证。
-- 本文的取舍：修饰键 + 普通键平时仍走吞键 tap，Carbon 只用于单个 F 键和安全输入期间的顶替（见下文"安全输入"）。如果 V1 竞态实验不通过，再在 D3 里重新比较"常开吞键 tap"和"全部走 Carbon"。
+- 好处：不需要主动 tap，没有 V1 的竞态，也没有权限撤销冻住的风险；安全输入下照常可用；不需要辅助功能权限，`bound` 回执里的 `needs_trusted` 基本用不上。
+- 代价：Carbon 会把另一侧的同一组合也吞掉，核对不上时只能"当没按"，按键已经到不了前台应用。例如绑 `MetaRight+KeyK`，左 ⌘K 在所有应用里都会失灵；绑 `AltRight+Space`，用左 Option 打不换行空格也会失灵。实测：注册 ⌥Space 后按左 Option+空格，5/5 触发，空格 0/5 到达应用。
+- 本文的取舍：修饰键 + 普通键平时走"触发 tap + 吞键 tap"，Carbon 只用于单个 F 键和安全输入期间的顶替（见下文"安全输入"）。主人 2026-10-21 看过 V1 的结果后选了这条，没选全部走 Carbon（分不了左右），也没选砍掉这类组合。
 - 停用通知：两种停用都处理；"该开着才重开，不该开的绝不再关一次"（现有注释记录过自己关 tap 也会收到通知、再关一次会无限循环，`main.swift:224-227`）。重新打开后清空按住集合，并对按着的绑定补报松开。
 - 锁屏、快速切换用户时不处理热键并清空状态（VoiceInk 的做法，`VoiceInk@22e5ec5 …/UserSessionInputPolicy.swift:5-31`；VoiceInk 是 GPL-3.0，只借鉴设计，不抄代码）。
 - 自己合成的事件：贴字时发的 ⌘V 会经过自己的 tap（`main.swift:89-96`）。在合成事件上打 `kCGEventSourceUserData` 标记，匹配器跳过（`SDK:CGEventSource.h:166-170`、`CGEventTypes.h:355-356`）。
@@ -367,11 +375,11 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 **安全输入（密码框、终端的安全键盘输入）**
 
-- 开着时，keyDown 和 keyUp 收不到，flagsChanged 照常收得到。两家独立实现的注释一致：AltTab "SecureInput does not block `.flagsChanged` … `.keyDown` is filtered out at the system level for both"（`KeyboardEvents.swift:218-219`）；Handy "keyed shortcuts (e.g. Option+Space) die silently while modifier-only shortcuts keep working"（`Handy@93c9ee0 src-tauri/src/secure_input.rs:3-7`；复现记录 https://github.com/cjpais/Handy/issues/1578 ）。本机没有复现（建 tap 要权限、要真按键）。
+- 开着时，keyDown 和 keyUp 收不到，flagsChanged 照常收得到。两家独立实现的注释一致：AltTab "SecureInput does not block `.flagsChanged` … `.keyDown` is filtered out at the system level for both"（`KeyboardEvents.swift:218-219`）；Handy "keyed shortcuts (e.g. Option+Space) die silently while modifier-only shortcuts keep working"（`Handy@93c9ee0 src-tauri/src/secure_input.rs:3-7`；复现记录 https://github.com/cjpais/Handy/issues/1578 ）。本机已复现（V20）：两种开法，对照进程调 `EnableSecureEventInput()`，以及 iTerm 的 Secure Keyboard Entry。两种开法下，tap 都收不到 keyDown、keyUp（合成 10 次、真键盘 9 次，全都收不到），flagsChanged 照常收到。
 - 影响：单按修饰键、修饰键 + 修饰键照常可用；修饰键 + 普通键、单独 F 键、esc 取消、"按着热键又按了别的键要取消"这几条都会失灵。还有一个连带后果：切进密码框的那一下（例如 Tab）按下收到了、松开收不到，这个键会一直留在按住集合里，之后连单按修饰键的听写也凑不成精确匹配。对策见 5.3 第 8 条。
 - 检测：每秒查一次 `IsSecureEventInputEnabled()`（任一进程开着就返回真，`SDK:HIToolbox/CarbonEventsCore.h:3044-3064`）。Handy 每秒轮询、持续 3 秒才算卡住（`secure_input.rs:132-135`），可以参考。
-- 应对一，Carbon 顶替：Handy 在安全输入持续期间，把带普通键的绑定改由 Carbon 注册一份，录键时也这样顶替"取消"（`Handy@93c9ee0 src-tauri/src/secure_input.rs:9-17`，原文 "shadow-registers vulnerable *keyed* bindings through the Carbon-backed Tauri global-shortcut path, which is not affected by secure input"）。我们照做：安全输入开着时，修饰键 + 普通键、单个 F 键、截取中的 esc 由 Carbon 注册；Carbon 分不了左右，回调里用只听 tap 记下的设备位核对（flagsChanged 照常收得到），核对不上就当没按。Handy 遇到同样问题时是放宽成两侧都认（同文件 `:31-37` 的 `degraded_bindings`）。安全输入关掉后注销。前提是 V19、V20 通过。
-- 应对二，提示：Carbon 注册失败，或者 V19、V20 不通过时，在悬浮条或菜单栏提示"有应用开着安全输入，组合键暂时用不了"。
+- 应对一，Carbon 顶替：Handy 在安全输入持续期间，把带普通键的绑定改由 Carbon 注册一份，录键时也这样顶替"取消"（`Handy@93c9ee0 src-tauri/src/secure_input.rs:9-17`，原文 "shadow-registers vulnerable *keyed* bindings through the Carbon-backed Tauri global-shortcut path, which is not affected by secure input"）。我们照做：安全输入开着时，修饰键 + 普通键、单个 F 键、截取中的 esc 由 Carbon 注册；Carbon 分不了左右，回调里用只听 tap 记下的设备位核对（flagsChanged 照常收得到），核对不上就当没按。Handy 遇到同样问题时是放宽成两侧都认（同文件 `:31-37` 的 `degraded_bindings`）。安全输入关掉后注销。V19、V20 已通过：安全输入开着时 Carbon 照常触发，合成 F13、⌥Space 各 5/5，真键盘 ⌃⌥⌘K 3/3。
+- 应对二，提示：Carbon 注册失败时，在悬浮条或菜单栏提示"有应用开着安全输入，组合键暂时用不了"。
 - 安全输入从开到关时，清掉按住集合里的非修饰键（5.3 第 8 条），它们的松开多半丢了。
 
 **键码与键名**
@@ -434,7 +442,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - Win 或 Alt 单独按下再松开、中间没有别的键，系统会弹开始菜单，或者激活前台窗口的菜单栏。对策是在中间插一个无效键，让系统以为是"Win/Alt + 某个键"。现在只有右 Alt 按下时插 0xE8（`keys.go:17-19, 98`）。
 - 新规则：本次 Win 或 Alt 按住期间，只要有绑定触发、或者有事件被我们吞掉，就插一次掩码。**被吞的键松开时也算**：handy-keys 实测"F20↓ Win↓ F20↑ Win↑ with Win+F20 blocked opens Start"（`handy-keys@e7d1b8e src/platform/windows/listener.rs:755-790`）。
 - Ctrl 或 Shift 按下，本身就会让之前按着的 Win、Alt 不再触发菜单（AutoHotkey `hook.cpp:2020` 的注释）。所以 `Ctrl+Win` 这类组合自带掩码，Wispr 也说 "Ctrl+Win suppresses the Start/Search action while that combination is held"。
-- 插的时机：现在是交回消息循环再插。AutoHotkey 和 handy-keys 都在回调里同步 `SendInput`，注入的事件靠记号放行。对右 Alt，现状已经验收过；Win 键按下后交回消息循环再插能不能挡住开始菜单，未验证（真机绑左 Win 点一下即知）。
+- 插的时机：第 8 步起改成在回调里同步 `SendInput`（AutoHotkey 和 handy-keys 也是），注入的事件靠记号放行。原来交回消息循环再插：消息循环先处理的是钩子回调（发来的消息排在投递的前面），点得快或者线程正忙时，Alt、Win 的松开可能抢在掩码前面。一次按住只插一次，Alt、Win 全松开再算下一次（`native/windows/matcher.go` 的 `settleMask`）。Win 键绑定点一下能不能挡住开始菜单，仍要真机试（第 12 步）。
 - 0xE8 在微软 VK 表里仍标为 "Unassigned"（https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes ）。AutoHotkey 文档提醒，微软以后可能给未分配的码派用途，例如 0x07 从 1909 起被用来开 Game Bar（https://www.autohotkey.com/docs/v2/lib/A_MenuMaskKey.htm ）。另外 `keys.go:18` 的注释"AutoHotkey 用的也是它"不准确：AHK 的默认掩码键是左 Ctrl（`AutoHotkey@0b8e6fa source/globaldata.cpp:66-67`），0xE8 是文档推荐值。
 
 **其他修饰键自带的系统行为**
@@ -455,7 +463,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - 时限：回调超过 `LowLevelHooksTimeout`，"on Windows 7 and later, the hook is silently removed without being called. There is no way for the application to know whether the hook is removed"；Windows 10 1709 起最长 1000 ms（LowLevelKeyboardProc 页）。所以匹配必须在小帮手里，不能每个键问一次父进程。node-global-key-listener 就是每个事件回 Node 问一遍、等 30 ms，是反面例子。
 - 先修 3.3 里的两处阻塞发送。
 - 睡眠唤醒、解锁后重装钩子：先装新的再卸旧的，并校正修饰键状态（handy-keys：`listener.rs:54-60, 120-160`，注释写明 "Windows can silently drop LL hooks across a suspend"）。
-- 漏掉的松开：Win+L 锁屏以后 Win 的松开到不了钩子；管理员窗口在前台时松开被 UIPI 挡掉（见下文）也一样。每次可能凑成组合的时刻，先用 `GetAsyncKeyState` 核对集合里的其他键，再做匹配（5.3 第 8 条）；它查不准"触发本次回调的这个键"，查别的键是准的（OpenWhispr `windows-key-listener.c:83-97` 的注释）。
+- 漏掉的松开：Win+L 锁屏以后 Win 的松开到不了钩子；管理员窗口在前台时松开被 UIPI 挡掉（见下文）也一样。每次可能凑成组合的时刻，先用 `GetAsyncKeyState` 核对集合里的**修饰键**，再做匹配（5.3 第 8 条）；它查不准"触发本次回调的这个键"，查别的键是准的（OpenWhispr `windows-key-listener.c:83-97` 的注释）。被钩子吞掉的普通键不能这样核对：吞掉的按下不更新系统的按键状态，`GetAsyncKeyState` 永远读成松开，只能靠 10 秒清理（实施时改的，见 5.3 第 8 条）。NumLock 开着时驱动在小键盘键前插的假 Shift 松开（扫描码带 0x200；AltGr 布局上补的假左 Ctrl 松开同理）同样会让系统状态读成松开：记下来，补回来按下、或这个键真的按下松开之前不核对它。
 - 看门狗（可选，未验证）：同一消息窗口注册 Raw Input（`RIDEV_INPUTSINK`）。Raw Input 不受钩子时限影响，它持续收到按键而钩子一个都没看到，就判定钩子没了，重装并报 error。需要真机验证"被别的钩子吞掉的键 Raw Input 还收不收得到"和先后顺序。不要用"定时注入一个键"当心跳，注入的键会进前台程序。
 
 **UIPI：管理员窗口在前台时**
@@ -590,7 +598,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 1. 集合精确匹配：按住的键集合必须恰好等于绑定，多一个键都不算。
 2. 修饰键 + 修饰键不分先后。
-3. 修饰键 + 普通键要求普通键最后按下。先按着空格、再碰一下 Ctrl，不触发。
+3. 修饰键 + 普通键要求普通键最后按下。先按着空格、再碰一下 Ctrl，不触发。实测，人"同时按"右 Option+空格 18 次，有 5 次空格先到；这几次按规则不触发，空格照常打出去。系统快捷键也是这个习惯（⌘C 要先按 ⌘），不放宽。
 4. 只有按下能凑成组合；松开导致集合恰好等于某个绑定时不触发。这同时实现了 Typeless 的"不降级"。
 5. 组合里的键全部松开才算松开（D1，同 Typeless）。绑定按着期间，组合里的某个键松开又按下，不算新的一次，不报事件；只有组合外的键按下才算打断（第 6 条）。
 6. 组合按着时又按下一个键：
@@ -599,7 +607,9 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
    - 两键以内，升级最多发生一次（一键升到两键），不需要 Typeless 的"第三次起忽略"计数。
 7. 自动重复：已在集合里的键再来按下事件，就是自动重复，不参与匹配；它的按下被吞了，重复也吞。
 8. 丢失松开事件。精确匹配让这件事比现在要紧：现在的代码只看热键自己的键码（`native/main.swift:128-140`、`native/windows/keys.go:91-99`），别的键丢了松开不受影响；新规则下集合里多一个残留的键，所有绑定都凑不上。安全输入（4.1）和 UIPI（4.2）都会吞掉松开，例如用 Tab 切进密码框，Tab 的按下收到了、松开没收到。所以：
-   - 每次可能凑成组合的时刻（任何修饰键变化、任何 keyDown），先用系统接口核对集合里的**非修饰键**还按没按着（Mac `CGEventSourceKeyState(.hidSystemState, key)`，Windows `GetAsyncKeyState`），没按着的移出集合，再做匹配。修饰键不用核对，Mac 每次都从 flags 里重新解出来（4.1），Windows 的修饰键状态也由同一个钩子维护。
+   - 每次可能凑成组合的时刻（任何修饰键变化、任何 keyDown），先用系统接口核对集合里的键还按没按着，没按着的移出集合，再做匹配。两个系统核对的对象不同（实施时按实测改的）：
+     - Mac 核对**非修饰键**（`CGEventSourceKeyState(.hidSystemState, key)`），修饰键每次都从 flags 里重新解出来（4.1），不用核对。修饰键松开时也核对按着的绑定里的普通键：它的松开丢了的话，照样报松开。
+     - Windows 核对**修饰键**（`GetAsyncKeyState`）：Alt+Tab 切进管理员窗口后 Alt 的松开被 UIPI 挡掉，靠这个补上。被钩子吞掉的普通键不核对，吞掉的按下不更新系统状态，问了永远是松开；它们只靠下面的 10 秒清理。
    - 安全输入从开到关、tap 停用后重新打开、钩子重装、锁屏回来时，清掉集合里的非修饰键，对按着的绑定补报松开。
    - 10 秒清理必做：按下超过 10 秒还没松开的非修饰键移出集合（Typeless 的 `cleanupStaleKeys`）。
    - 安全输入期间 `CGEventSourceKeyState` 准不准，未验证（V24）。
@@ -742,7 +752,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 ```json
 {"cmd":"bind","bindings":[
   {"id":"dictate#0","mods":[61],"when":"always"},
-  {"id":"cancel#0","key":53,"when":"capturing"}
+  {"id":"cancel#0","mods":[],"key":53,"when":"capturing"}
 ]}
 {"cmd":"capture","regions":[{"id":"cancel","x":0,"y":0,"width":28,"height":28}]}
 {"cmd":"release"}
@@ -753,9 +763,9 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 {"cmd":"paste","id":1,"text":"…"}
 ```
 
-- 一个绑定分成 `mods`（修饰键，0 到 2 个）和 `key`（普通键，最多 1 个）两栏，形状规则（5.3）直接写在结构里，小帮手不用自己猜哪个码是修饰键。
+- 一个绑定分成 `mods`（修饰键，0 到 2 个，一定带，没有就是空数组）和 `key`（普通键，最多 1 个，可以不带）两栏，形状规则（5.3）直接写在结构里，小帮手不用自己猜哪个码是修饰键。小帮手再查一遍形状：整条不对（不是一组对象、少了 `id`/`mods`/`when`、类型不对）报 `error`、绑定表不动；单个不合规矩的（含重复的 id，两个都不装）在回执里退回，原因 `invalid`。
 - `bind` 整表替换，可以随时再发。上例是 Mac 的原生码；Windows 上 `mods` 发 vk，`key` 发扫描码（4.2），所以 `AltRight` 是 165（0xA5），`Escape` 是 1，`F13` 是 100（0x64）。
-- `probe` 查系统冲突，结果见下面的 `probed`。Mac 上调 `CopySymbolicHotKeys`（Carbon 接口，只有 Swift 小帮手能调）；Windows 上用 `RegisterHotKey` 试登记，它要 vk，小帮手按前台窗口的布局用 `MapVirtualKeyEx` 把扫描码换成 vk。只对"修饰键 + 普通键"有意义，别的形状直接回 `conflict: false`。
+- `probe` 查系统冲突，结果见下面的 `probed`。Mac 上调 `CopySymbolicHotKeys`（Carbon 接口，只有 Swift 小帮手能调）；Windows 上用 `RegisterHotKey` 试登记，它要 vk，小帮手按前台窗口的布局用 `MapVirtualKeyEx` 把扫描码换成 vk。带普通键的都查（Mac 的系统快捷键表里也有单个 F12、F14 这种，修饰位只有合成的 fn 位）；单个修饰键、只由修饰键组成的直接回 `conflict: false`。只在说话时生效的动作（取消）不查：那时小帮手先截住了它。
 - `info` 问一次系统设置里和热键相关的值，第一版只有 Mac 的 `AppleFnUsageType`（4.1）。也可以由主进程用 `defaults read com.apple.HIToolbox AppleFnUsageType` 自己读，那样协议里就不需要 `info`；放在小帮手里，是为了和 `CFPreferencesCopyAppValue` 读到的同一份值一致。
 - `when` 只有 `always` 和 `capturing` 两种。`capturing` 跟着现有的 `capture`、`release` 切换。悬浮条按钮的点击仍走 `regions`。
 - 吞不吞不设开关：修饰键不吞，非修饰键吞，规则固定。笔记 05 草案里的 `swallow` 字段去掉，少一个可能配错的旋钮。
@@ -770,19 +780,24 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 {"event":"binding","id":"dictate#0","down":false}
 {"event":"interrupted","id":"dictate#0"}
 {"event":"interrupted","id":"dictate#0","to":"x#0"}
-{"event":"recording","mods":[61],"keys":[49]}
+{"event":"recording","on":true,"mods":[61],"keys":[49]}
+{"event":"recording","on":false}
 {"event":"probed","id":7,"conflict":true,"source":"symbolic"}
 {"event":"info","fnUsage":1}
 {"event":"click","id":"cancel"}
-{"event":"secure_input","on":true}
+{"event":"permissions","listen":true,"trusted":false,"capture":false}
+{"event":"secure_input","on":true,"unavailable":["dictate#1"]}
+{"event":"elevated_foreground","on":true,"pid":4242}
+{"event":"relistened","reason":"resume"}
 {"event":"pasted","id":1,"ok":true}
 ```
 
-- `bound` 回执说明哪些绑定装不上、为什么。例如 Mac 上没有辅助功能权限时，需要吞普通键的绑定装不上（`needs_trusted`）。不装上而让普通键漏出去，会往用户的输入框里打字，所以宁可装不上并照实提示。
+- `bound` 回执说明哪些绑定装不上、为什么，`rejected` 总是数组。原因有四种：`invalid`（形状不合规矩）；`needs_listen`（Mac 没有输入监控权限、Windows 键盘钩子没装上）；`needs_trusted`（Mac 上要吞普通键却没有辅助功能权限）；`register_failed`（Mac 上单个 F 键交给 Carbon 注册不上，多半是别的应用占了）。不装上而让普通键漏出去，会往用户的输入框里打字，所以宁可装不上并照实提示。
 - `interrupted` 带 `to` 时表示升级，紧接着一定是 `to` 那个绑定的按下。状态机可以据此决定保留麦克风、只换动作，还是取消再开始；第一版按"取消再开始"处理即可。
-- `recording` 只在录制模式下出现，报当前按住的原生码集合，修饰键和别的键分开报（录制时可能按着不止一个普通键，所以 `keys` 是数组，交给 JS 判形状）。
+- `recording` 只在录制模式下出现，报当前按住的原生码集合，修饰键和别的键分开报（录制时可能按着不止一个普通键，所以 `keys` 是数组，交给 JS 判形状）。进入时先报一份空的；只算进入以后才按下的键。离开时（命令让停的、30 秒到点自己停的）报 `on: false`。主进程按自己发出的 `record off` 计数，认掉对应的回执，剩下的才是到点（`src/app/hotkey-recording.mjs`）；刚开始录时、空快照之前到的是上一轮晚到的，不算。
 - `probed` 的 `source` 是 `symbolic`（Mac 系统快捷键）或 `registered`（Windows 上已被别的程序登记）；`info` 里 `fnUsage` 读不到时不带这个字段。
-- `secure_input` 只有 Mac 有。Windows 可选加一条前台是管理员窗口的提示事件（D8）。
+- `permissions`、`secure_input` 只有 Mac 有。`permissions`：运行中两项权限变了（每秒查一次，辅助功能另听 `com.apple.accessibility.api`），没了的那项的 tap 已经作废，紧跟着按新的权限重报一次 `bound`。`secure_input`：安全输入开了、关了；开着时带普通键的绑定由 Carbon 顶着，`unavailable` 是顶不了的（带 fn 的、注册不上的）。
+- `elevated_foreground`、`relistened` 只有 Windows 有。`elevated_foreground`：前台换成了以管理员身份运行的窗口（`on: true`，带 `pid`），或者换走了（`on: false`）；小帮手自己是管理员身份时不报。主进程对同一个进程只提示一次（D8）。`relistened`：睡眠唤醒（`reason: "resume"`）、解锁或切回这个用户（`"unlock"`）以后重装了键盘钩子；睡下去、锁屏时按着的绑定先补报松开。
 - 去掉的事件：`hotkey`、`other_key`、`escape`。
 - 可选：事件带时间戳（Mac `CGEvent.timestamp`，Windows `KBDLLHOOKSTRUCT.time`），以后做双击和按住时长不受进程间延迟影响。现在 600 ms 由 JS 计时（`bar.mjs:60-62`），误差可以接受，第一版不加。
 
@@ -872,7 +887,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | 4 | Swift：`native/main.swift` 拆成"纯逻辑 + 入口"多个文件，Swift 测试用 `swiftc` 直接编出来跑 | 同一套样例在 Swift 上全绿；`src/cli/native-helper.mjs` 的 `sourceContent` 现在只收 `go.mod` 和 `.go`（`:44-50`），要把 `.swift` 收进来，`swiftc` 也要传多个源文件（`:120-135`） |
 | 5 | 协议：`bind`、`bound`、`binding`、`interrupted`；删 `--key`；主进程按动作目录的处理者分发，事件带动作 id；esc 并进绑定表。这一步设置还是旧的 `hotkey` 一项，主进程用 `legacy.mjs` 把它换成组合再下发：对照表本来就要留着做换算，不是临时代码 | `test/app/helper.test.mjs` 的假小帮手加新事件；Go `protocol_test.go`；主进程 code → 原生码的期望表；`e2e.mjs` 换新事件 |
 | 6 | 设置：按目录生成 `hotkey.<动作>`，删掉旧的 `hotkey` 项和 `settings.mjs` 里的键表；框架补 `describe`、`legacyName`、`check`；`migrateLegacySettings` 接到两个入口（App 那一处挪到 `main.mjs:137` 之前）；`bindings.mjs` 的下发前校验和降级；环境变量；`config`、`LIVE` 和 `reload-hotkeys`；后台状态和 D13；5.4 的两条按目录查的测试 | 换算、幂等、"旧版里改过以旧版为准"、跨系统降级、直接起 App 不丢键、旧环境变量和旧命令照样能用，各有用例；按目录查的测试先往目录里加一个假动作、看它红 |
-| 7 | macOS 吞键：吞键 tap 按需打开，两个 tap 共用匹配器并按事件去重；tap 挪到独立线程；单个 F 键走 Carbon；停用和锁屏时清状态；跳过自己合成的事件；安全输入检测、Carbon 顶替与提示 | 先跑 V1、V8、V19、V20 四个实验；再在真机按清单逐项走 |
+| 7 | macOS 吞键：小帮手改用 NSApplication 跑（`.prohibited`）；触发 tap（有"修饰键 + 普通键"绑定时才建）同步打开吞键 tap，三个 tap 共用匹配器并按事件去重；tap 挪到独立线程；权限撤销时立刻作废所有主动 tap；单个 F 键走 Carbon；停用和锁屏时清状态；跳过自己合成的事件；安全输入检测、Carbon 顶替与提示 | V1、V8、V19、V20 已跑完（4.1）；照本机实验程序（`.playwright-mcp/hotkey-research/experiments/hk.swift`）的合成按键办法，给小帮手写进仓库的回归脚本（快速连发不漏、只听 tap 去重、Carbon 能触发）；再在真机按清单逐项走 |
 | 8 | Windows 平台细节：掩码通用化、假 Shift、睡眠唤醒重装、`GetAsyncKeyState` 校正、扫描码为 0 的回退 | `keys_test.go` 补用例；`e2e.ps1` 改用扫描码注入并加只带 vk 的一组 |
 | 9 | 录键：小帮手 `record` 模式、IPC、设置页按动作目录逐行画录键控件（照 Typeless 一个动作列多个组合、× 删、"添加另一个"，D4）、引导页按目录列出每个动作和它的键（D10）、引导页"换个键"复用它（"测快捷键"仍走真实匹配）、系统冲突探测 `probe`（Mac `CopySymbolicHotKeys`，Windows `RegisterHotKey` 试登记）、`info` | 定稿规则的 JS 单测；`probe`、`info` 进协议测试；界面在开发窗口里给主人看（项目记忆 `ui-review-in-dev-window`） |
 | 10 | 显示：`keys.<code>.*` 和 `actions.<动作>.name` 文案、悬浮条一组键帽、菜单栏、命令行 `status` 和 `config` | `bar-view.test.mjs`、`i18n` 测试、`cli` 测试改写；六个旧键的键帽和名字逐字不变 |
@@ -916,7 +931,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 **D3 macOS 上带普通键的绑定怎么做**
 
-**定：A。** V1、V19、V20 哪个不通过，再找主人选。
+**定：A；V1 不通过后改定 E。** 2026-10-21 的实验结果：V1 不通过（由只听 tap 打开吞键 tap 会漏键，4.1），V19、V20 通过。主人在 B、D 和新找到的 E 之间选了 E。
 
 分两类：修饰键 + 普通键（`AltRight+Space`），单个 F 键（`F13`）。
 
@@ -924,6 +939,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - 选项 B：带普通键的绑定全部走 Carbon，只听 tap 只看修饰键（AltTab 的分法）。不需要按需开主动 tap，也不怕安全输入；代价是 Carbon 会把另一侧的同一组合也吞掉，例如绑 `MetaRight+KeyK`，左 ⌘K 在所有应用里都会失灵。
 - 选项 C：有带普通键的绑定时吞键 tap 常开。只有一套机制；代价是主动 tap 一直挡在每次按键的路上，撤销辅助功能权限时整机冻住的风险也一直在。
 - 选项 D：第一版只开放单按修饰键和修饰键 + 修饰键，完全不碰吞键，保持"只听"。
+- 选项 E（V1 之后新增，已定）：存在修饰键 + 普通键绑定时，常开一个掩码只有 flagsChanged 的触发 tap，在它的同步回调里打开吞键 tap（4.1）；单个 F 键和安全输入顶替同 A。和 C 比，它不挡打字键，只挡修饰键事件；权限撤销时冻住的风险一样在，靠监听权限变化、立刻作废主动 tap 来缓解（V26）。
 - 建议 A。主人明确要"组合键"，而常见的组合（`AltRight+Space`）都含普通键。A 有三个前提：V1（按需打开有没有竞态）、V19（小帮手里收不收得到 Carbon 热键）、V20（安全输入下 Carbon 还触不触发）。V1 不通过，就在 B、C 之间重新选，需要主人再确认一次；V19 不通过，单个 F 键第一版在 Mac 上不开放；V20 不通过，安全输入期间只提示。
 
 **D4 每个动作几个组合**
@@ -1004,14 +1020,14 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 | # | 事项 | 影响哪一步 | 验证办法 |
 | --- | --- | --- | --- |
-| V1 | Mac：修饰键按下后再打开吞键 tap，紧跟的普通键会不会漏出去 | 第 7 步，D3 | 测试程序在 flagsChanged 回调里打开主动 tap，`CGEventPost` 快速连发修饰键和 Space |
+| V1 | Mac：修饰键按下后再打开吞键 tap，紧跟的普通键会不会漏出去 | 第 7 步，D3 | **10-21 已验：不通过。** 由只听 tap 打开，间隔 0–2 ms 漏 1%–69%；由触发 tap 同步打开，合成 800 次、真键盘 13 次 0 漏（4.1） |
 | V2 | Mac：安全输入下各类绑定的表现 | 第 7 步 | 密码框里试；`ioreg -l -w 0 \| grep SecureInput` 确认 |
 | V3 | Mac：吞掉 fn 的 flagsChanged 能否压住地球仪键的系统动作；`AppleFnUsageType` 不存在时的默认行为 | 5.5 的 Fn 警告 | 设成"表情"，主动 tap 对键码 63 返回 nil；新建用户看默认选项 |
 | V4 | Mac：地球仪键是否产生键码 179；fn + 方向键录到什么键码 | 5.1、5.5 | 只听 tap 记录全部事件 |
 | V5 | Mac：吞掉修饰键 flagsChanged 后，后续 keyDown 是否仍带修饰位 | "修饰键不吞"的依据之一 | 吞右 ⌘ 的 flagsChanged 再按 X |
 | V6 | Mac：session 层主动 tap 能否抢在 ⌘Space 之前 | 是否允许绑系统已占用的组合 | 吞 ⌘Space 的 keyDown，看 Spotlight |
 | V7 | Mac：不带设备位的键盘（CapsLock 那一半不用验了，D11 不开放） | 左右判断的退路 | 接第三方键盘记录 flags 原值 |
-| V8 | Mac：吞键 tap 后建排在前面（仓库注释的说法）；放行的同一个事件先后到两个 tap 时，时间戳、类型、键码是否不变 | 两个 tap 的分工和去重（4.1） | 先建只听 tap、再建主动 tap 吞 esc，看只听 tap 还收不收得到；放行 Space，两个回调各记一次时间戳比对 |
+| V8 | Mac：吞键 tap 后建排在前面（仓库注释的说法）；放行的同一个事件先后到两个 tap 时，时间戳、类型、键码是否不变 | 几个 tap 的分工和去重（4.1） | **10-21 已验：通过。** 后建的在前，被吞的键只听 tap 0/80 收到；时间戳合成 160/160、真键盘 71/71 一致 |
 | V9 | Windows：Win 当热键时交回消息循环再插 0xE8 能否挡住开始菜单 | 第 8 步 | 真机绑左 Win 点一下 |
 | V10 | Windows：插掩码能否挡住 Ctrl+Shift 切布局；微软拼音下钩子看到原 vk 还是 0xE5 | 5.5 的警告 | 装两个布局按组合；开拼音打字记 vkCode |
 | V11 | Windows：别的程序注入的不分左右的 vk、扫描码为 0 的事件长什么样 | 5.1、第 8 步 | `e2e.ps1` 分三种注入方式打日志 |
@@ -1022,13 +1038,14 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | V16 | D1 定了全部松开才算；常用组合各按一轮，看 600 ms 规则误取消多不多 | D1 | 开发窗口里配 `ControlRight+Space` 实际按 |
 | V17 | `navigator.keyboard.getLayoutMap()` 在 Electron `file://` 页面能否用 | 5.7 的后续 | 开发窗口控制台执行一次 |
 | V18 | Typeless 运行时是否真的吞命中的键；"再贴一次"是否真的不能用 | 只影响对原版的描述 | 装着 Typeless 按 `Fn+Space`、`Ctrl+Cmd+V` |
-| V19 | Mac：只跑 `RunLoop`、没有 `NSApplication` 的小帮手里，Carbon `RegisterEventHotKey` 的热键收不收得到（分路笔记 03 §3.2 已列） | 第 7 步，D3（单个 F 键、安全输入顶替） | 小帮手里注册 F13，按一下看回调 |
-| V20 | Mac：安全输入开着时 `RegisterEventHotKey` 还触不触发（目前只有 Handy 的说法） | 4.1 安全输入，D3 | 终端打开"安全键盘输入"，按注册过的 `⌥Space` |
-| V21 | Mac：Carbon 和 tap 一起用时的细节：MacBook 上按 fn+F5（事件带 fn 位）时，修饰键传 0 的 F5 注册触不触发；只听 tap 还看不看得到被 Carbon 吞掉的 keyDown；绑 F13、F5 后前台应用有没有收到 | 4.1 单个 F 键 | 浏览器在前台时按 F5，看页面刷不刷新；只听 tap 记日志 |
+| V19 | Mac：只跑 `RunLoop`、没有 `NSApplication` 的小帮手里，Carbon `RegisterEventHotKey` 的热键收不收得到（分路笔记 03 §3.2 已列） | 第 7 步，D3（单个 F 键、安全输入顶替） | **10-21 已验：只跑 RunLoop 收不到，而且键会被系统吃掉；改用 NSApplication（`.prohibited`）后合成 5/5、真键盘 3/3 收到** |
+| V20 | Mac：安全输入开着时 `RegisterEventHotKey` 还触不触发（目前只有 Handy 的说法） | 4.1 安全输入，D3 | **10-21 已验：通过。** 合成 F13、⌥Space 各 5/5，iTerm 安全键盘输入下真键盘 ⌃⌥⌘K 3/3；同时 tap 收不到任何 keyDown |
+| V21 | Mac：Carbon 和 tap 一起用时的细节：MacBook 上按 fn+F5（事件带 fn 位）时，修饰键传 0 的 F5 注册触不触发；绑 F5 后前台应用有没有收到（10-21 已验：只听 tap 看得到被 Carbon 接走的 keyDown，合成 F13 不会到达应用） | 4.1 单个 F 键 | 浏览器在前台时按 fn+F5，看页面刷不刷新；只听 tap 记日志 |
 | V22 | Windows：左右 Shift、左右 Ctrl 各带不带 `LLKHF_EXTENDED`，扫描码是多少 | 4.2 修饰键按 vk 认的依据 | 真机按四个键，钩子里记 `flags` 和 `scanCode` |
 | V23 | Windows：输入语言热键的默认值（左 `Alt+Shift`、`Ctrl+Shift`） | 5.5 的警告 | 设置 → 时间和语言 → 输入 → 高级键盘设置 → 输入语言热键 |
 | V24 | Mac：安全输入开着时 `CGEventSourceKeyState(.hidSystemState, key)` 准不准 | 5.3 第 8 条 | 密码框里按住 Tab 不放，轮询这个接口 |
 | V25 | Mac：录制中按 ⌘W、⌘Q、⌃Space 各会发生什么；渲染层 `preventDefault`、主进程 `before-input-event` 拦不拦得住默认菜单的快捷键 | 5.6 录制时吞键 | 开发窗口里分有、无辅助功能权限两种各按一遍 |
+| V26 | Mac：辅助功能权限在运行中被撤销时，常开的触发 tap 会不会冻住整机；监听到权限变化后立刻 `CFMachPortInvalidate`，能不能避免或解冻 | 第 7 步，D3 的缓解 | 只在随时可以重来的 macOS 虚拟机里做，不在主人的电脑上做：装一个带触发 tap 的测试应用、授权后用 `tccutil reset Accessibility` 撤销，看键盘鼠标 |
 
 ---
 
@@ -1066,7 +1083,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | 协议里的键用 code 名（03、04）还是原生码（05） | 原生码 | 小帮手才能完全不带键名表 |
 | 录制时吞不吞（04 全吞，05 不吞，03 可选） | 两边都吞；Mac 没有辅助功能权限时退到窗口内拦截 | Windows 不吞会弹开始菜单；Mac 不吞时 ⌘Space 这类键会被系统先执行、抢走焦点，录制跟着取消（5.6） |
 | 录制何时定稿（Typeless 第一次松键，04 全部松开） | 第一次松键 | 两键以内结果相同，反馈更快 |
-| Mac 吞键 tap 按需开（03）还是存在绑定时常开（05） | 按需开，竞态实验不过再在"常开"和"全部走 Carbon"之间重选（D3） | 保住"平时不在必经之路上"，降低权限撤销时冻住的风险 |
+| Mac 吞键 tap 按需开（03）还是存在绑定时常开（05） | 吞键 tap 仍按需开，但由只收修饰键事件的触发 tap 同步打开（V1 实测只听 tap 打开会漏，D3 改定） | 打字键不在必经之路上；只有修饰键事件经过常开的主动 tap |
 | 键表份数（任务描述 3 份，02 查出 4 份） | 4 份键表加 2 份按 id 写的文案 | `main_windows.go:302` 的报错文案也是一份 |
 | 回滚写法（05 两处都写；第二版只写一处） | 第三版：不再写旧的 `hotkey`，第一次启动时换算掉；文件里再出现 `hotkey` 就以它为准 | 主人 10-21 定的方向：内部做干净、老用户无感；退回旧版用默认键，照样起得来 |
 | Typeless 录制控件的行号（01 写 1920-1940） | `R:DdHsgR7k.js:1951-1971`，判断在 1962 | 成文时对照可读源码复核 |

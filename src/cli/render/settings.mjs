@@ -31,7 +31,8 @@ export function renderConfig({ settings, paths }, { color, t }) {
   for (const [name, setting] of Object.entries(SETTINGS)) {
     const { value } = settings[name];
     const meaning = setting.label ? `${t.text(setting.label(value))} · ` : "";
-    const describe = t(`settings.describe.${name}`);
+    // 设置项自带说明的（按动作目录生成的热键）用它的，别的查文案
+    const describe = setting.describe ? t.text(setting.describe) : t(`settings.describe.${name}`);
     entries.push(
       [
         name,

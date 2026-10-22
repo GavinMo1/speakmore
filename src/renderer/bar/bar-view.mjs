@@ -44,20 +44,21 @@ export function viewOf(state, previousPhase) {
 /**
  * 条上方的那行提示。
  * @param {string} view
- * @param {{ keycap: string, cancellable: boolean, shown?: boolean }} options keycap：热键的短名字；
- *   cancellable：esc 截不截得住；shown：设置里开着操作提示（barHint），关了哪个样子都不写
+ * @param {{ keys: string[], escKeys: string[], cancellable: boolean, shown?: boolean }} options
+ *   keys：听写这个组合的键帽，一个键一个；escKeys：取消那个动作的键帽（默认是 esc，能改）；
+ *   cancellable：取消键截不截得住；shown：设置里开着操作提示（barHint），关了哪个样子都不写
  * @param {Function} t 界面语言的翻译函数（src/i18n）。键在句子里的位置由各语言自己定
- * @returns {Array<string | { key: string }>} 一段一段的：文字，或者一个要标成键名的键
+ * @returns {Array<string | { keys: string[] }>} 一段一段的：文字，或者一组要标成键帽的键（docs/hotkey-research.md 5.7）
  */
-export function hintFor(view, { keycap, cancellable, shown = true }, t) {
+export function hintFor(view, { keys, escKeys, cancellable, shown = true }, t) {
   if (!shown) return [];
   switch (view) {
     case View.STARTING:
       return [t("bar.opening")];
     case View.RECORDING:
       return t.parts(cancellable ? "bar.recording" : "bar.recordingNoEsc", {
-        key: { key: keycap },
-        esc: { key: "esc" },
+        key: { keys },
+        esc: { keys: escKeys },
       });
     case View.FINISHING:
       return [t("bar.finishing")];

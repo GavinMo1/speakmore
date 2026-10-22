@@ -1,0 +1,26 @@
+{
+  "cases": [
+    {
+      "name": "MacBook 上按 fn 再按 F5 才是 F5：fn 按着又按 F 键时，把 fn 当成没按",
+      "platforms": ["darwin"],
+      "bindings": [{ "id": "dictate#0", "chord": "F5" }],
+      "steps": [
+        { "key": "Fn", "down": true },
+        { "key": "F5", "down": true, "events": [{ "down": "dictate#0" }], "swallow": true },
+        { "key": "F5", "down": false, "events": [{ "up": "dictate#0" }], "swallow": true },
+        { "key": "Fn", "down": false }
+      ]
+    },
+    {
+      "name": "绑了 fn、按 fn+F5：fn 按下时触发，按 F5 算打断（F5 不吞）",
+      "platforms": ["darwin"],
+      "bindings": [{ "id": "dictate#0", "chord": "Fn" }],
+      "steps": [
+        { "key": "Fn", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "F5", "down": true, "events": [{ "interrupted": "dictate#0" }] },
+        { "key": "F5", "down": false },
+        { "key": "Fn", "down": false }
+      ]
+    }
+  ]
+}

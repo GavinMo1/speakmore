@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { ACTIONS, actionOf } from "../../../src/hotkeys/actions.mjs";
 import { createTranslator } from "../../../src/i18n/index.mjs";
-import { Action, initialState, Phase, transition } from "../../../src/renderer/bar/machine.mjs";
+import {
+  Action,
+  eventTypeOf,
+  initialState,
+  LONG_PRESS_MS,
+  Phase,
+  transition,
+} from "../../../src/renderer/bar/machine.mjs";
 
 const zh = createTranslator("zh-CN");
 
@@ -145,4 +153,44 @@ test("空闲时来的成品和报错都忽略；不认识的事件直接报错",
   assert.deepEqual(run("RESULT").state, initialState);
   assert.deepEqual(run({ type: "FAILED", message: "x" }).state, initialState);
   assert.throws(() => transition(initialState, { type: "NOPE" }), /不认识的事件/);
+});
+
+test("小帮手报的事 → 状态机的事件：语音输入的按下、松开、被打断，取消只看按下", () => {
+  const cases = [
+    [{ event: "binding", action: "dictate", down: true }, "KEY_DOWN"],
+    [{ event: "binding", action: "dictate", down: false }, "KEY_UP"],
+    // 升级（带 to）也是被打断：这一次作废，新绑定的按下紧跟着另报
+    [{ event: "interrupted", action: "dictate" }, "OTHER_KEY"],
+    [{ event: "interrupted", action: "dictate", to: "x#0" }, "OTHER_KEY"],
+    [{ event: "binding", action: "cancel", down: true }, "USER_CANCEL"],
+    [{ event: "binding", action: "cancel", down: false }, null],
+    [{ event: "click", id: "cancel" }, "USER_CANCEL"],
+    [{ event: "click", id: "confirm" }, "USER_CONFIRM"],
+  ];
+  for (const [input, type] of cases) assert.equal(eventTypeOf(input), type, JSON.stringify(input));
+});
+
+test("认不出来的输入是 undefined（页面记一条警告），不是 null，也不会让状态机抛错", () => {
+  for (const input of [
+    { event: "binding", action: "nope", down: true },
+    { event: "binding", down: true },
+    { event: "click", id: "constructor" },
+    { event: "click", id: "nope" },
+    { event: "hotkey", down: true },
+    { event: "escape" },
+    null,
+  ]) {
+    assert.equal(eventTypeOf(input), undefined, JSON.stringify(input));
+  }
+});
+
+test("动作目录里每个动作的处理者，悬浮条都认得它的按下", () => {
+  for (const action of ACTIONS) {
+    assert.notEqual(eventTypeOf({ event: "binding", action: action.id, down: true }), undefined, action.id);
+  }
+});
+
+test("按住多久算按住：取自动作目录里语音输入的 longPressMs", () => {
+  assert.equal(LONG_PRESS_MS, actionOf("dictate").longPressMs);
+  assert.equal(LONG_PRESS_MS, 600);
 });

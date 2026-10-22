@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
@@ -96,4 +96,45 @@ test("Node 太旧：按终端的语言说要哪个版本；旧到连文案那一
     ancient.stderr,
     "SpeakMore needs Node 22.13 or newer (23.4 or newer on the 23 line); this is 14.21.3.\n",
   );
+});
+
+test("0.13 以前的设置文件（热键存的是旧 id）：直接跑命令，第一次读设置之前就换好，听写还是原来那个键", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sm-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const settingsFile = resolvePaths({ SPEAKMORE_HOME: dir }).settingsFile;
+  writeFileSync(settingsFile, '{"hotkey":"right_control","theme":"indigo"}\n');
+  const { SPEAKMORE_HOTKEY: _old, SPEAKMORE_HOTKEY_DICTATE: _new, ...base } = process.env;
+  const result = spawnSync(process.execPath, [BIN, "config"], {
+    encoding: "utf8",
+    env: { ...base, SPEAKMORE_HOME: dir, LANG: "zh_CN.UTF-8" },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  // 键帽 Mac 上写右⌃，Windows 上写右 Ctrl
+  assert.match(result.stdout, /hotkey\.dictate\s+\["ControlRight"\]\s+右(⌃| Ctrl) · 存在设置文件里/);
+  assert.deepEqual(JSON.parse(readFileSync(settingsFile, "utf8")), {
+    theme: "indigo",
+    "hotkey.dictate": ["ControlRight"],
+  });
+  // 换算记进日志：升级后命令行往往比 App 先跑，App 那边就看不到旧设置了
+  const logFile = resolvePaths({ SPEAKMORE_HOME: dir }).logFile;
+  const logged = readFileSync(logFile, "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  assert.deepEqual(
+    logged.map(({ event, from, to, value, stored }) => ({ event, from, to, value, stored })),
+    [
+      {
+        event: "settings_migrated",
+        from: "hotkey",
+        to: "hotkey.dictate",
+        value: "right_control",
+        stored: ["ControlRight"],
+      },
+    ],
+  );
+  // 只问帮助、版本时不动文件
+  writeFileSync(settingsFile, '{"hotkey":"fn"}\n');
+  spawnSync(process.execPath, [BIN, "--version"], { env: { ...base, SPEAKMORE_HOME: dir } });
+  assert.equal(readFileSync(settingsFile, "utf8"), '{"hotkey":"fn"}\n');
 });

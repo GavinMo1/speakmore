@@ -6,12 +6,29 @@ import { buildHelper, ensureHelper, helperNeedsBuild, helperPaths } from "../../
 
 // 这些按 macOS 的写法查（路径也按 POSIX 拼）；Windows 的那份在后面单独查
 const paths = helperPaths("/pkg", "darwin");
-const SOURCE = "print(1)";
+const SWIFT_FILES = { "main.swift": "print(1)", "Matcher.swift": "struct Matcher {}" };
 /** 假的文件系统：路径 → 内容，没有的文件读出来是 null */
 const filesOf = (files) => (file) => (file in files ? Buffer.from(files[file]) : null);
 const stampOf = (source) => createHash("sha256").update(source).digest("hex");
-/** 假的文件系统里没有目录 */
-const noDirs = () => null;
+/** 源码目录里的文件按名字排好、带着名字拼起来算指纹（native-helper.mjs 的 sourceContent） */
+const fingerprintOf = (files) =>
+  stampOf(
+    Buffer.concat(
+      Object.keys(files)
+        .sort()
+        .flatMap((name) => [Buffer.from(`${name}\0`), Buffer.from(files[name]), Buffer.from("\0")]),
+    ),
+  );
+/** 假的 native/mac 目录：几个 Swift 文件，加一个测试目录（不算进指纹、不编进去） */
+const swiftSource = (files = SWIFT_FILES) =>
+  Object.fromEntries(Object.entries(files).map(([name, content]) => [join(paths.source, name), content]));
+const swiftDir =
+  (files = SWIFT_FILES) =>
+  (dir) =>
+    dir === paths.source ? [...Object.keys(files), "tests"] : null;
+const SOURCE_FILES = Object.keys(SWIFT_FILES)
+  .sort()
+  .map((name) => join(paths.source, name));
 
 /** 编译用到的外部动作全换成记录 */
 function fakeBuild(run) {
@@ -21,8 +38,8 @@ function fakeBuild(run) {
     options: {
       run,
       mkdir: () => {},
-      read: filesOf({ [paths.source]: SOURCE }),
-      list: () => null,
+      read: filesOf(swiftSource()),
+      list: swiftDir(),
       platform: "darwin",
       write: (file, content) => {
         build.written[file] = content;
@@ -35,37 +52,43 @@ function fakeBuild(run) {
 
 test("可执行文件、源码、指纹文件的位置", () => {
   assert.deepEqual(paths, {
-    source: join("/pkg", "native", "main.swift"),
+    source: join("/pkg", "native", "mac"),
     binary: join("/pkg", "build", "key-helper"),
     stamp: join("/pkg", "build", "key-helper.source-sha256"),
   });
 });
 
 test("没有可执行文件就要编译", () => {
-  assert.equal(helperNeedsBuild(paths, filesOf({ [paths.source]: SOURCE }), noDirs), true);
+  assert.equal(helperNeedsBuild(paths, filesOf(swiftSource()), swiftDir()), true);
 });
 
-test("可执行文件是从现在这份源码编出来的，就不用再编", () => {
-  const files = { [paths.source]: SOURCE, [paths.binary]: "x", [paths.stamp]: `${stampOf(SOURCE)}\n` };
-  assert.equal(helperNeedsBuild(paths, filesOf(files), noDirs), false);
+test("可执行文件是从现在这份源码编出来的，就不用再编；测试目录里的改动不算", () => {
+  const files = { ...swiftSource(), [paths.binary]: "x", [paths.stamp]: `${fingerprintOf(SWIFT_FILES)}\n` };
+  assert.equal(helperNeedsBuild(paths, filesOf(files), swiftDir()), false);
 });
 
-test("源码改过，或者说不清可执行文件是从哪份源码来的，就要重新编", () => {
-  const built = { [paths.binary]: "x", [paths.stamp]: stampOf(SOURCE) };
-  assert.equal(helperNeedsBuild(paths, filesOf({ ...built, [paths.source]: "print(2)" }), noDirs), true);
-  assert.equal(helperNeedsBuild(paths, filesOf({ [paths.source]: SOURCE, [paths.binary]: "x" }), noDirs), true);
+test("任何一个源码文件改过、多了一个，或者说不清可执行文件是从哪份源码来的，就要重新编", () => {
+  const built = { [paths.binary]: "x", [paths.stamp]: fingerprintOf(SWIFT_FILES) };
+  const changed = { ...SWIFT_FILES, "main.swift": "print(2)" };
+  assert.equal(helperNeedsBuild(paths, filesOf({ ...built, ...swiftSource(changed) }), swiftDir(changed)), true);
+  const added = { ...SWIFT_FILES, "Taps.swift": "" };
+  assert.equal(helperNeedsBuild(paths, filesOf({ ...built, ...swiftSource(added) }), swiftDir(added)), true);
+  assert.equal(helperNeedsBuild(paths, filesOf({ ...swiftSource(), [paths.binary]: "x" }), swiftDir()), true);
 });
 
 test("只有可执行文件、没有源码时照用不误", () => {
-  assert.equal(helperNeedsBuild(paths, filesOf({ [paths.binary]: "x" }), noDirs), false);
+  assert.equal(
+    helperNeedsBuild(paths, filesOf({ [paths.binary]: "x" }), () => null),
+    false,
+  );
 });
 
 test("平时只编本机的架构，编完记下是从哪份源码来的", () => {
   const calls = [];
   const build = fakeBuild((command, args) => calls.push([command, ...args]));
   buildHelper("/pkg", build.options);
-  assert.deepEqual(calls, [["swiftc", "-O", "-o", paths.binary, paths.source]]);
-  assert.deepEqual(build.written, { [paths.stamp]: `${stampOf(SOURCE)}\n` });
+  assert.deepEqual(calls, [["swiftc", "-O", "-o", paths.binary, ...SOURCE_FILES]]);
+  assert.deepEqual(build.written, { [paths.stamp]: `${fingerprintOf(SWIFT_FILES)}\n` });
 });
 
 test("发布时两种芯片各编一份再合成一个文件，中间文件删掉", () => {
@@ -77,6 +100,7 @@ test("发布时两种芯片各编一份再合成一个文件，中间文件删�
     calls.slice(0, 2).map((call) => call[call.indexOf("-target") + 1]),
     ["arm64-apple-macos12.0", "x86_64-apple-macos12.0"],
   );
+  for (const call of calls.slice(0, 2)) assert.deepEqual(call.slice(-SOURCE_FILES.length), SOURCE_FILES);
   assert.deepEqual(calls[2], [
     "lipo",
     "-create",
@@ -112,7 +136,7 @@ test("ensureHelper：要编才编，动手之前先说一声，并说明这次�
   const said = [];
   const build = fakeBuild((command) => calls.push(command));
   const onBuild = () => said.push("要编了");
-  const upToDate = filesOf({ [paths.source]: SOURCE, [paths.binary]: "x", [paths.stamp]: stampOf(SOURCE) });
+  const upToDate = filesOf({ ...swiftSource(), [paths.binary]: "x", [paths.stamp]: fingerprintOf(SWIFT_FILES) });
 
   assert.equal(ensureHelper("/pkg", { ...build.options, read: upToDate, onBuild }), false);
   assert.deepEqual([calls, said], [[], []]);

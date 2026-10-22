@@ -1,6 +1,7 @@
 import { formatCount, formatSpan } from "../../usage/format.mjs";
 import { activityGrid } from "../../usage/insights.mjs";
-import { keycapOf, t } from "../shared/i18n.mjs";
+import { t } from "../shared/i18n.mjs";
+import { keycapGroups } from "../shared/keycaps.mjs";
 import { createSpend } from "./spend.mjs";
 
 // 首页：标题下面一行热键；原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费。版本号写在侧栏底下。
@@ -138,7 +139,7 @@ export function createHome() {
       renderStats(insights);
       renderHeatmap();
       spend.render(usage);
-      $("home-keycap").textContent = keycapOf(app.hotkey);
+      $("home-keycap").replaceChildren(...keycapGroups(app.hotkeys.dictate));
       $("app-version").textContent = `v${app.version}`;
     },
 

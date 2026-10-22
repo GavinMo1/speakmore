@@ -1,5 +1,5 @@
 import { formatSeconds, formatTokens, formatUsd } from "../../usage/format.mjs";
-import { keycapOf, t } from "../shared/i18n.mjs";
+import { hotkeyText, t } from "../shared/i18n.mjs";
 
 // 历史记录：按天分组（今天、昨天、再往前写日期），一行一条，鼠标移上去才出现复制和详情。
 // 和原版一样一行只有时间和文字；我们多出来的录音时长、模型用时和花费放在详情的悬停提示里。
@@ -103,7 +103,7 @@ export function createHistory() {
     render({ rows, app }) {
       $("history-error").hidden = true;
       $("history-empty").hidden = rows.length > 0;
-      $("history-empty").textContent = t("history.empty", { keycap: keycapOf(app.hotkey) });
+      $("history-empty").textContent = t("history.empty", { keycap: hotkeyText(app.hotkeys.dictate) });
 
       const now = new Date();
       const groups = [];

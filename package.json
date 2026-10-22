@@ -44,8 +44,9 @@
     "test:unit": "node --test --test-timeout=5000 \"test/*.test.mjs\" \"test/!(install)/**/*.test.mjs\"",
     "test:install": "node --test --test-timeout=120000 \"test/install/**/*.test.mjs\"",
     "test:e2e": "node scripts/dev/e2e.mjs",
+    "test:native": "node scripts/dev/test-native.mjs",
     "lint": "biome check .",
-    "check": "biome check . && npm test"
+    "check": "biome check . && npm test && npm run test:native"
   },
   "dependencies": {
     "@audio/decode-webm": "1.6.1",

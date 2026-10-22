@@ -21,7 +21,7 @@
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README；别人报的修好发版回复完就直接关
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
 - [验收要端到端闭环](acceptance-end-to-end.md) — 沿用户路径走一遍；没什么可验的也要把打好的包真启动一次；Windows 包先出先验、不干等；issue 全验完再回
-- [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、改完就收，不再派第二轮，除非他点名
+- [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、放在全部步骤做完之后统一审（中途不审），改完就收，不再派第二轮，除非他点名
 - [workflow 子 agent 控制在十个上下](workflow-agent-budget.md) — 派之前算总数；复核按组批量判，不按条乘人数；10-21 一次起了 73 个他嫌多
 - [桌面端的文案和观感](desktop-copy-and-look.md) — 书面语、短词短句；配色走自己的主题；按钮一律胶囊（共用一条样式）；图标不垫色块、不用星光魔杖；改样式后真窗口逐个查按钮
 - [README 中文为主](readme-chinese-default.md) — 中文 README.md 默认、英文 README.en.md 切换；书面语像报告，五个自由、讲好不讲坏、多配图，图放图片桶
@@ -52,7 +52,9 @@
 - [重构要做干净](refactor-surgical-clean.md) — 定了重构就手术式、不给我们自己的旧做法留兼容；碰到用户手里旧版本的先说清影响
 - [目录可配置重构](speakmore-relocatable-home.md) — issue #10：只留定位文件、整个 .speakmore 可装别处并一键迁移；已随 0.12.0 发布、#10 已关
 - [引擎页（原模型页）改成树](plaza-tree-prototype.md) — 10-21 审查、合并，随 0.13.0 发布；原型存档在 .playwright-mcp/plaza-tree/
-- [热键开放任意键](speakmore-hotkey-any-key.md) — 两键以内、配置驱动、内部做干净、老用户无感；报告 docs/hotkey-research.md；D1–D13 10-21 已拍板，先跑 V1/V8/V19/V20 再实施
+- [热键开放任意键](speakmore-hotkey-any-key.md) — 两键以内、配置驱动、内部做干净、老用户无感；报告 docs/hotkey-research.md；D1–D13 已拍板，四个真机实验 10-21 跑完（D3 改成触发 tap），在 feat/hotkey-any-key 上实施
 - [界面逐页打磨的分支](ui-polish-branch.md) — ui-polish：首页、词典、引擎节点、胶囊按钮、花费卡做完，10-21 审查、合并，随 0.13.0 发布
 - [界面改动在开发窗口给他看](ui-review-in-dev-window.md) — 从源码起的隔离 App 验完不关，他直接在上面提意见，不打包
 - [拍板做成选项](decisions-as-options.md) — 要他定的几件事用选项一批批给他点，他会在选项里写补充
+- [热键敢做减法](hotkey-subtract-boldly.md) — 和系统按键、组合键冲突或实验里离谱的，直接不让绑，不用问；改方向才问
+- [他 Mac 上被占的键](mac-keys-taken.md) — Typeless 占着左 fn、右 ⌘，键盘没有右 Ctrl；开发版热键用右 ⌥（正式版不开时）

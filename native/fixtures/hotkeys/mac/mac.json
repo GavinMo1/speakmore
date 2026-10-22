@@ -1,0 +1,143 @@
+{
+  "cases": [
+    {
+      "name": "MacBook 上按 fn 再按 F5 才是 F5：fn 按着又按 F 键时，把 fn 当成没按",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [],
+          "key": 96
+        }
+      ],
+      "steps": [
+        {
+          "code": 63,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 96,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "code": 96,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "code": 63,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "绑了 fn、按 fn+F5：fn 按下时触发，按 F5 算打断（F5 不吞）",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            63
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "code": 63,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 96,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "dictate#0"
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 96,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 63,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        }
+      ]
+    }
+  ]
+}

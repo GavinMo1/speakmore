@@ -5,8 +5,6 @@ import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { createTranslator } from "../../src/i18n/index.mjs";
 import {
-  HOTKEY_IDS,
-  hotkeyIdsFor,
   MODE_SETTINGS,
   overridingEnv,
   patchSettings,
@@ -14,6 +12,7 @@ import {
   routeOf,
   SETTINGS,
   saveSetting,
+  settingName,
   unsetSetting,
 } from "../../src/storage/settings.mjs";
 
@@ -30,13 +29,16 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-/** 热键按系统分：这里用本机这个系统的，默认的是第一个，另挑一个不是默认的 */
-const DEFAULT_HOTKEY = HOTKEY_IDS[0];
-const OTHER_HOTKEY = HOTKEY_IDS.at(-1);
+/** 听写的默认键两个系统都是右 Option / 右 Alt；另挑一个两个系统都能绑的 */
+const DEFAULT_HOTKEY = '["AltRight"]';
+/** 热键的设置项按这台机器的系统生成（SETTINGS），键名、能不能绑也按它：Windows 上没有 fn，⌘ 叫 Win 而且不让绑 */
+const WINDOWS = process.platform === "win32";
+const OTHER_HOTKEY = '["ControlRight"]';
 
 test("没有文件也没有环境变量时全用默认值", () => {
   assert.deepEqual(resolveSettings({ file, env: {} }), {
-    hotkey: { value: DEFAULT_HOTKEY, source: "default" },
+    "hotkey.dictate": { value: DEFAULT_HOTKEY, source: "default" },
+    "hotkey.cancel": { value: '["Escape"]', source: "default" },
     mode: { value: "native", source: "default" },
     model: { value: "gemini/gemini-3.6-flash", source: "default" },
     thinking: { value: "MINIMAL", source: "default" },
@@ -54,23 +56,24 @@ test("没有文件也没有环境变量时全用默认值", () => {
 });
 
 test("存下来的值下次读得到，没动过的仍是默认值", () => {
-  saveSetting(file, "hotkey", OTHER_HOTKEY);
+  saveSetting(file, "hotkey.dictate", "ControlRight");
   saveSetting(file, "thinking", "low");
   const settings = resolveSettings({ file, env: {} });
-  assert.deepEqual(settings.hotkey, { value: OTHER_HOTKEY, source: "file" });
+  assert.deepEqual(settings["hotkey.dictate"], { value: OTHER_HOTKEY, source: "file" });
   assert.deepEqual(settings.thinking, { value: "LOW", source: "file" });
   assert.deepEqual(settings.model, { value: "gemini/gemini-3.6-flash", source: "default" });
-  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { hotkey: OTHER_HOTKEY, thinking: "LOW" });
+  // 热键在文件里存成数组（store）
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { "hotkey.dictate": ["ControlRight"], thinking: "LOW" });
 });
 
 test("环境变量优先于文件", () => {
-  saveSetting(file, "hotkey", OTHER_HOTKEY);
+  saveSetting(file, "hotkey.dictate", "ControlRight");
   saveSetting(file, "model", "gemini-3.8-flash");
   const settings = resolveSettings({
     file,
-    env: { SPEAKMORE_HOTKEY: DEFAULT_HOTKEY, SPEAKMORE_MODEL: "openai", GEMINI_THINKING_LEVEL: "high" },
+    env: { SPEAKMORE_HOTKEY_DICTATE: "AltRight", SPEAKMORE_MODEL: "openai", GEMINI_THINKING_LEVEL: "high" },
   });
-  assert.deepEqual(settings.hotkey, { value: DEFAULT_HOTKEY, source: "env" });
+  assert.deepEqual(settings["hotkey.dictate"], { value: DEFAULT_HOTKEY, source: "env" });
   assert.deepEqual(settings.model, { value: "openai/gpt-audio-mini", source: "env" });
   assert.deepEqual(settings.thinking, { value: "HIGH", source: "env" });
 });
@@ -96,8 +99,8 @@ test("悬浮条上方的操作提示能关掉（GitHub issue #3）：on 或 off�
 });
 
 test("模型：写成 厂商/模型，只写厂商就用它的默认模型；存下来的都是 厂商/模型", () => {
-  assert.equal(saveSetting(file, "model", "openai"), "openai/gpt-audio-mini");
-  assert.equal(saveSetting(file, "model", "OpenAI/gpt-audio-1.5"), "openai/gpt-audio-1.5");
+  assert.equal(saveSetting(file, "model", "openai").value, "openai/gpt-audio-mini");
+  assert.equal(saveSetting(file, "model", "OpenAI/gpt-audio-1.5").value, "openai/gpt-audio-1.5");
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { model: "openai/gpt-audio-1.5" });
   assert.throws(() => saveSetting(file, "model", "deepseek/deepseek-flash"), said(/不认识 deepseek.*gemini \/ openai/));
   assert.equal(zh.text(SETTINGS.model.label("openai/gpt-audio-1.5")), "OpenAI");
@@ -119,6 +122,12 @@ test("0.3 以前的写法照样认：设置文件里只写了 Gemini 的模型�
   );
 });
 
+test("热键写坏了也能用 config set 改回来：写入前的检查不读正要被换掉的那个旧值", () => {
+  writeFileSync(file, JSON.stringify({ "hotkey.dictate": ["AltRigth"], theme: "ink" }));
+  assert.equal(saveSetting(file, "hotkey.dictate", "ControlRight").value, OTHER_HOTKEY);
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { "hotkey.dictate": ["ControlRight"], theme: "ink" });
+});
+
 test("overridingEnv：这一项现在被哪个环境变量盖着；没有就是 null", () => {
   assert.equal(overridingEnv("model", {}), null);
   assert.equal(overridingEnv("model", { GEMINI_MODEL: "x" }), "GEMINI_MODEL");
@@ -127,15 +136,15 @@ test("overridingEnv：这一项现在被哪个环境变量盖着；没有就是 
 });
 
 test("不认识的设置项、不认识的热键、不认识的思考档位都拒绝保存，并列出能填什么", () => {
-  assert.throws(() => saveSetting(file, "volume", "11"), said(/hotkey.*model.*thinking/));
-  assert.throws(() => saveSetting(file, "hotkey", "caps_lock"), said(new RegExp(HOTKEY_IDS.join(".*"))));
+  assert.throws(() => saveSetting(file, "volume", "11"), said(/hotkey\.dictate.*hotkey\.cancel.*model.*thinking/));
+  assert.throws(() => saveSetting(file, "hotkey.dictate", "caps_lock"), said(/不认识的键 "caps_lock"/));
   assert.throws(() => saveSetting(file, "thinking", "none"), said(/MINIMAL.*LOW.*MEDIUM.*HIGH/));
   assert.throws(() => saveSetting(file, "model", "  "), said(/model/));
 });
 
 test("主题：写 id 或写名字都行，存下来的是 id；没有的那一套拒绝，并列出有哪几套", () => {
-  assert.equal(saveSetting(file, "theme", "cinnabar"), "cinnabar");
-  assert.equal(saveSetting(file, "theme", "靛青"), "indigo");
+  assert.equal(saveSetting(file, "theme", "cinnabar").value, "cinnabar");
+  assert.equal(saveSetting(file, "theme", "靛青").value, "indigo");
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { theme: "indigo" });
   assert.deepEqual(resolveSettings({ file, env: {} }).theme, { value: "indigo", source: "file" });
   assert.deepEqual(resolveSettings({ file, env: { SPEAKMORE_THEME: "朱砂" } }).theme, {
@@ -146,29 +155,77 @@ test("主题：写 id 或写名字都行，存下来的是 id；没有的那一�
   assert.deepEqual(SETTINGS.theme.choices, ["ink", "cinnabar", "indigo"]);
 });
 
-test("带说明的设置项：热键给出键的名字，主题给出主题的名字，按界面语言写；语言的名字用它自己的语言写", () => {
-  assert.equal(zh.text(SETTINGS.hotkey.label("fn")), "地球仪（fn）键");
-  assert.equal(en.text(SETTINGS.hotkey.label("fn")), "Globe (fn)");
+test("带说明的设置项：热键给出键帽，主题给出主题的名字，按界面语言写；语言的名字用它自己的语言写", () => {
+  assert.equal(zh.text(SETTINGS["hotkey.dictate"].label('["Fn","MetaRight"]')), WINDOWS ? "fn、右 Win" : "fn、右⌘");
   assert.equal(zh.text(SETTINGS.theme.label("cinnabar")), "朱砂");
   assert.equal(en.text(SETTINGS.theme.label("cinnabar")), "Cinnabar");
   assert.equal(en.text(SETTINGS.language.label("zh-CN")), "简体中文");
   assert.equal(zh.text(SETTINGS.language.label("system")), "跟随系统");
 });
 
-test("热键能选哪几个按系统分，第一个是默认的；Windows 上是右 Alt 和右 Ctrl", () => {
-  assert.deepEqual(hotkeyIdsFor("darwin"), ["right_option", "right_command", "right_control", "fn"]);
-  assert.deepEqual(hotkeyIdsFor("win32"), ["right_alt", "right_ctrl"]);
-  assert.deepEqual(HOTKEY_IDS, hotkeyIdsFor(process.platform));
-  assert.equal(zh.text(SETTINGS.hotkey.label("right_alt")), "右 Alt 键");
-  assert.equal(en.text(SETTINGS.hotkey.label("right_ctrl")), "Right Ctrl");
+test("改名前的名字（legacyName）：命令行 config set/unset hotkey 照样认，存的、删的都是新名字；别的入口不认", () => {
+  assert.equal(settingName("hotkey"), "hotkey.dictate");
+  assert.equal(settingName("theme"), "theme");
+  assert.throws(() => settingName("volume"), said(/没有 "volume" 这项设置/));
+  assert.equal(saveSetting(file, "hotkey", "right_control").value, '["ControlRight"]');
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { "hotkey.dictate": ["ControlRight"] });
+  assert.equal(overridingEnv("hotkey", { SPEAKMORE_HOTKEY: "fn" }), "SPEAKMORE_HOTKEY");
+  unsetSetting(file, "hotkey");
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), {});
+  // 列出来的、读出来的都只有新名字
+  assert.equal(Object.hasOwn(SETTINGS, "hotkey"), false);
+  assert.equal(Object.hasOwn(resolveSettings({ file, env: {} }), "hotkey"), false);
+});
+
+test("热键的环境变量：每个动作一个；听写另认 0.13 以前的 SPEAKMORE_HOTKEY，旧 id 和新写法都收，新的优先", () => {
+  const dictate = (env) => resolveSettings({ file, env })["hotkey.dictate"];
+  assert.deepEqual(dictate({ SPEAKMORE_HOTKEY: "right_command" }), {
+    value: '["MetaRight"]',
+    source: "env",
+    env: "SPEAKMORE_HOTKEY",
+  });
+  assert.equal(dictate({ SPEAKMORE_HOTKEY: "ControlRight+Space" }).value, '["ControlRight+Space"]');
+  assert.equal(
+    dictate({ SPEAKMORE_HOTKEY: "fn", SPEAKMORE_HOTKEY_DICTATE: '["Fn","MetaRight"]' }).value,
+    '["Fn","MetaRight"]',
+  );
+  assert.deepEqual(resolveSettings({ file, env: { SPEAKMORE_HOTKEY_CANCEL: "F13" } })["hotkey.cancel"], {
+    value: '["F13"]',
+    source: "env",
+  });
+  // 文件里写成数组、写成一个字符串都认
+  writeFileSync(file, JSON.stringify({ "hotkey.dictate": ["Fn", "MetaRight"], "hotkey.cancel": "F13" }));
+  assert.equal(dictate({}).value, '["Fn","MetaRight"]');
+  assert.equal(resolveSettings({ file, env: {} })["hotkey.cancel"].value, '["F13"]');
+});
+
+test("写入前的检查（check）：不让存的照实说并且不写文件；只有提醒时照存，带回提醒；读文件、环境变量时不查", () => {
+  assert.throws(() => saveSetting(file, "hotkey.dictate", "ControlRight+KeyC"), said(/hotkey\.dictate.*加打字的键/));
+  assert.equal(existsSync(file), false);
+  saveSetting(file, "hotkey.cancel", "F13");
+  // 和文件里另一个动作的撞了：要改的这个让位
+  assert.throws(() => saveSetting(file, "hotkey.dictate", "F13"), said(/已经给了「取消」/));
+  // 只有提醒的：Mac 上单按 fn（地球仪键有系统功能），Windows 上右 Alt（AltGr 布局）
+  const warned = WINDOWS ? "AltRight" : "Fn";
+  const { value, warnings } = saveSetting(file, "hotkey.dictate", warned);
+  assert.equal(value, `["${warned}"]`);
+  assert.equal(warnings.length, 1);
+  assert.deepEqual(saveSetting(file, "theme", "ink").warnings, []);
+  // 读的时候只查写法：系统保留的组合写在文件里也读得出来，由下发前那道兜住（bindings.mjs）
+  writeFileSync(file, JSON.stringify({ "hotkey.dictate": ["MetaRight+KeyC"] }));
+  assert.equal(resolveSettings({ file, env: {} })["hotkey.dictate"].value, '["MetaRight+KeyC"]');
+  // patchSettings 也查：先看改了之后走哪条路线的那些地方同样不能拼出存不下的设置
+  const settings = resolveSettings({ file: join(dir, "none.json"), env: {} });
+  assert.throws(() => patchSettings(settings, { "hotkey.dictate": "ControlRight+KeyC" }), said(/加打字的键/));
+  assert.equal(patchSettings(settings, { hotkey: "right_control" })["hotkey.dictate"].value, '["ControlRight"]');
 });
 
 test("界面语言：默认跟随系统；写哪种都认（大小写、_ 不论），存下来是规整的 id；写了没有的说能填什么", () => {
   assert.deepEqual(resolveSettings({ file, env: {} }).language, { value: "system", source: "default" });
-  assert.equal(saveSetting(file, "language", "zh_cn"), "zh-CN");
+  assert.equal(saveSetting(file, "language", "zh_cn").value, "zh-CN");
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { language: "zh-CN" });
-  assert.equal(saveSetting(file, "language", "EN"), "en");
-  assert.equal(saveSetting(file, "language", "System"), "system");
+  assert.equal(saveSetting(file, "language", "EN").value, "en");
+  assert.equal(saveSetting(file, "language", "System").value, "system");
   assert.deepEqual(resolveSettings({ file, env: { SPEAKMORE_LANGUAGE: "zh-CN" } }).language, {
     value: "zh-CN",
     source: "env",
@@ -179,8 +236,8 @@ test("界面语言：默认跟随系统；写哪种都认（大小写、_ 不论
 
 test("写错时的说法也跟着语言换", () => {
   assert.throws(
-    () => saveSetting(file, "hotkey", "caps_lock"),
-    (error) => en.text(error.problem) === `hotkey is "caps_lock": must be one of ${HOTKEY_IDS.join(" / ")}`,
+    () => saveSetting(file, "hotkey.dictate", "caps_lock"),
+    (error) => en.text(error.problem) === 'hotkey.dictate is "caps_lock": Unknown key "caps_lock"',
   );
   assert.throws(
     () => resolveSettings({ file, env: { SPEAKMORE_THEME: "neon" } }),
@@ -191,30 +248,30 @@ test("写错时的说法也跟着语言换", () => {
 
 test("环境变量或文件里的值写错时报错，不悄悄换成默认值", () => {
   assert.throws(() => resolveSettings({ file, env: { SPEAKMORE_HOTKEY: "caps_lock" } }), said(/SPEAKMORE_HOTKEY/));
-  writeFileSync(file, JSON.stringify({ hotkey: "caps_lock" }));
+  writeFileSync(file, JSON.stringify({ "hotkey.dictate": ["caps_lock"] }));
   assert.throws(() => resolveSettings({ file, env: {} }), said(/settings\.json/));
   writeFileSync(file, "{ 不是 JSON");
   assert.throws(() => resolveSettings({ file, env: {} }), said(/settings\.json/));
 });
 
 test("取消一项设置后回到默认值，其余的不动", () => {
-  saveSetting(file, "hotkey", OTHER_HOTKEY);
+  saveSetting(file, "hotkey.dictate", "ControlRight");
   saveSetting(file, "model", "gemini-3.8-flash");
-  unsetSetting(file, "hotkey");
+  unsetSetting(file, "hotkey.dictate");
   const settings = resolveSettings({ file, env: {} });
-  assert.deepEqual(settings.hotkey, { value: DEFAULT_HOTKEY, source: "default" });
+  assert.deepEqual(settings["hotkey.dictate"], { value: DEFAULT_HOTKEY, source: "default" });
   assert.deepEqual(settings.model, { value: "gemini/gemini-3.8-flash", source: "file" });
-  assert.throws(() => unsetSetting(file, "volume"), said(/hotkey/));
+  assert.throws(() => unsetSetting(file, "volume"), said(/hotkey\.dictate/));
 });
 
 test("数据目录还不存在时也能保存", () => {
   const nested = join(dir, "not-yet", "settings.json");
-  saveSetting(nested, "hotkey", OTHER_HOTKEY);
-  assert.equal(resolveSettings({ file: nested, env: {} }).hotkey.value, OTHER_HOTKEY);
+  saveSetting(nested, "hotkey.dictate", "ControlRight");
+  assert.equal(resolveSettings({ file: nested, env: {} })["hotkey.dictate"].value, OTHER_HOTKEY);
 });
 
 test("Gemini 的模型存成 0.3 也读得懂的写法（只写模型名），退回旧版本时设置照样能用；读出来统一是 厂商/模型", () => {
-  assert.equal(saveSetting(file, "model", "gemini"), "gemini/gemini-3.6-flash");
+  assert.equal(saveSetting(file, "model", "gemini").value, "gemini/gemini-3.6-flash");
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { model: "gemini-3.6-flash" });
   assert.equal(resolveSettings({ file, env: {} }).model.value, "gemini/gemini-3.6-flash");
   // 别家的 0.3 本来就不认，照常存 厂商/模型
@@ -280,7 +337,8 @@ test("自定义服务的额外参数：存成紧凑的 JSON，路线里是对象
   saveSetting(file, "polish", "custom/gpt-5-mini");
   saveSetting(file, "customUrl", "https://router.example/v1");
   assert.equal(
-    saveSetting(file, "customParams", ' {\n  "max_completion_tokens": 1024,\n  "reasoning_effort": "minimal"\n} '),
+    saveSetting(file, "customParams", ' {\n  "max_completion_tokens": 1024,\n  "reasoning_effort": "minimal"\n} ')
+      .value,
     '{"max_completion_tokens":1024,"reasoning_effort":"minimal"}',
   );
   const settings = resolveSettings({ file, env: {} });
@@ -292,7 +350,7 @@ test("自定义服务的额外参数：存成紧凑的 JSON，路线里是对象
   // 环境变量也能写，和单独启动服务端时同名
   const fromEnv = resolveSettings({ file, env: { SPEAKMORE_CUSTOM_PARAMS: '{"temperature": 0.2}' } });
   assert.deepEqual(routeOf(fromEnv).customParams, { temperature: 0.2 });
-  assert.equal(saveSetting(file, "customParams", "{}"), "");
+  assert.equal(saveSetting(file, "customParams", "{}").value, "");
   assert.equal(routeOf(resolveSettings({ file, env: {} })).customParams, null);
   assert.throws(() => saveSetting(file, "customParams", "{max_tokens: 1}"), said(/customParams.*JSON/));
   assert.throws(() => saveSetting(file, "customParams", '{"model": "x"}'), said(/model/));
@@ -338,5 +396,5 @@ test("识别链路的几项写错了拒绝保存，说能填什么；自定义�
   assert.throws(() => saveSetting(file, "polish", "nobody/x"), said(/deepseek/));
   assert.throws(() => saveSetting(file, "customUrl", "api.example.com"), said(/https:\/\//));
   saveSetting(file, "customUrl", "https://x.example/v1");
-  assert.equal(saveSetting(file, "customUrl", ""), "");
+  assert.equal(saveSetting(file, "customUrl", "").value, "");
 });

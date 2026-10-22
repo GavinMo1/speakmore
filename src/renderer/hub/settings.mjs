@@ -1,5 +1,6 @@
 import { LOCALES, SYSTEM_LOCALE } from "../../i18n/index.mjs";
 import { fillSelect } from "../shared/dom.mjs";
+import { createHotkeyEditor, recordBlocker } from "../shared/hotkey-editor.mjs";
 import { t } from "../shared/i18n.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
 
@@ -122,12 +123,10 @@ export function createSettings({ refresh }) {
 
   // ---------- 通用：热键、主题、语言、开机启动 ----------
 
+  const hotkeyEditor = createHotkeyEditor($("hotkey-editor"), { onChanged: refresh });
+
   function renderGeneral(setup) {
-    fillSelect(
-      $("hotkey"),
-      setup.hotkey.choices.map((id) => [id, t(`hotkeys.${id}.name`)]),
-      setup.hotkey.value,
-    );
+    hotkeyEditor.render(setup.hotkeyActions, { blocker: recordBlocker(setup) });
     fillSelect(
       $("theme"),
       setup.theme.choices.map((id) => [id, t(`themes.${id}.name`)]),
@@ -159,17 +158,6 @@ export function createSettings({ refresh }) {
     $(id).dataset.tone = tone;
     $(id).hidden = !message;
   }
-
-  $("hotkey").addEventListener("change", async (event) => {
-    showNote("hotkey-note", null);
-    try {
-      const result = await window.speakmore.setHotkey(event.target.value);
-      showNote("hotkey-note", result.note ?? null);
-    } catch (error) {
-      showNote("hotkey-note", t("preferences.hotkeyFailed", { reason: describeError(error) }), "problem");
-    }
-    await refresh();
-  });
 
   $("theme").addEventListener("change", async (event) => {
     showNote("general-problem", null);

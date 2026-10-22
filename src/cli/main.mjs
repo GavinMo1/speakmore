@@ -13,7 +13,7 @@ import {
   SYSTEM_LOCALE,
   terminalLocales,
 } from "../i18n/index.mjs";
-import { log } from "../log.mjs";
+import { log, logToFile } from "../log.mjs";
 import { createLocalModels } from "../models/library.mjs";
 import { createMove } from "../move/index.mjs";
 import { readMoveRecord, stillMoving } from "../move/state.mjs";
@@ -21,7 +21,7 @@ import { CHAT_VENDORS } from "../server/chat/vendors.mjs";
 import { PROVIDERS } from "../server/providers/index.mjs";
 import { adoptAppKeys } from "../storage/app-keys.mjs";
 import { openHistory } from "../storage/history.mjs";
-import { migrateLegacyData } from "../storage/legacy.mjs";
+import { migrateLegacyData, migrateLegacySettings } from "../storage/legacy.mjs";
 import { resolvePaths } from "../storage/paths.mjs";
 import { resolveSettings } from "../storage/settings.mjs";
 import { THEMES } from "../themes/index.mjs";
@@ -310,6 +310,10 @@ export async function main(argv) {
       const moved = await migrateLegacyData({ paths: io.paths, log: { info() {}, warn: log.warn } });
       // 0.7.0 及以前 App 另存的那份 key 搬进共用的文件：没启动后台时命令行也看得到
       adoptAppKeys({ paths: io.paths, log: { info() {}, warn: log.warn } });
+      // 0.13 以前的热键设置换成新写法：要赶在第一次读设置之前（docs/hotkey-research.md 5.9）
+      const migrated = migrateLegacySettings(io.paths.settingsFile);
+      // App 起来时文件已经换好了，它记不到这一条：命令行自己记进日志文件
+      if (migrated) logToFile(io.paths.logFile, "info", "settings_migrated", { ...migrated, by: "cli" });
       if (moved.length > 0) io.out(io.t("cli.migrated", { home: io.paths.home, items: moved.join(", ") }));
     } catch (error) {
       io.err(io.t.text(problemOf(error)));

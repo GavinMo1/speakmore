@@ -5,157 +5,95 @@ import (
 	"testing"
 )
 
-func newState(hotkey string) *keyState { return &keyState{hotkey: hotkeys[hotkey]} }
-
-func key(vk uint32, down bool) keyInput { return keyInput{vk: vk, down: down} }
-
-func eventsOf(outs ...outcome) []event {
-	var all []event
-	for _, out := range outs {
-		all = append(all, out.events...)
+// 假的 MapVirtualKeyW(vk, MAPVK_VK_TO_VSC_EX)：只认测试里用到的几个
+func fakeScanOf(vk uint32) (uint32, bool) {
+	switch vk {
+	case 0x7C: // F13
+		return 0x64, false
+	case 0x26: // 上箭头：扩展键
+		return 0x48, true
+	case 0x20: // 空格
+		return 0x39, false
 	}
-	return all
+	return 0, false
 }
 
-func TestHotkeyDownUpReportedOnceEachDespiteAutoRepeat(t *testing.T) {
-	s := newState("right_ctrl")
-	got := eventsOf(s.onKey(key(vkRControl, true)), s.onKey(key(vkRControl, true)), s.onKey(key(vkRControl, false)))
-	want := []event{{"event": "hotkey", "down": true}, {"event": "hotkey", "down": false}}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-}
-
-func TestOtherKeyWhileHeldReportedOnceWithoutNamingTheKey(t *testing.T) {
-	s := newState("right_ctrl")
-	s.onKey(key(vkRControl, true))
-	got := eventsOf(s.onKey(key('A', true)), s.onKey(key('A', false)), s.onKey(key('B', true)))
-	if want := []event{{"event": "other_key"}}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-	// 下一次按住重新算
-	s.onKey(key(vkRControl, false))
-	s.onKey(key(vkRControl, true))
-	if got := eventsOf(s.onKey(key('C', true))); len(got) != 1 {
-		t.Fatalf("新的一次按住没有报 other_key：%v", got)
+func noLookup(t *testing.T) func(uint32) (uint32, bool) {
+	return func(vk uint32) (uint32, bool) {
+		t.Fatalf("不该按 vk 0x%X 查扫描码", vk)
+		return 0, false
 	}
 }
 
-func TestKeysWithoutHotkeyHeldAreNotReportedOrSwallowed(t *testing.T) {
-	s := newState("right_alt")
-	for _, in := range []keyInput{key('A', true), key('A', false), key(vkEscape, true), key(vkEscape, false)} {
-		if out := s.onKey(in); out.swallow || len(out.events) != 0 {
-			t.Fatalf("%v：%+v", in, out)
+// 别的程序模拟的修饰键只填了不分左右的 vk：按扫描码、扩展位分出左右
+func TestNormalizeSidesGenericModifiers(t *testing.T) {
+	cases := []struct {
+		name string
+		in   keyInput
+		want uint32
+	}{
+		{"Shift 扫描码 0x2A 是左", keyInput{vk: vkShift, scan: 0x2A}, vkLShift},
+		{"Shift 扫描码 0x36 是右", keyInput{vk: vkShift, scan: 0x36}, vkRShift},
+		{"Shift 扫描码 0x36 带扩展位也是右", keyInput{vk: vkShift, scan: 0x36, extended: true}, vkRShift},
+		{"Shift 只给了 vk 当左", keyInput{vk: vkShift}, vkLShift},
+		{"Ctrl 不带扩展位是左", keyInput{vk: vkControl, scan: 0x1D}, vkLControl},
+		{"Ctrl 带扩展位是右", keyInput{vk: vkControl, scan: 0x1D, extended: true}, vkRControl},
+		{"Alt 不带扩展位是左", keyInput{vk: vkMenu, scan: 0x38}, vkLMenu},
+		{"Alt 带扩展位是右", keyInput{vk: vkMenu, scan: 0x38, extended: true}, vkRMenu},
+		{"已经分了左右的不动", keyInput{vk: vkRMenu, scan: 0x38, extended: true}, vkRMenu},
+	}
+	for _, c := range cases {
+		if got := normalize(c.in, noLookup(t)); got.vk != c.want {
+			t.Errorf("%s：得到 0x%X，应为 0x%X", c.name, got.vk, c.want)
 		}
 	}
 }
 
-func TestRightAltAsksForMaskKeySoMenusDoNotOpen(t *testing.T) {
-	s := newState("right_alt")
-	if out := s.onKey(key(vkRMenu, true)); !out.mask {
-		t.Fatal("按下右 Alt 时没要求插一下 vkMask")
+// 普通键只填了 vk、扫描码是 0：按 vk 查一个；查到的是扩展键就带上扩展位
+func TestNormalizeLooksUpMissingScanCodes(t *testing.T) {
+	if got := normalize(keyInput{vk: 0x7C}, fakeScanOf); got.scan != 0x64 || got.extended {
+		t.Errorf("F13：%+v", got)
 	}
-	if out := s.onKey(key(vkRMenu, false)); out.mask {
-		t.Fatal("松开时不用插")
+	if got := normalize(keyInput{vk: 0x26}, fakeScanOf); got.scan != 0x48 || !got.extended {
+		t.Errorf("上箭头：%+v", got)
 	}
-	c := newState("right_ctrl")
-	if out := c.onKey(key(vkRControl, true)); out.mask {
-		t.Fatal("右 Ctrl 单按没有副作用，不用插")
-	}
-}
-
-func TestOurOwnInjectedKeysAndAltGrFakeCtrlAreNotOtherKeys(t *testing.T) {
-	s := newState("right_alt")
-	s.onKey(key(vkRMenu, true))
-	got := eventsOf(
-		s.onKey(keyInput{vk: vkMask, down: true, ours: true}),
-		s.onKey(keyInput{vk: vkMask, down: false, ours: true}),
-		// AltGr 布局下按住右 Alt，系统跟着自动重复那个假的左 Ctrl
-		s.onKey(keyInput{vk: vkLControl, scan: altGrFakeCtrlScan, down: true}),
-	)
-	if len(got) != 0 {
-		t.Fatalf("got %v", got)
-	}
-	// 真的左 Ctrl 是别的键
-	if got := eventsOf(s.onKey(keyInput{vk: vkLControl, scan: 0x1D, down: true})); len(got) != 1 {
-		t.Fatalf("真的左 Ctrl 没算成别的键：%v", got)
+	// 有扫描码的、修饰键、不是物理键的 vk、vk 也是 0 的：都不查
+	for _, in := range []keyInput{
+		{vk: 0x7C, scan: 0x64},
+		{vk: vkRControl},
+		{vk: 0xE7},
+		{vk: vkMask},
+		{},
+	} {
+		normalize(in, noLookup(t))
 	}
 }
 
-func TestEscapeSwallowedOnlyWhileCapturingAndHeldPressIsSwallowedToTheEnd(t *testing.T) {
-	s := newState("right_alt")
-	s.setCapturing(true, nil)
-	down := s.onKey(key(vkEscape, true))
-	if !down.swallow || !reflect.DeepEqual(down.events, []event{{"event": "escape"}}) {
-		t.Fatalf("截着时按 esc：%+v", down)
-	}
-	// 长按的重复不再报
-	if out := s.onKey(key(vkEscape, true)); !out.swallow || len(out.events) != 0 {
-		t.Fatalf("重复：%+v", out)
-	}
-	// 取消了，父进程说不截了，手还没松
-	s.setCapturing(false, nil)
-	if out := s.onKey(key(vkEscape, true)); !out.swallow {
-		t.Fatal("不截了之后、松开之前的重复要吞掉")
-	}
-	if out := s.onKey(key(vkEscape, false)); !out.swallow {
-		t.Fatal("松开要吞掉，不然前台应用收到半个事件")
-	}
-	// 之后的 esc 和我们无关了
-	if out := s.onKey(key(vkEscape, true)); out.swallow {
-		t.Fatal("不截时的新一下 esc 被吞了")
+// 模拟输入 Unicode 字符的 VK_PACKET，扫描码那一栏是字符本身：'9' 是 0x39，正好是空格的扫描码。
+// 它要当成别的键（打断），不能凑成右 Alt+空格
+func TestVirtualKeysAreOtherKeysNotTheirScanCode(t *testing.T) {
+	m := newMatcher(func(keyID, heldKey) bool { return true })
+	m.bind([]binding{
+		{ID: "dictate#0", Mods: []uint32{vkRMenu}},
+		{ID: "x#0", Mods: []uint32{vkRMenu}, Key: 0x39, HasKey: true},
+	})
+	m.onKey(keyInput{vk: vkRMenu, scan: 0x38, extended: true, down: true, time: 1})
+	got := m.onKey(normalize(keyInput{vk: 0xE7, scan: '9', down: true, time: 2}, noLookup(t)))
+	if want := []event{{"event": "interrupted", "id": "dictate#0"}}; !reflect.DeepEqual(got.events, want) || got.swallow {
+		t.Fatalf("VK_PACKET 应该只是打断：%+v", got)
 	}
 }
 
-func TestEscapeWhileHotkeyHeldAndCapturingIsNotAnOtherKey(t *testing.T) {
-	s := newState("right_alt")
-	s.onKey(key(vkRMenu, true))
-	s.setCapturing(true, nil)
-	got := eventsOf(s.onKey(key(vkEscape, true)))
-	if want := []event{{"event": "escape"}}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
+// 别的工具只填 vk 模拟的右 Ctrl（不分左右的 VK_CONTROL 加扩展位）和 F13（扫描码 0）：补全以后照样凑成右 Ctrl+F13、吞掉 F13
+func TestVKOnlyInjectedChordStillMatches(t *testing.T) {
+	m := newMatcher(func(keyID, heldKey) bool { return true })
+	m.bind([]binding{{ID: "x#0", Mods: []uint32{vkRControl}, Key: 0x64, HasKey: true}})
+	m.onKey(normalize(keyInput{vk: vkControl, extended: true, down: true, time: 1}, fakeScanOf))
+	got := m.onKey(normalize(keyInput{vk: 0x7C, down: true, time: 2}, fakeScanOf))
+	if want := []event{{"event": "binding", "id": "x#0", "down": true}}; !reflect.DeepEqual(got.events, want) || !got.swallow {
+		t.Fatalf("应该凑成 x#0 并吞掉 F13：%+v", got)
 	}
-}
-
-func TestClickCountsOnlyWhenPressedAndReleasedInTheSameRegion(t *testing.T) {
-	s := newState("right_alt")
-	s.setCapturing(true, []region{{ID: "cancel", X: 100, Y: 100, Width: 28, Height: 28}, {ID: "done", X: 140, Y: 100, Width: 28, Height: 28}})
-	if out := s.onLeftButton(true, 110, 110); !out.swallow {
-		t.Fatal("按在按钮上要吞掉")
-	}
-	if out := s.onLeftButton(false, 111, 111); !out.swallow || !reflect.DeepEqual(out.events, []event{{"event": "click", "id": "cancel"}}) {
-		t.Fatalf("松开：%+v", out)
-	}
-	// 按下之后拖到另一块再松手：反悔，不报，但松开照样吞掉
-	s.onLeftButton(true, 110, 110)
-	if out := s.onLeftButton(false, 150, 110); !out.swallow || len(out.events) != 0 {
-		t.Fatalf("拖走：%+v", out)
-	}
-	// 右、下边不算在里面
-	if out := s.onLeftButton(true, 128, 110); out.swallow {
-		t.Fatal("右边界算进去了")
-	}
-	// 不在任何一块里的点击原样放行
-	if out := s.onLeftButton(true, 10, 10); out.swallow {
-		t.Fatal("块外的点击被吞了")
-	}
-}
-
-func TestClickReleasedAfterCaptureEndedIsSwallowedButNotReported(t *testing.T) {
-	s := newState("right_alt")
-	s.setCapturing(true, []region{{ID: "done", X: 0, Y: 0, Width: 10, Height: 10}})
-	s.onLeftButton(true, 5, 5)
-	s.setCapturing(false, nil)
-	if !s.wantsCapture() {
-		t.Fatal("按下吞了还没松开，鼠标钩子要留着")
-	}
-	if out := s.onLeftButton(false, 5, 5); !out.swallow || len(out.events) != 0 {
-		t.Fatalf("got %+v", out)
-	}
-	if s.wantsCapture() {
-		t.Fatal("松开之后不该再截")
-	}
-	if out := s.onLeftButton(true, 5, 5); out.swallow {
-		t.Fatal("不截时的点击被吞了")
+	if got := m.onKey(normalize(keyInput{vk: 0x7C, down: false, time: 3}, fakeScanOf)); !got.swallow {
+		t.Fatalf("F13 的松开也要吞：%+v", got)
 	}
 }
