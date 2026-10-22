@@ -1,6 +1,6 @@
 ---
 name: speakmore-hotkey-any-key
-description: 热键开放成任意键或两键组合（配置驱动、内部做干净、老用户无感）；报告 docs/hotkey-research.md，D1–D13 10-21 已拍板；feat/hotkey-any-key 上第 0–12 步做完、审查一轮修完（10-21），等他点头合并发 0.14.0
+description: 热键开放成任意键或两键组合（配置驱动、内部做干净、老用户无感）；报告 docs/hotkey-research.md，D1–D13 10-21 已拍板；10-21 合进 main（d640932）、随 0.14.0 发布
 metadata:
   node_type: memory
   type: project

@@ -16,7 +16,7 @@
 - [SpeakMore 按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节
 - [SpeakMore 还在内测](speakmore-only-user-in-beta.md) — 只有他一个人在用；兼容旧版本、迁移按一个人的量来权衡，不做重
 - [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，代码在仓库根，已公开（MIT）；一行命令安装并启动，装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端以后用 Electron（同 Typeless，不用 Tauri）
-- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship，挂后台），GitHub 不再发；最新 0.13.1（10-21，#11 热修；0.11.0 起换成 channel.json + store/ 按块更新）；安装包公证会自己重交三次，再断就只补那一步、别重打包；发过的版本不覆盖；证书 2027-01-12 到期要续
+- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship，挂后台），GitHub 不再发；最新 0.14.0（10-21，热键任意键，#13；0.11.0 起换成 channel.json + store/ 按块更新）；安装包公证会自己重交三次，再断就只补那一步、别重打包；发过的版本不覆盖；证书 2027-01-12 到期要续
 - [SpeakMore 官网](speakmore-website.md) — 代码在 website/，图片在单独的桶加 media 子域名（证书 2027-01-13 到期要续），Docker 部署、npm run deploy；README 的图在同一个桶的 readme/ 下；10-17 重做已上线（费用并进模型、开发者终端、costs.json 对账）；发新版后要再部署
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README；别人报的修好发版回复完就直接关
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
@@ -52,7 +52,7 @@
 - [重构要做干净](refactor-surgical-clean.md) — 定了重构就手术式、不给我们自己的旧做法留兼容；碰到用户手里旧版本的先说清影响
 - [目录可配置重构](speakmore-relocatable-home.md) — issue #10：只留定位文件、整个 .speakmore 可装别处并一键迁移；已随 0.12.0 发布、#10 已关
 - [引擎页（原模型页）改成树](plaza-tree-prototype.md) — 10-21 审查、合并，随 0.13.0 发布；原型存档在 .playwright-mcp/plaza-tree/
-- [热键开放任意键](speakmore-hotkey-any-key.md) — 两键以内、配置驱动、内部做干净、老用户无感；报告 docs/hotkey-research.md；D1–D13 已拍板，四个真机实验 10-21 跑完（D3 改成触发 tap），在 feat/hotkey-any-key 上实施
+- [热键开放任意键](speakmore-hotkey-any-key.md) — 两键以内、配置驱动、内部做干净、老用户无感；报告 docs/hotkey-research.md；10-21 做完、审查修完，随 0.14.0 发布
 - [界面逐页打磨的分支](ui-polish-branch.md) — ui-polish：首页、词典、引擎节点、胶囊按钮、花费卡做完，10-21 审查、合并，随 0.13.0 发布
 - [界面改动在开发窗口给他看](ui-review-in-dev-window.md) — 从源码起的隔离 App 验完不关，他直接在上面提意见，不打包
 - [拍板做成选项](decisions-as-options.md) — 要他定的几件事用选项一批批给他点，他会在选项里写补充
