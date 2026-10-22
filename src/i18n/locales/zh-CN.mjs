@@ -250,6 +250,12 @@ export default {
       translate: {
         to: "语音翻译译成什么：一种或几种语言（en、ja，逗号隔开），第一种是默认，悬浮条上能临时换成别的几种",
       },
+      lookup: {
+        to: "划词翻译译成什么：一种语言，卡片上能临时换成别的",
+        model: "划词翻译交给哪一家的哪个模型，写成 厂商/模型，和语音那边的模型无关；自定义服务写 custom/模型名",
+        customUrl: "划词翻译用的自定义服务的地址（兼容 OpenAI 接口的那种），和语音那边的分开",
+        customParams: "发给划词翻译的自定义服务的额外请求参数，一段 JSON 对象；不能写 model、messages、stream",
+      },
       theme: "界面用哪套主题",
       language: "界面用哪种语言；system 是跟随系统",
     },

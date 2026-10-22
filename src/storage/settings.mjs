@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { hotkeySettings } from "../hotkeys/settings.mjs";
 import { alternatives, findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
-import { languageName, parseLanguage } from "../languages.mjs";
+import { languageName, parseLanguage, LANGUAGES as TARGET_LANGUAGES } from "../languages.mjs";
 import { DEFAULT_SOURCE, DEFAULT_TRANSCRIBER, MODELS, SOURCES } from "../models/catalog.mjs";
 import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../server/asr/cloud/vendors.mjs";
 import {
@@ -43,6 +43,8 @@ export const LOCAL_MODEL_MEMORY = Object.freeze(["resident", "1m", "5m", "10m", 
 /** 悬浮条上方的操作提示（"再按一下 右⌥ 完成 · esc 取消"）显示不显示：熟练了的人嫌它一直挂着（GitHub issue #3） */
 export const BAR_HINTS = Object.freeze(["on", "off"]);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
+/** 划词翻译出厂交给谁：只写厂商，用它的默认模型（DeepSeek V4.1 Flash） */
+const DEFAULT_LOOKUP = "deepseek";
 /** 语音翻译最多列几种目标语言：悬浮条上的语言选单一种一行，再多放不下，也挑不过来 */
 export const MAX_TRANSLATE_TARGETS = 6;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
@@ -206,6 +208,37 @@ export const SETTINGS = {
     parse: parseTranslateTargets,
     store: (value) => JSON.parse(value),
     label: (value) => alternatives(JSON.parse(value).map(languageName)),
+  },
+  // 划词翻译自己的几项，和语音那边毫不相干（他定的）：译成哪种、交给哪个模型；选自定义服务时，地址和参数也是它自己的，
+  // 不和整理那一步的 customUrl、customParams 共用，key 也另存一把（app/lookup.mjs）
+  "lookup.to": {
+    // 一种：卡片上能临时换成别的（只管那一次）
+    env: "SPEAKMORE_LOOKUP_TO",
+    default: "zh-CN",
+    choices: TARGET_LANGUAGES.map(({ id }) => id),
+    parse: parseLanguage,
+    label: languageName,
+  },
+  "lookup.model": {
+    env: "SPEAKMORE_LOOKUP_MODEL",
+    // DeepSeek V4.1 Flash：关掉思考一两句话一秒上下（10-22 实测），价钱低
+    default: formatChatChoice(parseChatChoice(DEFAULT_LOOKUP)),
+    choices: null,
+    // 写法同 polish：厂商/模型，只写厂商用它的默认模型，自定义服务写 custom/模型名
+    parse: (value) => formatChatChoice(parseChatChoice(value)),
+  },
+  "lookup.customUrl": {
+    env: "SPEAKMORE_LOOKUP_CUSTOM_URL",
+    default: "",
+    choices: null,
+    parse: (value) => (value.trim() === "" ? "" : normalizeBaseUrl(value)),
+  },
+  "lookup.customParams": {
+    env: "SPEAKMORE_LOOKUP_CUSTOM_PARAMS",
+    json: true,
+    default: "",
+    choices: null,
+    parse: (value) => formatCustomParams(parseCustomParams(value)),
   },
   barHint: {
     env: "SPEAKMORE_BAR_HINT",
@@ -442,6 +475,22 @@ const ROUTES = {
   }),
   private: (settings) => ({ mode: "private", transcriber: settings.privateTranscriber.value }),
 };
+
+/**
+ * 划词翻译按现在的设置交给谁、译成什么（app/lookup.mjs）：choice 是 { vendor, model }，customUrl、customParams 是划词自己的
+ * 自定义服务（没填是 null），to 是语言 id
+ * @param {ReturnType<typeof resolveSettings>} settings
+ */
+export function lookupOf(settings) {
+  return {
+    to: settings["lookup.to"].value,
+    choice: parseChatChoice(settings["lookup.model"].value),
+    customUrl: settings["lookup.customUrl"].value || null,
+    customParams: settings["lookup.customParams"].value
+      ? parseCustomParams(settings["lookup.customParams"].value)
+      : null,
+  };
+}
 
 /**
  * 某种模式按现在的设置走哪条路线，不写就是设置里选的那种模式

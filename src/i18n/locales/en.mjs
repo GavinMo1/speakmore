@@ -258,6 +258,15 @@ export default {
       localModelMemory:
         "Whether the on-device speech-to-text model stays in memory: resident keeps it loaded; 1m, 5m, 10m, or 30m releases it after that much idle time and loads it again when you next speak (the first sentence after a long pause takes a second or two longer)",
       barHint: "Whether the hint line above the voice bar (press … to finish · esc to cancel) shows: on or off",
+      lookup: {
+        to: "What selection translation translates into: one language; the card can switch to another for one go",
+        model:
+          "Which provider and model selection translation uses, as provider/model, separate from the voice models; for a custom service write custom/<model>",
+        customUrl:
+          "Address of the custom service for selection translation (OpenAI-compatible), separate from the voice one",
+        customParams:
+          "Extra request parameters for selection translation's custom service, as one JSON object; model, messages, and stream can't be set",
+      },
       translate: {
         to: "What voice translation translates into: one or more languages (en, ja, comma-separated); the first is the default, and the voice bar can switch to the others for one go",
       },

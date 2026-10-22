@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { createTranslator, LocalizedError } from "../../src/i18n/index.mjs";
 import {
+  lookupOf,
   MODE_SETTINGS,
   overridingEnv,
   patchSettings,
@@ -53,6 +54,10 @@ test("没有文件也没有环境变量时全用默认值", () => {
     acceleration: { value: "auto", source: "default" },
     localModelMemory: { value: "resident", source: "default" },
     "translate.to": { value: '["en"]', source: "default" },
+    "lookup.to": { value: "zh-CN", source: "default" },
+    "lookup.model": { value: "deepseek/deepseek-flash", source: "default" },
+    "lookup.customUrl": { value: "", source: "default" },
+    "lookup.customParams": { value: "", source: "default" },
     barHint: { value: "on", source: "default" },
     theme: { value: "ink", source: "default" },
     language: { value: "system", source: "default" },
@@ -74,6 +79,35 @@ test("语音翻译译成什么：一个、逗号隔开的几个、JSON 数组都
   for (const bad of ["", "[]", "klingon", "en,xx", "en,ja,ko,fr,de,es,it", '{"en":1}']) {
     assert.throws(() => saveSetting(file, "translate.to", bad), LocalizedError, bad);
   }
+});
+
+test("划词翻译：译成一种语言（默认简体中文），模型写 厂商/模型（默认 DeepSeek V4.1 Flash）；自定义服务的地址、参数是它自己的，和整理那一步的分开", () => {
+  assert.equal(saveSetting(file, "lookup.to", "JA").value, "ja");
+  assert.throws(() => saveSetting(file, "lookup.to", "xx"), said(/要是 en \/ zh-CN/));
+  assert.equal(saveSetting(file, "lookup.model", "bailian").value, "bailian/qwen3.8-flash");
+  assert.equal(saveSetting(file, "lookup.model", "custom/qwen3:8b").value, "custom/qwen3:8b");
+  assert.throws(() => saveSetting(file, "lookup.model", "custom"), LocalizedError);
+  assert.equal(
+    saveSetting(file, "lookup.customUrl", "https://llm.example.com/v1/chat/completions").value,
+    "https://llm.example.com/v1",
+  );
+  assert.equal(saveSetting(file, "lookup.customParams", '{ "temperature": 0.2 }').value, '{"temperature":0.2}');
+  const settings = resolveSettings({ file, env: {} });
+  // 语音那边的自定义服务没动
+  assert.equal(settings.customUrl.value, "");
+  assert.deepEqual(lookupOf(settings), {
+    to: "ja",
+    choice: { vendor: "custom", model: "qwen3:8b" },
+    customUrl: "https://llm.example.com/v1",
+    customParams: { temperature: 0.2 },
+  });
+  assert.deepEqual(lookupOf(resolveSettings({ file: join(dir, "none.json"), env: {} })), {
+    to: "zh-CN",
+    choice: { vendor: "deepseek", model: "deepseek-flash" },
+    customUrl: null,
+    customParams: null,
+  });
+  assert.equal(resolveSettings({ file, env: { SPEAKMORE_LOOKUP_MODEL: "moonshot" } })["lookup.model"].source, "env");
 });
 
 test("存下来的值下次读得到，没动过的仍是默认值", () => {
