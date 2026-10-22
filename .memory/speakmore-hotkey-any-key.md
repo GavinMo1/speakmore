@@ -1,6 +1,6 @@
 ---
 name: speakmore-hotkey-any-key
-description: 热键开放成任意键或两键组合（配置驱动、内部做干净、老用户无感）；报告 docs/hotkey-research.md 第三版 10-21 改完，D1–D13 10-21 已拍板，下一步先跑 V1/V8/V19/V20 再开分支实施
+description: 热键开放成任意键或两键组合（配置驱动、内部做干净、老用户无感）；报告 docs/hotkey-research.md，D1–D13 10-21 已拍板；10-21 合进 main（d640932）、随 0.14.0 发布
 metadata:
   node_type: memory
   type: project
@@ -18,5 +18,11 @@ metadata:
 
 10-21 D1–D13 拍板（报告 1.2、7.1 记着）。和我建议不同的：D1 组合全部松开才算松开（他用 Typeless 顺手）；D4 一个动作能绑多个（上限 4），设置页照 Typeless 截图那样每个组合一个框、× 删、"添加另一个"，设置文件存成列表，他嫌逗号拼接审美低；D9 只认键盘，鼠标键以后也不做；D10 新功能必须带默认快捷键、引导页要讲到，"留空绝对不行"，具体键做那个功能时再定；D11 单按 Shift 和 CapsLock 都不开放。其余按建议：D2 允许前缀并提醒、D3 Mac 按需拦截、D5 默认键不变、D6 一律标左右、D7 走 config set、D8 管理员窗口只提示、D12 不支持任一侧、D13 status --json 旧字段留一版再删。
 
+10-21 真机实验（程序和数据在本机 .playwright-mcp/hotkey-research/experiments/）：V1 不通过，只听 tap 事后打开吞键 tap 会漏键（人同时按能按出 0.4 ms 间隔）；他在选项里选了"同步触发"：有修饰键+普通键绑定时常开一个只收 flagsChanged 的主动 tap，同步回调里打开吞键 tap，实测 0 漏。V19：小帮手要改用 NSApplication（.prohibited）跑，只跑 RunLoop 时 Carbon 会吃键不回调。V8、V20 通过。权限撤销冻住整机的风险只在虚拟机里验（V26），别在他电脑上试。
+
+10-21 实施进度：第 0–10 步已提交（第 8 步 924d8f4 Windows 掩码/假修饰键/睡眠解锁重装/管理员窗口提示；第 9 步 4edb3d5 录键；第 10 步 026fc47 键帽成组）。第 7 步实测推翻了报告里"tap 挪到独立线程"（独立线程漏 57/200 个空格），tap 留在主线程。回归：Mac `node scripts/dev/mac-hotkeys.mjs --secure-input`（42 项），Windows `WAIT=150 scripts/dev/win-desktop.sh - < native/windows/e2e.ps1`（39 项）。第 11 步 a9b88b4（README、文档、引导页截图；首页、官网图不用换）；录键结束原因分开记 27ec5db。第 12 步：两台各装线上 0.13.1、设右 Control/右 Ctrl，用 0.14.0-e2e.1 测试包升级（换算、热键、状态都对），退回 0.13.1 用默认键起来，再升回照旧；Mac 打包 App 直接打开会换算并记 settings_migrated。命令行先换算时不记日志，留给审查。
+10-21 统一审查：五个方面 32 条（确认 21、可能 6、驳回 5），修了 24 条（ea20447、2f9485e、1ff687e、05657ae），另把 15 条写死 Mac 键名、在 Windows 上红的测试改成按系统给期望（b230feb）；验证记录在 docs/development.md 末尾。他 10-22 回 issue #13 说两小时内上新版，提的人已关 issue；发版后在 #13 下补一句版本号和改键入口。
+跑 Mac 合成按键回归前先看键盘空闲（ioreg HIDIdleTime ≥ 30 秒）：10-21 他正在打字时跑过一次，录键那几项录到真键、也吞了他几个字。Windows 开发机的 build\key-helper.exe 不随 win-sync 更新，改了 Go 要本机交叉编译后拷过去再跑 e2e。留给统一审查的：小帮手在锁屏时启动不知道屏幕锁着（第 7 步遗留）。10-21 子 agent 在锁屏时跑过一次合成按键，安全输入那几下可能进了锁屏密码框；之后发键程序在锁屏、切走用户、别的应用开着安全输入时拒发。
+
 **Why:** 顺着目录重构"写死的都改成配置驱动"的思路提的；以后加功能要绑新热键。
-**How to apply:** 决定都定了，不要再重议；先跑 7.2 里影响设计的真机实验（V1、V8、V19、V20），不通过的再找他选。开 feature 分支，按第 6 节的步骤一步一提交。
+**How to apply:** 决定都定了，不要再重议；在 feat/hotkey-any-key 上按第 6 节的步骤一步一提交。

@@ -53,13 +53,141 @@ export default {
     request: "Allow",
   },
 
-  hotkeys: {
-    right_option: { name: "Right Option", keycap: "Right ⌥" },
-    right_command: { name: "Right Command", keycap: "Right ⌘" },
-    right_control: { name: "Right Control", keycap: "Right ⌃" },
-    fn: { name: "Globe (fn)", keycap: "fn" },
-    right_alt: { name: "Right Alt", keycap: "Right Alt" },
-    right_ctrl: { name: "Right Ctrl", keycap: "Right Ctrl" },
+  // Key names, short names inside a combination, and keycaps (codes from src/hotkeys/keys.mjs). Letters, digits, F keys and
+  // punctuation read the same in every language: their text is in the key table and named builds the name. Windows wording is under windows
+  keys: {
+    named: "{label}",
+    ControlLeft: { name: "Left Control", short: "Left Control", keycap: "Left ⌃" },
+    ControlRight: { name: "Right Control", short: "Right Control", keycap: "Right ⌃" },
+    ShiftLeft: { name: "Left Shift", short: "Left Shift", keycap: "Left ⇧" },
+    ShiftRight: { name: "Right Shift", short: "Right Shift", keycap: "Right ⇧" },
+    AltLeft: { name: "Left Option", short: "Left Option", keycap: "Left ⌥" },
+    AltRight: { name: "Right Option", short: "Right Option", keycap: "Right ⌥" },
+    MetaLeft: { name: "Left Command", short: "Left Command", keycap: "Left ⌘" },
+    MetaRight: { name: "Right Command", short: "Right Command", keycap: "Right ⌘" },
+    Fn: { name: "Globe (fn)", short: "fn", keycap: "fn" },
+    ContextMenu: { name: "Menu key", short: "Menu", keycap: "Menu" },
+    Space: { name: "Space", short: "Space", keycap: "Space" },
+    Escape: { name: "esc", short: "esc", keycap: "esc" },
+    Enter: { name: "Return", short: "Return", keycap: "↩" },
+    Tab: { name: "Tab", short: "Tab", keycap: "⇥" },
+    Backspace: { name: "Delete", short: "Delete", keycap: "⌫" },
+    Delete: { name: "Forward Delete", short: "Forward Delete", keycap: "⌦" },
+    Insert: { name: "Insert", short: "Insert", keycap: "Insert" },
+    Home: { name: "Home", short: "Home", keycap: "Home" },
+    End: { name: "End", short: "End", keycap: "End" },
+    PageUp: { name: "Page Up", short: "Page Up", keycap: "Page Up" },
+    PageDown: { name: "Page Down", short: "Page Down", keycap: "Page Down" },
+    ArrowUp: { name: "Up Arrow", short: "Up", keycap: "↑" },
+    ArrowDown: { name: "Down Arrow", short: "Down", keycap: "↓" },
+    ArrowLeft: { name: "Left Arrow", short: "Left", keycap: "←" },
+    ArrowRight: { name: "Right Arrow", short: "Right", keycap: "→" },
+    CapsLock: { name: "Caps Lock", short: "Caps Lock", keycap: "⇪" },
+    NumLock: { name: "Num Lock", short: "Num Lock", keycap: "Num Lock" },
+    ScrollLock: { name: "Scroll Lock", short: "Scroll Lock", keycap: "Scroll Lock" },
+    Pause: { name: "Pause", short: "Pause", keycap: "Pause" },
+    PrintScreen: { name: "Print Screen", short: "Print Screen", keycap: "PrtSc" },
+  },
+
+  chord: {
+    named: "{first}+{second}",
+    // Mac menus put no plus sign between keys; our keycaps carry Left/Right, so a space keeps them readable
+    text: "{first} {second}",
+    empty: "No keys",
+    unknown: "Unknown key {code}",
+    tooMany: "Two keys at most",
+    twice: "{key} is listed twice",
+    blocked: "{key} can't be part of a shortcut",
+    typingAlone: "{key} needs a modifier: on its own it types",
+    shiftAlone: "Shift on its own can't be a shortcut: input methods use it to switch languages",
+    twoPlain: "One of the two keys has to be a modifier",
+    escapeCombo: "esc can't be combined with other keys",
+    shiftTyping: "Shift with a typing key types capitals or symbols; pick another modifier",
+  },
+
+  // What a shortcut can do (src/hotkeys/actions.mjs): one row per action in Settings and onboarding, name and description
+  actions: {
+    dictate: { name: "Voice input", description: "Press to start talking; press again to finish." },
+    cancel: { name: "Cancel", description: "Press while talking to cancel this one." },
+  },
+
+  // The shortcut settings (src/hotkeys/settings.mjs)
+  hotkeySetting: {
+    describe: "Shortcut for {action}: any combination of up to two keys; see the README for how to write it",
+    notList: 'must be one combination (AltRight, ControlRight+F9) or a list of them (["AltRight","ControlRight"])',
+    problem: "{chord}: {reason}",
+  },
+
+  // Recording a shortcut in Settings and onboarding (src/app/hotkey-recording.mjs, src/renderer/shared/hotkey-editor.mjs)
+  hotkeyRecord: {
+    prompt: "Press keys",
+    hint: "Up to two keys · esc to cancel",
+    hintCapturing: "One key · click elsewhere to cancel",
+    tooMany: "Two keys at most",
+    unknownKey: "Key not recognized",
+    systemTaken: "Used by a system shortcut",
+    appTaken: "Used by another app",
+    saveFailed: "Couldn't save",
+    add: "Add another",
+    addLabel: "Add another combination for {action}",
+    reset: "Reset",
+    resetLabel: "Reset {action} to default",
+    change: "Change {chord}",
+    remove: "Remove {chord}",
+    saved: "Saved",
+    limit: "Up to {count}",
+    needsListen: "Needs Input Monitoring permission",
+    helperStopped: "Key listening isn't running, so shortcuts can't be recorded now",
+    envOverride: "{variable} takes precedence; remove it to change this here",
+  },
+
+  // Found before handing the shortcuts to the helper, or reported back by it (src/hotkeys/bindings.mjs); listed under what's missing
+  hotkeyProblem: {
+    chord: "{action}'s {chord} doesn't work: {reason}",
+    fallback: "{action} uses the default {chord} for now",
+    needsTrusted: "SpeakMore needs Accessibility access in System Settings first",
+    registerFailed: "the system wouldn't register it; another app may be using it",
+    invalid: "the helper doesn't recognize this combination",
+  },
+
+  // Why a combination can't be bound, or what to watch out for (src/hotkeys/validate.mjs)
+  binding: {
+    notAvailable: "{key} isn't available on this system",
+    capturingSingle: "{action} takes a single key that isn't a modifier (an F key, the Menu key or esc)",
+    escapeOnlyCapturing: "esc on its own is only for actions that work while you talk",
+    macCommandTyping: "Command with a typing key is an app shortcut (copy, paste, save…)",
+    macControlTyping:
+      "Control with a typing key is a system or text-editing shortcut (switching input sources, moving the cursor…)",
+    macFnTyping: "Globe with a letter, digit or symbol is a system shortcut",
+    macFnFKey: "fn with an F key is just that F key; bind the F key on its own",
+    macControlF: "Control with F1–F8 is a system keyboard-navigation shortcut",
+    macCommandF: "Command with F1–F12 is a system shortcut (Command-F5 turns VoiceOver on and off)",
+    macF11: "F11 is the system's Show Desktop",
+    winMeta: "The Windows key and its combinations belong to Windows",
+    winControlTyping: "Ctrl with a typing key is an app shortcut (copy, paste, save…)",
+    winAltSpace: "Alt+Space opens the window menu",
+    winCloses: "This closes the window",
+    winShiftSwitch: "Ctrl+Shift and Alt+Shift switch input languages and keyboard layouts",
+    winF12: "Windows reserves F12 on its own for debuggers",
+    winShiftF10: "Shift+F10 opens the context menu",
+    leftOnly:
+      "Everyday shortcuts start with left-hand modifiers (Command-C, Shift-Command-Z), so this would fire by accident all the time: use a right-hand modifier, or add fn",
+    required: "{action} needs at least one combination",
+    tooMany: "An action takes {count} combinations at most",
+    repeated: "Listed twice",
+    taken: "Already used by {action}",
+    usesCapturingKey: "{key} is the key for {action}: while you talk, pressing it only cancels",
+    capturingKeyUsed: "{key} is part of a {action} combination: an action that works only while you talk can't use it",
+    fnSystem:
+      "If the Globe key has another job in System Settings (switching input sources, emoji, dictation), that fires too; most external keyboards have no fn",
+    // Said precisely when the helper can read the system setting (refineWarning in src/hotkeys/validate.mjs)
+    fnSystemUse: "Pressing Globe also {use}; set it to “Do Nothing” in System Settings › Keyboard",
+    fnUses: { inputSource: "changes the input source", emoji: "shows Emoji & Symbols", dictation: "starts Dictation" },
+    macOptionTyping:
+      "Option with a typing key normally types a special character (Option-Space is a non-breaking space); bound, it no longer will",
+    altGr: "Some keyboard layouts (German, French…) use Right Alt as AltGr for typing; pressing it fires this too",
+    winAltLetter: "Alt with a letter normally opens an app's menu (Alt+F for File); bound, it no longer will",
+    prefix: "It's part of {action}'s combination {chord}: pressing that one fires this first",
   },
 
   themes: {
@@ -85,7 +213,6 @@ export default {
 
   settings: {
     describe: {
-      hotkey: "Which key starts and stops dictation",
       mode: "Which way to recognize speech: native sends the recording to a model that takes audio; local transcribes on this Mac first, then has any LLM polish the text; private only transcribes on this Mac and uploads nothing",
       model:
         "Which provider and model refines your words, as provider/model; a provider alone uses its default. Switch with speakmore model",
@@ -321,6 +448,9 @@ export default {
     noSignal: "The microphone isn't picking anything up: check the input device and mute",
     recordError: "Recording error: {reason}",
     helperStopped: "Key listener stopped; {hotkey} won't work. Try restarting SpeakMore",
+    secureInput: "Secure input is on in another app, so some shortcuts won't work for now",
+    // 只有 Windows 有：系统不把发给管理员窗口的按键交给我们
+    elevatedForeground: "The window in front runs as administrator, so shortcuts won't work in it",
   },
 
   tray: {
@@ -753,7 +883,6 @@ export default {
     localModelMemoryFailed: "Memory setting not changed: {reason}",
     barHint: "Hints above the voice bar",
     openAtLogin: "Launch at login",
-    hotkeyFailed: "Not changed: {reason}",
     themeFailed: "Theme not changed: {reason}",
     languageFailed: "Language not changed: {reason}",
     loginFailed: "Couldn't set launch at login: {reason}",
@@ -928,9 +1057,7 @@ export default {
       question: "Did the key light up?",
       yes: "Yes, continue",
       no: "No, pick another key",
-      switchTo: "Switch to",
       switched: "Switched. Press it to try",
-      failed: "Not switched: {reason}",
     },
     try: {
       soft: "Now, ",
@@ -1072,6 +1199,8 @@ export default {
       "The history database is version {found}, but this program expects {known}: start SpeakMore once, or update to the latest version",
     legacyRunning:
       "An old version of SpeakMore is still running, so its data can't be moved. Quit it first (menu bar → Quit), then run this again.",
+    settingsMigrateFailed:
+      "Can't update the old shortcut in the settings file {file} ({reason}). Make the file writable, then run this again.",
   },
 
   cli: {
@@ -1231,7 +1360,10 @@ export default {
         "The running SpeakMore still uses {language}: {variable} is set where it was started, and it overrides the settings file.",
       modelSourceOverridden:
         "The running SpeakMore still uses {source}: {variable} is set where it was started, and it overrides the settings file.",
+      hotkeyOverridden:
+        "The running SpeakMore still uses {hotkey}: {variable} is set where it was started, and it overrides the settings file.",
       envWarning: "Note: the {variable} env var is set and overrides this value.",
+      warning: "Note: {warning}",
       changed: "{name} set to {value}.",
       modeCommand:
         "This is usually changed with {command}, which checks it works first and leaves it alone if not. config set skips the checks and writes it straight in.",
@@ -1242,8 +1374,8 @@ export default {
       settingsOpened: "Settings opened.",
       title: "Settings",
       choices: "{describe}. Options: {choices}",
-      hintSet: "Change one: speakmore config set hotkey fn",
-      hintUnset: "Reset one: speakmore config unset hotkey",
+      hintSet: "Change one: speakmore config set hotkey.dictate Fn+Space",
+      hintUnset: "Reset one: speakmore config unset hotkey.dictate",
       hintKey: "Replace the key: speakmore key",
       hintTheme: "Switch theme: speakmore theme",
       folder: "Folder",
@@ -1573,6 +1705,27 @@ speakmore help     all commands`,
 
   // Windows 上说法不同的那几句，名字照抄通用的（见 src/i18n/index.mjs 开头）
   windows: {
+    // A combination is joined with a plus sign (Right Alt+Space)
+    chord: { text: "{first}+{second}" },
+    binding: {
+      leftOnly:
+        "Everyday shortcuts start with left-hand modifiers (Ctrl+C, Alt+Tab), so this would fire by accident all the time: use a right-hand modifier",
+    },
+    keys: {
+      ControlLeft: { name: "Left Ctrl", short: "Left Ctrl", keycap: "Left Ctrl" },
+      ControlRight: { name: "Right Ctrl", short: "Right Ctrl", keycap: "Right Ctrl" },
+      ShiftLeft: { name: "Left Shift", short: "Left Shift", keycap: "Left Shift" },
+      ShiftRight: { name: "Right Shift", short: "Right Shift", keycap: "Right Shift" },
+      AltLeft: { name: "Left Alt", short: "Left Alt", keycap: "Left Alt" },
+      AltRight: { name: "Right Alt", short: "Right Alt", keycap: "Right Alt" },
+      MetaLeft: { name: "Left Win", short: "Left Win", keycap: "Left Win" },
+      MetaRight: { name: "Right Win", short: "Right Win", keycap: "Right Win" },
+      Enter: { name: "Enter", short: "Enter", keycap: "Enter" },
+      Tab: { name: "Tab", short: "Tab", keycap: "Tab" },
+      Backspace: { name: "Backspace", short: "Backspace", keycap: "Backspace" },
+      Delete: { name: "Delete", short: "Delete", keycap: "Delete" },
+      CapsLock: { name: "Caps Lock", short: "Caps Lock", keycap: "Caps Lock" },
+    },
     instance: {
       stuckNoPid:
         "SpeakMore is stuck and not answering, and its process can't be identified. In Task Manager's Details tab, find electron.exe and end it.",
@@ -1588,6 +1741,7 @@ speakmore help     all commands`,
     },
     cli: {
       key: { storage: "It's encrypted with Windows data protection and stays on this PC." },
+      config: { hintSet: "Change one: speakmore config set hotkey.dictate ControlRight" },
     },
     permissions: { openSettings: "Settings" },
     // PowerShell strips double quotes from arguments it passes to speakmore.cmd; they need a backslash

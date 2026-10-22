@@ -1,7 +1,7 @@
 {
   "name": "speakmore",
   "productName": "SpeakMore",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "private": true,
   "description": "macOS 上的语音输入：按一下热键说话，整理好的文字贴进当前输入框。用你自己的 Gemini 或 OpenAI 的 key",
   "license": "MIT",
@@ -44,8 +44,9 @@
     "test:unit": "node --test --test-timeout=5000 \"test/*.test.mjs\" \"test/!(install)/**/*.test.mjs\"",
     "test:install": "node --test --test-timeout=120000 \"test/install/**/*.test.mjs\"",
     "test:e2e": "node scripts/dev/e2e.mjs",
+    "test:native": "node scripts/dev/test-native.mjs",
     "lint": "biome check .",
-    "check": "biome check . && npm test"
+    "check": "biome check . && npm test && npm run test:native"
   },
   "dependencies": {
     "@audio/decode-webm": "1.6.1",

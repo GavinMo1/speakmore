@@ -1,0 +1,127 @@
+{
+  "cases": [
+    {
+      "name": "单个修饰键：按下、松开各报一次，自动重复不算新的一下；修饰键不吞",
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "AltRight", "down": true },
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+      ]
+    },
+    {
+      "name": "单个右 Ctrl：不含 Alt，不插掩码",
+      "bindings": [{ "id": "dictate#0", "chord": "ControlRight" }],
+      "steps": [
+        { "key": "ControlRight", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "ControlRight", "down": false, "events": [{ "up": "dictate#0" }] }
+      ]
+    },
+    {
+      "name": "两个修饰键：先按哪个都行，第二个按下时触发；全部松开才算松开",
+      "bindings": [{ "id": "x#0", "chord": "ControlRight+ShiftRight" }],
+      "steps": [
+        { "key": "ControlRight", "down": true },
+        { "key": "ShiftRight", "down": true, "events": [{ "down": "x#0" }] },
+        { "key": "ShiftRight", "down": false },
+        { "key": "ControlRight", "down": false, "events": [{ "up": "x#0" }] },
+        { "key": "ShiftRight", "down": true },
+        { "key": "ControlRight", "down": true, "events": [{ "down": "x#0" }] },
+        { "key": "ControlRight", "down": false },
+        { "key": "ShiftRight", "down": false, "events": [{ "up": "x#0" }] }
+      ]
+    },
+    {
+      "name": "绑定按着时组合里的键松开又按回去：不算新的一下，不报事件",
+      "bindings": [{ "id": "x#0", "chord": "ControlRight+ShiftRight" }],
+      "steps": [
+        { "key": "ControlRight", "down": true },
+        { "key": "ShiftRight", "down": true, "events": [{ "down": "x#0" }] },
+        { "key": "ShiftRight", "down": false },
+        { "key": "ShiftRight", "down": true },
+        { "key": "ShiftRight", "down": false },
+        { "key": "ControlRight", "down": false, "events": [{ "up": "x#0" }] }
+      ]
+    },
+    {
+      "name": "修饰键加普通键：普通键的按下、自动重复、松开整段吞掉；修饰键照常放行",
+      "bindings": [{ "id": "x#0", "chord": "AltRight+Space" }],
+      "steps": [
+        { "key": "AltRight", "down": true },
+        { "key": "Space", "down": true, "events": [{ "down": "x#0" }], "swallow": true, "mask": true },
+        { "key": "Space", "down": true, "swallow": true },
+        { "key": "Space", "down": false, "swallow": true },
+        { "key": "AltRight", "down": false, "events": [{ "up": "x#0" }] }
+      ]
+    },
+    {
+      "name": "修饰键加普通键按着时普通键松开又按回去：不报事件，但这一下的按下、自动重复、松开照样吞（不然 ⌥ 空格打出不换行空格）",
+      "bindings": [{ "id": "x#0", "chord": "AltRight+Space" }],
+      "steps": [
+        { "key": "AltRight", "down": true },
+        { "key": "Space", "down": true, "events": [{ "down": "x#0" }], "swallow": true, "mask": true },
+        { "key": "Space", "down": false, "swallow": true },
+        { "key": "Space", "down": true, "swallow": true },
+        { "key": "Space", "down": true, "swallow": true },
+        { "key": "Space", "down": false, "swallow": true },
+        { "key": "AltRight", "down": false, "events": [{ "up": "x#0" }] }
+      ]
+    },
+    {
+      "name": "修饰键先松开、普通键后松开：普通键松开时才算松开，它的松开照样吞",
+      "bindings": [{ "id": "x#0", "chord": "AltRight+Space" }],
+      "steps": [
+        { "key": "AltRight", "down": true },
+        { "key": "Space", "down": true, "events": [{ "down": "x#0" }], "swallow": true, "mask": true },
+        { "key": "AltRight", "down": false },
+        { "key": "Space", "down": false, "events": [{ "up": "x#0" }], "swallow": true }
+      ]
+    },
+    {
+      "name": "先按普通键再按修饰键：不触发，什么都不吞",
+      "bindings": [{ "id": "x#0", "chord": "AltRight+Space" }],
+      "steps": [
+        { "key": "Space", "down": true },
+        { "key": "AltRight", "down": true },
+        { "key": "Space", "down": false },
+        { "key": "AltRight", "down": false }
+      ]
+    },
+    {
+      "name": "单个 F 键：按下就触发，整段吞掉",
+      "bindings": [{ "id": "dictate#0", "chord": "F13" }],
+      "steps": [
+        { "key": "F13", "down": true, "events": [{ "down": "dictate#0" }], "swallow": true },
+        { "key": "F13", "down": true, "swallow": true },
+        { "key": "F13", "down": false, "events": [{ "up": "dictate#0" }], "swallow": true }
+      ]
+    },
+    {
+      "name": "没绑的键：不报、不吞",
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "KeyA", "down": true },
+        { "key": "KeyA", "down": false },
+        { "key": "Escape", "down": true },
+        { "key": "Escape", "down": false },
+        { "key": "ControlRight", "down": true },
+        { "key": "ControlRight", "down": false }
+      ]
+    },
+    {
+      "name": "集合要恰好相等：按着别的键时再按绑定的键不触发，也不吞",
+      "bindings": [
+        { "id": "dictate#0", "chord": "AltRight" },
+        { "id": "f#0", "chord": "F13" }
+      ],
+      "steps": [
+        { "key": "KeyW", "down": true },
+        { "key": "AltRight", "down": true },
+        { "key": "F13", "down": true },
+        { "key": "F13", "down": false },
+        { "key": "AltRight", "down": false },
+        { "key": "KeyW", "down": false }
+      ]
+    }
+  ]
+}

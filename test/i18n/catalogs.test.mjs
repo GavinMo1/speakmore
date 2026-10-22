@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
+import { KEYS } from "../../src/hotkeys/keys.mjs";
 import { DEFAULT_LOCALE, findLocale, LOCALES } from "../../src/i18n/index.mjs";
 import { PROVIDERS } from "../../src/server/providers/index.mjs";
-import { HOTKEY_IDS, SETTINGS } from "../../src/storage/settings.mjs";
+import { SETTINGS } from "../../src/storage/settings.mjs";
 import { THEMES } from "../../src/themes/index.mjs";
 
 // 每种语言的文案都齐、参数都对得上；代码里用到的名字都有。加一种语言时这几条会指出缺了什么。
@@ -69,12 +70,17 @@ for (const locale of LOCALES) {
   });
 }
 
-test("动态拼出来的名字也都有：每个热键、主题、厂商、设置项", () => {
+test("动态拼出来的名字也都有：每个键、主题、厂商、设置项（自带说明的不查文案）", () => {
   const needed = [
-    ...HOTKEY_IDS.flatMap((id) => [`hotkeys.${id}.name`, `hotkeys.${id}.keycap`]),
+    // 字的和语言无关的键自带 label，别的键的名字、组合里的叫法、键帽在文案里（src/hotkeys/chord.mjs）
+    ...KEYS.filter((key) => key.label === undefined).flatMap(({ code }) =>
+      ["name", "short", "keycap"].map((field) => `keys.${code}.${field}`),
+    ),
     ...THEMES.flatMap(({ id }) => [`themes.${id}.name`, `themes.${id}.describe`]),
     ...PROVIDERS.map(({ id }) => `providers.${id}.getKey`),
-    ...Object.keys(SETTINGS).map((name) => `settings.describe.${name}`),
+    ...Object.keys(SETTINGS)
+      .filter((name) => !SETTINGS[name].describe)
+      .map((name) => `settings.describe.${name}`),
   ];
   assert.deepEqual(
     needed.filter((key) => !baseKeys.has(key)),

@@ -1,0 +1,83 @@
+{
+  "cases": [
+    {
+      "name": "只有按下能凑成组合：松开别的键、剩下的恰好是绑定时不触发",
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "KeyK", "down": true },
+        { "key": "AltRight", "down": true },
+        { "key": "KeyK", "down": false },
+        { "key": "AltRight", "down": false }
+      ]
+    },
+    {
+      "name": "升级：前缀绑定按着时来了第二个键、恰好凑成另一个绑定，先报打断（带 to）再报新绑定按下",
+      "bindings": [
+        { "id": "dictate#0", "chord": "AltRight" },
+        { "id": "x#0", "chord": "AltRight+Space" }
+      ],
+      "steps": [
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        {
+          "key": "Space",
+          "down": true,
+          "events": [{ "interrupted": "dictate#0", "to": "x#0" }, { "down": "x#0" }],
+          "swallow": true
+        },
+        { "key": "Space", "down": false, "swallow": true },
+        { "key": "AltRight", "down": false, "events": [{ "up": "x#0" }] }
+      ]
+    },
+    {
+      "name": "升级成两个修饰键",
+      "bindings": [
+        { "id": "dictate#0", "chord": "ControlRight" },
+        { "id": "x#0", "chord": "ControlRight+ShiftRight" }
+      ],
+      "steps": [
+        { "key": "ControlRight", "down": true, "events": [{ "down": "dictate#0" }] },
+        { "key": "ShiftRight", "down": true, "events": [{ "interrupted": "dictate#0", "to": "x#0" }, { "down": "x#0" }] },
+        { "key": "ControlRight", "down": false },
+        { "key": "ShiftRight", "down": false, "events": [{ "up": "x#0" }] }
+      ]
+    },
+    {
+      "name": "被打断：报一次打断，之后不报松开；组合里的键全松开之前不再触发任何东西",
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "KeyK", "down": true, "events": [{ "interrupted": "dictate#0" }] },
+        { "key": "KeyK", "down": false },
+        { "key": "KeyB", "down": true },
+        { "key": "KeyB", "down": false },
+        { "key": "AltRight", "down": false },
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+      ]
+    },
+    {
+      "name": "打断绑定的那个键不吞（那是用户自己的组合键）；已经吞了按下的照样吞松开",
+      "bindings": [{ "id": "x#0", "chord": "AltRight+Space" }],
+      "steps": [
+        { "key": "AltRight", "down": true },
+        { "key": "Space", "down": true, "events": [{ "down": "x#0" }], "swallow": true, "mask": true },
+        { "key": "KeyK", "down": true, "events": [{ "interrupted": "x#0" }] },
+        { "key": "KeyK", "down": false },
+        { "key": "Space", "down": false, "swallow": true },
+        { "key": "AltRight", "down": false }
+      ]
+    },
+    {
+      "name": "按着热键又按别的修饰键也算打断，只报一次",
+      "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
+      "steps": [
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "ShiftLeft", "down": true, "events": [{ "interrupted": "dictate#0" }] },
+        { "key": "ControlLeft", "down": true },
+        { "key": "ShiftLeft", "down": false },
+        { "key": "ControlLeft", "down": false },
+        { "key": "AltRight", "down": false }
+      ]
+    }
+  ]
+}

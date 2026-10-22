@@ -35,13 +35,13 @@ test("收尾的样子自己会消失，说话时的样子一直留着", () => {
 });
 
 test("上方的那行提示：告诉人现在在干什么、按哪个键；键名单独标出来", () => {
-  const options = { keycap: "右⌥", cancellable: true };
+  const options = { keys: ["右⌥"], escKeys: ["esc"], cancellable: true };
   assert.deepEqual(hintFor(View.STARTING, options, zh), ["打开麦克风…"]);
   assert.deepEqual(hintFor(View.RECORDING, options, zh), [
     "再按一下 ",
-    { key: "右⌥" },
+    { keys: ["右⌥"] },
     " 完成 · ",
-    { key: "esc" },
+    { keys: ["esc"] },
     " 取消",
   ]);
   assert.deepEqual(hintFor(View.FINISHING, options, zh), ["整理中"]);
@@ -50,27 +50,39 @@ test("上方的那行提示：告诉人现在在干什么、按哪个键；键�
 });
 
 test("英文的提示：键在句子里的位置照英文的说法", () => {
-  assert.deepEqual(hintFor(View.RECORDING, { keycap: "Right ⌥", cancellable: true }, en), [
+  assert.deepEqual(hintFor(View.RECORDING, { keys: ["Right ⌥"], escKeys: ["esc"], cancellable: true }, en), [
     "Press ",
-    { key: "Right ⌥" },
+    { keys: ["Right ⌥"] },
     " to finish · ",
-    { key: "esc" },
+    { keys: ["esc"] },
     " to cancel",
   ]);
-  assert.deepEqual(hintFor(View.STARTING, { keycap: "fn", cancellable: true }, en), ["Opening microphone…"]);
+  assert.deepEqual(hintFor(View.STARTING, { keys: ["fn"], escKeys: ["esc"], cancellable: true }, en), [
+    "Opening microphone…",
+  ]);
 });
 
 test("设置里关了操作提示（GitHub issue #3）：哪个样子都不写，条上方空着", () => {
   for (const view of Object.values(View)) {
-    assert.deepEqual(hintFor(view, { keycap: "右⌥", cancellable: true, shown: false }, zh), [], view);
+    assert.deepEqual(hintFor(view, { keys: ["右⌥"], escKeys: ["esc"], cancellable: true, shown: false }, zh), [], view);
   }
 });
 
 test("取消不了的时候（没有辅助功能权限，截不住 esc）提示里不提 esc", () => {
-  assert.deepEqual(hintFor(View.RECORDING, { keycap: "fn", cancellable: false }, zh), [
+  assert.deepEqual(hintFor(View.RECORDING, { keys: ["fn"], escKeys: ["esc"], cancellable: false }, zh), [
     "再按一下 ",
-    { key: "fn" },
+    { keys: ["fn"] },
     " 完成",
+  ]);
+});
+
+test("两个键的组合是一组键帽；取消换了键，提示里写换上的那个", () => {
+  assert.deepEqual(hintFor(View.RECORDING, { keys: ["右⌥", "空格"], escKeys: ["F13"], cancellable: true }, zh), [
+    "再按一下 ",
+    { keys: ["右⌥", "空格"] },
+    " 完成 · ",
+    { keys: ["F13"] },
+    " 取消",
   ]);
 });
 

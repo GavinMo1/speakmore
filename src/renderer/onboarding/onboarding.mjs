@@ -1,5 +1,7 @@
-import { fillSelect, h, progressBadge, svg } from "../shared/dom.mjs";
-import { keycapOf, localize, t } from "../shared/i18n.mjs";
+import { h, progressBadge, svg } from "../shared/dom.mjs";
+import { createHotkeyEditor, recordBlocker } from "../shared/hotkey-editor.mjs";
+import { hotkeyText, localize, t } from "../shared/i18n.mjs";
+import { keycapRow } from "../shared/keycaps.mjs";
 import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
 import { providerIcon } from "../shared/provider-icons.mjs";
 import { describeError, permissionGranted } from "../shared/setup-text.mjs";
@@ -76,7 +78,10 @@ async function changePlan(next) {
 /** 离开某一步时要收拾的：关麦克风、不再截热键 */
 const leave = {
   microphone: () => stopMeter(),
-  hotkey: () => window.speakmore.captureHotkey(false),
+  hotkey: () => {
+    window.speakmore.captureHotkey(false);
+    hotkeyEditor.stop();
+  },
 };
 /** 进入某一步时要做的 */
 const enter = {
@@ -99,6 +104,14 @@ function go(next) {
 const goBy = (offset) => go(STEPS[Math.min(STEPS.length - 1, Math.max(0, STEPS.indexOf(step) + offset))]);
 
 // ---------- 画 ----------
+
+const hotkeyEditor = createHotkeyEditor($("hotkey-editor"), {
+  onChanged: refresh,
+  // 只有听写在这一步按得出效果（大键帽亮）；取消要说话时才有用，存好了就只说"已保存"
+  savedNote: (actionId) => (actionId === "dictate" ? "onboarding.hotkey.switched" : "hotkeyRecord.saved"),
+});
+/** 听写现在装着的组合（大键帽、完成页、体验一下的提示里写的） */
+const dictateChords = () => setup.hotkeyActions.find((action) => action.id === "dictate").inEffect;
 
 const modeName = (mode) => t(`plaza.modes.${mode}`);
 const transcriber = (id) => setup.local.transcribers.find((model) => model.id === id);
@@ -441,7 +454,7 @@ function renderSummary() {
   const mic = permissionGranted("microphone", setup.permissions.microphone);
   $("summary").replaceChildren(
     item("i-audio-lines", t("onboarding.done.mode"), mode, state ? state.tone : "ok"),
-    item("i-keyboard", t("onboarding.done.hotkey"), keycapOf(setup.hotkey.value), "ok"),
+    item("i-keyboard", t("onboarding.done.hotkey"), hotkeyText(dictateChords()), "ok"),
     item(
       "i-mic",
       t("permissions.microphone"),
@@ -475,13 +488,10 @@ function render() {
     button.disabled = granted === true;
   }
 
-  const keycap = keycapOf(setup.hotkey.value);
-  $("big-keycap").textContent = keycap;
-  fillSelect(
-    $("hotkey-select"),
-    setup.hotkey.choices.map((id) => [id, t(`hotkeys.${id}.name`)]),
-    setup.hotkey.value,
-  );
+  const keycap = hotkeyText(dictateChords());
+  // 大键帽：听写的第一个组合，一个键一块
+  $("big-keycap").replaceChildren(...keycapRow(dictateChords()[0] ?? [], "big-keycap"));
+  hotkeyEditor.render(setup.hotkeyActions, { blocker: recordBlocker(setup) });
   $("try-text").placeholder = t("onboarding.try.placeholder", { keycap });
 
   // 底下：返回（第一步没有）、跳过引导、继续。这一步做完了"继续"是主按钮，没做完是次要的（照样能往下走）
@@ -560,21 +570,8 @@ $("microphone-no").addEventListener("click", () => {
 $("microphone-settings").addEventListener("click", () => window.speakmore.openPrivacySettings("microphone"));
 
 $("hotkey-yes").addEventListener("click", () => goBy(1));
-$("hotkey-no").addEventListener("click", () => {
-  $("hotkey-choice").hidden = false;
-  $("hotkey-select").focus();
-});
-$("hotkey-select").addEventListener("change", async (event) => {
-  $("hotkey-note").hidden = true;
-  try {
-    const result = await window.speakmore.setHotkey(event.target.value);
-    $("hotkey-note").textContent = result.note ? t.text(result.note) : t("onboarding.hotkey.switched");
-  } catch (error) {
-    $("hotkey-note").textContent = t("onboarding.hotkey.failed", { reason: describeError(error) });
-  }
-  $("hotkey-note").hidden = false;
-  await refresh();
-});
+// 没变：换掉听写的第一个组合，录的是和设置页同一个控件。"测快捷键"本身仍走真实的匹配（5.6）
+$("hotkey-no").addEventListener("click", () => hotkeyEditor.record("dictate", 0));
 
 // 说完的话贴进笔记里了："继续"变成主按钮
 $("try-text").addEventListener("input", render);

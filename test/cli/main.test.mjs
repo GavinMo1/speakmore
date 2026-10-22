@@ -15,28 +15,37 @@ import { afterEach, beforeEach, test } from "node:test";
 import { Cancelled } from "../../src/cli/ask-secret.mjs";
 import { run } from "../../src/cli/main.mjs";
 import { NotRunningError, TimeoutError } from "../../src/control.mjs";
+import { ACTIONS } from "../../src/hotkeys/actions.mjs";
+import { settingNameOf } from "../../src/hotkeys/settings.mjs";
 import { createTranslator, LocalizedError, msg } from "../../src/i18n/index.mjs";
 import { downloadSize, findModel } from "../../src/models/catalog.mjs";
 import { CHAT_VENDORS } from "../../src/server/chat/vendors.mjs";
 import { openHistory } from "../../src/storage/history.mjs";
 import { keyFile, oldAppKeyFile, resolvePaths } from "../../src/storage/paths.mjs";
-import { HOTKEY_IDS, resolveSettings } from "../../src/storage/settings.mjs";
+import { resolveSettings, SETTINGS } from "../../src/storage/settings.mjs";
 import { createUpdates } from "../../src/update/index.mjs";
 import { parseChannel } from "../../src/update/release.mjs";
 import { assertOwnerOnlyDir } from "../helpers/owner-only.mjs";
 
-/** 热键按系统分：默认的是第一个，另挑一个不是默认的；能填哪几个照本机这个系统的写 */
-const DEFAULT_HOTKEY = HOTKEY_IDS[0];
-const OTHER_HOTKEY = HOTKEY_IDS.at(-1);
-const HOTKEY_CHOICES = new RegExp(HOTKEY_IDS.join(" \\/ "));
-const zhHotkey = createTranslator("zh-CN")(`hotkeys.${DEFAULT_HOTKEY}.name`);
-const enHotkey = createTranslator("en")(`hotkeys.${DEFAULT_HOTKEY}.name`);
+/** 听写的默认键两个系统都是右 Option / 右 Alt；另挑一个两个系统都能绑的 */
+const DEFAULT_HOTKEY = '["AltRight"]';
+const OTHER_HOTKEY = "ControlRight";
+// 默认的听写键：同一个位置，Mac 叫右 Option，Windows 叫右 Alt（键名跟着系统走）
+const WINDOWS = process.platform === "win32";
+const zhHotkey = WINDOWS ? "右 Alt 键" : "右 Option 键";
+const enHotkey = WINDOWS ? "Right Alt" : "Right Option";
+const zhKeycap = WINDOWS ? "右 Alt" : "右⌥";
+/** fn、⌘ 只有 Mac 有：写着它们的断言在 Windows 上不跑 */
+const macOnly = { skip: WINDOWS && "fn、⌘ 只有 Mac 有" };
 
 const READY = {
   pid: 4321,
   version: "0.1.0",
   starting: false,
-  hotkey: DEFAULT_HOTKEY,
+  "hotkey.dictate": DEFAULT_HOTKEY,
+  "hotkey.cancel": '["Escape"]',
+  // 0.13 以前的两个字段，留一个版本（D13）
+  hotkey: "right_option",
   hotkeyLabel: zhHotkey,
   provider: "gemini",
   mode: "native",
@@ -112,6 +121,10 @@ function fakeDaemon({
   hung = false,
   reloadTheme = () => ({ theme: resolveSettings({ file: paths.settingsFile, env: {} }).theme.value }),
   reloadLanguage = () => ({ language: resolveSettings({ file: paths.settingsFile, env: {} }).language.value }),
+  reloadHotkeys = () => {
+    const settings = resolveSettings({ file: paths.settingsFile, env: {} });
+    return Object.fromEntries(ACTIONS.map((action) => [settingNameOf(action), settings[settingNameOf(action)].value]));
+  },
 } = {}) {
   const daemon = {
     calls: [],
@@ -155,6 +168,7 @@ function fakeDaemon({
       if (cmd === "forget-key") daemon.current = NO_KEY;
       if (cmd === "reload-theme") return reloadTheme();
       if (cmd === "reload-language") return reloadLanguage();
+      if (cmd === "reload-hotkeys") return reloadHotkeys();
       return null;
     },
   };
@@ -730,8 +744,8 @@ test("正在运行的是装成应用的那一个：不代它重启（会被换�
   assert.match(restarting.output.err, /退出/);
 
   const configuring = harness({ daemon: fakeDaemon({ running: packaged }) });
-  assert.equal(await configuring.speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
-  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { hotkey: OTHER_HOTKEY });
+  assert.equal(await configuring.speakmore("config", "set", "thinking", "low"), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { thinking: "LOW" });
   assert.deepEqual(configuring.daemon.calls, []);
   assert.match(configuring.output.out, /SpeakMore\.app/);
   assert.doesNotMatch(configuring.output.out, /已经生效/);
@@ -777,8 +791,20 @@ test("status --json：给程序读的，一行 JSON，带运行状态、设置�
   const parsed = JSON.parse(output.out);
   assert.equal(parsed.running, true);
   assert.equal(parsed.status.pid, 4321);
-  assert.equal(parsed.settings.hotkey.value, DEFAULT_HOTKEY);
+  assert.equal(parsed.settings["hotkey.dictate"].value, DEFAULT_HOTKEY);
   assert.deepEqual(parsed.stats, { today: null, total: null });
+});
+
+test("status --json 里 0.13 以前的 settings.hotkey 留一个版本（D13）：听写是旧键之一时给旧 id，按系统分；新组合给 null", async () => {
+  const json = async (platform) => {
+    const { speakmore, output } = harness({ daemon: fakeDaemon({ running: READY }), platform });
+    await speakmore("status", "--json");
+    return JSON.parse(output.out).settings.hotkey;
+  };
+  assert.deepEqual(await json("darwin"), { value: "right_option", source: "default" });
+  assert.deepEqual(await json("win32"), { value: "right_alt", source: "default" });
+  writeFileSync(paths.settingsFile, JSON.stringify({ "hotkey.dictate": ["AltRight+Space"] }));
+  assert.deepEqual(await json("darwin"), { value: null, source: "file" });
 });
 
 // ---------- 更新 ----------
@@ -1192,16 +1218,18 @@ test("key --forget：共用的那份和 0.7.0 及以前 App 另存的那份都�
 test("config：列出每一项和文件位置", async () => {
   const { speakmore, output } = harness();
   assert.equal(await speakmore("config"), 0);
-  assert.match(output.out, new RegExp(`hotkey\\s+${DEFAULT_HOTKEY}`));
+  assert.match(output.out, new RegExp(`hotkey\\.dictate\\s+\\["AltRight"\\]\\s+${zhKeycap} · 默认`));
+  assert.match(output.out, /hotkey\.cancel\s+\["Escape"\]\s+esc · 默认/);
+  assert.match(output.out, /「语音输入」的快捷键：两键以内的任意组合，写法见 README/);
   assert.ok(output.out.includes(paths.settingsFile), output.out);
 });
 
 test("config set：存进文件；在运行的话重启让它生效", async () => {
   const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
-  assert.equal(await speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
-  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { hotkey: OTHER_HOTKEY });
+  assert.equal(await speakmore("config", "set", "thinking", "low"), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { thinking: "LOW" });
   assert.deepEqual(daemon.calls.slice(0, 2), ["stop", "start"]);
-  assert.match(output.out, new RegExp(`hotkey 改成了 ${OTHER_HOTKEY}`));
+  assert.match(output.out, /thinking 改成了 LOW/);
   assert.match(output.out, /已经生效/);
 
   const idle = harness();
@@ -1234,19 +1262,83 @@ test("config set：还没启动过就先改设置时，建出来的目录同样�
   assertOwnerOnlyDir(paths.home);
 });
 
-test("config set：填错时说能填什么，不动文件，以 2 退出", async () => {
+test("config set：填错时说哪里不对，不动文件，以 2 退出", async () => {
   const { speakmore, output } = harness();
   assert.equal(await speakmore("config", "set", "hotkey", "caps_lock"), 2);
-  assert.match(output.err, HOTKEY_CHOICES);
+  assert.match(output.err, /hotkey\.dictate 写的是 "caps_lock"，不认识的键 "caps_lock"/);
+  assert.equal(existsSync(paths.settingsFile), false);
+  // 写法对、这个系统上不让绑的（check）：同样不存
+  assert.equal(await speakmore("config", "set", "hotkey.dictate", "ControlRight+KeyC"), 2);
+  // Mac 上写"右⌃ C"，Windows 上写"右 Ctrl+C"
+  assert.match(output.err, /右(⌃ | Ctrl\+)C：(⌃|Ctrl) 加打字的键/);
   assert.equal(existsSync(paths.settingsFile), false);
   assert.equal(await speakmore("config", "set", "hotkey"), 2);
   assert.equal(await speakmore("config", "dance"), 2);
 });
 
-test("config set：这一项正被环境变量盖着时提醒一句", async () => {
-  const { speakmore, output } = harness({ env: { SPEAKMORE_HOTKEY: DEFAULT_HOTKEY } });
+test("config set：这一项正被环境变量盖着时提醒一句（改名前的环境变量也算）", async () => {
+  const { speakmore, output } = harness({ env: { SPEAKMORE_HOTKEY: "right_option" } });
   assert.equal(await speakmore("config", "set", "hotkey", OTHER_HOTKEY), 0);
-  assert.match(output.out, /SPEAKMORE_HOTKEY/);
+  assert.match(output.out, /环境变量 SPEAKMORE_HOTKEY 现在设着/);
+});
+
+test("热键：config set hotkey.<动作> 存成列表，后台当场换（reload-hotkeys），不重启", macOnly, async () => {
+  const { speakmore, output, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
+  assert.equal(await speakmore("config", "set", "hotkey.dictate", '["Fn","AltRight+Space"]'), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), {
+    "hotkey.dictate": ["Fn", "AltRight+Space"],
+  });
+  assert.deepEqual(daemon.calls, ["reload-hotkeys"]);
+  assert.match(output.out, /hotkey\.dictate 改成了 \["Fn","AltRight\+Space"\]。\n注意：/);
+  assert.match(output.out, /已经生效，不用重启/);
+  // 能存但要提醒的照存，把提醒说出来
+  assert.match(output.out, /注意：fn：地球仪键在系统设置里/);
+  assert.equal(await speakmore("config", "set", "hotkey.cancel", "F13"), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8"))["hotkey.cancel"], ["F13"]);
+});
+
+test("按动作目录逐个动作：config set hotkey.<动作> 都是当场换（LIVE 表里有它），不重启", async () => {
+  for (const action of ACTIONS) {
+    const name = settingNameOf(action);
+    const { speakmore, daemon } = harness({ daemon: fakeDaemon({ running: READY }) });
+    assert.equal(await speakmore("config", "set", name, SETTINGS[name].default), 0, name);
+    assert.deepEqual(daemon.calls, ["reload-hotkeys"], name);
+  }
+});
+
+test("热键：旧名字 hotkey 和旧 id 照样认（0.13 以前的写法），回话里写的是新名字和新写法", async () => {
+  const { speakmore, output } = harness();
+  assert.equal(await speakmore("config", "set", "hotkey", "right_control"), 0);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), { "hotkey.dictate": ["ControlRight"] });
+  assert.match(output.out, /hotkey\.dictate 改成了 \["ControlRight"\]/);
+  assert.equal(await speakmore("config", "unset", "hotkey"), 0);
+  assert.match(output.out, /hotkey\.dictate 回到了默认值 \["AltRight"\]/);
+  assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), {});
+});
+
+test("热键当场换的时候：后台被环境变量盖着就说清楚；旧版本的后台不认这条命令时说要重启", async () => {
+  const overridden = harness({
+    daemon: fakeDaemon({
+      running: READY,
+      reloadHotkeys: () => ({ "hotkey.dictate": DEFAULT_HOTKEY, env: { "hotkey.dictate": "SPEAKMORE_HOTKEY" } }),
+    }),
+  });
+  assert.equal(await overridden.speakmore("config", "set", "hotkey.dictate", "ControlRight"), 0);
+  assert.match(
+    overridden.output.out,
+    new RegExp(`正在运行的 SpeakMore 用的还是${zhKeycap}：启动它的环境里设着 SPEAKMORE_HOTKEY`),
+  );
+
+  const old = harness({
+    daemon: fakeDaemon({
+      running: READY,
+      reloadHotkeys: () => {
+        throw new Error("不认识的命令：reload-hotkeys");
+      },
+    }),
+  });
+  assert.equal(await old.speakmore("config", "set", "hotkey.dictate", "ControlRight"), 0);
+  assert.match(old.output.out, /旧版本，不会当场换：运行 speakmore restart/);
 });
 
 test("config set 是不检查的后门：模式那一层管的几项照写，说平时用哪个命令换；不在那种模式里的说切过去才用上", async () => {
@@ -1282,10 +1374,10 @@ test("config set 把 local 的第一跳改成没下载的：重启后说还没�
 
 test("config unset：回到默认值", async () => {
   const { speakmore, output } = harness();
-  await speakmore("config", "set", "hotkey", OTHER_HOTKEY);
-  assert.equal(await speakmore("config", "unset", "hotkey"), 0);
+  await speakmore("config", "set", "thinking", "low");
+  assert.equal(await speakmore("config", "unset", "thinking"), 0);
   assert.deepEqual(JSON.parse(readFileSync(paths.settingsFile, "utf8")), {});
-  assert.match(output.out, new RegExp(`hotkey 回到了默认值 ${DEFAULT_HOTKEY}`));
+  assert.match(output.out, /thinking 回到了默认值 MINIMAL/);
 });
 
 // ---------- 主题 ----------

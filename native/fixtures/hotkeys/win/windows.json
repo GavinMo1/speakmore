@@ -1,0 +1,870 @@
+{
+  "cases": [
+    {
+      "name": "AltGr 布局：按右 Alt 时系统先补一个假的左 Ctrl（扫描码 0x21D），不算别的键",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 162,
+          "scan": 541,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 162,
+          "scan": 541,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "NumLock 开着时按着 Shift 按小键盘：驱动补的假 Shift 松开、按下（扫描码 0x236）不算，补回来的那下不会凑成组合",
+      "bindings": [
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            163,
+            161
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 161,
+          "scan": 54,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 161,
+          "scan": 566,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 71,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 163,
+          "scan": 29,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 71,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 161,
+          "scan": 566,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 163,
+          "scan": 29,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 7,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 161,
+          "scan": 54,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 8,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "掩码：被吞的键在 Win 按着时松开也要插（先按 F13、再按 Win，系统只看到 Win 的按下松开，会开开始菜单）",
+      "bindings": [
+        {
+          "id": "f#0",
+          "when": "always",
+          "mods": [],
+          "key": 100
+        }
+      ],
+      "steps": [
+        {
+          "vk": 0,
+          "scan": 100,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "f#0",
+                "down": true
+              }
+            ],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 91,
+          "scan": 91,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "f#0"
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 100,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": true,
+            "mask": true
+          }
+        },
+        {
+          "vk": 91,
+          "scan": 91,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "掩码：截着时按着左 Alt 按 esc，esc 被吞，插一下；一次按住只插一次，再按一次 Win 再插",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            91
+          ],
+          "key": null
+        },
+        {
+          "id": "cancel#0",
+          "when": "capturing",
+          "mods": [],
+          "key": 1
+        }
+      ],
+      "steps": [
+        {
+          "capture": true,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 164,
+          "scan": 56,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 1,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "cancel#0",
+                "down": true
+              }
+            ],
+            "swallow": true,
+            "mask": true
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 1,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "cancel#0",
+                "down": false
+              }
+            ],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 1,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "cancel#0",
+                "down": true
+              }
+            ],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 1,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "cancel#0",
+                "down": false
+              }
+            ],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 164,
+          "scan": 56,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "capture": false,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 91,
+          "scan": 91,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 7,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 91,
+          "scan": 91,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 8,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 91,
+          "scan": 91,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 9,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 91,
+          "scan": 91,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 10,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "修饰键的松开丢了也核对：Alt+Tab 切进管理员窗口，Alt 和 Tab 的松开都被挡掉，回来按右 Alt 听写照常（Mac 从标志位重读，不用）",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 164,
+          "scan": 56,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 15,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "lostUp": {
+            "vk": 0,
+            "scan": 15,
+            "extended": false
+          },
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "lostUp": {
+            "vk": 164,
+            "scan": 56,
+            "extended": false
+          },
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "Win+L 锁屏后 Win 的松开到不了：解锁时从头认，修饰键也问一遍系统，再按 Win 是新的一下",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            91
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 91,
+          "scan": 91,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 38,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "dictate#0"
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "lostUp": {
+            "vk": 0,
+            "scan": 38,
+            "extended": false
+          },
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "lostUp": {
+            "vk": 91,
+            "scan": 91,
+            "extended": true
+          },
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "reset": true,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 91,
+          "scan": 91,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 91,
+          "scan": 91,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "掩码只在 Alt 或 Win 按着时插：右 Ctrl 加 F13 不插，左 Alt 加 K 插",
+      "bindings": [
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            163
+          ],
+          "key": 100
+        },
+        {
+          "id": "y#0",
+          "when": "always",
+          "mods": [
+            164
+          ],
+          "key": 37
+        }
+      ],
+      "steps": [
+        {
+          "vk": 163,
+          "scan": 29,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 100,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 100,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 163,
+          "scan": 29,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 164,
+          "scan": 56,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 37,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "y#0",
+                "down": true
+              }
+            ],
+            "swallow": true,
+            "mask": true
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 37,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 7,
+          "expect": {
+            "events": [],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 164,
+          "scan": 56,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 8,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "y#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    }
+  ]
+}

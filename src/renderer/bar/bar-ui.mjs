@@ -21,12 +21,12 @@ const REDUCED_MOTION_MS = 200;
  * @param {(visible: boolean) => void} options.host.setVisible 把悬浮条的窗口显示出来 / 收起来
  * @param {(regions: object[] | null) => void} options.host.capture 开始截 esc 和这几块里的点击
  *   （{ id, x, y, width, height }，窗口里的位置）；null 是不截了
- * @param {string} options.keycap 热键的短名字，写在提示里
+ * @param {{ keys: string[], escKeys: string[] }} options.keys 提示里写的键帽：听写的组合、取消的键，一个键一个
  * @param {Function} options.t 界面语言的翻译函数（src/i18n），提示按它写
  */
-export function createBarUi({ document, host, keycap: initialKeycap, t: initialT }) {
+export function createBarUi({ document, host, keys: initialKeys, t: initialT }) {
   /** 在设置里改了热键时跟着换 */
-  let keycap = initialKeycap;
+  let keys = initialKeys;
   /** 在设置里换了语言时跟着换 */
   let t = initialT;
   const { body } = document;
@@ -90,11 +90,16 @@ export function createBarUi({ document, host, keycap: initialKeycap, t: initialT
   }
 
   function drawHint() {
-    const parts = hintFor(view, { keycap, cancellable: controls, shown: hintShown }, t);
+    const parts = hintFor(view, { ...keys, cancellable: controls, shown: hintShown }, t);
     hint.replaceChildren(
-      ...parts.map((part) =>
-        typeof part === "string" ? part : Object.assign(document.createElement("kbd"), { textContent: part.key }),
-      ),
+      ...parts.map((part) => {
+        if (typeof part === "string") return part;
+        // 一个组合是一组键帽，键帽之间不写加号
+        const group = document.createElement("span");
+        group.className = "keys";
+        group.append(...part.keys.map((key) => Object.assign(document.createElement("kbd"), { textContent: key })));
+        return group;
+      }),
     );
   }
 
@@ -180,9 +185,9 @@ export function createBarUi({ document, host, keycap: initialKeycap, t: initialT
       if (view !== View.HIDDEN) drawHint();
     },
 
-    /** 热键换了：提示里写新的那个 */
-    setKeycap(next) {
-      keycap = next;
+    /** 热键换了（或者这一次是按另一个组合开始的）：提示里写新的那组 */
+    setKeys(next) {
+      keys = next;
       if (view !== View.HIDDEN) drawHint();
     },
 

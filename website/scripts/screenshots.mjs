@@ -20,6 +20,7 @@ const { insights } = await import(join(ROOT, "src/usage/insights.mjs"));
 const { describePlaza, loadPriceBook } = await import(join(ROOT, "src/app/model-plaza.mjs"));
 const { resolveSettings, routeOf } = await import(join(ROOT, "src/storage/settings.mjs"));
 const { MODE_ORDER } = await import(join(ROOT, "src/renderer/hub/engine/plaza-view.mjs"));
+const { ACTIONS, MAX_CHORDS } = await import(join(ROOT, "src/hotkeys/actions.mjs"));
 
 const out = resolve(process.argv[process.argv.indexOf("--") + 1] ?? "media-out");
 const VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
@@ -109,7 +110,9 @@ ipcMain.on("locale:get", (event) => {
 ipcMain.handle("history:list", () => current.history.list());
 ipcMain.handle("usage:report", () => usageReport(current.history, { now: new Date() }));
 ipcMain.handle("insights:get", () => insights(current.history.dictations(), { now: new Date() }));
-ipcMain.handle("app:info", () => ({ version: VERSION, hotkey: "right_option" }));
+/** 默认的热键，拼法同 app/main.mjs 的 hotkeys.chords：Mac 上听写是右 Option，取消是 esc */
+const HOTKEYS = { dictate: [["AltRight"]], cancel: [["Escape"]] };
+ipcMain.handle("app:info", () => ({ version: VERSION, hotkeys: HOTKEYS }));
 /** 首页标题右边的识别方式、引擎页按它画：出厂设置、原生识别、配了 Gemini 的密钥，拼法同 app/main.mjs 的 describePlazaNow */
 const settings = resolveSettings({ file: join(tmpdir(), "speakmore-shots-none", "settings.json"), env: {} });
 const plaza = describePlaza({
@@ -137,7 +140,18 @@ ipcMain.handle("setup:get", () => ({
   key: { state: "ready", source: "stored" },
   permissions: { microphone: "granted", listen: true, trusted: true },
   summary: { ready: true, missing: [], blocker: null, degraded: null },
-  hotkey: { value: "right_option", choices: ["right_option", "right_command", "right_control", "fn"] },
+  // 设置页、引导页每个动作一行，拼法同 app/main.mjs 的 describeHotkeyActions
+  hotkeyActions: ACTIONS.map((action) => ({
+    id: action.id,
+    when: action.when,
+    clearable: action.clearable,
+    max: MAX_CHORDS,
+    chords: HOTKEYS[action.id],
+    inEffect: HOTKEYS[action.id],
+    defaults: HOTKEYS[action.id],
+    problems: [],
+    env: null,
+  })),
   theme: { value: current.theme.id, choices: THEMES.map(({ id }) => id) },
   language: { value: "system", locale: current.locale },
   openAtLogin: { supported: true, enabled: true },
@@ -161,7 +175,7 @@ ipcMain.handle("setup:get", () => ({
   switchable: true,
   plaza,
 }));
-ipcMain.handle("config:get", () => ({ serverUrl: "ws://127.0.0.1:9/none", hotkey: "right_option", barControls: true }));
+ipcMain.handle("config:get", () => ({ serverUrl: "ws://127.0.0.1:9/none", hotkeys: HOTKEYS, barControls: true }));
 ipcMain.on("bar:set-visible", () => {});
 ipcMain.on("bar:capture", () => {});
 
@@ -283,9 +297,19 @@ async function shootBar(locale) {
       b.dataset.view = "recording";
       b.dataset.shown = "true";
       b.dataset.controls = "true";
-      const kbd = (text) => Object.assign(document.createElement("kbd"), { textContent: text });
-      const parts = hintFor("recording", { keycap: t("hotkeys.right_option.keycap"), cancellable: true }, t);
-      document.getElementById("hint").replaceChildren(...parts.map((p) => (typeof p === "string" ? p : kbd(p.key))));
+      // 键帽一组一组的，画法同 bar-ui.mjs 的 drawHint
+      const group = (keys) => {
+        const span = Object.assign(document.createElement("span"), { className: "keys" });
+        span.append(...keys.map((key) => Object.assign(document.createElement("kbd"), { textContent: key })));
+        return span;
+      };
+      // 键帽的字照 bar.mjs 的 keycapsOf 算：默认的听写（右 Option）和取消（esc）
+      const { chordKeycaps } = await import("../../hotkeys/chord.mjs");
+      const keycapsOf = (codes) => chordKeycaps(codes).map((cap) => t.text(cap));
+      const keys = keycapsOf(${JSON.stringify(HOTKEYS.dictate[0])});
+      const escKeys = keycapsOf(${JSON.stringify(HOTKEYS.cancel[0])});
+      const parts = hintFor("recording", { keys, escKeys, cancellable: true }, t);
+      document.getElementById("hint").replaceChildren(...parts.map((p) => (typeof p === "string" ? p : group(p.keys))));
       [...document.querySelectorAll("#wave i")].forEach((i, n) => i.style.setProperty("--h", ${JSON.stringify(WAVE)}[n]));
     })()`);
     await wait(1200);

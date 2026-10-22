@@ -32,7 +32,7 @@ contextBridge.exposeInMainWorld("speakmore", {
   deliver: (payload) => ipcRenderer.invoke("dictation:deliver", payload),
   reportFailure: (payload) => ipcRenderer.invoke("dictation:failed", payload),
 
-  onHotkeyChanged: (callback) => ipcRenderer.on("bar:hotkey", (_event, hotkey) => callback(hotkey)),
+  onHotkeysChanged: (callback) => ipcRenderer.on("bar:hotkeys", (_event, hotkeys) => callback(hotkeys)),
   onBarHint: (callback) => ipcRenderer.on("bar:hint", (_event, value) => callback(value)),
 
   // 主窗口：首页、历史记录
@@ -92,7 +92,12 @@ contextBridge.exposeInMainWorld("speakmore", {
   openPrivacySettings: (permission) => ipcRenderer.invoke("setup:open-privacy", permission),
   recheckPermissions: () => ipcRenderer.invoke("setup:recheck"),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke("setup:set-open-at-login", enabled),
-  setHotkey: (hotkey) => ipcRenderer.invoke("setup:set-hotkey", hotkey),
+  // 录键（docs/hotkey-research.md 5.6）：index 是换掉第几个组合，null 是加一个；结果经 onHotkeyRecording 报回来
+  recordHotkey: (action, index, token) => ipcRenderer.invoke("hotkey:record", action, index, token),
+  stopRecordingHotkey: (reason) => ipcRenderer.invoke("hotkey:record-stop", reason),
+  onHotkeyRecording: (callback) => ipcRenderer.on("hotkey:recording", (_event, payload) => callback(payload)),
+  removeHotkey: (action, index) => ipcRenderer.invoke("setup:remove-hotkey", action, index),
+  resetHotkey: (action) => ipcRenderer.invoke("setup:reset-hotkey", action),
   setBarHint: (value) => ipcRenderer.invoke("setup:set-bar-hint", value),
 
   // 首次引导

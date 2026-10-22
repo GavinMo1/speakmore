@@ -1,0 +1,508 @@
+{
+  "cases": [
+    {
+      "name": "说话时（截着）按 esc：报取消、整段吞掉；不截的时候照常放行、不报",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        },
+        {
+          "id": "cancel#0",
+          "when": "capturing",
+          "mods": [],
+          "key": 53
+        }
+      ],
+      "steps": [
+        {
+          "code": 53,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "capture": true,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "cancel#0",
+                "down": true
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": true
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "cancel#0",
+                "down": false
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "capture": false,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 7,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "热键还按着时按 esc：只报取消，不算打断，esc 也不进按住的键",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        },
+        {
+          "id": "cancel#0",
+          "when": "capturing",
+          "mods": [],
+          "key": 53
+        }
+      ],
+      "steps": [
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "capture": true,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "cancel#0",
+                "down": true
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "cancel#0",
+                "down": false
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "esc 按下时还截着、松开前不截了：重复和松开照样吞；之后的 esc 照常放行",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        },
+        {
+          "id": "cancel#0",
+          "when": "capturing",
+          "mods": [],
+          "key": 53
+        }
+      ],
+      "steps": [
+        {
+          "capture": true,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "cancel#0",
+                "down": true
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "capture": false,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": true
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "cancel#0",
+                "down": false
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "不截的时候 esc 是普通的键：热键按着时按它算打断，不吞",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        },
+        {
+          "id": "cancel#0",
+          "when": "capturing",
+          "mods": [],
+          "key": 53
+        }
+      ],
+      "steps": [
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "dictate#0"
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "取消换成 F13：截着时按 F13 取消，esc 照常放行；不截的时候 F13 也照常放行",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        },
+        {
+          "id": "cancel#0",
+          "when": "capturing",
+          "mods": [],
+          "key": 105
+        }
+      ],
+      "steps": [
+        {
+          "code": 105,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 105,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "capture": true,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 53,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 105,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "cancel#0",
+                "down": true
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "code": 105,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "cancel#0",
+                "down": false
+              }
+            ],
+            "swallow": true
+          }
+        }
+      ]
+    }
+  ]
+}

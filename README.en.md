@@ -46,9 +46,9 @@
 ## 🚀 Installation
 
 <p align="center">
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.13.1/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Apple%20silicon-111?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac with Apple silicon" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.13.1/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Intel Mac" /></a>
-  <a href="https://dl.zephyrxiang.com/speakmore/v0.13.1/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/Download-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.14.0/SpeakMore-arm64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Apple%20silicon-111?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac with Apple silicon" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.14.0/SpeakMore-x64.dmg"><img src="https://img.shields.io/badge/Download-Mac%20·%20Intel-555?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Intel Mac" /></a>
+  <a href="https://dl.zephyrxiang.com/speakmore/v0.14.0/SpeakMore-Setup-x64.exe"><img src="https://img.shields.io/badge/Download-Windows-0078d4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>
 </p>
 
 **macOS**
@@ -101,6 +101,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 2. Dictate. The bar at the bottom of the screen follows the input level.
 3. Press the hotkey again to insert the text at the cursor, or press `esc` to discard the dictation.
 
+- Change the hotkeys in Settings: click one and press a new key or two-key combination; it applies at once. Dictation takes up to 4 combinations.
 - SpeakMore resides in the menu bar (the notification area on Windows).
 - The main window provides statistics, history, dictionary, models and settings.
 - **Dictionary**: add the names, products and terms you say often, and dictation spells them as written. The dictionary is stored on this device only and sent with each request to the chosen model; the dictionary page lists the models that support it.
@@ -130,7 +131,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
   </tr>
   <tr>
     <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-microphone.en.e2c1ebb7.webp" alt="Onboarding: a level meter responding to the voice" /></td>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-hotkey.en.cd353a72.webp" alt="Onboarding: the Right Option keycap highlighted when pressed" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-hotkey.en.7da0acf9.webp" alt="Onboarding: the Right Option keycap highlighted when pressed, with the voice input and cancel hotkeys listed on the left" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>5</b> · Test the microphone</sub></td>
@@ -344,7 +345,7 @@ Comparison with every Typeless plan (heavy use, 100 dictations a day):
 ## 🧑‍💻 For developers
 
 - **CLI and app parity**: switch modes and models, manage and check keys, download models, query history and spending.
-- **JSON output**: `status`, `history` and `usage` support `--json`.
+- **JSON output**: `status`, `history` and `usage` support `--json`. In `status --json` the hotkeys are `hotkey.dictate` and `hotkey.cancel` (under both `status` and `settings`, as set), with the combinations in effect under `status.hotkeysInEffect`; the old fields `status.hotkey`, `status.hotkeyLabel` and `settings.hotkey` are deprecated and will be removed in 0.15.
 - **Plug-in architecture**: each vendor is a strategy behind a common interface.
 - **Unified I/O**: audio is normalized to 16 kHz mono; every transcriber returns `{ text }`.
 - **Cross-platform development**: [`scripts/dev/win-*.sh`](scripts/dev) synchronize the working tree to a Windows machine over SSH, run tests remotely, restart the app from source with a debugging port, and capture the desktop.
@@ -423,7 +424,8 @@ flowchart LR
 
 | Name | Default | Description |
 | --- | --- | --- |
-| `hotkey` | `right_option` | Hotkey; `right_alt` on Windows |
+| `hotkey.dictate` | `["AltRight"]` | Hotkey for dictation |
+| `hotkey.cancel` | `["Escape"]` | Hotkey that discards a dictation in progress |
 | `mode` | `native` | Recognition mode: `native` / `local` / `private` |
 | `model` | `gemini/gemini-3.6-flash` | Native model, as `provider/model` |
 | `thinking` | `MINIMAL` | Gemini thinking level |
@@ -449,14 +451,16 @@ For a custom polish service, the separate memory option in its key form supports
 Idle release time is selectable separately for ASR and Ollama: 1, 5 (default), 10, or 30 minutes. Each control is disabled unless that model's on-demand policy is selected; its saved duration is retained. Shorter times reclaim memory sooner; longer times reduce reloads during intermittent dictation. Leaving or closing the custom service cancels SpeakMore's timer, and Ollama's server policy then controls retention.
 
 - Settings are stored in `~/.speakmore/settings.json`.
-- Hotkey values: macOS `right_option` / `right_command` / `right_control` / `fn`; Windows `right_alt` / `right_ctrl`.
+- A hotkey value is a list of combinations. Keys use [`KeyboardEvent.code`](https://developer.mozilla.org/docs/Web/API/UI_Events/Keyboard_event_code_values) names (e.g. `AltRight`, `MetaRight`, `ControlRight`, `Fn`, `Space`, `KeyK`, `F13`), with two keys joined by `+`. A single combination can be written as is: `speakmore config set hotkey.dictate ControlRight+F9`; several go in a JSON array: `'["AltRight","ControlRight"]'`.
+- A combination has at most two keys; cancel takes a single non-modifier key. Combinations that clash with system or common shortcuts can't be bound (⌘ or ⌃ with a letter, the Windows key), nor can combinations of left-hand modifiers only, or Shift or Caps Lock on its own.
+- A `hotkey` setting from 0.13 or earlier is converted on upgrade; the old form, such as `config set hotkey right_command`, still works.
 - Gemini thinking levels: `MINIMAL` / `LOW` / `MEDIUM` / `HIGH`.
 - A self-hosted polishing model is written as `custom/<model>`, e.g. at `http://127.0.0.1:11434/v1`.
 - Extra parameters a custom service needs go in `customParams`, e.g. `{"reasoning_effort": "minimal"}`. They are sent with both checks and polishing; `model`, `messages`, and `stream` cannot be overridden. When capping a reasoning model's output, leave room for its thinking (e.g. `{"max_completion_tokens": 4096}`), or long passages get cut off.
 - In Windows PowerShell, put a backslash before each double quote in `--params`: `--params '{\"reasoning_effort\": \"minimal\"}'`.
 - Switching through the app or `speakmore mode`, `model`, `transcriber` and `polish` is checked first and takes effect immediately.
 - `config set` writes values directly, without checks.
-- Temporary overrides: set environment variables such as `SPEAKMORE_HOTKEY`, `SPEAKMORE_MODE` and `SPEAKMORE_MODEL` at startup.
+- Temporary overrides: set environment variables such as `SPEAKMORE_HOTKEY_DICTATE`, `SPEAKMORE_HOTKEY_CANCEL`, `SPEAKMORE_MODE` and `SPEAKMORE_MODEL` at startup. Hotkeys are written as in the settings file; the old `SPEAKMORE_HOTKEY` means `SPEAKMORE_HOTKEY_DICTATE`.
 - Keys in environment variables take precedence over stored keys: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `BAILIAN_API_KEY`, `MOONSHOT_API_KEY` (Kimi), `ZHIPU_API_KEY`, `MINIMAX_API_KEY`, `SPEAKMORE_CUSTOM_API_KEY`.
 
 </details>
@@ -479,8 +483,8 @@ Idle release time is selectable separately for ASR and Ollama: 1, 5 (default), 1
 | macOS permission | Purpose |
 | --- | --- |
 | Microphone | Recording |
-| Input Monitoring | Detecting the hotkey, and only that key |
-| Accessibility | Inserting text with a simulated ⌘V; responding to `esc` |
+| Input Monitoring | Detecting the hotkeys, responding only to those keys; reading the keys pressed while recording a hotkey |
+| Accessibility | Inserting text with a simulated ⌘V; holding back `esc`, combination hotkeys and keys pressed while recording, so they don't reach the active app |
 
 - The app requests these permissions during onboarding.
 - With the terminal installation, permissions are granted to the terminal that runs SpeakMore.
@@ -520,6 +524,8 @@ Idle release time is selectable separately for ASR and Ollama: 1, 5 (default), 1
 | A key shows "not verified" | Run `speakmore status` once online |
 | A check fails although the key is correct | Run `speakmore model check` to see the response |
 | The hotkey has no effect | Run `speakmore status`, then `speakmore restart` |
+| On macOS, some combination hotkeys stop working for a while | Another app has secure input on (a password field, or Secure Keyboard Entry in a terminal); they work again once it's off, and the voice bar says so |
+| On Windows, the hotkey doesn't work in some windows | That window runs as administrator, and Windows doesn't pass its keys to other programs; the voice bar says so |
 | A command times out | Run `speakmore stop`, then `speakmore` |
 | No menu bar icon | Run `speakmore settings` |
 | SpeakMore's folder can't be found | If the storage location is on an external drive, connect it first |

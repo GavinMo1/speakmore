@@ -1,12 +1,34 @@
 // 听写的状态机，纯函数：给当前状态和一个事件，得到新状态和要执行的动作。
 // 照原版 2.8.1 的单击流程做（docs/10-interaction-state-machine.md）：
-// 按一下热键开始，再按一下结束；按住超过 600 ms 取消（这一版不支持按住说话）。
-// 说话的时候可以取消（按 esc 或点悬浮条上的 ✕），点 ✓ 等于再按一下热键。
+// 按一下热键开始，再按一下结束；按住超过 LONG_PRESS_MS 取消（这一版不支持按住说话）。
+// 说话的时候可以取消（按取消的键或点悬浮条上的 ✕），点 ✓ 等于再按一下热键。
 // 原版的热键是 fn，这里是哪个键由主进程决定，状态机不关心。
 
+import { actionOf } from "../../hotkeys/actions.mjs";
 import { msg } from "../../i18n/index.mjs";
 
-export const LONG_PRESS_MS = 600;
+/** 按住超过这么久算"按住"、这次作废：动作目录里语音输入的 longPressMs */
+export const LONG_PRESS_MS = actionOf("dictate").longPressMs;
+
+const CLICKS = Object.freeze({ cancel: "USER_CANCEL", confirm: "USER_CONFIRM" });
+
+/** 动作目录里的处理者（handler）各认哪些输入：session 是这一次录音（按下、松开、被打断），cancel 只看按下 */
+const HANDLERS = Object.freeze({
+  session: (input) => (input.event === "interrupted" ? "OTHER_KEY" : input.down ? "KEY_DOWN" : "KEY_UP"),
+  cancel: (input) => (input.event === "binding" && input.down ? "USER_CANCEL" : null),
+});
+
+/**
+ * 主进程转来的一个输入 → 状态机的事件类型。输入是小帮手报的绑定事件，主进程认出是哪个动作后带上 action：
+ * { event: "binding", action, down }、{ event: "interrupted", action }；或者悬浮条上的点击 { event: "click", id }。
+ * 这一下不用管的是 null；认不出来的是 undefined
+ */
+export function eventTypeOf(input) {
+  if (input?.event === "click") return Object.hasOwn(CLICKS, input.id) ? CLICKS[input.id] : undefined;
+  if (input?.event !== "binding" && input?.event !== "interrupted") return undefined;
+  const action = actionOf(input.action);
+  return action === null ? undefined : HANDLERS[action.handler](input);
+}
 
 export const Phase = Object.freeze({
   IDLE: "idle",

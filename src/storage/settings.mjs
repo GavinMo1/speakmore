@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { hotkeySettings } from "../hotkeys/settings.mjs";
 import { findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
 import { DEFAULT_SOURCE, DEFAULT_TRANSCRIBER, MODELS, SOURCES } from "../models/catalog.mjs";
 import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../server/asr/cloud/vendors.mjs";
@@ -22,29 +23,6 @@ import { DEFAULT_THEME, findTheme, THEMES } from "../themes/index.mjs";
 
 // 用户能改的几项设置，存在数据目录的 settings.json 里。
 // 取值的顺序：环境变量（只管这一次运行）优先于文件，文件优先于默认值。key 不在这里，它单独加密保存。
-
-/**
- * 热键是单独一个修饰键，能选哪几个按系统分（按键要由那个系统的原生小帮手认得）：
- *   macOS    原版 Typeless 用 fn；这里默认右 Option，这样两个可以同时开着用。
- *   Windows  右 Alt（默认，位置同 Mac 的右 Option）、右 Ctrl。右 Win 松开会弹开始菜单，fn 系统看不到，都不给。
- * 叫什么、在悬浮条上写成什么（hotkeys.<id>.name / keycap）在文案里，按界面语言写。Windows 的右 Ctrl 和 Mac 的
- * 右 Control 是同一个位置的键，叫法跟着各自系统的习惯，所以是两个 id。
- */
-const HOTKEYS_BY_PLATFORM = {
-  darwin: ["right_option", "right_command", "right_control", "fn"],
-  win32: ["right_alt", "right_ctrl"],
-};
-
-/** 这个系统上能选的热键，第一个是默认的 */
-export const hotkeyIdsFor = (platform) =>
-  Object.freeze([...(HOTKEYS_BY_PLATFORM[platform] ?? HOTKEYS_BY_PLATFORM.darwin)]);
-
-export const HOTKEY_IDS = hotkeyIdsFor(process.platform);
-
-/** 热键叫什么：一句还没定语言的话 */
-export const hotkeyName = (id) => msg(`hotkeys.${id}.name`);
-/** 热键写在悬浮条提示里的短名字（那里地方小） */
-export const hotkeyKeycap = (id) => msg(`hotkeys.${id}.keycap`);
 
 const THEME_IDS = THEMES.map((theme) => theme.id);
 const MODE_IDS = MODES.map((mode) => mode.id);
@@ -72,9 +50,13 @@ const oneOf = (choices) => new LocalizedError(msg("settings.oneOf", { choices: c
 
 /**
  * 每一项：对应的环境变量、默认值、能填的值（不限时为 null）、把写法规整并校验的函数。
- * 这一项是做什么的写在文案里（settings.describe.<名字>），按界面语言写。
- * label 可有可无：值本身不好懂时（right_option、cinnabar）给出它叫什么，是一句话（msg）或者一个名字。
+ * 这一项是做什么的写在文案里（settings.describe.<名字>），按界面语言写；describe 可有可无：设置项自带的说明（一句 msg），
+ *   按别的表生成的项（热键，src/hotkeys/settings.mjs）用它。
+ * label 可有可无：值本身不好懂时（["AltRight"]、cinnabar）给出它叫什么，是一句话（msg）或者一个名字。
  * legacyEnv 可有可无：改名之前的环境变量，env 没设时照样认（README 里写过，用的人可能还在用）。
+ * legacyName 可有可无：改名之前这一项叫什么，命令行 config set/unset 照样认；写进文件的总是新名字。
+ * check 可有可无：check(值, 整份设置) 写入前看这一项和别的项合不合，saveSetting、patchSettings 调它，读的时候不调。
+ *   不合就抛出原因；合的话返回要提醒的话（几句 msg，没有是空的）。
  * store 可有可无：规整后的值写进文件时换成什么样子（默认原样）。
  * json 可有可无：值本身是一段 JSON，设置文件里直接写成对象、数组也认（先变回字符串再规整）。
  * ofMode 可有可无：这一项属于哪种识别模式（server/modes.mjs），只在那种模式里能换（app/modes.mjs）。
@@ -82,16 +64,8 @@ const oneOf = (choices) => new LocalizedError(msg("settings.oneOf", { choices: c
  *   private（数据隐私）只有一跳：privateTranscriber，只能是本机模型；和 local 的第一跳分开存，各换各的。
  */
 export const SETTINGS = {
-  hotkey: {
-    env: "SPEAKMORE_HOTKEY",
-    default: HOTKEY_IDS[0],
-    choices: HOTKEY_IDS,
-    parse(value) {
-      if (!HOTKEY_IDS.includes(value)) throw oneOf(HOTKEY_IDS);
-      return value;
-    },
-    label: hotkeyName,
-  },
+  // 每个动作一项 hotkey.<动作>：hotkey.dictate、hotkey.cancel（docs/hotkey-research.md 5.2）
+  ...hotkeySettings(process.platform),
   mode: {
     env: "SPEAKMORE_MODE",
     // 两条链路平级（server/modes.mjs）。原生是 0.6 以前唯一的一条，没选过的人照旧
@@ -295,13 +269,16 @@ export const SETTINGS = {
   },
 };
 
-function settingNamed(name) {
-  if (!Object.hasOwn(SETTINGS, name)) {
-    throw new LocalizedError(
-      msg("settings.unknown", { name: JSON.stringify(name), names: Object.keys(SETTINGS).join(" / ") }),
-    );
-  }
-  return SETTINGS[name];
+/**
+ * 命令行写的设置名 → 这一项现在的名字：改名之前的（legacyName）换成新的。不认识的抛错并列出能改的
+ */
+export function settingName(name) {
+  if (Object.hasOwn(SETTINGS, name)) return name;
+  const renamed = Object.keys(SETTINGS).find((current) => SETTINGS[current].legacyName === name);
+  if (renamed !== undefined) return renamed;
+  throw new LocalizedError(
+    msg("settings.unknown", { name: JSON.stringify(name), names: Object.keys(SETTINGS).join(" / ") }),
+  );
 }
 
 /** @param {string | object} where 哪里写的：设置的名字，或者一句话（msg） */
@@ -341,7 +318,7 @@ function writeFile(file, stored) {
 
 /** 这一项现在被哪个环境变量盖着（新名字优先于改名前的）；没有就是 null */
 export function overridingEnv(name, env) {
-  const setting = settingNamed(name);
+  const setting = SETTINGS[settingName(name)];
   for (const variable of [setting.env, setting.legacyEnv]) {
     if (variable && env[variable] !== undefined) return variable;
   }
@@ -354,7 +331,11 @@ export function overridingEnv(name, env) {
  *   来自改名前的环境变量时，env 写着是哪一个
  */
 export function resolveSettings({ file, env }) {
-  const stored = readFile(file);
+  return resolveFrom(readFile(file), { file, env });
+}
+
+/** 按读出来的设置文件内容（stored）算，file 只用在报错里 */
+function resolveFrom(stored, { file, env }) {
   const resolved = {};
   for (const [name, setting] of Object.entries(SETTINGS)) {
     const variable = overridingEnv(name, env);
@@ -373,18 +354,41 @@ export function resolveSettings({ file, env }) {
   return resolved;
 }
 
-/** 校验并保存一项设置。返回规整后的值 */
-export function saveSetting(file, name, value) {
-  settingNamed(name);
-  const parsed = parseValue(name, value, name);
-  writeFile(file, { ...readFile(file), [name]: SETTINGS[name].store?.(parsed) ?? parsed });
-  return parsed;
+/** 写入前的检查（check）。不合的照 parse 的规矩报错，说是哪一项、写的什么 */
+function checkValue(name, value, settings) {
+  const { check } = SETTINGS[name];
+  if (!check) return [];
+  try {
+    return check(value, settings);
+  } catch (error) {
+    throw new LocalizedError(
+      msg("settings.invalid", { where: name, value: JSON.stringify(value), reason: problemOf(error) }),
+      {
+        cause: error,
+      },
+    );
+  }
 }
 
-/** 取消一项设置，让它回到默认值 */
+/**
+ * 校验并保存一项设置。name 可以是改名之前的（legacyName）。和别的项合不合（check）按文件里存的比，不看环境变量：
+ * 环境变量只管这一次运行
+ * @returns {{ value: string, warnings: object[] }} 规整后的值，和能存但要提醒的话
+ */
+export function saveSetting(file, name, value) {
+  const current = settingName(name);
+  const parsed = parseValue(current, value, current);
+  // 和别的项比的那份设置是换上新值以后的：文件里这一项原来写坏了，正是要用这一下改回来
+  const next = { ...readFile(file), [current]: SETTINGS[current].store?.(parsed) ?? parsed };
+  const warnings = SETTINGS[current].check ? checkValue(current, parsed, resolveFrom(next, { file, env: {} })) : [];
+  writeFile(file, next);
+  return { value: parsed, warnings };
+}
+
+/** 取消一项设置，让它回到默认值。name 可以是改名之前的 */
 export function unsetSetting(file, name) {
-  settingNamed(name);
-  const { [name]: _removed, ...rest } = readFile(file);
+  const current = settingName(name);
+  const { [current]: _removed, ...rest } = readFile(file);
   writeFile(file, rest);
 }
 
@@ -397,8 +401,10 @@ export function unsetSetting(file, name) {
 export function patchSettings(settings, changes) {
   const patched = { ...settings };
   for (const [name, value] of Object.entries(changes)) {
-    settingNamed(name);
-    patched[name] = { value: parseValue(name, value, name), source: "file" };
+    const current = settingName(name);
+    const parsed = parseValue(current, value, current);
+    checkValue(current, parsed, patched);
+    patched[current] = { value: parsed, source: "file" };
   }
   return patched;
 }

@@ -18,6 +18,19 @@ import {
   Tray,
 } from "electron";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
+import { ACTIONS, actionOf, defaultChords, MAX_CHORDS } from "../hotkeys/actions.mjs";
+import {
+  actionOfBinding,
+  bindingTable,
+  boundProblems,
+  describeHotkeyProblem,
+  resolveHotkeys,
+} from "../hotkeys/bindings.mjs";
+import { chordString, chordsName, chordsText } from "../hotkeys/chord.mjs";
+import { isModifier, nativeCode } from "../hotkeys/keys.mjs";
+import { legacyIdOf } from "../hotkeys/legacy.mjs";
+import { chordsOf, chordsValue, settingNameOf } from "../hotkeys/settings.mjs";
+import { refineWarning } from "../hotkeys/validate.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale, SYSTEM_LOCALE } from "../i18n/index.mjs";
 import { createInstance } from "../instance.mjs";
 import { alsoLogTo, log } from "../log.mjs";
@@ -32,12 +45,10 @@ import { formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
 import { findVendor, VENDORS } from "../server/vendors.mjs";
 import { adoptAppKeys } from "../storage/app-keys.mjs";
 import { openHistory } from "../storage/history.mjs";
-import { migrateLegacyData } from "../storage/legacy.mjs";
+import { migrateLegacyData, migrateLegacySettings } from "../storage/legacy.mjs";
 import { ensureHome, installedHomeOf, keyFile, oldAppKeyFile, resolvePaths } from "../storage/paths.mjs";
 import {
   ACCELERATIONS,
-  HOTKEY_IDS,
-  hotkeyName,
   LOCAL_MODEL_MEMORY,
   MODEL_IDLE_MINUTES,
   overridingEnv,
@@ -45,6 +56,7 @@ import {
   resolveSettings,
   routeOf,
   saveSetting,
+  unsetSetting,
 } from "../storage/settings.mjs";
 import { openVocabulary, readImportFile } from "../storage/vocabulary.mjs";
 import { toHex } from "../themes/color.mjs";
@@ -58,6 +70,7 @@ import { MAX_TERM_LENGTH, MAX_TERMS } from "../vocabulary/terms.mjs";
 import { createDelivery } from "./delivery.mjs";
 import { chooseHome, needsHomeChoice } from "./first-run.mjs";
 import { helperPaths, startHelper } from "./helper.mjs";
+import { createHotkeyRecording } from "./hotkey-recording.mjs";
 import { createKeyManager } from "./keys/key-manager.mjs";
 import { createKeyStore } from "./keys/key-store.mjs";
 import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
@@ -97,8 +110,15 @@ const PRELUDE = MOVE_TO
 
 let PATHS;
 let SETTINGS;
-/** 现在用哪个键。设置里可以当场换（setup:set-hotkey），换的时候重启小帮手 */
-let hotkey;
+/** 0.13 以前的热键设置换成了新写法时，换了什么（migrateLegacySettings）：日志接到文件上之后再记 */
+let MIGRATED = null;
+/**
+ * 这一次装哪些热键（hotkeys/bindings.mjs 的 resolveHotkeys）：每个动作的组合，和装不上的、要提醒的。
+ * 设置里、命令行里可以当场换（setup:set-hotkey、reload-hotkeys），换的时候给小帮手下发新的绑定表
+ */
+let hotkeys;
+/** 设置里热键那几项写的（hotkeySettingValues），和 hotkeys 一起换 */
+let hotkeySettings;
 /**
  * 启动时用谁家的 key：原生链路是收音频的那家，本地转写链路是润色的那家；数据隐私模式不用 key，是 null。
  * 正在用的以 keys.provider 为准
@@ -138,17 +158,37 @@ if (process.platform === "win32" && PRELUDE === null) {
 if (PRELUDE === null) {
   try {
     PATHS = resolvePaths(process.env);
+    // 0.13 以前的热键设置先换成新写法：直接双击打开、开机自启的那一次也要用原来的键（docs/hotkey-research.md 5.9）
+    MIGRATED = migrateLegacySettings(PATHS.settingsFile);
     SETTINGS = resolveSettings({ file: PATHS.settingsFile, env: process.env });
     ROUTE = routeOf(SETTINGS);
     acceleration = SETTINGS.acceleration.value;
     localModelMemory = SETTINGS.localModelMemory.value;
     localModelIdleMinutes = SETTINGS.localModelIdleMinutes.value;
-    hotkey = SETTINGS.hotkey.value;
+    hotkeys = resolveHotkeys(SETTINGS, process.platform);
+    hotkeySettings = hotkeySettingValues(SETTINGS);
     PROVIDER = keyVendorOf(ROUTE) ?? null;
   } catch (error) {
     reportStartupProblem(error);
     process.exit(2);
   }
+}
+/** 日志里的话用英文写：排查的人不一定看得懂界面的语言 */
+const LOG_TEXT = createTranslator("en");
+/** 每个动作的组合写成 "AltRight+Space" 这样的字：日志里看得懂 */
+const chordStrings = (chords) =>
+  Object.fromEntries(Object.entries(chords).map(([action, list]) => [action, list.map(chordString)]));
+/** 设置里热键那几项现在写的（hotkey.<动作> → 值）。后台报给命令行的状态、当场换的回答里都是这几项 */
+function hotkeySettingValues(settings) {
+  return Object.fromEntries(ACTIONS.map((action) => [settingNameOf(action), settings[settingNameOf(action)].value]));
+}
+/** 一个组合换成小帮手认的原生码（探测冲突用，写法同绑定表） */
+function nativeChord(codes, platform) {
+  const key = codes.find((code) => !isModifier(code));
+  return {
+    mods: codes.filter(isModifier).map((code) => nativeCode(code, platform)),
+    ...(key === undefined ? {} : { key: nativeCode(key, platform) }),
+  };
 }
 /** 思考档位只有 Gemini 有；别家用不上时是 null，状态里也不报 */
 const thinkingFor = (provider) => (provider?.thinkingLevels ? SETTINGS.thinking.value : null);
@@ -466,6 +506,8 @@ async function main() {
   let onboardingWindow = null;
   /** 首次引导正在测快捷键：热键送到引导窗口，不去开悬浮条 */
   let hotkeyToOnboarding = false;
+  /** 小帮手问来的系统设置（Mac：按下地球仪键时做什么），录键存的时候按它说提醒；小帮手每次起来再问一遍 */
+  let systemInfo = {};
 
   // ---------- 界面语言 ----------
 
@@ -478,9 +520,11 @@ async function main() {
     event.returnValue = locale;
   });
 
+  if (MIGRATED) log.info("settings_migrated", MIGRATED);
+  logHotkeys("hotkeys_resolved");
   log.info("started", {
     version: app.getVersion(),
-    hotkey,
+    hotkeys: chordStrings(hotkeys.chords),
     route: describeRoute(ROUTE),
     thinking: ROUTE.mode === "native" ? thinkingFor(PROVIDER) : null,
     theme: SETTINGS.theme.value,
@@ -510,6 +554,12 @@ async function main() {
     key: keys.current,
     localModel: service?.localModel ?? null,
     helper: helperState,
+    hotkeys: [...hotkeys.problems, ...helperHotkeyProblems],
+    // 小帮手把听写的组合全退回了（回执里每个都在）：按哪个都没反应
+    dictateUsable:
+      hotkeys.chords.dictate.length >
+      new Set(helperHotkeyProblems.filter((problem) => problem.action === "dictate").map((p) => chordString(p.chord)))
+        .size,
     permissions: {
       microphone: systemPreferences.getMediaAccessStatus("microphone"),
       listen: helperPermissions?.listen ?? null,
@@ -660,6 +710,12 @@ async function main() {
   let helper = null;
   /** 每启动一个小帮手加一；旧的那个退出时发来的事件靠它认出来并丢掉 */
   let helperGeneration = 0;
+  /**
+   * 发给小帮手、还没等到 bound 回执的几份组合（先发的在前）。小帮手按顺序一份一份回，回执里的绑定 id 按发的那份数
+   */
+  let sentHotkeys = [];
+  /** 最近一次 bound 回执里装不上的（没有辅助功能权限、注册不上……），放进"还差什么" */
+  let helperHotkeyProblems = [];
   /** 小帮手截不截得住 esc 和点击（要辅助功能权限）。截不住时悬浮条不画那两个按钮 */
   let barControls = false;
   function setBarControls(enabled) {
@@ -667,52 +723,114 @@ async function main() {
     tellBar("bar:controls", enabled);
   }
 
+  /** 把现在要装的热键下发给小帮手（hotkeys 已经查过，这个系统上绑不了的不在里面） */
+  function sendHotkeys() {
+    sentHotkeys.push(hotkeys.chords);
+    helper.bind(bindingTable(hotkeys.chords, process.platform));
+  }
+
+  /** 热键装不上的、要提醒的写进日志（英文）：热键不灵时先看这几条 */
+  function logHotkeys(event) {
+    const fields = {
+      hotkeys: chordStrings(hotkeys.chords),
+      problems: hotkeys.problems.map((problem) => LOG_TEXT.text(describeHotkeyProblem(problem))),
+      warnings: hotkeys.warnings.map(
+        ({ action, chord, reason }) => `${action} ${chordString(chord)}: ${LOG_TEXT.text(reason)}`,
+      ),
+    };
+    if (hotkeys.problems.length > 0) log.warn(event, fields);
+    else log.info(event, fields);
+  }
+
   /**
    * @param {{ prompt: boolean }} options prompt：两项权限没给时让不让系统弹授权框。只在应用启动时弹一次；
    *   之后重新检查权限靠的是重启小帮手，那时再弹的话每查一次弹一次
    */
   function launchHelper({ prompt }) {
+    // 换小帮手（重查权限）时正在录的那次跟着结束：旧的那个的回执、退出都按代数丢掉了，不说的话页面一直停在"请按键"
+    if (helperGeneration > 0) recording.helperGone();
     const generation = ++helperGeneration;
     helperPermissions = null;
     helperState = "starting";
+    sentHotkeys = [];
+    helperHotkeyProblems = [];
     setBarControls(false);
     helper = startHelper(helperPaths(app.getAppPath()).binary, {
-      args: ["--key", hotkey, ...(prompt ? [] : ["--no-prompt"])],
+      args: prompt ? [] : ["--no-prompt"],
       onEvent: (event) => {
         if (generation === helperGeneration) onHelperEvent(event);
       },
       log,
     });
+    // 写进标准输入就行：它报完 ready 才开始读命令，读到之前的按键本来也没有绑定可认
+    sendHotkeys();
   }
+
+  /** 提示过"管理员窗口在前台、热键用不了"的进程号 */
+  const elevatedNoticed = new Set();
 
   function onHelperEvent(event) {
     switch (event.event) {
-      case "ready":
+      case "ready": {
         helperState = "running";
         helperPermissions = { listen: event.listen, trusted: event.trusted };
         log.info("helper_ready", { ...helperPermissions, capture: event.capture });
+        const asked = helperGeneration;
+        helper.info().then((info) => {
+          if (asked !== helperGeneration) return;
+          systemInfo = info;
+          log.info("helper_info", info);
+        });
         setBarControls(event.capture === true);
         setupChanged();
         offerSettingsIfIncomplete();
         break;
-      case "hotkey":
-      case "other_key": {
-        // 首次引导正在测快捷键、人也正看着它：热键只送到引导窗口。
-        // 切到别的应用了就照常听写，不然热键在哪都按不出来，还没有任何提示；
-        // 悬浮条在屏幕上（切出去开了一段听写又切回来）时也给条，不然这一段停不下来
-        if (event.event === "hotkey" && hotkeyToOnboarding && onboardingWindow?.isFocused() && !bar.isVisible()) {
-          log.info("key_event", { event: event.event, down: event.down, to: "onboarding" });
-          onboardingWindow.webContents.send("onboarding:hotkey", { down: event.down });
-          break;
-        }
-        // 热键不灵时先看这条日志有没有：没有就是小帮手没收到按键（权限或键选错了）
-        log.info("key_event", { event: event.event, down: event.down });
-        const { blocker } = summarizeSetup(currentSetup());
-        if (bar.isVisible() || blocker === null) tellBar("input", event);
-        else if (event.event === "hotkey" && event.down) notify(blocker);
+      }
+      case "bound": {
+        // 装不上的绑定按了不会有反应：先看这条。没有辅助功能权限时取消装不上是预料之中的，悬浮条那时也不画按钮
+        const sent = sentHotkeys.shift() ?? hotkeys.chords;
+        const rejected = event.rejected ?? [];
+        if (rejected.length) log.warn("helper_bound", { rejected });
+        else log.info("helper_bound", { rejected: [] });
+        // 回的是更早的一份（中间又换过键）：等最新那份的回执
+        if (sentHotkeys.length > 0) break;
+        helperHotkeyProblems = boundProblems(rejected, sent);
+        setupChanged();
         break;
       }
-      case "escape":
+      case "permissions":
+        // 运行中两项权限变了（Mac 小帮手自己盯着）：没了的那项的 tap 它已经作废，紧跟着按新的权限重报 bound
+        helperPermissions = { listen: event.listen, trusted: event.trusted };
+        log.info("helper_permissions", { ...helperPermissions, capture: event.capture });
+        setBarControls(event.capture === true);
+        setupChanged();
+        break;
+      case "secure_input":
+        // 有应用开着安全输入（密码框、终端的安全键盘输入）：带普通键的组合由 Carbon 顶着，顶不了的这段时间按了没反应
+        log.info("secure_input", { on: event.on, unavailable: event.unavailable });
+        if (event.on && event.unavailable?.length > 0) notify(msg("bar.secureInput"));
+        break;
+      case "elevated_foreground":
+        // Windows：以管理员身份运行的窗口在前台，钩子收不到发给它的按键，按热键没有任何反应。
+        // 同一个窗口（进程）只提示一次，切来切去不反复弹
+        log.info("elevated_foreground", { on: event.on, pid: event.pid });
+        if (event.on && !elevatedNoticed.has(event.pid)) {
+          elevatedNoticed.add(event.pid);
+          notify(msg("bar.elevatedForeground"));
+        }
+        break;
+      case "relistened":
+        // Windows：睡眠唤醒、解锁以后小帮手重装了键盘钩子。热键这时候不灵的话，先看有没有这条
+        log.info("helper_relistened", { reason: event.reason });
+        break;
+      case "binding":
+      case "interrupted":
+        onBindingEvent(event);
+        break;
+      case "recording":
+        // 录键模式里按住的键（设置页、引导页在录）：只交给录键那边，不进日志
+        recording.onRecording(event);
+        break;
       case "click":
         // 只在听写进行中才会有：那时页面让小帮手把它们截下来了
         // 字段不能叫 event：日志这一条的名字就记在 event 里，会被盖掉
@@ -722,15 +840,70 @@ async function main() {
       case "exit":
         helperState = "stopped";
         helperPermissions = null;
+        recording.helperGone();
         setBarControls(false);
         log.error("helper_exited", { code: event.code, signal: event.signal });
         setupChanged();
-        notify(msg("bar.helperStopped", { hotkey: hotkeyName(hotkey) }));
+        notify(msg("bar.helperStopped", { hotkey: chordsName(hotkeys.chords.dictate) }));
         break;
       default:
         log.warn("helper_unknown_event", { event: event.event });
     }
   }
+
+  /** 小帮手报的绑定按下、松开、被打断：认出是哪个动作，交给它的处理者（动作目录的 handler） */
+  function onBindingEvent(event) {
+    const action = actionOfBinding(event.id);
+    if (action === null) {
+      log.warn("helper_unknown_binding", { id: event.id });
+      return;
+    }
+    // 热键不灵时先看这条日志有没有：没有就是小帮手没收到按键（权限或键选错了）
+    const fields = { event: event.event, id: event.id, down: event.down, to: event.to };
+    // chord：这个动作的第几个组合（绑定 id 的序号），悬浮条的提示里写按下的那一个
+    const input = { event: event.event, action: action.id, down: event.down, chord: Number(event.id.split("#")[1]) };
+    if (action.handler !== "session") {
+      // 只在说话时生效的（取消）：那时页面让小帮手截着，交给悬浮条
+      log.info("key_event", fields);
+      tellBar("input", input);
+      return;
+    }
+    // 首次引导正在测快捷键、人也正看着它：听写的按下松开只送到引导窗口。
+    // 切到别的应用了就照常听写，不然热键在哪都按不出来，还没有任何提示；
+    // 悬浮条在屏幕上（切出去开了一段听写又切回来）时也给条，不然这一段停不下来
+    // 被打断（按着时碰了别的键）以后小帮手不再报松开：也当松开送过去，不然大键帽一直亮着
+    if (
+      (event.event === "binding" || event.event === "interrupted") &&
+      hotkeyToOnboarding &&
+      onboardingWindow?.isFocused() &&
+      !bar.isVisible()
+    ) {
+      log.info("key_event", { ...fields, to: "onboarding" });
+      onboardingWindow.webContents.send("onboarding:hotkey", { down: event.event === "binding" && event.down });
+      return;
+    }
+    log.info("key_event", fields);
+    const { blocker } = summarizeSetup(currentSetup());
+    if (blocker === null) tellBar("input", input);
+    else if (event.event === "binding" && event.down) notify(blocker);
+  }
+
+  // 设置页、引导页录键（hotkey-recording.mjs）：小帮手的录键模式、定稿、探测冲突、保存
+  const recording = createHotkeyRecording({
+    platform: process.platform,
+    record: (on) => helper.record(on),
+    probe: async (codes) => {
+      const found = await helper.probe(nativeChord(codes, process.platform));
+      if (found.timedOut) log.warn("hotkey_probe_timeout", { chord: chordString(codes) });
+      return found;
+    },
+    chordsOf: (actionId) => chordsOf(hotkeySettings[settingNameOf(actionOf(actionId))]),
+    save: (actionId, chords) => setHotkey(actionId, chordsValue(chords)),
+    send: (contents, payload) => {
+      if (!contents.isDestroyed()) contents.send("hotkey:recording", payload);
+    },
+    log,
+  });
 
   // 端到端测试时不启动小帮手：不听真键盘，也绝不往用户当前的窗口里贴字
   if (e2e) helper = e2e.fakeHelper;
@@ -766,7 +939,7 @@ async function main() {
 
   handle("config:get", () => ({
     serverUrl,
-    hotkey,
+    hotkeys: hotkeys.chords,
     barControls,
     barHint: currentBarHint(),
     // 冷启动可能超过原有的二十秒，只有启用了按需模式的本机链路放宽等待。
@@ -795,7 +968,7 @@ async function main() {
   handle("history:list", () => history.list());
   handle("usage:report", () => usageReport(history, { now: new Date() }));
   handle("insights:get", () => insights(history.dictations(), { now: new Date() }));
-  handle("app:info", () => ({ version: app.getVersion(), hotkey }));
+  handle("app:info", () => ({ version: app.getVersion(), hotkeys: hotkeys.chords }));
   handle("app:open-homepage", () => shell.openExternal(HOMEPAGE));
   // 设置 › 通用的"软件更新"：检查、开始更新。进行到哪了跟着 setup:get 一起给（update）
   handle("update:check", () => appUpdates.check());
@@ -929,8 +1102,8 @@ async function main() {
     return {
       ...setup,
       summary: summarizeSetup(setup),
-      // 叫什么由页面按界面语言写，这里只给 id
-      hotkey: { value: hotkey, choices: HOTKEY_IDS },
+      // 每个动作一行：设置里存的组合、装着的、默认的、装不上的；叫什么由页面按界面语言写，这里只给 code
+      hotkeyActions: describeHotkeyActions(),
       theme: { value: theme.id, choices: THEMES.map(({ id }) => id) },
       barHint: currentBarHint(),
       language: { value: languageSetting, locale },
@@ -1139,7 +1312,42 @@ async function main() {
     log.info("open_at_login", { enabled: Boolean(enabled) });
     setupChanged();
   });
-  handle("setup:set-hotkey", (_event, wanted) => setHotkey(wanted));
+  // 录键（docs/hotkey-research.md 5.6）：页面点了某个组合（换掉它）或者"添加"，结果经 hotkey:recording 报回那个页面
+  handle("hotkey:record", (event, action, index, token) => {
+    editableHotkey(action);
+    blockKeysWhileRecording(event.sender);
+    recording.start(
+      event.sender,
+      action,
+      Number.isInteger(index) && index >= 0 ? index : null,
+      Number.isInteger(token) ? token : undefined,
+    );
+  });
+  handle("hotkey:record-stop", (event, reason) => recording.stop(event.sender, reason));
+  handle("setup:remove-hotkey", (_event, actionId, index) => {
+    const action = editableHotkey(actionId);
+    const chords = chordsOf(hotkeySettings[settingNameOf(action)]).filter((_, at) => at !== index);
+    return setHotkey(action.id, chordsValue(chords));
+  });
+  handle("setup:reset-hotkey", (_event, actionId) => {
+    const action = editableHotkey(actionId);
+    const name = settingNameOf(action);
+    unsetSetting(PATHS.settingsFile, name);
+    log.info("hotkey_reset", { action: action.id });
+    reloadHotkeys();
+    return {};
+  });
+  /**
+   * 页面要改的这个动作：认得、没被环境变量盖着。盖着时页面上看到的是环境变量里的组合，在它上面改再写进设置文件，
+   * 会把文件里原来存的冲掉、把临时的值存成长期的；所以只让看，删掉环境变量才能改
+   */
+  function editableHotkey(actionId) {
+    const action = actionOf(actionId);
+    if (action === null) throw new TypeError(`不认识的动作：${actionId}`);
+    const variable = overridingEnv(settingNameOf(action), process.env);
+    if (variable !== null) throw new LocalizedError(msg("hotkeyRecord.envOverride", { variable }));
+    return action;
+  }
   handle("setup:set-theme", (_event, wanted) => {
     saveSetting(PATHS.settingsFile, "theme", wanted);
     reloadTheme();
@@ -1239,26 +1447,83 @@ async function main() {
   }
 
   /**
-   * 当场换热键：记进设置，重启小帮手让它听新的键，悬浮条的提示、菜单栏跟着换。不用重启整个应用
-   * @returns {{ note?: object }} 有话要交代时（被环境变量盖着）带一句（msg）
+   * 重新读一遍设置里的热键，当场换上：给小帮手下发新的绑定表，悬浮条的提示、菜单栏跟着换。不用重启小帮手，更不用重启整个应用。
+   * 设置页、引导页换了键（setHotkey），命令行 config set hotkey.<动作> 之后（reload-hotkeys）都走这里
+   * @returns {Record<string, string> & { env?: Record<string, string> }} 每一项现在用的值；被环境变量盖着的，env 里写着是哪一个
    */
-  function setHotkey(wanted) {
-    if (!HOTKEY_IDS.includes(wanted)) throw new TypeError(`不认识的热键：${wanted}`);
-    saveSetting(PATHS.settingsFile, "hotkey", wanted);
-    if (wanted !== hotkey) {
-      hotkey = wanted;
-      log.info("hotkey_changed", { hotkey });
-      // 和重新检查权限一样：先停旧的再起新的，旧的那个退出时的事件靠代数作废
-      if (!e2e) {
-        helper.stop();
-        launchHelper({ prompt: false });
-      }
-      tellBar("bar:hotkey", hotkey);
+  function reloadHotkeys() {
+    const settings = resolveSettings({ file: PATHS.settingsFile, env: process.env });
+    const before = JSON.stringify(hotkeys.chords);
+    hotkeys = resolveHotkeys(settings, process.platform);
+    hotkeySettings = hotkeySettingValues(settings);
+    logHotkeys("hotkeys_reloaded");
+    if (JSON.stringify(hotkeys.chords) !== before) {
+      helperHotkeyProblems = [];
+      sendHotkeys();
+      tellBar("bar:hotkeys", hotkeys.chords);
       historyChanged();
-      setupChanged();
     }
-    const variable = overridingEnv("hotkey", process.env);
-    return variable === null ? {} : { note: msg("notes.envNextLaunch", { variable }) };
+    setupChanged();
+    const env = {};
+    for (const name of Object.keys(hotkeySettings)) {
+      const variable = overridingEnv(name, process.env);
+      if (variable !== null) env[name] = variable;
+    }
+    return { ...hotkeySettings, ...(Object.keys(env).length > 0 ? { env } : {}) };
+  }
+
+  /**
+   * 设置页、引导页换某个动作的热键：查过、存进设置，当场换上
+   * @param {string} actionId
+   * @param {string} wanted 组合或一组组合（"ControlRight"、'["Fn","MetaRight"]'），写法同设置文件
+   * @returns {{ note?: object }} 有话要交代时带一句（msg）：被环境变量盖着；能存但要提醒的
+   */
+  function setHotkey(actionId, wanted) {
+    const action = actionOf(actionId);
+    if (action === null) throw new TypeError(`不认识的动作：${actionId}`);
+    const name = settingNameOf(action);
+    const { warnings } = saveSetting(PATHS.settingsFile, name, wanted);
+    log.info("hotkey_changed", { action: action.id, value: wanted });
+    reloadHotkeys();
+    const variable = overridingEnv(name, process.env);
+    if (variable !== null) return { note: msg("notes.envRemove", { variable }) };
+    // 地球仪键那条按系统设置说具体，设成"无操作"的不提醒
+    const notes = warnings.map((warning) => refineWarning(warning, systemInfo)).filter(Boolean);
+    return notes.length > 0 ? { note: notes[0] } : {};
+  }
+
+  /** 设置页、引导页的快捷键：动作目录里每个动作一行 */
+  function describeHotkeyActions() {
+    const problems = [...hotkeys.problems, ...helperHotkeyProblems];
+    return ACTIONS.map((action) => {
+      const name = settingNameOf(action);
+      return {
+        id: action.id,
+        when: action.when,
+        clearable: action.clearable,
+        max: MAX_CHORDS,
+        chords: chordsOf(hotkeySettings[name]),
+        inEffect: hotkeys.chords[action.id],
+        defaults: defaultChords(action, process.platform),
+        // 存着的组合里装不上的（下发前查出来的、小帮手退回的），和一个都装不上、先用默认的那条
+        problems: problems
+          .filter((problem) => problem.action === action.id)
+          .map((problem) =>
+            problem.fallback ? { fallback: problem.fallback } : { chord: problem.chord, reason: problem.reason },
+          ),
+        env: overridingEnv(name, process.env),
+      };
+    });
+  }
+
+  /** 录键时拦住这个页面的按键：没有辅助功能权限的 Mac 上小帮手吞不了，⌘W、⌘Q 之类会作用在窗口上（5.6）。每个页面装一次 */
+  const blocking = new WeakSet();
+  function blockKeysWhileRecording(contents) {
+    if (blocking.has(contents)) return;
+    blocking.add(contents);
+    contents.on("before-input-event", (event) => {
+      if (recording.recordingFor(contents)) event.preventDefault();
+    });
   }
 
   // ---------- 菜单栏、主窗口和首次引导 ----------
@@ -1295,8 +1560,12 @@ async function main() {
       window.webContents.send("history:changed");
       window.webContents.send("setup:changed");
     });
+    // 录键时切走了（点了别的应用、⌘Tab）就不录了：焦点不在这里，人也不在看
+    const contents = window.webContents;
+    window.on("blur", () => recording.stop(contents, "blur"));
     window.on("closed", () => {
       hubWindow = null;
+      recording.stop(contents, "closed");
     });
     return window;
   }
@@ -1319,9 +1588,12 @@ async function main() {
         if (listen !== true || trusted !== true) recheckPermissions();
         else setupChanged();
       });
+      const contents = onboardingWindow.webContents;
+      onboardingWindow.on("blur", () => recording.stop(contents, "blur"));
       onboardingWindow.on("closed", () => {
         onboardingWindow = null;
         hotkeyToOnboarding = false;
+        recording.stop(contents, "closed");
       });
       // 页面崩了就没人说"测完了"
       onboardingWindow.webContents.on("render-process-gone", (_event, details) => {
@@ -1358,7 +1630,7 @@ async function main() {
     const update = appUpdates.describe();
     const summary = summarizeSetup(currentSetup());
     const headline = summary.ready
-      ? t("tray.ready", { keycap: t(`hotkeys.${hotkey}.keycap`) })
+      ? t("tray.ready", { keycap: chordsText(hotkeys.chords.dictate) })
       : summary.missing.length > 0
         ? t("tray.missing", { items: t.list(summary.missing) })
         : t("tray.preparing");
@@ -1441,9 +1713,16 @@ async function main() {
       startedAt,
       // 启动时要等 key 验证完、麦克风的授权框有了回应，才算准备好
       starting: !startupChecked,
-      hotkey,
-      // 0.5 及以前的命令行靠它说热键叫什么
-      hotkeyLabel: say(`hotkeys.${hotkey}.name`),
+      // 设置里热键那几项（hotkey.<动作>），命令行拿它和设置文件比，看改了还没生效的
+      ...hotkeySettings,
+      // 实际装上的（写法同设置项）：设置里写的装不上时退回了默认键，告诉人按哪个要按这一份
+      hotkeysInEffect: Object.fromEntries(
+        ACTIONS.map((action) => [action.id, chordsValue(hotkeys.chords[action.id] ?? [])]),
+      ),
+      // 0.13 以前的两项留一个版本（D13）：听写装着的是一个旧键时给旧 id、新组合给 null；hotkeyLabel 是它叫什么，
+      // 0.5 及以前的命令行靠它说热键叫什么。0.15 删
+      hotkey: legacyIdOf(hotkeys.chords.dictate, process.platform),
+      hotkeyLabel: say.text(chordsName(hotkeys.chords.dictate)),
       // 连着单独启动的服务端时，用哪个模型由那边定
       provider: service ? (keys.provider?.id ?? null) : null,
       // 每家的 key 在哪。装成应用的那个各存各的，命令行要靠这一项才知道
@@ -1547,6 +1826,7 @@ async function main() {
           "reload-theme": reloadTheme,
           "reload-language": () => reloadLanguage(),
           "reload-model-source": () => reloadModelSource(),
+          "reload-hotkeys": () => reloadHotkeys(),
           // 本机模型：下载在后台下，进度看 status 的 localModels
           "download-model": async ({ id, locale: wanted }) =>
             withProblemText(await localModels.download(id), translatorFor(wanted)),

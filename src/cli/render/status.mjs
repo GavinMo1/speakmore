@@ -1,9 +1,12 @@
+import { chordName, chordsName } from "../../hotkeys/chord.mjs";
+import { legacyChord } from "../../hotkeys/legacy.mjs";
+import { chordsOf } from "../../hotkeys/settings.mjs";
 import { findLocale, msg, SYSTEM_LOCALE } from "../../i18n/index.mjs";
 import { backendText } from "../../models/describe.mjs";
 import { parseChatChoice } from "../../server/chat/vendors.mjs";
 import { findProvider, parseModelChoice } from "../../server/providers/index.mjs";
 import { findVendor } from "../../server/vendors.mjs";
-import { HOTKEY_IDS, SETTINGS } from "../../storage/settings.mjs";
+import { SETTINGS } from "../../storage/settings.mjs";
 import { formatUsd } from "../../usage/format.mjs";
 import { routeTitle } from "./modes.mjs";
 import { themeTitle } from "./settings.mjs";
@@ -78,9 +81,20 @@ function localModelLine(localModel, t) {
   }
 }
 
-/** 热键叫什么。比这个命令新的版本里才有的热键叫不出名字，用后台报的说法 hotkeyLabel */
-const hotkeyTitle = (status, t) =>
-  HOTKEY_IDS.includes(status.hotkey) ? t(`hotkeys.${status.hotkey}.name`) : (status.hotkeyLabel ?? status.hotkey);
+/**
+ * 听写的热键叫什么：后台实际装上的（hotkeysInEffect.dictate；设置里写的装不上时它退回了默认键），没报这一项的后台
+ * 用设置里的 hotkey.dictate。0.13 以前的后台只报旧 id（hotkey），在这里换成组合；
+ * 都认不出（比这个命令新的版本）时用后台报的说法 hotkeyLabel
+ */
+function hotkeyTitle(status, t) {
+  try {
+    const value = SETTINGS["hotkey.dictate"].parse(String(status.hotkeysInEffect?.dictate ?? status["hotkey.dictate"]));
+    return t.text(chordsName(chordsOf(value)));
+  } catch {
+    const legacy = legacyChord(status.hotkey);
+    return legacy ? t.text(chordName([legacy])) : (status.hotkeyLabel ?? status.hotkey);
+  }
+}
 
 /** 界面语言：跟随系统时带上实际用的那种（"System · English"） */
 function languageTitle({ language, locale }, t) {
@@ -205,6 +219,9 @@ export function renderStatus({ status, version, settings, stats }, { color, t, p
 
   if (summary.ready) {
     lines.push(`${INDENT}${t("cli.status.ready", { hotkey: hotkeyTitle(status, t) })}`, "");
+    // 能用，但还差点什么（有个热键组合装不上）
+    if (summary.missing.length > 0)
+      lines.push(`${INDENT}${t("cli.status.missing", { items: t.list(summary.missing) })}`, "");
   } else if (!status.starting && summary.missing.length > 0) {
     lines.push(`${INDENT}${t("cli.status.missing", { items: t.list(summary.missing) })}`, "");
   }

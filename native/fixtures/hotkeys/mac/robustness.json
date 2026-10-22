@@ -1,0 +1,629 @@
+{
+  "cases": [
+    {
+      "name": "松开的事件丢了（用 Tab 切进密码框）：下次按键前核对，丢了的移出去，热键照常按下",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "code": 48,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "lostUp": {
+            "code": 48,
+            "modifier": false
+          },
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "吞掉的普通键松开丢了：Mac 照系统接口清掉（查的是硬件那份状态，吞不吞都准）；Windows 不信系统接口（钩子吞了按下，系统根本没记下它按着），只按 10 秒清",
+      "bindings": [
+        {
+          "id": "a#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": 49
+        },
+        {
+          "id": "b#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": 40
+        }
+      ],
+      "steps": [
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 49,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "a#0",
+                "down": true
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "lostUp": {
+            "code": 49,
+            "modifier": false
+          },
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 40,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "a#0",
+                "to": "b#0"
+              },
+              {
+                "event": "binding",
+                "id": "b#0",
+                "down": true
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "code": 40,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": true
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "b#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "按下超过 10 秒还没松开的普通键当成丢了松开，即使系统接口说它还按着",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "code": 48,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 0,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 10001,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 10002,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "不到 10 秒、系统接口也说还按着：照样算按着，不触发",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "code": 48,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 0,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 9000,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 9001,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 48,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 9002,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "监听停了又打开：按着的绑定补报松开，按住的普通键和吞了一半的都清掉",
+      "bindings": [
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": 49
+        }
+      ],
+      "steps": [
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 49,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": true
+          }
+        },
+        {
+          "reset": true,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 49,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "被打断的绑定遇到监听重开：不再补报松开",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 40,
+          "modifier": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "dictate#0"
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "reset": true,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 40,
+          "modifier": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "自己模拟的按键（贴字时的 ⌘V/Ctrl+V、插的掩码键）：不算，原样放行",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 9,
+          "modifier": false,
+          "down": true,
+          "injected": true,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 9,
+          "modifier": false,
+          "down": false,
+          "injected": true,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "换了绑定表：按着的绑定补报松开，按住的键照旧记着",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            61
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "code": 61,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "bind": [
+            {
+              "id": "dictate#0",
+              "when": "always",
+              "mods": [
+                62
+              ],
+              "key": null
+            }
+          ],
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 61,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false
+          }
+        },
+        {
+          "code": 62,
+          "modifier": true,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false
+          }
+        },
+        {
+          "code": 62,
+          "modifier": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false
+          }
+        }
+      ]
+    }
+  ]
+}

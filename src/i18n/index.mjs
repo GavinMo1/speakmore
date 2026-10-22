@@ -116,6 +116,14 @@ export const msg = (key, params) => (params === undefined ? { key } : { key, par
 
 const isMessage = (value) => value !== null && typeof value === "object" && typeof value.key === "string";
 
+/**
+ * 几句话里任一句都行（一个动作绑的几个组合：fn、右⌘），翻的时候按"或"并列（t.either）。和 msg 一样能当参数、能过 JSON
+ * @param {Array<object | string>} items
+ */
+export const alternatives = (items) => ({ alternatives: items });
+
+const isAlternatives = (value) => value !== null && typeof value === "object" && Array.isArray(value.alternatives);
+
 const lookup = (messages, key) => key.split(".").reduce((node, part) => node?.[part], messages);
 
 /**
@@ -123,7 +131,7 @@ const lookup = (messages, key) => key.split(".").reduce((node, part) => node?.[p
  * 按参数 count 挑。count 是个数：给数字就按这种语言写（1,234），别的参数原样写（命令里的数不能加逗号）。
  * 找不到的名字原样返回（显得出来，不会悄悄空着），测试保证用到的名字都在。
  * 另外几样：
- *   t.text(话)   msg 翻成这种语言；本来就是一段字（模型回的原话、旧版本后台报的中文）照原样；null 是空字符串
+ *   t.text(话)   msg、alternatives 翻成这种语言；本来就是一段字（模型回的原话、旧版本后台报的中文）照原样；null 是空字符串
  *   t.list(几句) 按这种语言并列（A, B, and C / A、B、C）；t.either(几句) 是"或"（A or B / A、B）
  *   t.parts(名字, 参数) 同 t，但不拼成一段：参数的位置留着参数本身，调用方要把它画成别的样子时用（键帽）
  *   t.number(数) 按这种语言写数字（1,234）
@@ -155,6 +163,7 @@ export function createTranslator(id, platform = defaultPlatform()) {
   const text = (value) => {
     if (value === null || value === undefined) return "";
     if (isMessage(value)) return t(value.key, value.params);
+    if (isAlternatives(value)) return t.either(value.alternatives);
     return String(value);
   };
 

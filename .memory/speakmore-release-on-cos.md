@@ -1,6 +1,6 @@
 ---
 name: speakmore-release-on-cos
-description: SpeakMore 的发布包在腾讯云 COS + CDN（dl.zephyrxiang.com/speakmore/），只从本机用 npm run ship 发，GitHub 上的发布流程已删；最新 0.13.1（10-21）；证书 2027-01-12 到期要续
+description: SpeakMore 的发布包在腾讯云 COS + CDN（dl.zephyrxiang.com/speakmore/），只从本机用 npm run ship 发，GitHub 上的发布流程已删；最新 0.14.0（10-21）；证书 2027-01-12 到期要续
 metadata:
   node_type: memory
   type: project
@@ -29,6 +29,7 @@ SpeakMore 的发布包放在用户自己的腾讯云 COS，前面是 CDN 域名 
 - 0.11.0 在 2026-10-20 发布（本机模型改从魔搭下、按块更新、包瘦身；第一次按块发布，7088 个块加 15 个文件）。照惯例先只推标签，ship 由他用 `! nohup npm run ship > /tmp/sm-ship.log 2>&1 &` 在会话里挂后台，一次跑通，两个 dmg 都公证通过；传完推 main。从线上地址验过：Mac 用安装命令装进临时目录、再 update 说已是最新、启动正常；线上 dmg 校验值对、过公证、真启动正常；Windows 用 irm 那一行装好、update 说已是最新。同一天下载地址的封顶改成每小时 4 GB（cdn-cap --apply，读回来核对过）。
 - 0.12.0 在 2026-10-20 发布（存储位置可选、一键搬家，issue #10；7102 个对象加 15 个文件）。照惯例先只推标签；第一次 ship 停在检查：ship 还会用 Electron 自带的 Node 跑一遍单测，新加的那条 .asar 测试在那里自己读文件时被当成压缩包（程序本身没问题），什么都没传。修好后他同意把已推的 v0.12.0 标签挪到新提交（删远端标签、重打、再推），第二次 ship 一次跑通，传完推 main、部署官网（线上提交 95125c1）。从线上地址两台都在隔离目录里装过、update 说已是最新；线上 dmg 公证有效、真启动正常。然后把两台他真在用的那份用 `speakmore update` 从 0.11.0 升上来：Mac 的命令行和 App 一起换、App 自己重开（started、helper_ready、零报错）；游戏电脑升完在桌面会话里起过一次再停回去（升级前它没开着）。#10 回复后关闭。
 - 0.13.0 在 2026-10-21 发布（引擎页改成树、首页花费卡改成柱状趋势、界面逐页打磨；7110 个对象加 15 个文件），照惯例先只推标签，ship 由他挂后台一次跑通，传完推 main。紧接着 issue #11（Windows 安装最后删旧版本时报"不能对 Null 值表达式调用方法"，偶发，约百次一遇）热修成 0.13.1，同一天发布（第一次 ship 开头连 GitHub 核对标签时网络断了一下，报"标签还没推"，`git ls-remote` 确认标签在后重跑一次跑通）；传完推 main、部署官网（线上提交 7c2cd6f）。0.13.0 的官网部署和线上验收并进 0.13.1 一起做：Mac 线上 dmg 公证有效、隔离家目录真启动零报错，终端安装加 update 正常；Windows 开发机隔离用户目录装 0.13.0 开着再 irm 升 0.13.1，停旧版、删旧版本、真启动都正常。#11 回复后关闭。
+- 0.14.0 在 2026-10-21 发布（热键开放成任意键或两键组合，issue #13；7128 个对象加 15 个文件），ship 由他挂后台一次跑通（约 20 分钟）。这次我先推了 main 再跑 ship（漏看了上面"先只推标签"那条），README 的下载按钮空了二十来分钟。发完从下载地址核对五个包都 200、线上 Apple 芯片 dmg 校验值对、公证有效、隔离家目录真启动（旧设置当场换算、右 Control 合成一下能触发）；Windows 开发机照 README 从线上装 0.14.0 起来、换算、右 Ctrl 能触发，快捷方式和 Path 已还原。#13 已回复（提的人自己关的）。官网同一天部署（线上提交 f2f38b7，页面脚本里的版本号是 0.14.0）。
 - ship 开头报"标签 vX 还没推到 GitHub"时先看日志上一行：是 `SSL_ERROR_SYSCALL` 之类的网络错误，就用 `git ls-remote origin refs/tags/vX^{}` 确认标签指着 HEAD，直接重跑，不用动标签。
 - 从 ssh 远程跑 Windows 的 `speakmore update`：旧版本目录要等旧进程退出后由后台删，那个后台进程随 ssh 会话一起没了，旧目录会留着（桌面上点更新不会）。确认 current 已指向新版本、没有进程在用旧目录，再手动删。
 - 发版前本机自测打的包在 dist/release，ship 的打包第一步会整个清掉，不会被传上去。

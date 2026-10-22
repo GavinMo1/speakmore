@@ -1,0 +1,618 @@
+{
+  "cases": [
+    {
+      "name": "只有按下能凑成组合：松开别的键、剩下的恰好是绑定时不触发",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 0,
+          "scan": 37,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 37,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "升级：前缀绑定按着时来了第二个键、恰好凑成另一个绑定，先报打断（带 to）再报新绑定按下",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        },
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": 57
+        }
+      ],
+      "steps": [
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "dictate#0",
+                "to": "x#0"
+              },
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "升级成两个修饰键",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            163
+          ],
+          "key": null
+        },
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            163,
+            161
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 163,
+          "scan": 29,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 161,
+          "scan": 54,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "dictate#0",
+                "to": "x#0"
+              },
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 163,
+          "scan": 29,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 161,
+          "scan": 54,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "被打断：报一次打断，之后不报松开；组合里的键全松开之前不再触发任何东西",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 37,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "dictate#0"
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 37,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 48,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 48,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 7,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 8,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": false
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "打断绑定的那个键不吞（那是用户自己的组合键）；已经吞了按下的照样吞松开",
+      "bindings": [
+        {
+          "id": "x#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": 57
+        }
+      ],
+      "steps": [
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "x#0",
+                "down": true
+              }
+            ],
+            "swallow": true,
+            "mask": true
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 37,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "x#0"
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 37,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 0,
+          "scan": 57,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [],
+            "swallow": true,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "按着热键又按别的修饰键也算打断，只报一次",
+      "bindings": [
+        {
+          "id": "dictate#0",
+          "when": "always",
+          "mods": [
+            165
+          ],
+          "key": null
+        }
+      ],
+      "steps": [
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": true,
+          "injected": false,
+          "t": 1,
+          "expect": {
+            "events": [
+              {
+                "event": "binding",
+                "id": "dictate#0",
+                "down": true
+              }
+            ],
+            "swallow": false,
+            "mask": true
+          }
+        },
+        {
+          "vk": 160,
+          "scan": 42,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 2,
+          "expect": {
+            "events": [
+              {
+                "event": "interrupted",
+                "id": "dictate#0"
+              }
+            ],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 162,
+          "scan": 29,
+          "extended": false,
+          "down": true,
+          "injected": false,
+          "t": 3,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 160,
+          "scan": 42,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 4,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 162,
+          "scan": 29,
+          "extended": false,
+          "down": false,
+          "injected": false,
+          "t": 5,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        },
+        {
+          "vk": 165,
+          "scan": 56,
+          "extended": true,
+          "down": false,
+          "injected": false,
+          "t": 6,
+          "expect": {
+            "events": [],
+            "swallow": false,
+            "mask": false
+          }
+        }
+      ]
+    }
+  ]
+}
