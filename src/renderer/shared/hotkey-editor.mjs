@@ -51,10 +51,11 @@ export function createHotkeyEditor(root, { onChanged, savedNote = "hotkeyRecord.
     });
   }
 
-  function stop() {
+  /** reason 记进日志（src/app/hotkey-recording.mjs 的 PAGE_REASONS） */
+  function stop(reason) {
     if (recording === null) return;
     recording = null;
-    window.speakmore.stopRecordingHotkey();
+    window.speakmore.stopRecordingHotkey(reason);
     draw();
   }
 
@@ -82,7 +83,7 @@ export function createHotkeyEditor(root, { onChanged, savedNote = "hotkeyRecord.
 
   // 录着的时候点了别处：不录了（录键时按键被小帮手吞掉，点鼠标是还能用的出口）
   document.addEventListener("pointerdown", (event) => {
-    if (recording !== null && !event.target.closest?.("[data-recording]")) stop();
+    if (recording !== null && !event.target.closest?.("[data-recording]")) stop("elsewhere");
   });
 
   /** 一个组合的框。index 是它在这个动作里排第几；录着的那个画实时按着的键 */
@@ -117,7 +118,7 @@ export function createHotkeyEditor(root, { onChanged, savedNote = "hotkeyRecord.
           class: "chord-keys",
           disabled: !enabled && !live,
           "aria-label": live ? t("hotkeyRecord.prompt") : t("hotkeyRecord.change", { chord: text }),
-          onclick: () => (live ? stop() : start(action.id, index)),
+          onclick: () => (live ? stop("reclick") : start(action.id, index)),
         },
         ...caps,
       ),
@@ -225,12 +226,12 @@ export function createHotkeyEditor(root, { onChanged, savedNote = "hotkeyRecord.
     render(hotkeyActions, { canRecord }) {
       actions = hotkeyActions;
       enabled = canRecord;
-      if (!enabled && recording !== null) stop();
+      if (!enabled && recording !== null) stop("unavailable");
       draw();
     },
     /** 直接开始给某个动作录（引导页的"换个键"）。index 同上 */
     record: start,
     /** 不录了（换页、收起时） */
-    stop,
+    stop: () => stop("left"),
   };
 }

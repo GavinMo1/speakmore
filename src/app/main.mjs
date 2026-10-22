@@ -1276,7 +1276,7 @@ async function main() {
     blockKeysWhileRecording(event.sender);
     recording.start(event.sender, action, Number.isInteger(index) ? index : null);
   });
-  handle("hotkey:record-stop", (event) => recording.stop(event.sender, "blur"));
+  handle("hotkey:record-stop", (event, reason) => recording.stop(event.sender, reason));
   handle("setup:remove-hotkey", (_event, actionId, index) => {
     const action = actionOf(actionId);
     if (action === null) throw new TypeError(`不认识的动作：${actionId}`);
@@ -1492,7 +1492,7 @@ async function main() {
     window.on("blur", () => recording.stop(contents, "blur"));
     window.on("closed", () => {
       hubWindow = null;
-      recording.stop(contents, "blur");
+      recording.stop(contents, "closed");
     });
     return window;
   }
@@ -1520,7 +1520,7 @@ async function main() {
       onboardingWindow.on("closed", () => {
         onboardingWindow = null;
         hotkeyToOnboarding = false;
-        recording.stop(contents, "blur");
+        recording.stop(contents, "closed");
       });
       // 页面崩了就没人说"测完了"
       onboardingWindow.webContents.on("render-process-gone", (_event, details) => {

@@ -212,6 +212,18 @@ test("小帮手不在了：在录的那一处收到结束", () => {
   assert.equal(recording.recordingFor("hub"), false);
 });
 
+test("结束的原因照页面说的记（再点一下、点了别处、离开这一步……）；页面说的不认识就记成 page", () => {
+  const { recording, sent } = setup();
+  for (const reason of ["reclick", "elsewhere", "left", "unavailable", "closed"]) {
+    recording.start("hub", "dictate", null);
+    recording.stop("hub", reason);
+    assert.equal(sent.at(-1)[1].reason, reason);
+  }
+  recording.start("hub", "dictate", null);
+  recording.stop("hub", "<script>");
+  assert.equal(sent.at(-1)[1].reason, "page");
+});
+
 test("不认识的动作直接报错", () => {
   const { recording } = setup();
   assert.throws(() => recording.start("hub", "nope", null), /nope/);

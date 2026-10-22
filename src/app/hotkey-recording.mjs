@@ -11,8 +11,18 @@ import { LocalizedError, msg } from "../i18n/index.mjs";
 //   recording  还在录，codes 是现在按着的（unknown：有认不出的键，tooMany：超过两个了）
 //   rejected   这一下不行，reason 说为什么；还在录，全部松开后可以直接重按
 //   saved      存好了，退出录键；note 是能存但要提醒的话
-//   ended      没录成就结束了，reason：cancelled（单按 esc）、blur（页面失焦或说不录了）、replaced（另一处开始录）、
-//              timeout（小帮手 30 秒到点自己停了）、helper（小帮手不在了）
+//   ended      没录成就结束了，reason 是为什么（日志里也记它，排查"怎么录着录着没了"）：
+//              cancelled 单按 esc；replaced 另一处开始录；timeout 小帮手 30 秒到点自己停了；helper 小帮手不在了；
+//              blur 窗口失焦（切到别的应用）、closed 窗口关了，这两条是主进程看到的；
+//              页面自己说的见 PAGE_REASONS
+
+/**
+ * 页面说不录了的几种原因：reclick 又点了一下正在录的那个框，elsewhere 点了页面上别处，left 离开了这一步（引导页翻页），
+ * unavailable 页面知道录不了了（小帮手没在听）。页面传来的不在这里面的一律记成 page
+ */
+const PAGE_REASONS = new Set(["reclick", "elsewhere", "left", "unavailable"]);
+/** 主进程自己看到的原因 */
+const WINDOW_REASONS = new Set(["blur", "closed"]);
 
 /** 一个错误里给人看的那句：设置校验的错包了一层"哪一项写的是什么"，录键时页面上看得到是哪个组合，只要最里面的原因 */
 function reasonOf(error) {
@@ -104,9 +114,14 @@ export function createHotkeyRecording({ platform, record, probe, chordsOf, save,
       log.info("hotkey_record_started", { action: action.id, index: session.index });
     },
 
-    /** 页面说不录了（失焦、点了别处、关了）。不是在录的那一处说的不算 */
-    stop(target, reason = "blur") {
-      if (session?.target === target) end(reason);
+    /**
+     * 不录了。不是在录的那一处说的不算
+     * @param {unknown} target
+     * @param {string} reason 主进程的 blur、closed，或者页面传来的（PAGE_REASONS 以外的记成 page）
+     */
+    stop(target, reason) {
+      if (session?.target !== target) return;
+      end(PAGE_REASONS.has(reason) || WINDOW_REASONS.has(reason) ? reason : "page");
     },
 
     /** 这个页面是不是正在录：它的窗口这时要拦住按键，免得 ⌘W 之类作用在窗口上 */
