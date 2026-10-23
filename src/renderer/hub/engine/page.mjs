@@ -8,6 +8,7 @@ import { toast } from "../toast.mjs";
 import { createCanvas } from "./canvas.mjs";
 import { createDetail } from "./detail.mjs";
 import { createKeys } from "./keys.mjs";
+import { createLookupSegment } from "./lookup.mjs";
 import { itemKey, itemName, MODE_ROLES, modeName, plazaView, ROLE_IDS, ROLES } from "./plaza-view.mjs";
 import { createSearch } from "./search.mjs";
 import { createTree } from "./tree.mjs";
@@ -18,6 +19,8 @@ import { createTree } from "./tree.mjs";
 // 密钥是标题行右边的一张面板（keys.mjs）。数据由主进程拼好（app/model-plaza.mjs，随 getSetup 来），
 // 这里只画、只转达操作：换方式、换模型当场换上，存密钥先验证，还差的照实写着（顶上的横幅也会写）。
 // 控件和尺寸照界面规范（docs/desktop-ui-spec.md），文案照规范里的词表。
+// 标题旁分语音、划词两段：上面说的是语音那一段；划词那一段只有厂商、型号两列（lookup.mjs），和这棵树不相干，
+// 密钥面板两段共用（清单里的厂商同一家只有一把 key）。
 
 /**
  * @param {object} options
@@ -53,7 +56,10 @@ export function createEngine({ refresh }) {
   };
 
   const checks = createChecks(() => draw());
-  const indicators = slidingIndicators(document.querySelector('.page[data-route="models"]'));
+  const page = document.querySelector('.page[data-route="models"]');
+  const indicators = slidingIndicators(page);
+  /** 标题旁的两段：voice（树、画布）、lookup（lookup.mjs） */
+  let segment = "voice";
 
   // ---------- 主进程那边的操作 ----------
 
@@ -237,13 +243,15 @@ export function createEngine({ refresh }) {
     openKeys: (platform, options) => keys.open(platform, options),
     /** 从密钥面板回到详情：焦点放在还差的那一步（配置密钥）上，补齐了就放在启用上 */
     focusDetail: () =>
-      canvas.quietly(() =>
-        (
-          dock.querySelector(".detail-need button:not(:disabled)") ??
-          dock.querySelector(".detail-actions button:not(:disabled)") ??
-          dock.querySelector(".detail-close")
-        )?.focus({ preventScroll: true }),
-      ),
+      segment === "lookup"
+        ? lookupSegment.focusDetail()
+        : canvas.quietly(() =>
+            (
+              dock.querySelector(".detail-need button:not(:disabled)") ??
+              dock.querySelector(".detail-actions button:not(:disabled)") ??
+              dock.querySelector(".detail-close")
+            )?.focus({ preventScroll: true }),
+          ),
     toast,
     draw: () => draw(),
   };
@@ -263,6 +271,23 @@ export function createEngine({ refresh }) {
   });
   const detail = createDetail(ctx, dock);
   const keys = createKeys(ctx);
+  const lookupSegment = createLookupSegment({
+    els: {
+      root: $("lookup-engine"),
+      stage: $("lookup-stage"),
+      tree: $("lookup-tree"),
+      links: $("lookup-links"),
+      makers: $("lookup-makers"),
+      models: $("lookup-models"),
+      dock: $("lookup-detail"),
+      dockLinks: $("lookup-dock-links"),
+    },
+    getSetup: () => setup,
+    refresh,
+    openKeys: (platform, options) => keys.open(platform, options),
+    toast,
+    placeIndicators: () => indicators.place(),
+  });
   createSearch(ctx);
   const canvas = createCanvas({
     canvas: canvasEl,
@@ -307,10 +332,56 @@ export function createEngine({ refresh }) {
 
   // Esc 收起详情；开着的对话框（密钥面板、设置）、弹出的单子里按的 Esc 归它们自己
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || !ui.detail || canvasEl.offsetParent === null) return;
-    if (document.querySelector("dialog:modal, :popover-open")) return;
+    if (event.key !== "Escape" || document.querySelector("dialog:modal, :popover-open")) return;
+    if (segment === "lookup") {
+      if (lookupSegment.detailOpen && $("lookup-engine").offsetParent !== null) lookupSegment.closeDetail();
+      return;
+    }
+    if (!ui.detail || canvasEl.offsetParent === null) return;
     closeDetail();
   });
+
+  /** 换到另一段：只露出那一段，搜索、推荐组合只在语音那一段（engine.css 按 data-segment 藏） */
+  function showSegment(name) {
+    segment = name;
+    page.dataset.segment = name;
+    for (const button of $("engine-segments").querySelectorAll(".segment")) {
+      button.setAttribute("aria-checked", String(button.dataset.segment === name));
+    }
+    canvasEl.hidden = name !== "voice";
+    $("lookup-engine").hidden = name !== "lookup";
+    indicators.place();
+    if (name === "lookup") {
+      lookupSegment.render();
+      lookupSegment.shown();
+      return;
+    }
+    if (!setup?.plaza) return;
+    requestAnimationFrame(() => {
+      tree.drawLinks();
+      place(ui.detail ? "leaf" : "fit", { animate: false });
+    });
+  }
+  $("engine-segments").append(
+    ...[
+      ["voice", "i-mic"],
+      ["lookup", "i-letter-text"],
+    ].map(([name, icon]) =>
+      h(
+        "button",
+        {
+          type: "button",
+          class: "segment",
+          role: "radio",
+          "aria-checked": String(name === segment),
+          "data-segment": name,
+          onclick: () => showSegment(name),
+        },
+        svg(icon),
+        h("span", { text: t(`plaza.segments.${name}`) }),
+      ),
+    ),
+  );
 
   // ---------- 总的 ----------
 
@@ -418,14 +489,21 @@ export function createEngine({ refresh }) {
       // 没切成的那种方式后来从别处换上了（详情里启用、菜单栏、命令行）：失败的说明作废
       if (ui.modeFailure?.mode === next.plaza?.mode) ui.modeFailure = null;
       draw(first ? { view: "fit" } : {});
+      lookupSegment.render();
     },
 
     /**
-     * 从别处打开到某一处：tab 是一个环节就展开到它，是 "keys" 或给了 platform 就打开密钥面板（给了平台顺带展开那一家）
-     * @param {{ tab?: string, platform?: string }} target
+     * 从别处打开到某一处：tab 是一个环节就展开到它，是 "keys" 或给了 platform 就打开密钥面板（给了平台顺带展开那一家）；
+     * section 是 "lookup" 就换到划词那一段、打开在用的那一项（划词卡片上的"配置密钥"来的）
+     * @param {{ tab?: string, platform?: string, section?: "voice" | "lookup" }} target
      */
-    show({ tab, platform } = {}) {
+    show({ tab, platform, section } = {}) {
       if (!setup?.plaza) return;
+      if (section === "lookup") {
+        showSegment("lookup");
+        lookupSegment.openChosen();
+        return;
+      }
       if (tab === "keys" || platform) {
         keys.open(platform ?? null);
         return;
@@ -442,6 +520,10 @@ export function createEngine({ refresh }) {
     shown() {
       indicators.reset();
       indicators.place();
+      if (segment === "lookup") {
+        lookupSegment.shown();
+        return;
+      }
       if (!setup?.plaza) return;
       requestAnimationFrame(() => {
         tree.drawLinks();

@@ -6,14 +6,14 @@ import { describeError, keyMissing, permissionDenied, permissionText } from "../
 import { createTranslatePane } from "./translate-pane.mjs";
 
 // 设置对话框：原版的"设置中心"，左边一列菜单，按功能分栏：通用（主题、界面语言、开机启动、存储位置、软件更新）、
-// 快捷键（动作目录里的每个动作、悬浮条上的按键提示）、语音翻译（译成哪几种，translate-pane.mjs）、
+// 快捷键（动作目录里的每个动作、悬浮条上的按键提示）、语音翻译（译成哪几种，translate-pane.mjs）、划词翻译（译成哪一种）、
 // 本机模型（下载源、加速、内存）、权限、关于。
 // 识别方式、模型和 key 不在这里：在侧栏的"引擎"一页（engine/）。
 // 状态都在主进程，这里只负责画出来和转达用户的操作。
 
 const $ = (id) => document.getElementById(id);
 
-const PANES = ["general", "hotkeys", "voice-translate", "local-models", "permissions", "about"];
+const PANES = ["general", "hotkeys", "voice-translate", "lookup", "local-models", "permissions", "about"];
 
 /**
  * 还差的东西在哪补：key 在侧栏"引擎"一页的密钥表；权限、小帮手停了在设置的权限页（重新检查在那页）；
@@ -159,6 +159,16 @@ export function createSettings({ refresh }) {
 
   const translatePane = createTranslatePane({ refresh });
 
+  // ---------- 划词翻译：译成哪一种 ----------
+
+  function renderLookup(setup) {
+    fillSelect(
+      $("lookup-to"),
+      setup.lookup.choices.map((id) => [id, t(`languages.${id}`)]),
+      setup.lookup.to,
+    );
+  }
+
   // ---------- 本机模型：下载源、加速、内存 ----------
 
   function renderLocalModels(setup) {
@@ -206,6 +216,20 @@ export function createSettings({ refresh }) {
       showNote("language-note", result.note ?? null);
     } catch (error) {
       showNote("general-problem", t("preferences.languageFailed", { reason: describeError(error) }), "problem");
+    }
+    await refresh();
+  });
+
+  $("lookup-to").addEventListener("change", async (event) => {
+    showNote("lookup-problem", null);
+    showNote("lookup-note", null);
+    try {
+      const result = await window.speakmore.setLookupTo(event.target.value);
+      if (result.ok === false) {
+        showNote("lookup-problem", t("preferences.lookupFailed", { reason: t.text(result.problem) }), "problem");
+      } else showNote("lookup-note", result.note ?? null);
+    } catch (error) {
+      showNote("lookup-problem", t("preferences.lookupFailed", { reason: describeError(error) }), "problem");
     }
     await refresh();
   });
@@ -382,6 +406,7 @@ export function createSettings({ refresh }) {
       renderGeneral(setup);
       renderHotkeys(setup);
       translatePane.render(setup);
+      renderLookup(setup);
       renderLocalModels(setup);
       renderPermissions(setup);
       $("about-version").textContent = `v${setup.version}`;

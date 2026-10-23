@@ -523,6 +523,15 @@ export default {
   // 说明写成名词短语、用" · "连起来，不写"能用"这类口语
   plaza: {
     title: "引擎",
+    // 标题旁的两段（engine/page.mjs）：语音是三种识别方式的树，划词只有厂商、型号（engine/lookup.mjs）
+    segments: { label: "引擎分段", voice: "语音", lookup: "划词" },
+    lookup: {
+      testedTip: "经成批划词样例评测",
+      customKey: "自定义服务 API 密钥",
+      customEnabled: "已启用自定义服务",
+      removeKey: "删除密钥",
+      keyRemoved: "自定义服务密钥已删除",
+    },
     search: "搜索模型或厂商",
     modes: { native: "直出", local: "混合", private: "离线" },
     // 树的三个步骤，和每一步做什么（悬停时看）
@@ -899,6 +908,7 @@ export default {
     translateRemove: "移除{language}",
     translateAdd: "添加",
     translateFailed: "语音翻译的语言未能更改：{reason}",
+    lookupFailed: "划词翻译的语言未能更改：{reason}",
     recheck: "重新检查",
     version: "版本",
     source: "源代码",

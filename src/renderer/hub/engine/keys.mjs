@@ -15,14 +15,16 @@ export function createKeys(ctx) {
   /** 从详情里点"配置密钥"来的：存好就收起面板，回到详情接着启用 */
   let back = false;
 
-  /** 存了这把密钥之后能用的模型有几个（三个环节上这个平台卖的） */
-  const newlyUsable = (platform) => Object.values(platform.coverage).reduce((sum, count) => sum + count, 0);
+  /** 存了这把密钥之后能用的模型有几个（三个环节上这个平台卖的；划词那一排和整理是同一份，不重复数） */
+  const newlyUsable = ({ coverage: { native, transcribe, polish } }) => native + transcribe + polish;
 
   function coverage(platform) {
-    if (platform.id === "custom") return t("plaza.custom.desc");
+    // 这一行的自定义服务是语音那边整理用的；划词的自定义服务在引擎页"划词"那一段自己填
+    if (platform.id === "custom") return `${roleName("polish")} · ${t("plaza.custom.desc")}`;
     const parts = ["native", "transcribe", "polish"]
       .filter((role) => platform.coverage[role] > 0)
       .map((role) => `${roleName(role)} ${platform.coverage[role]}`);
+    if (platform.coverage.lookup > 0) parts.push(`${t("plaza.segments.lookup")} ${platform.coverage.lookup}`);
     return `${t("plaza.keys.coverage")} ${parts.join(" · ")}`;
   }
 

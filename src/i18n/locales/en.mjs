@@ -539,6 +539,14 @@ export default {
   // The Engine page in the sidebar (renderer/hub/engine/)
   plaza: {
     title: "Engine",
+    segments: { label: "Engine sections", voice: "Voice", lookup: "Selection" },
+    lookup: {
+      testedTip: "Evaluated on a batch of selection samples",
+      customKey: "Custom service API key",
+      customEnabled: "Custom service enabled",
+      removeKey: "Remove key",
+      keyRemoved: "Custom service key removed",
+    },
     search: "Search models",
     modes: { native: "Direct", local: "Hybrid", private: "Offline" },
     // The tree's three steps, and what each one does (on hover)
@@ -933,6 +941,7 @@ export default {
     translateRemove: "Remove {language}",
     translateAdd: "Add",
     translateFailed: "Translation languages not changed: {reason}",
+    lookupFailed: "Selection translation language not changed: {reason}",
     recheck: "Check again",
     version: "Version",
     source: "Source code",

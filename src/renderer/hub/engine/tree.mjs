@@ -49,8 +49,11 @@ function line(kind, text, title) {
   );
 }
 
-/** 一个标签：出厂默认、已评测、已知问题（悬停说是什么问题）、未验证 */
-export function tagNode(tag) {
+/**
+ * 一个标签：出厂默认、已评测、已知问题（悬停说是什么问题）、未验证
+ * @param {string | null} [tip] 悬停说的话换成这一句（划词那一段的"已评测"评的是划词，不是录音）
+ */
+export function tagNode(tag, tip = null) {
   if (tag.kind === "issue") {
     return h("span", {
       class: "tag",
@@ -64,7 +67,7 @@ export function tagNode(tag) {
   return h("span", {
     class: "tag",
     "data-tone": tone,
-    title: t(`plaza.tags.${tag.kind}Tip`),
+    title: tip ?? t(`plaza.tags.${tag.kind}Tip`),
     text: t(`plaza.tags.${tag.kind}`),
   });
 }

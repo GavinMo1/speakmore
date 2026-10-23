@@ -231,7 +231,13 @@
              树排在一块可拖动、可缩放的画布上（engine/page.mjs）。标题行右边是搜索、推荐组合、密钥 -->
         <section class="page" data-route="models" aria-labelledby="models-title" hidden>
           <header class="page-head">
-            <h1 class="page-title" id="models-title" data-i18n="plaza.title">Engine</h1>
+            <!-- 标题旁分语音、划词两段：语音是下面的树，划词只有厂商、型号两列（engine/lookup.mjs） -->
+            <div class="title-row">
+              <h1 class="page-title" id="models-title" data-i18n="plaza.title">Engine</h1>
+              <div class="segmented" id="engine-segments" role="radiogroup" data-indicator="engine-segments" data-i18n-aria-label="plaza.segments.label">
+                <span class="indicator" aria-hidden="true"></span>
+              </div>
+            </div>
             <div class="page-tools">
               <search class="search">
                 <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
@@ -248,6 +254,21 @@
               <h2 class="picker-title" id="preset-picker-title" data-i18n="presets.title">Recommended setups</h2>
             </header>
             <div class="picker-options" id="preset-options"></div>
+          </div>
+
+          <!-- 划词那一段：厂商 → 型号两列，点型号在右边出详情；只有两列、放得下，不上画布 -->
+          <div class="lookup-engine" id="lookup-engine" hidden>
+            <div class="lookup-stage" id="lookup-stage">
+              <div class="tree lookup-tree" id="lookup-tree">
+                <svg class="tree-links" id="lookup-links" aria-hidden="true"></svg>
+                <p class="col-label" data-col="1" data-i18n="plaza.columns.makers">Maker</p>
+                <p class="col-label" data-col="2" data-i18n="plaza.columns.models">Model</p>
+                <div class="tree-col" data-level="maker" id="lookup-makers"></div>
+                <div class="tree-col" data-level="model" id="lookup-models"></div>
+              </div>
+            </div>
+            <svg class="canvas-links" id="lookup-dock-links" aria-hidden="true"></svg>
+            <div class="detail-dock" id="lookup-detail"></div>
           </div>
 
           <!-- 画布：不带框、铺到窗口边。world 整块平移、缩放；详情、图例、缩放条浮在上面，不跟着动 -->
@@ -418,6 +439,9 @@
         <button type="button" class="menu-item" data-pane="voice-translate">
           <svg class="icon" aria-hidden="true"><use href="#i-languages" /></svg><span data-i18n="actions.translate.name">Voice translation</span>
         </button>
+        <button type="button" class="menu-item" data-pane="lookup">
+          <svg class="icon" aria-hidden="true"><use href="#i-letter-text" /></svg><span data-i18n="actions.lookup.name">Selection translation</span>
+        </button>
         <button type="button" class="menu-item" data-pane="local-models">
           <svg class="icon" aria-hidden="true"><use href="#i-laptop" /></svg><span data-i18n="preferences.localModels">On-device models</span>
         </button>
@@ -492,6 +516,17 @@
           <ul class="language-list" id="translate-targets"></ul>
           <p class="setting-note" id="translate-note" role="status" hidden></p>
           <p class="setting-note" id="voice-translate-problem" role="alert" hidden></p>
+        </section>
+
+        <!-- 划词翻译：只有译成哪一种；卡片上能临时换成别的（只管那一次）。交给哪个模型在引擎页"划词"那一段 -->
+        <section class="pane" data-pane="lookup" hidden>
+          <h3 class="pane-title" data-i18n="actions.lookup.name">Selection translation</h3>
+          <div class="setting">
+            <label class="setting-title" for="lookup-to" data-i18n="preferences.translateTo">Translate into</label>
+            <select class="select" id="lookup-to"></select>
+          </div>
+          <p class="setting-note" id="lookup-note" role="status" hidden></p>
+          <p class="setting-note" id="lookup-problem" role="alert" hidden></p>
         </section>
 
         <!-- 本机模型：下载源、加速、内存。栏名写了"本机模型"，每项的名字就短 -->
