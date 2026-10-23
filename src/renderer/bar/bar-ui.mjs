@@ -4,7 +4,7 @@
 // 提示行左边可以有一个胶囊（功能给的，语音翻译是目标语言）：鼠标移上去展开几个选项，点了交给 onPick。
 // 窗口本身点不到，鼠标移动是主进程转过来的（setIgnoreMouseEvents 的 forward），点击和条上两个按钮一样由小帮手截下来。
 
-import { controlsIn, hintFor, LINGER_MS, showsChip, View } from "./bar-view.mjs";
+import { controlsIn, hintFor, LINGER_MS, picksChip, showsChip, View } from "./bar-view.mjs";
 import { createWave, REST, WAVE_BARS } from "./wave.mjs";
 
 /** 整理中那道波有几根竖条 */
@@ -118,8 +118,8 @@ export function createBarUi({ document, host, keys: initialKeys, t: initialT, on
     );
   }
 
-  /** 胶囊有几个选项可挑、点得动：只有一种语言时只是写着，没得挑 */
-  const choosable = () => chip !== null && chip.options.length > 1 && controls && showsChip(view);
+  /** 胶囊有几个选项可挑、点得动：只有一种语言时只是写着，没得挑；等成品时也只是写着 */
+  const choosable = () => chip !== null && chip.options.length > 1 && controls && picksChip(view);
 
   /** 画胶囊和它的选项。选项从胶囊上方展开，一项一行，选中的那项打勾 */
   function drawChip() {

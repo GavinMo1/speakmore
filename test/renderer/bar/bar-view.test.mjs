@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createTranslator, msg } from "../../../src/i18n/index.mjs";
-import { controlsIn, hintFor, LINGER_MS, showsChip, View, viewOf } from "../../../src/renderer/bar/bar-view.mjs";
+import {
+  controlsIn,
+  hintFor,
+  LINGER_MS,
+  picksChip,
+  showsChip,
+  View,
+  viewOf,
+} from "../../../src/renderer/bar/bar-view.mjs";
 
 const zh = createTranslator("zh-CN");
 const en = createTranslator("en");
@@ -101,5 +109,10 @@ test("等成品时写功能自己的那句（语音翻译写翻译中）；功�
   assert.deepEqual(
     [View.STARTING, View.RECORDING, View.FINISHING, View.DONE, View.NOTICE, View.ERROR, View.HIDDEN].map(showsChip),
     [true, true, true, false, false, false, false],
+  );
+  // 胶囊只在说话时点得动、要截：等成品时换语言也来不及了，esc 也不该被吞
+  assert.deepEqual(
+    [View.STARTING, View.RECORDING, View.FINISHING, View.DONE, View.NOTICE, View.ERROR, View.HIDDEN].map(picksChip),
+    [true, true, false, false, false, false, false],
   );
 });

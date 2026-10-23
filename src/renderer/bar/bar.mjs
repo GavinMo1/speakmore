@@ -238,6 +238,8 @@ async function stop() {
     }
     dispatch({ type: "FAILED", message });
   }
+  // 这一次完了：胶囊收掉，下一次开口时不先画出这一次的语言（新的一次那时还没开始，session 是空的）
+  if (session === null) ui.setFeature({ chip: null, finishing: null });
 }
 
 // ---------- 来自主进程的事件 ----------

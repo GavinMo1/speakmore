@@ -71,6 +71,9 @@ export function hintFor(view, { keys, escKeys, cancellable, shown = true, finish
 /** 这几种样子下提示行左边画功能的胶囊（语音翻译的目标语言）：说着话、等成品时 */
 export const showsChip = (view) => view === View.STARTING || view === View.RECORDING || view === View.FINISHING;
 
+/** 胶囊点得动（换这一次的语言）、要截的样子：说着话时。等成品时只写着：换了也来不及，esc 也不该被吞 */
+export const picksChip = (view) => view === View.STARTING || view === View.RECORDING;
+
 /** 这个样子下，条上哪几个按钮点得动 */
 export function controlsIn(view) {
   if (view === View.STARTING) return ["cancel"];
