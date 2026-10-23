@@ -38,6 +38,8 @@ metadata:
   - 他的要求：字幕里的 APP 一律大写（"Any APP"、"One APP"）；落版的官网用首屏（Hero），不用最底下的下载区。
   - 他追加（10-23）：SPEAK 不要只是粘贴一句，要用字幕表现说了一大段，再自动去语气词、整理分点。改成说"嗯，周五之前要做几件事，呃，一个是修好登录页……"、语气词炸散、备忘录里落成三条编号（口述里没说第一第二，App 自己分的点），提交 a399fc9。
   - 做法：开场从原曲第 4 拍起放，前后两次各加长一小节（32 → 40 拍，多出的给演示，SPEAK 约 4 秒），之后各段整体 +8 拍，片长 289 拍（115.6 秒）；砸下的拍现在是 b32、b128、b224。三段演示在 components/Glimpse.tsx，成品是 App 真实输出。最新渲染 https://kineto.zephyrxiang.com/renders/speakmore-promo-3/speakmore-promo-3-abbea0ee35ef.mp4
+  - 10-23 他说 SPEAK 那步"完全 OK"。
+  - 封面（10-23，提交 02399a7，待他看）：他要横竖两张，要有 logo、产品名、三大功能、背景，审美要高，不承接前两支（"这一次是彻底、很大很大的重构"）。做法是暗场夜色底，开场的粒子漩涡定格成一圈环绕 speakmore 的光环，图标、小写品牌字、版本号居中，下面三项功能各带自己的霓虹键帽。环要几乎放平，斜着放总有一头压到字。文件在 kineto 的 out/speakmore-promo-3/（-cover-16x9.png、-cover-3x4.png）。
   - 临时脚本（抽帧拼图 sheet.py、亮度和静止 luma.py）在 kineto 的 out/speakmore-promo-3/work/，`out/` 不进 git。新写的 luma.py 比原来的严，Modes 段和片尾图标段也会报静止，上一版跑出来一样，不算新问题。
 - "terminal 就是 terminal"：普通标签不配中文解释。
 - 砍废话：像"外文，无处不在"这种铺垫句直接删。
