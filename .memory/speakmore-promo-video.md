@@ -8,6 +8,8 @@ metadata:
   modified: 2026-10-17T17:17:34.667Z
 ---
 
+**第三支（10-23 定下要做，还没开始）**：给 0.16、0.17 的三位一体升级配（语音输入、语音翻译、划词翻译，口号"口述成文，划词即译"，新引导、苹果风格按钮）。他原话："这么牛逼的升级必须配一个巨牛逼的宣传片"，要先好好探讨方向再动手。素材可用：README 那批图（docs/media.json，主窗口、三项功能示意图、划词实拍、新引导）、官网的三段演示、引导里的演示画面（src/renderer/onboarding/scene.mjs）。
+
 2026-10-15 定下的宣传片。视频在 kineto 仓库（他自己的开源项目，基于 Remotion）里做，视频 id `speakmore-promo`（当初在 `feat/speakmore-promo` 分支做，已合进 main、分支已删）。照 kineto 的 AGENTS.md：素材只经 `./kineto asset add` 带授权登记，导出只用 `./kineto render`，收尾跑 `npm run verify`。
 
 ## 他的要求（原话）
