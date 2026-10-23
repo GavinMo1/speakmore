@@ -90,7 +90,11 @@ test("认不出、模型照抄回来（拉丁字母的语言）：再按另一�
 });
 
 test("繁体选给简体：模型转写成简体就是结果，不因为和原文字多半相同就改译成英文", async () => {
-  const { client, requests } = fakeClient({ text: "我想去北京看看天安门，然后去吃烤鸭。", problem: null, usage: USAGE });
+  const { client, requests } = fakeClient({
+    text: "我想去北京看看天安门，然后去吃烤鸭。",
+    problem: null,
+    usage: USAGE,
+  });
   const result = await translatorWith(client).translate("我想去北京看看天安門，然後去吃烤鴨。", {
     language: zhCN,
     lookupId: "l",

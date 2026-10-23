@@ -24,7 +24,8 @@ const SCRIPTS = {
 };
 
 /** 比占比用的单位：中日韩、泰文一个字一个，别的文字一个词一个（中文里夹的 API、response 各算一个，不按字母数） */
-const LETTER_UNITS = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}]|[^\P{L}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}]+/gu;
+const LETTER_UNITS =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}]|[^\P{L}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}]+/gu;
 
 /** 每个单位是哪种文字系统，数一数（数字、标点不算） */
 function countScripts(text) {
@@ -75,10 +76,7 @@ const CONVERTERS = { "zh-CN": toSimplified, "zh-TW": toTraditional };
 
 /** 中文目标遇上以汉字为主、没有假名、转成目标写法会改字的原文：是另一种写法（繁简、日文汉字），要转写，"不是"作数 */
 const decidesNo = (text, language, scripts) =>
-  language in CONVERTERS &&
-  mostly(scripts, "han") &&
-  scripts.counts.kana === 0 &&
-  CONVERTERS[language](text) !== text;
+  language in CONVERTERS && mostly(scripts, "han") && scripts.counts.kana === 0 && CONVERTERS[language](text) !== text;
 
 /**
  * 选中的字是不是已经是这种语言
