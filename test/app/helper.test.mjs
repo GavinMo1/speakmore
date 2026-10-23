@@ -15,7 +15,7 @@ console.log("这一行不是 JSON");
 require("node:readline").createInterface({ input: process.stdin }).on("line", (line) => {
   const command = JSON.parse(line);
   if (command.cmd === "bind") return emit({ event: "bound", rejected: [], got: command.bindings });
-  if (command.cmd === "capture") return emit({ event: "click", id: command.regions[0]?.id ?? null, regions: command.regions });
+  if (command.cmd === "capture") return emit({ event: "click", id: command.regions[0]?.id ?? null, regions: command.regions, outside: command.outside });
   if (command.cmd === "release") return emit({ event: "interrupted", id: "dictate#0", got: command });
   if (command.cmd === "record") return emit(command.on ? { event: "recording", on: true, mods: [], keys: [] } : { event: "recording", on: false });
   if (command.cmd === "probe") {
@@ -111,11 +111,12 @@ test("开始截和不截了：命令原样送到，截到的点击和别的事�
   ];
   const clicked = once(events, "click");
   helper.capture(regions);
+  // 悬浮条不带 outside
   assert.deepEqual((await clicked)[0], { event: "click", id: "cancel", regions });
   // 划词卡片要块外的按下：带上 outside
   const outside = once(events, "click");
   helper.capture(regions, { outside: true });
-  assert.deepEqual((await outside)[0].regions, regions);
+  assert.deepEqual((await outside)[0], { event: "click", id: "cancel", regions, outside: true });
   const interrupted = once(events, "interrupted");
   helper.release();
   assert.deepEqual((await interrupted)[0], { event: "interrupted", id: "dictate#0", got: { cmd: "release" } });
