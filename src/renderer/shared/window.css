@@ -10,9 +10,11 @@
   --fill-thin: color-mix(in oklab, var(--ink) 4%, var(--bg));
   --fill-hover: color-mix(in oklch, var(--ink) 6%, transparent);
   --fill-selected: color-mix(in oklch, var(--ink) 10%, transparent);
+  /* 次要按钮一类悬停、按下时：比 selected 再深一点 */
+  --fill-strong: color-mix(in oklch, var(--ink) 14%, transparent);
   --line: color-mix(in oklch, var(--ink) 8%, transparent);
 
-  /* 主题的渐变：主按钮、口述卡、进度、电平 */
+  /* 主题的渐变：口述卡、进度、电平（按钮不用，见下面的胶囊） */
   --gradient: linear-gradient(135deg, var(--primary), var(--glow));
   /* 窗口背后的两团光，一直不动：玻璃透出来的就是它 */
   --aura-layer:
@@ -165,7 +167,8 @@ p {
 }
 
 /* ---------- 胶囊：按钮、下拉框、标题行的胶囊按钮（hub/picker.css）共用一个外形 ----------
-   全圆、无描边、半透明的面浮起一点、字加粗；悬停时实底。主要按钮换成主题渐变，幽灵按钮没有面。
+   照苹果的做法：全圆、无描边、不浮起，一层淡灰底，字加粗；悬停时深一点。主要按钮是实色的主题色，不用渐变、不发光；
+   幽灵按钮没有底；按钮里不放箭头。2026-10-23 他说渐变加光晕的胶囊"有点 AI slop"，改成这样。
    用 :where 写、不占优先级，各自的样式（主要、幽灵、置灰、展开着）照常盖过它。
    以后加按钮一类的东西都用这个外形，别再写圆角矩形（测试守着：按钮一类的圆角只能是全圆） */
 
@@ -173,14 +176,14 @@ p {
   font: inherit;
   font-weight: var(--weight-semibold);
   color: var(--ink);
-  background: var(--surface);
+  background: var(--fill-selected);
   border: none;
   border-radius: var(--radius-full);
-  box-shadow: var(--edge), var(--lift);
+  box-shadow: none;
 }
 
 :where(.button, .select, .picker-trigger):hover {
-  background: var(--surface-solid);
+  background: var(--fill-strong);
 }
 
 /* ---------- 按钮：次要（默认）、主要、幽灵、小号；撑满列宽用 .block ---------- */
@@ -216,22 +219,17 @@ p {
 .button:disabled {
   color: var(--ink-2);
   cursor: default;
-  background: var(--surface);
-  box-shadow: var(--edge);
+  background: var(--fill-hover);
 }
 
 .button.primary {
   font-weight: var(--weight-semibold);
   color: var(--on-primary);
-  background: var(--gradient);
-  box-shadow:
-    inset 0 1px 0 color-mix(in oklch, var(--on-primary) 18%, transparent),
-    0 1px 2px oklch(0 0 0 / 0.12),
-    0 6px 16px -8px color-mix(in oklch, var(--primary) 70%, transparent);
+  background: var(--primary);
 }
 
 .button.primary:hover {
-  filter: brightness(1.06) saturate(1.08);
+  filter: brightness(1.08);
 }
 
 .button.ghost {
@@ -378,7 +376,7 @@ p {
 }
 
 .select:open {
-  background: var(--surface-solid);
+  background: var(--fill-strong);
 }
 
 /* 箭头用自己的（和胶囊按钮同一个），不要自带的 */
