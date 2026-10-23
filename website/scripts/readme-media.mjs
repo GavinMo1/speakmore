@@ -3,7 +3,7 @@
 //   ../node_modules/.bin/electron scripts/readme-media.mjs -- <截图目录> <输出目录>     （在 website/ 下）
 //
 // 截图目录里是从真 App 用调试端口截的 PNG（两倍图），文件名 <en|zh>-<序号>-<名字>.png：序号 01–09 是首次引导的窗口，
-// 其余是主窗口（红绿灯的位置不同，照 src/app/main.mjs 的 frame()）。怎么截见 docs/development.md 的"README 的图"。
+// 其余是主窗口（红绿灯的位置不同，照 src/app/main.mjs 的 frame()）；名字以 settings- 开头的是设置对话框，不画红绿灯。怎么截见 docs/development.md 的"README 的图"。
 // 输出目录里有 manifest.json（名字 → 文件、CSS 像素宽高），再用 upload-media.mjs 传到图片桶的 readme/ 下。
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -237,9 +237,10 @@ app.whenReady().then(async () => {
     .filter((f) => f.endsWith(".png"))
     .sort()) {
     const [, lang, rest] = file.match(/^(en|zh)-\d+-(.+)\.png$/);
-    // 序号 01–09 是首次引导的窗口：红绿灯的位置不同，名字前面加 onboarding-
+    // 序号 01–09 是首次引导的窗口：红绿灯的位置不同，名字前面加 onboarding-。
+    // 设置是主窗口里的对话框，截的只是它那一块（settings-…），不是一个窗口，不画红绿灯
     const onboarding = /^(en|zh)-0\d-/.test(file);
-    const lights = onboarding ? ONBOARDING : HUB;
+    const lights = onboarding ? ONBOARDING : rest.startsWith("settings-") ? null : HUB;
     const name = `${onboarding ? "onboarding-" : ""}${rest}.${LOCALE[lang]}`;
     const png = readFileSync(join(shotsDir, file));
     const { body, width, height } = await framed(png, lights);

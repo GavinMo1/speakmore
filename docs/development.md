@@ -157,7 +157,7 @@ node scripts/release/release.mjs windows      # 只打 Windows 的（更新清�
 README 里的图不进仓库，和官网的截图放在同一个 COS 图片桶里（官网、宣传片也用），在 `readme/` 下；传上去的记在 `docs/media.json`，测试会查 README 引用的都在这份清单里、中文版只用中文的图。
 
 1. 用隔离的家目录起 App，带调试端口：`SPEAKMORE_HOME=<短路径> SPEAKMORE_THEME=indigo SPEAKMORE_LANGUAGE=<en|zh-CN> node_modules/.bin/electron . --remote-debugging-port=9333`。家目录是新的就从首次引导开始；主窗口要有数据的话，先往 `data/history.db` 里造历史（照 `website/scripts/screenshots.mjs` 的 `seed`）。macOS 的套接字路径有长度上限，家目录用 `/tmp` 下的短路径（可以软链到别处）。
-2. 用调试协议点到要截的那一页，`Page.captureScreenshot` 存成两倍图的 PNG，文件名 `<en|zh>-<序号>-<名字>.png`（01–09 是首次引导）。窗口高度不够时用 `Emulation.setDeviceMetricsOverride` 把视口加高。
+2. 用调试协议点到要截的那一页，`Page.captureScreenshot` 存成两倍图的 PNG，文件名 `<en|zh>-<序号>-<名字>.png`（01–09 是首次引导；设置对话框只截它那一块，名字以 `settings-` 开头，加外框时不画红绿灯）。窗口高度不够时用 `Emulation.setDeviceMetricsOverride` 把视口加高。
 3. 加窗口外框、画下载速度对比和厂商标志墙：在 `website/` 下 `../node_modules/.bin/electron scripts/readme-media.mjs -- <截图目录> <输出目录>`。
 4. 上传：`../scripts/release/with-cos-key.sh node scripts/upload-media.mjs <输出目录> --prefix readme --manifest ../docs/media.json`。对象名带内容指纹，图变了地址就变，README 里的地址照新的清单换。推上 GitHub 后把页面上每张图（经 camo 代理）取一遍：代理第一次从桶上取图偶尔拿到空的，还会缓存一年，遇到了就在那张图的地址后面加 `?v=2` 之类的查询串让它重取。
 
