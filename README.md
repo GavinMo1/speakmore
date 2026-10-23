@@ -7,6 +7,7 @@
 <p align="center">
   <b>口述成文，划词即译。</b><br>
   开源、免费的语音输入与翻译工具，支持 macOS 与 Windows。<br>
+  语音输入、语音翻译、划词翻译，各由一个快捷键触发，在任意应用中可用。<br>
   兼容主流大模型，语音输入亦可完全在本机运行。<br>
   <a href="https://speakmore.zephyrxiang.com/?lang=zh-CN">speakmore.zephyrxiang.com</a>
 </p>
@@ -23,11 +24,13 @@
 </p>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/home-dark.zh-CN.a8dce461.webp" />
-  <img src="https://media.speakmore.zephyrxiang.com/readme/home.zh-CN.aa9c9d24.webp" alt="SpeakMore 主窗口首页：三项功能的快捷键、字数、节省时间、语速与每日热力图，右上角为当前识别方式" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/home-dark.zh-CN.596d6346.webp" />
+  <img src="https://media.speakmore.zephyrxiang.com/readme/home.zh-CN.52652b74.webp" alt="SpeakMore 主窗口首页：标题为口述成文，划词即译，下方为三项功能的快捷键、字数、节省时间、语速与每日热力图，右上角为当前识别方式" />
 </picture>
 
 ## 三项功能
+
+三项功能均以右 ⌥（Windows 为右 Alt）为起点：单按为语音输入，加空格为语音翻译，加回车为划词翻译。
 
 | 功能 | 用途 | macOS | Windows |
 | --- | --- | --- | --- |
@@ -46,6 +49,7 @@
 - 自动去除语气词、重复与改口内容（直出、混合方式）。
 - 自动补全标点，较长内容分段、分条。
 - 词典中的专有名词、产品名与术语按词典的写法输出。
+- 三种识别方式并列可选，离线方式完全在本机运行，不上传任何数据。
 
 ### 🌐 语音翻译
 
@@ -56,10 +60,10 @@
 
 - 用中文口述，写入的是英文；目标语言支持 16 种。
 - 适用于在群聊中与外国同事、客户交流，以及撰写英文邮件与提交说明：译文直接写入输入框，无需另开翻译工具。
-- 在「设置 › 语音翻译」中预设目标语言，可设多种，第一种为默认。
-- 口述时在悬浮条上临时切换目标语言，仅对本次生效。
 - 先整理再翻译：语气词与改口不进入译文，原文与译文均记入历史。
+- 在「设置 › 语音翻译」中预设目标语言，可设多种，第一种为默认；口述时可在悬浮条上临时切换，仅对本次生效。
 - 模型耗时中位数：直出 2.6 秒，混合 1.3 秒。
+- 使用直出或混合方式；离线方式的本机模型只能转文字，不提供语音翻译。
 
 ### 📖 划词翻译
 
@@ -81,13 +85,13 @@
 - 卡片不抢占焦点，正在阅读或编辑的应用保持原状；卡片上可复制译文、临时切换目标语言、固定卡片。
 - 原文已是目标语言时，改译为英文（目标为英文时改译为简体中文），卡片上标明实际译成的语言。
 - 使用独立的文字模型，与语音互不影响：默认 DeepSeek V4.1 Flash，单次约 0.9 秒；可在引擎页的「划词」一段更换，亦支持 OpenAI 兼容服务。
-- 在「设置 › 划词翻译」中设置目标语言；划词记录计入历史与花费。
+- 划词记录计入历史与花费，不计入首页的口述统计。
 
 ## 五项自由
 
-- 🧩 **[模型自由](#-模型自由)**：29 个模型，并支持 OpenAI 兼容服务；划词翻译另选文字模型。
-- 🔀 **[方式自由](#-方式自由)**：语音输入与语音翻译有三种识别方式并列可选，推荐组合一键启用。
-- 💻 **[硬件自由](#-硬件自由)**：Mac 与 Windows 通用，本机模型经 Metal、Vulkan 或 CPU 运行。
+- 🧩 **[模型自由](#-模型自由)**：语音 29 个模型，划词翻译另选文字模型；整理与划词均可接入 OpenAI 兼容服务。
+- 🔀 **[方式自由](#-方式自由)**：语音输入与语音翻译有三种识别方式，并列可选；推荐组合一键启用。
+- 💻 **[硬件自由](#-硬件自由)**：Mac 与 Windows 通用；本机模型经 Metal、Vulkan 或 CPU 运行。
 - 🔒 **[隐私自由](#-隐私自由)**：语音输入可完全离线，不上传数据，无需密钥与账号。
 - 💸 **[费用自由](#-费用自由)**：软件免费；按每日 100 次计，语音输入推荐组合月成本 ¥0–35，划词翻译约 ¥2.4。
 
@@ -143,26 +147,83 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 </details>
 
-## 🎙️ 使用
+## 🧭 使用
 
-1. 将光标置于任意输入框，按下**右 Option**（Windows 为**右 Alt**）。
-2. 开始口述，屏幕底部的悬浮条随音量变化。
-3. 再次按下快捷键，文字写入光标位置；按 `esc` 取消本次口述。
+SpeakMore 常驻菜单栏（Windows 为任务栏通知区域）。三项功能均由快捷键触发，在任意应用中可用，无需打开主窗口。
 
-- 语音翻译、划词翻译的快捷键见[三项功能](#三项功能)。
-- 快捷键可在「设置 › 快捷键」中更换：点击后按下新的键或两键组合，即刻生效；每项功能至多可绑定 4 个组合。
-- SpeakMore 常驻菜单栏（Windows 为任务栏通知区域）。
-- 主窗口提供统计、历史记录、词典、引擎与设置。
-- **词典**：常说的专有名词、产品名与术语加入词典后，语音输入与语音翻译按词典的写法输出。词典仅保存在本机，随请求发送给所选模型；支持词典的模型列于词典页。
+### 语音输入
+
+1. 将光标置于任意输入框，按下**右 ⌥**（Windows 为**右 Alt**）。
+2. 开始口述，屏幕底部的悬浮条随音量变化，并提示结束与取消的按键。
+3. 再次按下快捷键，整理后的文字写入光标位置；按 `esc` 取消本次口述。
+
+按一下开始、再按一下结束，不需要一直按住。
+
+### 语音翻译
+
+1. 将光标置于输入框，按下**右 ⌥ + 空格**（Windows 为**右 Alt + 空格**）。
+2. 开始口述，悬浮条上显示本次的目标语言，点击可临时切换。
+3. 再次按下右 ⌥ + 空格，译文写入光标位置；按 `esc` 取消。
+
+### 划词翻译
+
+1. 在任意应用中选中一段文字，单次至多 4000 字。
+2. 按下**右 ⌥ + 回车**（Windows 为**右 Alt + 回车**），选区下方出现卡片，显示译文。
+3. 卡片上可复制译文、临时切换目标语言或固定卡片；按 `esc` 或点击卡片以外的位置即收起，固定后点击别处不再收起。
+
+macOS 上读取选中的文字需要辅助功能权限，首次引导中一并开启。
+
+### 主窗口
+
+从菜单栏图标打开主窗口，左侧为四个页面，左下角为设置。
+
+| 页面 | 内容 |
+| --- | --- |
+| 首页 | 三项功能的快捷键、当前识别方式、口述字数与语速、每日热力图、花费走势 |
+| 引擎 | 「语音」「划词」两段的模型、密钥与推荐组合，详见[模型自由](#-模型自由) |
+| 历史 | 三项功能的全部记录，可按功能筛选；翻译记录附原文，单条可复制 |
+| 词典 | 专有名词、产品名与术语，语音输入与语音翻译按词典的写法输出 |
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/history.zh-CN.0dfd6dba.webp" alt="历史页：按语音输入、语音翻译、划词翻译筛选，翻译记录下方附原文" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/settings-hotkeys.zh-CN.3977aafd.webp" alt="设置的快捷键一栏：三项功能与取消各一行，可添加多个组合" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/history.zh-CN.3b64aa60.webp" alt="历史页：按语音输入、语音翻译、划词翻译筛选，翻译记录下方附原文" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/vocabulary.zh-CN.afcce34f.webp" alt="词典页：十二个专有名词与术语，可搜索、导入与新增，右上为支持词典的模型" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>历史记录按功能筛选，翻译附原文</sub></td>
+    <td align="center"><sub>历史：三项功能的记录，翻译附原文</sub></td>
+    <td align="center"><sub>词典：按词典的写法输出</sub></td>
+  </tr>
+</table>
+
+**词典**
+
+- 常说的专有名词、产品名与术语加入词典后，语音输入与语音翻译按词典的写法输出；划词翻译不使用词典。
+- 支持从单列 CSV 或每行一词的文本导入，已有的词跳过。
+- 词典仅保存在本机，随请求发送给所选模型；离线方式下不离开本机。支持词典的模型列于词典页。
+
+### 设置
+
+| 一栏 | 内容 |
+| --- | --- |
+| 通用 | 主题、界面语言、开机自启、存储位置、软件更新 |
+| 快捷键 | 三项功能与取消的快捷键，悬浮条上的按键提示 |
+| 语音翻译 | 目标语言，可设多种，第一种为默认 |
+| 划词翻译 | 目标语言 |
+| 本机模型 | 下载源、加速方式、内存释放 |
+| 权限 | 麦克风、输入监控与辅助功能（仅 Mac）的状态 |
+| 关于 | 版本与源代码 |
+
+- 更换快捷键：点击后按下新的键或两键组合，即刻生效；每项功能至多绑定 4 个组合，划词翻译的快捷键可清空。
+- 与系统或常用快捷键冲突的组合不可绑定，规则见下文「参考 › 设置项」。
+
+<table>
+  <tr>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/settings-hotkeys.zh-CN.d3d85bc6.webp" alt="设置的快捷键一栏：语音输入、语音翻译、划词翻译与取消各一行，可添加多个组合" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/settings-translate.zh-CN.a2a6d309.webp" alt="设置的语音翻译一栏：目标语言为英文（默认）与日文，可添加" /></td>
+  </tr>
+  <tr>
     <td align="center"><sub>设置 › 快捷键</sub></td>
+    <td align="center"><sub>设置 › 语音翻译</sub></td>
   </tr>
 </table>
 
@@ -191,7 +252,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
   </tr>
   <tr>
     <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-engine.zh-CN.0c125326.webp" alt="引导第 4 步：汇总快捷键、权限与引擎的状态，下方为前往引擎" /></td>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/presets.zh-CN.9e5e1226.webp" alt="前往引擎后弹出推荐组合：四套完整配置，含月成本、检测与一键启用" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/presets.zh-CN.87ef1878.webp" alt="前往引擎后弹出推荐组合：四套完整配置，含月成本、检测与一键启用" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>4</b> · 前往引擎</sub></td>
@@ -208,33 +269,35 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 <sub>上述名称与标志归各自权利人所有，仅用于说明 SpeakMore 支持对接的服务。</sub>
 
-**引擎页**分「语音」「划词」两段。语音一段把识别方式、步骤、厂商、型号排成一棵树：
+**引擎页**分「语音」「划词」两段：语音输入与语音翻译共用「语音」一段的模型，划词翻译使用「划词」一段单独选择的文字模型。
 
-- **直出 7 个**：音频输入，文字输出。
+**语音**一段把识别方式、步骤、厂商、型号排成一棵树：
+
+- **直出 7 个**：音频输入，文字输出；语音翻译时直接输出目标语言。
 - **转文字 10 个**：本机 4 个，云端 6 个。
-- **整理 12 个**：通义千问、DeepSeek、Kimi、智谱、MiniMax 与自定义服务。
+- **整理 12 个**：通义千问、DeepSeek、Kimi、智谱、MiniMax 与自定义服务；语音翻译时由这一步完成翻译。
 - 点开型号查看官方价格、实测得分与渠道，正在使用的一路以主题色标出。
 - 同一模型由多个平台提供时合并为一项，在详情中切换渠道。
 
-**划词**一段单独选择一个文字模型，厂商与整理相同，各自配置、互不影响。
+**划词**一段单独选择一个文字模型，可选厂商与整理一步相同，配置互不影响；出厂为 DeepSeek V4.1 Flash。
 
-**密钥**在标题行右侧的面板中按平台管理：
+**密钥**在标题行右侧的面板中按平台管理，同一平台的密钥在三项功能间共用：
 
 - 一把阿里云百炼密钥可调用 14 个模型，覆盖直出、转文字、整理与划词。
 - DeepSeek、Kimi、智谱、MiniMax、Gemini、OpenAI 的官方密钥均可直接使用。
-- OpenAI 兼容服务填写地址与密钥即可接入。
+- OpenAI 兼容服务填写地址与密钥即可接入；语音与划词的自定义服务分别配置。
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/polish.zh-CN.ae87c68b.webp" alt="引擎页：整理一步展开到 DeepSeek，详情中为渠道、价格与检测" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/engine-lookup.zh-CN.7260778e.webp" alt="引擎页划词一段：厂商与型号两列，DeepSeek V4.1 Flash 正在使用" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/polish.zh-CN.d2a35bf5.webp" alt="引擎页：整理一步展开到 DeepSeek，详情中为渠道、价格与检测" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/engine-lookup.zh-CN.cdf6ac0a.webp" alt="引擎页划词一段：厂商与型号两列，DeepSeek V4.1 Flash 正在使用" /></td>
   </tr>
   <tr>
     <td align="center"><sub>语音：整理模型详情</sub></td>
     <td align="center"><sub>划词：单独选择文字模型</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="https://media.speakmore.zephyrxiang.com/readme/keys.zh-CN.34f05711.webp" alt="密钥面板：八个平台的配置状态及各自可调用的模型数量" /></td>
+    <td colspan="2"><img src="https://media.speakmore.zephyrxiang.com/readme/keys.zh-CN.9c509220.webp" alt="密钥面板：八个平台的配置状态及各自可调用的模型数量" /></td>
   </tr>
   <tr>
     <td colspan="2" align="center"><sub>按平台管理密钥</sub></td>
@@ -243,22 +306,22 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 ## 🔀 方式自由
 
-- 语音输入与语音翻译有三种识别方式，并列可选。
+- 语音输入与语音翻译有三种识别方式，并列可选；划词翻译不受识别方式影响。
 - 各方式独立保存模型配置，切换时无需重新设置。
 - 在引擎页第一列切换，首页标题右侧显示当前方式。
 
-| 方式 | 处理流程 | 上传内容 | 密钥 | 语音翻译 |
-| --- | --- | --- | --- | --- |
-| ✨ **直出** | 录音 → 音频大模型 → 文字 | 录音 | 需要 | ✓ |
-| 🪄 **混合** | 录音 → 转文字 → 大模型整理 | 本机转文字时仅文字 | 需要 | ✓ |
-| 🛡️ **离线** | 录音 → 本机模型 → 文字 | 无 | 不需要 | — |
+| 方式 | 处理流程 | 上传内容 | 密钥 | 语音输入 | 语音翻译 |
+| --- | --- | --- | --- | --- | --- |
+| ✨ **直出** | 录音 → 音频大模型 → 文字 | 录音 | 需要 | ✓ | ✓ |
+| 🪄 **混合** | 录音 → 转文字 → 大模型整理或翻译 | 本机转文字时仅文字 | 需要 | ✓ | ✓ |
+| 🛡️ **离线** | 录音 → 本机模型 → 文字 | 无 | 不需要 | ✓ | — |
 
-<sub>离线方式的本机模型只能转文字，不提供语音翻译。划词翻译不受识别方式影响，始终使用引擎页「划词」一段所选的文字模型。</sub>
+<sub>离线方式的本机模型只能转文字，不提供语音翻译。划词翻译始终使用引擎页「划词」一段所选的文字模型。</sub>
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/engine.zh-CN.208ea144.webp" alt="引擎页：识别方式、步骤、厂商、型号排成一棵树，正在使用的一路以主题色标出" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/presets.zh-CN.9e5e1226.webp" alt="推荐组合：四套完整配置，含月成本、检测与一键启用" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/engine.zh-CN.ebcad9b3.webp" alt="引擎页：识别方式、步骤、厂商、型号排成一棵树，正在使用的一路以主题色标出" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/presets.zh-CN.87ef1878.webp" alt="推荐组合：四套完整配置，含月成本、检测与一键启用" /></td>
   </tr>
   <tr>
     <td align="center"><sub>在引擎页切换识别方式</sub></td>
@@ -268,7 +331,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 **推荐组合**：
 
-- 将完整路线打包，一键启用。
+- 将语音的完整路线打包，一键启用。
 - 支持先检测、后启用。
 - 缺少的密钥与本机模型可在原处补齐。
 
@@ -279,10 +342,11 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 | Gemini | 直出 | Gemini 3.6 Flash | ¥35.49 |
 | 纯本机 | 离线 | Qwen3-ASR 0.6B（本机） | **¥0** |
 
-<sub>月成本口径：每日 100 次、每月 30 天；单次按 26 秒计（97 条真实口述的平均值）；按各厂商官方价格估算，美元按 6.71 折算。Intel Mac 改用 CPU 版 SenseVoice Small。</sub>
+<sub>月成本为语音输入的估算：每日 100 次、每月 30 天；单次按 26 秒计（97 条真实口述的平均值）；按各厂商官方价格估算，美元按 6.71 折算。Intel Mac 改用 CPU 版 SenseVoice Small。</sub>
 
 ## 💻 硬件自由
 
+- 本机模型负责转文字一步：离线方式的语音输入，以及混合方式下语音输入与语音翻译的转文字，均可在本机完成。
 - 同一本机模型适用于全部受支持的设备。
 - 有可用显卡时优先使用显卡。
 - 无显卡或显卡不可用时，自动回退至 CPU。
@@ -296,7 +360,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 <sub>单条耗时为 97 条真实口述的转文字耗时中位数；Windows 显卡为 RTX 4060 Ti。Vulkan 支持 NVIDIA、AMD 与 Intel 显卡。</sub>
 
-<img src="https://media.speakmore.zephyrxiang.com/readme/transcribe.zh-CN.4a0d027f.webp" alt="引擎页转文字一步：本机模型 Qwen3-ASR 0.6B 的中文与中英混合得分、每分钟音频耗时、内存与体积，绿色为同组最佳" />
+<img src="https://media.speakmore.zephyrxiang.com/readme/transcribe.zh-CN.8bfa8c28.webp" alt="引擎页转文字一步：本机模型 Qwen3-ASR 0.6B 的中文与中英混合得分、每分钟音频耗时、内存与体积，绿色为同组最佳" />
 
 ## 🔒 隐私自由
 
@@ -320,12 +384,19 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 - SpeakMore 本身免费。
 - 模型费用按实际用量，直接结算给厂商。
-- 划词翻译单次约 ¥0.0008，按每日 100 次计每月约 ¥2.4（DeepSeek V4.1 Flash，15 次实际调用的中位数）。
-- 首页按今天、本月、累计统计花费：柱状图与趋势线看走势，下方列出各模型的花费与占比；语音翻译与划词翻译一并计入。
+- 首页按今天、本月、累计统计花费：柱状图与趋势线看走势，下方列出各模型的花费与占比；三项功能一并计入。
 
-<img src="https://media.speakmore.zephyrxiang.com/readme/spend.zh-CN.847246f5.webp" alt="首页花费卡：本月每天的花费柱状图与趋势线，下方为各模型的花费与占比" />
+| 功能 | 配置 | 单次 | 每日 100 次的月成本 |
+| --- | --- | --- | --- |
+| 语音输入 | 本机 + DeepSeek | 约 ¥0.0009 | ¥2.63 |
+| 语音翻译 | 本机 + DeepSeek | 约 ¥0.0005 | 约 ¥1.6 |
+| 划词翻译 | DeepSeek V4.1 Flash | 约 ¥0.0008 | 约 ¥2.4 |
 
-与 Typeless 各档套餐对比（重度使用，每日 100 次）：
+<sub>语音输入按上文推荐组合的口径估算；语音翻译、划词翻译为实际调用的中位数（分别为 8 次、15 次），按官方价格计，美元按 6.71 折算。</sub>
+
+<img src="https://media.speakmore.zephyrxiang.com/readme/spend.zh-CN.a456f5c7.webp" alt="首页花费卡：本月每天的花费柱状图与趋势线，下方为各模型的花费与占比" />
+
+语音输入与 Typeless 各档套餐对比（重度使用，每日 100 次）：
 
 <table>
   <tr>
@@ -397,7 +468,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 ## ✅ 可信
 
-- **开源**：MIT 许可，语音与翻译处理相关代码全部公开。
+- **开源**：MIT 许可，三项功能的全部代码公开。
 - **无需账号**：无注册与登录流程。
 - **单一目录**：数据、设置、密钥、模型与日志统一存放于一个文件夹，默认为 `~/.speakmore`（Windows 为 `%USERPROFILE%\.speakmore`），可迁移至其他磁盘。
 - **一键清除**：执行 `speakmore uninstall` 删除全部内容。
@@ -482,7 +553,7 @@ flowchart LR
 - `native` 为直出，`local` 为混合，`private` 为离线。
 - 直出厂商：`gemini` / `openai` / `bailian`。
 - 整理厂商：`deepseek` / `bailian` / `moonshot` / `zhipu` / `minimax` / `custom`；自定义服务另需 `--url <地址>`，可选 `--params '<JSON>'` 附加请求参数。
-- 划词翻译的模型在 App 的引擎页或用 `config set lookup.model` 设置。
+- 语音翻译的目标语言：`config set translate.to`；划词翻译的模型与目标语言：`config set lookup.model`、`config set lookup.to`，或在 App 的引擎页与设置中修改。
 - 管道输入示例：`pbpaste | speakmore key`（Windows：`Get-Clipboard | speakmore key`）。
 
 </details>
@@ -495,7 +566,7 @@ flowchart LR
 | `hotkey.dictate` | `["AltRight"]` | 语音输入的快捷键 |
 | `hotkey.translate` | `["AltRight+Space"]` | 语音翻译的快捷键 |
 | `hotkey.lookup` | `["AltRight+Enter"]` | 划词翻译的快捷键，可清空 |
-| `hotkey.cancel` | `["Escape"]` | 口述中取消的快捷键 |
+| `hotkey.cancel` | `["Escape"]` | 取消口述、收起划词卡片的快捷键 |
 | `mode` | `native` | 识别方式：`native`（直出）/ `local`（混合）/ `private`（离线） |
 | `model` | `gemini/gemini-3.6-flash` | 直出模型，`厂商/模型` |
 | `thinking` | `MINIMAL` | Gemini 思考档位 |
@@ -551,7 +622,7 @@ flowchart LR
 
 | macOS 权限 | 用途 |
 | --- | --- |
-| 麦克风 | 录音 |
+| 麦克风 | 录音（语音输入、语音翻译） |
 | 输入监控 | 监听快捷键，仅响应所设按键；录制快捷键时读取所按的键 |
 | 辅助功能 | 模拟 ⌘V 写入文字；读取选中的文字（划词翻译）；拦下 `esc`、组合快捷键与录制中的按键，不传给前台应用 |
 
@@ -569,7 +640,7 @@ flowchart LR
 | `settings.json` | 设置 |
 | `vocabulary.json` | 词典 |
 | `<厂商>-key.bin` | 加密后的密钥，每个厂商一份；划词翻译的自定义服务另存 `lookupcustom-key.bin` |
-| `data/history.db` | 历史记录与花费记录 |
+| `data/history.db` | 历史记录与花费记录（三项功能） |
 | `data/Recordings/` | 录音 |
 | `logs/main.log` | 日志 |
 | `models/` | 本机模型 |
@@ -593,8 +664,11 @@ flowchart LR
 | 密钥显示"未验证" | 联网后执行 `speakmore status` |
 | 检测未通过，密钥无误 | `speakmore model check` 查看返回内容 |
 | 按快捷键无响应 | `speakmore status` 查看缺失项，`speakmore restart` 重启 |
+| 语音翻译提示"离线方式不支持语音翻译" | 在引擎页改用直出或混合方式 |
+| 划词卡片提示"先选中要翻译的文字"或"没取到选中的文字" | 确认已选中文字后重按；macOS 需开启辅助功能权限 |
+| 划词卡片提示"未配置密钥" | 点击卡片上的"配置密钥"，填写所选模型的密钥 |
 | macOS 上部分组合快捷键暂时无效 | 有应用开着安全输入（如密码框、终端的安全键盘输入），关闭后恢复；悬浮条会提示 |
-| Windows 上快捷键在个别窗口中无效 | 该窗口以管理员身份运行，系统不向普通程序转发按键；悬浮条会提示 |
+| Windows 上快捷键或划词在个别窗口中无效 | 该窗口以管理员身份运行，系统不向普通程序转发按键与选中的文字；悬浮条或卡片会提示 |
 | 命令提示"没有在 5 秒内回话" | 执行 `speakmore stop`，再执行 `speakmore` |
 | 菜单栏中无图标 | 按住 ⌘ 将部分图标拖出菜单栏，或执行 `speakmore settings` |
 | 提示找不到 SpeakMore 的目录 | 存储位置在移动硬盘上时，先连接该磁盘 |

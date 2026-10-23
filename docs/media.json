@@ -5,32 +5,32 @@
     "height": 830
   },
   "home-dark.en": {
-    "path": "readme/home-dark.en.8c295077.webp",
+    "path": "readme/home-dark.en.2cec7117.webp",
     "width": 1160,
     "height": 830
   },
   "home.en": {
-    "path": "readme/home.en.41aea329.webp",
+    "path": "readme/home.en.123d495c.webp",
     "width": 1160,
     "height": 830
   },
   "transcribe.en": {
-    "path": "readme/transcribe.en.5bfd3426.webp",
+    "path": "readme/transcribe.en.8e075f8d.webp",
     "width": 1160,
     "height": 830
   },
   "polish.en": {
-    "path": "readme/polish.en.c5692c7a.webp",
+    "path": "readme/polish.en.b43d004e.webp",
     "width": 1160,
     "height": 830
   },
   "keys.en": {
-    "path": "readme/keys.en.a2697758.webp",
+    "path": "readme/keys.en.6008995c.webp",
     "width": 1160,
     "height": 830
   },
   "presets.en": {
-    "path": "readme/presets.en.539f3b19.webp",
+    "path": "readme/presets.en.a7834de4.webp",
     "width": 1160,
     "height": 830
   },
@@ -40,32 +40,32 @@
     "height": 830
   },
   "home-dark.zh-CN": {
-    "path": "readme/home-dark.zh-CN.a8dce461.webp",
+    "path": "readme/home-dark.zh-CN.596d6346.webp",
     "width": 1160,
     "height": 830
   },
   "home.zh-CN": {
-    "path": "readme/home.zh-CN.aa9c9d24.webp",
+    "path": "readme/home.zh-CN.52652b74.webp",
     "width": 1160,
     "height": 830
   },
   "transcribe.zh-CN": {
-    "path": "readme/transcribe.zh-CN.4a0d027f.webp",
+    "path": "readme/transcribe.zh-CN.8bfa8c28.webp",
     "width": 1160,
     "height": 830
   },
   "polish.zh-CN": {
-    "path": "readme/polish.zh-CN.ae87c68b.webp",
+    "path": "readme/polish.zh-CN.d2a35bf5.webp",
     "width": 1160,
     "height": 830
   },
   "keys.zh-CN": {
-    "path": "readme/keys.zh-CN.34f05711.webp",
+    "path": "readme/keys.zh-CN.9c509220.webp",
     "width": 1160,
     "height": 830
   },
   "presets.zh-CN": {
-    "path": "readme/presets.zh-CN.9e5e1226.webp",
+    "path": "readme/presets.zh-CN.87ef1878.webp",
     "width": 1160,
     "height": 830
   },
@@ -110,22 +110,22 @@
     "height": 228
   },
   "engine.en": {
-    "path": "readme/engine.en.5a34762c.webp",
+    "path": "readme/engine.en.5c08aed5.webp",
     "width": 1160,
     "height": 830
   },
   "spend.en": {
-    "path": "readme/spend.en.5801d33c.webp",
+    "path": "readme/spend.en.7cfdbdab.webp",
     "width": 1160,
     "height": 830
   },
   "engine.zh-CN": {
-    "path": "readme/engine.zh-CN.208ea144.webp",
+    "path": "readme/engine.zh-CN.ebcad9b3.webp",
     "width": 1160,
     "height": 830
   },
   "spend.zh-CN": {
-    "path": "readme/spend.zh-CN.847246f5.webp",
+    "path": "readme/spend.zh-CN.a456f5c7.webp",
     "width": 1160,
     "height": 830
   },
@@ -150,27 +150,27 @@
     "height": 830
   },
   "engine-lookup.en": {
-    "path": "readme/engine-lookup.en.8f439c69.webp",
+    "path": "readme/engine-lookup.en.7ea57529.webp",
     "width": 1160,
     "height": 830
   },
   "settings-hotkeys.en": {
-    "path": "readme/settings-hotkeys.en.57c45b90.webp",
+    "path": "readme/settings-hotkeys.en.58a9660e.webp",
     "width": 912,
     "height": 688
   },
   "settings-translate.en": {
-    "path": "readme/settings-translate.en.b0477293.webp",
+    "path": "readme/settings-translate.en.1d25d382.webp",
     "width": 912,
     "height": 688
   },
   "settings-lookup.en": {
-    "path": "readme/settings-lookup.en.5bb630a7.webp",
+    "path": "readme/settings-lookup.en.54d58f2d.webp",
     "width": 912,
     "height": 688
   },
   "history.en": {
-    "path": "readme/history.en.4a08e91d.webp",
+    "path": "readme/history.en.2397780f.webp",
     "width": 1160,
     "height": 830
   },
@@ -195,27 +195,27 @@
     "height": 830
   },
   "engine-lookup.zh-CN": {
-    "path": "readme/engine-lookup.zh-CN.7260778e.webp",
+    "path": "readme/engine-lookup.zh-CN.cdf6ac0a.webp",
     "width": 1160,
     "height": 830
   },
   "settings-hotkeys.zh-CN": {
-    "path": "readme/settings-hotkeys.zh-CN.3977aafd.webp",
+    "path": "readme/settings-hotkeys.zh-CN.d3d85bc6.webp",
     "width": 912,
     "height": 688
   },
   "settings-translate.zh-CN": {
-    "path": "readme/settings-translate.zh-CN.1b1ef8c0.webp",
+    "path": "readme/settings-translate.zh-CN.a2a6d309.webp",
     "width": 912,
     "height": 688
   },
   "settings-lookup.zh-CN": {
-    "path": "readme/settings-lookup.zh-CN.f889fbfe.webp",
+    "path": "readme/settings-lookup.zh-CN.9d32844f.webp",
     "width": 912,
     "height": 688
   },
   "history.zh-CN": {
-    "path": "readme/history.zh-CN.0dfd6dba.webp",
+    "path": "readme/history.zh-CN.3b64aa60.webp",
     "width": 1160,
     "height": 830
   },
@@ -288,5 +288,15 @@
     "path": "readme/lookup-app.en.dc494575.webp",
     "width": 617.5,
     "height": 292.5
+  },
+  "vocabulary.en": {
+    "path": "readme/vocabulary.en.fef0c6e8.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "vocabulary.zh-CN": {
+    "path": "readme/vocabulary.zh-CN.afcce34f.webp",
+    "width": 1160,
+    "height": 830
   }
 }

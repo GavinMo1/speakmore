@@ -7,6 +7,7 @@
 <p align="center">
   <b>Speak it written. Select to translate.</b><br>
   Free, open-source voice input and translation for macOS and Windows.<br>
+  Voice input, voice translation and selection translation, each one hotkey away in any app.<br>
   Works with leading AI models; voice input can also run entirely on device.<br>
   <a href="https://speakmore.zephyrxiang.com">speakmore.zephyrxiang.com</a>
 </p>
@@ -23,11 +24,13 @@
 </p>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/home-dark.en.8c295077.webp" />
-  <img src="https://media.speakmore.zephyrxiang.com/readme/home.en.41aea329.webp" alt="SpeakMore home window: the hotkeys of the three features, word count, time saved, speaking rate and daily heatmap, with the active recognition mode" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/home-dark.en.2cec7117.webp" />
+  <img src="https://media.speakmore.zephyrxiang.com/readme/home.en.123d495c.webp" alt="SpeakMore home window: the title Speak it written. Select to translate., the hotkeys of the three features, word count, time saved, speaking rate and daily heatmap, with the active recognition mode" />
 </picture>
 
 ## Three features
+
+All three start from Right ⌥ (Right Alt on Windows): on its own for voice input, with Space for voice translation, with Return for selection translation.
 
 | Feature | What it does | macOS | Windows |
 | --- | --- | --- | --- |
@@ -46,6 +49,7 @@
 - Filler words, repetitions and self-corrections are removed (Direct and Hybrid modes).
 - Punctuation is added; longer passages are split into paragraphs and lists.
 - Names, products and terms in the dictionary are spelled as written there.
+- Three recognition modes of equal standing; Offline mode runs entirely on device and uploads nothing.
 
 ### 🌐 Voice translation
 
@@ -56,10 +60,10 @@
 
 - Speak in English and the text arrives in Chinese; 16 target languages are available.
 - Suited to group chats with colleagues and clients abroad, and to emails and commit messages in another language: the translation goes straight into the input box, with no separate translation tool.
-- Set target languages in Settings › Voice translation; several can be listed, and the first is the default.
-- Switch the target on the voice bar while speaking; the choice applies to that dictation only.
 - Speech is cleaned up before translation, so fillers and self-corrections stay out; history keeps both the original and the translation.
+- Set target languages in Settings › Voice translation; several can be listed, and the first is the default. Switch the target on the voice bar while speaking; the choice applies to that dictation only.
 - Median model time: 2.6 seconds with Direct, 1.3 seconds with Hybrid.
+- Works in Direct and Hybrid modes; the on-device models of Offline mode only transcribe, so it offers no voice translation.
 
 ### 📖 Selection translation
 
@@ -81,11 +85,11 @@
 - The card never takes focus, so the app being read or edited stays as it was; it offers copy, a one-off change of target language, and pinning.
 - When the text is already in the target language, it is translated into English instead (into Simplified Chinese when the target is English); the card shows the language actually used.
 - Uses its own text model, independent of voice: DeepSeek V4.1 Flash by default, about 0.9 seconds per request; change it in the Selection section of the Engine page, including OpenAI-compatible services.
-- Set the target language in Settings › Selection translation; translations are kept in history and counted in spending.
+- Translations are kept in history and counted in spending, but not in the dictation statistics on the home window.
 
 ## Five freedoms
 
-- 🧩 **[Model freedom](#-model-freedom)**: 29 models, plus OpenAI-compatible services; selection translation takes its own text model.
+- 🧩 **[Model freedom](#-model-freedom)**: 29 voice models, plus a separate text model for selection translation; refinement and selection translation both accept OpenAI-compatible services.
 - 🔀 **[Mode freedom](#-mode-freedom)**: three recognition modes for voice input and voice translation; recommended setups in one click.
 - 💻 **[Hardware freedom](#-hardware-freedom)**: Mac and Windows; on-device models on Metal, Vulkan or the CPU.
 - 🔒 **[Privacy freedom](#-privacy-freedom)**: voice input can run fully offline, with no uploads, API key or account.
@@ -143,26 +147,83 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 </details>
 
-## 🎙️ Usage
+## 🧭 Usage
 
-1. Place the cursor in any text field and press **Right Option** (**Right Alt** on Windows).
-2. Dictate. The bar at the bottom of the screen follows the input level.
-3. Press the hotkey again to insert the text at the cursor, or press `esc` to discard the dictation.
+SpeakMore resides in the menu bar (the notification area on Windows). All three features are triggered by hotkeys and work in any app, without opening the main window.
 
-- The hotkeys for voice translation and selection translation are listed under [Three features](#three-features).
-- Change the hotkeys in Settings › Shortcut: click one and press a new key or two-key combination; it applies at once. Each feature takes up to 4 combinations.
-- SpeakMore resides in the menu bar (the notification area on Windows).
-- The main window provides statistics, history, dictionary, engine and settings.
-- **Dictionary**: add the names, products and terms you say often, and voice input and voice translation spell them as written. The dictionary is stored on this device only and sent with each request to the chosen model; the dictionary page lists the models that support it.
+### Voice input
+
+1. Place the cursor in any text field and press **Right ⌥** (**Right Alt** on Windows).
+2. Dictate. The bar at the bottom of the screen follows the input level and shows the keys that finish and cancel.
+3. Press the hotkey again to insert the cleaned-up text at the cursor, or press `esc` to discard the dictation.
+
+Press once to start and once to finish; there is no need to hold the key.
+
+### Voice translation
+
+1. Place the cursor in a text field and press **Right ⌥ + Space** (**Right Alt + Space** on Windows).
+2. Speak. The voice bar shows this dictation's target language; click it to switch for this time only.
+3. Press Right ⌥ + Space again to insert the translation at the cursor, or press `esc` to discard it.
+
+### Selection translation
+
+1. Select some text in any app, up to 4,000 characters at a time.
+2. Press **Right ⌥ + Return** (**Right Alt + Enter** on Windows); a card with the translation appears below the selection.
+3. The card offers copy, a one-off change of target language, and pinning. Press `esc` or click anywhere outside the card to dismiss it; a pinned card stays when you click elsewhere.
+
+On macOS, reading the selected text requires Accessibility permission, which onboarding turns on along with the others.
+
+### Main window
+
+Open the main window from the menu bar icon. The four pages are on the left, with settings at the bottom left.
+
+| Page | Contents |
+| --- | --- |
+| Home | The hotkeys of the three features, the active recognition mode, words dictated and speaking rate, a daily heatmap, and the spending trend |
+| Engine | Models, keys and recommended setups for the Voice and Selection sections; see [Model freedom](#-model-freedom) |
+| History | Every record from the three features, filterable by feature; translations show the original, and each entry can be copied |
+| Dictionary | Names, products and terms that voice input and voice translation spell as written there |
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/history.en.4a08e91d.webp" alt="History page: filters for voice input, voice translation and selection translation, with the original shown under each translation" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/settings-hotkeys.en.57c45b90.webp" alt="Settings, Shortcut pane: one row for each feature and for cancel, with room for more combinations" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/history.en.2397780f.webp" alt="History page: filters for voice input, voice translation and selection translation, with the original shown under each translation" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/vocabulary.en.fef0c6e8.webp" alt="Dictionary page: twelve names and terms, with search, import and New word, and the supported models at the top right" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>History by feature, with originals</sub></td>
+    <td align="center"><sub>History of the three features, with originals</sub></td>
+    <td align="center"><sub>Dictionary: spelled as written</sub></td>
+  </tr>
+</table>
+
+**Dictionary**
+
+- Add the names, products and terms you say often, and voice input and voice translation spell them as written; selection translation does not use the dictionary.
+- Import a one-column CSV or a one-word-per-line text file; existing words are skipped.
+- The dictionary is stored on this device only and sent with each request to the chosen model; in Offline mode it never leaves the device. The dictionary page lists the models that support it.
+
+### Settings
+
+| Pane | Contents |
+| --- | --- |
+| General | Theme, interface language, launch at login, storage location, software update |
+| Shortcut | Hotkeys for the three features and for cancel; key hints on the voice bar |
+| Voice translation | Target languages; several can be listed, and the first is the default |
+| Selection translation | Target language |
+| On-device models | Download source, acceleration, memory release |
+| Permissions | Status of microphone, Input Monitoring and Accessibility (Mac only) |
+| About | Version and source code |
+
+- To change a hotkey, click it and press a new key or two-key combination; it applies at once. Each feature takes up to 4 combinations, and the selection translation hotkey can be cleared.
+- Combinations that clash with system or common shortcuts can't be bound; the rules are under Reference › Settings below.
+
+<table>
+  <tr>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/settings-hotkeys.en.58a9660e.webp" alt="Settings, Shortcut pane: one row each for voice input, voice translation, selection translation and cancel, with room for more combinations" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/settings-translate.en.1d25d382.webp" alt="Settings, Voice translation pane: Simplified Chinese (default) and Japanese as targets, with Add" /></td>
+  </tr>
+  <tr>
     <td align="center"><sub>Settings › Shortcut</sub></td>
+    <td align="center"><sub>Settings › Voice translation</sub></td>
   </tr>
 </table>
 
@@ -191,7 +252,7 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
   </tr>
   <tr>
     <td><img src="https://media.speakmore.zephyrxiang.com/readme/onboarding-engine.en.ecf5c820.webp" alt="Onboarding step 4: status of hotkeys, permissions and engine, with Open Engine below" /></td>
-    <td><img src="https://media.speakmore.zephyrxiang.com/readme/presets.en.539f3b19.webp" alt="The Engine page opened from onboarding, showing recommended setups with monthly cost, check and one-click enable" /></td>
+    <td><img src="https://media.speakmore.zephyrxiang.com/readme/presets.en.a7834de4.webp" alt="The Engine page opened from onboarding, showing recommended setups with monthly cost, check and one-click enable" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>4</b> · Open Engine</sub></td>
@@ -208,33 +269,35 @@ irm https://dl.zephyrxiang.com/speakmore/install.ps1 | iex
 
 <sub>All names and logos are the property of their respective owners and are shown solely to indicate supported services.</sub>
 
-The **Engine** page has two sections, Voice and Selection. Voice lays out modes, steps, vendors and models as a tree:
+The **Engine** page has two sections: voice input and voice translation share the models of the Voice section, while selection translation uses the text model chosen in the Selection section.
 
-- **7 Direct models**: audio in, text out.
+**Voice** lays out modes, steps, vendors and models as a tree:
+
+- **7 Direct models**: audio in, text out; for voice translation they write the target language directly.
 - **10 Transcribe models**: 4 on-device, 6 cloud.
-- **12 Refine models**: Qwen, DeepSeek, Kimi, Zhipu, MiniMax, and custom services.
+- **12 Refine models**: Qwen, DeepSeek, Kimi, Zhipu, MiniMax, and custom services; for voice translation this step does the translating.
 - Open a model to see its list prices, measured scores and channels; the route in use is highlighted.
 - A model offered by several platforms appears once, with its channel chosen in the details.
 
-**Selection** picks a single text model of its own, from the same vendors as Refine; the two are configured independently.
+**Selection** picks a single text model of its own, from the same vendors as Refine; the two are configured independently. DeepSeek V4.1 Flash is the default.
 
-**API keys** are managed per platform, in a panel at the top right:
+**API keys** are managed per platform, in a panel at the top right; a platform's key serves all three features:
 
 - One Alibaba Cloud Bailian key provides access to 14 models, across Direct, Transcribe, Refine and Selection.
 - Official DeepSeek, Kimi, Zhipu, MiniMax, Gemini and OpenAI keys are supported directly.
-- OpenAI-compatible services connect with an endpoint address and a key.
+- OpenAI-compatible services connect with an endpoint address and a key; voice and selection translation each have their own custom service.
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/polish.en.c5692c7a.webp" alt="Engine page: the Refine step expanded to DeepSeek, with channels, prices and a check in the details" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/engine-lookup.en.8f439c69.webp" alt="Engine page, Selection section: vendors and models in two columns, DeepSeek V4.1 Flash in use" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/polish.en.b43d004e.webp" alt="Engine page: the Refine step expanded to DeepSeek, with channels, prices and a check in the details" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/engine-lookup.en.7ea57529.webp" alt="Engine page, Selection section: vendors and models in two columns, DeepSeek V4.1 Flash in use" /></td>
   </tr>
   <tr>
     <td align="center"><sub>Voice: Refine model details</sub></td>
     <td align="center"><sub>Selection: its own text model</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="https://media.speakmore.zephyrxiang.com/readme/keys.en.a2697758.webp" alt="Keys panel: configuration status of eight platforms and the number of models each provides" /></td>
+    <td colspan="2"><img src="https://media.speakmore.zephyrxiang.com/readme/keys.en.6008995c.webp" alt="Keys panel: configuration status of eight platforms and the number of models each provides" /></td>
   </tr>
   <tr>
     <td colspan="2" align="center"><sub>Keys managed per platform</sub></td>
@@ -243,22 +306,22 @@ The **Engine** page has two sections, Voice and Selection. Voice lays out modes,
 
 ## 🔀 Mode freedom
 
-- Voice input and voice translation have three recognition modes of equal standing.
+- Voice input and voice translation have three recognition modes of equal standing; selection translation is unaffected by the mode.
 - Each mode keeps its own model configuration; switching requires no reconfiguration.
 - Switch in the first column of the Engine page; the home window shows the active mode to the right of the title.
 
-| Mode | Pipeline | Data uploaded | API key | Voice translation |
-| --- | --- | --- | --- | --- |
-| ✨ **Direct** | Audio → audio model → text | Recording | Required | ✓ |
-| 🪄 **Hybrid** | Audio → transcription → LLM refinement | Text only, if transcribed on device | Required | ✓ |
-| 🛡️ **Offline** | Audio → on-device model → text | None | None | — |
+| Mode | Pipeline | Data uploaded | API key | Voice input | Voice translation |
+| --- | --- | --- | --- | --- | --- |
+| ✨ **Direct** | Audio → audio model → text | Recording | Required | ✓ | ✓ |
+| 🪄 **Hybrid** | Audio → transcription → LLM refinement or translation | Text only, if transcribed on device | Required | ✓ | ✓ |
+| 🛡️ **Offline** | Audio → on-device model → text | None | None | ✓ | — |
 
-<sub>The on-device models in Offline mode only transcribe, so it offers no voice translation. Selection translation is unaffected by the mode and always uses the text model chosen in the Selection section of the Engine page.</sub>
+<sub>The on-device models in Offline mode only transcribe, so it offers no voice translation. Selection translation always uses the text model chosen in the Selection section of the Engine page.</sub>
 
 <table>
   <tr>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/engine.en.5a34762c.webp" alt="Engine page: modes, steps, vendors and models laid out as a tree, with the route in use highlighted" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/presets.en.539f3b19.webp" alt="Recommended setups: four complete configurations with monthly cost, check and one-click enable" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/engine.en.5c08aed5.webp" alt="Engine page: modes, steps, vendors and models laid out as a tree, with the route in use highlighted" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/presets.en.a7834de4.webp" alt="Recommended setups: four complete configurations with monthly cost, check and one-click enable" /></td>
   </tr>
   <tr>
     <td align="center"><sub>Switching modes on the Engine page</sub></td>
@@ -268,7 +331,7 @@ The **Engine** page has two sections, Voice and Selection. Voice lays out modes,
 
 **Recommended setups**:
 
-- Package a complete pipeline, enabled in one click.
+- Package a complete voice pipeline, enabled in one click.
 - Can be checked before they are enabled.
 - Missing keys and on-device models are completed in place.
 
@@ -279,10 +342,11 @@ The **Engine** page has two sections, Voice and Selection. Voice lays out modes,
 | Gemini | Direct | Gemini 3.6 Flash | $5.29 |
 | Fully On-device | Offline | Qwen3-ASR 0.6B (on device) | **$0** |
 
-<sub>Monthly cost basis: 100 dictations a day for 30 days; 26 seconds per dictation (the average of 97 real dictations); estimated at vendor list prices. Intel Macs use the CPU build of SenseVoice Small.</sub>
+<sub>Monthly cost is estimated for voice input: 100 dictations a day for 30 days; 26 seconds per dictation (the average of 97 real dictations); at vendor list prices. Intel Macs use the CPU build of SenseVoice Small.</sub>
 
 ## 💻 Hardware freedom
 
+- On-device models handle the transcription step: voice input in Offline mode, and transcription for both voice input and voice translation in Hybrid mode, can run on this machine.
 - The same on-device models run on every supported device.
 - An available graphics card is used first.
 - Without a usable graphics card, SpeakMore falls back to the CPU automatically.
@@ -296,7 +360,7 @@ The **Engine** page has two sections, Voice and Selection. Voice lays out modes,
 
 <sub>Median transcription time across 97 real dictations; Windows GPU: RTX 4060 Ti. Vulkan supports NVIDIA, AMD and Intel graphics.</sub>
 
-<img src="https://media.speakmore.zephyrxiang.com/readme/transcribe.en.5bfd3426.webp" alt="Engine page, Transcribe step: Chinese and mixed-language scores, time per minute of audio, memory and size of the on-device Qwen3-ASR 0.6B; green marks the best in its group" />
+<img src="https://media.speakmore.zephyrxiang.com/readme/transcribe.en.8e075f8d.webp" alt="Engine page, Transcribe step: Chinese and mixed-language scores, time per minute of audio, memory and size of the on-device Qwen3-ASR 0.6B; green marks the best in its group" />
 
 ## 🔒 Privacy freedom
 
@@ -320,12 +384,19 @@ The **Engine** page has two sections, Voice and Selection. Voice lays out modes,
 
 - SpeakMore is free.
 - Model usage is billed directly by each vendor, according to actual use.
-- Selection translation costs about $0.00012 per request, or about $0.36 a month at 100 a day (DeepSeek V4.1 Flash, median of 15 real requests).
-- The home window tracks spending for today, this month and all time: bars and a trend line show the course, with each model's cost and share below; voice translation and selection translation are included.
+- The home window tracks spending for today, this month and all time: bars and a trend line show the course, with each model's cost and share below; all three features are included.
 
-<img src="https://media.speakmore.zephyrxiang.com/readme/spend.en.5801d33c.webp" alt="Home window spending card: daily spending this month as bars with a trend line, and each model's cost and share below" />
+| Feature | Setup | Per use | Monthly at 100 a day |
+| --- | --- | --- | --- |
+| Voice input | On-device + DeepSeek | about $0.00013 | $0.39 |
+| Voice translation | On-device + DeepSeek | about $0.00008 | about $0.23 |
+| Selection translation | DeepSeek V4.1 Flash | about $0.00012 | about $0.36 |
 
-Comparison with every Typeless plan (heavy use, 100 dictations a day):
+<sub>Voice input is estimated on the basis of the recommended setups above; voice translation and selection translation are medians of real requests (8 and 15 respectively), at list prices.</sub>
+
+<img src="https://media.speakmore.zephyrxiang.com/readme/spend.en.7cfdbdab.webp" alt="Home window spending card: daily spending this month as bars with a trend line, and each model's cost and share below" />
+
+Voice input compared with every Typeless plan (heavy use, 100 dictations a day):
 
 <table>
   <tr>
@@ -397,7 +468,7 @@ Comparison with every Typeless plan (heavy use, 100 dictations a day):
 
 ## ✅ Trust
 
-- **Open source**: MIT-licensed; all code that handles voice data and translation is public.
+- **Open source**: MIT-licensed; all code for the three features is public.
 - **No account**: no registration or sign-in.
 - **Single directory**: data, settings, keys, models and logs are stored in one folder, by default `~/.speakmore` (`%USERPROFILE%\.speakmore` on Windows), which can be moved to another disk.
 - **Complete removal**: `speakmore uninstall` deletes everything.
@@ -482,7 +553,7 @@ flowchart LR
 - `native` is Direct, `local` is Hybrid, `private` is Offline.
 - Direct providers: `gemini` / `openai` / `bailian`.
 - Refine providers: `deepseek` / `bailian` / `moonshot` / `zhipu` / `minimax` / `custom`; a custom service also takes `--url <url>`, and optionally `--params '<JSON>'` for extra request parameters.
-- The selection translation model is set on the Engine page, or with `config set lookup.model`.
+- Voice translation targets: `config set translate.to`; the selection translation model and target: `config set lookup.model`, `config set lookup.to`, or the Engine page and Settings in the app.
 - Piped input example: `pbpaste | speakmore key` (Windows: `Get-Clipboard | speakmore key`).
 
 </details>
@@ -495,7 +566,7 @@ flowchart LR
 | `hotkey.dictate` | `["AltRight"]` | Hotkey for voice input |
 | `hotkey.translate` | `["AltRight+Space"]` | Hotkey for voice translation |
 | `hotkey.lookup` | `["AltRight+Enter"]` | Hotkey for selection translation; can be cleared |
-| `hotkey.cancel` | `["Escape"]` | Hotkey that discards a dictation in progress |
+| `hotkey.cancel` | `["Escape"]` | Hotkey that discards a dictation in progress or dismisses the selection card |
 | `mode` | `native` | Recognition mode: `native` (Direct) / `local` (Hybrid) / `private` (Offline) |
 | `model` | `gemini/gemini-3.6-flash` | Direct model, as `provider/model` |
 | `thinking` | `MINIMAL` | Gemini thinking level |
@@ -551,7 +622,7 @@ flowchart LR
 
 | macOS permission | Purpose |
 | --- | --- |
-| Microphone | Recording |
+| Microphone | Recording (voice input, voice translation) |
 | Input Monitoring | Detecting the hotkeys, responding only to those keys; reading the keys pressed while recording a hotkey |
 | Accessibility | Inserting text with a simulated ⌘V; reading the selected text (selection translation); holding back `esc`, combination hotkeys and keys pressed while recording, so they don't reach the active app |
 
@@ -569,7 +640,7 @@ flowchart LR
 | `settings.json` | Settings |
 | `vocabulary.json` | Dictionary |
 | `<vendor>-key.bin` | Encrypted keys, one per vendor; the selection translation custom service has its own `lookupcustom-key.bin` |
-| `data/history.db` | History and spending records |
+| `data/history.db` | History and spending records (all three features) |
 | `data/Recordings/` | Recordings |
 | `logs/main.log` | Logs |
 | `models/` | On-device models |
@@ -593,8 +664,11 @@ flowchart LR
 | A key shows "not verified" | Run `speakmore status` once online |
 | A check fails although the key is correct | Run `speakmore model check` to see the response |
 | The hotkey has no effect | Run `speakmore status`, then `speakmore restart` |
+| Voice translation says it isn't available in Offline mode | Switch to Direct or Hybrid on the Engine page |
+| The selection card says "Select some text first" or "Couldn't read the selection" | Select the text and press again; on macOS, turn on Accessibility |
+| The selection card says "No key set" | Click "Add key" on the card and enter the key for the chosen model |
 | On macOS, some combination hotkeys stop working for a while | Another app has secure input on (a password field, or Secure Keyboard Entry in a terminal); they work again once it's off, and the voice bar says so |
-| On Windows, the hotkey doesn't work in some windows | That window runs as administrator, and Windows doesn't pass its keys to other programs; the voice bar says so |
+| On Windows, the hotkey or selection translation doesn't work in some windows | That window runs as administrator, and Windows doesn't pass its keys or selection to other programs; the voice bar or card says so |
 | A command times out | Run `speakmore stop`, then `speakmore` |
 | No menu bar icon | Run `speakmore settings` |
 | SpeakMore's folder can't be found | If the storage location is on an external drive, connect it first |
