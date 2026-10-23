@@ -1,6 +1,6 @@
 ---
 name: speakmore-translation-features
-description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格）；分支 translate-features，第一、二段做完（两台电脑验过），第三段划词翻译做了大半（内核、小帮手、卡片），剩主窗口几页和 Windows 验收
+description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格）；分支 translate-features，三段都做完（10-23），等他点头再起对抗性审查，之后问合并
 metadata:
   node_type: memory
   type: project
@@ -124,9 +124,17 @@ metadata:
   - `b867af2` 他报的 bug：语音翻译的语言选单往上移就收起（胶囊和选单之间有缝），已修，等他验
 - 他中途定的：划词的自定义服务和语音那边完全分开（地址、型号、参数、key 各存各的，key 文件 lookupcustom-key.bin，
   环境变量 SPEAKMORE_LOOKUP_CUSTOM_API_KEY）。对抗性审查启动 workflow 之前先停下问他。
-- 第三段还没做：设置"划词翻译"栏（译成下拉框）；引擎页"划词"段（厂商、型号两列，含划词自己的自定义服务表单、检查）；
-  卡片"配置密钥"打开的是 showHub({ route: "models", engine: "lookup" })，主窗口那头还没接；历史页划词的标签和筛选、
-  首页三个功能的键、命令行历史；Windows 真机走一遍（右 Alt+回车、V28）；docs/implementation-notes.md 记划词一节和评测数字
+- 10-23 把第三段剩下的做完：
+  - `4596103` `app/lookup/setup.mjs`（主窗口改划词设置：译成、换模型、检测、自定义服务先验再存）、
+    `server/lookup/models.mjs`（出厂 Flash；"已评测"只给 Flash，V4 Pro 只评过旧提示词）、广场多一排 lookup、密钥表数"划词 N"
+  - `08b5177` 设置"划词翻译"一栏（下拉框）；引擎页分语音、划词两段（`engine/lookup.mjs`、`lookup-view.mjs`），
+    自定义服务在划词的详情里直接填；卡片"配置密钥"跳到划词段、缺 key 顺手开密钥面板
+  - `2da5024` 历史详情划词不写录音、首页不列清空了键的功能、命令行说明
+  - `4c64023` Windows 上卡片阴影被窗口边切成硬边，阴影收小、留边 32px
+  - `03c676a` 实现笔记划词一节（评测数字）、V28 部分已验（合成按键，记事本、Edge；真键盘、属性窗口、表格没试）
+  - 单测 Mac 1487 过、Windows 1429 过（65 跳过），都 0 失败。Windows 开发机上替换、只读只给复制、点别处收起都验过
+- 还开着：他验悬浮条选单的修复（b867af2）、中文选区译英文和替换；Windows 真键盘按一次右 Alt+回车；
+  README、官网改叫法和加划词（memory 里"留到最后改 README 时一起改"那两条）
 - Mac 开发窗口：他真按过，卡片位置、复制、替换都对。
 
 **参照**：
