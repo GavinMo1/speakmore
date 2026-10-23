@@ -16,7 +16,7 @@
 - [SpeakMore 按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节
 - [SpeakMore 还在内测](speakmore-only-user-in-beta.md) — 只有他一个人在用；兼容旧版本、迁移按一个人的量来权衡，不做重
 - [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，代码在仓库根，已公开（MIT）；一行命令安装并启动，装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端以后用 Electron（同 Typeless，不用 Tauri）
-- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship，挂后台），GitHub 不再发；最新 0.15.0（10-22，本机模型空闲释放 PR #14、BOM；0.11.0 起换成 channel.json + store/ 按块更新）；安装包公证会自己重交三次，再断就只补那一步、别重打包；发过的版本不覆盖；证书 2027-01-12 到期要续
+- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship，挂后台），GitHub 不再发；最新 0.16.0（10-23，语音翻译、划词翻译；0.11.0 起换成 channel.json + store/ 按块更新）；安装包公证会自己重交三次，再断就只补那一步、别重打包；发过的版本不覆盖；证书 2027-01-12 到期要续
 - [SpeakMore 官网](speakmore-website.md) — 代码在 website/，图片在单独的桶加 media 子域名（证书 2027-01-13 到期要续），Docker 部署、npm run deploy；README 的图在同一个桶的 readme/ 下；10-17 重做已上线（费用并进模型、开发者终端、costs.json 对账）；发新版后要再部署
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README；别人报的修好发版回复完就直接关
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
@@ -59,4 +59,4 @@
 - [热键敢做减法](hotkey-subtract-boldly.md) — 和系统按键、组合键冲突或实验里离谱的，直接不让绑，不用问；改方向才问
 - [他 Mac 上被占的键](mac-keys-taken.md) — Typeless 占着左 fn、右 ⌘，键盘没有右 Ctrl；开发版热键用右 ⌥（正式版不开时）
 - [PR #14 按需装载](speakmore-pr14-on-demand-model.md) — 外部贡献；自定义服务的空闲释放交给 customParams 的 keep_alive/ttl，本机转写合成一项 localModelMemory；10-22 已合并，跟下个版本发
-- [翻译功能的形态](speakmore-translation-features.md) — 语音输入、语音翻译、划词翻译；规格在 .playwright-mcp/translate-proto/README.md；分支 translate-features，三段做完、审查一轮修完、#16 合进来（10-23），等他点头合并 main
+- [翻译功能的形态](speakmore-translation-features.md) — 语音输入、语音翻译、划词翻译；规格在 .playwright-mcp/translate-proto/README.md；随 0.16.0 发布（10-23）；README 改三位一体进行中（分支 readme-three-in-one），引导要重做、再发版，先和他讨论
