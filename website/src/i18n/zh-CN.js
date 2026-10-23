@@ -171,7 +171,7 @@ export default {
     long: { title: "长录音同样稳定", text: "近三分钟的口述，完整成文，不截断。", start: "0:00", end: "2:52" },
   },
   privacy: {
-    title: "数据\n只留本机",
+    title: "数据只留本机",
     items: [
       { icon: "offline", title: "不上传", text: "语音输入可在本机完成" },
       { icon: "account", title: "无需账号", text: "打开即可使用" },
@@ -209,7 +209,7 @@ export default {
     ],
   },
   developers: {
-    title: "命令行\n与 App 对等",
+    title: "命令行与 App 对等",
     points: [
       { title: "命令行全覆盖", text: "切换方式与模型、管理密钥、下载模型、查看历史与花费。" },
       { title: "JSON 输出", text: "status、history、usage 均可输出 JSON，便于接入脚本。" },
