@@ -421,6 +421,28 @@ func testSelection() {
     check(parseOutside(json["c"]) == nil, "字符串不算布尔")
 }
 
+func testSerialJobs() {
+    let jobs = SerialJobs()
+    var log: [String] = []
+    var finishFirst: (() -> Void)?
+    jobs.add { finished in
+        log.append("贴字开始")
+        finishFirst = finished
+    }
+    jobs.add { finished in
+        log.append("复制开始")
+        finished()
+    }
+    check(log == ["贴字开始"], "上一件没说做完，下一件不开始：\(log)")
+    finishFirst?()
+    check(log == ["贴字开始", "复制开始"], "上一件做完了才开始下一件：\(log)")
+    jobs.add { _ in log.append("第三件") }
+    check(log == ["贴字开始", "复制开始", "第三件"], "空着的时候来的马上开始：\(log)")
+    finishFirst?()
+    jobs.add { _ in log.append("第四件") }
+    check(log.count == 3, "第一件又说一次做完，不算第三件做完，第四件等着：\(log)")
+}
+
 guard CommandLine.arguments.count == 2 else {
     FileHandle.standardError.write("用法：<测试程序> <样例目录 native/fixtures/hotkeys/mac>\n".data(using: .utf8)!)
     exit(2)
@@ -431,6 +453,7 @@ testParseBindings()
 testRecorder()
 testProbe()
 testSelection()
+testSerialJobs()
 
 for failure in failures { print("✖ \(failure)") }
 print("Swift：\(passed) 条过，\(failures.count) 条没过")

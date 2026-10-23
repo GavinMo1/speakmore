@@ -1,4 +1,5 @@
 // 贴字：存剪贴板 → 写入文字 → 模拟 ⌘V → 恢复剪贴板。只有粘贴这一条路，和原版一样。
+// 和划词的模拟 ⌘C（Selection.swift）排在同一队剪贴板的活里（clipboardJobs）。
 
 import AppKit
 
@@ -37,6 +38,37 @@ private func writeTransientText(_ pasteboard: NSPasteboard, _ text: String) {
     pasteboard.writeObjects([item])
 }
 
+// MARK: - 剪贴板的活一件一件来
+
+/// 一件做完才开始下一件：每件拿到一个 finished，做完了调它（可以晚一点调，比如等剪贴板还原完）。只在主线程上用
+final class SerialJobs {
+    private var waiting: [(@escaping () -> Void) -> Void] = []
+    private var busy = false
+
+    func add(_ job: @escaping (_ finished: @escaping () -> Void) -> Void) {
+        waiting.append(job)
+        next()
+    }
+
+    private func next() {
+        guard !busy, !waiting.isEmpty else { return }
+        busy = true
+        let job = waiting.removeFirst()
+        var done = false
+        job { [self] in
+            // 同一件说两次做完只算一次，不多放一件进来
+            guard !done else { return }
+            done = true
+            busy = false
+            next()
+        }
+    }
+}
+
+/// 贴字、取选区的模拟 ⌘C 都是"存下 → 改 → 等 → 还原"，两件交叠的话剪贴板会被还原成另一件存下的东西，
+/// 还可能把用户原来复制的字当成选区。排成一队，按来的先后做（同 Windows 版的 clipboardJobs）
+let clipboardJobs = SerialJobs()
+
 // MARK: - 贴字
 
 /// 合成的 ⌘V 带上自己的记号：它会经过自己的 tap，匹配器认出来就不当成用户按的键
@@ -50,21 +82,25 @@ private func postCommandV() {
     }
 }
 
+/// 排进剪贴板的活里：等着还原的那一会儿也占着，模拟 ⌘C 插不进来
 func paste(id: Int, text: String) {
-    let pasteboard = NSPasteboard.general
-    guard AXIsProcessTrusted() else {
-        // 没有辅助功能权限时模拟按键不会生效。把文字留在剪贴板里，让用户自己按 ⌘V
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        emit(["event": "pasted", "id": id, "ok": false, "reason": "not_trusted"])
-        return
-    }
-    let saved = snapshotPasteboard(pasteboard)
-    writeTransientText(pasteboard, text)
-    postCommandV()
-    DispatchQueue.main.asyncAfter(deadline: .now() + restoreDelay) {
-        restorePasteboard(pasteboard, from: saved)
-        emit(["event": "pasted", "id": id, "ok": true])
+    clipboardJobs.add { finished in
+        let pasteboard = NSPasteboard.general
+        guard AXIsProcessTrusted() else {
+            // 没有辅助功能权限时模拟按键不会生效。把文字留在剪贴板里，让用户自己按 ⌘V
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            emit(["event": "pasted", "id": id, "ok": false, "reason": "not_trusted"])
+            return finished()
+        }
+        let saved = snapshotPasteboard(pasteboard)
+        writeTransientText(pasteboard, text)
+        postCommandV()
+        DispatchQueue.main.asyncAfter(deadline: .now() + restoreDelay) {
+            restorePasteboard(pasteboard, from: saved)
+            emit(["event": "pasted", "id": id, "ok": true])
+            finished()
+        }
     }
 }
 

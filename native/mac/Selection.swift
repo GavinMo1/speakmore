@@ -2,6 +2,8 @@
 // 先问辅助功能：焦点元素的 AXSelectedText，位置是 AXSelectedTextRange 的 AXBoundsForRange（全局坐标，左上角为原点，
 // 和 CGEvent、capture 的 regions 同一套）。原生控件、Safari 都问得到；问不到字的（多数 Electron 应用、没开辅助功能树的
 // Chrome）再模拟 ⌘C 从剪贴板取，取完把剪贴板还原，这条路拿不到位置。
+// 问辅助功能不在主线程上：主线程跑着三个 tap 的回调，前台应用卡住时一次最多等 0.5 秒，全系统的按键会跟着卡
+// （同 Windows 版把 UIA 放在别的线程上）。模拟 ⌘C 回到主线程，和贴字排在同一队剪贴板的活里（Paste.swift）。
 // 和 Windows 版（native/windows/selection*.go）的回执一字不差：
 //   {"event":"selection","id":7,"text":"…","rect":{…},"via":"ax","ms":12}
 //   text 为空时带 reason（none 没选中 / not_trusted 没有辅助功能权限 / failed），不带 rect
@@ -16,6 +18,10 @@ private let axTimeout: Float = 0.5
 private let releaseWait: TimeInterval = 1.0
 /// 模拟 ⌘C 之后等剪贴板变化最多多久
 private let copyWait: TimeInterval = 0.4
+/// 到点没变先回没选中，再多盯这么久：慢的应用（远程桌面、忙着的 Electron）过了点才写进剪贴板，写了就还原
+private let lateCopyWait: TimeInterval = 1.5
+/// 问辅助功能的那条线：一次问一个
+private let axQueue = DispatchQueue(label: "speakmore.selection")
 private let cKeyCode: CGKeyCode = 8
 
 // MARK: - 纯逻辑（tests/main.swift 测）
@@ -116,21 +122,31 @@ private func poll(every interval: TimeInterval = 0.02, for limit: TimeInterval, 
     tick()
 }
 
-/// 模拟 ⌘C 从剪贴板取选中的字：先等修饰键松开（还按着右⌥ 时有的应用把 ⌘C 当成 ⌥⌘C），存剪贴板、记 changeCount，
-/// 发 ⌘C，等剪贴板变了读出字，再还原。剪贴板没变就是没选中（或者这个应用不让复制）
+/// 模拟 ⌘C 从剪贴板取选中的字（主线程上）：先等修饰键松开（还按着右⌥ 时有的应用把 ⌘C 当成 ⌥⌘C），
+/// 再排进剪贴板的活里：存剪贴板、记 changeCount，发 ⌘C，等剪贴板变了读出字，再还原。
+/// 剪贴板没变就是没选中（或者这个应用不让复制、慢了）：先回空的，再多盯一会儿，晚到的也还原
 private func copySelection(_ done: @escaping (String) -> Void) {
     poll(for: releaseWait, until: {
         CGEventSource.flagsState(.hidSystemState).intersection(heldModifiers).isEmpty
     }) { _ in
-        let pasteboard = NSPasteboard.general
-        let saved = snapshotPasteboard(pasteboard)
-        let before = pasteboard.changeCount
-        postCommandC()
-        poll(for: copyWait, until: { pasteboard.changeCount != before }) { changed in
-            guard changed else { return done("") }
-            let text = pasteboard.string(forType: .string) ?? ""
-            restorePasteboard(pasteboard, from: saved)
-            done(text)
+        clipboardJobs.add { finished in
+            let pasteboard = NSPasteboard.general
+            let saved = snapshotPasteboard(pasteboard)
+            let before = pasteboard.changeCount
+            postCommandC()
+            poll(for: copyWait, until: { pasteboard.changeCount != before }) { changed in
+                if changed {
+                    let text = pasteboard.string(forType: .string) ?? ""
+                    restorePasteboard(pasteboard, from: saved)
+                    done(text)
+                    return finished()
+                }
+                done("")
+                poll(for: lateCopyWait, until: { pasteboard.changeCount != before }) { late in
+                    if late { restorePasteboard(pasteboard, from: saved) }
+                    finished()
+                }
+            }
         }
     }
 }
@@ -145,12 +161,16 @@ func selection(id: Int) {
         emit(selectionEvent(id: id, text: "", rect: nil, via: "ax", reason: "not_trusted", ms: 0))
         return
     }
-    if let focused = focusedElement(), let text = selectedText(focused), !text.isEmpty {
-        emit(selectionEvent(id: id, text: text, rect: selectionBounds(focused), via: "ax", reason: nil, ms: elapsed()))
-        return
-    }
-    copySelection { text in
-        // 复制拿不到位置
-        emit(selectionEvent(id: id, text: text, rect: nil, via: "copy", reason: nil, ms: elapsed()))
+    axQueue.async {
+        if let focused = focusedElement(), let text = selectedText(focused), !text.isEmpty {
+            emit(selectionEvent(id: id, text: text, rect: selectionBounds(focused), via: "ax", reason: nil, ms: elapsed()))
+            return
+        }
+        DispatchQueue.main.async {
+            copySelection { text in
+                // 复制拿不到位置
+                emit(selectionEvent(id: id, text: text, rect: nil, via: "copy", reason: nil, ms: elapsed()))
+            }
+        }
     }
 }
