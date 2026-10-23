@@ -187,7 +187,7 @@ macOS 上读取选中的文字需要辅助功能权限，首次引导中一并�
 <table>
   <tr>
     <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/history.zh-CN.3b64aa60.webp" alt="历史页：按语音输入、语音翻译、划词翻译筛选，翻译记录下方附原文" /></td>
-    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/vocabulary.zh-CN.afcce34f.webp" alt="词典页：十二个专有名词与术语，可搜索、导入与新增，右上为支持词典的模型" /></td>
+    <td width="50%"><img src="https://media.speakmore.zephyrxiang.com/readme/vocabulary.zh-CN.afcce34f.webp?v=2" alt="词典页：十二个专有名词与术语，可搜索、导入与新增，右上为支持词典的模型" /></td>
   </tr>
   <tr>
     <td align="center"><sub>历史：三项功能的记录，翻译附原文</sub></td>
