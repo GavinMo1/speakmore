@@ -22,7 +22,6 @@ test("目标语言写在提示词的第一行：换一种语言，下一次拼�
 
 test("用词典：接在两步提示词的最后、一行一个；词典是空的时提示词里没有这一段", () => {
   const bound = translate.bind({ output_language: "en" });
-  assert.equal(translate.vocabulary, true);
   for (const step of [bound.native, bound.polish]) {
     const plain = step.system([]);
     assert.ok(!plain.includes("用户词典"));

@@ -26,7 +26,6 @@ export const translate = Object.freeze({
   configMode: "translation",
   /** 要客户端在 set_mode_config 里给的参数：目标语言（src/languages.mjs 的 id） */
   parameters: Object.freeze(["output_language"]),
-  vocabulary: true,
   steps: Object.freeze(["native", "polish"]),
   /**
    * @param {{ output_language?: string }} parameters
