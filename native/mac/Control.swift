@@ -62,12 +62,12 @@ private func isSingleKey(_ binding: Binding) -> Bool {
     !binding.capturing && binding.mods.isEmpty && binding.key != nil
 }
 
-/// capture、release：开始截取消键和悬浮条上的点击，或者不截了
-func capture(_ on: Bool, regions: [Region] = []) {
+/// capture、release：开始截取消键和悬浮条（或划词卡片）上的点击，或者不截了。outside：块外的按下也报（不吞）
+func capture(_ on: Bool, regions: [Region] = [], outside: Bool = false) {
     captureDeadline?.cancel()
     captureDeadline = nil
     capturingNow = on
-    setCapturing(on, regions: regions)
+    setCapturing(on, regions: regions, outside: outside)
     refreshShadows()
     guard on else { return }
     let deadline = DispatchWorkItem {

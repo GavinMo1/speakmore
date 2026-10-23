@@ -1,10 +1,15 @@
+import { ACTIONS } from "../../hotkeys/actions.mjs";
 import { formatCount, formatSpan } from "../../usage/format.mjs";
 import { activityGrid } from "../../usage/insights.mjs";
+import { h } from "../shared/dom.mjs";
 import { t } from "../shared/i18n.mjs";
 import { keycapGroups } from "../shared/keycaps.mjs";
 import { createSpend } from "./spend.mjs";
 
-// 首页：标题下面一行热键；原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费。版本号写在侧栏底下。
+/** 首页标题下列出来的功能：任何时候都能按的动作（取消只在说话时管用，不列） */
+const FEATURES = ACTIONS.filter((action) => action.when === "always");
+
+// 首页：标题下面一行，每个功能的键和名字；原版"洞察"那一列——四个数、活跃天数和热力图，再加我们的花费。版本号写在侧栏底下。
 // 数是主进程从全部历史里算好的（src/usage/insights.mjs、src/usage/report.mjs），这里只管画。
 // 花费那张卡在 spend.mjs。
 
@@ -139,7 +144,17 @@ export function createHome() {
       renderStats(insights);
       renderHeatmap();
       spend.render(usage);
-      $("home-keycap").replaceChildren(...keycapGroups(app.hotkeys.dictate));
+      // 清空了键的功能（划词翻译能清空）不列
+      $("home-actions").replaceChildren(
+        ...FEATURES.filter(({ id }) => app.hotkeys[id]?.length > 0).map(({ id }) =>
+          h(
+            "span",
+            { class: "home-action" },
+            ...keycapGroups(app.hotkeys[id] ?? []),
+            h("span", { text: t(`actions.${id}.name`) }),
+          ),
+        ),
+      );
       $("app-version").textContent = `v${app.version}`;
     },
 

@@ -8,6 +8,7 @@ import { createTranslator, msg } from "../../src/i18n/index.mjs";
 const en = { darwin: createTranslator("en", "darwin"), win32: createTranslator("en", "win32") };
 const dictate = actionOf("dictate");
 const cancel = actionOf("cancel");
+const lookup = actionOf("lookup");
 
 /** 一个组合在这个系统上被拒的原因（英文），能绑是 null */
 const rejected = (text, platform, action = dictate) => {
@@ -15,11 +16,17 @@ const rejected = (text, platform, action = dictate) => {
   return reason === null ? null : en[platform].text(reason);
 };
 const warned = (text, platform) => warningsOf(parseChord(text), { platform }).map((w) => en[platform].text(w));
+/** 一整份绑定的每条问题写成 "动作#第几个 级别 原因（英文）" */
+const reasons = (bindings, platform = "darwin") =>
+  checkBindings(bindings, platform).map(
+    ({ action, index, level, reason }) => `${action}#${index} ${level} ${en[platform].text(reason)}`,
+  );
+const chords = (...texts) => texts.map(parseChord);
 
-test("动作目录：语音输入和取消；每个动作两个系统都有默认组合（D10），默认组合本身都能绑", () => {
+test("动作目录：语音输入、语音翻译、划词翻译和取消；每个动作两个系统都有默认组合（D10），默认组合本身都能绑", () => {
   assert.deepEqual(
     ACTIONS.map((action) => action.id),
-    ["dictate", "cancel"],
+    ["dictate", "translate", "lookup", "cancel"],
   );
   for (const action of ACTIONS) {
     for (const platform of ["darwin", "win32"]) {
@@ -28,12 +35,75 @@ test("动作目录：语音输入和取消；每个动作两个系统都有默�
       for (const codes of chords)
         assert.equal(rejectReason(codes, { action, platform }), null, `${action.id} ${platform}`);
     }
-    const bindings = Object.fromEntries(ACTIONS.map((a) => [a.id, defaultChords(a, "darwin")]));
-    assert.deepEqual(checkBindings(bindings, "darwin"), []);
   }
+  // 默认的彼此不撞。Mac 上只有右⌥空格、右⌥回车各带一条提醒（他定的默认键，照实提醒）；右⌥是右⌥回车的一部分，
+  // 不提醒：按右⌥回车时主进程把语音输入那一下压住，不会先开始说话（app/session-gate.mjs）
+  for (const platform of ["darwin", "win32"]) {
+    const bindings = Object.fromEntries(ACTIONS.map((a) => [a.id, defaultChords(a, platform)]));
+    assert.deepEqual(
+      checkBindings(bindings, platform).filter(({ level }) => level === "reject"),
+      [],
+    );
+  }
+  assert.deepEqual(
+    checkBindings(Object.fromEntries(ACTIONS.map((a) => [a.id, defaultChords(a, "darwin")])), "darwin").map(
+      ({ action, level, reason }) => [action, level, en.darwin.text(reason)],
+    ),
+    [
+      [
+        "translate",
+        "warn",
+        "Option with a typing key normally types a special character (Option-Space is a non-breaking space); bound, it no longer will",
+      ],
+      [
+        "lookup",
+        "warn",
+        "In spreadsheets Option-Return adds a line break inside a cell; bound, it takes the Option key on the other side",
+      ],
+    ],
+  );
   assert.deepEqual(defaultChords(dictate, "darwin"), [["AltRight"]]);
   assert.deepEqual(defaultChords(dictate, "win32"), [["AltRight"]]);
+  assert.deepEqual(defaultChords(lookup, "darwin"), [["AltRight", "Enter"]]);
+  assert.deepEqual(defaultChords(lookup, "win32"), [["AltRight", "Enter"]]);
   assert.deepEqual(defaultChords(cancel, "win32"), [["Escape"]]);
+});
+
+test("回车能和修饰键一起绑：⌘、⌃、fn、Ctrl 加回车照样被各自的规则拦，Windows 另拦左 Alt+回车（表格里单元格内换行）", () => {
+  assert.equal(rejected("AltRight+Enter", "darwin"), null);
+  assert.equal(rejected("AltLeft+Enter", "darwin"), null);
+  assert.equal(rejected("AltRight+Enter", "win32"), null);
+  assert.equal(
+    rejected("MetaRight+Enter", "darwin"),
+    "Command with a typing key is an app shortcut (copy, paste, save…)",
+  );
+  assert.equal(
+    rejected("ControlRight+Enter", "darwin"),
+    "Control with a typing key is a system or text-editing shortcut (switching input sources, moving the cursor…)",
+  );
+  assert.equal(rejected("Fn+Enter", "darwin"), "Globe with a letter, digit or symbol is a system shortcut");
+  assert.equal(
+    rejected("ControlRight+Enter", "win32"),
+    "Ctrl with a typing key is an app shortcut (copy, paste, save…)",
+  );
+  assert.equal(rejected("AltLeft+Enter", "win32"), "Left Alt+Enter adds a line break inside a spreadsheet cell");
+  // ⌥ 加回车不会打出特殊字符：提醒的是表格里的换行，不是"⌥ 加打字的键"那条
+  assert.deepEqual(warned("AltRight+Enter", "darwin"), [
+    "In spreadsheets Option-Return adds a line break inside a cell; bound, it takes the Option key on the other side",
+  ]);
+  assert.deepEqual(warned("AltRight+Enter", "win32"), [
+    "Some keyboard layouts (German, French…) use Right Alt as AltGr for typing; pressing it fires this too",
+  ]);
+});
+
+test("划词翻译能清空；它是另一个组合的一部分时照样提醒（它不是录音会话，没人压住它）", () => {
+  assert.deepEqual(reasons({ dictate: chords("AltRight"), lookup: [], cancel: chords("Escape") }), []);
+  assert.deepEqual(
+    reasons({ dictate: chords("AltRight+F13"), lookup: chords("F13"), cancel: chords("Escape") }).filter((line) =>
+      line.startsWith("lookup"),
+    ),
+    ["lookup#0 warn It's part of Voice input's combination Right ⌥ F13: pressing that one fires this first"],
+  );
 });
 
 test("能绑的（两个系统各自）", () => {
@@ -96,7 +166,7 @@ test("Windows 上和系统、各应用的快捷键撞的，一律不让绑", () 
     "ControlRight+MetaRight": meta,
     "ControlRight+KeyC": "Ctrl with a typing key is an app shortcut (copy, paste, save…)",
     "ControlRight+Space": "Ctrl with a typing key is an app shortcut (copy, paste, save…)",
-    "AltRight+Space": "Alt+Space opens the window menu",
+    "AltLeft+Space": "Left Alt+Space opens the window menu",
     "AltRight+F4": "This closes the window",
     "ControlRight+F4": "This closes the window",
     "ControlRight+ShiftRight": "Ctrl+Shift and Alt+Shift switch input languages and keyboard layouts",
@@ -105,6 +175,8 @@ test("Windows 上和系统、各应用的快捷键撞的，一律不让绑", () 
     F12: "Windows reserves F12 on its own for debuggers",
   };
   for (const [text, reason] of Object.entries(cases)) assert.equal(rejected(text, "win32"), reason, text);
+  // 右 Alt+空格不拦：语音翻译的默认键
+  assert.equal(rejected("AltRight+Space", "win32"), null);
   // Mac 上这几个是可以的
   assert.equal(rejected("ControlRight+ShiftRight", "darwin"), null);
   assert.equal(rejected("MetaRight", "darwin"), null);
@@ -155,12 +227,6 @@ test("提醒（照样能存）", () => {
 });
 
 test("整份绑定：动作之间同键、用了取消的键、一个动作里写重复、超过 4 个、不能清空的清空了", () => {
-  const reasons = (bindings, platform = "darwin") =>
-    checkBindings(bindings, platform).map(
-      ({ action, index, level, reason }) => `${action}#${index} ${level} ${en[platform].text(reason)}`,
-    );
-  const chords = (...texts) => texts.map(parseChord);
-
   assert.deepEqual(reasons({ dictate: chords("F13"), cancel: chords("F13") }), [
     "cancel#0 reject Already used by Voice input",
   ]);
@@ -191,11 +257,18 @@ test("整份绑定：动作之间同键、用了取消的键、一个动作里�
   assert.deepEqual(reasons({ dictate: chords("MetaRight+KeyC"), cancel: chords("Escape") }), [
     "dictate#0 reject Command with a typing key is an app shortcut (copy, paste, save…)",
   ]);
-  // 提醒：组合是另一个组合的一部分；单个组合自己的提醒也带上
+  // 单个组合自己的提醒带上。组合是另一个组合的一部分时，两个都是录音会话（语音输入、语音翻译）不提醒：
+  // 按长的那个时悬浮条直接升级过去，录音不断
   assert.deepEqual(reasons({ dictate: chords("AltRight", "AltRight+Space"), cancel: chords("Escape") }), [
-    "dictate#0 warn It's part of Voice input's combination Right ⌥ Space: pressing that one fires this first",
     "dictate#1 warn Option with a typing key normally types a special character (Option-Space is a non-breaking space); bound, it no longer will",
   ]);
+  assert.deepEqual(
+    reasons({ dictate: chords("AltRight"), translate: chords("AltRight+Space"), cancel: chords("Escape") }, "win32"),
+    [
+      "dictate#0 warn Some keyboard layouts (German, French…) use Right Alt as AltGr for typing; pressing it fires this too",
+      "translate#0 warn Some keyboard layouts (German, French…) use Right Alt as AltGr for typing; pressing it fires this too",
+    ],
+  );
   assert.deepEqual(reasons({ dictate: chords("AltRight"), cancel: chords("Escape") }), []);
 });
 

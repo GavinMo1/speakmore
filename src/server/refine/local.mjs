@@ -3,10 +3,11 @@ import { SPEECH_SAMPLE_RATE } from "../audio/pcm.mjs";
 import { toSpeech } from "../audio/transcode.mjs";
 import { ModelError } from "../providers/errors.mjs";
 
-// 本地转写链路：录音 → 统一成 16 kHz 单声道 → 转写（第一跳，本机模型或云端模型）→ 纯文字模型润色（第二跳）→ 成品。
-// 和原生链路（refiner.mjs）平级，对外的接口一样（warmUp、prepare、refine），服务端不用知道走的是哪一条。
-// 两跳各是一个策略：转写器是哪个模型由模型清单和转写进程管（asr/），润色交给哪一家由润色器管（polisher.mjs），
-// 这里只管把它们按顺序接起来。
+// 混合和离线：录音 → 统一成 16 kHz 单声道 → 转文字（第一步，本机模型或云端模型）→ 纯文字模型整理（第二步）→ 成品。
+// 离线没有第二步：转出来的文字交给任务的 transcribe 那一副收尾。
+// 和直出（refiner.mjs）平级，对外的接口一样（warmUp、prepare、refine），服务端不用知道走的是哪一条。
+// 两步各是一个策略：转文字用哪个模型由模型清单和转写进程管（asr/），整理交给哪一家由整理器管（polisher.mjs），
+// 让模型做什么由每次交进来的任务定（../tasks），这里只管把它们按顺序接起来。
 // 记账两跳各记一笔：润色那一笔由润色器记（花钱、有 token），本机转写这一笔在这里记（provider 是 local，不花钱），
 // 这样用量里能看出每次听写的时间花在哪一跳、钱花在谁身上。
 
@@ -15,8 +16,8 @@ import { ModelError } from "../providers/errors.mjs";
  * @param {{ transcribe(samples: Float32Array, o: { signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }): Promise<{ text: string }> }} options.transcriber
  *   第一跳：本机模型（asr/host.mjs）或云端模型（asr/cloud/transcriber.mjs）。用户词典两跳都交，各按自己的收法用
  *   （收不收、收多少写在模型清单里，见 vocabulary/support.mjs）
- * @param {{ warmUp(): Promise<void>, polish(text: string, o: object): Promise<string> } | null} options.polisher
- *   第二跳（polisher.mjs）。数据隐私模式不接（null）：原文去掉首尾空白直接交出，什么都不往外发
+ * @param {{ warmUp(): Promise<void>, polish(text: string, o: object): Promise<{ text: string, source: string | null }> } | null} options.polisher
+ *   第二步（polisher.mjs）。离线方式不接（null）：原文交给任务的 transcribe 那一副收尾，什么都不往外发
  * @param {{ info: Function, error: Function }} options.log
  * @param {string | null} [options.model] 第一跳是哪个本机模型（models/catalog.mjs 的 id），记账用。
  *   第一跳是云端模型时不写：它自己记账（花钱、按时长或 token 算）
@@ -59,7 +60,12 @@ export function createLocalRefiner({ transcriber, polisher, log, model, onCall =
     /** 开口时没什么要先备的：转写模型装在转写进程里，按需装载时由内置服务在开口那一刻装上（app/service.mjs） */
     async prepare() {},
 
-    async refine(audio, { mimeType, signal, audioId = null, vocabulary = [] }) {
+    /**
+     * @param {{ task: object, mimeType: string, signal?: AbortSignal, audioId?: string, vocabulary?: readonly string[] }} options
+     *   task：这一次的任务（../tasks 的 bind 回的）
+     * @returns {Promise<{ text: string, source: string | null }>} 任务收好的成品
+     */
+    async refine(audio, { task, mimeType, signal, audioId = null, vocabulary = [] }) {
       const startedAt = performance.now();
       let samples;
       try {
@@ -90,11 +96,11 @@ export function createLocalRefiner({ transcriber, polisher, log, model, onCall =
           transcribe_ms: Math.round(transcribedAt - decodedAt),
           transcript_length: transcript.length,
         });
-        return transcript.trim();
+        return task.transcribe.finish(transcript);
       }
       // 转写的这段时间里用户已经断开了：润色要花钱，不必再发
       signal?.throwIfAborted();
-      const refined = await polisher.polish(transcript, { signal, audioId, vocabulary });
+      const refined = await polisher.polish(transcript, { task, signal, audioId, vocabulary });
       // 只记长度和耗时：原文和成品都是用户说的话
       log.info("local_refined", {
         audio_id: audioId,

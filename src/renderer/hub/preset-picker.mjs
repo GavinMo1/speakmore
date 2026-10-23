@@ -147,7 +147,6 @@ export function createPresetPicker({ refresh, configureKey }) {
           h("span", { class: "preset-row-name", text: nameOf(preset.id) }),
           h("span", { class: "preset-row-mode", text: t(`plaza.modes.${preset.mode}`) }),
         ),
-        h("p", { class: "preset-row-desc", text: t(`presets.items.${preset.id}.desc`) }),
         hopChain(preset.hops, platformOf),
         // 还差什么写出来；都齐了才能整套检测
         gaps.length > 0
@@ -171,7 +170,6 @@ export function createPresetPicker({ refresh, configureKey }) {
     const { presets } = setup.plaza;
     trigger.hidden = presets.length === 0;
     trigger.replaceChildren(svg("i-zap"), h("span", { text: t("presets.title") }), svg("i-chevron", "icon chevron"));
-    $("preset-meta").textContent = t("presets.meta", { daily: setup.plaza.typical.daily });
     $("preset-options").replaceChildren(...presets.map(option));
   }
 

@@ -1,6 +1,7 @@
 import { INDENT, paint } from "./text.mjs";
 
 // 历史（speakmore history）：按天分组，新的在前。
+// 翻译的那几条正文是译文，下面淡色写功能、目标语言和原文（和主窗口的历史一样）。
 
 /** 按给定时区拆出年月日和"时:分"（日期怎么写、星期几由 dayHeading 按界面语言写） */
 function localParts(date, timeZone) {
@@ -36,6 +37,15 @@ function dayHeading(date, parts, { now, timeZone, t }) {
   // 不是今年的要带上年份，否则分不清是哪一年的 10 月 8 日
   const year = parts.year === today.year ? {} : { year: "numeric" };
   return format({ ...year, month: "long", day: "numeric", weekday: "short" });
+}
+
+/** 翻译的那条（有目标语言）：功能 · 语言，后面跟原文；原文没有（失败了）就只写功能和语言。不是翻译的没有这几行 */
+function sourceLines({ kind, outputLanguage, sourceText }, t) {
+  if (!outputLanguage) return [];
+  const label = `${t(`actions.${kind}.name`)} · ${t(`languages.${outputLanguage}`)}`;
+  if (!sourceText) return [label];
+  const [first, ...rest] = sourceText.split("\n");
+  return [t("cli.history.source", { label, text: first }), ...rest];
 }
 
 /**
@@ -77,6 +87,7 @@ export function renderHistory({ rows, total }, { color, now, timeZone, t }) {
       // 段落之间的空行不带缩进，免得行尾留一串空格
       else lines.push(line === "" ? "" : `${continuation}${line}`);
     });
+    for (const line of sourceLines(entry, t)) lines.push(line === "" ? "" : `${continuation}${c.dim(line)}`);
   }
 
   if (rows.length < total) {

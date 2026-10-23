@@ -29,8 +29,18 @@ contextBridge.exposeInMainWorld("speakmore", {
   onBarControls: (callback) => ipcRenderer.on("bar:controls", (_event, enabled) => callback(enabled)),
   setBarVisible: (visible) => ipcRenderer.send("bar:set-visible", visible),
   captureBarInput: (regions) => ipcRenderer.send("bar:capture", regions),
+  // 每次开口时现读的设置（语音翻译译成哪几种）
+  sessionConfig: () => ipcRenderer.invoke("bar:session-config"),
   deliver: (payload) => ipcRenderer.invoke("dictation:deliver", payload),
   reportFailure: (payload) => ipcRenderer.invoke("dictation:failed", payload),
+
+  // 划词卡片（src/app/lookup/card-window.mjs）：主进程交来这一次的样子、截到的点击；页面报卡片多高、要截哪几块，
+  // 点了什么，指针在不在要滚动的译文上
+  onLookupView: (callback) => ipcRenderer.on("lookup:view", (_event, view) => callback(view)),
+  onLookupClick: (callback) => ipcRenderer.on("lookup:click", (_event, id) => callback(id)),
+  lookupLayout: (layout) => ipcRenderer.send("lookup:layout", layout),
+  lookupAct: (action) => ipcRenderer.send("lookup:act", action),
+  lookupScroll: (on) => ipcRenderer.send("lookup:scroll", on),
 
   onHotkeysChanged: (callback) => ipcRenderer.on("bar:hotkeys", (_event, hotkeys) => callback(hotkeys)),
   onBarHint: (callback) => ipcRenderer.on("bar:hint", (_event, value) => callback(value)),
@@ -98,6 +108,13 @@ contextBridge.exposeInMainWorld("speakmore", {
   removeHotkey: (action, index) => ipcRenderer.invoke("setup:remove-hotkey", action, index),
   resetHotkey: (action) => ipcRenderer.invoke("setup:reset-hotkey", action),
   setBarHint: (value) => ipcRenderer.invoke("setup:set-bar-hint", value),
+  // 语音翻译译成哪几种（语言 id 的列表，第一种是默认）
+  setTranslateTo: (languages) => ipcRenderer.invoke("setup:set-translate-to", languages),
+  setLookupTo: (language) => ipcRenderer.invoke("setup:set-lookup-to", language),
+  setLookupModel: (choice) => ipcRenderer.invoke("setup:set-lookup-model", choice),
+  checkLookup: (changes) => ipcRenderer.invoke("setup:check-lookup", changes),
+  saveLookupCustom: (form) => ipcRenderer.invoke("setup:save-lookup-custom", form),
+  forgetLookupCustomKey: () => ipcRenderer.invoke("setup:forget-lookup-custom-key"),
 
   // 首次引导
   captureHotkey: (capturing) => ipcRenderer.send("onboarding:capture-hotkey", capturing),

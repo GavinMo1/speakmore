@@ -248,11 +248,12 @@ export function createSpend() {
 
   // ---------- 型号一条一条 ----------
 
-  /** 一个型号的细数：多少 token、几次听写、一般多久回话。指着这一行时才露出来 */
+  /** 一个型号的细数：多少 token、几次听写、几次划词、一般多久回话。指着这一行时才露出来 */
   function detailText(row) {
     const parts = [];
     if (!row.local && row.tokens > 0) parts.push(t("home.tokenTotal", { count: formatTokens(row.tokens) }));
     if (row.dictations > 0) parts.push(t("home.dictations", { count: row.dictations }));
+    if (row.lookups > 0) parts.push(t("home.lookups", { count: row.lookups }));
     if (row.latency) parts.push(t("home.latencyIs", { time: formatSeconds(row.latency.medianMs, t) }));
     return parts.join(" · ");
   }
@@ -285,11 +286,12 @@ export function createSpend() {
     [...list.children].find((item) => item.dataset.key === focused)?.focus({ preventScroll: true });
   }
 
-  /** 底下一行小字：几次听写、多少 token、里面含了几次检查、多少是提示词缓存，有的型号没标价，钱是估算的 */
+  /** 底下一行小字：几次听写、几次划词、多少 token、里面含了几次检查、多少是提示词缓存，有的型号没标价；钱是估算的，口径在悬停里 */
   function renderNote() {
     const now = period();
     const notes = [];
     if (now.dictations > 0) notes.push(t("home.dictations", { count: now.dictations }));
+    if (now.lookups > 0) notes.push(t("home.lookups", { count: now.lookups }));
     if (now.tokens > 0) notes.push(t("home.tokenTotal", { count: formatTokens(now.tokens) }));
     if (now.checks > 0) notes.push(t("home.checks", { count: now.checks }));
     if (now.cacheCostUsd > 0) notes.push(t("home.cache", { cost: formatUsd(now.cacheCostUsd) }));
@@ -297,8 +299,8 @@ export function createSpend() {
     if (unpriced.length > 0) {
       notes.push(t("home.unpriced", { models: t.list(unpriced.map(({ model }) => model)), count: now.unpricedCalls }));
     }
-    notes.push(t("home.estimate"));
     $("spend-note").textContent = notes.join(" · ");
+    $("spend-note").title = t("home.estimate");
   }
 
   function render() {

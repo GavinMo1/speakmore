@@ -16,6 +16,9 @@
 // 不想每次都重下本地模型：SPEAKMORE_E2E_MODELS=<已装好的模型仓>（比如 bench/_work/models），开跑前克隆进数据目录（APFS 上不占空间）。
 // 听写几遍：SPEAKMORE_E2E_ROUNDS=2。本机模型按需装载时两遍之间等它空闲释放，第二遍验重新装载：
 //   SPEAKMORE_MODE=private SPEAKMORE_LOCAL_MODEL_MEMORY=1m SPEAKMORE_E2E_ROUNDS=2 node scripts/dev/e2e.mjs <WAV>
+// 语音翻译：SPEAKMORE_E2E_ACTION=translate，译成什么用 SPEAKMORE_TRANSLATE_TO（默认英文）；
+// SPEAKMORE_E2E_ACTION=upgrade 是先按语音输入的键、再凑成语音翻译的组合，验中途换成翻译、录音不断：
+//   SPEAKMORE_E2E_ACTION=translate SPEAKMORE_TRANSLATE_TO=ja scripts/dev/with-key.sh gemini node scripts/dev/e2e.mjs <WAV>
 
 import { spawn } from "node:child_process";
 import {
@@ -113,6 +116,14 @@ child.on("exit", (code) => {
     for (const [index, row] of rows.entries()) {
       const round = rounds > 1 ? `第 ${index + 1} 遍：` : "";
       if (result.rounds[index]) console.log(`${round}松开后 ${result.rounds[index].ms} 毫秒出字`);
+      // 语音翻译（直接按的、升级来的）：历史里记着是翻译、原文和目标语言
+      const action = process.env.SPEAKMORE_E2E_ACTION ?? "dictate";
+      const kind = action === "upgrade" ? "translate" : action;
+      if (row.kind !== kind) problems.push(`${round}历史里记的功能是 ${row.kind}，应该是 ${kind}`);
+      if (kind === "translate") {
+        if (!row.sourceText || !row.outputLanguage) problems.push(`${round}翻译的历史没有原文或目标语言`);
+        console.log(`${round}原文：${row.sourceText}\n${round}译成 ${row.outputLanguage}`);
+      }
       // 历史里只记录音的文件名，录音在家目录的 data/Recordings 下（storage/paths.mjs 的 recordingsDir）
       const recording = row.audioFile && join(home, "data", "Recordings", row.audioFile);
       if (!recording || !existsSync(recording) || statSync(recording).size === 0) {

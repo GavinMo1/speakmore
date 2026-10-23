@@ -17,6 +17,9 @@ import { createModelRefiner } from "./refine/refiner.mjs";
 // private 选一个本机模型（和 local 的第一跳分开存）。
 // 先定模式，再在模式里选模型，各管各的（app/modes.mjs）。
 // 装出来的都是同一个接口（warmUp、prepare、refine），服务端只认这个接口。
+// 让模型做什么（语音输入、语音翻译……）是另一个维度，由每次说话交进来的任务定（tasks/）。每种模式说自己的成品
+// 出在哪一步（step）：直出在 native 那一步，混合在 polish（整理）那一步，离线只有 transcribe（转文字）这一步。
+// 任务在那一步上有做法，这种模式就能做它；没有就做不了（supportsTask），不按任务的名字判断。
 //
 // "路线"（route）写清这一条要用哪些东西，由设置或环境变量拼出来：
 //   { mode: "native", model: { provider, model }, thinkingLevel }
@@ -36,6 +39,8 @@ export const DEFAULT_POLISH = "deepseek";
 export const MODES = Object.freeze([
   Object.freeze({
     id: "native",
+    /** 成品出在哪一步：任务要在这一步上有做法（tasks/index.mjs 的 steps） */
+    step: "native",
     /** 要用谁家的 key，主的那家在最后 */
     keyVendors: (route) => [findProvider(route.model.provider)],
     describe: (route) => formatModelChoice(route.model),
@@ -50,6 +55,7 @@ export const MODES = Object.freeze([
   }),
   Object.freeze({
     id: "local",
+    step: "polish",
     keyVendors(route) {
       const cloud = cloudTranscriberOf(route.transcriber);
       const polish = findChatVendor(route.polish.vendor);
@@ -87,6 +93,7 @@ export const MODES = Object.freeze([
   }),
   Object.freeze({
     id: "private",
+    step: "transcribe",
     // 不要任何一家的 key
     keyVendors: () => [],
     describe: (route) => route.transcriber,
@@ -135,6 +142,24 @@ export const keyVendorOf = (route) => keyVendorsOf(route).at(-1);
 export const usesLocalModel = (route) =>
   route.mode === "private" || (route.mode === "local" && cloudTranscriberOf(route.transcriber) === null);
 
+/**
+ * 这条路线做不做得了这个任务：任务在这种模式出成品的那一步上有没有做法
+ * @param {object} route
+ * @param {{ steps: readonly string[] }} task 任务的定义（tasks/index.mjs 的 TASKS 的一项）
+ */
+export const supportsTask = (route, task) => task.steps.includes(findMode(route.mode).step);
+
+/**
+ * 这条路线做不了这个任务时说的那句话（离线方式不支持语音翻译）；做得了是 null。按键时主进程拿它拦，服务端也拿它挡
+ * @param {object} route
+ * @param {{ id: string, steps: readonly string[] }} task 任务的定义
+ */
+export const taskProblem = (route, task) => (supportsTask(route, task) ? null : unsupported(route.mode, task.id));
+
+/** 某种模式不支持某件事：离线方式不支持语音翻译 */
+const unsupported = (mode, task) =>
+  msg("voice.unsupported", { mode: msg(`plaza.modes.${mode}`), feature: msg(`actions.${task}.name`) });
+
 /** 一句话说清这条路线，给日志和状态用 */
 export const describeRoute = (route) => `${route.mode}: ${findMode(route.mode).describe(route)}`;
 
@@ -146,8 +171,21 @@ export const describeRoute = (route) => `${route.mode}: ${findMode(route.mode).d
  * @param {Record<string, string>} [options.keys] 这条路线要的每一家的 key（keyVendorsOf），按厂商 id
  * @param {object} [options.transcriber] 第一跳是本机模型时要的转写器（asr/host.mjs 的 spawnTranscriber）
  */
-export function createModeRefiner({ apiKey, keys, ...options }) {
+export async function createModeRefiner({ apiKey, keys, ...options }) {
   const primary = keyVendorOf(options.route);
   const all = { ...keys, ...(apiKey === undefined || primary === undefined ? {} : { [primary.id]: apiKey }) };
-  return findMode(options.route.mode).create({ ...options, keys: all });
+  const mode = findMode(options.route.mode);
+  const refiner = await mode.create({ ...options, keys: all });
+  // 这种模式做不了的任务在这里挡下，说清是哪种模式不支持什么：按键时主进程已经先挡过一道（supportsTask），
+  // 这里是服务端自己的一道，命令行、单独启动的服务端、老版本的页面发来的也挡得住
+  return {
+    ...refiner,
+    async prepare(prepared) {
+      if (prepared.task[mode.step]) await refiner.prepare(prepared);
+    },
+    async refine(audio, refining) {
+      if (!refining.task[mode.step]) throw new LocalizedError(unsupported(mode.id, refining.task.id));
+      return refiner.refine(audio, refining);
+    },
+  };
 }

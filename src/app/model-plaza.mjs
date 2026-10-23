@@ -3,6 +3,7 @@ import { nameParts } from "../models/describe.mjs";
 import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../server/asr/cloud/vendors.mjs";
 import { CHAT_VENDORS, formatChatChoice, parseChatChoice } from "../server/chat/vendors.mjs";
 import { CNY_PER_USD } from "../server/currency.mjs";
+import { DEFAULT_LOOKUP, LOOKUP_TESTED } from "../server/lookup/models.mjs";
 import { DEFAULT_POLISH, keyVendorsOf, usesLocalModel } from "../server/modes.mjs";
 import { DEFAULT_MODEL_CHOICE, formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
 import { VENDORS } from "../server/vendors.mjs";
@@ -12,6 +13,7 @@ import { DAILY_DICTATIONS, monthlyCost, TYPICAL } from "../usage/estimate.mjs";
 //   native      原生识别：收音频的模型（server/providers）
 //   transcribe  转写：本机模型（models/catalog.mjs）和云端模型（server/asr/cloud）
 //   polish      润色：纯文字模型（server/chat/vendors.mjs），最后是自定义服务
+// 另有划词翻译那一排（lookup）：型号同润色，默认和评测是划词自己的（server/lookup/models.mjs），自定义服务也是它自己的。
 // 云端的货架按"谁做的"（maker）分组，一组里的模型可能有好几个平台卖（DeepSeek 官方和百炼都有 V4.1 Flash）：
 // 平台是这一组的渠道，同一个模型在各渠道的写法和价格各自记在 offers 里。用户一个平台只配一把 key。
 // 另外给引擎页第一列的识别方式（renderer/hub/engine/）一份三种方式各自的样子：一路经过哪几个模型、切过去还差什么；
@@ -69,8 +71,16 @@ export async function loadPriceBook() {
   };
 }
 
-/** 云端的一排货架：按 maker 分组，同名的模型并成一行，各平台是这一行的渠道 */
-function cloudShelf(role, { priceOf }) {
+/**
+ * 云端的一排货架：按 maker 分组，同名的模型并成一行，各平台是这一行的渠道
+ * @param {{ defaultChoice?: string, tested?: (choice: string, model: object) => boolean }} [tags]
+ *   打"默认""已评测"按谁的：不给就是这个角色自己的（DEFAULTS、清单里的 tested）
+ */
+function cloudShelf(
+  role,
+  { priceOf },
+  { defaultChoice = DEFAULTS[role], tested = (_choice, model) => model.tested } = {},
+) {
   const groups = new Map();
   for (const vendor of REGISTRIES[role]) {
     for (const model of vendor.models) {
@@ -81,7 +91,7 @@ function cloudShelf(role, { priceOf }) {
       if (!group.rows.has(model.name))
         group.rows.set(model.name, { name: model.name, tested: false, issue: null, offers: {} });
       const row = group.rows.get(model.name);
-      row.tested ||= Boolean(model.tested);
+      row.tested ||= Boolean(tested(`${vendor.id}/${model.id}`, model));
       row.issue ??= model.issue ?? null;
       // 未验证（照文档接入、没拿真 key 调过）跟着渠道走：同一个模型换一家卖，可能就验过了
       row.offers[vendor.id] = {
@@ -98,13 +108,21 @@ function cloudShelf(role, { priceOf }) {
       items: [...rows.values()].map(({ tested, issue, ...row }) => ({
         ...row,
         tags: tagsOf({
-          isDefault: Object.values(row.offers).some(({ choice }) => choice === DEFAULTS[role]),
+          isDefault: Object.values(row.offers).some(({ choice }) => choice === defaultChoice),
           tested,
           issue,
         }),
       })),
     }));
 }
+
+/** 自定义服务那一组：没有清单可列，只有一项 */
+const customGroup = () => ({
+  id: "custom",
+  kind: "custom",
+  channels: ["custom"],
+  items: [{ name: null, tags: [], offers: {} }],
+});
 
 /** 标签只有三种：出厂默认、跑过成批评测、已知问题（文案 models.issues.<issue>） */
 function tagsOf({ isDefault, tested, issue }) {
@@ -153,14 +171,14 @@ function localGroup({ status, chip, freeBytes }) {
   };
 }
 
-/** 一个平台在三排货架上各有几个模型（密钥表里写"可用 原生 4 · 转写 4 · 润色 7"） */
+/** 一个平台在各排货架上各有几个模型（密钥表里写"可用 直出 4 · 转文字 4 · 整理 6 · 划词 6"） */
 function coverageOf(id) {
-  return Object.fromEntries(
-    Object.entries(REGISTRIES).map(([role, registry]) => [
-      role,
-      registry.find((vendor) => vendor.id === id)?.models.length ?? 0,
-    ]),
-  );
+  const count = (registry) => registry.find((vendor) => vendor.id === id)?.models.length ?? 0;
+  // 划词翻译那一排的型号同润色（各家的同一把 key 两边都能用）
+  return {
+    ...Object.fromEntries(Object.entries(REGISTRIES).map(([role, registry]) => [role, count(registry)])),
+    lookup: count(REGISTRIES.polish),
+  };
 }
 
 /** 一路上的一个云端模型：名字取清单里的，清单外的照写进设置的型号 */
@@ -270,9 +288,14 @@ export function describePlaza({ mode, chosen, keys, status, chip, freeBytes, pri
     shelves: {
       native: cloudShelf("native", prices),
       transcribe: [localGroup({ status, chip, freeBytes }), ...cloudShelf("transcribe", prices)],
-      polish: [
-        ...cloudShelf("polish", prices),
-        { id: "custom", kind: "custom", channels: ["custom"], items: [{ name: null, tags: [], offers: {} }] },
+      polish: [...cloudShelf("polish", prices), customGroup()],
+      // 划词翻译（引擎页"划词"那一段）：型号同润色，标签按划词自己的；自定义服务那一组也是划词自己的
+      lookup: [
+        ...cloudShelf("polish", prices, {
+          defaultChoice: formatChatChoice(parseChatChoice(DEFAULT_LOOKUP)),
+          tested: (choice) => LOOKUP_TESTED.includes(choice),
+        }),
+        customGroup(),
       ],
     },
   };

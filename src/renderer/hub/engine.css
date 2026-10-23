@@ -527,13 +527,6 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
   gap: 0.25rem;
 }
 
-.leaf-sub {
-  font-size: var(--text-small);
-  line-height: 1.35;
-  color: var(--ink-2);
-  white-space: nowrap;
-}
-
 /* 型号右边：正在用、已选定写成带点的字；没下载、下载中、缺密钥只放一个小图标 */
 .leaf-state {
   display: inline-flex;
@@ -792,12 +785,6 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
   width: 0.875rem;
   height: 0.875rem;
   margin-top: 0.15rem;
-}
-
-.detail-note-meta {
-  margin-left: auto;
-  font-size: var(--text-micro);
-  white-space: nowrap;
 }
 
 .detail-channel {
@@ -1230,4 +1217,66 @@ body:has(.page[data-route="models"]:not([hidden])) .toast {
   .detail[data-enter] {
     animation: none;
   }
+}
+
+/* ---------- 标题旁的两段：语音、划词 ---------- */
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.title-row .segment .icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+/* 搜索、推荐组合只管语音那一段 */
+.page[data-route="models"][data-segment="lookup"] :is(.search, #preset-trigger) {
+  display: none;
+}
+
+/* ---------- 划词那一段：厂商 → 型号两列，居中放；详情停在右边（同语音那一段），开着时树往左让 ---------- */
+
+.lookup-engine {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 24rem;
+  margin: 0 -3.5rem -3rem -3rem;
+  overflow: clip;
+  isolation: isolate;
+}
+
+.lookup-engine[hidden] {
+  display: none;
+}
+
+.lookup-stage {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1.5rem 3rem;
+  overflow: auto;
+  transition: padding-right var(--dur-slow) var(--ease-out);
+}
+
+.lookup-engine[data-detail] .lookup-stage {
+  padding-right: 23rem;
+}
+
+.lookup-tree {
+  grid-template-columns: repeat(2, max-content);
+  margin: auto;
+}
+
+.lookup-tree .tree-col[data-level="maker"] {
+  grid-column: 1;
+}
+
+.lookup-tree .tree-col[data-level="model"] {
+  grid-column: 2;
+  justify-content: flex-start;
 }

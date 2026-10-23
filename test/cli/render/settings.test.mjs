@@ -30,17 +30,17 @@ test("设置逐项列出现在的值、从哪来、能填什么，后面是文�
   // 用的是改名前的环境变量：照实写它的名字
   assert.match(text, /model\s+gemini\/gemini-3\.8-flash\s+Gemini · 这次运行来自环境变量 GEMINI_MODEL/);
   assert.match(text, /thinking\s+MINIMAL\s+.*默认/);
-  assert.match(text, /mode\s+native\s+原生：录音直接交给模型 · 默认/);
+  assert.match(text, /mode\s+native\s+直出：录音直接交给模型 · 默认/);
   assert.match(text, /native \/ local \/ private/);
   assert.match(text, /privateTranscriber\s+qwen3-asr-0\.6b-q8/);
   assert.match(text, /polish\s+deepseek\/deepseek-flash\s+默认/);
   assert.match(text, /customUrl\s+默认/);
   assert.match(text, /customParams\s+默认/);
-  assert.match(text, /modelSource\s+cn\s+国内源（魔搭） · 默认/);
+  assert.match(text, /modelSource\s+cn\s+魔搭 · 默认/);
   assert.match(text, /cn \/ original/);
   assert.match(text, /localModelMemory\s+resident\s+常驻内存 · 默认/);
   assert.match(text, /resident \/ 1m \/ 5m \/ 10m \/ 30m/);
-  assert.match(text, /acceleration\s+auto\s+自动（有显卡就用） · 默认/);
+  assert.match(text, /acceleration\s+auto\s+自动 · 默认/);
   assert.match(text, /auto \/ cpu/);
   assert.match(text, /barHint\s+on\s+显示 · 默认/);
   assert.match(text, /on \/ off/);

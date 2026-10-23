@@ -103,10 +103,12 @@ export default {
     shiftTyping: "Shift 加打字的键会打出大写或符号，换一个修饰键",
   },
 
-  // 能按快捷键做的事（src/hotkeys/actions.mjs）：设置页、引导页每个动作一行，名字在左、说明在下
+  // 能按快捷键做的事（src/hotkeys/actions.mjs）：设置页、引导页每个动作一行，名字在左、组合在右
   actions: {
-    dictate: { name: "语音输入", description: "按一下开始说话，再按一下结束。" },
-    cancel: { name: "取消", description: "说话时按下，取消这一次。" },
+    dictate: { name: "语音输入" },
+    translate: { name: "语音翻译" },
+    lookup: { name: "划词翻译" },
+    cancel: { name: "取消" },
   },
 
   // 热键的设置项（src/hotkeys/settings.mjs）
@@ -162,7 +164,8 @@ export default {
     macF11: "F11 是系统的“显示桌面”",
     winMeta: "Win 键和它的组合都归 Windows 自己用",
     winControlTyping: "Ctrl 加打字的键是各个应用的快捷键（复制、粘贴、保存……）",
-    winAltSpace: "Alt+空格会打开窗口菜单",
+    winAltSpace: "左 Alt+空格会打开窗口菜单",
+    winAltEnter: "左 Alt+回车在表格软件里是单元格内换行",
     winCloses: "这个组合会关掉窗口",
     winShiftSwitch: "Ctrl+Shift、Alt+Shift 是 Windows 切换输入语言和键盘布局的快捷键",
     winF12: "Windows 把单独的 F12 留给调试器",
@@ -179,6 +182,7 @@ export default {
     fnSystemUse: "按地球仪键时系统还会{use}：可在系统设置 › 键盘里改成“无操作”",
     fnUses: { inputSource: "切换输入法", emoji: "显示表情与符号", dictation: "开始听写" },
     macOptionTyping: "⌥ 加打字的键平时会打出特殊字符（⌥空格是不换行空格），绑上以后就打不出来了",
+    macOptionEnter: "表格软件里 ⌥回车是单元格内换行，绑上以后那里要按另一边的 ⌥",
     altGr: "有些键盘布局（德语、法语等）把右 Alt 当 AltGr 打字用，按它时会一起触发",
     winAltLetter: "Alt 加字母平时会打开应用的菜单（Alt+F 打开“文件”），绑上以后就打不开了",
     prefix: "它是「{action}」的组合 {chord} 的一部分：按那个组合时会先触发这个",
@@ -191,44 +195,74 @@ export default {
   },
 
   providers: {
-    gemini: { name: "Google Gemini", getKey: "去 Google AI Studio 申请" },
-    openai: { name: "OpenAI", getKey: "去 OpenAI 开发者平台申请" },
-    deepseek: { name: "DeepSeek", getKey: "去 DeepSeek 开放平台申请" },
+    gemini: { name: "Google Gemini" },
+    openai: { name: "OpenAI" },
+    deepseek: { name: "DeepSeek" },
     custom: { name: "自定义服务" },
-    bailian: { name: "阿里云百炼", getKey: "去阿里云百炼控制台申请" },
-    moonshot: { name: "Kimi", getKey: "去 Kimi API 开放平台申请" },
-    zhipu: { name: "智谱", getKey: "去智谱开放平台申请" },
-    minimax: { name: "MiniMax", getKey: "去 MiniMax 开放平台申请" },
+    bailian: { name: "阿里云百炼" },
+    moonshot: { name: "Kimi" },
+    zhipu: { name: "智谱" },
+    minimax: { name: "MiniMax" },
   },
 
   language: {
     system: "跟随系统",
   },
 
+  // 翻译能译成的语言（src/languages.mjs）：设置里的"译成"、悬浮条上的语言胶囊、历史里的标签
+  languages: {
+    en: "英文",
+    "zh-CN": "简体中文",
+    "zh-TW": "繁体中文",
+    ja: "日文",
+    ko: "韩文",
+    fr: "法文",
+    de: "德文",
+    es: "西班牙文",
+    pt: "葡萄牙文",
+    it: "意大利文",
+    ru: "俄文",
+    ar: "阿拉伯文",
+    vi: "越南文",
+    th: "泰文",
+    id: "印尼文",
+    tr: "土耳其文",
+  },
+
   settings: {
     describe: {
-      mode: "识别走哪条路：native 是录音直接交给收音频的模型，local 是本机的小模型先转成文字、再交给任意大模型润色，private 是只用本机模型转写、什么都不上传",
+      mode: "识别方式：native（直出）是录音直接交给收音频的模型，local（混合）是先转成文字、再交给任意大模型整理，private（离线）是只用本机模型转文字、什么都不上传",
       model: "用哪一家的哪个模型整理，写成 厂商/模型；只写厂商就用它的默认模型。换模型用 speakmore model",
       thinking: "Gemini 的思考档位，越高越慢。别家的模型用不上",
-      transcriber: "local 那条路上用哪个本机模型转文字，要先下载好（speakmore transcriber download）",
-      privateTranscriber: "private 那条路上用哪个本机模型转文字，只能是本机模型，要先下载好",
-      polish: "local 那条路上把文字交给哪一家的哪个模型润色，写成 厂商/模型；自定义服务写 custom/模型名",
-      customUrl: "自定义润色服务的地址（兼容 OpenAI 接口的那种），比如 https://api.example.com/v1",
+      transcriber: "local（混合）方式用哪个模型转文字，本机模型要先下载好（speakmore transcriber download）",
+      privateTranscriber: "private（离线）方式用哪个本机模型转文字，只能是本机模型，要先下载好",
+      polish: "local（混合）方式把文字交给哪一家的哪个模型整理，写成 厂商/模型；自定义服务写 custom/模型名",
+      customUrl: "自定义服务的地址（兼容 OpenAI 接口的那种），比如 https://api.example.com/v1",
       customParams:
-        '发给自定义服务的额外请求参数，一段 JSON 对象，比如 {"reasoning_effort": "minimal"}；验证和润色都带上，不能写 model、messages、stream',
+        '发给自定义服务的额外请求参数，一段 JSON 对象，比如 {"reasoning_effort": "minimal"}；验证和整理都带上，不能写 model、messages、stream',
       modelSource:
         "本机模型从哪下载：cn 是国内源（魔搭 ModelScope），original 是 Hugging Face 原始地址。选的那个下不动会自动换另一个，下了一截的接着下",
       acceleration:
         "本机模型用不用显卡：auto 有显卡就用，出问题自动退回 CPU；cpu 只用 CPU（显卡驱动有问题、或者想把显卡让给别的程序时）",
       localModelMemory:
-        "本机转写模型常驻内存，还是空闲多久后释放：resident 一直装着；1m、5m、10m、30m 空闲这么久后释放，下次开口时再装（隔久了第一句慢一两秒）",
+        "本机转文字的模型常驻内存，还是空闲多久后释放：resident 一直装着；1m、5m、10m、30m 空闲这么久后释放，下次开口时再装（隔久了第一句慢一两秒）",
       barHint: "悬浮条上方那行操作提示（再按一下 … 完成 · esc 取消）显示不显示：on 显示，off 不显示",
+      translate: {
+        to: "语音翻译译成什么：一种或几种语言（en、ja，逗号隔开），第一种是默认，悬浮条上能临时换成别的几种",
+      },
+      lookup: {
+        to: "划词翻译译成什么：一种语言，卡片上能临时换成别的",
+        model: "划词翻译交给哪一家的哪个模型，写成 厂商/模型，和语音那边的模型无关；自定义服务写 custom/模型名",
+        customUrl: "划词翻译用的自定义服务的地址（兼容 OpenAI 接口的那种），和语音那边的分开",
+        customParams: "发给划词翻译的自定义服务的额外请求参数，一段 JSON 对象；不能写 model、messages、stream",
+      },
       theme: "界面用哪套主题",
       language: "界面用哪种语言；system 是跟随系统",
     },
     unknown: "没有 {name} 这项设置。能改的有：{names}",
     notText: "要是一段文字",
     oneOf: "要是 {choices} 之一",
+    translateTargets: "要写 1 到 {max} 种语言，比如 en 或 en,ja",
     invalid: "{where} 写的是 {value}，{reason}",
     whereEnv: "环境变量 {variable}",
     whereFile: "设置文件 {file} 里的 {name}",
@@ -241,21 +275,21 @@ export default {
     unknownProvider: "不认识 {name} 这家，可选的有 {providers}",
     badName: "模型名 {model} 不对：只能有字母、数字和 . _ : -",
     // 模型广场上"已知问题"标签悬停时说的（各家清单里的 issue）
-    issues: { jsonWrapped: "偶发将成稿包裹为 JSON、返回 HTTP 500" },
+    issues: { jsonWrapped: "偶发把结果包在 JSON 里、返回 HTTP 500" },
   },
   modes: {
-    native: "原生：录音直接交给模型",
-    local: "本地转写，再交给模型润色",
-    private: "数据隐私：只用本机模型转写，什么都不上传",
-    privateOnlyLocal: "数据隐私模式只用本机模型，{model} 是云端模型",
+    native: "直出：录音直接交给模型",
+    local: "混合：先转文字，再交给模型整理",
+    private: "离线：只用本机模型，什么都不上传",
+    privateOnlyLocal: "离线方式只用本机模型，{model} 是云端模型",
     notIn: "现在是 {current} 模式，{what}要在 {mode} 模式里才能换",
     notOfMode: "{name} 不是 {mode} 模式的设置；切换至 {mode} 时可一并设置的是 {names}",
     notDownloaded: "{model} 还没下载（{size}）：先下载再用",
     what: {
       model: "收音频的模型",
-      transcriber: "本机转写模型（第一跳）",
-      polish: "润色模型（第二跳）",
-      privateTranscriber: "数据隐私模式的本机模型",
+      transcriber: "转文字的模型",
+      polish: "整理的模型",
+      privateTranscriber: "离线方式的本机模型",
     },
   },
   local: {
@@ -264,14 +298,14 @@ export default {
     modelFailed: "本地模型没装上：{reason}",
     modelMissing: "本地模型 {model} 还没下载：在引擎页下载，或运行 speakmore transcriber download {id}",
     undecodable: "录音解不开：{reason}",
-    transcribeFailed: "本地转写失败：{reason}",
+    transcribeFailed: "本机转文字失败：{reason}",
   },
   modelSources: {
-    cn: "国内源（魔搭）",
-    original: "原始地址（Hugging Face）",
+    cn: "魔搭",
+    original: "Hugging Face",
   },
   accelerations: {
-    auto: "自动（有显卡就用）",
+    auto: "自动",
     cpu: "只用 CPU",
   },
   localModelMemories: {
@@ -311,9 +345,9 @@ export default {
     unknown: "模型清单里没有 {id}",
     noSpace: "磁盘空间不够：下载 {model} 还要 {need}，磁盘只剩 {free}",
     downloadFailed: "{model} 没下下来：{reason}",
-    inUse: "{model} 正在用，删不了：先换一个模型，或切回 native",
+    inUse: "{model} 正在用，删不了：先换一个模型，或切回直出",
     checkNoSpeech: "念不出检查用的那句话（用的是系统朗读）：{reason}",
-    checkFailed: "{model} 转写出错：{reason}",
+    checkFailed: "{model} 转文字出错：{reason}",
     checkEmpty: "{model} 一个字都没转出来",
   },
   chat: {
@@ -370,7 +404,7 @@ export default {
     noKeyServiceFor:
       "还没有填 {provider} API key：在终端运行 speakmore key {id}，或者点菜单栏上 SpeakMore 的图标打开设置",
     failedFor: "{provider} 的 key 未通过：{reason}",
-    whichVendor: "数据隐私模式不用 key；要给某一家存 key，写明是哪一家",
+    whichVendor: "离线方式不用 key；要给某一家存 key，写明是哪一家",
   },
 
   model: {
@@ -400,6 +434,30 @@ export default {
     disconnected: "和服务端的连接断了",
     timeout: "等了 {seconds} 秒没有等到成品",
     serverError: "服务端报错 {code}：{detail}",
+    // 识别方式做不了这件事（离线方式没有能翻译的模型）：离线方式不支持语音翻译
+    unsupported: "{mode}方式不支持{feature}",
+  },
+
+  // 划词翻译（src/app/lookup）
+  lookup: {
+    noKey: "{provider} 未配置密钥",
+    customUrlMissing: "自定义服务还没填地址",
+    noSelection: "先选中要翻译的文字",
+    noAccessibility: "划词翻译要辅助功能权限：系统设置 › 隐私与安全性 › 辅助功能",
+    elevated: "那个窗口是以管理员身份运行的，取不到选中的文字",
+    selectionFailed: "没取到选中的文字，再按一次试试",
+    tooLong: "选中的太长了：一次最多 {max} 字",
+    empty: "模型没有回译文，再试一次",
+    card: {
+      copy: "复制",
+      copied: "已复制",
+      pin: "固定",
+      unpin: "取消固定",
+      close: "关闭",
+      keys: "配置密钥",
+      retry: "重试",
+      translating: "翻译中",
+    },
   },
 
   delivery: {
@@ -415,6 +473,8 @@ export default {
     recording: "再按一下 {key} 完成 · {esc} 取消",
     recordingNoEsc: "再按一下 {key} 完成",
     finishing: "整理中",
+    // 语音翻译等成品时
+    translating: "翻译中",
     noHold: "不支持按住说话：按一下开始，再按一下结束",
     noMicPermission: "缺麦克风权限：系统设置 › 隐私与安全性 › 麦克风",
     noMicrophone: "找不到麦克风",
@@ -462,13 +522,22 @@ export default {
   // 说明写成名词短语、用" · "连起来，不写"能用"这类口语
   plaza: {
     title: "引擎",
+    // 标题旁的两段（engine/page.mjs）：语音是三种识别方式的树，划词只有厂商、型号（engine/lookup.mjs）
+    segments: { label: "引擎分段", voice: "语音", lookup: "划词" },
+    lookup: {
+      testedTip: "经成批划词样例评测",
+      customKey: "自定义服务 API 密钥",
+      customEnabled: "已启用自定义服务",
+      removeKey: "删除密钥",
+      keyRemoved: "自定义服务密钥已删除",
+    },
     search: "搜索模型或厂商",
-    modes: { native: "原生识别", local: "转写 + 润色", private: "数据隐私" },
-    // 树的三个环节，和每个环节做什么（悬停时看）
-    roles: { native: "原生", transcribe: "转写", polish: "润色" },
-    roleDesc: { native: "音频直接成稿", transcribe: "音频转成文字", polish: "文字整理成稿" },
+    modes: { native: "直出", local: "混合", private: "离线" },
+    // 树的三个步骤，和每一步做什么（悬停时看）
+    roles: { native: "直出", transcribe: "转文字", polish: "整理" },
+    roleDesc: { native: "录音直接出字", transcribe: "录音转成文字", polish: "把文字改顺" },
     // 树上每列上面那一行小字
-    columns: { modes: "识别方式", roles: "环节", makers: "厂商", models: "型号" },
+    columns: { modes: "识别方式", roles: "步骤", makers: "厂商", models: "型号" },
     unchosen: "未选定",
     state: { notDownloaded: "未下载", downloading: "下载中", downloaded: "已下载 {done}/{total}" },
     legend: { standby: "已选定 · 其他识别方式" },
@@ -484,12 +553,11 @@ export default {
       label: "{model} 详情",
       close: "收起详情",
       switchTo: "启用即切换至{mode}",
-      current: "当前 · {mode}",
       price: "价格",
       perHour: "/ 小时音频",
       listPrice: "{platform}标价",
       listPriceTokens: "{platform}标价 · 每百万 tokens",
-      specsNote: "评分基于 97 条真实录音 · 绿色为同组最佳",
+      best: "同组最佳",
       license: "{license} 许可",
       audioLocal: "音频留存本机",
       audioTo: "音频发送至 {platform}",
@@ -511,7 +579,7 @@ export default {
       okAgain: "检测通过，重新检测",
       failAgain: "检测失败，重新检测",
       modelTip: "发送样例请求验证",
-      localTip: "以系统朗读的样句转写验证",
+      localTip: "以系统朗读的样句转文字验证",
       keyTip: "以该密钥发起一次最小请求",
     },
     cols: {
@@ -520,17 +588,17 @@ export default {
       output: "输出",
       outputTip: "输出单价 · 每百万 tokens",
       hour: "每小时",
-      hourTip: "每小时音频的转写费用",
-      hourApprox: "每小时音频的转写费用 · 按 token 计费，依实测折算",
+      hourTip: "每小时音频转文字的费用",
+      hourApprox: "每小时音频转文字的费用 · 按 token 计费，依实测折算",
       noPrice: "以平台定价为准",
       zh: "中文",
       zhTip: "中文口述准确度 · 47 条真实录音评分，满分 5",
       mix: "中英混合",
       mixTip: "中英混合准确度 · 45 条真实录音评分，满分 5",
       minute: "1 分钟耗时",
-      minuteTip: "转写 1 分钟音频所需时间 · 按本机实测的实时倍率折算",
+      minuteTip: "1 分钟音频转成文字所需时间 · 按本机实测的实时倍率折算",
       memory: "内存",
-      memoryTip: "转写时的峰值内存",
+      memoryTip: "转文字时的峰值内存",
       size: "体积",
       sizeTip: "下载体积",
     },
@@ -579,15 +647,14 @@ export default {
     },
     custom: {
       name: "自定义服务",
-      desc: "OpenAI 兼容接口 · 自填地址、模型名与密钥",
-      kind: "OpenAI 兼容接口",
+      desc: "OpenAI 兼容接口",
       url: "接口地址",
       urlPlaceholder: "接口地址，如 https://api.example.com/v1",
       model: "模型名",
       modelPlaceholder: "模型名",
       params: "额外参数",
       paramsPlaceholder: "额外参数（JSON，选填）",
-      paramsTip: '发给这个服务的额外请求参数，如 {"reasoning_effort": "minimal"}，检测和润色都会带上',
+      paramsTip: '发给这个服务的额外请求参数，如 {"reasoning_effort": "minimal"}，检测和整理都会带上',
       keyKept: "密钥已配置，留空则不更改",
       modelMissing: "请填写模型名",
     },
@@ -602,7 +669,6 @@ export default {
       envTip: "来自环境变量 {variable}，优先于存着的密钥",
       stored: "已配置",
       none: "未配置",
-      widest: "覆盖最广",
       placeholder: "粘贴 {platform} API 密钥",
       label: "{platform} API 密钥",
       save: "保存",
@@ -629,23 +695,22 @@ export default {
   // 引擎页标题行右边的推荐组合（src/models/presets.mjs、renderer/hub/preset-picker.mjs）。月成本统一按每天 100 次、一个月 30 天
   presets: {
     title: "推荐组合",
-    meta: "月成本以每天 {daily} 次计",
     perMonth: "/ 月",
     costTip: "每天 {daily} 次 · 每次约 {seconds} 秒 · 工作日高峰价",
     costUnknown: "价格不明",
     enable: "启用",
     enabling: "启用中",
-    checkTip: "整套检测：本机模型转写一句样例，云端各家以这套设置发起一次最小请求",
+    checkTip: "整套检测：本机模型转一句样例，云端各家以这套设置发起一次最小请求",
     enabled: "已启用 {name}",
     download: "下载 {size}",
     downloading: "{model} 下载中",
     items: {
-      "local-deepseek": { name: "本机转写 + DeepSeek", desc: "效果最佳 · 快速稳定 · 成本极低" },
-      "native-gemini": { name: "Gemini 原生识别", desc: "一步成稿 · 一把密钥" },
-      "bailian-cloud": { name: "百炼全云端", desc: "一把密钥 · 不占本机算力" },
-      "private-qwen": { name: "纯本机", desc: "不上传任何数据 · 零成本" },
-      "local-deepseek-cpu": { name: "本机转写 + DeepSeek", desc: "CPU 版本机模型 · 成本极低" },
-      "private-sensevoice-cpu": { name: "纯本机", desc: "CPU 版本机模型 · 不上传任何数据" },
+      "local-deepseek": { name: "本机 + DeepSeek" },
+      "native-gemini": { name: "Gemini" },
+      "bailian-cloud": { name: "百炼全云端" },
+      "private-qwen": { name: "纯本机" },
+      "local-deepseek-cpu": { name: "本机 + DeepSeek" },
+      "private-sensevoice-cpu": { name: "纯本机" },
     },
   },
 
@@ -679,24 +744,24 @@ export default {
     local: "本机",
     free: "免费",
     emptyPeriod: "这段时间还没用过",
-    noCost: "均为本机转写 · 未产生费用",
+    noCost: "均为本机模型 · 未产生费用",
     unpricedOnly: "所用云端型号未标价 · 花费未计入",
     range: "{from}至{to}",
     dictations: { other: "{count} 次听写" },
+    lookups: { other: "{count} 次划词" },
     tokenTotal: "{count} token",
     checks: { other: "含检查 {count} 次" },
     cache: "提示词缓存 {cost}",
     estimate: "按各家官方标准价估算",
     unpriced: "{models} 无标价，{count} 次未计入",
-    dictate: "按一下说话",
     // 识别方式：首页标题右边只显示（renderer/hub/mode-chip.mjs），在引擎页第一列换，首次引导也用；三种方式的名字在 plaza.modes
     mode: {
       label: "识别方式",
       open: "在引擎页更换",
       desc: {
-        native: "音频直达模型 · 单次成稿",
-        local: "语音转写 · 文本润色",
-        private: "本机转写 · 不上传任何数据",
+        native: "录音直接交给模型",
+        local: "先转文字，再交给模型整理",
+        private: "只用本机模型 · 不上传",
       },
       needs: {
         key: "{platform} 密钥未配置",
@@ -713,7 +778,10 @@ export default {
 
   history: {
     title: "历史",
-    empty: "还没有记录 · 按 {keycap} 说第一句",
+    // 标题右边按功能筛：全部，和每个功能的名字（actions.<动作>.name）
+    filter: "按功能筛选",
+    all: "全部",
+    empty: "还没有记录",
     loadError: "读不出历史：{reason}",
     today: "今天",
     yesterday: "昨天",
@@ -738,14 +806,13 @@ export default {
     // 跟在"仅保存在本机"后面。词典文件只在本机；当前方式里有收词典的云端模型时，听写时那部分词随请求发出去，照实说
     localMeta: { device: "不上传", cloud: "随听写请求发出" },
     localTip:
-      "词典保存在 {file}，不上传、不同步。听写时，所用模型收得下的那部分词随这次请求一并发出；数据隐私方式下不离开本机",
-    composer: { placeholder: "输入新词", add: "添加", close: "收起" },
+      "词典保存在 {file}，不上传、不同步。听写时，所用模型收得下的那部分词随这次请求一并发出；离线方式下不离开本机",
+    composer: { placeholder: "输入新词", close: "收起" },
     supportTrigger: "支持的模型",
     support: {
       title: "支持的模型",
-      meta: "各模型接收词典的方式不同",
       all: "全部模型",
-      roles: { native: "原生识别", transcribe: "转写", polish: "润色" },
+      roles: { native: "直出", transcribe: "转文字", polish: "整理" },
       limitTerms: "前 {count} 个词",
       limitChars: "前 {count} 字",
       limitAll: "全部词",
@@ -765,7 +832,7 @@ export default {
     },
     search: "搜索",
     count: "{count} 个词",
-    empty: { title: "还没有词汇", description: "常说的人名、产品名和术语 · 识别时按此写法输出" },
+    empty: { title: "还没有词汇" },
     noResults: "没有匹配的词",
     loadError: "读不出词典：{reason}",
     editHint: "回车保存 · Esc 放弃",
@@ -784,7 +851,6 @@ export default {
         skipped: { existing: "已在词典中 {count} 个", duplicates: "文件内重复 {count} 个", invalid: "无效 {count} 个" },
         none: "{file} 中没有可添加的新词",
         confirm: "添加 {count} 个",
-        hint: "一列的 CSV 或文本文件，每行一个词",
         more: "还有 {count} 个",
       },
     },
@@ -820,12 +886,13 @@ export default {
     about: "关于",
     hotkey: "快捷键",
     theme: "主题",
-    language: "语言",
-    modelSource: "本地模型下载源",
-    acceleration: "本机模型加速",
-    localModelMemory: "本机转写模型内存",
+    language: "界面语言",
+    localModels: "本机模型",
+    modelSource: "下载源",
+    acceleration: "加速",
+    localModelMemory: "内存",
     localModelMemoryFailed: "内存设置未能更换：{reason}",
-    barHint: "悬浮条操作提示",
+    barHint: "悬浮条上显示按键提示",
     openAtLogin: "开机启动",
     themeFailed: "主题没换成：{reason}",
     languageFailed: "语言没换成：{reason}",
@@ -833,6 +900,14 @@ export default {
     sourceFailed: "下载源未能更换：{reason}",
     accelerationFailed: "加速方式未能更换：{reason}",
     barHintFailed: "操作提示未能更改：{reason}",
+    // 设置 › 语音翻译（renderer/hub/translate-pane.mjs）
+    translateTo: "译成",
+    translateDefault: "默认",
+    translateMakeDefault: "设为默认",
+    translateRemove: "移除{language}",
+    translateAdd: "添加",
+    translateFailed: "语音翻译的语言未能更改：{reason}",
+    lookupFailed: "划词翻译的语言未能更改：{reason}",
     recheck: "重新检查",
     version: "版本",
     source: "源代码",
@@ -949,29 +1024,23 @@ export default {
       key: "需密钥",
       local: "本机模型 · {size}",
       offline: "无需密钥",
-      note: "随时可在主窗口更换 · 也可跳过，进入后配置",
     },
     prepare: {
-      native: { soft: "接入", title: "原生识别模型" },
-      local: { soft: "本机转写，", title: "云端润色" },
+      native: { soft: "接入", title: "直出模型" },
+      local: { soft: "本机转文字，", title: "云端整理" },
       private: { soft: "下载", title: "本机模型" },
       route: { label: "识别路线", audio: "录音", text: "文字", local: "本机" },
-      sections: { model: "本机模型", native: "原生识别", local: "润色" },
+      sections: { model: "本机模型", native: "直出", local: "整理" },
       model: {
         download: "下载",
         retry: "重新下载",
         ready: "已下载",
-        background: "后台下载 · 可先继续",
         sources: { cn: "国内源", original: "Hugging Face" },
       },
-      nativeOnly: "仅这几家支持音频直达 · DeepSeek、Kimi、GLM 等见转写 + 润色",
-      later: "可跳过 · 进入后在引擎页配置",
-      laterModel: "可跳过 · 进入后在引擎页下载",
-      more: "云端转写、自定义服务见引擎页",
       status: {
         enabled: "已启用{mode}",
         enabling: "启用中",
-        switched: "已切换到{mode} · 补齐下列各项即可使用",
+        switched: "已切换至{mode}",
         failed: "未启用",
         retry: "重试",
       },
@@ -1008,7 +1077,7 @@ export default {
       title: "说一句",
       sample: "嗯，我们明天上午九点开会，不对，九点半吧，记得把上周的数据带上。",
       notes: "笔记",
-      placeholder: "点这里，按 {keycap} 读左边那句，再按一下结束",
+      placeholder: "按 {keycap} 读左边那句",
       downloading: "{model} 下载中 · {percent}%",
       needDownload: "{model} 未下载（{size}）",
       needKey: "缺 {vendor} 密钥",
@@ -1144,29 +1213,29 @@ export default {
   speakmore update              更新到最新版本（Mac 上装着 SpeakMore.app 的话连它一起）。设置、key、词典、历史和录音不动
 
   speakmore history [-n 条数] [--json]
-                                看说过的话，按天分组，新的在前（默认最近 {limit} 条）
+                                看说过的话和划词翻译，按天分组，新的在前（默认最近 {limit} 条）
   speakmore dict [--json]       看词典：常说的人名、产品名和术语，识别时按这里的写法。只存在本机
   speakmore dict add|remove <词>…
                                 加词、删词，几个词一次给（有空格的词加引号）
   speakmore dict import <文件>   从一列的 CSV 或一行一个词的文本导入，已有的跳过
   speakmore usage [--json]      看花了多少钱：今天、本月、累计的花费、token，模型多久回话，按型号分开
-  speakmore mode                看三种识别模式各用什么：native 录音直接交给模型，local 先转写、再交给模型润色，private 只用本机模型转写、什么都不上传
+  speakmore mode                看三种识别模式各用什么：native（直出）录音直接交给模型，local（混合）先转文字、再交给模型整理，private（离线）只用本机模型转文字、什么都不上传
   speakmore mode <native|local|private> [--model …] [--transcriber …] [--polish … --url … --params …]
                                 切模式，当场生效。可以连带那种模式自己的设置，比如第一次进 local 就用自定义服务
   speakmore model               native 模式：看能用哪几家的模型（{providers}）、各家的 key 有没有、现在用的哪个
   speakmore model <厂商>[/<模型>]
                                 native 模式里换一家或换个模型，比如 speakmore model openai。没有它的 key 会先问
   speakmore transcriber [<模型>]
-                                local 模式第一跳：看、换本机转写模型。要用的还没下载时先问要不要下
+                                local 模式转文字那一步：看、换本机模型。要用的还没下载时先问要不要下
   speakmore transcriber download|cancel|delete <模型> [--yes]
-                                下载、停下、删除本机转写模型（哪种模式里都能做；正在用的删不了）
+                                下载、停下、删除本机转文字的模型（哪种模式里都能做；正在用的删不了）
   speakmore transcriber check [<模型>]
-                                检查本机转写模型：用系统朗读念一句交给它转，看能不能正常出字。不写就查现在选的
+                                检查本机转文字的模型：用系统朗读念一句交给它转，看能不能正常出字。不写就查现在选的
   speakmore polish [<厂商>[/<模型>] [--url <地址>] [--params <JSON>]]
-                                local 模式第二跳：看、换润色的模型（{polishers}）。custom 是兼容 OpenAI 接口的任意服务，
+                                local 模式整理那一步：看、换整理的模型（{polishers}）。custom 是兼容 OpenAI 接口的任意服务，
                                 --params 是发给它的额外请求参数，比如 '{"reasoning_effort": "minimal"}'
   speakmore polish check [<厂商>[/<模型>] [--url <地址>] [--params <JSON>]]
-                                检查第二跳能不能用
+                                检查整理那一步能不能用
   speakmore model check [<厂商>[/<模型>]]
                                 检查能不能用：拿那一家的 key 发一个最小的请求。不写就查现在用的
   speakmore key [<厂商>]         换一把 key，不写厂商就是现在用的那家（输入不会显示出来；也可以从管道喂进来）
@@ -1253,12 +1322,12 @@ export default {
       notInline:
         "key 不要写在命令后面：那样它会留在 shell 的历史记录里。运行 speakmore key 再粘贴，或者从管道喂：pbpaste | speakmore key。要给某一家填，后面写它的名字：{providers}",
       forgotten: "存着的 {provider} 的 key 已经删掉。",
-      whichVendor: "数据隐私模式不用 key。要给某一家填，后面写它的名字：{providers}",
+      whichVendor: "离线模式不用 key。要给某一家填，后面写它的名字：{providers}",
       cancelled: "已取消，key 没有改动。",
       nothingRead: "没有读到 key，原来的没有改动。",
       badShapeUnchanged: "{problem}。原来的没有改动。",
       switchHint: "要换成用它：{command}",
-      needText: "需要一把 {provider} API key：录音在本机转成文字，只把文字发给 {provider} 润色。",
+      needText: "需要一把 {provider} API key：录音在本机转成文字，只把文字发给 {provider} 整理。",
       customWithModel:
         "自定义服务的 key 要和模型名、地址一起填：speakmore polish custom/<模型名> --url <地址>（还没在 local 模式时：speakmore mode local --polish custom/<模型名> --url <地址>）",
     },
@@ -1321,20 +1390,20 @@ export default {
       loading: "本地模型正在装载，几秒就好。",
       switch: "切换：speakmore mode {mode}（当场生效）",
       nativeModels: "native 里换模型：speakmore model",
-      localHops: "local 的两跳：speakmore transcriber（第一跳，本机转写）· speakmore polish（第二跳，润色）",
+      localHops: "local 的两步：speakmore transcriber（转文字）· speakmore polish（整理）",
       withSettings: "第一次进 local 就用自定义服务：speakmore mode local --polish custom/<模型名> --url <地址>",
       flagsFor: "{flag} 不是 {mode} 模式的设置；切到 {mode} 时能带的是 {flags}",
       already: "已经是 {mode} 模式：{route}。",
       switched: "切到了 {mode} 模式：{route}。",
       localRoute: "{transcriber} → {polish}",
-      privateRoute: "本机的 {transcriber}，不润色、不上传",
+      privateRoute: "本机的 {transcriber}，不整理、不上传",
       privateModel: "private 的本机模型：speakmore transcriber（只认本机模型）",
     },
     local: {
       notInLocal: "现在是 {current} 模式，用不上这些：要用先切过去（speakmore mode local 或 private）",
       cloudNoDownload: "{model} 是云端模型，不用下载",
       cloudCheckOk: "{model} 能用，问一次用了 {seconds}。",
-      transcribersTitle: "本机转写模型（local 的第一跳、private 的模型）",
+      transcribersTitle: "本机转文字的模型（local 的第一步、private 的模型）",
       installed: "已下载",
       notInstalled: "还没下载",
       downloading: "下载中 {percent}%",
@@ -1363,14 +1432,14 @@ export default {
       deleted: "删掉了 {model}，腾出 {size}。",
       oldDaemonDelete: "正在运行的 SpeakMore 是旧版本，不知道哪个模型正在用，先不删：运行 speakmore restart 再删。",
       checking: "正在检查 {model}：念一句话交给它转……",
-      checkOk: "{model} 能用。念的是「{said}」，转出来「{text}」，转写用了 {seconds}。",
+      checkOk: "{model} 能用。念的是「{said}」，转出来「{text}」，用了 {seconds}。",
       checkLoaded: "它没在用，临时装上用了 {seconds}，查完已经卸掉。",
       oldDaemonCheck: "正在运行的 SpeakMore 是旧版本，查不了本机模型：运行 speakmore restart 之后再查。",
       notDownloadedAsk: "{model} 还没下载（{size}，从{source}下）。现在下载吗？输入 y 下载：",
       notDownloadedHint: "{model} 还没下载：先运行 speakmore transcriber download {id}",
       notDownloadedLater: "没有下载，也没有换。想下的时候运行 speakmore transcriber download {id}",
-      transcriberSwitched: "第一跳换成了 {model}。",
-      polishTitle: "润色模型（local 模式的第二跳）",
+      transcriberSwitched: "转文字的模型换成了 {model}。",
+      polishTitle: "整理的模型（local 模式的第二步）",
       customName: "自定义服务",
       customModel: "自己填模型名和地址",
       alsoModels: "也能选：{models}",
@@ -1379,24 +1448,24 @@ export default {
       polishCustom: "自定义服务（兼容 OpenAI 接口）：speakmore polish custom/<模型名> --url <地址> [--params '<JSON>']",
       polishParams: "额外参数：{params}",
       polishCheck: "看能不能用：speakmore polish check",
-      polishSwitched: "第二跳换成了 {model}。",
-      urlNeeded: "润色交给自定义服务时要给它的地址：--url <地址>（兼容 OpenAI 接口，多数以 /v1 结尾）",
-      paramsCustomOnly: "--params 只给自定义服务：润色交给 custom/<模型名> 时才带上",
+      polishSwitched: "整理的模型换成了 {model}。",
+      urlNeeded: "整理交给自定义服务时要给它的地址：--url <地址>（兼容 OpenAI 接口，多数以 /v1 结尾）",
+      paramsCustomOnly: "--params 只给自定义服务：整理交给 custom/<模型名> 时才带上",
       sourceCurrent: "下载源：{source}",
       sourceSwitch: "换下载源：speakmore config set modelSource {other}（下不动时会自动换另一个）",
     },
     choose: {
       question: "先选怎么把录音变成文字（以后可以用 speakmore mode、speakmore model 换）：",
-      native: "native 模式：录音直接交给模型",
-      local: "local 模式：本机先转写，只把文字交给模型润色（第一次要下载约 {size} 的本地模型）",
-      private: "private 模式：只用本机模型转写，不润色、什么都不上传（第一次要下载约 {size} 的本地模型）",
-      privateOption: "数据隐私    不用 key",
+      native: "native（直出）模式：录音直接交给模型",
+      local: "local（混合）模式：本机先转文字，只把文字交给模型整理（第一次要下载约 {size} 的本地模型）",
+      private: "private（离线）模式：只用本机模型转文字，不整理、什么都不上传（第一次要下载约 {size} 的本地模型）",
+      privateOption: "离线        不用 key",
       custom:
         "  想用别的服务（兼容 OpenAI 接口）：装好后运行 speakmore mode local --polish custom/<模型名> --url <地址>",
     },
     model: {
       textOnly:
-        "{provider} 只收文字，用在 local 模式的第二跳：speakmore polish {id}（还没在 local 模式时先 speakmore mode local）",
+        "{provider} 只收文字，用在 local 模式的整理那一步：speakmore polish {id}（还没在 local 模式时先 speakmore mode local）",
       notInNative: "现在是 {current} 模式，这里的模型用不上：要用先切回去（speakmore mode native）",
       unknownProvider: "不认识 {name} 这家，能用的有 {providers}。指定模型写成 厂商/模型",
       invalid: "模型写的是 {value}，{reason}",
@@ -1460,7 +1529,7 @@ export default {
       keyEnvUnverified:
         "这次运行用的是环境变量 {variable} 里的，没有保存；启动时没连上 {provider}，还没验证这把能不能用",
       keyExternal: "连的是单独启动的服务端，key 在那边配",
-      keyNone: "不用 key（数据隐私模式）",
+      keyNone: "不用 key（离线模式）",
       keySaved: "已保存，验证通过",
       keySavedUnverified: "已保存；启动时没连上 {provider}，还没验证这把能不能用",
       keyChecking: "正在验证…",
@@ -1502,6 +1571,7 @@ speakmore help     全部命令`,
       failed: "✗ 没有成功：{reason}",
       recording: "录音 {seconds} 秒，留在 {path}",
       notSaved: "（没存下来）",
+      source: "{label}：{text}",
       more: "显示最近 {shown} 条，共 {total} 条。speakmore history -n {total} 看全部。",
     },
     usage: {
@@ -1520,6 +1590,7 @@ speakmore help     全部命令`,
       byModel: "按型号（累计）",
       tokensNote:
         "累计的 token：输入 {input}（其中音频 {audio}、命中缓存 {cached}），输出 {output}（其中思考 {thinking}）。",
+      lookupsNote: { other: "划词翻译 {count} 次：花费和 token 算在里面，听写次数和回话时间不算。" },
       checksNote: { other: "验证 key 的 {count} 次也算在里面。" },
       cacheNote: "花费里有 {cost} 是提示词缓存的（建缓存、存着）。",
       unpricedNote: "{models} 不在价目表里，这 {count} 次的钱没算进去。",

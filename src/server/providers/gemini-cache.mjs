@@ -6,6 +6,8 @@ import { costOf, storageCostOf } from "./prices/gemini.mjs";
 //
 // 用法跟着人说话的节奏走：开口说话时建好（已经有了就往后续），说完整理时带上它；30 分钟没人说话它自己过期，
 // 不再收存储费。缓存只是省钱，任何一步出岔子都退回不带缓存的请求，不耽误这一句话。
+// 每份提示词各存各的：语音输入和语音翻译（每种目标语言一份）的提示词不一样，交替着用时不互相顶掉；
+// 哪份建不了（比如太短，不到显式缓存的下限）也只是那一份不再试。
 
 /**
  * 缓存放多久：每次开口都从那时起往后续这么久。拿作者在原版上 126 天、3169 次听写的时间间隔模拟过
@@ -18,6 +20,11 @@ const MARGIN_MS = 60_000;
 /** 建、续最多等多久（实测 0.4–0.7 秒）。卡住不回的话"正在建"一直占着，以后就再也建不了 */
 const REQUEST_TIMEOUT_MS = 15_000;
 const HOUR_MS = 3_600_000;
+/**
+ * 最多记着几份提示词。词典改了提示词就是新的一份，旧的那份在 Google 那边到点自己过期，这里只是不再记着；
+ * 平时用到的是语音输入一份、翻译几份
+ */
+const MAX_PROMPTS = 8;
 
 /** 缓存在 Google 那边已经没了（过期得比算的早、被删了）。实测回 403 "CachedContent not found (or permission denied)" */
 export const cacheMissing = (error) => /CachedContent not found/i.test(String(error?.message ?? ""));
@@ -30,15 +37,25 @@ export const cacheMissing = (error) => /CachedContent not found/i.test(String(er
  * @param {{ info: Function, warn: Function }} options.log
  */
 export function createPromptCache({ caches, model, now, log }) {
-  /** 建好的那个：{ name, systemPrompt, model, tokens, expiresAt }；没有是 null */
-  let cache = null;
-  /** 这个型号建不了显式缓存（比如 4 Argon 起只有隐式的）：不再试 */
-  let unsupported = false;
-  /** 正在建或者正在续：同时开口两次只建一个 */
-  let preparing = null;
+  /** 建好的：提示词 → { name, model, tokens, expiresAt } */
+  const built = new Map();
+  /** 建不了显式缓存的提示词（这个型号不支持，或者这份太短）：不再试 */
+  const unsupported = new Set();
+  /** 正在建或者正在续的：提示词 → 那一次。同时开口两次只建一个 */
+  const preparing = new Map();
 
-  const usable = (systemPrompt) =>
-    cache !== null && cache.systemPrompt === systemPrompt && cache.expiresAt - now().getTime() > MARGIN_MS;
+  const usable = (systemPrompt) => {
+    const cache = built.get(systemPrompt);
+    return cache !== undefined && cache.expiresAt - now().getTime() > MARGIN_MS;
+  };
+
+  /** 记下一份，记着的超过上限就丢掉最早的（Map 按放进去的先后排） */
+  const remember = (collection, systemPrompt, value) => {
+    collection.delete(systemPrompt);
+    if (collection instanceof Map) collection.set(systemPrompt, value);
+    else collection.add(systemPrompt);
+    if (collection.size > MAX_PROMPTS) collection.delete(collection.keys().next().value);
+  };
 
   /** 回话里的过期时间；读不出来就按本地算 */
   const expiryOf = (reply, at) => {
@@ -71,7 +88,7 @@ export function createPromptCache({ caches, model, now, log }) {
     } catch (error) {
       // 4xx（限流除外）：这个型号建不了，或者它不收这份提示词，再试也一样。没网、它那边出状况的，下次开口再试
       if (error?.status >= 400 && error.status < 500 && error.status !== 429) {
-        unsupported = true;
+        remember(unsupported, systemPrompt);
         log.warn("prompt_cache_unsupported", { model, status: error.status });
       }
       throw error;
@@ -79,7 +96,8 @@ export function createPromptCache({ caches, model, now, log }) {
     const at = now();
     const billed = created.model?.replace(/^models\//, "") || model;
     const tokens = created.usageMetadata?.totalTokenCount ?? 0;
-    cache = { name: created.name, systemPrompt, model: billed, tokens, expiresAt: expiryOf(created, at) };
+    const cache = { name: created.name, model: billed, tokens, expiresAt: expiryOf(created, at) };
+    remember(built, systemPrompt, cache);
     log.info("prompt_cache_created", { model: billed, tokens, expires_at: new Date(cache.expiresAt).toISOString() });
     // 建的时候按标准输入价收一次（Vertex AI 的缓存文档这么写；Gemini API 的文档没说，按同样的算），
     // 再加上这次买下的存储时长。存储按设的时长收（删早了也不退，社区里这么说，没验证），所以记的是买下的那一段
@@ -89,7 +107,7 @@ export function createPromptCache({ caches, model, now, log }) {
   }
 
   async function extend(systemPrompt) {
-    const current = cache;
+    const current = built.get(systemPrompt);
     let updated;
     try {
       updated = await caches.update({
@@ -99,7 +117,7 @@ export function createPromptCache({ caches, model, now, log }) {
     } catch (error) {
       if (!cacheMissing(error)) throw error;
       log.warn("prompt_cache_missing", { when: "extend" });
-      cache = null;
+      built.delete(systemPrompt);
       return create(systemPrompt);
     }
     const at = now();
@@ -117,21 +135,22 @@ export function createPromptCache({ caches, model, now, log }) {
      *   （这个型号建不了，或者正在建）。出错就抛，调用方记一笔警告，不耽误听写
      */
     prepare(systemPrompt) {
-      if (unsupported || preparing) return Promise.resolve(null);
-      preparing = (usable(systemPrompt) ? extend(systemPrompt) : create(systemPrompt)).finally(() => {
-        preparing = null;
+      if (unsupported.has(systemPrompt) || preparing.has(systemPrompt)) return Promise.resolve(null);
+      const job = (usable(systemPrompt) ? extend(systemPrompt) : create(systemPrompt)).finally(() => {
+        preparing.delete(systemPrompt);
       });
-      return preparing;
+      preparing.set(systemPrompt, job);
+      return job;
     },
 
-    /** 整理时能用的缓存名字；提示词不一样、快过期了、还没建好的，是 null */
+    /** 整理时能用的缓存名字；这份提示词没建过、快过期了、还没建好的，是 null */
     nameFor(systemPrompt) {
-      return usable(systemPrompt) ? cache.name : null;
+      return usable(systemPrompt) ? built.get(systemPrompt).name : null;
     },
 
     /** 用的时候发现它已经没了：丢掉，下次开口重新建 */
     forget(name) {
-      if (cache?.name === name) cache = null;
+      for (const [systemPrompt, cache] of built) if (cache.name === name) built.delete(systemPrompt);
       log.warn("prompt_cache_missing", { when: "generate" });
     },
   };

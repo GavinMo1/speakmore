@@ -77,7 +77,7 @@ test("动态拼出来的名字也都有：每个键、主题、厂商、设置�
       ["name", "short", "keycap"].map((field) => `keys.${code}.${field}`),
     ),
     ...THEMES.flatMap(({ id }) => [`themes.${id}.name`, `themes.${id}.describe`]),
-    ...PROVIDERS.map(({ id }) => `providers.${id}.getKey`),
+    ...PROVIDERS.map(({ id }) => `providers.${id}.name`),
     ...Object.keys(SETTINGS)
       .filter((name) => !SETTINGS[name].describe)
       .map((name) => `settings.describe.${name}`),

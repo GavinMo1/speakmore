@@ -4,9 +4,9 @@
       "name": "单个修饰键：按下、松开各报一次，自动重复不算新的一下；修饰键不吞",
       "bindings": [{ "id": "dictate#0", "chord": "AltRight" }],
       "steps": [
-        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }], "mask": true },
+        { "key": "AltRight", "down": true, "events": [{ "down": "dictate#0" }] },
         { "key": "AltRight", "down": true },
-        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }] }
+        { "key": "AltRight", "down": false, "events": [{ "up": "dictate#0" }], "mask": true }
       ]
     },
     {

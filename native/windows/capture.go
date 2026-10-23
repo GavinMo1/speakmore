@@ -3,11 +3,15 @@ package main
 // 听写进行中截住悬浮条上的点击（纯逻辑）：低级鼠标钩子把左键的按下松开交给这里，这里说吞不吞、报不报 click。
 // 截着的时候（父进程说"开始截"之后、"不截了"之前），悬浮条那几块里的左键点击要吞掉：点击落到我们的窗口上
 // 会抢走焦点。手还没松开的那一下要吞完整：按下吞了、松开却放出去的话，前台应用会收到没头没尾的半个事件。
+// 划词卡片也用它截卡片上的按钮，另外要知道用户点了卡片以外的地方（点别处收起）：capture 带 outside 时，
+// 块外的左键按下报一次 outside，这一下照常放行，用户点哪儿还是点哪儿。
 // esc 不在这里：它是一个只在截着时生效的绑定，由 matcher 管。
 
 type clickCapture struct {
 	capturing bool
 	regions   []region
+	// 块外的按下要不要报 outside（划词卡片要，悬浮条不要）
+	outside bool
 	// 按下已经被吞掉、还在等松开的那一块（"" 是没有）
 	pressed string
 }
@@ -15,8 +19,9 @@ type clickCapture struct {
 // 鼠标钩子现在该不该装着：截着，或者被吞掉的那一下还没松开
 func (c *clickCapture) wantsHook() bool { return c.capturing || c.pressed != "" }
 
-func (c *clickCapture) setCapturing(on bool, regions []region) {
+func (c *clickCapture) setCapturing(on bool, regions []region, outside bool) {
 	c.capturing = on
+	c.outside = on && outside
 	if on {
 		c.regions = regions
 	} else {
@@ -42,6 +47,9 @@ func (c *clickCapture) onLeftButton(down bool, x, y float64) outcome {
 		}
 		id := c.regionAt(x, y)
 		if id == "" {
+			if c.outside {
+				return outcome{events: []event{{"event": "click", "id": "outside"}}}
+			}
 			return outcome{}
 		}
 		c.pressed = id

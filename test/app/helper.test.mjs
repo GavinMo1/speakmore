@@ -15,7 +15,7 @@ console.log("这一行不是 JSON");
 require("node:readline").createInterface({ input: process.stdin }).on("line", (line) => {
   const command = JSON.parse(line);
   if (command.cmd === "bind") return emit({ event: "bound", rejected: [], got: command.bindings });
-  if (command.cmd === "capture") return emit({ event: "click", id: command.regions[0]?.id ?? null, regions: command.regions });
+  if (command.cmd === "capture") return emit({ event: "click", id: command.regions[0]?.id ?? null, regions: command.regions, outside: command.outside });
   if (command.cmd === "release") return emit({ event: "interrupted", id: "dictate#0", got: command });
   if (command.cmd === "record") return emit(command.on ? { event: "recording", on: true, mods: [], keys: [] } : { event: "recording", on: false });
   if (command.cmd === "probe") {
@@ -24,6 +24,11 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
     return emit({ event: "probed", id: command.id, conflict: command.key === 49, ...(command.key === 49 ? { source: "symbolic" } : {}), got: command });
   }
   if (command.cmd === "info") return emit({ event: "info", fnUsage: 2 });
+  if (command.cmd === "selection") {
+    if (command.id === 2) return;
+    return emit({ event: "selection", id: command.id, text: "picked",
+      rect: { x: 10, y: 20, width: 300, height: 18 }, via: "ax", ms: 9 });
+  }
   const { id, text } = command;
   if (text === "不回") return;
   if (text === "退出") process.exit(3);
@@ -106,7 +111,12 @@ test("开始截和不截了：命令原样送到，截到的点击和别的事�
   ];
   const clicked = once(events, "click");
   helper.capture(regions);
+  // 悬浮条不带 outside
   assert.deepEqual((await clicked)[0], { event: "click", id: "cancel", regions });
+  // 划词卡片要块外的按下：带上 outside
+  const outside = once(events, "click");
+  helper.capture(regions, { outside: true });
+  assert.deepEqual((await outside)[0], { event: "click", id: "cancel", regions, outside: true });
   const interrupted = once(events, "interrupted");
   helper.release();
   assert.deepEqual((await interrupted)[0], { event: "interrupted", id: "dictate#0", got: { cmd: "release" } });
@@ -184,6 +194,26 @@ test("问系统信息：回执交给调用方，不往上转", async () => {
   helper.stop();
 });
 
+test("取选区：按 id 认回各自的回执，不往上转；回执不来时按没取到算，不一直等", async () => {
+  const { helper, seen } = start();
+  assert.deepEqual(await helper.selection(), {
+    text: "picked",
+    rect: { x: 10, y: 20, width: 300, height: 18 },
+    via: "ax",
+    reason: null,
+    ms: 9,
+  });
+  assert.deepEqual(await helper.selection({ timeoutMs: 50 }), {
+    text: "",
+    rect: null,
+    via: null,
+    reason: "timeout",
+    ms: null,
+  });
+  assert.ok(!seen.some((event) => event.event === "selection"));
+  helper.stop();
+});
+
 test("小帮手不在了：探测按不冲突算，系统信息是空的", async () => {
   const { helper, events } = start();
   const exited = once(events, "exit");
@@ -192,4 +222,5 @@ test("小帮手不在了：探测按不冲突算，系统信息是空的", async
   helper.record(true);
   assert.deepEqual(await helper.probe({ mods: [55], key: 49 }), { conflict: false, timedOut: true });
   assert.deepEqual(await helper.info(), {});
+  assert.equal((await helper.selection()).reason, "gone");
 });

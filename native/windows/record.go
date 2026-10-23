@@ -101,7 +101,7 @@ func (r *recorder) onKey(in keyInput) outcome {
 			delete(r.others, id)
 		}
 		out := outcome{swallow: swallow}
-		r.settleMask(&out)
+		r.settleMask(&out, id, in.down)
 		return out
 	}
 	if !r.on {
@@ -121,15 +121,15 @@ func (r *recorder) onKey(in keyInput) outcome {
 		out.events = []event{r.snapshot()}
 	}
 	// 剩下的是按下在进入前、匹配器也不知道的键松开了：原样放行
-	r.settleMask(&out)
+	r.settleMask(&out, id, in.down)
 	return out
 }
 
 // 吞了键时 Alt 或 Win 还按着、而它们的按下系统看到了：系统看到的就是 Alt、Win 单按了一下，松开时会开菜单。
 // 录键期间这样的 Alt、Win 是进入前就按着、原样放行的那些；离开以后是匹配器那边按着的，交给它插（它也记着插没插过）
-func (r *recorder) settleMask(out *outcome) {
+func (r *recorder) settleMask(out *outcome, id keyID, down bool) {
 	if !r.on {
-		r.hotkeys.settleMask(out)
+		r.hotkeys.settleMask(out, id, down)
 		return
 	}
 	held := false

@@ -1,9 +1,9 @@
-// 仿刻客户端的原生小帮手：听热键、把文字贴进当前输入框。
+// 仿刻客户端的原生小帮手：听热键、把文字贴进当前输入框、取选中的字（划词翻译）。
 // 这两件事 Electron 自己做不了，原版也是交给 Swift 写的库和子进程（docs/07-native-helpers.md）。
 // 文件：main.swift 入口；Control.swift 命令，和权限、锁屏、安全输入的变化；Keyboard.swift 三个 tap、按键和点击；
 // HotKeys.swift Carbon 热键；
 // Matcher.swift 热键匹配；Recorder.swift 录键；Bindings.swift 绑定表的解析；Probe.swift 冲突查询和系统设置；
-// Paste.swift 贴字；Output.swift 往父进程写事件。
+// Paste.swift 贴字；Selection.swift 取选中的字；Output.swift 往父进程写事件。
 //
 // 和父进程用"一行一个 JSON"通信，和 Windows 版（native/windows/）一字不差（docs/hotkey-research.md 5.8）：
 //   标准输出  {"event":"ready","listen":true,"trusted":true,"capture":true}
@@ -14,6 +14,11 @@
 //             {"event":"interrupted","id":"dictate#0"}               按着时来了组合外的键（是别的组合键，这一下作废）
 //             {"event":"interrupted","id":"dictate#0","to":"x#0"}    升级成了另一个绑定，紧接着报它的按下
 //             {"event":"click","id":"cancel"}                        截着的时候点了某一块
+//             {"event":"click","id":"outside"}                       截着、并且说了 outside 时，点在所有块之外（这一下照常放行）
+//             {"event":"selection","id":7,"text":"…","rect":{"x":…,"y":…,"width":…,"height":…},"via":"ax","ms":12}
+//                                         selection 的答复（Selection.swift）：前台应用里选中的字、在屏幕上的位置（没有就不带）；
+//                                         via 是 ax（辅助功能）或 copy（模拟 ⌘C）。text 为空时带 reason：
+//                                         none 没选中 / not_trusted 没有辅助功能权限 / failed
 //             {"event":"pasted","id":1,"ok":true}                    贴完了；ok 为 false 时文字留在剪贴板里
 //             {"event":"permissions","listen":true,"trusted":false,"capture":false}
 //                                         运行中两项权限变了（只有 Mac 有）：没了的那项的 tap 已经作废，紧跟着按新的权限重报 bound
@@ -32,8 +37,9 @@
 //                                       {"id":"cancel#0","mods":[],"key":53,"when":"capturing"}]}
 //                                         整表替换；mods 是修饰键、key 是普通键，都是 kVK 键码；
 //                                         capturing 的只在截着的时候算数
-//             {"cmd":"capture","regions":[{"id":"cancel","x":0,"y":0,"width":28,"height":28}]}
-//                                         开始截：capturing 的绑定，和这几块（屏幕坐标）里的鼠标点击
+//             {"cmd":"capture","regions":[{"id":"cancel","x":0,"y":0,"width":28,"height":28}],"outside":true}
+//                                         开始截：capturing 的绑定，和这几块（屏幕坐标）里的鼠标点击；outside（可不写）：块外的按下也报
+//             {"cmd":"selection","id":7}  取前台应用里选中的字（划词翻译）；id 是整数时一定回一条 selection
 //             {"cmd":"release"}           不截了
 //             {"cmd":"record","on":true}  进入录键模式（已经在录就重新开始）：匹配器停下，按着的绑定补报松开；
 //                                         录到的普通键吞掉（有辅助功能权限时），修饰键不吞。30 秒还没说停就自己停
@@ -100,7 +106,17 @@ Thread.detachNewThread {
                 emit(["event": "error", "message": "capture 需要 regions：一组 { id, x, y, width, height }"])
                 continue
             }
-            DispatchQueue.main.async { capture(true, regions: parsed) }
+            guard let outside = parseOutside(object["outside"]) else {
+                emit(["event": "error", "message": "capture 的 outside 要是 true 或 false"])
+                continue
+            }
+            DispatchQueue.main.async { capture(true, regions: parsed, outside: outside) }
+        case "selection":
+            guard let id = object["id"] as? Int else {
+                emit(["event": "error", "message": "selection 需要整数 id"])
+                continue
+            }
+            DispatchQueue.main.async { selection(id: id) }
         case "release":
             DispatchQueue.main.async { capture(false) }
         case "record":

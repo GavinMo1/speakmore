@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { textFromModelOutput } from "../../../src/server/refine/output.mjs";
-import { NO_SPEECH_MARK, SYSTEM_PROMPT } from "../../../src/server/refine/prompt.mjs";
+import { textFromModelOutput } from "../../../../src/server/tasks/dictate/output.mjs";
+import { NO_SPEECH_MARK, SYSTEM_PROMPT } from "../../../../src/server/tasks/dictate/prompt.mjs";
 
 test("提示词里写的无人声标记，和代码里判断的是同一个", () => {
   assert.ok(SYSTEM_PROMPT.includes(`只输出 ${NO_SPEECH_MARK}，`));

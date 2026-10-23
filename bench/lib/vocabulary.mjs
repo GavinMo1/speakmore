@@ -8,7 +8,11 @@ import { findChatVendor } from "../../src/server/chat/vendors.mjs";
 import { findProvider } from "../../src/server/providers/index.mjs";
 import { createChatPolisher } from "../../src/server/refine/polisher.mjs";
 import { createModelRefiner } from "../../src/server/refine/refiner.mjs";
+import { findTask } from "../../src/server/tasks/index.mjs";
 import { findVendor } from "../../src/server/vendors.mjs";
+
+/** 语音输入这件事（src/server/tasks）：评测、量时间都是拿它跑 */
+const DICTATION = findTask("dictate").bind({});
 
 // 词典评测共用的部分：词典本身、哪些词算分、怎么判、要评的模型和怎么装出来。
 // 两个入口用它：scripts/dev/eval-vocabulary.mjs（各模型带不带词典对比）和 scripts/dev/climb-vocabulary.mjs（爬山）。
@@ -161,7 +165,10 @@ export async function buildTarget(target, { modelsDir, transcriptOf = null }) {
       thinkingLevel: "MINIMAL",
       log: QUIET,
     });
-    return { run: (clip, vocabulary) => refiner.refine(clip.wav, { mimeType: "audio/wav", vocabulary }) };
+    return {
+      run: async (clip, vocabulary) =>
+        (await refiner.refine(clip.wav, { task: DICTATION, mimeType: "audio/wav", vocabulary })).text,
+    };
   }
   if (!findChatVendor(target.vendor)) return { skip: `没有 ${target.vendor} 这一家` };
   if (!transcriptOf) throw new Error("润色要给 transcriptOf：拿本机转写的原文");
@@ -171,10 +178,10 @@ export async function buildTarget(target, { modelsDir, transcriptOf = null }) {
     log: QUIET,
   });
   return {
-    run: (clip, vocabulary) => {
+    run: async (clip, vocabulary) => {
       const transcript = transcriptOf(clip.id);
       if (transcript === undefined) throw new Error(`先跑 ${POLISH_SOURCE}：润色要拿它不带词典的原文（${clip.id}）`);
-      return polisher.polish(transcript, { vocabulary });
+      return (await polisher.polish(transcript, { task: DICTATION, vocabulary })).text;
     },
   };
 }

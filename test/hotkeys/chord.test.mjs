@@ -64,7 +64,7 @@ test("不认的写法，各有各的原因", () => {
     "AltRight+Escape": "esc can't be combined with other keys",
     "ShiftLeft+KeyA": "Shift with a typing key types capitals or symbols; pick another modifier",
     "ShiftRight+Space": "Shift with a typing key types capitals or symbols; pick another modifier",
-    Enter: "Return can't be part of a shortcut",
+    Enter: "Return needs a modifier: on its own it types",
     "AltRight+Tab": "Tab can't be part of a shortcut",
     "ControlLeft+ArrowLeft": "Left Arrow can't be part of a shortcut",
     CapsLock: "Caps Lock can't be part of a shortcut",

@@ -3,25 +3,32 @@ import { fillSelect } from "../shared/dom.mjs";
 import { createHotkeyEditor, recordBlocker } from "../shared/hotkey-editor.mjs";
 import { t } from "../shared/i18n.mjs";
 import { describeError, keyMissing, permissionDenied, permissionText } from "../shared/setup-text.mjs";
+import { createTranslatePane } from "./translate-pane.mjs";
 
-// 设置对话框：原版的"设置中心"，左边一列菜单。我们的三页：通用（热键、主题、语言、本机模型的下载源、开机启动、
-// 软件更新）、权限、关于。
+// 设置对话框：原版的"设置中心"，左边一列菜单，按功能分栏：通用（主题、界面语言、开机启动、存储位置、软件更新）、
+// 快捷键（动作目录里的每个动作、悬浮条上的按键提示）、语音翻译（译成哪几种，translate-pane.mjs）、划词翻译（译成哪一种）、
+// 本机模型（下载源、加速、内存）、权限、关于。
 // 识别方式、模型和 key 不在这里：在侧栏的"引擎"一页（engine/）。
 // 状态都在主进程，这里只负责画出来和转达用户的操作。
 
 const $ = (id) => document.getElementById(id);
 
-const PANES = ["general", "permissions", "about"];
+const PANES = ["general", "hotkeys", "voice-translate", "lookup", "local-models", "permissions", "about"];
 
 /**
- * 还差的东西在哪补：key 在侧栏"模型"一页的密钥表，其余是设置的权限页（小帮手停了也是，重新检查在那页）；
- * 两样都差时先补 key
+ * 还差的东西在哪补：key 在侧栏"引擎"一页的密钥表；权限、小帮手停了在设置的权限页（重新检查在那页）；
+ * 装不上的热键在快捷键那一页。几样都差时按这个先后
  * @returns {{ route: "models", tab: "keys" } | { pane: string }}
  */
 export function fixTarget(setup) {
   if (keyMissing(setup)) return { route: "models", tab: "keys" };
-  return { pane: permissionDenied(setup) || setup.helper === "stopped" ? "permissions" : "general" };
+  if (permissionDenied(setup) || setup.helper === "stopped") return { pane: "permissions" };
+  if (hotkeysTroubled(setup)) return { pane: "hotkeys" };
+  return { pane: "general" };
 }
+
+/** 有动作的组合装不上、或退回了默认 */
+const hotkeysTroubled = (setup) => (setup.hotkeyActions ?? []).some((action) => action.problems?.length);
 
 /**
  * 软件更新那一行怎么显示：一句状态（语气、图标）和按钮做什么。按钮总是下一步该做的事：
@@ -121,12 +128,9 @@ export function createSettings({ refresh }) {
     }
   }
 
-  // ---------- 通用：热键、主题、语言、开机启动 ----------
-
-  const hotkeyEditor = createHotkeyEditor($("hotkey-editor"), { onChanged: refresh });
+  // ---------- 通用：主题、界面语言、开机启动 ----------
 
   function renderGeneral(setup) {
-    hotkeyEditor.render(setup.hotkeyActions, { blocker: recordBlocker(setup) });
     fillSelect(
       $("theme"),
       setup.theme.choices.map((id) => [id, t(`themes.${id}.name`)]),
@@ -138,6 +142,36 @@ export function createSettings({ refresh }) {
       [[SYSTEM_LOCALE, t("language.system")], ...LOCALES.map(({ id, name }) => [id, name])],
       setup.language.value,
     );
+    $("open-at-login").checked = setup.openAtLogin.enabled;
+    $("open-at-login-row").hidden = !setup.openAtLogin.supported;
+  }
+
+  // ---------- 快捷键：每个动作的组合、悬浮条上的按键提示 ----------
+
+  const hotkeyEditor = createHotkeyEditor($("hotkey-editor"), { onChanged: refresh });
+
+  function renderHotkeys(setup) {
+    hotkeyEditor.render(setup.hotkeyActions, { blocker: recordBlocker(setup) });
+    $("bar-hint").checked = setup.barHint === "on";
+  }
+
+  // ---------- 语音翻译：译成哪几种 ----------
+
+  const translatePane = createTranslatePane({ refresh });
+
+  // ---------- 划词翻译：译成哪一种 ----------
+
+  function renderLookup(setup) {
+    fillSelect(
+      $("lookup-to"),
+      setup.lookup.choices.map((id) => [id, t(`languages.${id}`)]),
+      setup.lookup.to,
+    );
+  }
+
+  // ---------- 本机模型：下载源、加速、内存 ----------
+
+  function renderLocalModels(setup) {
     fillSelect(
       $("model-source"),
       setup.local.source.choices.map((id) => [id, t(`modelSources.${id}`)]),
@@ -153,9 +187,6 @@ export function createSettings({ refresh }) {
       setup.local.memory.choices.map((id) => [id, t(`localModelMemories.${id}`)]),
       setup.local.memory.value,
     );
-    $("bar-hint").checked = setup.barHint === "on";
-    $("open-at-login").checked = setup.openAtLogin.enabled;
-    $("open-at-login-row").hidden = !setup.openAtLogin.supported;
   }
 
   function showNote(id, message, tone = "") {
@@ -189,50 +220,72 @@ export function createSettings({ refresh }) {
     await refresh();
   });
 
+  $("lookup-to").addEventListener("change", async (event) => {
+    showNote("lookup-problem", null);
+    showNote("lookup-note", null);
+    try {
+      const result = await window.speakmore.setLookupTo(event.target.value);
+      if (result.ok === false) {
+        showNote("lookup-problem", t("preferences.lookupFailed", { reason: t.text(result.problem) }), "problem");
+      } else showNote("lookup-note", result.note ?? null);
+    } catch (error) {
+      showNote("lookup-problem", t("preferences.lookupFailed", { reason: describeError(error) }), "problem");
+    }
+    await refresh();
+  });
+
   $("model-source").addEventListener("change", async (event) => {
-    showNote("general-problem", null);
+    showNote("local-models-problem", null);
     showNote("source-note", null);
     try {
       const result = await window.speakmore.setModelSource(event.target.value);
       showNote("source-note", result.note ?? null);
     } catch (error) {
-      showNote("general-problem", t("preferences.sourceFailed", { reason: describeError(error) }), "problem");
+      showNote("local-models-problem", t("preferences.sourceFailed", { reason: describeError(error) }), "problem");
     }
     await refresh();
   });
 
   $("acceleration").addEventListener("change", async (event) => {
-    showNote("general-problem", null);
+    showNote("local-models-problem", null);
     showNote("acceleration-note", null);
     try {
       const result = await window.speakmore.setAcceleration(event.target.value);
       showNote("acceleration-note", result.note ?? null);
     } catch (error) {
-      showNote("general-problem", t("preferences.accelerationFailed", { reason: describeError(error) }), "problem");
+      showNote(
+        "local-models-problem",
+        t("preferences.accelerationFailed", { reason: describeError(error) }),
+        "problem",
+      );
     }
     await refresh();
   });
 
   $("local-model-memory").addEventListener("change", async (event) => {
-    showNote("general-problem", null);
+    showNote("local-models-problem", null);
     showNote("local-model-memory-note", null);
     try {
       const result = await window.speakmore.setLocalModelMemory(event.target.value);
       showNote("local-model-memory-note", result.note ?? null);
     } catch (error) {
-      showNote("general-problem", t("preferences.localModelMemoryFailed", { reason: describeError(error) }), "problem");
+      showNote(
+        "local-models-problem",
+        t("preferences.localModelMemoryFailed", { reason: describeError(error) }),
+        "problem",
+      );
     }
     await refresh();
   });
 
   $("bar-hint").addEventListener("change", async (event) => {
-    showNote("general-problem", null);
+    showNote("hotkeys-problem", null);
     showNote("bar-hint-note", null);
     try {
       const result = await window.speakmore.setBarHint(event.target.checked ? "on" : "off");
       showNote("bar-hint-note", result.note ?? null);
     } catch (error) {
-      showNote("general-problem", t("preferences.barHintFailed", { reason: describeError(error) }), "problem");
+      showNote("hotkeys-problem", t("preferences.barHintFailed", { reason: describeError(error) }), "problem");
     }
     await refresh();
   });
@@ -351,14 +404,18 @@ export function createSettings({ refresh }) {
 
     render(setup) {
       renderGeneral(setup);
+      renderHotkeys(setup);
+      translatePane.render(setup);
+      renderLookup(setup);
+      renderLocalModels(setup);
       renderPermissions(setup);
       $("about-version").textContent = `v${setup.version}`;
       $("storage-path").textContent = setup.home;
       $("storage-path").title = setup.home;
       renderUpdate(setup.update);
-      // 菜单上标个点：权限这一页有东西要补（红点），通用这一页有更新的事（见下），侧栏的设置图标上也标
+      // 菜单上标个点：权限、快捷键这两页有东西要补（红点），通用这一页有更新的事（见下），侧栏的设置图标上也标
       const update = updateFlagged(setup.update);
-      const flagged = { permissions: permissionDenied(setup), general: update };
+      const flagged = { permissions: permissionDenied(setup), hotkeys: hotkeysTroubled(setup), general: update };
       for (const dot of dialog.querySelectorAll(".menu-dot")) dot.hidden = !flagged[dot.dataset.for];
       // 有新版本是主题色的点，上一次没更新成是红点
       const tone = setup.update?.progress?.state === "failed" ? "problem" : "new";

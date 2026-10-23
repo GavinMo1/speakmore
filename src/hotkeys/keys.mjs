@@ -90,8 +90,11 @@ export const KEYS = Object.freeze([
 
   row("Escape", "escape", 0x35, 0x0001),
 
-  // 打字、挪光标要用的：和 Ctrl、⌘、Alt 组合几乎全是系统或编辑器的快捷键（⌥← 跳词、Ctrl+Enter 发送、Alt+Tab 切窗口）
-  row("Enter", "blocked", 0x24, 0x001c),
+  // 回车和打字的键一样，要和修饰键一起按（划词翻译的默认键是右⌥回车）。⌘、⌃、Ctrl、fn 加回车由 validate.mjs 的规则拦，
+  // ⇧ 回车是 chord.mjs 拦的（⇧ 加打字的键），Windows 的左 Alt+回车另拦
+  row("Enter", "typing", 0x24, 0x001c),
+
+  // 打字、挪光标要用的：和 Ctrl、⌘、Alt 组合几乎全是系统或编辑器的快捷键（⌥← 跳词、Alt+Tab 切窗口）
   row("Tab", "blocked", 0x30, 0x000f),
   row("Backspace", "blocked", 0x33, 0x000e),
   row("Delete", "blocked", 0x75, 0xe053),

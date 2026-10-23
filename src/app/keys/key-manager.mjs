@@ -477,6 +477,18 @@ export function createKeyManager({
     },
 
     /**
+     * 某一家现在该用哪把 key，给语音以外的功能用（划词翻译选的那一家）：同一家只有一把，和语音那边共用。
+     * 正在用的那家给这次运行实际在用的那把（中途存过新的就是新的）；别家环境变量优先、其次存着的
+     * @param {string} id 厂商 id
+     * @returns {{ apiKey: string, source: "env" | "stored" } | null} 没有是 null；不认识的厂商、存着的解不开会抛错
+     */
+    keyOf(id) {
+      const { found, store } = lookup(id);
+      if (found.id === provider?.id && inUse) return inUse;
+      return keyFor(found, store);
+    },
+
+    /**
      * 每家的 key 在哪：env（环境变量）/ stored（存着的）/ null（没有）。不解密，给命令行列模型用：
      * 装成应用的那个各存各的，命令行从文件看不到它的
      * @returns {Record<string, "env" | "stored" | null>}

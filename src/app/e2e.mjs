@@ -10,6 +10,9 @@ const RECORD_MS = Number(process.env.SPEAKMORE_E2E_RECORD_MS ?? 7_500);
 const GIVE_UP_MS = RECORD_MS + 40_000;
 // 听写几遍（SPEAKMORE_E2E_ROUNDS）。本机模型按需装载时，两遍之间等它空闲释放，下一遍就验了重新装载
 const ROUNDS = Number(process.env.SPEAKMORE_E2E_ROUNDS ?? 1);
+// 按哪个说话的功能（SPEAKMORE_E2E_ACTION，dictate、translate；译成什么照设置 translate.to，可用 SPEAKMORE_TRANSLATE_TO 换）。
+// upgrade：先按语音输入的键，再凑成语音翻译的组合（小帮手报的"升级"），验这一次中途换成翻译、录音不断
+const ACTION = process.env.SPEAKMORE_E2E_ACTION ?? "dictate";
 // 空闲释放最长 30 分钟（设置里的 localModelMemory），再多等一会儿
 const RELEASE_GIVE_UP_MS = 31 * 60_000;
 
@@ -102,11 +105,23 @@ export async function run({ bar, history, localModel, localModelMemory, download
     await new Promise((resolve) => bar.webContents.once("did-finish-load", resolve));
   }
   // 和主进程认出小帮手报的绑定事件之后交给悬浮条的一样（main.mjs 的 onBindingEvent）
-  const press = async () => {
-    bar.webContents.send("input", { event: "binding", action: "dictate", down: true });
+  const send = (input) => bar.webContents.send("input", input);
+  const tap = async (action) => {
+    send({ event: "binding", action, down: true, chord: 0 });
     await sleep(120);
-    bar.webContents.send("input", { event: "binding", action: "dictate", down: false });
+    send({ event: "binding", action, down: false, chord: 0 });
   };
+  // 升级：按下右⌥，过一会儿空格到了，小帮手先报打断（带 to）再报语音翻译按下；之后结束时按的是语音翻译
+  const upgrade = async () => {
+    send({ event: "binding", action: "dictate", down: true, chord: 0 });
+    await sleep(150);
+    send({ event: "interrupted", action: "dictate", chord: 0, to: "translate" });
+    send({ event: "binding", action: "translate", down: true, chord: 0 });
+    await sleep(80);
+    send({ event: "binding", action: "translate", down: false, chord: 0 });
+  };
+  const begin = () => (ACTION === "upgrade" ? upgrade() : tap(ACTION));
+  const end = () => tap(ACTION === "upgrade" ? "translate" : ACTION);
   await sleep(500);
 
   for (let round = 1; round <= ROUNDS; round++) {
@@ -124,9 +139,9 @@ export async function run({ bar, history, localModel, localModelMemory, download
     const outcome = new Promise((resolve) => {
       finish = resolve;
     });
-    await press();
+    await begin();
     await sleep(RECORD_MS);
-    await press();
+    await end();
     const stoppedAt = performance.now();
     const result = await outcome;
     clearTimeout(giveUp);

@@ -3,6 +3,10 @@ import { test } from "node:test";
 import { createTranslator } from "../../../src/i18n/index.mjs";
 import { ModelError } from "../../../src/server/providers/errors.mjs";
 import { createLocalRefiner } from "../../../src/server/refine/local.mjs";
+import { findTask } from "../../../src/server/tasks/index.mjs";
+
+/** 流水线不认任务的名字，测的时候拿语音输入这件事跑 */
+const DICTATION = findTask("dictate").bind({});
 
 const zh = createTranslator("zh-CN");
 
@@ -39,7 +43,7 @@ function parts({ transcript = "原文", transcribeError = null, polishError = nu
       async polish(text, options) {
         seen.polished.push({ text, options });
         if (polishError) throw polishError;
-        return `成品：${text}`;
+        return { text: `成品：${text}`, source: null };
       },
     },
   };
@@ -51,11 +55,16 @@ test("录音 → 统一格式 → 本地转写 → 润色；和原生链路一�
   const refiner = createLocalRefiner({ transcriber, polisher, log, decode });
   const audio = Buffer.from("webm");
   const signal = new AbortController().signal;
-  assert.equal(await refiner.refine(audio, { mimeType: "audio/webm", signal, audioId: "a1" }), "成品：原文");
+  assert.equal(
+    (await refiner.refine(audio, { task: DICTATION, mimeType: "audio/webm", signal, audioId: "a1" })).text,
+    "成品：原文",
+  );
   assert.deepEqual(seen.decoded, [{ audio, mimeType: "audio/webm" }]);
   assert.equal(seen.transcribed[0], SAMPLES);
-  assert.deepEqual(seen.polished, [{ text: "原文", options: { signal, audioId: "a1", vocabulary: [] } }]);
-  await refiner.prepare();
+  assert.deepEqual(seen.polished, [
+    { text: "原文", options: { task: DICTATION, signal, audioId: "a1", vocabulary: [] } },
+  ]);
+  await refiner.prepare({ task: DICTATION });
   await refiner.warmUp();
   assert.equal(polisher.warmUps, 1);
 });
@@ -64,7 +73,7 @@ test("用户词典：转写和润色两跳都拿到同一份，各按各的收�
   const { seen, decode, transcriber, polisher } = parts();
   const refiner = createLocalRefiner({ transcriber, polisher, log: recordingLog(), decode });
   const vocabulary = ["Runzo", "埋点"];
-  await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm", audioId: "a9", vocabulary });
+  await refiner.refine(Buffer.from("x"), { task: DICTATION, mimeType: "audio/webm", audioId: "a9", vocabulary });
   assert.deepEqual(seen.transcribeOptions.vocabulary, vocabulary);
   assert.deepEqual(seen.polished[0].options.vocabulary, vocabulary);
 });
@@ -72,7 +81,7 @@ test("用户词典：转写和润色两跳都拿到同一份，各按各的收�
 test("用户词典：数据隐私模式不润色，词典只交给转写这一跳", async () => {
   const { seen, decode, transcriber } = parts();
   const refiner = createLocalRefiner({ transcriber, polisher: null, log: recordingLog(), decode });
-  await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm", vocabulary: ["Runzo"] });
+  await refiner.refine(Buffer.from("x"), { task: DICTATION, mimeType: "audio/webm", vocabulary: ["Runzo"] });
   assert.deepEqual(seen.transcribeOptions.vocabulary, ["Runzo"]);
 });
 
@@ -80,6 +89,7 @@ test("每次记一条日志：两跳各花了多久、原文多长，不记原�
   const log = recordingLog();
   const { decode, transcriber, polisher } = parts({ transcript: "一二三" });
   await createLocalRefiner({ transcriber, polisher, log, decode }).refine(Buffer.from("x"), {
+    task: DICTATION,
     mimeType: "audio/webm",
     audioId: "a2",
   });
@@ -94,10 +104,10 @@ test("每次记一条日志：两跳各花了多久、原文多长，不记原�
 test("本地转写出错：报分好类的 ModelError，说是本地转写的事，原话进 detail", async () => {
   const { decode, transcriber, polisher } = parts({ transcribeError: new Error("转写进程退出了（code 3）") });
   const refiner = createLocalRefiner({ transcriber, polisher, log: recordingLog(), decode });
-  const error = await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm" }).catch((e) => e);
+  const error = await refiner.refine(Buffer.from("x"), { task: DICTATION, mimeType: "audio/webm" }).catch((e) => e);
   assert.ok(error instanceof ModelError);
   assert.equal(error.kind, "other");
-  assert.match(zh.text(error.problem), /本地转写/);
+  assert.match(zh.text(error.problem), /本机转文字失败/);
   assert.match(error.detail, /code 3/);
 });
 
@@ -105,7 +115,10 @@ test("润色出的错原样往上报（已经是分好类的）", async () => {
   const failure = new ModelError({ kind: "key", problem: { key: "model.keyInvalid" }, detail: "401" });
   const { decode, transcriber, polisher } = parts({ polishError: failure });
   const refiner = createLocalRefiner({ transcriber, polisher, log: recordingLog(), decode });
-  assert.equal(await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm" }).catch((e) => e), failure);
+  assert.equal(
+    await refiner.refine(Buffer.from("x"), { task: DICTATION, mimeType: "audio/webm" }).catch((e) => e),
+    failure,
+  );
 });
 
 test("录音解不开：报 ModelError，不让解码的原始错误直接冒出去", async () => {
@@ -114,7 +127,7 @@ test("录音解不开：报 ModelError，不让解码的原始错误直接冒出
     throw new Error("bad webm");
   };
   const refiner = createLocalRefiner({ transcriber, polisher, log: recordingLog(), decode });
-  const error = await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm" }).catch((e) => e);
+  const error = await refiner.refine(Buffer.from("x"), { task: DICTATION, mimeType: "audio/webm" }).catch((e) => e);
   assert.ok(error instanceof ModelError);
   assert.match(error.detail, /bad webm/);
 });
@@ -127,7 +140,9 @@ test("转写完时客户端已经断开：不再花润色的钱", async () => {
     return { text: "原文" };
   };
   const refiner = createLocalRefiner({ transcriber, polisher, log: recordingLog(), decode });
-  await assert.rejects(refiner.refine(Buffer.from("x"), { mimeType: "audio/webm", signal: abort.signal }));
+  await assert.rejects(
+    refiner.refine(Buffer.from("x"), { task: DICTATION, mimeType: "audio/webm", signal: abort.signal }),
+  );
   assert.equal(seen.polished.length, 0);
 });
 
@@ -142,7 +157,7 @@ test("本机转写那一跳也记一笔账：是哪个模型、转了多久，�
     model: "qwen3-asr-0.6b-q8",
     onCall: (call) => calls.push(call),
   });
-  await refiner.refine(Buffer.from("webm"), { mimeType: "audio/webm", audioId: "a1" });
+  await refiner.refine(Buffer.from("webm"), { task: DICTATION, mimeType: "audio/webm", audioId: "a1" });
   assert.equal(calls.length, 1);
   const { latencyMs, createdAt, ...rest } = calls[0];
   assert.deepEqual(rest, {
@@ -171,6 +186,9 @@ test("本机转写那一跳也记一笔账：是哪个模型、转了多久，�
       throw new Error("库锁住了");
     },
   });
-  assert.equal(await broken.refine(Buffer.from("webm"), { mimeType: "audio/webm", audioId: "a2" }), "成品：原文");
+  assert.equal(
+    (await broken.refine(Buffer.from("webm"), { task: DICTATION, mimeType: "audio/webm", audioId: "a2" })).text,
+    "成品：原文",
+  );
   assert.ok(log.events.some(({ event }) => event === "model_call_not_recorded"));
 });

@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { hotkeySettings } from "../hotkeys/settings.mjs";
-import { findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
+import { alternatives, findLocale, LOCALES, LocalizedError, msg, problemOf, SYSTEM_LOCALE } from "../i18n/index.mjs";
+import { languageName, parseLanguage, LANGUAGES as TARGET_LANGUAGES } from "../languages.mjs";
 import { DEFAULT_SOURCE, DEFAULT_TRANSCRIBER, MODELS, SOURCES } from "../models/catalog.mjs";
 import { CLOUD_TRANSCRIBERS, cloudTranscriberOf } from "../server/asr/cloud/vendors.mjs";
 import {
@@ -11,6 +12,7 @@ import {
   parseChatChoice,
   parseCustomParams,
 } from "../server/chat/vendors.mjs";
+import { DEFAULT_LOOKUP } from "../server/lookup/models.mjs";
 import { DEFAULT_MODE, DEFAULT_POLISH, MODES, parseMode } from "../server/modes.mjs";
 import {
   DEFAULT_MODEL_CHOICE,
@@ -42,6 +44,8 @@ export const LOCAL_MODEL_MEMORY = Object.freeze(["resident", "1m", "5m", "10m", 
 /** 悬浮条上方的操作提示（"再按一下 右⌥ 完成 · esc 取消"）显示不显示：熟练了的人嫌它一直挂着（GitHub issue #3） */
 export const BAR_HINTS = Object.freeze(["on", "off"]);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
+/** 语音翻译最多列几种目标语言：悬浮条上的语言选单一种一行，再多放不下，也挑不过来 */
+export const MAX_TRANSLATE_TARGETS = 6;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
 
 const oneOf = (choices) => new LocalizedError(msg("settings.oneOf", { choices: choices.join(" / ") }));
@@ -193,6 +197,47 @@ export const SETTINGS = {
     },
     label: (value) => msg(`localModelMemories.${value}`),
   },
+  "translate.to": {
+    // 语音翻译译成什么：一种或几种，第一种是默认，悬浮条上能临时换成别的几种（只管那一次）。
+    // 值是规整过的 id 列表写成 JSON（["en","ja"]），文件里存成数组；也认一个 id、逗号隔开的几个
+    env: "SPEAKMORE_TRANSLATE_TO",
+    default: JSON.stringify(["en"]),
+    choices: null,
+    json: true,
+    parse: parseTranslateTargets,
+    store: (value) => JSON.parse(value),
+    label: (value) => alternatives(JSON.parse(value).map(languageName)),
+  },
+  // 划词翻译自己的几项，和语音那边毫不相干（他定的）：译成哪种、交给哪个模型；选自定义服务时，地址和参数也是它自己的，
+  // 不和整理那一步的 customUrl、customParams 共用，key 也另存一把（app/lookup/engine.mjs）
+  "lookup.to": {
+    // 一种：卡片上能临时换成别的（只管那一次）
+    env: "SPEAKMORE_LOOKUP_TO",
+    default: "zh-CN",
+    choices: TARGET_LANGUAGES.map(({ id }) => id),
+    parse: parseLanguage,
+    label: languageName,
+  },
+  "lookup.model": {
+    env: "SPEAKMORE_LOOKUP_MODEL",
+    default: formatChatChoice(parseChatChoice(DEFAULT_LOOKUP)),
+    choices: null,
+    // 写法同 polish：厂商/模型，只写厂商用它的默认模型，自定义服务写 custom/模型名
+    parse: (value) => formatChatChoice(parseChatChoice(value)),
+  },
+  "lookup.customUrl": {
+    env: "SPEAKMORE_LOOKUP_CUSTOM_URL",
+    default: "",
+    choices: null,
+    parse: (value) => (value.trim() === "" ? "" : normalizeBaseUrl(value)),
+  },
+  "lookup.customParams": {
+    env: "SPEAKMORE_LOOKUP_CUSTOM_PARAMS",
+    json: true,
+    default: "",
+    choices: null,
+    parse: (value) => formatCustomParams(parseCustomParams(value)),
+  },
   barHint: {
     env: "SPEAKMORE_BAR_HINT",
     default: "on",
@@ -232,6 +277,35 @@ export const SETTINGS = {
     label: (value) => (value === SYSTEM_LOCALE ? msg("language.system") : findLocale(value).name),
   },
 };
+
+/** 语音翻译的目标语言：一个、逗号隔开的几个，或者 JSON 数组；规整成去重后的 id 列表。至少一种，最多 MAX_TRANSLATE_TARGETS 种 */
+function parseTranslateTargets(text) {
+  const trimmed = text.trim();
+  let items = trimmed.split(",");
+  if (trimmed.startsWith("[")) {
+    try {
+      items = JSON.parse(trimmed);
+    } catch {
+      // PowerShell 调 speakmore.cmd 时会去掉参数里的双引号（[en,ja]）。语言 id 里没有逗号和引号，照样拆得开
+      items = trimmed.slice(1, -1).split(",");
+    }
+    if (!Array.isArray(items) || items.some((item) => typeof item !== "string")) {
+      throw new LocalizedError(msg("settings.translateTargets", { max: MAX_TRANSLATE_TARGETS }));
+    }
+  }
+  const ids = [
+    ...new Set(
+      items
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map(parseLanguage),
+    ),
+  ];
+  if (ids.length === 0 || ids.length > MAX_TRANSLATE_TARGETS) {
+    throw new LocalizedError(msg("settings.translateTargets", { max: MAX_TRANSLATE_TARGETS }));
+  }
+  return JSON.stringify(ids);
+}
 
 /**
  * 命令行写的设置名 → 这一项现在的名字：改名之前的（legacyName）换成新的。不认识的抛错并列出能改的
@@ -399,6 +473,22 @@ const ROUTES = {
   }),
   private: (settings) => ({ mode: "private", transcriber: settings.privateTranscriber.value }),
 };
+
+/**
+ * 划词翻译按现在的设置交给谁、译成什么（app/lookup/engine.mjs）：choice 是 { vendor, model }，customUrl、customParams 是划词自己的
+ * 自定义服务（没填是 null），to 是语言 id
+ * @param {ReturnType<typeof resolveSettings>} settings
+ */
+export function lookupOf(settings) {
+  return {
+    to: settings["lookup.to"].value,
+    choice: parseChatChoice(settings["lookup.model"].value),
+    customUrl: settings["lookup.customUrl"].value || null,
+    customParams: settings["lookup.customParams"].value
+      ? parseCustomParams(settings["lookup.customParams"].value)
+      : null,
+  };
+}
 
 /**
  * 某种模式按现在的设置走哪条路线，不写就是设置里选的那种模式

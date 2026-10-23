@@ -36,7 +36,7 @@ function dictateOnce(url) {
   });
 }
 
-const fakeRefiner = (text, warmUp = async () => {}) => ({ warmUp, refine: async () => text });
+const fakeRefiner = (text, warmUp = async () => {}) => ({ warmUp, refine: async () => ({ text, source: null }) });
 
 // 模型层报上来的错都分好了类（src/server/providers/errors.mjs）
 const UNAVAILABLE = () =>
@@ -291,7 +291,7 @@ test("用户词典：服务端每次听写读一次，开口的准备和整理�
       prepare: async (options) => void seen.push(["prepare", options.vocabulary]),
       refine: async (_audio, options) => {
         seen.push(["refine", options.vocabulary]);
-        return "Runzo";
+        return { text: "Runzo", source: null };
       },
     }),
   });
@@ -350,7 +350,7 @@ function fakeModels(installed = ["qwen3-asr-0.6b-q8", "sensevoice-small-q8"]) {
 /** 假的 refiner：照路线把转写器用起来，好看出本地模型这一跳的状态 */
 const throughTranscriber = async ({ transcriber }) => ({
   warmUp: async () => {},
-  refine: async () => (await transcriber.transcribe(new Float32Array(3))).text,
+  refine: async () => ({ text: (await transcriber.transcribe(new Float32Array(3))).text, source: null }),
 });
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -400,8 +400,10 @@ test("用户词典：交给本机模型的转写器原样转过去", async (t) =
     vocabulary: () => ["埋点"],
     createRefiner: async ({ transcriber }) => ({
       warmUp: async () => {},
-      refine: async (_audio, options) =>
-        (await transcriber.transcribe(new Float32Array(3), { vocabulary: options.vocabulary })).text,
+      refine: async (_audio, options) => ({
+        text: (await transcriber.transcribe(new Float32Array(3), { vocabulary: options.vocabulary })).text,
+        source: null,
+      }),
     }),
   });
   t.after(() => service.close());
@@ -693,7 +695,7 @@ test("整理超过空闲时长也不释放模型，整理完才开始算空闲",
         const result = await transcriber.transcribe(new Float32Array(3));
         entered();
         await gate;
-        return result.text;
+        return { text: result.text, source: null };
       },
     }),
   });

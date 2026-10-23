@@ -379,6 +379,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - 影响：单按修饰键、修饰键 + 修饰键照常可用；修饰键 + 普通键、单独 F 键、esc 取消、"按着热键又按了别的键要取消"这几条都会失灵。还有一个连带后果：切进密码框的那一下（例如 Tab）按下收到了、松开收不到，这个键会一直留在按住集合里，之后连单按修饰键的听写也凑不成精确匹配。对策见 5.3 第 8 条。
 - 检测：每秒查一次 `IsSecureEventInputEnabled()`（任一进程开着就返回真，`SDK:HIToolbox/CarbonEventsCore.h:3044-3064`）。Handy 每秒轮询、持续 3 秒才算卡住（`secure_input.rs:132-135`），可以参考。
 - 应对一，Carbon 顶替：Handy 在安全输入持续期间，把带普通键的绑定改由 Carbon 注册一份，录键时也这样顶替"取消"（`Handy@93c9ee0 src-tauri/src/secure_input.rs:9-17`，原文 "shadow-registers vulnerable *keyed* bindings through the Carbon-backed Tauri global-shortcut path, which is not affected by secure input"）。我们照做：安全输入开着时，修饰键 + 普通键、单个 F 键、截取中的 esc 由 Carbon 注册；Carbon 分不了左右，回调里用只听 tap 记下的设备位核对（flagsChanged 照常收得到），核对不上就当没按。Handy 遇到同样问题时是放宽成两侧都认（同文件 `:31-37` 的 `degraded_bindings`）。安全输入关掉后注销。V19、V20 已通过：安全输入开着时 Carbon 照常触发，合成 F13、⌥Space 各 5/5，真键盘 ⌃⌥⌘K 3/3。
+  已知限制（10-23 审查查出）：语音翻译、划词默认绑着右⌥空格、右⌥回车，安全输入开着时 Carbon 把左⌥空格、左⌥回车也一起吞掉，核对不上就丢了，到不了前台应用。终端里 Option 当 Meta 时左⌥回车是换行，这段时间按不出来。只在安全输入开着时（终端开了"安全键盘输入"、密码框）出现，他那台 Terminal、iTerm2 的安全键盘输入都关着。要改得在回调里把核对不上的那一下补发给前台应用，安全输入下补发的键进不进得去、会不会再被 Carbon 截住，要拿真键盘先试。
 - 应对二，提示：Carbon 注册失败时，在悬浮条或菜单栏提示"有应用开着安全输入，组合键暂时用不了"。
 - 安全输入从开到关时，清掉按住集合里的非修饰键（5.3 第 8 条），它们的松开多半丢了。
 
@@ -442,7 +443,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - Win 或 Alt 单独按下再松开、中间没有别的键，系统会弹开始菜单，或者激活前台窗口的菜单栏。对策是在中间插一个无效键，让系统以为是"Win/Alt + 某个键"。现在只有右 Alt 按下时插 0xE8（`keys.go:17-19, 98`）。
 - 新规则：本次 Win 或 Alt 按住期间，只要有绑定触发、或者有事件被我们吞掉，就插一次掩码。**被吞的键松开时也算**：handy-keys 实测"F20↓ Win↓ F20↑ Win↑ with Win+F20 blocked opens Start"（`handy-keys@e7d1b8e src/platform/windows/listener.rs:755-790`）。
 - Ctrl 或 Shift 按下，本身就会让之前按着的 Win、Alt 不再触发菜单（AutoHotkey `hook.cpp:2020` 的注释）。所以 `Ctrl+Win` 这类组合自带掩码，Wispr 也说 "Ctrl+Win suppresses the Start/Search action while that combination is held"。
-- 插的时机：第 8 步起改成在回调里同步 `SendInput`（AutoHotkey 和 handy-keys 也是），注入的事件靠记号放行。原来交回消息循环再插：消息循环先处理的是钩子回调（发来的消息排在投递的前面），点得快或者线程正忙时，Alt、Win 的松开可能抢在掩码前面。一次按住只插一次，Alt、Win 全松开再算下一次（`native/windows/matcher.go` 的 `settleMask`）。Win 键绑定点一下能不能挡住开始菜单，仍要真机试（第 12 步）。
+- 插的时机：第 8 步起改成在回调里同步 `SendInput`（AutoHotkey 和 handy-keys 也是），注入的事件靠记号放行。10-22 补：赶上的事件是 Alt、Win 自己的按下时（单按右 Alt 就触发的语音输入），在它的回调里插，效果和先插掩码、再按 Alt 一样，等于没插，Windows 11 记事本照样选中菜单栏；手动在 Alt 按下之后再插就挡住了。改成这时只记着，等下一个键事件（别的键，或 Alt、Win 自己的松开）再插（`matcher.go` 的 `settleMask`、样例 `windows.json` 最后一条），`e2e.ps1` 用 UI Automation 看焦点查这一项。原来交回消息循环再插：消息循环先处理的是钩子回调（发来的消息排在投递的前面），点得快或者线程正忙时，Alt、Win 的松开可能抢在掩码前面。一次按住只插一次，Alt、Win 全松开再算下一次（`native/windows/matcher.go` 的 `settleMask`）。Win 键绑定点一下能不能挡住开始菜单，仍要真机试（第 12 步）。
 - 0xE8 在微软 VK 表里仍标为 "Unassigned"（https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes ）。AutoHotkey 文档提醒，微软以后可能给未分配的码派用途，例如 0x07 从 1909 起被用来开 Game Bar（https://www.autohotkey.com/docs/v2/lib/A_MenuMaskKey.htm ）。另外 `keys.go:18` 的注释"AutoHotkey 用的也是它"不准确：AHK 的默认掩码键是左 Ctrl（`AutoHotkey@0b8e6fa source/globaldata.cpp:66-67`），0xE8 是文档推荐值。
 
 **其他修饰键自带的系统行为**
@@ -589,7 +590,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | 修饰键 + 修饰键 | `ControlRight+ShiftRight`、`Fn+ShiftLeft`、`ControlLeft+MetaLeft` | 允许 |
 | 修饰键 + 普通键 | `AltRight+Space`、`ControlRight+F13` | 允许，普通键要吞（Mac 需辅助功能权限）；两边系统保留的组合除外（5.5） |
 | 单个非打字键 | `F13`、`F5`、`ContextMenu` | 允许，要吞 |
-| 单个打字键 | `KeyA`、`Space`、`Enter` | 禁止 |
+| 单个打字键 | `KeyA`、`Space`、`Enter` | 禁止。回车 10-22 起和别的打字键一样，能和修饰键一起绑（划词翻译的默认键右⌥回车）；之前连组合也不让绑 |
 | 普通键 + 普通键 | `KeyA+KeyS` | 禁止 |
 | `Shift` + 打字键 | `ShiftLeft+KeyA` | 禁止：会打出大写或符号，两键以内无法再加修饰键 |
 | 单按 Shift | `ShiftLeft`、`ShiftRight` | 禁止（D11）：微软拼音单按 Shift 切中英文，连按可能弹粘滞键；和别的修饰键、F 键组合仍允许 |
@@ -628,10 +629,12 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 
 建议沿用第一种。它和 Typeless 一致，也和我们已经验收过的"按下即开始"一致。还有一个副作用要写进文档：说话进行中按带前缀的长组合，前缀那一下会先被当成"再按一下"，直接结束这次听写。保存时对前缀关系给警告，文案参考 Wispr："Your Hands-free mode shortcut is a part of a Push-to-talk shortcut. This may lead to conflicts."（https://docs.wisprflow.ai/articles/2612050838-supported-unsupported-keyboard-hotkey-shortcuts ）。第一版的两个动作之间不会有前缀关系："取消"是单键，别的动作的组合按 5.5 不能含它的键。前缀问题要到第三个动作出现时才真正出现，但匹配器从一开始就支持升级，代价很小。
 
+2026-10-22 加划词翻译（默认右⌥回车）时补了第三种做法的一个窄版：语音输入的某个组合是别的动作（不是录音会话的，现在只有划词翻译）某个组合的一部分时，主进程把这个组合的按下先压住（`src/app/session-gate.mjs`），松开了、或者 250 ms 到了还没等来第二个键，再交给悬浮条；等来的是被打断（凑成了划词，或者是别的组合键）就整个丢掉，悬浮条什么都没看见，不会闪、不开麦克风。凑成语音翻译的也丢掉压住的那一下，紧跟着的语音翻译自己的按下照常开始。代价是点按语音输入要等到松开才开始，多出来的是一次点按的时长（一百毫秒上下）；按住的话悬浮条晚 250 ms 才收到按下，下面"按住 600 ms 作废"从它收到时算，从真按下算起是 850 ms。没绑划词、或者划词的组合不含语音输入的键时不压。压着的时候按了截着的取消键（esc），压着的那一下作废；首次引导测快捷键时不压，按下就亮。所以保存时的前缀提醒只对"短的那个不是录音会话"的报。
+
 **点按、按住与 600 ms**
 
 - 小帮手只报按下、松开、被打断，不判断单击、长按、双击。以后加"按住说话""双击"时不用改原生层。
-- 600 ms 规则由动作决定，写在动作目录里：听写的计时从绑定按下开始，到组合里的键全部松开或被打断为止。比如空格先抬、Ctrl 晚了 0.7 秒才松，算按住了 0.7 秒，这次取消，和 Typeless 一样（D1）。和 Typeless 的区别：升级以后，新绑定从自己按下时重新计时，而 Typeless 从第一个键算起、升级不重置。
+- 600 ms 规则由动作决定，写在动作目录里：听写的计时从悬浮条收到绑定按下开始（被会话门压住的组合晚 250 ms，见上），到组合里的键全部松开或被打断为止。比如空格先抬、Ctrl 晚了 0.7 秒才松，算按住了 0.7 秒，这次取消，和 Typeless 一样（D1）。和 Typeless 的区别：升级以后，新绑定从自己按下时重新计时，而 Typeless 从第一个键算起、升级不重置。
 - 和现有状态机的对应：`binding down` → `KEY_DOWN`，`binding up` → `KEY_UP`，`interrupted` → `OTHER_KEY`。状态机本身不用改语义；`OTHER_KEY` 只在 `held` 时生效（`machine.mjs:59-62`），所以说话中打字不受影响，这一点保持不变。
 - Typeless 的 300 ms 听写防抖暂不加，等真遇到误触再说。
 
@@ -681,7 +684,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - 只在截取中生效的动作只按自己那一个键认（5.3），所以别的动作的组合里不能含它的键：取消绑了 `F13`，听写就不能绑 `ControlRight+F13`，否则说话时按这个组合只会取消。
 - 系统保留组合，按系统分别建表、按 code 写、左右都列：
   - macOS：⌘ + `Space`、`Tab`、常用编辑键（C V X Z A S W Q N O P F H M T 和逗号）；`Control` + `Space`（切换输入法，对中文用户尤其要紧）；⌃ + F1–F5；⌘ + `Backspace`（来源：Apple HIG https://developer.apple.com/design/human-interface-guidelines/keyboards ，以及 Wispr 文档）。另外用 `CopySymbolicHotKeys()` 动态查启用的系统快捷键。
-  - Windows：Alt+Tab、Alt+F4、Alt+Space、Ctrl + 常用编辑键、Win + 字母数字 Tab 方向键、Win+Space、Ctrl+Alt+Del、Win+L、`Shift + Space`（微软拼音全角半角）。另外对"修饰键 + 普通键"用 `RegisterHotKey` 试登记一次。
+  - Windows：Alt+Tab、Alt+F4、左 Alt+Space（右 Alt+Space 留给语音翻译，Typeless 的 Windows 默认键里也有它；小帮手吞掉空格后窗口菜单不弹，V27 已验）、左 Alt+Enter（Excel、WPS 表格里是单元格内换行；右 Alt+Enter 留给划词翻译，V28）、Ctrl + 常用编辑键、Win + 字母数字 Tab 方向键、Win+Space、Ctrl+Alt+Del、Win+L、`Shift + Space`（微软拼音全角半角）。另外对"修饰键 + 普通键"用 `RegisterHotKey` 试登记一次。
 - Mac 上 `Fn` + 方向键、删除、回车。
 - 和自家另一个动作的绑定规范化后相同：拒绝，并写明"已被「某动作」占用"。"任何时候"和别的场景都算重叠，所以现在任意两个动作都不能同键；以后有了互不重叠的场景，才按场景放开。
 
@@ -699,7 +702,8 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | Windows 上 `AltLeft+ShiftLeft`、`AltLeft+ShiftRight` | 默认在输入语言之间切换（4.2，V23） |
 | Windows 上 `Ctrl+Shift` | 装了多个布局时会切换布局 |
 | Mac 上 Control 作修饰键 | Apple HIG："Avoid using the Control key as a modifier" |
-| 组合是另一个绑定的前缀 | 见 5.3 |
+| 组合是另一个绑定的前缀 | 见 5.3。短的那个是录音会话时不提醒：长的也是录音会话（语音翻译）的，悬浮条把这一次直接升级过去，录音不断；长的是划词翻译的，主进程先压住这一下（2026-10-22 加语音翻译、划词翻译时改） |
+| Mac 上 `⌥` + 回车 | Excel、Numbers 里是单元格内换行；两边的 ⌥ 是同一个键，绑了右边的那里就要按左边的。提醒，不拦：划词翻译的默认键就是右⌥回车 |
 | Mac 修饰键 + 普通键 | 安全输入时改由 Carbon 顶替，顶替不上就失灵（4.1） |
 
 **做不到的事要说清楚**：别的应用用钩子或 tap 实现的热键，以及别的应用注册的 Carbon 热键，都没有通用接口能查出来。只能静态表加警告，用户撞上了自己改。
@@ -755,13 +759,18 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
   {"id":"cancel#0","mods":[],"key":53,"when":"capturing"}
 ]}
 {"cmd":"capture","regions":[{"id":"cancel","x":0,"y":0,"width":28,"height":28}]}
+{"cmd":"capture","regions":[{"id":"copy","x":0,"y":0,"width":28,"height":28}],"outside":true}
 {"cmd":"release"}
 {"cmd":"record","on":true}
 {"cmd":"record","on":false}
 {"cmd":"probe","id":7,"mods":[58],"key":40}
 {"cmd":"info"}
 {"cmd":"paste","id":1,"text":"…"}
+{"cmd":"selection","id":7}
 ```
+
+- `capture` 带 `outside: true`（划词卡片）时，块外的左键按下另报 `click`、`id` 是 `outside`，这一下照常放行；不写就是不报（悬浮条）。
+- `selection` 取前台应用里选中的字（划词翻译），答复见下面的 `selection`。Mac 先问辅助功能，Windows 先问 UI Automation；问不到再模拟一次复制（⌘C、Ctrl+C），从剪贴板取、取完还原。Windows 上应用有 TextPattern、选区是空的，或者前台是终端，就是没选中，不模拟复制：终端里没选区时 Ctrl+C 是中断。模拟复制和 `paste` 排成一队，一件做完才做下一件。
 
 - 一个绑定分成 `mods`（修饰键，0 到 2 个，一定带，没有就是空数组）和 `key`（普通键，最多 1 个，可以不带）两栏，形状规则（5.3）直接写在结构里，小帮手不用自己猜哪个码是修饰键。小帮手再查一遍形状：整条不对（不是一组对象、少了 `id`/`mods`/`when`、类型不对）报 `error`、绑定表不动；单个不合规矩的（含重复的 id，两个都不装）在回执里退回，原因 `invalid`。
 - `bind` 整表替换，可以随时再发。上例是 Mac 的原生码；Windows 上 `mods` 发 vk，`key` 发扫描码（4.2），所以 `AltRight` 是 165（0xA5），`Escape` 是 1，`F13` 是 100（0x64）。
@@ -785,6 +794,9 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 {"event":"probed","id":7,"conflict":true,"source":"symbolic"}
 {"event":"info","fnUsage":1}
 {"event":"click","id":"cancel"}
+{"event":"click","id":"outside"}
+{"event":"selection","id":7,"text":"…","rect":{"x":10,"y":20,"width":300,"height":40},"via":"uia","ms":35}
+{"event":"selection","id":8,"text":"","via":"copy","reason":"none","ms":420}
 {"event":"permissions","listen":true,"trusted":false,"capture":false}
 {"event":"secure_input","on":true,"unavailable":["dictate#1"]}
 {"event":"elevated_foreground","on":true,"pid":4242}
@@ -798,6 +810,7 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 - `probed` 的 `source` 是 `symbolic`（Mac 系统快捷键）或 `registered`（Windows 上已被别的程序登记）；`info` 里 `fnUsage` 读不到时不带这个字段。
 - `permissions`、`secure_input` 只有 Mac 有。`permissions`：运行中两项权限变了（每秒查一次，辅助功能另听 `com.apple.accessibility.api`），没了的那项的 tap 已经作废，紧跟着按新的权限重报一次 `bound`。`secure_input`：安全输入开了、关了；开着时带普通键的绑定由 Carbon 顶着，`unavailable` 是顶不了的（带 fn 的、注册不上的）。
 - `elevated_foreground`、`relistened` 只有 Windows 有。`elevated_foreground`：前台换成了以管理员身份运行的窗口（`on: true`，带 `pid`），或者换走了（`on: false`）；小帮手自己是管理员身份时不报。主进程对同一个进程只提示一次（D8）。`relistened`：睡眠唤醒（`reason: "resume"`）、解锁或切回这个用户（`"unlock"`）以后重装了键盘钩子；睡下去、锁屏时按着的绑定先补报松开。
+- `selection`：`rect` 是选区的外接框（屏幕坐标，Mac 是点、Windows 是物理像素），拿不到不带；`via` 是 `ax`、`uia`（辅助功能、UI Automation）或 `copy`（模拟复制，拿不到位置）。`text` 为空时带 `reason`：`none` 没选中、`not_trusted` 没有辅助功能权限（Mac）、`elevated` 前台是管理员窗口（Windows）、`failed` 出错了（另报 `error`）。选中的字最多交出 65536 个 UTF-16 单元。
 - 去掉的事件：`hotkey`、`other_key`、`escape`。
 - 可选：事件带时间戳（Mac `CGEvent.timestamp`，Windows `KBDLLHOOKSTRUCT.time`），以后做双击和按住时长不受进程间延迟影响。现在 600 ms 由 JS 计时（`bar.mjs:60-62`），误差可以接受，第一版不加。
 
@@ -1046,6 +1059,8 @@ AltTab 就是这么分的：普通键快捷键用 Carbon `RegisterEventHotKey` �
 | V24 | Mac：安全输入开着时 `CGEventSourceKeyState(.hidSystemState, key)` 准不准 | 5.3 第 8 条 | 密码框里按住 Tab 不放，轮询这个接口 |
 | V25 | Mac：录制中按 ⌘W、⌘Q、⌃Space 各会发生什么；渲染层 `preventDefault`、主进程 `before-input-event` 拦不拦得住默认菜单的快捷键 | 5.6 录制时吞键 | 开发窗口里分有、无辅助功能权限两种各按一遍 |
 | V26 | Mac：辅助功能权限在运行中被撤销时，常开的触发 tap 会不会冻住整机；监听到权限变化后立刻 `CFMachPortInvalidate`，能不能避免或解冻 | 第 7 步，D3 的缓解 | 只在随时可以重来的 macOS 虚拟机里做，不在主人的电脑上做：装一个带触发 tap 的测试应用、授权后用 `tccutil reset Accessibility` 撤销，看键盘鼠标 |
+| V27 | Windows：绑了右 Alt+空格，小帮手吞掉空格以后，系统的窗口菜单还弹不弹 | 5.5 只拦左 Alt+空格（语音翻译的默认键） | **10-22 已验：窗口菜单不弹。** 开发机记事本里真键盘按、合成按各两次，空格都吞住了。同时查出记事本的菜单栏被选中：掩码插早了，单按右 Alt 也一样（4.2 掩码），修好后 `e2e.ps1` 42/42 |
+| V28 | Windows：绑了右 Alt+回车，小帮手吞掉回车以后，记事本的菜单栏、资源管理器的属性窗口、表格的单元格换行还会不会跟着来 | 5.5 只拦左 Alt+回车（划词翻译的默认键） | **10-23 部分已验：通过。** 开发机上合成按键，记事本两次、Edge 两次：焦点留在正文，菜单栏没被选中，回车也没漏进去（选中的字还在）。真键盘、资源管理器的属性窗口、表格还没试 |
 
 ---
 

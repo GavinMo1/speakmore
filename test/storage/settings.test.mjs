@@ -3,8 +3,9 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { createTranslator } from "../../src/i18n/index.mjs";
+import { createTranslator, LocalizedError } from "../../src/i18n/index.mjs";
 import {
+  lookupOf,
   MODE_SETTINGS,
   overridingEnv,
   patchSettings,
@@ -38,6 +39,8 @@ const OTHER_HOTKEY = '["ControlRight"]';
 test("没有文件也没有环境变量时全用默认值", () => {
   assert.deepEqual(resolveSettings({ file, env: {} }), {
     "hotkey.dictate": { value: DEFAULT_HOTKEY, source: "default" },
+    "hotkey.translate": { value: '["AltRight+Space"]', source: "default" },
+    "hotkey.lookup": { value: '["AltRight+Enter"]', source: "default" },
     "hotkey.cancel": { value: '["Escape"]', source: "default" },
     mode: { value: "native", source: "default" },
     model: { value: "gemini/gemini-3.6-flash", source: "default" },
@@ -50,10 +53,61 @@ test("没有文件也没有环境变量时全用默认值", () => {
     modelSource: { value: "cn", source: "default" },
     acceleration: { value: "auto", source: "default" },
     localModelMemory: { value: "resident", source: "default" },
+    "translate.to": { value: '["en"]', source: "default" },
+    "lookup.to": { value: "zh-CN", source: "default" },
+    "lookup.model": { value: "deepseek/deepseek-flash", source: "default" },
+    "lookup.customUrl": { value: "", source: "default" },
+    "lookup.customParams": { value: "", source: "default" },
     barHint: { value: "on", source: "default" },
     theme: { value: "ink", source: "default" },
     language: { value: "system", source: "default" },
   });
+});
+
+test("语音翻译译成什么：一个、逗号隔开的几个、JSON 数组都认，规整成去重的 id 列表、文件里存成数组；第一种是默认", () => {
+  assert.equal(saveSetting(file, "translate.to", "ja").value, '["ja"]');
+  assert.equal(saveSetting(file, "translate.to", "EN, ja ,en").value, '["en","ja"]');
+  assert.equal(saveSetting(file, "translate.to", '["zh-tw","en"]').value, '["zh-TW","en"]');
+  // PowerShell 去掉了引号
+  assert.equal(saveSetting(file, "translate.to", "[ko,fr]").value, '["ko","fr"]');
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8"))["translate.to"], ["ko", "fr"]);
+  assert.equal(resolveSettings({ file, env: {} })["translate.to"].value, '["ko","fr"]');
+  assert.equal(resolveSettings({ file, env: { SPEAKMORE_TRANSLATE_TO: "de" } })["translate.to"].value, '["de"]');
+  // 手改文件写成数组也认
+  writeFileSync(file, JSON.stringify({ "translate.to": ["vi"] }));
+  assert.equal(resolveSettings({ file, env: {} })["translate.to"].value, '["vi"]');
+  for (const bad of ["", "[]", "klingon", "en,xx", "en,ja,ko,fr,de,es,it", '{"en":1}']) {
+    assert.throws(() => saveSetting(file, "translate.to", bad), LocalizedError, bad);
+  }
+});
+
+test("划词翻译：译成一种语言（默认简体中文），模型写 厂商/模型（默认 DeepSeek V4.1 Flash）；自定义服务的地址、参数是它自己的，和整理那一步的分开", () => {
+  assert.equal(saveSetting(file, "lookup.to", "JA").value, "ja");
+  assert.throws(() => saveSetting(file, "lookup.to", "xx"), said(/要是 en \/ zh-CN/));
+  assert.equal(saveSetting(file, "lookup.model", "bailian").value, "bailian/qwen3.8-flash");
+  assert.equal(saveSetting(file, "lookup.model", "custom/qwen3:8b").value, "custom/qwen3:8b");
+  assert.throws(() => saveSetting(file, "lookup.model", "custom"), LocalizedError);
+  assert.equal(
+    saveSetting(file, "lookup.customUrl", "https://llm.example.com/v1/chat/completions").value,
+    "https://llm.example.com/v1",
+  );
+  assert.equal(saveSetting(file, "lookup.customParams", '{ "temperature": 0.2 }').value, '{"temperature":0.2}');
+  const settings = resolveSettings({ file, env: {} });
+  // 语音那边的自定义服务没动
+  assert.equal(settings.customUrl.value, "");
+  assert.deepEqual(lookupOf(settings), {
+    to: "ja",
+    choice: { vendor: "custom", model: "qwen3:8b" },
+    customUrl: "https://llm.example.com/v1",
+    customParams: { temperature: 0.2 },
+  });
+  assert.deepEqual(lookupOf(resolveSettings({ file: join(dir, "none.json"), env: {} })), {
+    to: "zh-CN",
+    choice: { vendor: "deepseek", model: "deepseek-flash" },
+    customUrl: null,
+    customParams: null,
+  });
+  assert.equal(resolveSettings({ file, env: { SPEAKMORE_LOOKUP_MODEL: "moonshot" } })["lookup.model"].source, "env");
 });
 
 test("存下来的值下次读得到，没动过的仍是默认值", () => {

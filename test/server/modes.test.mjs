@@ -10,8 +10,12 @@ import {
   keyVendorsOf,
   MODES,
   parseMode,
+  supportsTask,
   usesLocalModel,
 } from "../../src/server/modes.mjs";
+import { findTask } from "../../src/server/tasks/index.mjs";
+
+const DICTATION = findTask("dictate").bind({});
 
 const zh = createTranslator("zh-CN");
 const quiet = { info() {}, warn() {}, error() {} };
@@ -72,7 +76,7 @@ test("本地转写链路：拿交进来的转写器和按路线装的润色器�
     decode: async () => new Float32Array(16_000),
     fetch,
   });
-  assert.equal(await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm" }), "好的");
+  assert.equal((await refiner.refine(Buffer.from("x"), { task: DICTATION, mimeType: "audio/webm" })).text, "好的");
   assert.equal(requests[0].url, "https://api.deepseek.com/chat/completions");
 });
 
@@ -97,7 +101,10 @@ test("数据隐私模式：一跳，本机模型转写完直接交出原文；�
     fetch,
   });
   await refiner.warmUp();
-  assert.equal(await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm" }), "嗯，我现在有几个事要做");
+  assert.equal(
+    (await refiner.refine(Buffer.from("x"), { task: DICTATION, mimeType: "audio/webm" })).text,
+    "嗯，我现在有几个事要做",
+  );
   assert.deepEqual(requests, []);
   assert.deepEqual(keyVendorsOf(PRIVATE), []);
   assert.equal(keyVendorOf(PRIVATE), undefined);
@@ -111,6 +118,30 @@ test("数据隐私模式只认本机模型：写成云端的、没交转写器�
     /本机模型/,
   );
   await assert.rejects(createModeRefiner({ route: PRIVATE, log: quiet }), /转写器/);
+});
+
+test("每种方式做得了哪些任务看成品出在哪一步：任务在那一步上没有做法就做不了，不按任务的名字判断", async () => {
+  const dictate = findTask("dictate");
+  for (const route of [NATIVE, LOCAL, PRIVATE]) assert.equal(supportsTask(route, dictate), true);
+  // 只在直出、整理两步上有做法的任务（翻译就是这样）：离线做不了
+  const textOnly = { id: "dictate", steps: ["native", "polish"] };
+  assert.equal(supportsTask(NATIVE, textOnly), true);
+  assert.equal(supportsTask(LOCAL, textOnly), true);
+  assert.equal(supportsTask(PRIVATE, textOnly), false);
+
+  // 服务端自己也挡一道：交进来的任务没有离线这一步的做法时，不转文字、不准备，直接说清哪种方式不支持什么
+  const transcribed = [];
+  const refiner = await createModeRefiner({
+    route: PRIVATE,
+    transcriber: { transcribe: async (samples) => transcribed.push(samples) && { text: "好的" } },
+    log: quiet,
+    decode: async () => new Float32Array(16_000),
+  });
+  const task = { id: "dictate", native: DICTATION.native, polish: DICTATION.polish };
+  await refiner.prepare({ task });
+  const error = await refiner.refine(Buffer.from("x"), { task, mimeType: "audio/webm" }).catch((thrown) => thrown);
+  assert.equal(zh.text(error.problem), "离线方式不支持语音输入");
+  assert.deepEqual(transcribed, []);
 });
 
 test("第一跳交给云端时要两家的 key，主的那家（润色）在最后；同一家只要一把", () => {
@@ -154,7 +185,7 @@ test("第一跳交给云端：不用交转写器，按路线装；两家各用�
     decode: async () => new Float32Array(16_000).fill(0.1),
     fetch,
   });
-  assert.equal(await refiner.refine(Buffer.from("x"), { mimeType: "audio/webm" }), "好的");
+  assert.equal((await refiner.refine(Buffer.from("x"), { task: DICTATION, mimeType: "audio/webm" })).text, "好的");
   assert.deepEqual(
     requests.map(({ url, auth }) => [new URL(url).host, auth]),
     [

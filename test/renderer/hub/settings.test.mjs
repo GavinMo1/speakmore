@@ -32,6 +32,22 @@ test("按键监听的小程序停了：去权限那一页，重新检查在那�
   assert.deepEqual(fixTarget(setup("ready", { listen: null, trusted: null }, "stopped")), { pane: "permissions" });
 });
 
+test("有动作的组合装不上：去快捷键那一页；权限也缺时先补权限", () => {
+  const troubled = {
+    ...setup("ready"),
+    hotkeyActions: [
+      { id: "dictate", problems: [{ fallback: true }] },
+      { id: "cancel", problems: [] },
+    ],
+  };
+  assert.deepEqual(fixTarget(troubled), { pane: "hotkeys" });
+  assert.deepEqual(fixTarget({ ...troubled, permissions: { ...troubled.permissions, listen: false } }), {
+    pane: "permissions",
+  });
+  const fine = { ...setup("ready"), hotkeyActions: [{ id: "dictate", problems: [] }] };
+  assert.deepEqual(fixTarget(fine), { pane: "general" });
+});
+
 // ---------- 软件更新那一行 ----------
 
 const zh = createTranslator("zh-CN");

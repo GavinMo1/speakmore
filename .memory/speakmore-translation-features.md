@@ -1,6 +1,6 @@
 ---
 name: speakmore-translation-features
-description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格），名字、默认键、引擎两段、设置七栏、卡片、历史都定了；还没开工
+description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格）；分支 translate-features，三段都做完（10-23），审查一轮修完、#16 合进来了，等他点头合并 main
 metadata:
   node_type: memory
   type: project
@@ -74,6 +74,79 @@ metadata:
 - **翻译的提示词**：设置里选的目标语言注入在提示词最前面，其余让模型发挥。没有 Typeless 的记录可对照，只能靠感觉和用户反馈，后面慢慢调。他先给了两条：
   1. 照语音输入的格式：能分段就分段，能分点就分点，不要堆成一大段。
   2. 译得 native 一些。
+
+**进度**：
+- 分支 `translate-features`（从 main 23d8fab 开的，还没推）。
+- 第一段 10-22 做完、停下等他压缩：
+  - `8bfb4ed`：改叫法、设置分成通用 / 快捷键 / 本机模型 / 权限 / 关于。
+    - 文案词表加了旧叫法，命令行里也不许有（`test/i18n/copy-lexicon.test.mjs`）。
+    - 语音翻译、划词翻译两栏跟着第二、三段加。
+  - `1713673`：砍说明小字。单子他照我推荐的定了。
+    - 引导第一步选识别方式时三个选项下面那行留着。
+    - 推荐组合"Gemini 直出"改叫 Gemini。
+- 第二段（语音翻译）10-22 做完、停下等他压缩（他真按真说过，原话"非常非常惊艳"）。提交：
+  - `4d40d9e` 内核按任务切开：`src/server/tasks/<任务>/` 管让模型做什么（提示词、成品怎么收），识别方式管交给谁；
+    方式声明成品出在哪一步（native / polish / transcribe），任务声明能在哪几步做，`supportsTask` 按这个判断，不按名字。
+  - `8e9ae84` Gemini 提示词缓存按提示词各存各的（翻译提示词不顶掉语音输入的）。
+  - `d03e629` 翻译任务、`src/languages.mjs`（16 种）、动作 translate（默认右⌥+空格）、Windows 只拦左 Alt+空格。
+  - `90718a4` 提示词调了一轮（`scripts/dev/eval-translate.mjs`，数字在 docs/implementation-notes.md）。
+  - `6da855f` 历史库版本 3（kind、source_text、output_language，退回命令在 history.mjs 文件头）、交付、设置项 `translate.to`。
+  - `917341b` 悬浮条：每个说话的功能一个模块（`src/renderer/bar/features/`），语言胶囊悬停展开（鼠标移动 forward），
+    升级不断录音（set_mode_config 以最后一条为准），离线按键就拦。
+  - `bb8e685` 设置"语音翻译"栏（translate-pane.mjs）、首页两组键、历史标签加原文和按功能筛。
+  - `e9505a8` 命令行 `speakmore history` 画翻译的标签和原文。
+  - `3532520` Windows 小帮手掩码修复：他在记事本按右 Alt+空格，菜单栏被选中；单按右 Alt 的语音输入一样（老毛病）。
+    掩码在 Alt 自己按下的回调里插等于没插，改成留到下一个键事件；e2e.ps1 加了 UI Automation 查菜单栏，42/42。
+    他提过"换个完全没冲突的组合键"，查清是掩码的事、修好了，键没换。
+- 他中途定的：目标语言是提示词最上面的一行格式化输入，每次现拼，改了下一次就生效；**语音翻译也用词典**（先识别再整理，
+  他一度说不用、马上改口了），只有划词翻译不用——任务自己声明 `vocabulary`。
+- 验过的（细节在 docs/implementation-notes.md 语音翻译一节）：单测 Mac 1418、Windows 1360 全过；端到端 Mac 四条、Windows
+  混合两条（那台连不上 Gemini）；Mac 开发窗口合成按键走了一遍（悬停胶囊在 Mac 上可用）；V27 已验，窗口菜单不弹。
+- 还开着：他用下来按反馈再调提示词（混合方式分段分点偏弱）。
+- 真按键验收的做法：Mac 终端没有录屏权限，截悬浮条走调试端口；按键用 CGEvent 合成（scratchpad 里的 act 小工具），
+  热键是点按（按住超 0.6 秒作废）；Windows 用 win-desktop.sh 跑 SendInput，焦点看 UI Automation。
+  zsh 里 `"$变量:路径"` 会被当成修饰符（`:s`），scp 的目标要写 `"${WIN_SSH_TARGET}:…"`。
+- 留到最后改 README 时一起改：
+  - 中英 README 第 449 行的"设置 → 通用 → 本机转写模型内存"，现在是"设置 → 本机模型 → 内存"。
+  - 新叫法：直出、混合、离线，转文字、整理。
+- 开发窗口：家目录 `/tmp/smdev`，混合方式加 DeepSeek，造了 1105 条历史；调试端口 9333。
+
+- 第三段（划词翻译）10-22 做了大半，停下等他压缩。提交：
+  - `2aa1180` 热键：回车改成 typing、Windows 拦左 Alt+回车、Mac ⌥回车单独提醒；动作 lookup（右⌥回车，能清空）；
+    `app/session-gate.mjs` 语音输入是划词组合的一部分时按下先压住（松开或 250ms 再交悬浮条），右⌥回车时悬浮条不闪
+  - `125a514` 内核 `src/server/lookup/`（和语音任务互不引用），`chat/client.mjs` 共用；历史库版本 4（账的用途多 lookup，
+    退回办法在 history.mjs 文件头）；用量另数划词
+  - `ed8a3b4` 设置 lookup.to（默认 zh-CN）、lookup.model（默认 deepseek/deepseek-flash）、lookup.customUrl、lookup.customParams
+  - `02ba0e3` 两个小帮手的 selection 命令和 capture 的 outside；Windows 那块是分身写的，e2e.ps1 在他那台 61/61
+  - `438e2d2` App：`app/lookup/`（controller 流程、engine 找 key 装翻译器、card-window、place）、`renderer/lookup/` 卡片
+  - `93f4ba6` 提示词去翻译腔（他说一股机翻味）；"原文已是目标语言"改由代码判断（`server/lookup/source.mjs`），
+    评测 `scripts/dev/eval-lookup.mjs`，Flash 18 条×2 全对；V4 Pro 没更好
+  - `b867af2` 他报的 bug：语音翻译的语言选单往上移就收起（胶囊和选单之间有缝），已修，等他验
+- 他中途定的：划词的自定义服务和语音那边完全分开（地址、型号、参数、key 各存各的，key 文件 lookupcustom-key.bin，
+  环境变量 SPEAKMORE_LOOKUP_CUSTOM_API_KEY）。对抗性审查启动 workflow 之前先停下问他。
+- 10-23 把第三段剩下的做完：
+  - `4596103` `app/lookup/setup.mjs`（主窗口改划词设置：译成、换模型、检测、自定义服务先验再存）、
+    `server/lookup/models.mjs`（出厂 Flash；"已评测"只给 Flash，V4 Pro 只评过旧提示词）、广场多一排 lookup、密钥表数"划词 N"
+  - `08b5177` 设置"划词翻译"一栏（下拉框）；引擎页分语音、划词两段（`engine/lookup.mjs`、`lookup-view.mjs`），
+    自定义服务在划词的详情里直接填；卡片"配置密钥"跳到划词段、缺 key 顺手开密钥面板
+  - `2da5024` 历史详情划词不写录音、首页不列清空了键的功能、命令行说明
+  - `4c64023` Windows 上卡片阴影被窗口边切成硬边，阴影收小、留边 32px
+  - `03c676a` 实现笔记划词一节（评测数字）、V28 部分已验（合成按键，记事本、Edge；真键盘、属性窗口、表格没试）
+  - 单测 Mac 1487 过、Windows 1429 过（65 跳过），都 0 失败。Windows 开发机上替换、只读只给复制、点别处收起都验过
+- 10-23 他定了砍掉"替换选中文字"（`17d5e6d`）：划词多半在网页、App 里，选区不一定能改，往原处贴出问题；卡片上只留复制。
+  小帮手判断能不能改的代码一起删了（回执不再有 editable），Windows e2e.ps1 61/61
+- 10-23 他点头后起了对抗性审查（workflow wf_5f699c5a-321，10 个 agent，一轮）：报 38 条、核实成立 36 条，当天修完
+  （`1e82ea0`…`de083e5`，12 个提交）。最要紧的：Windows 没选中时也模拟 Ctrl+C，终端里会中断跑着的程序（旧小帮手真机复现
+  ping -t 被打断）；改成有 TextPattern 选区空、或前台是终端就不发。两个小帮手的模拟复制和贴字排成一队、晚到的复制也还原；
+  Mac 问辅助功能挪出主线程。没改代码的一条：安全输入开着时 Carbon 把左⌥回车也吞掉，写进 hotkey-research.md 4.1 当已知限制
+- 10-23 issue #16（Windows 上悬浮条被别家置顶窗口盖住）修在 `bar-on-top`（`99abae9`），审查修完已合回（`8875e91`），
+  分支和工作副本删了。issue 里已回复进度，发版后再回、再关
+- 10-23 修完后：单测 Mac 1492 过、Windows 1434 过（65 跳过），都 0 失败；Windows e2e.ps1 67/67；两台开发版从主仓库重启了。
+  Mac 取选区挪线程以后还没真按过（等他划一次）
+- 他 Mac 上 10-23 说话"音频无声"：录音比前一天小约 20 dB，系统输入音量是 50，让他自己调高（我们录音关了自动增益）
+- 还开着：他验悬浮条选单的修复（b867af2）、中文选区译英文；Windows 真键盘按一次右 Alt+回车；
+  README、官网改叫法和加划词（memory 里"留到最后改 README 时一起改"那两条）
+- Mac 开发窗口：他真按过，卡片位置、复制、替换都对。
 
 **参照**：
 - Typeless 的翻译是第三个热键（Fn + 左 Shift，Windows 是右 Alt + 右 Shift），和听写共用悬浮条和后端，只多一个 `output_language`（`targets/typeless/docs/04-voice-pipeline.md:99`）。目标语言在悬浮条上悬停切换，2.0 起能预存几个。

@@ -293,7 +293,7 @@ test("local 模式：写模式、两跳各用什么（key 说的是润色那家�
   };
   const localSettings = { ...settings, mode: { value: "local", source: "file" } };
   const text = renderStatus({ status, version: "0.1.0", settings: localSettings, stats: noStats }, plain);
-  assert.match(text, /模式\s+本地转写，再交给模型润色/);
+  assert.match(text, /模式\s+混合：先转文字，再交给模型整理/);
   assert.match(text, /模型\s+qwen3-asr-0\.6b-q8 → DeepSeek 的 deepseek-flash/);
   assert.match(text, /本地模型\s+下载中 50%（425 \/ 850 MB）/);
   assert.match(text, /环境变量 DEEPSEEK_API_KEY/);

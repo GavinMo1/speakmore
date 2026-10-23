@@ -2,8 +2,8 @@
 
 // 在词典评测上爬山（claude-api skill 的 hillclimb 流程）：每轮只改一处讲词典的写法，跑一遍，训练集和测试集都涨才留。
 // 三个 flow，各管一处写法、各跑用到它的模型：
-//   native   原生识别的提示词里讲词典的那段（src/server/refine/prompt.mjs 的 nativePromptWith）
-//   polish   润色的提示词里讲词典的那段（src/server/refine/polish-prompt.mjs 的 polishPromptWith）
+//   native   原生识别的提示词里讲词典的那段（src/server/tasks/dictate/prompt.mjs 的 nativePromptWith）
+//   polish   润色的提示词里讲词典的那段（src/server/tasks/dictate/polish-prompt.mjs 的 polishPromptWith）
 //   context  百炼转写收的上下文（src/server/asr/cloud/bailian.mjs 的 contextOf）
 //
 //   node scripts/dev/climb-vocabulary.mjs split                                     切一次训练/测试（按录音），写各 flow 的 _state.json
@@ -32,8 +32,8 @@ import {
 import { contextOf } from "../../src/server/asr/cloud/bailian.mjs";
 import { CLOUD_TRANSCRIBERS } from "../../src/server/asr/cloud/vendors.mjs";
 import { decodeWav } from "../../src/server/audio/pcm.mjs";
-import { polishPromptWith } from "../../src/server/refine/polish-prompt.mjs";
-import { nativePromptWith } from "../../src/server/refine/prompt.mjs";
+import { polishPromptWith } from "../../src/server/tasks/dictate/polish-prompt.mjs";
+import { nativePromptWith } from "../../src/server/tasks/dictate/prompt.mjs";
 import { fitTerms, PROMPT_VOCABULARY } from "../../src/vocabulary/support.mjs";
 
 const ROOT = resolve(import.meta.dirname, "../..");
@@ -48,12 +48,12 @@ const supportOf = (targetId) => {
 /** 每个 flow：改的是哪个文件、跑哪些模型、模型实际收到的讲词典的那段长什么样（写进 trace 给分析的人看） */
 const FLOWS = {
   native: {
-    artifact: "src/server/refine/prompt.mjs",
+    artifact: "src/server/tasks/dictate/prompt.mjs",
     targets: ["native/gemini/gemini-3.6-flash", "native/openai/gpt-audio-mini", "native/bailian/qwen3.8-omni-flash"],
     instruction: () => nativePromptWith(fitTerms(VOCABULARY, PROMPT_VOCABULARY)),
   },
   polish: {
-    artifact: "src/server/refine/polish-prompt.mjs",
+    artifact: "src/server/tasks/dictate/polish-prompt.mjs",
     targets: ["polish/deepseek/deepseek-flash", "polish/bailian/qwen3.8-flash"],
     instruction: () => polishPromptWith(fitTerms(VOCABULARY, PROMPT_VOCABULARY)),
   },

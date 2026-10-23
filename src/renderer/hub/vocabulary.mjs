@@ -195,7 +195,6 @@ export function createVocabulary() {
     $("vocabulary-empty").hidden = !empty;
     $("vocabulary-empty").dataset.kind = searching ? "search" : "first";
     $("vocabulary-empty-title").textContent = searching ? t("vocabulary.noResults") : t("vocabulary.empty.title");
-    $("vocabulary-empty-text").textContent = searching ? "" : t("vocabulary.empty.description");
     $("vocabulary-empty-actions").hidden = searching;
     const grid = $("vocabulary-grid");
     // 重画前焦点在哪个词的哪个按钮上，画完放回去（键盘操作不会掉到页面最前面）
@@ -517,15 +516,10 @@ export function createVocabulary() {
           ? t("vocabulary.dialogs.import.found", { file: preview.fileName, count })
           : t("vocabulary.dialogs.import.none", { file: preview.fileName }),
       preview: preview.terms,
-      note: [
-        ["existing", "duplicates", "invalid"]
-          .filter((part) => preview[part] > 0)
-          .map((part) => t(`vocabulary.dialogs.import.skipped.${part}`, { count: preview[part] }))
-          .join(" · "),
-        t("vocabulary.dialogs.import.hint"),
-      ]
-        .filter(Boolean)
-        .join("\n"),
+      note: ["existing", "duplicates", "invalid"]
+        .filter((part) => preview[part] > 0)
+        .map((part) => t(`vocabulary.dialogs.import.skipped.${part}`, { count: preview[part] }))
+        .join(" · "),
       problem: count > preview.room ? t("vocabulary.tooMany", { max: MAX_TERMS, room: preview.room, count }) : null,
       confirm: t("vocabulary.dialogs.import.confirm", { count }),
       disabled: count === 0,

@@ -60,6 +60,25 @@ test("润色按谁做的分组：DeepSeek 官方和百炼都卖的并成一行�
   assert.equal(shelves.polish.at(-1).kind, "custom");
 });
 
+test("划词那一排：型号同整理那一排，标签按划词自己的默认和评测打（和整理的评测不相干）；最后是划词自己的自定义服务", async () => {
+  const { shelves } = await view();
+  const names = (shelf) => shelf.map(({ id, items }) => [id, items.map(({ name }) => name)]);
+  assert.deepEqual(names(shelves.lookup), names(shelves.polish));
+  const deepseek = group(shelves.lookup, "deepseek");
+  const tags = (name) => deepseek.items.find((item) => item.name === name).tags.map(({ kind }) => kind);
+  assert.deepEqual(tags("DeepSeek V4.1 Flash"), ["default", "tested"]);
+  // 整理那一步评过 V4 Pro，划词用现在的提示词没评过
+  assert.deepEqual(tags("DeepSeek V4 Pro"), []);
+  assert.equal(
+    group(shelves.polish, "deepseek").items.find(({ name }) => name === "DeepSeek V4 Pro").tags[0].kind,
+    "tested",
+  );
+  // 渠道、价钱同整理那一排
+  assert.deepEqual(deepseek.channels, ["deepseek", "bailian"]);
+  assert.equal(deepseek.items[0].offers.deepseek.price.currency, "USD");
+  assert.equal(shelves.lookup.at(-1).kind, "custom");
+});
+
 test("原生：已知问题打成标签；百炼的 Omni 在通义那一组、按人民币标价", async () => {
   const { shelves } = await view();
   const openai = group(shelves.native, "openai");
@@ -94,13 +113,15 @@ test("转写：本机一组在前（规格取这类芯片上最快的那次实�
   assert.deepEqual(flash.offers.bailian.price, { currency: "CNY", perHour: 0.79, approx: false });
 });
 
-test("密钥表：每个平台一行，key 在哪、三排货架上各有几个；百炼排第一，自定义服务最后", async () => {
+test("密钥表：每个平台一行，key 在哪、各排货架上各有几个（划词和整理同一份清单）；百炼排第一，自定义服务最后", async () => {
   const { platforms } = await view();
   assert.equal(platforms[0].id, "bailian");
   assert.equal(platforms.at(-1).id, "custom");
   const bailian = platforms[0];
   assert.equal(bailian.key, "env");
-  assert.deepEqual(bailian.coverage, { native: 4, transcribe: 4, polish: 6 });
+  assert.deepEqual(bailian.coverage, { native: 4, transcribe: 4, polish: 6, lookup: 6 });
+  // 自定义服务那一行是语音那边（整理）的：划词有它自己的一份，不在密钥表里
+  assert.deepEqual(platforms.at(-1).coverage, { native: 0, transcribe: 0, polish: 0, lookup: 0 });
   assert.equal(platforms.find(({ id }) => id === "gemini").key, null);
 });
 

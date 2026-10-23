@@ -13,6 +13,13 @@ import { LocalizedError, msg } from "../i18n/index.mjs";
  * 退回旧版本前要先把库降回去，旧版本见到比自己新的库不敢动、启动不了。从 2（记账）退回 1（0.4.2 及以前）：
  *   sqlite3 ~/.speakmore/data/history.db "DROP TABLE model_calls; PRAGMA user_version = 1;"
  * 只丢掉账，说过的话都在。
+ * 从 3（语音翻译）退回 2（0.15 及以前）：
+ *   sqlite3 ~/.speakmore/data/history.db "ALTER TABLE history DROP COLUMN kind; ALTER TABLE history DROP COLUMN source_text; ALTER TABLE history DROP COLUMN output_language; PRAGMA user_version = 2;"
+ * 翻译的那几条只剩译文，看起来像普通的听写；别的都在。
+ * 从 4（划词翻译）退回 3：
+ *   sqlite3 ~/.speakmore/data/history.db "DELETE FROM model_calls WHERE purpose = 'lookup'; PRAGMA user_version = 3;"
+ * 只丢掉划词的那几笔账（账表认的用途多一种，版本 3 不在乎）；划词的记录还在，再退回 2 时和翻译一样只剩译文。
+ * 家目录搬过的照 speakmore status 里写的位置换路径。
  */
 const MIGRATIONS = [
   `CREATE TABLE history (
@@ -42,6 +49,37 @@ const MIGRATIONS = [
      latency_ms      INTEGER NOT NULL,   -- 发出请求到收齐回话
      created_at      TEXT NOT NULL       -- ISO 8601
    );
+   CREATE INDEX model_calls_created_at ON model_calls (created_at);
+   CREATE INDEX model_calls_audio_id ON model_calls (audio_id);`,
+  // 语音翻译也进历史。原版在 history_v2 里用 mode（voice_transcript…）和一段 JSON（mode_meta）记，我们按功能分开：
+  // kind 是动作目录的 id，老记录都是语音输入；翻译的原文和目标语言各一列，划词翻译以后也用这两列
+  `ALTER TABLE history ADD COLUMN kind TEXT NOT NULL DEFAULT 'dictate';   -- 哪个功能：dictate、translate
+   ALTER TABLE history ADD COLUMN source_text TEXT;                         -- 翻译的原文（refined_text 是译文）；不是翻译的为空
+   ALTER TABLE history ADD COLUMN output_language TEXT;                     -- 翻译的目标语言（src/languages.mjs 的 id）`,
+  // 划词翻译的账单独一类（lookup）：和听写分开数次数、等待时间。SQLite 改不了 CHECK，照原样建一张新表把账搬过去。
+  // 划词的记录进 history：kind 是 lookup，refined_text 是译文、source_text 是选中的字，没有录音（audio_local_path 为空、
+  // duration 是 0）
+  `CREATE TABLE model_calls_v4 (
+     id              INTEGER PRIMARY KEY,
+     audio_id        TEXT,               -- 哪一次听写或划词（history.id）；验证 key、提示词缓存的为空
+     purpose         TEXT NOT NULL CHECK (purpose IN ('dictation', 'lookup', 'check', 'cache')),
+     provider        TEXT NOT NULL,
+     model           TEXT NOT NULL,
+     input_tokens    INTEGER NOT NULL,
+     audio_tokens    INTEGER NOT NULL,
+     cached_tokens   INTEGER NOT NULL,
+     output_tokens   INTEGER NOT NULL,
+     thinking_tokens INTEGER NOT NULL,
+     cost_usd        REAL,
+     latency_ms      INTEGER NOT NULL,
+     created_at      TEXT NOT NULL
+   );
+   INSERT INTO model_calls_v4 (id, audio_id, purpose, provider, model, input_tokens, audio_tokens, cached_tokens,
+                               output_tokens, thinking_tokens, cost_usd, latency_ms, created_at)
+     SELECT id, audio_id, purpose, provider, model, input_tokens, audio_tokens, cached_tokens,
+            output_tokens, thinking_tokens, cost_usd, latency_ms, created_at FROM model_calls;
+   DROP TABLE model_calls;
+   ALTER TABLE model_calls_v4 RENAME TO model_calls;
    CREATE INDEX model_calls_created_at ON model_calls (created_at);
    CREATE INDEX model_calls_audio_id ON model_calls (audio_id);`,
 ];
@@ -107,8 +145,9 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
   db.exec("PRAGMA busy_timeout = 2000");
 
   const insert = db.prepare(
-    `INSERT INTO history (id, status, refined_text, error, duration, audio_local_path, created_at)
-     VALUES (:id, :status, :refinedText, :error, :duration, :audioFile, :createdAt)`,
+    `INSERT INTO history (id, kind, status, refined_text, source_text, output_language, error, duration,
+                         audio_local_path, created_at)
+     VALUES (:id, :kind, :status, :refinedText, :sourceText, :outputLanguage, :error, :duration, :audioFile, :createdAt)`,
   );
   const insertCall = db.prepare(
     `INSERT INTO model_calls (audio_id, purpose, provider, model, input_tokens, audio_tokens, cached_tokens,
@@ -122,7 +161,8 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
     `WITH recent AS (
        SELECT * FROM history ORDER BY created_at DESC LIMIT :limit
      )
-     SELECT recent.id, recent.status, recent.refined_text AS refinedText, recent.error, recent.duration,
+     SELECT recent.id, recent.kind, recent.status, recent.refined_text AS refinedText, recent.source_text AS sourceText,
+            recent.output_language AS outputLanguage, recent.error, recent.duration,
             recent.audio_local_path AS audioFile, recent.created_at AS createdAt,
             count(call.id) AS calls,
             sum(call.input_tokens) AS inputTokens,
@@ -133,23 +173,32 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
      GROUP BY recent.id
      ORDER BY recent.created_at DESC`,
   );
+  // kinds 是 JSON 数组，只数这几个功能的；为空时全数。entries 不管功能，是这段时间里所有记录的条数。
+  // 字数按他说的那段数（翻译的是原文），和下面的 dictations() 一个口径：译成英文按字母数，语速会虚高三倍
   const summarize = db.prepare(
-    `SELECT count(*) FILTER (WHERE status = 'completed') AS dictations,
-            coalesce(sum(length(refined_text)) FILTER (WHERE status = 'completed'), 0) AS characters,
+    `WITH picked AS (
+       SELECT * FROM history
+       WHERE created_at >= :since AND (:kinds IS NULL OR kind IN (SELECT value FROM json_each(:kinds)))
+     )
+     SELECT (SELECT count(*) FROM history WHERE created_at >= :since) AS entries,
+            count(*) FILTER (WHERE status = 'completed') AS dictations,
+            coalesce(sum(length(coalesce(source_text, refined_text))) FILTER (WHERE status = 'completed'), 0) AS characters,
             coalesce(sum(duration) FILTER (WHERE status = 'completed'), 0) AS seconds,
             count(*) FILTER (WHERE status = 'failed') AS failed,
             (SELECT coalesce(sum(cost_usd), 0) FROM model_calls WHERE created_at >= :since) AS costUsd,
             (SELECT count(*) - count(cost_usd) FROM model_calls WHERE created_at >= :since) AS unpricedCalls
-     FROM history WHERE created_at >= :since`,
+     FROM picked`,
   );
+  // 说了什么：翻译的是原文（他说的那段话），别的是成品
   const completed = db.prepare(
-    `SELECT created_at AS createdAt, refined_text AS text, duration FROM history
+    `SELECT created_at AS createdAt, kind, coalesce(source_text, refined_text) AS text, duration FROM history
      WHERE status = 'completed' AND refined_text <> '' ORDER BY created_at`,
   );
   // 用量汇总的各列，总数和按型号分开的两处共用
   const USAGE_COLUMNS = `count(*) AS calls,
             count(*) FILTER (WHERE purpose = 'check') AS checks,
-            count(DISTINCT audio_id) AS dictations,
+            count(DISTINCT audio_id) FILTER (WHERE purpose = 'dictation') AS dictations,
+            count(DISTINCT audio_id) FILTER (WHERE purpose = 'lookup') AS lookups,
             coalesce(sum(input_tokens), 0) AS inputTokens,
             coalesce(sum(audio_tokens), 0) AS audioTokens,
             coalesce(sum(cached_tokens), 0) AS cachedTokens,
@@ -186,11 +235,13 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
 
   return {
     /**
-     * @param {{ id: string, status: "completed" | "failed", refinedText: string, error: string | null, duration: number, audioFile: string | null, createdAt: string }} entry
+     * @param {{ id: string, kind?: string, status: "completed" | "failed", refinedText: string, sourceText?: string | null,
+     *   outputLanguage?: string | null, error: string | null, duration: number, audioFile: string | null, createdAt: string }} entry
+     *   kind：哪个功能（动作目录的 id），不写是语音输入；sourceText、outputLanguage：翻译的原文和目标语言，不是翻译的不写；
      *   audioFile：录音在录音目录（paths.recordingsDir）里的文件名，没存录音是 null
      */
-    add(entry) {
-      insert.run(entry);
+    add({ kind = "dictate", sourceText = null, outputLanguage = null, ...entry }) {
+      insert.run({ ...entry, kind, sourceText, outputLanguage });
     },
     /**
      * 最近的记录，新的在前。每一条带上它的用量 usage：{ calls, inputTokens, outputTokens, costUsd, latencyMs }，
@@ -206,23 +257,27 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
     },
     /**
      * 说了多少次、多少字、多长时间（只数完成的），失败了几次，以及花了多少美元（验证 key 的也算）。
-     * 钱只加得上知道价的那几笔，不知道价的有几笔另报（unpricedCalls），给人看时要说"至少"
-     * @param {{ since?: string }} [range] 只数这个时刻（ISO 8601）之后的
+     * 钱只加得上知道价的那几笔，不知道价的有几笔另报（unpricedCalls），给人看时要说"至少"。
+     * entries 是这段时间里一共几条记录，不管功能、不管成没成
+     * @param {{ since?: string, kinds?: readonly string[] }} [range] 只数这个时刻（ISO 8601）之后的；
+     *   kinds：次数、字数、时长只数这几个功能的（命令行只数说话的那几个），不写是全部
      */
-    stats({ since = "" } = {}) {
-      return { ...summarize.get({ since }) };
+    stats({ since = "", kinds = null } = {}) {
+      return { ...summarize.get({ since, kinds: kinds === null ? null : JSON.stringify(kinds) }) };
     },
     /**
-     * 所有完成了的听写，老的在前，只带首页统计要的几项（src/usage/insights.mjs）：字数、哪天说的要从文字和时间里数。
-     * 没听到声音的（模型回了空文字）不算：误按一下不该算一天活跃，也不该拉低语速。
-     * 一条百来个字，几千条也就几百 KB，不在库里预先汇总
+     * 所有完成了的记录，老的在前，只带首页统计要的几项（src/usage/insights.mjs）：字数、哪天说的要从文字和时间里数。
+     * text 是他说的那段话：翻译的是原文，别的是成品。没听到声音的（模型回了空文字）不算：误按一下不该算一天活跃，
+     * 也不该拉低语速。一条百来个字，几千条也就几百 KB，不在库里预先汇总
+     * @param {{ kinds?: readonly string[] }} [filter] 只要这几个功能的（首页只数说话的那几个）；不写是全部
      */
-    dictations() {
-      return completed.all().map((row) => ({ ...row }));
+    dictations({ kinds } = {}) {
+      const rows = completed.all().map((row) => ({ ...row }));
+      return kinds ? rows.filter((row) => kinds.includes(row.kind)) : rows;
     },
     /**
      * 记一笔账：一次回了话的模型调用（src/server/refine/refiner.mjs 的 onCall 给的样子）。
-     * @param {{ purpose: "dictation" | "check" | "cache", audioId: string | null, provider: string, model: string, inputTokens: number, audioTokens: number, cachedTokens: number, outputTokens: number, thinkingTokens: number, costUsd: number | null, latencyMs: number, createdAt: string }} call
+     * @param {{ purpose: "dictation" | "lookup" | "check" | "cache", audioId: string | null, provider: string, model: string, inputTokens: number, audioTokens: number, cachedTokens: number, outputTokens: number, thinkingTokens: number, costUsd: number | null, latencyMs: number, createdAt: string }} call
      */
     addCall(call) {
       // 只取表里有的几项：多给一项的话 SQLite 会报"未知参数"，适配器多带一项用量不该让账记不上
@@ -242,7 +297,7 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
       });
     },
     /**
-     * 用量汇总：调了几次（几次是验证 key）、几次听写、各项 token、多少美元（其中提示词缓存多少）、几次不知道价（没算进钱里），
+     * 用量汇总：调了几次（几次是验证 key）、几次听写、几次划词、各项 token、多少美元（其中提示词缓存多少）、几次不知道价（没算进钱里），
      * latenciesMs 是每次听写等模型的毫秒数（从快到慢）；models 是按型号分开的同样几项，花得多的在前。
      * @param {{ since?: string }} [range] 只数这个时刻（ISO 8601）之后的
      */

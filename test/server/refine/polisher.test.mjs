@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createTranslator, msg } from "../../../src/i18n/index.mjs";
 import { ModelError } from "../../../src/server/providers/errors.mjs";
-import { POLISH_PROMPT, polishInput, polishPromptWith } from "../../../src/server/refine/polish-prompt.mjs";
 import { createChatPolisher, createPolisher } from "../../../src/server/refine/polisher.mjs";
-import { NO_SPEECH_MARK } from "../../../src/server/refine/prompt.mjs";
+import { POLISH_PROMPT, polishInput, polishPromptWith } from "../../../src/server/tasks/dictate/polish-prompt.mjs";
+import { NO_SPEECH_MARK } from "../../../src/server/tasks/dictate/prompt.mjs";
+import { findTask } from "../../../src/server/tasks/index.mjs";
+
+/** 流水线不认任务的名字，测的时候拿语音输入这件事跑 */
+const DICTATION = findTask("dictate").bind({});
 
 const zh = createTranslator("zh-CN");
 const quiet = { info() {}, warn() {}, error() {} };
@@ -49,7 +53,10 @@ test("提示词里写的无人声标记，和收尾判断的是同一个；原�
 test("原文交给模型，成品照样经过收尾（繁转简、去句末句号）", async () => {
   const { client, requests } = fakeClient({ text: "這個 bug 我看了一下。", problem: null, usage: USAGE });
   const polisher = polisherWith(client);
-  assert.equal(await polisher.polish("这个 bug 我我看了一下", { audioId: "a1" }), "这个 bug 我看了一下");
+  assert.equal(
+    (await polisher.polish("这个 bug 我我看了一下", { task: DICTATION, audioId: "a1" })).text,
+    "这个 bug 我看了一下",
+  );
   assert.equal(requests[0].system, POLISH_PROMPT);
   assert.equal(requests[0].user, polishInput("这个 bug 我我看了一下"));
 });
@@ -65,7 +72,7 @@ test("词典：接在润色提示词最后、一行一个，说的是按原文�
 
 test("词典：润色时写进系统提示词，原文那条消息不变", async () => {
   const { client, requests } = fakeClient({ text: "Runzo 的图标", problem: null, usage: USAGE });
-  await polisherWith(client).polish("润佐的图标", { vocabulary: ["Runzo"] });
+  await polisherWith(client).polish("润佐的图标", { task: DICTATION, vocabulary: ["Runzo"] });
   assert.equal(requests[0].system, polishPromptWith(["Runzo"]));
   assert.equal(requests[0].user, polishInput("润佐的图标"));
 });
@@ -73,19 +80,19 @@ test("词典：润色时写进系统提示词，原文那条消息不变", async
 test("原文是空的（没转出字）：不调模型，成品是空的", async () => {
   const { client, requests } = fakeClient();
   const polisher = polisherWith(client);
-  assert.equal(await polisher.polish("  \n", {}), "");
+  assert.equal((await polisher.polish("  \n", { task: DICTATION })).text, "");
   assert.equal(requests.length, 0);
 });
 
 test("模型判断没有要输入的内容（输出标记）：成品是空的", async () => {
   const { client } = fakeClient({ text: NO_SPEECH_MARK, problem: null, usage: USAGE });
-  assert.equal(await polisherWith(client).polish("嗯。", {}), "");
+  assert.equal((await polisherWith(client).polish("嗯。", { task: DICTATION })).text, "");
 });
 
 test("客户端断开时取消请求：交给协议客户端的 signal 跟着断", async () => {
   const { client, requests } = fakeClient({ text: "好", problem: null, usage: USAGE });
   const abort = new AbortController();
-  await polisherWith(client).polish("好", { signal: abort.signal });
+  await polisherWith(client).polish("好", { task: DICTATION, signal: abort.signal });
   assert.equal(requests[0].signal.aborted, false);
   abort.abort();
   assert.equal(requests[0].signal.aborted, true);
@@ -96,7 +103,7 @@ test("回了话但用不了（被截断）：先记账再报分好类的错", as
   const problem = msg("model.unfinished", { provider: "DeepSeek", reason: "length" });
   const { client } = fakeClient({ text: null, problem, usage: USAGE });
   const polisher = polisherWith(client, { onCall: (call) => calls.push(call) });
-  const error = await polisher.polish("原文", { audioId: "a1" }).catch((e) => e);
+  const error = await polisher.polish("原文", { task: DICTATION, audioId: "a1" }).catch((e) => e);
   assert.ok(error instanceof ModelError);
   assert.equal(zh.text(error.problem), "DeepSeek 没有正常结束：length");
   assert.equal(calls.length, 1);
@@ -108,7 +115,7 @@ test("回了话但用不了（被截断）：先记账再报分好类的错", as
 test("每次润色记一笔：哪次听写、哪家、多少 token、多少钱、多久", async () => {
   const calls = [];
   const { client } = fakeClient({ text: "好的", problem: null, usage: USAGE });
-  await polisherWith(client, { onCall: (call) => calls.push(call) }).polish("好的", { audioId: "a9" });
+  await polisherWith(client, { onCall: (call) => calls.push(call) }).polish("好的", { task: DICTATION, audioId: "a9" });
   assert.equal(calls.length, 1);
   const { latencyMs, createdAt, ...call } = calls[0];
   assert.ok(Number.isInteger(latencyMs));
@@ -152,7 +159,7 @@ test("createChatPolisher：按选的厂商装上它的协议、地址、参数�
     log: quiet,
     fetch,
   });
-  assert.equal(await polisher.polish("好的", {}), "好的");
+  assert.equal((await polisher.polish("好的", { task: DICTATION })).text, "好的");
   assert.equal(requests[0].url, "https://api.deepseek.com/chat/completions");
   assert.deepEqual(requests[0].body.thinking, { type: "disabled" });
 });
@@ -176,7 +183,7 @@ test("createChatPolisher：自定义服务的额外参数，验证和润色都�
     fetch,
   });
   await polisher.warmUp();
-  assert.equal(await polisher.polish("好的", {}), "好的");
+  assert.equal((await polisher.polish("好的", { task: DICTATION })).text, "好的");
   assert.equal(requests.length, 2);
   for (const { url, body } of requests) {
     assert.equal(url, "https://router.example/v1/chat/completions");
@@ -196,7 +203,7 @@ test("createChatPolisher：自定义的用设置里的地址，报错时称呼�
     log: quiet,
     fetch,
   });
-  const error = await polisher.polish("好的", {}).catch((e) => e);
+  const error = await polisher.polish("好的", { task: DICTATION }).catch((e) => e);
   assert.ok(error instanceof ModelError);
   assert.match(zh.text(error.problem), /127\.0\.0\.1:11434 的这个地址上没有对话接口/);
 

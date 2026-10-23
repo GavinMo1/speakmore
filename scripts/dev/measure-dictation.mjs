@@ -18,7 +18,11 @@ import { parseChatChoice } from "../../src/server/chat/vendors.mjs";
 import { DEFAULT_THINKING_LEVEL, parseModelChoice } from "../../src/server/providers/index.mjs";
 import { createChatPolisher } from "../../src/server/refine/polisher.mjs";
 import { createModelRefiner } from "../../src/server/refine/refiner.mjs";
+import { findTask } from "../../src/server/tasks/index.mjs";
 import { findVendor } from "../../src/server/vendors.mjs";
+
+/** 语音输入这件事（src/server/tasks）：评测、量时间都是拿它跑 */
+const DICTATION = findTask("dictate").bind({});
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const DATASET = join(ROOT, "bench/_work/datasets/default");
@@ -83,7 +87,7 @@ for (const value of list(values.polish)) {
         log: QUIET,
         onCall: (c) => calls.push(c),
       });
-      await polisher.polish(transcript);
+      await polisher.polish(transcript, { task: DICTATION });
     } catch (error) {
       failed += 1;
       console.error(`${value} ${clip.id}: ${String(error?.detail ?? error?.message ?? error).slice(0, 160)}`);
@@ -110,7 +114,7 @@ for (const value of list(values.native)) {
   for (const clip of clips) {
     calls = [];
     try {
-      await refiner.refine(readFileSync(join(DATASET, clip.file)), { mimeType: "audio/wav" });
+      await refiner.refine(readFileSync(join(DATASET, clip.file)), { task: DICTATION, mimeType: "audio/wav" });
     } catch (error) {
       failed += 1;
       console.error(`${value} ${clip.id}: ${String(error?.detail ?? error?.message ?? error).slice(0, 160)}`);

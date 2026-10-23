@@ -27,7 +27,12 @@ const presetPicker = createPresetPicker({
   refresh: refreshSetup,
   configureKey: (platform) => engine.show({ platform }),
 });
-const modeChip = createModeChip({ open: () => navigate("models") });
+/** 去引擎页换识别方式：语音那一段的第一列（上次停在划词段也换回来） */
+function openModes() {
+  navigate("models");
+  engine.show({ section: "voice" });
+}
+const modeChip = createModeChip({ open: openModes });
 
 /** 最近一次拿到的状态：横幅、设置对话框都按它画 */
 let setup = null;
@@ -45,6 +50,7 @@ function navigate(route) {
   else engine.hidden();
   if (name === "home") home.shown();
   if (name === "vocabulary") vocabulary.shown();
+  if (name === "history") history.shown();
   // 记在地址里：换语言时页面重新加载，回到的还是这一页。打开时带的 pane 也一并去掉，免得重新加载时设置又弹出来
   window.history.replaceState(null, "", `?route=${name}`);
 }
@@ -94,7 +100,7 @@ async function refreshData() {
       window.speakmore.appInfo(),
     ]);
     home.render({ insights, usage, app });
-    history.render({ rows, app });
+    history.render({ rows });
   } catch (error) {
     console.error("读历史失败", error);
     history.showError(error instanceof Error ? error.message : String(error));
@@ -117,8 +123,8 @@ function openFix() {
   } else settings.open(target.pane);
 }
 $("banner-action").addEventListener("click", openFix);
-// 换一种识别方式：引擎页的第一列就是
-$("banner-switch").addEventListener("click", () => navigate("models"));
+// 换一种识别方式
+$("banner-switch").addEventListener("click", openModes);
 // 往下滚了，最上面那条拖窗口的地方变成玻璃
 const content = document.querySelector(".content");
 content.addEventListener("scroll", () => content.toggleAttribute("data-scrolled", content.scrollTop > 4), {
@@ -130,8 +136,10 @@ content.addEventListener("scroll", () => content.toggleAttribute("data-scrolled"
 window.speakmore.onHistoryChanged(refreshData);
 window.speakmore.onSetupChanged(refreshSetup);
 // 菜单栏、命令行要打开某一页（"显示历史记录"、"设置…"）
-window.speakmore.onNavigate(({ route, pane }) => {
+window.speakmore.onNavigate(({ route, pane, engine: section }) => {
   if (route) navigate(route);
+  // 引擎页的哪一段（划词卡片上的"配置密钥"要划词那一段）
+  if (section) engine.show({ section });
   if (pane === "auto") openFix();
   else if (pane) settings.open(pane);
 });
@@ -140,5 +148,6 @@ window.speakmore.onNavigate(({ route, pane }) => {
 const params = new URLSearchParams(location.search);
 navigate(params.get("route") ?? "home");
 await Promise.all([refreshSetup(), refreshData()]);
+if (params.get("engine")) engine.show({ section: params.get("engine") });
 if (params.get("pane") === "auto") openFix();
 else if (params.get("pane")) settings.open(params.get("pane"));

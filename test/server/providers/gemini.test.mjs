@@ -404,3 +404,40 @@ test("同时开口两次只建一个；提示词变了的缓存不用", async ()
   });
   assert.equal(calls.generate[0].config.cachedContent, undefined);
 });
+
+test("每份提示词各存各的：语音输入、翻译交替着用，各用各的缓存，不互相顶掉", async () => {
+  const { client, calls } = cachingClient();
+  const TRANSLATE = "目标语言：英文（English）\n翻译的提示词";
+  const send = (systemPrompt) =>
+    client.generate({ audio: Buffer.from("rec"), mimeType: "audio/webm", systemPrompt, reminder: "" });
+  await client.prepare({ systemPrompt: SYSTEM });
+  await send(SYSTEM);
+  await client.prepare({ systemPrompt: TRANSLATE });
+  await send(TRANSLATE);
+  // 再说一句语音输入：它的缓存还在，只往后续，不重建
+  await client.prepare({ systemPrompt: SYSTEM });
+  await send(SYSTEM);
+  assert.deepEqual(
+    calls.create.map(({ config }) => config.systemInstruction),
+    [SYSTEM, TRANSLATE],
+  );
+  assert.equal(calls.update.length, 1);
+  assert.deepEqual(
+    calls.generate.map(({ config }) => config.cachedContent),
+    ["cachedContents/c1", "cachedContents/c2", "cachedContents/c1"],
+  );
+});
+
+test("一份提示词建不了（4xx，比如太短）只是那一份不再试，别的照样建", async () => {
+  const { client, calls, sdk } = cachingClient();
+  const create = sdk.caches.create;
+  sdk.caches.create = async (params) => {
+    if (params.config.systemInstruction !== "很短的提示词") return create(params);
+    calls.create.push(params);
+    throw Object.assign(new Error('{"error":{"code":400,"message":"Cached content is too small"}}'), { status: 400 });
+  };
+  await assert.rejects(client.prepare({ systemPrompt: "很短的提示词" }), /too small/);
+  assert.equal(await client.prepare({ systemPrompt: "很短的提示词" }), null);
+  assert.ok((await client.prepare({ systemPrompt: SYSTEM })).usage);
+  assert.equal(calls.create.length, 2);
+});

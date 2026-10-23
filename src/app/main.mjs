@@ -18,7 +18,7 @@ import {
   Tray,
 } from "electron";
 import { ALREADY_RUNNING_EXIT_CODE, startControlServer } from "../control.mjs";
-import { ACTIONS, actionOf, defaultChords, MAX_CHORDS } from "../hotkeys/actions.mjs";
+import { ACTIONS, actionOf, defaultChords, MAX_CHORDS, SPOKEN_ACTIONS } from "../hotkeys/actions.mjs";
 import {
   actionOfBinding,
   bindingTable,
@@ -32,6 +32,7 @@ import { chordsOf, chordsValue, settingNameOf } from "../hotkeys/settings.mjs";
 import { refineWarning } from "../hotkeys/validate.mjs";
 import { createTranslator, LocalizedError, msg, problemOf, resolveLocale, SYSTEM_LOCALE } from "../i18n/index.mjs";
 import { createInstance } from "../instance.mjs";
+import { LANGUAGES } from "../languages.mjs";
 import { alsoLogTo, log } from "../log.mjs";
 import { chipOf, downloadSize, MODELS, makerOf, measuredOn, SOURCES, tagsOn } from "../models/catalog.mjs";
 import { sizeText } from "../models/describe.mjs";
@@ -39,8 +40,9 @@ import { createLocalModels, freeBytesAt } from "../models/library.mjs";
 import { presetsFor } from "../models/presets.mjs";
 import { createMove, settleMove } from "../move/index.mjs";
 import { CHAT_VENDORS, formatChatChoice } from "../server/chat/vendors.mjs";
-import { describeRoute, keyVendorOf, MODES } from "../server/modes.mjs";
+import { describeRoute, keyVendorOf, MODES, taskProblem } from "../server/modes.mjs";
 import { formatModelChoice, PROVIDERS } from "../server/providers/index.mjs";
+import { findTask } from "../server/tasks/index.mjs";
 import { findVendor, VENDORS } from "../server/vendors.mjs";
 import { adoptAppKeys } from "../storage/app-keys.mjs";
 import { openHistory } from "../storage/history.mjs";
@@ -49,6 +51,7 @@ import { ensureHome, installedHomeOf, keyFile, oldAppKeyFile, resolvePaths } fro
 import {
   ACCELERATIONS,
   LOCAL_MODEL_MEMORY,
+  MAX_TRANSLATE_TARGETS,
   overridingEnv,
   patchSettings,
   resolveSettings,
@@ -71,10 +74,16 @@ import { helperPaths, startHelper } from "./helper.mjs";
 import { createHotkeyRecording } from "./hotkey-recording.mjs";
 import { createKeyManager } from "./keys/key-manager.mjs";
 import { createKeyStore } from "./keys/key-store.mjs";
+import { createCardWindow } from "./lookup/card-window.mjs";
+import { createLookup } from "./lookup/controller.mjs";
+import { createLookupEngine } from "./lookup/engine.mjs";
+import { createLookupSetup } from "./lookup/setup.mjs";
 import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
 import { createModeSwitch } from "./modes.mjs";
 import { MOVE_TO, startMoveWindow } from "./move-window.mjs";
+import { floatAboveAll, showAboveAll } from "./on-top.mjs";
 import { startService } from "./service.mjs";
+import { createSessionGate } from "./session-gate.mjs";
 import { summarizeSetup, summaryAsText } from "./setup-state.mjs";
 import { createAppUpdates } from "./updates.mjs";
 import { describeVocabularySupport, vocabularyHops } from "./vocabulary.mjs";
@@ -202,14 +211,20 @@ const WINDOW_ICON = join(import.meta.dirname, "../../assets/icon.ico");
  * 和主窗口内容区最上面那条拖动区（hub.css 的 .content::before，2.75rem）一样高
  */
 const CAPTION_HEIGHT = 44;
+/** 划词翻译自己的自定义服务的 key 存在哪（keyFile 的厂商 id）、从哪个环境变量来：和语音那边的 custom 分开 */
+const LOOKUP_CUSTOM_KEY = "lookupcustom";
+const LOOKUP_CUSTOM_KEY_ENV = "SPEAKMORE_LOOKUP_CUSTOM_API_KEY";
 /** 关于里"在 GitHub 上看"打开的地方 */
 const HOMEPAGE = "https://github.com/zephyr4123/speakmore";
 /** 这台机器是哪类芯片：本地模型的实测按它挑（models/catalog.mjs 的 CHIPS） */
 const CHIP = chipOf();
 /** 主窗口的大小，照原版（targets/typeless 的 hub 窗口：1080×750，最小 988×685） */
 const HUB_SIZE = { width: 1080, height: 750, minWidth: 988, minHeight: 685 };
-/** 悬浮条的窗口。比条本身大一圈：上面要放一行提示，四周要留出阴影，报错时条会变宽变高 */
-const BAR_SIZE = { width: 380, height: 124 };
+/**
+ * 悬浮条的窗口。比条本身大一圈：上面要放一行提示，四周要留出阴影，报错时条会变宽变高；
+ * 再往上留出语音翻译的语言选单（最多 MAX_TRANSLATE_TARGETS 种，一种一行）。窗口透明、点不到，多出来的地方看不见也挡不住
+ */
+const BAR_SIZE = { width: 380, height: 310 };
 /**
  * 系统设置里各项权限的页面。Windows 只有麦克风这一项：没有"输入监控""辅助功能"，
  * 小帮手装上钩子就能听键、能模拟按键（报上来的 listen、trusted 总是 true）
@@ -642,16 +657,18 @@ async function main() {
       hasShadow: false,
       resizable: false,
       skipTaskbar: true,
-      alwaysOnTop: true,
       // 不能抢焦点：焦点一旦离开用户正在用的输入框，文字就贴不进去了
       focusable: false,
       webPreferences,
     });
     // 整个窗口都点不到，鼠标事件原样落到它下面的应用上。条上的两个按钮不靠这个窗口收点击：
     // 点击一旦落在我们的窗口上，系统就会把我们切到最前面（面板类型的窗口也一样，实测过），输入框照样丢焦点。
-    // 所以点击是原生小帮手在事件到达任何窗口之前截下来的，见下面的 bar:capture
-    bar.setIgnoreMouseEvents(true);
+    // 所以点击是原生小帮手在事件到达任何窗口之前截下来的，见下面的 bar:capture。
+    // 鼠标移动照样转给页面（forward）：语音翻译的语言胶囊要靠悬停展开，点选项还是小帮手截
+    bar.setIgnoreMouseEvents(true, { forward: true });
     bar.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    // 浮在一切之上，露出来时再顶一次（on-top.mjs，GitHub issue #16）
+    floatAboveAll(bar, { mac: !WINDOWS });
     bar.loadFile(join(sourceDir, "renderer", "bar", "bar.html"));
     return bar;
   }
@@ -664,26 +681,40 @@ async function main() {
   const notify = (message) => tellBar("notice", message);
   /** 悬浮条上方的操作提示开不开（设置里的 barHint，on / off）。每次现读：被环境变量盖着时是环境变量里的 */
   const currentBarHint = () => resolveSettings({ file: PATHS.settingsFile, env: process.env }).barHint.value;
+  /** 语音翻译译成哪几种（设置里的 translate.to），第一种是默认。同样每次现读 */
+  const currentTranslateTo = () =>
+    JSON.parse(resolveSettings({ file: PATHS.settingsFile, env: process.env })["translate.to"].value);
+  /**
+   * 小帮手现在替谁截着 esc 和点击：bar（悬浮条，说话时）、lookup（划词卡片开着时）或 null。同一时间只有一个：
+   * 开始说话时卡片收起；正在说话时不理划词。esc、截到的点击按它转给谁
+   */
+  let captureOwner = null;
+  /** 悬浮条不截了：只松开它自己截的，卡片截着的不动 */
+  function releaseBarCapture() {
+    if (captureOwner !== "bar") return;
+    captureOwner = null;
+    helper.release();
+  }
   ipcMain.on("bar:set-visible", (_event, visible) => {
     if (visible) {
-      bar.showInactive();
+      showAboveAll(bar);
       return;
     }
     bar.hide();
-    // 条不在屏幕上时什么都不该截着。页面自己会说"不截了"，这里再说一遍是保险：
+    // 条不在屏幕上时它不该截着。页面自己会说"不截了"，这里再说一遍是保险：
     // 万一它漏说了，esc 会一直被吞掉，在哪个应用里都按不出来
-    helper.release();
+    releaseBarCapture();
   });
   // 页面崩了就更没人说"不截了"
   bar.webContents.on("render-process-gone", (_event, details) => {
     log.error("bar_gone", { reason: details.reason });
-    helper.release();
+    releaseBarCapture();
   });
   // 听写进行中，页面让小帮手把 esc 和条上两个按钮的点击截下来（null 是不截了）。
   // 页面给的是按钮在窗口里的位置，小帮手要的是在屏幕上的位置
   ipcMain.on("bar:capture", (_event, regions) => {
     if (regions === null) {
-      helper.release();
+      releaseBarCapture();
       return;
     }
     if (!Array.isArray(regions)) {
@@ -698,6 +729,9 @@ async function main() {
     });
     // "点了按钮没反应"时先看这条：位置对不对得上屏幕上画的那两个圆
     log.info("bar_capture", { regions: onScreen });
+    // 开始说话了：划词卡片收起，截取归悬浮条（卡片刚开、还没报位置时也收）
+    if (lookup.open) lookup.close("dictation");
+    captureOwner = "bar";
     helper.capture(onScreen);
   });
 
@@ -719,9 +753,15 @@ async function main() {
     tellBar("bar:controls", enabled);
   }
 
+  /**
+   * 小帮手报的绑定事件先过这一道：语音输入的组合是划词翻译的一部分时，按下先压住，凑成划词就不交给悬浮条（session-gate.mjs）
+   */
+  const sessionGate = createSessionGate({ deliver: (event) => onBindingEvent(event) });
+
   /** 把现在要装的热键下发给小帮手（hotkeys 已经查过，这个系统上绑不了的不在里面） */
   function sendHotkeys() {
     sentHotkeys.push(hotkeys.chords);
+    sessionGate.setChords(hotkeys.chords);
     helper.bind(bindingTable(hotkeys.chords, process.platform));
   }
 
@@ -743,8 +783,13 @@ async function main() {
    *   之后重新检查权限靠的是重启小帮手，那时再弹的话每查一次弹一次
    */
   function launchHelper({ prompt }) {
-    // 换小帮手（重查权限）时正在录的那次跟着结束：旧的那个的回执、退出都按代数丢掉了，不说的话页面一直停在"请按键"
-    if (helperGeneration > 0) recording.helperGone();
+    // 换小帮手（重查权限）时正在录的那次跟着结束：旧的那个的回执、退出都按代数丢掉了，不说的话页面一直停在"请按键"。
+    // 新的小帮手没在截：开着的划词卡片收起
+    if (helperGeneration > 0) {
+      recording.helperGone();
+      lookup.close("helper");
+      captureOwner = null;
+    }
     const generation = ++helperGeneration;
     helperPermissions = null;
     helperState = "starting";
@@ -821,22 +866,31 @@ async function main() {
         break;
       case "binding":
       case "interrupted":
-        onBindingEvent(event);
+        // 引导页正在测快捷键：不压，按下就亮。压着的话点按右⌥ 的按下和松开同一刻送到，键帽看不出变色
+        if (onboardingTestsHotkey()) onBindingEvent(event);
+        else sessionGate.accept(event);
         break;
       case "recording":
         // 录键模式里按住的键（设置页、引导页在录）：只交给录键那边，不进日志
         recording.onRecording(event);
         break;
       case "click":
-        // 只在听写进行中才会有：那时页面让小帮手把它们截下来了
+        // 只在截着时才会有：听写进行中的悬浮条，或者开着的划词卡片
         // 字段不能叫 event：日志这一条的名字就记在 event 里，会被盖掉
-        log.info("bar_input", { input: event.event, id: event.id });
-        tellBar("input", event);
+        log.info("captured_click", { id: event.id, to: captureOwner });
+        if (captureOwner !== "lookup") tellBar("input", event);
+        else if (event.id === "outside") lookup.outside();
+        else card.click(event.id);
         break;
       case "exit":
         helperState = "stopped";
         helperPermissions = null;
         recording.helperGone();
+        // 压着的那一下不会再有松开、打断了：丢掉，不然 250ms 后照样交给悬浮条
+        sessionGate.reset();
+        // 没有小帮手就截不住卡片上的点击：卡片收起
+        lookup.close("helper");
+        captureOwner = null;
         setBarControls(false);
         log.error("helper_exited", { code: event.code, signal: event.signal });
         setupChanged();
@@ -858,30 +912,60 @@ async function main() {
     const fields = { event: event.event, id: event.id, down: event.down, to: event.to };
     // chord：这个动作的第几个组合（绑定 id 的序号），悬浮条的提示里写按下的那一个
     const input = { event: event.event, action: action.id, down: event.down, chord: Number(event.id.split("#")[1]) };
-    if (action.handler !== "session") {
-      // 只在说话时生效的（取消）：那时页面让小帮手截着，交给悬浮条
+    BINDING_HANDLERS[action.handler]({ event, action, fields, input });
+  }
+
+  /** 动作目录里的每种处理者（handler）：绑定事件交给谁 */
+  const BINDING_HANDLERS = {
+    session: onSessionKey,
+    // 只在截着时生效的（取消）：交给正在截的那一个，悬浮条或者划词卡片
+    cancel: ({ event, fields, input }) => {
+      log.info("key_event", { ...fields, to: captureOwner });
+      if (captureOwner !== "lookup") tellBar("input", input);
+      else if (event.event === "binding" && event.down) lookup.cancel();
+    },
+    // 划词翻译：按下就取选区、弹卡片（lookup/controller.mjs）
+    lookup: ({ event, fields }) => {
       log.info("key_event", fields);
-      tellBar("input", input);
-      return;
-    }
-    // 首次引导正在测快捷键、人也正看着它：听写的按下松开只送到引导窗口。
-    // 切到别的应用了就照常听写，不然热键在哪都按不出来，还没有任何提示；
-    // 悬浮条在屏幕上（切出去开了一段听写又切回来）时也给条，不然这一段停不下来
+      if (event.event === "binding" && event.down) lookup.press();
+    },
+  };
+
+  /**
+   * 首次引导正在测快捷键、人也正看着它：听写的按下松开只送到引导窗口。
+   * 切到别的应用了就照常听写，不然热键在哪都按不出来，还没有任何提示；
+   * 悬浮条在屏幕上（切出去开了一段听写又切回来）时也给条，不然这一段停不下来
+   */
+  const onboardingTestsHotkey = () => hotkeyToOnboarding && onboardingWindow?.isFocused() && !bar.isVisible();
+
+  /** 录音会话的动作（语音输入、语音翻译）：交给悬浮条开始、结束、升级 */
+  function onSessionKey({ event, action, fields, input }) {
     // 被打断（按着时碰了别的键）以后小帮手不再报松开：也当松开送过去，不然大键帽一直亮着
-    if (
-      (event.event === "binding" || event.event === "interrupted") &&
-      hotkeyToOnboarding &&
-      onboardingWindow?.isFocused() &&
-      !bar.isVisible()
-    ) {
+    if ((event.event === "binding" || event.event === "interrupted") && onboardingTestsHotkey()) {
       log.info("key_event", { ...fields, to: "onboarding" });
       onboardingWindow.webContents.send("onboarding:hotkey", { down: event.event === "binding" && event.down });
       return;
     }
     log.info("key_event", fields);
-    const { blocker } = summarizeSetup(currentSetup());
-    if (blocker === null) tellBar("input", input);
+    const blocker = summarizeSetup(currentSetup()).blocker ?? featureProblem(action);
+    // 升级到另一个说话的功能（按着右⌥又按了空格）：带上是哪个，悬浮条把这一次直接换过去。
+    // 升级到的做不了（离线方式下的语音翻译）就不带：这一次作废，紧跟着它自己的按下会说为什么
+    const upgrade = event.to ? actionOfBinding(event.to) : null;
+    const to = upgrade?.handler === "session" && featureProblem(upgrade) === null ? { to: upgrade.id } : {};
+    // 凑成的是划词（按住右⌥ 停了一下才按回车，会话门已经把按下交给了悬浮条）：悬浮条会作废这一次，截取现在就放掉。
+    // 紧跟着的划词按下同一轮就到，等悬浮条自己说不截了，划词会当成正在说话丢掉
+    if (event.event === "interrupted" && upgrade && upgrade.handler !== "session") releaseBarCapture();
+    if (blocker === null) tellBar("input", { ...input, ...to });
     else if (event.event === "binding" && event.down) notify(blocker);
+  }
+
+  /**
+   * 这个说话的功能，现在的识别方式做不做得了（离线方式没有能翻译的模型）：做不了是要说的那句话，做得了是 null。
+   * 连着单独启动的服务端时由那边判断
+   */
+  function featureProblem(action) {
+    const task = findTask(action.id);
+    return service && task ? taskProblem(service.route, task) : null;
   }
 
   // 设置页、引导页录键（hotkey-recording.mjs）：小帮手的录键模式、定稿、探测冲突、保存
@@ -898,6 +982,81 @@ async function main() {
     send: (contents, payload) => {
       if (!contents.isDestroyed()) contents.send("hotkey:recording", payload);
     },
+    log,
+  });
+
+  // ---------- 划词翻译（lookup/） ----------
+
+  /** 划词自己的自定义服务的 key：和语音那边的自定义服务分开存（他定的）。环境变量优先 */
+  const lookupCustomKeys = createKeyStore({ file: keyFile(PATHS, LOOKUP_CUSTOM_KEY), safeStorage });
+  function lookupCustomKey() {
+    const fromEnv = process.env[LOOKUP_CUSTOM_KEY_ENV]?.trim();
+    if (fromEnv) return { apiKey: fromEnv, source: "env" };
+    const stored = lookupCustomKeys.load();
+    return stored ? { apiKey: stored, source: "stored" } : null;
+  }
+  const lookupEngine = createLookupEngine({
+    readSettings: () => resolveSettings({ file: PATHS.settingsFile, env: process.env }),
+    keyOf: (id) => keys.keyOf(id),
+    customKey: lookupCustomKey,
+    log,
+    // 划词的每一笔账也记上，开着的历史窗口跟着更新花费
+    onCall: (call) => {
+      history.addCall(call);
+      historyChanged();
+    },
+  });
+  // 主窗口改划词的设置：设置里的译成、引擎页"划词"那一段（换模型、检测、配自定义服务）
+  const lookupSetup = createLookupSetup({
+    engine: lookupEngine,
+    readSettings: () => resolveSettings({ file: PATHS.settingsFile, env: process.env }),
+    save: (name, value) => saveSetting(PATHS.settingsFile, name, value),
+    customKeys: lookupCustomKeys,
+    customKeyEnv: LOOKUP_CUSTOM_KEY_ENV,
+    env: process.env,
+    log,
+  });
+  const card = createCardWindow({
+    BrowserWindow,
+    screen,
+    ipcMain,
+    sourceDir,
+    webPreferences,
+    windows: WINDOWS,
+    capture: (regions) => {
+      if (regions === null) {
+        if (captureOwner !== "lookup") return;
+        captureOwner = null;
+        helper.release();
+        return;
+      }
+      // 正在说话（悬浮条截着）：卡片不抢截取，收起
+      if (captureOwner === "bar") {
+        lookup.close("dictation");
+        return;
+      }
+      captureOwner = "lookup";
+      helper.capture(regions, { outside: true });
+    },
+    onAct: (action) => lookup.act(action),
+    // 卡片页面崩了：这一张收起，页面重新加载，下一次划词照常出卡片
+    onGone: () => lookup.close("card_gone"),
+    log,
+  });
+  const lookup = createLookup({
+    selection: () => helper.selection(),
+    engine: lookupEngine,
+    card,
+    copy: (text) => clipboard.writeText(text),
+    notify,
+    record: (entry) => {
+      history.add(entry);
+      historyChanged();
+    },
+    // 正在说话（悬浮条截着键）时不理划词
+    busy: () => captureOwner === "bar",
+    openKeys: () => showHub({ route: "models", engine: "lookup" }),
+    newId: () => crypto.randomUUID(),
     log,
   });
 
@@ -934,6 +1093,8 @@ async function main() {
   }
 
   handle("config:get", () => ({ serverUrl, hotkeys: hotkeys.chords, barControls, barHint: currentBarHint() }));
+  // 悬浮条每次开口时现读的设置：设置页、命令行、手改文件改了，下一次说话就按新的
+  handle("bar:session-config", () => ({ translateTo: currentTranslateTo() }));
   handle("dictation:deliver", async (_event, payload) => {
     const result = await delivery.completed(payload);
     // 只记长度：成品是用户说的话，不进日志
@@ -950,7 +1111,8 @@ async function main() {
   });
   handle("history:list", () => history.list());
   handle("usage:report", () => usageReport(history, { now: new Date() }));
-  handle("insights:get", () => insights(history.dictations(), { now: new Date() }));
+  // 首页的口述统计只数说话的功能（录音会话的动作：语音输入、语音翻译），花费另算、都记
+  handle("insights:get", () => insights(history.dictations({ kinds: SPOKEN_ACTIONS }), { now: new Date() }));
   handle("app:info", () => ({ version: app.getVersion(), hotkeys: hotkeys.chords }));
   handle("app:open-homepage", () => shell.openExternal(HOMEPAGE));
   // 设置 › 通用的"软件更新"：检查、开始更新。进行到哪了跟着 setup:get 一起给（update）
@@ -1089,6 +1251,10 @@ async function main() {
       hotkeyActions: describeHotkeyActions(),
       theme: { value: theme.id, choices: THEMES.map(({ id }) => id) },
       barHint: currentBarHint(),
+      // 语音翻译译成哪几种（第一种是默认）、能选哪些、最多几种
+      translate: { to: currentTranslateTo(), choices: LANGUAGES.map(({ id }) => id), max: MAX_TRANSLATE_TARGETS },
+      // 划词翻译：译成哪一种、能选哪些，交给哪个模型、自定义服务的地址参数和 key 在哪（货架在 plaza.shelves.lookup）
+      lookup: { ...lookupSetup.describe(), choices: LANGUAGES.map(({ id }) => id) },
       language: { value: languageSetting, locale },
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
       openAtLogin: {
@@ -1370,6 +1536,25 @@ async function main() {
     const variable = overridingEnv("barHint", process.env);
     return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
   });
+  // 设置 › 语音翻译：译成哪几种，第一种是默认。悬浮条每次开口现读，下一次说话就按新的
+  handle("setup:set-translate-to", (_event, wanted) => {
+    if (!Array.isArray(wanted)) throw new TypeError("要译成的语言不是一组");
+    const { value } = saveSetting(PATHS.settingsFile, "translate.to", JSON.stringify(wanted));
+    log.info("translate_to_changed", { to: JSON.parse(value) });
+    setupChanged();
+    const variable = overridingEnv("translate.to", process.env);
+    return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
+  });
+  // 划词翻译的设置（app/lookup/setup.mjs）：改了都让窗口重读一遍
+  const lookupChanged = (result) => {
+    if (result.ok) setupChanged();
+    return result;
+  };
+  handle("setup:set-lookup-to", (_event, wanted) => lookupChanged(lookupSetup.setTo(wanted)));
+  handle("setup:set-lookup-model", (_event, choice) => lookupChanged(lookupSetup.use(choice)));
+  handle("setup:check-lookup", (_event, changes) => lookupSetup.check(changes));
+  handle("setup:save-lookup-custom", async (_event, form) => lookupChanged(await lookupSetup.saveCustom(form ?? {})));
+  handle("setup:forget-lookup-custom-key", () => lookupChanged(lookupSetup.forgetCustomKey()));
   handle("setup:set-language", (_event, wanted) => {
     saveSetting(PATHS.settingsFile, "language", wanted);
     // 是在设置的"通用"那一页换的：主窗口换好语言后回到这一页
@@ -1402,6 +1587,7 @@ async function main() {
       t = createTranslator(locale);
       refreshTrayMenu();
       tellBar("locale:changed", locale);
+      card.localeChanged(locale);
       if (hubWindow !== null) {
         if (hubTarget) hubWindow.loadFile(join(sourceDir, "renderer", "hub", "hub.html"), { query: hubTarget });
         else hubWindow.webContents.reload();

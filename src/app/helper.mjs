@@ -5,6 +5,13 @@ import { createInterface } from "node:readline";
 const PASTE_TIMEOUT_MS = 3_000;
 /** 探测冲突、问系统信息等多久：只是查一下，回不来就当没查到，不挡着录键 */
 const QUERY_TIMEOUT_MS = 1_500;
+/**
+ * 取选区等多久。Windows 版最坏要 2.7 秒左右（UI Automation 1.2 秒到点，再等修饰键松开最多 1 秒、等剪贴板 0.4 秒），
+ * 留一点余量；Mac 版问辅助功能 0.5 秒到点，再模拟 ⌘C 也差不多
+ */
+const SELECTION_TIMEOUT_MS = 3_500;
+/** 取选区没有回执时的样子：reason 说为什么（timeout 到点了、gone 小帮手不在） */
+const noSelection = (reason) => ({ text: "", rect: null, via: null, reason, ms: null });
 
 /**
  * 小帮手的源码、编好的可执行文件、指纹文件在哪。App 启动时要用，所以放在这一层：
@@ -31,7 +38,8 @@ export function helperPaths(packageDir, platform = process.platform) {
  * @param {object} options
  * @param {string[]} [options.args]
  * @param {(event: object) => void} options.onEvent 收到 ready / bound / binding / interrupted / click / recording 等，
- *   以及小帮手不在了（退出或根本没起来）时的 exit，只报一次。pasted、probed、info 是对某条命令的回执，交给那条命令的调用方
+ *   以及小帮手不在了（退出或根本没起来）时的 exit，只报一次。pasted、probed、info、selection 是对某条命令的回执，
+ *   交给那条命令的调用方
  * @param {{ warn: Function, error: Function }} options.log
  */
 export function startHelper(command, { args = [], onEvent, log }) {
@@ -42,6 +50,9 @@ export function startHelper(command, { args = [], onEvent, log }) {
   /** 发出去还没回的探测：id → 回执来了交给谁 */
   const probes = new Map();
   let nextProbe = 1;
+  /** 发出去还没回的取选区：id → 回执来了交给谁 */
+  const selections = new Map();
+  let nextSelection = 1;
   /** 问系统信息的，按发出的先后排着：回执不带 id，一问一答 */
   const infos = [];
   let exited = false;
@@ -70,6 +81,8 @@ export function startHelper(command, { args = [], onEvent, log }) {
       request.resolve({ ok: event.ok, reason: event.reason ?? null });
     } else if (event.event === "probed") {
       probes.get(event.id)?.(event);
+    } else if (event.event === "selection") {
+      selections.get(event.id)?.(event);
     } else if (event.event === "info") {
       infos.shift()?.(event);
     } else if (event.event === "error") {
@@ -87,6 +100,7 @@ export function startHelper(command, { args = [], onEvent, log }) {
     rejectAll(reason);
     // 探测、系统信息的等着的照常有个结果：按"没查到"算
     for (const answer of probes.values()) answer(null);
+    for (const answer of selections.values()) answer(null);
     for (const answer of infos.splice(0)) answer(null);
     onEvent({ event: "exit", code, signal });
   };
@@ -130,12 +144,14 @@ export function startHelper(command, { args = [], onEvent, log }) {
       });
     },
     /**
-     * 听写进行中：只在说话时生效的绑定（取消）开始算数，这几块里的鼠标点击截下来，都不让别的应用收到。
+     * 听写进行中、划词卡片开着时：只在说话时生效的绑定（取消）开始算数，这几块里的鼠标点击截下来，都不让别的应用收到。
      * 截到了会报那个绑定的 binding、点击的 click
      * @param {{ id: string, x: number, y: number, width: number, height: number }[]} regions 屏幕坐标
+     * @param {{ outside?: boolean }} [options] outside：块外的按下也报一次（click 的 id 是 outside），那一下照常放行。
+     *   划词卡片要它（点别处收起），悬浮条不要
      */
-    capture(regions) {
-      send({ cmd: "capture", regions });
+    capture(regions, { outside = false } = {}) {
+      send({ cmd: "capture", regions, ...(outside ? { outside: true } : {}) });
     },
     /** 不截了 */
     release() {
@@ -191,6 +207,38 @@ export function startHelper(command, { args = [], onEvent, log }) {
         };
         infos.push(answer);
         send({ cmd: "info" });
+      });
+    },
+    /**
+     * 取前台应用里选中的字（划词翻译）。回执不来（超时、小帮手不在）时按没取到算，reason 写 timeout 或 gone
+     * @returns {Promise<{ text: string, rect: { x: number, y: number, width: number, height: number } | null,
+     *   via: string | null, reason: string | null, ms: number | null }>}
+     *   rect 是屏幕坐标（Mac 是点，Windows 是物理像素）；text 为空时 reason 说为什么：none 没选中、not_trusted 没有辅助功能权限、
+     *   elevated 前台是管理员窗口、failed 出错了
+     */
+    selection({ timeoutMs = SELECTION_TIMEOUT_MS } = {}) {
+      if (exited || stopping) return Promise.resolve(noSelection("gone"));
+      const id = nextSelection++;
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => answer(undefined), timeoutMs);
+        const answer = (event) => {
+          clearTimeout(timer);
+          selections.delete(id);
+          if (event === undefined) return resolve(noSelection("timeout"));
+          if (event === null) return resolve(noSelection("gone"));
+          const text = typeof event.text === "string" ? event.text : "";
+          const rect = event.rect;
+          const valid = rect && ["x", "y", "width", "height"].every((key) => Number.isFinite(rect[key]));
+          resolve({
+            text,
+            rect: text !== "" && valid ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+            via: typeof event.via === "string" ? event.via : null,
+            reason: text === "" ? (event.reason ?? "none") : null,
+            ms: Number.isFinite(event.ms) ? event.ms : null,
+          });
+        };
+        selections.set(id, answer);
+        send({ cmd: "selection", id });
       });
     },
     /** 关掉标准输入，小帮手会自己退出 */

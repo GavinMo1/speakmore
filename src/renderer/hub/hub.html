@@ -58,6 +58,8 @@
       <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
       <symbol id="i-scan" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2m10 0h2a2 2 0 0 1 2 2v2m0 10v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/></symbol>
       <symbol id="i-search" viewBox="0 0 24 24"><g><path d="m21 21l-4.34-4.34"/><circle cx="11" cy="11" r="8"/></g></symbol>
+      <symbol id="i-keyboard" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" /></symbol>
+      <symbol id="i-languages" viewBox="0 0 24 24"><path d="m5 8 6 6m-7 0 6-6 2-3M2 5h12M7 2h1m14 20-5-10-5 10m2-4h6"/></symbol>
       <symbol id="i-laptop" viewBox="0 0 24 24"><path d="M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2zm2.054 10.987H3.946"/></symbol>
       <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9"/></symbol>
       <symbol id="i-mic" viewBox="0 0 24 24"><g><path d="M12 19v3m7-12v2a7 7 0 0 1-14 0v-2"/><rect width="6" height="13" x="9" y="2" rx="3"/></g></symbol>
@@ -128,13 +130,14 @@
           <button type="button" class="button" id="banner-action" data-i18n="hub.fix">Settings</button>
         </div>
 
-        <!-- 首页：标题下面一行是热键，标题右边写着正在用哪种识别方式，点一下去引擎页换（mode-chip.mjs）；
+        <!-- 首页：标题下面一行是功能和它的键，标题右边写着正在用哪种识别方式，点一下去引擎页换（mode-chip.mjs）；
              下面是原版"洞察"那一列，加上我们的花费，占满整宽 -->
         <section class="page" data-route="home" aria-labelledby="home-title">
           <header class="page-head">
             <div class="page-heading">
               <h1 class="page-title" id="home-title" data-i18n="home.title">Speak, don't type</h1>
-              <p class="page-lede"><span class="keycaps" id="home-keycap"></span><span data-i18n="home.dictate">Press to talk</span></p>
+              <!-- 每个功能一组：键帽和名字（语音输入、语音翻译、划词翻译），按动作目录画（home.mjs） -->
+              <p class="page-lede home-actions" id="home-actions"></p>
             </div>
             <button type="button" class="picker-trigger" id="mode-chip"></button>
           </header>
@@ -228,7 +231,13 @@
              树排在一块可拖动、可缩放的画布上（engine/page.mjs）。标题行右边是搜索、推荐组合、密钥 -->
         <section class="page" data-route="models" aria-labelledby="models-title" hidden>
           <header class="page-head">
-            <h1 class="page-title" id="models-title" data-i18n="plaza.title">Engine</h1>
+            <!-- 标题旁分语音、划词两段：语音是下面的树，划词只有厂商、型号两列（engine/lookup.mjs） -->
+            <div class="title-row">
+              <h1 class="page-title" id="models-title" data-i18n="plaza.title">Engine</h1>
+              <div class="segmented" id="engine-segments" role="radiogroup" data-indicator="engine-segments" data-i18n-aria-label="plaza.segments.label">
+                <span class="indicator" aria-hidden="true"></span>
+              </div>
+            </div>
             <div class="page-tools">
               <search class="search">
                 <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
@@ -243,9 +252,23 @@
           <div class="picker wide" id="preset-picker" popover role="dialog" aria-labelledby="preset-picker-title">
             <header class="picker-head">
               <h2 class="picker-title" id="preset-picker-title" data-i18n="presets.title">Recommended setups</h2>
-              <p class="picker-meta" id="preset-meta"></p>
             </header>
             <div class="picker-options" id="preset-options"></div>
+          </div>
+
+          <!-- 划词那一段：厂商 → 型号两列，点型号在右边出详情；只有两列、放得下，不上画布 -->
+          <div class="lookup-engine" id="lookup-engine" hidden>
+            <div class="lookup-stage" id="lookup-stage">
+              <div class="tree lookup-tree" id="lookup-tree">
+                <svg class="tree-links" id="lookup-links" aria-hidden="true"></svg>
+                <p class="col-label" data-col="1" data-i18n="plaza.columns.makers">Maker</p>
+                <p class="col-label" data-col="2" data-i18n="plaza.columns.models">Model</p>
+                <div class="tree-col" data-level="maker" id="lookup-makers"></div>
+                <div class="tree-col" data-level="model" id="lookup-models"></div>
+              </div>
+            </div>
+            <svg class="canvas-links" id="lookup-dock-links" aria-hidden="true"></svg>
+            <div class="detail-dock" id="lookup-detail"></div>
           </div>
 
           <!-- 画布：不带框、铺到窗口边。world 整块平移、缩放；详情、图例、缩放条浮在上面，不跟着动 -->
@@ -254,7 +277,7 @@
               <div class="tree" id="engine-tree">
                 <svg class="tree-links" id="engine-links" aria-hidden="true"></svg>
                 <p class="col-label" data-col="1" data-i18n="plaza.columns.modes">Mode</p>
-                <p class="col-label" data-col="2" data-i18n="plaza.columns.roles">Stage</p>
+                <p class="col-label" data-col="2" data-i18n="plaza.columns.roles">Step</p>
                 <p class="col-label" data-col="3" data-i18n="plaza.columns.makers">Maker</p>
                 <p class="col-label" data-col="4" data-i18n="plaza.columns.models">Model</p>
                 <div class="tree-col" data-level="mode" id="engine-modes" role="radiogroup" data-i18n-aria-label="plaza.columns.modes"></div>
@@ -294,9 +317,14 @@
           </dialog>
         </section>
 
-        <!-- 历史记录：按天分组，一行一条 -->
+        <!-- 历史记录：按天分组，一行一条；标题右边按功能筛（全部、语音输入、语音翻译、划词翻译，按动作目录画，history.mjs） -->
         <section class="page" data-route="history" aria-labelledby="history-title" hidden>
-          <h1 class="page-title" id="history-title" data-i18n="history.title">History</h1>
+          <header class="page-head">
+            <h1 class="page-title" id="history-title" data-i18n="history.title">History</h1>
+            <div class="segmented" id="history-filter" role="radiogroup" data-indicator="history-filter" data-i18n-aria-label="history.filter">
+              <span class="indicator" aria-hidden="true"></span>
+            </div>
+          </header>
           <p class="problem load-error" id="history-error" role="alert" hidden></p>
           <p class="empty-state" id="history-empty" hidden></p>
           <div id="history-days"></div>
@@ -322,7 +350,6 @@
           <div class="picker wide" id="vocabulary-support" popover role="dialog" aria-labelledby="vocabulary-support-title">
             <header class="picker-head">
               <h2 class="picker-title" id="vocabulary-support-title" data-i18n="vocabulary.support.title">Supported models</h2>
-              <p class="picker-meta" data-i18n="vocabulary.support.meta">Each model takes the dictionary its own way</p>
             </header>
             <div class="vocab-support" id="vocabulary-support-list"></div>
           </div>
@@ -343,7 +370,6 @@
           <form class="vocab-composer" id="vocabulary-composer" novalidate hidden>
             <svg class="icon vocab-composer-icon" aria-hidden="true"><use href="#i-plus" /></svg>
             <input class="vocab-composer-input" id="vocabulary-composer-input" type="text" autocomplete="off" spellcheck="false" data-i18n-placeholder="vocabulary.composer.placeholder" data-i18n-aria-label="vocabulary.composer.placeholder" />
-            <span class="vocab-composer-hint" aria-hidden="true"><kbd>↵</kbd><span data-i18n="vocabulary.composer.add">Add</span><kbd>esc</kbd><span data-i18n="vocabulary.composer.close">Close</span></span>
             <button type="button" class="icon-button" id="vocabulary-composer-close" data-i18n-title="vocabulary.composer.close" data-i18n-aria-label="vocabulary.composer.close">
               <svg class="icon" aria-hidden="true"><use href="#i-close" /></svg>
             </button>
@@ -357,10 +383,9 @@
               <svg class="icon" aria-hidden="true"><use href="#i-trash" /></svg><span data-i18n="vocabulary.selection.delete">Delete</span>
             </button>
           </div>
-          <!-- 空的时候教怎么用：一句话加两个入口；搜不到时只有一句 -->
+          <!-- 空的时候一个标题加两个入口；搜不到时只有一句 -->
           <div class="vocab-empty" id="vocabulary-empty" hidden>
             <p class="vocab-empty-title" id="vocabulary-empty-title"></p>
-            <p class="vocab-empty-text" id="vocabulary-empty-text"></p>
             <div class="vocab-empty-actions" id="vocabulary-empty-actions">
               <button type="button" class="button" id="vocabulary-empty-import">
                 <svg class="icon" aria-hidden="true"><use href="#i-file-up" /></svg><span data-i18n="vocabulary.import">Import</span>
@@ -384,7 +409,11 @@
     <template id="history-row">
       <li class="entry">
         <time class="entry-time"></time>
-        <p class="entry-text"></p>
+        <div class="entry-body">
+          <p class="entry-text"></p>
+          <!-- 翻译的那几条：功能和目标语言，后面是原文 -->
+          <p class="entry-source" hidden><span class="tag"></span><span class="entry-original"></span></p>
+        </div>
         <div class="entry-actions">
           <button type="button" class="icon-button copy" data-i18n-aria-label="history.copy" data-i18n-title="history.copy">
             <svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg>
@@ -403,6 +432,18 @@
         <button type="button" class="menu-item" data-pane="general">
           <svg class="icon" aria-hidden="true"><use href="#i-sliders" /></svg><span data-i18n="preferences.general">General</span><span class="menu-dot" data-for="general" hidden></span>
         </button>
+        <button type="button" class="menu-item" data-pane="hotkeys">
+          <svg class="icon" aria-hidden="true"><use href="#i-keyboard" /></svg><span data-i18n="preferences.hotkey">Shortcut</span><span class="menu-dot" data-for="hotkeys" hidden></span>
+        </button>
+        <button type="button" class="menu-item" data-pane="voice-translate">
+          <svg class="icon" aria-hidden="true"><use href="#i-languages" /></svg><span data-i18n="actions.translate.name">Voice translation</span>
+        </button>
+        <button type="button" class="menu-item" data-pane="lookup">
+          <svg class="icon" aria-hidden="true"><use href="#i-letter-text" /></svg><span data-i18n="actions.lookup.name">Selection translation</span>
+        </button>
+        <button type="button" class="menu-item" data-pane="local-models">
+          <svg class="icon" aria-hidden="true"><use href="#i-laptop" /></svg><span data-i18n="preferences.localModels">On-device models</span>
+        </button>
         <button type="button" class="menu-item" data-pane="permissions">
           <svg class="icon" aria-hidden="true"><use href="#i-shield" /></svg><span data-i18n="preferences.permissions">Permissions</span><span class="menu-dot" data-for="permissions" hidden></span>
         </button>
@@ -417,45 +458,16 @@
 
         <section class="pane" data-pane="general">
           <h3 class="pane-title" data-i18n="preferences.general">General</h3>
-          <!-- 快捷键：动作目录里每个动作一行（shared/hotkey-editor.mjs） -->
-          <section class="hotkey-group" aria-labelledby="hotkeys-title">
-            <h4 class="hotkey-group-title" id="hotkeys-title" data-i18n="preferences.hotkey">Shortcut</h4>
-            <div id="hotkey-editor"></div>
-          </section>
           <div class="setting">
             <label class="setting-title" for="theme" data-i18n="preferences.theme">Theme</label>
             <select class="select" id="theme"></select>
           </div>
           <p class="setting-note" id="theme-note" role="status" hidden></p>
           <div class="setting">
-            <label class="setting-title" for="language" data-i18n="preferences.language">Language</label>
+            <label class="setting-title" for="language" data-i18n="preferences.language">Interface language</label>
             <select class="select" id="language"></select>
           </div>
           <p class="setting-note" id="language-note" role="status" hidden></p>
-          <!-- 本机模型没下载过时先从哪下；选的那个下不动会换另一个，只影响快慢 -->
-          <div class="setting">
-            <label class="setting-title" for="model-source" data-i18n="preferences.modelSource">Model download source</label>
-            <select class="select" id="model-source"></select>
-          </div>
-          <p class="setting-note" id="source-note" role="status" hidden></p>
-          <!-- 本机模型用不用显卡：显卡驱动有问题、或者想把显卡让给别的程序时选只用 CPU -->
-          <div class="setting">
-            <label class="setting-title" for="acceleration" data-i18n="preferences.acceleration">On-device model acceleration</label>
-            <select class="select" id="acceleration"></select>
-          </div>
-          <p class="setting-note" id="acceleration-note" role="status" hidden></p>
-          <!-- 内存紧的电脑可以让本机转写模型空闲后释放，开口时再装（GitHub PR #14） -->
-          <div class="setting">
-            <label class="setting-title" for="local-model-memory" data-i18n="preferences.localModelMemory">On-device transcription memory</label>
-            <select class="select" id="local-model-memory"></select>
-          </div>
-          <p class="setting-note" id="local-model-memory-note" role="status" hidden></p>
-          <!-- 悬浮条上方那行"再按一下 … 完成 · esc 取消"：熟练了可以关掉（GitHub issue #3） -->
-          <div class="setting">
-            <label class="setting-title" for="bar-hint" data-i18n="preferences.barHint">Hints above the voice bar</label>
-            <input type="checkbox" class="switch" id="bar-hint" />
-          </div>
-          <p class="setting-note" id="bar-hint-note" role="status" hidden></p>
           <!-- 从终端启动时登记不了开机启动，整行不显示 -->
           <div class="setting" id="open-at-login-row">
             <label class="setting-title" for="open-at-login" data-i18n="preferences.openAtLogin">Launch at login</label>
@@ -481,6 +493,63 @@
             <button type="button" class="button" id="update-action"></button>
           </div>
           <p class="setting-note" id="general-problem" role="alert" hidden></p>
+        </section>
+
+        <!-- 快捷键：动作目录里每个动作一行（shared/hotkey-editor.mjs），下面是悬浮条上的按键提示 -->
+        <section class="pane" data-pane="hotkeys" hidden>
+          <h3 class="pane-title" data-i18n="preferences.hotkey">Shortcut</h3>
+          <div id="hotkey-editor"></div>
+          <!-- 悬浮条上方那行"再按一下 … 完成 · esc 取消"：熟练了可以关掉（GitHub issue #3） -->
+          <div class="setting">
+            <label class="setting-title" for="bar-hint" data-i18n="preferences.barHint">Show key hints on the voice bar</label>
+            <input type="checkbox" class="switch" id="bar-hint" />
+          </div>
+          <p class="setting-note" id="bar-hint-note" role="status" hidden></p>
+          <p class="setting-note" id="hotkeys-problem" role="alert" hidden></p>
+        </section>
+
+        <!-- 语音翻译：译成哪几种，一行一种，第一行是默认（translate-pane.mjs）；悬浮条上能临时换成别的几种 -->
+        <section class="pane" data-pane="voice-translate" hidden>
+          <h3 class="pane-title" data-i18n="actions.translate.name">Voice translation</h3>
+          <p class="setting-label" data-i18n="preferences.translateTo">Translate into</p>
+          <ul class="language-list" id="translate-targets"></ul>
+          <p class="setting-note" id="translate-note" role="status" hidden></p>
+          <p class="setting-note" id="voice-translate-problem" role="alert" hidden></p>
+        </section>
+
+        <!-- 划词翻译：只有译成哪一种；卡片上能临时换成别的（只管那一次）。交给哪个模型在引擎页"划词"那一段 -->
+        <section class="pane" data-pane="lookup" hidden>
+          <h3 class="pane-title" data-i18n="actions.lookup.name">Selection translation</h3>
+          <div class="setting">
+            <label class="setting-title" for="lookup-to" data-i18n="preferences.translateTo">Translate into</label>
+            <select class="select" id="lookup-to"></select>
+          </div>
+          <p class="setting-note" id="lookup-note" role="status" hidden></p>
+          <p class="setting-note" id="lookup-problem" role="alert" hidden></p>
+        </section>
+
+        <!-- 本机模型：下载源、加速、内存。栏名写了"本机模型"，每项的名字就短 -->
+        <section class="pane" data-pane="local-models" hidden>
+          <h3 class="pane-title" data-i18n="preferences.localModels">On-device models</h3>
+          <!-- 本机模型没下载过时先从哪下；选的那个下不动会换另一个，只影响快慢 -->
+          <div class="setting">
+            <label class="setting-title" for="model-source" data-i18n="preferences.modelSource">Download source</label>
+            <select class="select" id="model-source"></select>
+          </div>
+          <p class="setting-note" id="source-note" role="status" hidden></p>
+          <!-- 本机模型用不用显卡：显卡驱动有问题、或者想把显卡让给别的程序时选只用 CPU -->
+          <div class="setting">
+            <label class="setting-title" for="acceleration" data-i18n="preferences.acceleration">Acceleration</label>
+            <select class="select" id="acceleration"></select>
+          </div>
+          <p class="setting-note" id="acceleration-note" role="status" hidden></p>
+          <!-- 内存紧的电脑可以让本机转文字的模型空闲后释放，开口时再装（GitHub PR #14） -->
+          <div class="setting">
+            <label class="setting-title" for="local-model-memory" data-i18n="preferences.localModelMemory">Memory</label>
+            <select class="select" id="local-model-memory"></select>
+          </div>
+          <p class="setting-note" id="local-model-memory-note" role="status" hidden></p>
+          <p class="setting-note" id="local-models-problem" role="alert" hidden></p>
         </section>
 
         <section class="pane" data-pane="permissions" hidden>

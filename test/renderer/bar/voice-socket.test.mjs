@@ -22,8 +22,15 @@ afterEach(async () => {
   server = undefined;
 });
 
+/** refine 给出成品的那段字（语音输入，source 是 null），或者整个成品 { text, source } */
 async function start(refine) {
-  server = await startServer({ port: 0, refiner: { refine }, log: silentLog });
+  const refiner = {
+    async refine(...args) {
+      const result = await refine(...args);
+      return typeof result === "string" ? { text: result, source: null } : result;
+    },
+  };
+  server = await startServer({ port: 0, refiner, log: silentLog });
   voice = new VoiceSocket(`ws://127.0.0.1:${server.port}${WS_PATH}`);
   return voice;
 }
@@ -38,7 +45,7 @@ test("开始、按序发块、结束，拿到成品；服务端收到的是各�
   // 第一块故意大一些：取字节数更慢，不排队的话第二块会抢到前面
   socket.sendChunk(webm("A".repeat(200_000)));
   socket.sendChunk(new Blob(["BBB"]));
-  assert.equal(await socket.finish({ durationSeconds: 4.2 }), "成品");
+  assert.deepEqual(await socket.finish({ durationSeconds: 4.2 }), { text: "成品", source: null });
   assert.equal(received.mimeType, "audio/webm");
   assert.ok(received.text.endsWith(`${"A".repeat(10)}BBB`));
 });
@@ -48,7 +55,7 @@ test("同一条连接上连着做两次", async () => {
   for (const audioId of ["a1", "a2"]) {
     await socket.begin(audioId);
     socket.sendChunk(webm("xy"));
-    assert.equal(await socket.finish({ durationSeconds: 1 }), "6");
+    assert.equal((await socket.finish({ durationSeconds: 1 })).text, "6");
   }
 });
 
@@ -120,5 +127,36 @@ test("放弃一次录音后，它迟到的成品不会算到下一次头上", as
   releases[0]();
   await new Promise((resolve) => setTimeout(resolve, 20));
   releases[1]();
-  assert.equal(await second, "7");
+  assert.equal((await second).text, "7");
+});
+
+test("语音翻译：开口时带上模式和目标语言；说着话换语言，服务端按最后一次的译；成品带着原文", async () => {
+  let seen;
+  const socket = await start(async (_audio, { task }) => {
+    seen = { id: task.id, language: task.language };
+    return { text: "Hello", source: "你好" };
+  });
+  await socket.begin("t1", {
+    mode: "voice_translation",
+    configMode: "translation",
+    parameters: { output_language: "en" },
+  });
+  socket.sendChunk(webm("xy"));
+  socket.configure({ configMode: "translation", parameters: { output_language: "ja" } });
+  assert.deepEqual(await socket.finish({ durationSeconds: 1 }), { text: "Hello", source: "你好" });
+  assert.deepEqual(seen, { id: "translate", language: "ja" });
+});
+
+test("升级：开口时是语音输入，说着话换成语音翻译", async () => {
+  let seen;
+  const socket = await start(async (_audio, { task }) => {
+    seen = task.id;
+    return "Hi";
+  });
+  await socket.begin("u1");
+  socket.configure({ configMode: "translation", parameters: { output_language: "en" } });
+  socket.sendChunk(webm("xy"));
+  await socket.finish({ durationSeconds: 1 });
+  assert.equal(seen, "translate");
+  assert.throws(() => socket.configure({ configMode: "translation" }), /还没有开始录音/);
 });

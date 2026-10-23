@@ -24,8 +24,7 @@ export async function history(args, io) {
         ...row,
         audioLocalPath: audioFile === null ? null : join(io.paths.recordingsDir, audioFile),
       }));
-      const { dictations, failed } = db.stats();
-      total = dictations + failed;
+      total = db.stats().entries;
     } finally {
       db.close();
     }

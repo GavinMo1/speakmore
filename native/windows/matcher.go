@@ -11,7 +11,8 @@ package main
 //   - 松开的事件可能丢（UIPI、管理员窗口、Win+L）：每次按下前用系统接口核对按住的别的键，普通键按下超过 10 秒的也当丢了。
 //     我们吞掉的键系统接口查不准，只按 10 秒算；修饰键也核对（Mac 每个 flagsChanged 都从标志位重新读，不用），
 //     驱动补了假松开的修饰键除外（见 fakeReleased）。见 prune。
-// 只有 Windows 有的：Alt 或 Win 按住期间，我们第一次触发绑定或吞键时插一下掩码键（见 settleMask）。
+// 只有 Windows 有的：Alt 或 Win 按住期间，我们第一次触发绑定或吞键时插一下掩码键；赶上 Alt、Win 自己按下的那一下，
+// 改在下一个键事件上插（见 settleMask）。
 // 只报绑定的按下、松开、被打断，不报是哪个键（录键模式是有边界的例外，在 record.go，录键期间不喂这里）。
 
 // 一个绑定：父进程 bind 下发的一行
@@ -91,6 +92,8 @@ type matcher struct {
 	interrupted bool
 	// 这次 Alt、Win 按住期间插过掩码键了：插一次就够，全松开再清
 	masked bool
+	// 该插掩码了、但这一下是 Alt、Win 自己的按下：留到下一个键事件再插（见 settleMask）
+	maskDue bool
 }
 
 func newMatcher(stillDown func(keyID, heldKey) bool) *matcher {
@@ -149,7 +152,7 @@ func (m *matcher) reset() []event {
 	}
 	m.swallowed = map[keyID]bool{}
 	m.capturingDown = map[keyID]*binding{}
-	m.settleMask(&outcome{})
+	m.forgetMaskIfReleased()
 	return events
 }
 
@@ -198,7 +201,7 @@ func (m *matcher) onKey(in keyInput) outcome {
 	} else {
 		out = m.onUp(id)
 	}
-	m.settleMask(&out)
+	m.settleMask(&out, id, in.down)
 	return out
 }
 
@@ -219,21 +222,36 @@ func (m *matcher) onFake(id keyID, down bool) {
 
 // 掩码：Alt 或 Win 按住期间，我们触发了绑定或吞了键，系统看到的就是"Alt、Win 单按了一下"，松开时会开菜单。
 // 这次按住期间第一回这样时插一下掩码键。被吞的键松开时也算：先按 F13（单键绑定，整段吞）、再按 Win、
-// 松开 F13、松开 Win，系统看到的只有 Win 的按下松开（handy-keys 实测过，listener.rs:755-790）
-func (m *matcher) settleMask(out *outcome) {
-	if !m.menuKeyHeld() {
-		m.masked = false
-		return
+// 松开 F13、松开 Win，系统看到的只有 Win 的按下松开（handy-keys 实测过，listener.rs:755-790）。
+// 掩码是在钩子回调里插的。赶上的这一下是 Alt、Win 自己的按下（单按右 Alt 就触发的语音输入）时，在它的回调里插，
+// 效果和先插掩码、再按 Alt 一样，等于没插：Windows 11 记事本实测照样选中菜单栏；Alt 按下之后再插就挡住了（10-22）。
+// 所以这时只记着，等下一个键事件再插：别的键的按下松开，或者 Alt、Win 自己的松开
+func (m *matcher) settleMask(out *outcome, id keyID, down bool) {
+	held := m.menuKeyHeld()
+	if held && !m.masked && (out.swallow || firesBinding(out.events)) {
+		m.maskDue = true
 	}
-	if m.masked || !(out.swallow || firesBinding(out.events)) {
-		return
+	// 松开的正是最后一个 Alt、Win 时 held 已经是 false：欠着的掩码这时插，排在这一下松开前面
+	if m.maskDue && !(down && isMenuKey(id)) && (held || isMenuKey(id)) {
+		out.mask, m.masked, m.maskDue = true, true, false
 	}
-	out.mask, m.masked = true, true
+	if !held {
+		m.masked, m.maskDue = false, false
+	}
 }
+
+// Alt、Win 都松开了（核对时清掉了松开丢了的也算）：下一次按住另算
+func (m *matcher) forgetMaskIfReleased() {
+	if !m.menuKeyHeld() {
+		m.masked, m.maskDue = false, false
+	}
+}
+
+func isMenuKey(id keyID) bool { return id.isModifier() && menuVKs[uint32(id&^modifierBit)] }
 
 func (m *matcher) menuKeyHeld() bool {
 	for id := range m.held {
-		if id.isModifier() && menuVKs[uint32(id&^modifierBit)] {
+		if isMenuKey(id) {
 			return true
 		}
 	}
@@ -267,7 +285,7 @@ func (m *matcher) onDown(id keyID, in keyInput) outcome {
 	}
 	m.prune(in.time)
 	// 核对时清掉了松开丢了的 Alt、Win：上一次按住已经过去了，这一下另算
-	m.settleMask(&outcome{})
+	m.forgetMaskIfReleased()
 	m.held[id] = heldKey{since: in.time, vk: in.vk}
 
 	if m.current != nil {

@@ -47,8 +47,13 @@ export class VoiceSocket {
     return socket;
   }
 
-  /** 开始一次录音。连不上会在这里抛出 */
-  async begin(audioId) {
+  /**
+   * 开始一次录音。连不上会在这里抛出。
+   * 模式照原版：start_audio 写内部名（mode），要参数的紧跟一条 set_mode_config（configMode 和参数）
+   * @param {string} audioId
+   * @param {{ mode?: string, configMode?: string, parameters?: object | null }} [options] 不写是语音输入
+   */
+  async begin(audioId, { mode = "voice_transcript", configMode, parameters = null } = {}) {
     const socket = await this.#connected();
     this.#current = { audioId, nextIndex: 1, sending: Promise.resolve(), failure: null, settle: null };
     socket.send(
@@ -57,8 +62,22 @@ export class VoiceSocket {
         audio_id: audioId,
         audio_chunk_time: CHUNK_SECONDS,
         audio_metadata: { audio_format: "webm", audio_codec: "opus", audio_channels: 1, need_merge: true },
-        mode: "voice_transcript",
+        mode,
       }),
+    );
+    if (parameters !== null) this.configure({ configMode, parameters });
+  }
+
+  /**
+   * 换这一次的模式或参数（set_mode_config），说完之前都能换，以最后一条为准：说着话升级成语音翻译、
+   * 悬浮条上临时换了目标语言时用。要在 begin 之后
+   * @param {{ configMode: string, parameters?: object }} options
+   */
+  configure({ configMode, parameters = {} }) {
+    const current = this.#current;
+    if (!current) throw new Error("还没有开始录音就换模式");
+    this.#socket.send(
+      JSON.stringify({ type: "set_mode_config", audio_id: current.audioId, mode: configMode, parameters }),
     );
   }
 
@@ -84,8 +103,9 @@ export class VoiceSocket {
   }
 
   /**
-   * 结束录音，等成品文字。
-   * @returns {Promise<string>} 没有人声时是空字符串
+   * 结束录音，等成品。
+   * @returns {Promise<{ text: string, source: string | null }>} text 是要贴的字，没有人声时是空字符串；
+   *   source 是翻译的原文（服务端的 source_text），不是翻译的是 null
    */
   async finish({ durationSeconds, timeoutMs = REFINE_TIMEOUT_MS }) {
     const current = this.#current;
@@ -143,7 +163,7 @@ export class VoiceSocket {
     if (!current || (value.audio_id && value.audio_id !== current.audioId)) return;
     switch (kind) {
       case "audio_processing_completed":
-        current.settle?.resolve(value.refined_text);
+        current.settle?.resolve({ text: value.refined_text, source: value.source_text ?? null });
         break;
       case "audio_processing_error":
       case "error":

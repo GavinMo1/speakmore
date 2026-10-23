@@ -8,6 +8,7 @@ const period = (overrides = {}) => ({
   calls: 0,
   checks: 0,
   dictations: 0,
+  lookups: 0,
   inputTokens: 0,
   audioTokens: 0,
   cachedTokens: 0,
@@ -39,6 +40,7 @@ const report = {
     calls: 834,
     checks: 14,
     dictations: 820,
+    lookups: 5,
     inputTokens: 1_380_000,
     audioTokens: 120_000,
     cachedTokens: 0,
@@ -72,6 +74,7 @@ const report = {
       ...period({
         calls: 100,
         dictations: 90,
+        lookups: 5,
         costUsd: 0.14,
         tokens: 200_000,
         latency: { medianMs: 2600, p90Ms: 3100 },
@@ -98,7 +101,9 @@ test("按型号分开列累计：哪家的哪个型号、花费、token、次数
   const text = renderUsage(report, plain);
   assert.match(text, /按型号/);
   assert.match(text, /Gemini gemini-3\.6-flash\s+\$1\.10\s+1\.2M\s+720 次\s+一般 1\.7 秒/);
-  assert.match(text, /OpenAI gpt-audio-mini-2025-12-15\s+\$0\.14\s+200K\s+90 次\s+一般 2\.6 秒/);
+  // 次数算上划词（这个型号也被选作划词的模型）
+  assert.match(text, /OpenAI gpt-audio-mini-2025-12-15\s+\$0\.14\s+200K\s+95 次\s+一般 2\.6 秒/);
+  assert.match(text, /划词翻译 5 次：花费和 token 算在里面，听写次数和回话时间不算/);
 });
 
 test("说清 token 的分项、验证 key 的也算在里面、钱是按标准价估的", () => {
