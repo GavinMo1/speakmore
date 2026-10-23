@@ -727,8 +727,8 @@ async function main() {
     });
     // "点了按钮没反应"时先看这条：位置对不对得上屏幕上画的那两个圆
     log.info("bar_capture", { regions: onScreen });
-    // 开始说话了：划词卡片收起，截取归悬浮条
-    if (captureOwner === "lookup") lookup.close("dictation");
+    // 开始说话了：划词卡片收起，截取归悬浮条（卡片刚开、还没报位置时也收）
+    if (lookup.open) lookup.close("dictation");
     captureOwner = "bar";
     helper.capture(onScreen);
   });
@@ -950,6 +950,9 @@ async function main() {
     // 升级到的做不了（离线方式下的语音翻译）就不带：这一次作废，紧跟着它自己的按下会说为什么
     const upgrade = event.to ? actionOfBinding(event.to) : null;
     const to = upgrade?.handler === "session" && featureProblem(upgrade) === null ? { to: upgrade.id } : {};
+    // 凑成的是划词（按住右⌥ 停了一下才按回车，会话门已经把按下交给了悬浮条）：悬浮条会作废这一次，截取现在就放掉。
+    // 紧跟着的划词按下同一轮就到，等悬浮条自己说不截了，划词会当成正在说话丢掉
+    if (event.event === "interrupted" && upgrade && upgrade.handler !== "session") releaseBarCapture();
     if (blocker === null) tellBar("input", { ...input, ...to });
     else if (event.event === "binding" && event.down) notify(blocker);
   }
@@ -1025,10 +1028,17 @@ async function main() {
         helper.release();
         return;
       }
+      // 正在说话（悬浮条截着）：卡片不抢截取，收起
+      if (captureOwner === "bar") {
+        lookup.close("dictation");
+        return;
+      }
       captureOwner = "lookup";
       helper.capture(regions, { outside: true });
     },
     onAct: (action) => lookup.act(action),
+    // 卡片页面崩了：这一张收起，页面重新加载，下一次划词照常出卡片
+    onGone: () => lookup.close("card_gone"),
     log,
   });
   const lookup = createLookup({

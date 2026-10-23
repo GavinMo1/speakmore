@@ -25,6 +25,7 @@ const CAPTURE_REFRESH_MS = 5 * 60_000;
  * @param {boolean} options.windows 是不是 Windows（坐标换算）
  * @param {(regions: object[] | null) => void} options.capture 让小帮手截这几块（屏幕坐标、小帮手那一套）；null 是不截了
  * @param {(action: string) => void} options.onAct 卡片上点了什么（controller.mjs 的 act）
+ * @param {() => void} options.onGone 页面崩了（开着的那一张该收起）
  * @param {{ info: Function, warn: Function, error: Function }} options.log
  */
 export function createCardWindow({
@@ -36,6 +37,7 @@ export function createCardWindow({
   windows,
   capture,
   onAct,
+  onGone,
   log,
 }) {
   const window = new BrowserWindow({
@@ -121,9 +123,12 @@ export function createCardWindow({
     if (event.sender !== window.webContents || window.isDestroyed()) return;
     window.setIgnoreMouseEvents(!on, { forward: true });
   });
+  // 页面崩了不重新加载的话，之后每次划词都等不到它报位置，卡片永远出不来，模型却照调、历史照记
   window.webContents.on("render-process-gone", (_event, details) => {
     log.error("lookup_card_gone", { reason: details.reason });
     capture(null);
+    onGone();
+    if (!window.isDestroyed()) window.webContents.reload();
   });
 
   return {

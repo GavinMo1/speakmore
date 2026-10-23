@@ -113,18 +113,7 @@ export function createLookup({
         text_length: text.length,
         ms: Math.round(performance.now() - startedAt),
       });
-      record({
-        id: lookupId,
-        kind: "lookup",
-        status: "completed",
-        refinedText: text,
-        sourceText: current.source,
-        outputLanguage: produced,
-        error: null,
-        duration: 0,
-        audioFile: null,
-        createdAt: now().toISOString(),
-      });
+      remember(current, { lookupId, text, produced });
     } catch (error) {
       if (session !== current || abort.signal.aborted) return;
       const kind = error?.kind ?? "other";
@@ -141,6 +130,29 @@ export function createLookup({
         action: KEY_PROBLEMS.has(kind) ? "keys" : "retry",
       });
       card.update(view(current));
+    }
+  }
+
+  /**
+   * 记进历史。写不进去（库忙、磁盘满）只记一条错误日志：译文已经画在卡片上了，不能因此翻成"出错、重试"，
+   * 重试还要再花一次钱
+   */
+  function remember(current, { lookupId, text, produced }) {
+    try {
+      record({
+        id: lookupId,
+        kind: "lookup",
+        status: "completed",
+        refinedText: text,
+        sourceText: current.source,
+        outputLanguage: produced,
+        error: null,
+        duration: 0,
+        audioFile: null,
+        createdAt: now().toISOString(),
+      });
+    } catch (error) {
+      log.error("lookup_record_failed", { lookup_id: lookupId, error: String(error?.message ?? error).slice(0, 300) });
     }
   }
 
@@ -188,6 +200,11 @@ export function createLookup({
         reason: picked.reason ?? null,
       });
       if (press !== presses) return;
+      // 等选区的这段时间里开始说话了（模拟复制最长要等一两秒）：卡片不出，不抢悬浮条的截取
+      if (busy()) {
+        log.info("lookup_ignored", { reason: "busy" });
+        return;
+      }
       const source = normalize(picked.text);
       if (source === "") {
         notify(msg(NO_TEXT[picked.reason] ?? (picked.text === "" ? "lookup.selectionFailed" : "lookup.noSelection")));
