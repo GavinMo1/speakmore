@@ -494,7 +494,8 @@ export function createEngine({ refresh }) {
 
     /**
      * 从别处打开到某一处：tab 是一个环节就展开到它，是 "keys" 或给了 platform 就打开密钥面板（给了平台顺带展开那一家）；
-     * section 是 "lookup" 就换到划词那一段、打开在用的那一项（划词卡片上的"配置密钥"来的）
+     * section 是 "lookup" 就换到划词那一段、打开在用的那一项（划词卡片上的"配置密钥"来的）；
+     * 别的都是语音那一段的事（识别方式、环节、密钥），上次停在划词段也换回来
      * @param {{ tab?: string, platform?: string, section?: "voice" | "lookup" }} target
      */
     show({ tab, platform, section } = {}) {
@@ -504,6 +505,7 @@ export function createEngine({ refresh }) {
         lookupSegment.openChosen();
         return;
       }
+      if (segment !== "voice") showSegment("voice");
       if (tab === "keys" || platform) {
         keys.open(platform ?? null);
         return;

@@ -27,7 +27,12 @@ const presetPicker = createPresetPicker({
   refresh: refreshSetup,
   configureKey: (platform) => engine.show({ platform }),
 });
-const modeChip = createModeChip({ open: () => navigate("models") });
+/** 去引擎页换识别方式：语音那一段的第一列（上次停在划词段也换回来） */
+function openModes() {
+  navigate("models");
+  engine.show({ section: "voice" });
+}
+const modeChip = createModeChip({ open: openModes });
 
 /** 最近一次拿到的状态：横幅、设置对话框都按它画 */
 let setup = null;
@@ -118,8 +123,8 @@ function openFix() {
   } else settings.open(target.pane);
 }
 $("banner-action").addEventListener("click", openFix);
-// 换一种识别方式：引擎页的第一列就是
-$("banner-switch").addEventListener("click", () => navigate("models"));
+// 换一种识别方式
+$("banner-switch").addEventListener("click", openModes);
 // 往下滚了，最上面那条拖窗口的地方变成玻璃
 const content = document.querySelector(".content");
 content.addEventListener("scroll", () => content.toggleAttribute("data-scrolled", content.scrollTop > 4), {

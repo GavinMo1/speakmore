@@ -565,6 +565,12 @@ export function createLookupSegment({ els, getSetup, refresh, openKeys, toast, p
     if (ui.detail && !currentGroup().items.some((item) => itemKey(item) === ui.item)) ui.detail = false;
   }
 
+  /** 详情里该放焦点的那一个：还差的那一步，没差的就是主操作，都点不动就是关闭 */
+  const detailFocusTarget = () =>
+    els.dock.querySelector(".detail-need button:not(:disabled)") ??
+    els.dock.querySelector(".detail-actions button:not(:disabled)") ??
+    els.dock.querySelector(".detail-close");
+
   /** 重画会把两列和详情整块换掉：焦点在里面的，画完放回同一个（输入框连光标一起） */
   function keepingFocus(paint) {
     const active = document.activeElement;
@@ -580,10 +586,12 @@ export function createLookupSegment({ els, getSetup, refresh, openKeys, toast, p
     if (!next && column && key)
       next = [...document.getElementById(column).children].find((el) => el.dataset.key === key);
     if (!next && name) {
-      next = [...els.dock.querySelectorAll("button")].find(
+      next = [...els.dock.querySelectorAll("button:not(:disabled)")].find(
         (el) => (el.getAttribute("aria-label") ?? el.textContent.trim()) === name,
       );
     }
+    // 同一个没了（检测中换成了状态、启用以后成了使用中、密钥删了）：退到详情里还差的那一步或主操作上，不掉回页面开头
+    if (!next && !column && ui.detail) next = detailFocusTarget();
     next?.focus({ preventScroll: true });
     if (next && selection) next.setSelectionRange(...selection);
   }
@@ -627,17 +635,15 @@ export function createLookupSegment({ els, getSetup, refresh, openKeys, toast, p
       ui.item = itemKey(spot.item);
       ui.detail = true;
       ui.form = null;
+      // 先前在这一组换着看过别的渠道也不算：卡片说缺的是在用的那一份
+      delete ui.via[spot.group.id];
       render();
       if (view.blocker(spot.group, spot.item) === "key") openKeys(view.viaOf(spot.group), { back: true });
     },
 
     /** 从密钥面板回到详情：焦点放在还差的那一步上，补齐了就放在启用上 */
     focusDetail() {
-      (
-        els.dock.querySelector(".detail-need button:not(:disabled)") ??
-        els.dock.querySelector(".detail-actions button:not(:disabled)") ??
-        els.dock.querySelector(".detail-close")
-      )?.focus({ preventScroll: true });
+      detailFocusTarget()?.focus({ preventScroll: true });
     },
   };
 }
