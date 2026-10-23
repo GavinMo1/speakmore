@@ -161,13 +161,14 @@ export async function createModelRefiner({ choice, apiKey, thinkingLevel, timeou
  * 拿一次成品；里面夹着时间戳就重来一次，用第二次的结果。
  * 不直接把时间戳删掉，是因为他也可能真的说了钟点：重来一遍还有，就当是他说的。
  * 原版 2853 条成品里没有一条带这种写法，所以多出来的这一次请求几乎只落在写坏的成品上。
+ * 看的是他说的那段（翻译看原文）：这个统计是听写的，译文里 3:00 PM、15:30 是目标语言写钟点的正常样子。
  *
- * @param {() => Promise<{ text: string }>} generateOnce 拿一次任务收好的成品
+ * @param {() => Promise<{ text: string, source?: string | null }>} generateOnce 拿一次任务收好的成品
  * @param {{ warn: (event: string, fields: object) => void }} log
  */
 export async function generateClean(generateOnce, log) {
   const first = await generateOnce();
-  if (!STRAY_TIMESTAMP.test(first.text)) return first;
+  if (!STRAY_TIMESTAMP.test(first.source ?? first.text)) return first;
   log.warn("refine_retry", { reason: "成品里夹着时间戳" });
   return generateOnce();
 }

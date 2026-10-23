@@ -39,6 +39,26 @@ test("重来一次还有钟点，就当是他真说了，不再重试", async ()
   assert.equal(calls.count, 2);
 });
 
+test("语音翻译看原文那段：译文里写的 3:00 PM 是目标语言写钟点的样子，不算；原文里夹着时间戳才重来", async () => {
+  const clock = { text: "Let us meet tomorrow at 3:00 PM.", source: "明天下午三点开会" };
+  const calls = { count: 0 };
+  const quiet = { warn() {} };
+  const once = async () => {
+    calls.count++;
+    return clock;
+  };
+  assert.equal(await generateClean(once, quiet), clock);
+  assert.equal(calls.count, 1);
+
+  const outputs = [
+    { text: "Full speed ahead, migrate everything.", source: "全面开干、 00:30 全面迁移" },
+    { text: "Full speed ahead, migrate everything.", source: "全面开干、全面迁移" },
+  ];
+  let next = 0;
+  assert.equal((await generateClean(async () => outputs[next++], quiet)).source, "全面开干、全面迁移");
+  assert.equal(next, 2);
+});
+
 // ---------- 共用的整理流程：各家的适配器只管"发请求、拿原文"，其余在这里 ----------
 
 /** 适配器带回来的用量（openai.mjs 的 usageOf 那个样子） */
