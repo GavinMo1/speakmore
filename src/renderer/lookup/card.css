@@ -3,7 +3,8 @@
    按钮的外形照共用的胶囊（window.css）；字号、间距只用 tokens.css 里的几档 */
 
 :root {
-  --pad: 24px;
+  /* 要装得下下面的阴影（往下伸 12 + 28 - 10 = 30px），不然阴影被窗口边切成一圈硬边（10-23 在 Windows 上看到的） */
+  --pad: 32px;
 }
 
 html,
@@ -33,7 +34,7 @@ body {
   border-radius: var(--radius-card);
   box-shadow:
     var(--edge),
-    0 18px 48px -18px oklch(0 0 0 / 0.38);
+    0 12px 28px -10px oklch(0 0 0 / 0.34);
   transition: opacity var(--dur-base) var(--ease-out);
 }
 

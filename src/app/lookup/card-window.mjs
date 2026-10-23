@@ -7,8 +7,8 @@ import { placeCard } from "./place.mjs";
 // 块外的按下另报 outside（点别处收起）。
 // 坐标：Electron 用 DIP；小帮手在 Mac 上用点（和 DIP 一样），在 Windows 上用物理像素，进出都换算。
 
-/** 卡片四周给阴影留的地方（页面 body 的内边距，card.css 的 --pad 同一个数） */
-const PAD = 24;
+/** 卡片四周给阴影留的地方（页面 body 的内边距，card.css 的 --pad 同一个数）：留小了阴影被切成硬边 */
+const PAD = 32;
 /** 卡片的宽（card.css 的 .card 同一个数）；窗口还没量过时先按最高的开，免得页面排版被挤 */
 const CARD_WIDTH = 384;
 const INITIAL_HEIGHT = 640;
