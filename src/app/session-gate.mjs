@@ -67,6 +67,9 @@ export function createSessionGate({ deliver, holdMs = HOLD_MS, timers = { set: s
 
     /** 小帮手报的一个绑定事件 */
     accept(event) {
+      // 压着的时候按了截着的取消键（说话时、卡片开着时的 esc）：匹配器不算它打断，但人是要取消，压着的那一下作废。
+      // 不然取消先到、松开时才交出按下，悬浮条刚取消又开始一段新的
+      if (held && event.event === "binding" && event.down && actionOfBinding(event.id)?.when === "capturing") drop();
       if (held && event.id === held.event.id) {
         // 被打断：凑成了别的组合（划词、语音翻译），或者是别的组合键。悬浮条没看见按下，打断也不用给它
         if (event.event === "interrupted") drop();

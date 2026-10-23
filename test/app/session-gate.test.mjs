@@ -125,6 +125,16 @@ test("不用压的绑定原样过；没绑划词时语音输入也不压", () =>
   assert.deepEqual(plain.delivered, [down("dictate#0")]);
 });
 
+test("压着的时候按了截着的取消键：取消照常交出去，压着的那一下作废，松开时不再开始一段新的", () => {
+  const { gate, delivered, timers } = gateWith();
+  gate.accept(down("dictate#0"));
+  gate.accept(down("cancel#0"));
+  assert.equal(timers.pending, null);
+  gate.accept(up("cancel#0"));
+  gate.accept(up("dictate#0"));
+  assert.deepEqual(delivered, [down("cancel#0"), up("cancel#0"), up("dictate#0")]);
+});
+
 test("换热键、换小帮手：压着的那一下丢掉，计时器收掉", () => {
   const { gate, delivered, timers } = gateWith();
   gate.accept(down("dictate#0"));

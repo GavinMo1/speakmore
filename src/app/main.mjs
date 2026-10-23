@@ -864,7 +864,9 @@ async function main() {
         break;
       case "binding":
       case "interrupted":
-        sessionGate.accept(event);
+        // 引导页正在测快捷键：不压，按下就亮。压着的话点按右⌥ 的按下和松开同一刻送到，键帽看不出变色
+        if (onboardingTestsHotkey()) onBindingEvent(event);
+        else sessionGate.accept(event);
         break;
       case "recording":
         // 录键模式里按住的键（设置页、引导页在录）：只交给录键那边，不进日志
@@ -882,7 +884,9 @@ async function main() {
         helperState = "stopped";
         helperPermissions = null;
         recording.helperGone();
-        // 没有小帮手就截不住卡片上的点击，也贴不回去：卡片收起
+        // 压着的那一下不会再有松开、打断了：丢掉，不然 250ms 后照样交给悬浮条
+        sessionGate.reset();
+        // 没有小帮手就截不住卡片上的点击：卡片收起
         lookup.close("helper");
         captureOwner = null;
         setBarControls(false);
@@ -925,18 +929,17 @@ async function main() {
     },
   };
 
+  /**
+   * 首次引导正在测快捷键、人也正看着它：听写的按下松开只送到引导窗口。
+   * 切到别的应用了就照常听写，不然热键在哪都按不出来，还没有任何提示；
+   * 悬浮条在屏幕上（切出去开了一段听写又切回来）时也给条，不然这一段停不下来
+   */
+  const onboardingTestsHotkey = () => hotkeyToOnboarding && onboardingWindow?.isFocused() && !bar.isVisible();
+
   /** 录音会话的动作（语音输入、语音翻译）：交给悬浮条开始、结束、升级 */
   function onSessionKey({ event, action, fields, input }) {
-    // 首次引导正在测快捷键、人也正看着它：听写的按下松开只送到引导窗口。
-    // 切到别的应用了就照常听写，不然热键在哪都按不出来，还没有任何提示；
-    // 悬浮条在屏幕上（切出去开了一段听写又切回来）时也给条，不然这一段停不下来
     // 被打断（按着时碰了别的键）以后小帮手不再报松开：也当松开送过去，不然大键帽一直亮着
-    if (
-      (event.event === "binding" || event.event === "interrupted") &&
-      hotkeyToOnboarding &&
-      onboardingWindow?.isFocused() &&
-      !bar.isVisible()
-    ) {
+    if ((event.event === "binding" || event.event === "interrupted") && onboardingTestsHotkey()) {
       log.info("key_event", { ...fields, to: "onboarding" });
       onboardingWindow.webContents.send("onboarding:hotkey", { down: event.event === "binding" && event.down });
       return;
