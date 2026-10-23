@@ -41,6 +41,7 @@ metadata:
   - 10-23 他说 SPEAK 那步"完全 OK"。
   - 封面（10-23，提交 02399a7，待他看）：他要横竖两张，要有 logo、产品名、三大功能、背景，审美要高，不承接前两支（"这一次是彻底、很大很大的重构"）。做法是暗场夜色底，开场的粒子漩涡定格成一圈环绕 speakmore 的光环，图标、小写品牌字、版本号居中，下面三项功能各带自己的霓虹键帽。环要几乎放平，斜着放总有一头压到字。文件在 kineto 的 out/speakmore-promo-3/（-cover-16x9.png、-cover-3x4.png）。
   - **10-23 定稿**：他说"可以了"，merge+push。快进合并进 kineto main 并推送到 02399a7，分支已删；推之前扫过没有本机信息、没有 AI 署名。成片和横竖封面在 kineto 的 out/speakmore-promo-3/（speakmore-promo-3.mp4，115.6 秒）。
+  - 投稿文案（10-23）：五个平台（抖音、小红书、视频号、B 站、X）的标题、正文、话题，做成本机 HTML，不传 claude.ai；三支的都在 kineto 的 out/<视频 id>/publish.html。前两支原来放在会话临时目录、已被清掉，是从 ~/.claude/file-history 里找回来的。规矩：抖音只能 5 个话题，要挑量大、相关的大词；B 站 10 个标签，大词和精准词各一半；字数按各平台算法实时统计。
   - 临时脚本（抽帧拼图 sheet.py、亮度和静止 luma.py）在 kineto 的 out/speakmore-promo-3/work/，`out/` 不进 git。新写的 luma.py 比原来的严，Modes 段和片尾图标段也会报静止，上一版跑出来一样，不算新问题。
 - "terminal 就是 terminal"：普通标签不配中文解释。
 - 砍废话：像"外文，无处不在"这种铺垫句直接删。
