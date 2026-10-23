@@ -1,5 +1,5 @@
 // 记账：每一次回了话的模型调用记一笔（哪次听写、用的哪个型号、多少 token、多少钱、等了多久）。
-// 两条链路共用：原生链路记听录音的那一次，本地转写链路记润色的那一次。
+// 调模型的几处共用：直出记听录音的那一次，混合记整理的那一次，云端转写记转文字的那一次，划词记翻译的那一次（lookup）。
 // 回了话但用不了的（被截断、被拦下）也收了钱，照记。没回话的拿不到用量、记不了：连不上的本来就不收钱；
 // 发出去了却等不到回话（超时、断开）的对方可能照样收了钱，只记一条警告。
 
@@ -7,7 +7,7 @@
  * @param {object} options
  * @param {{ id: string }} options.provider 是哪一家
  * @param {{ info: Function, warn: Function, error: Function }} options.log
- * @param {(record: object) => void} options.onCall 记账：{ purpose: "dictation" | "check" | "cache", audioId, provider,
+ * @param {(record: object) => void} options.onCall 记账：{ purpose: "dictation" | "lookup" | "check" | "cache", audioId, provider,
  *   ...适配器带回的用量, latencyMs, createdAt }。它出错不影响这次听写
  * @returns {(purpose: string, audioId: string | null, call: () => Promise<object | null>) => Promise<object | null>}
  *   调一次适配器，回了话就记一笔，原样交回它的回话
