@@ -77,6 +77,7 @@ import { createKeyStore } from "./keys/key-store.mjs";
 import { createCardWindow } from "./lookup/card-window.mjs";
 import { createLookup } from "./lookup/controller.mjs";
 import { createLookupEngine } from "./lookup/engine.mjs";
+import { createLookupSetup } from "./lookup/setup.mjs";
 import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
 import { createModeSwitch } from "./modes.mjs";
 import { MOVE_TO, startMoveWindow } from "./move-window.mjs";
@@ -997,6 +998,16 @@ async function main() {
       historyChanged();
     },
   });
+  // 主窗口改划词的设置：设置里的译成、引擎页"划词"那一段（换模型、检测、配自定义服务）
+  const lookupSetup = createLookupSetup({
+    engine: lookupEngine,
+    readSettings: () => resolveSettings({ file: PATHS.settingsFile, env: process.env }),
+    save: (name, value) => saveSetting(PATHS.settingsFile, name, value),
+    customKeys: lookupCustomKeys,
+    customKeyEnv: LOOKUP_CUSTOM_KEY_ENV,
+    env: process.env,
+    log,
+  });
   const card = createCardWindow({
     BrowserWindow,
     screen,
@@ -1228,6 +1239,8 @@ async function main() {
       barHint: currentBarHint(),
       // 语音翻译译成哪几种（第一种是默认）、能选哪些、最多几种
       translate: { to: currentTranslateTo(), choices: LANGUAGES.map(({ id }) => id), max: MAX_TRANSLATE_TARGETS },
+      // 划词翻译：译成哪一种、能选哪些，交给哪个模型、自定义服务的地址参数和 key 在哪（货架在 plaza.shelves.lookup）
+      lookup: { ...lookupSetup.describe(), choices: LANGUAGES.map(({ id }) => id) },
       language: { value: languageSetting, locale },
       // 开机启动登记的是"这个应用"；从终端启动时登记上去的会是 Electron 本身，所以只在装成应用后开放
       openAtLogin: {
@@ -1518,6 +1531,16 @@ async function main() {
     const variable = overridingEnv("translate.to", process.env);
     return variable === null ? {} : { note: msg("notes.envRemove", { variable }) };
   });
+  // 划词翻译的设置（app/lookup/setup.mjs）：改了都让窗口重读一遍
+  const lookupChanged = (result) => {
+    if (result.ok) setupChanged();
+    return result;
+  };
+  handle("setup:set-lookup-to", (_event, wanted) => lookupChanged(lookupSetup.setTo(wanted)));
+  handle("setup:set-lookup-model", (_event, choice) => lookupChanged(lookupSetup.use(choice)));
+  handle("setup:check-lookup", (_event, changes) => lookupSetup.check(changes));
+  handle("setup:save-lookup-custom", async (_event, form) => lookupChanged(await lookupSetup.saveCustom(form ?? {})));
+  handle("setup:forget-lookup-custom-key", () => lookupChanged(lookupSetup.forgetCustomKey()));
   handle("setup:set-language", (_event, wanted) => {
     saveSetting(PATHS.settingsFile, "language", wanted);
     // 是在设置的"通用"那一页换的：主窗口换好语言后回到这一页

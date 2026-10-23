@@ -51,8 +51,12 @@ export function createLookupEngine({
     }
   }
 
-  function translatorFor(setup) {
-    const key = keyFor(setup);
+  /**
+   * @param {object} setup lookupOf 的样子
+   * @param {string} [candidate] 自定义服务还没存的那把 key（引擎页"划词"那一段先验再存）；选的不是自定义服务时不算数
+   */
+  function translatorFor(setup, candidate) {
+    const key = candidate && setup.choice.vendor === "custom" ? { apiKey: candidate, source: "typed" } : keyFor(setup);
     if (!key) throw new LookupSetupError(msg("lookup.noKey", { provider: nameOf(setup) }), "missing");
     if (setup.choice.vendor === "custom" && !setup.customUrl) {
       throw new LookupSetupError(msg("lookup.customUrlMissing"), "setup");
@@ -93,13 +97,14 @@ export function createLookupEngine({
     /**
      * 引擎页"划词"那一段的检查：按设置（再换上 changes 那几项）发一个最小的请求，不翻译
      * @param {Record<string, string>} [changes] 设置名 → 值，比如还没存的自定义服务地址
+     * @param {{ apiKey?: string }} [options] apiKey：自定义服务还没存的那把 key
      * @returns {Promise<{ ok: true, ms: number } | { ok: false, cause: string, problem: object | string }>}
      */
-    async check(changes = {}) {
+    async check(changes = {}, { apiKey } = {}) {
       const startedAt = performance.now();
       try {
         const setup = lookupOf(patchSettings(readSettings(), changes));
-        await (await translatorFor(setup)).warmUp();
+        await (await translatorFor(setup, apiKey)).warmUp();
         return { ok: true, ms: Math.round(performance.now() - startedAt) };
       } catch (error) {
         log.warn("lookup_check_failed", { cause: error?.kind ?? "other", error: String(error?.message ?? error) });

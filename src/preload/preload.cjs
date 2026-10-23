@@ -110,6 +110,11 @@ contextBridge.exposeInMainWorld("speakmore", {
   setBarHint: (value) => ipcRenderer.invoke("setup:set-bar-hint", value),
   // 语音翻译译成哪几种（语言 id 的列表，第一种是默认）
   setTranslateTo: (languages) => ipcRenderer.invoke("setup:set-translate-to", languages),
+  setLookupTo: (language) => ipcRenderer.invoke("setup:set-lookup-to", language),
+  setLookupModel: (choice) => ipcRenderer.invoke("setup:set-lookup-model", choice),
+  checkLookup: (changes) => ipcRenderer.invoke("setup:check-lookup", changes),
+  saveLookupCustom: (form) => ipcRenderer.invoke("setup:save-lookup-custom", form),
+  forgetLookupCustomKey: () => ipcRenderer.invoke("setup:forget-lookup-custom-key"),
 
   // 首次引导
   captureHotkey: (capturing) => ipcRenderer.send("onboarding:capture-hotkey", capturing),

@@ -12,6 +12,7 @@ import {
   parseChatChoice,
   parseCustomParams,
 } from "../server/chat/vendors.mjs";
+import { DEFAULT_LOOKUP } from "../server/lookup/models.mjs";
 import { DEFAULT_MODE, DEFAULT_POLISH, MODES, parseMode } from "../server/modes.mjs";
 import {
   DEFAULT_MODEL_CHOICE,
@@ -43,8 +44,6 @@ export const LOCAL_MODEL_MEMORY = Object.freeze(["resident", "1m", "5m", "10m", 
 /** 悬浮条上方的操作提示（"再按一下 右⌥ 完成 · esc 取消"）显示不显示：熟练了的人嫌它一直挂着（GitHub issue #3） */
 export const BAR_HINTS = Object.freeze(["on", "off"]);
 const THINKING_LEVELS = findProvider("gemini").thinkingLevels;
-/** 划词翻译出厂交给谁：只写厂商，用它的默认模型（DeepSeek V4.1 Flash） */
-const DEFAULT_LOOKUP = "deepseek";
 /** 语音翻译最多列几种目标语言：悬浮条上的语言选单一种一行，再多放不下，也挑不过来 */
 export const MAX_TRANSLATE_TARGETS = 6;
 const LANGUAGES = [SYSTEM_LOCALE, ...LOCALES.map(({ id }) => id)];
@@ -210,7 +209,7 @@ export const SETTINGS = {
     label: (value) => alternatives(JSON.parse(value).map(languageName)),
   },
   // 划词翻译自己的几项，和语音那边毫不相干（他定的）：译成哪种、交给哪个模型；选自定义服务时，地址和参数也是它自己的，
-  // 不和整理那一步的 customUrl、customParams 共用，key 也另存一把（app/lookup.mjs）
+  // 不和整理那一步的 customUrl、customParams 共用，key 也另存一把（app/lookup/engine.mjs）
   "lookup.to": {
     // 一种：卡片上能临时换成别的（只管那一次）
     env: "SPEAKMORE_LOOKUP_TO",
@@ -221,7 +220,6 @@ export const SETTINGS = {
   },
   "lookup.model": {
     env: "SPEAKMORE_LOOKUP_MODEL",
-    // DeepSeek V4.1 Flash：关掉思考一两句话一秒上下（10-22 实测），价钱低
     default: formatChatChoice(parseChatChoice(DEFAULT_LOOKUP)),
     choices: null,
     // 写法同 polish：厂商/模型，只写厂商用它的默认模型，自定义服务写 custom/模型名
@@ -477,7 +475,7 @@ const ROUTES = {
 };
 
 /**
- * 划词翻译按现在的设置交给谁、译成什么（app/lookup.mjs）：choice 是 { vendor, model }，customUrl、customParams 是划词自己的
+ * 划词翻译按现在的设置交给谁、译成什么（app/lookup/engine.mjs）：choice 是 { vendor, model }，customUrl、customParams 是划词自己的
  * 自定义服务（没填是 null），to 是语言 id
  * @param {ReturnType<typeof resolveSettings>} settings
  */

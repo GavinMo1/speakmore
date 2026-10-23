@@ -113,3 +113,17 @@ test("检查：按设置（再换上要改的几项）发一个最小的请求�
   const missing = await engineWith({ keys: {} }).engine.check();
   assert.equal(missing.cause, "missing");
 });
+
+test("检查自定义服务时可以带一把还没存的 key：拿它验，不用存着的", async () => {
+  const { engine, built } = engineWith({ custom: "sk-old", keys: {} });
+  const changes = { "lookup.model": "custom/qwen3:8b", "lookup.customUrl": "http://127.0.0.1:11434/v1" };
+  assert.equal((await engine.check(changes, { apiKey: "sk-new" })).ok, true);
+  assert.equal(built.at(-1).apiKey, "sk-new");
+  // 没存过 key、也没带：说缺 key
+  const fresh = engineWith({ keys: {} });
+  assert.equal((await fresh.engine.check(changes)).cause, "missing");
+  // 选的不是自定义服务时带的 key 不算数：清单里的厂商用它自己那把（和语音那边同一把）
+  const vendor = engineWith();
+  await vendor.engine.check({}, { apiKey: "sk-new" });
+  assert.equal(vendor.built.at(-1).apiKey, "sk-deepseek");
+});
