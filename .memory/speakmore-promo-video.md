@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 6b5e9ce5-00ff-48cc-99ba-a927306fc7c3
-  modified: 2026-10-23T08:56:48.537Z
+  modified: 2026-10-23T10:31:57.355Z
 ---
 
 **第三支（10-23 定下要做，还没开始）**：给 0.16、0.17 的三位一体升级配（语音输入、语音翻译、划词翻译，口号"口述成文，划词即译"，新引导、苹果风格按钮）。他原话："这么牛逼的升级必须配一个巨牛逼的宣传片"，要先好好探讨方向再动手。10-23 他给了参考片（Gemini 发布片），风格纲领在 [[speakmore-promo3-style]]，动手前先读。
@@ -33,6 +33,11 @@ metadata:
     - logo 外面不要套光圈（10-23 他点名开场和落版图标外那圈朱砂光环）；橙色强调词要和同行的字对齐、整行居中（滚轮零件曾把落定词抬高、整行偏左）。
   - 做法：配乐在语音输入后、划词后各接原曲连着的 24 拍（不再跳剪），新增 Setup 段；第二支的 Windows 桌面、图标表、Logo/Tile 上提到 kineto 的 engine/speakmore（adab81b、cd50dfa）。
   - 旧版"识别方式"截图（appModePicker）是老界面，没用。
+- **第四轮（10-23 晚，提交 4f2e44c、cea1ab3、3393148，未推送）**：https://kineto.zephyrxiang.com/renders/speakmore-promo-3/speakmore-promo-3-e9fae9962c29.mp4 （114 秒）
+  - 他的要求：开场只有三个词"太单调、太空"，每个词下面模拟一小段 App 用起来的样子（两三秒、节奏快、比中间章节简单）：SPEAK 出悬浮条和一次输入；TRANSLATE 只演语音翻译，说中文、过程用字幕、落成英文；SELECT 在终端里划选（"跟别人不一样"）。
+  - 他的要求：字幕里的 APP 一律大写（"Any APP"、"One APP"）；落版的官网用首屏（Hero），不用最底下的下载区。
+  - 做法：开场从原曲第 8 拍起放、加长一小节（32 → 36 拍），之后各段整体 +4 拍，片长 285 拍；砸下的拍现在是 b28、b124、b220。三段演示在 components/Glimpse.tsx，成品是 App 真实输出。
+  - 临时脚本（抽帧拼图 sheet.py、亮度和静止 luma.py）在 kineto 的 out/speakmore-promo-3/work/，`out/` 不进 git。新写的 luma.py 比原来的严，Modes 段和片尾图标段也会报静止，上一版跑出来一样，不算新问题。
 - "terminal 就是 terminal"：普通标签不配中文解释。
 - 砍废话：像"外文，无处不在"这种铺垫句直接删。
 
