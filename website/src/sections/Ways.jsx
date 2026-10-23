@@ -5,7 +5,7 @@ import { useEnterOnce } from "../lib/usePageMotion.js";
 
 /**
  * 每种识别方式一路经过的几站：图标，和这一站在本机（device）还是云端（cloud）。和文案里 ways.items[].steps 一一对应。
- * 本机转写那一站用印章色；离开本机的那一站和那一跳用朱砂色：一眼看出什么出了本机、数据隐私一道朱砂都没有
+ * 本机转写那一站用印章色；离开本机的那一站和那一跳用朱砂色：一眼看出什么出了本机、离线一道朱砂都没有
  */
 const ROUTES = {
   native: [
@@ -40,7 +40,7 @@ export function Ways() {
   const { m } = useI18n();
   return (
     <Section id="ways" tone="surface" labelledBy="ways-title">
-      <Heading id="ways-title" title={m.ways.title} lead={m.ways.lead} />
+      <Heading id="ways-title" title={m.ways.title} />
 
       <ol className="mt-[clamp(3.5rem,8vw,6rem)] grid">
         {m.ways.items.map((way) => (

@@ -4,7 +4,7 @@ import { useI18n } from "../i18n/index.jsx";
 import { Icon } from "../icons/Icon.jsx";
 
 /**
- * 隐私：数据隐私方式的四样（不上传、无需账号、密钥加密、记录本机）排一行，不套卡片、之间一道细线；
+ * 隐私：离线方式的四样（不上传、无需账号、密钥加密、记录本机）排一行，不套卡片、之间一道细线；
  * 下面是国内源：一句话加下载速度对比图（README 的那张，跟着系统深浅换）
  */
 export function Privacy() {
@@ -14,7 +14,7 @@ export function Privacy() {
   const dark = readme("download-speed-dark", locale);
   return (
     <Section id="privacy" tone="surface" labelledBy="privacy-title">
-      <Heading id="privacy-title" title={text.title} lead={text.lead} />
+      <Heading id="privacy-title" title={text.title} />
 
       <ul className="reveal mt-[clamp(3.5rem,8vw,6rem)] grid grid-cols-2 gap-y-12 lg:grid-cols-4 lg:divide-x lg:divide-line">
         {text.items.map((item) => (

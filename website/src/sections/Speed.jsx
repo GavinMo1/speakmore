@@ -19,7 +19,7 @@ export function Speed() {
   const stats = useEnterOnce("-8%");
   return (
     <Section id="speed" tone="ink" labelledBy="speed-title">
-      <Heading id="speed-title" title={text.title} lead={text.lead} />
+      <Heading id="speed-title" title={text.title} />
 
       <div className="reveal mt-[clamp(3rem,7vw,5rem)] grid gap-x-16 gap-y-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center">
         <dl ref={headline.ref} data-roll={headline.stage}>

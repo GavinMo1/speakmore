@@ -4,11 +4,12 @@
 
 export default {
   meta: {
-    title: "SpeakMore — Voice dictation for Mac and Windows",
+    title: "SpeakMore — Speak it written. Select to translate.",
     description:
-      "Press a key, speak, and polished text appears where you type. Free and open source. Your model, your mode, your cost.",
+      "Voice input, voice translation and selection translation, each one hotkey away. Free and open source for Mac and Windows. Your model, your mode, your cost.",
   },
   nav: {
+    trio: "Features",
     ways: "Modes",
     speed: "Speed",
     models: "Models",
@@ -19,15 +20,29 @@ export default {
     home: "SpeakMore home",
   },
   hero: {
-    title: "Speak more.\nType less.",
-    lead: "Voice dictation for Mac and Windows.\nYour model, your mode, your cost.",
+    title: "Speak it written. Select to translate.",
+    lead: "Free, open-source voice input and translation for Mac and Windows",
     shotAlt:
-      "SpeakMore's home window: words, time saved, pace, dictation time and a daily heatmap, with the active mode at the top right",
+      "SpeakMore's home window: the hotkeys of the three features, words, time saved, pace and a daily heatmap, with the active mode at the top right",
     barAlt: "The floating bar during dictation: cancel, a live waveform, done",
+  },
+  // How keys are written: the right-hand key is named differently on Mac and Windows; shown for the visitor's system
+  keys: { alt: { mac: "Right ⌥", windows: "Right Alt" }, space: "Space", enter: "Return" },
+  trio: {
+    label: "Three features",
+    items: [
+      { id: "demo", chord: ["alt"], name: "Voice input", text: "Dictate; clean text at the cursor" },
+      {
+        id: "translate",
+        chord: ["alt", "space"],
+        name: "Voice translation",
+        text: "Speak one language, write another",
+      },
+      { id: "lookup", chord: ["alt", "enter"], name: "Selection translation", text: "Select text; read it below" },
+    ],
   },
   demo: {
     title: "Speak naturally.\nRead polished text.",
-    lead: "Press a key to start and again to stop. Filler words, repetitions and self-corrections are removed. Enumerations become lists.",
     said: "Spoken",
     written: "Written",
     examples: [
@@ -44,9 +59,57 @@ export default {
       },
     ],
   },
+  // Voice translation demo: replying to a colleague in a group chat. Speech and translation are real app output (Hybrid mode, DeepSeek V4.1 Flash)
+  translate: {
+    title: "Speak one language.\nSend another.",
+    chat: {
+      contact: "Chen",
+      incoming: "这周能把修改后的时间表发我吗？",
+      said: "~~Um, ~~sure, I'll send you the~~, uh, the~~ revised timeline before Friday. Let me know if anything comes up.",
+      written: "好的，我会在周五之前把修订后的时间表发给你。如果有什么问题，随时告诉我。",
+      saidLabel: "Spoken · English",
+      chip: "Chinese",
+      placeholder: "Message",
+      alt: "In a group chat, Chen asks in Chinese about the timeline; after a reply spoken in English, the Chinese translation is written into the text field",
+    },
+    points: [
+      { title: "16 target languages", text: "Set several in Settings; switch on the voice bar while speaking." },
+      {
+        title: "Cleaned up, then translated",
+        text: "Fillers and self-corrections stay out; the original is kept in history.",
+      },
+      { title: "1.3 s to translate", text: "Median model time in Hybrid mode; 2.6 s in Direct." },
+    ],
+  },
+  // Selection translation: three real screenshots (the README set, taken on a Mac; name is the docs/media.json name);
+  // each language uses its own. The first is shown large, the other two side by side
+  lookup: {
+    title: "Web, PDF, terminal.\nSelect to translate.",
+    shots: [
+      {
+        name: "lookup-web",
+        caption: "Web page",
+        alt: "A paragraph selected on a Chinese web page, translated into English in a card below the selection",
+      },
+      {
+        name: "lookup-terminal",
+        caption: "Terminal",
+        alt: "Chinese help text selected in a terminal, translated into English in a card",
+      },
+      {
+        name: "lookup-app",
+        caption: "Notes",
+        alt: "Chinese text selected in a notes app, translated into English in a card",
+      },
+    ],
+    points: [
+      { title: "No plug-ins", text: "Works in any app." },
+      { title: "Never takes focus", text: "Copy, change the language or pin the card." },
+      { title: "About 0.9 s", text: "With the default DeepSeek V4.1 Flash." },
+    ],
+  },
   models: {
     title: "Leading models.\nAny you like.",
-    lead: "Pick native, transcription and polish models separately. Any OpenAI-compatible service works too.",
     loopLabel: "Supported model providers",
     vendors: {
       gemini: "Google Gemini",
@@ -61,37 +124,36 @@ export default {
       custom: "Custom service",
     },
     points: [
-      { title: "Your own keys", text: "Encrypted on this computer. Change them anytime." },
+      { title: "Your own keys", text: "Encrypted per platform on this computer, shared by all three features." },
       { title: "Measured, not guessed", text: "Benchmarked models show their scores." },
-      { title: "Switch instantly", text: "No restart needed." },
+      { title: "A model for selection", text: "Selection translation takes its own text model, independent of voice." },
     ],
-    shotAlt: "The Engine page: the Polish role expanded to DeepSeek, with channels, prices and a check in the details",
+    shotAlt: "The Engine page: the Refine step expanded to DeepSeek, with channels, prices and a check in the details",
   },
   ways: {
     title: "Three modes.\nSwitch anytime.",
-    lead: "Switch on the Engine page. Each mode keeps its own models.",
     lanes: { cloud: "Cloud", device: "Device", offline: "Offline" },
     items: [
       {
         id: "native",
-        name: "Native",
-        text: "Audio goes straight to the model. One pass.",
+        name: "Direct",
+        text: "Audio goes straight to the audio model. One pass.",
         facts: ["Uploads audio", "Needs an API key"],
         steps: ["Audio", "Model", "Text"],
         carry: "Audio",
       },
       {
         id: "local",
-        name: "Transcribe + Polish",
-        text: "Transcribed on device, polished by any model.",
+        name: "Hybrid",
+        text: "Transcribed on device, refined or translated by any model.",
         facts: ["Uploads text only", "Needs an API key"],
-        steps: ["Audio", "On device", "Polish", "Text"],
+        steps: ["Audio", "On device", "Refine", "Text"],
         carry: "Text",
       },
       {
         id: "private",
-        name: "Private",
-        text: "Fully on device. Offline.",
+        name: "Offline",
+        text: "Fully on device, no network. For voice input.",
         facts: ["Uploads nothing", "No API key"],
         steps: ["Audio", "On device", "Text"],
       },
@@ -99,7 +161,6 @@ export default {
   },
   speed: {
     title: "Fast.\nAnd light.",
-    lead: "Runs on processors and graphics cards. Uses the GPU automatically when there is one.",
     headline: {
       label: "Mainstream hardware",
       value: "2",
@@ -145,9 +206,8 @@ export default {
   },
   privacy: {
     title: "Your data.\nOn your computer.",
-    lead: "In Private mode, audio and text never leave this computer.",
     items: [
-      { icon: "offline", title: "No uploads", text: "Transcribed on device" },
+      { icon: "offline", title: "No uploads", text: "Voice input, on device" },
       { icon: "account", title: "No account", text: "Open and start" },
       { icon: "key", title: "Encrypted keys", text: "Protected by the system" },
       { icon: "history", title: "Local history", text: "Stays on this computer" },
@@ -160,22 +220,19 @@ export default {
   },
   cost: {
     title: "Free app. No subscription.",
-    text: "Pay model providers directly, only for what you use.",
+    text: "Pay model providers directly, only for what you use; about $0.00012 per selection translation.",
     per: "/ month",
-    paid: { name: "Transcribe + Polish", note: "100 dictations a day" },
-    free: { name: "Private", note: "Download the model and run AI on your own computer" },
+    paid: { name: "Hybrid", note: "100 dictations a day" },
+    free: { name: "Offline", note: "Download the model and run AI on your own computer" },
   },
   setup: {
-    title: "Three minutes.\nAll set.",
-    lead: "Pick a mode, prepare a model, grant access, say a line. Every step can be skipped.",
+    title: "Onboarding.\nFour steps.",
     steps: [
-      "Pick a mode",
-      "Prepare model and key",
+      "See the three features",
+      "Check the hotkeys",
       "Grant access",
-      "Test the microphone",
-      "Test the shortcut",
-      "Say a line",
-      "Start",
+      "Open Engine",
+      "A recommended setup in one click",
     ],
     alt: "Setup step {n}: {step}",
     previous: "Previous step",
@@ -187,13 +244,12 @@ export default {
       { icon: "translate", title: "English and Chinese", text: "Follows the system language" },
       { icon: "palette", title: "Three themes", text: "Light and dark, automatic" },
       { icon: "dictionary", title: "Dictionary", text: "Names and terms, spelled as listed" },
-      { icon: "history", title: "History and spend", text: "Kept locally, always at hand" },
+      { icon: "history", title: "History and spend", text: "All three features, in one place" },
       { icon: "erase", title: "Clean uninstall", text: "One folder, removed in one command" },
     ],
   },
   developers: {
     title: "Command line.\nOn par with the app.",
-    lead: "Open source under MIT. Develop the Windows version remotely from a Mac.",
     points: [
       {
         title: "Full command line",
@@ -204,7 +260,10 @@ export default {
         title: "Cross-platform development",
         text: "Sync to Windows over SSH, then test, restart and capture the screen remotely.",
       },
-      { title: "Plugin architecture", text: "Every provider implements one interface. Over 1,000 unit tests." },
+      {
+        title: "Plugin architecture",
+        text: "Every provider implements one interface; the three features stay independent. 1,500 unit tests.",
+      },
     ],
     source: "View source on GitHub",
     terminal: { label: "Terminal demo", tabs: { cli: "Command line", windows: "Windows development" } },
@@ -214,15 +273,19 @@ export default {
           comment: "Switch modes, effective immediately",
           command: "speakmore mode private",
           output: [
-            "Switched to private mode: qwen3-asr-0.6b-q8 on this Mac; no polishing, nothing uploaded.",
+            "Switched to private mode: qwen3-asr-0.6b-q8 on this Mac; no refining, nothing uploaded.",
             "Switched, no restart needed.",
           ],
         },
-        { comment: "Change the theme", command: "speakmore theme indigo", output: ["Theme set to Indigo (indigo)."] },
+        {
+          comment: "Change the theme",
+          command: "speakmore theme indigo",
+          output: ["Theme set to Indigo (indigo).", "Applied, no restart needed."],
+        },
         {
           comment: "Status as JSON",
           command: "speakmore status --json",
-          output: ['{"running":true,"settings":{"mode":{"value":"private",…},…}}'],
+          output: ['{"running":true,"status":{…},"settings":{"mode":{"value":"private",…},…},…}'],
         },
       ],
       windows: [

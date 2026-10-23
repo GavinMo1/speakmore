@@ -13,7 +13,7 @@ export function Developers() {
   const text = m.developers;
   return (
     <Section id="developers" tone="surface" labelledBy="developers-title">
-      <Heading id="developers-title" title={text.title} lead={text.lead} />
+      <Heading id="developers-title" title={text.title} />
 
       <div className="mt-[clamp(3rem,7vw,5rem)] grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center lg:gap-16">
         <div className="reveal">
