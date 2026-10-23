@@ -54,6 +54,23 @@ func clipUTF16(text string, max int) string {
 	return text
 }
 
+// 终端的窗口类名：conhost、Windows Terminal、mintty（Git Bash）、PuTTY、ConEmu。
+// 终端里没有选区时 Ctrl+C 不是复制，是中断正在跑的程序、丢掉敲了一半的命令
+var terminalClasses = map[string]bool{
+	"ConsoleWindowClass":            true,
+	"CASCADIA_HOSTING_WINDOW_CLASS": true,
+	"mintty":                        true,
+	"PuTTY":                         true,
+	"VirtualConsoleClass":           true,
+}
+
+// UIA 没拿到字时，要不要再模拟一次 Ctrl+C 从剪贴板取。
+// 有 TextPattern、选区是空的：应用认得选区，空的就是没选中（这时 Ctrl+C 在终端里是中断，在 VS Code 里复制整行）。
+// 前台是终端的一律不发：没接 UIA 的终端（mintty、PuTTY）照样会被中断
+func copyFallbackAllowed(patternFound bool, windowClass string) bool {
+	return !patternFound && !terminalClasses[windowClass]
+}
+
 // UIA 的 GetBoundingRectangles 回的一串 double，每 4 个一块：left、top、width、height。多行选区一行一块，取并集。
 // 宽或高是 0 的不算（折叠的选区、滚出视野的那几行有的应用这么报）。一块都不剩就是不知道位置
 func unionRects(values []float64) (screenRect, bool) {

@@ -14,7 +14,9 @@
 # 用临时的用户目录、InPrivate 窗口，跑完关掉删掉），capture 带 outside（块外的点击报 outside 并放行、块里的照旧吞）。
 # 左键放没放行看 GetAsyncKeyState：钩子吞掉的按下系统不记，和键盘一样。
 # 模拟复制那条兜底路：记事本和 Edge 都支持 UIA 走不到它，另开一个自己画字的窗口（CopyWindow：UIA 里只是个 Pane，
-# 没有 TextPattern，只认 Ctrl+C 往剪贴板里放一段字），一分钟后自己关，跑完也会关掉。
+# 没有 TextPattern，只认 Ctrl+C 往剪贴板里放一段字），一分钟后自己关，跑完也会关掉。它也能慢一步才写剪贴板，
+# 查晚到的复制会不会被还原。终端里没选中时不该发 Ctrl+C（会中断正在跑的程序）：开一个经典控制台跑 ping -t，
+# 按一次 selection，看 ping 还在不在，跑完关掉。
 # 没查的：Office 这类应用、开始菜单（Win 键）。
 $ErrorActionPreference = 'Stop'
 $repo = "$HOME\speakmore-dev\repo"
@@ -30,6 +32,9 @@ public static class Fake {
   [StructLayout(LayoutKind.Sequential)] struct INPUT { public uint type; public UNION u; }
   [DllImport("user32.dll")] static extern uint SendInput(uint n, INPUT[] inputs, int size);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+  // 窗口在屏幕上的框：不经过 UIA（问 UIA 会让 Chromium 先把无障碍树建起来）
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
   [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
   [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vk);
   // 系统认为这个键按着没有。低级钩子吞掉的按下系统不记（所有钩子都放行了才更新），拿它看录到的键吞没吞
@@ -74,10 +79,20 @@ using System.Threading;
 using System.Windows.Forms;
 public class CopyOnly : Control {
   public string Payload = "";
+  // 大于 0 时按了 Ctrl+C 过这么多毫秒才写剪贴板（像远程桌面、正忙的应用）
+  public static int Delay = 0;
   public CopyOnly() { SetStyle(ControlStyles.Selectable, true); TabStop = true; }
   protected override bool IsInputKey(Keys key) { return true; }
   protected override void OnPaint(PaintEventArgs e) { try { e.Graphics.DrawString(Payload, Font, Brushes.Black, 8, 8); } catch { } }
-  protected override void OnKeyDown(KeyEventArgs e) { try { if (e.Control && e.KeyCode == Keys.C) Clipboard.SetText(Payload); } catch { } }
+  protected override void OnKeyDown(KeyEventArgs e) {
+    try {
+      if (!(e.Control && e.KeyCode == Keys.C)) return;
+      if (Delay <= 0) { Clipboard.SetText(Payload); return; }
+      var late = new System.Windows.Forms.Timer { Interval = Delay };
+      late.Tick += (s, a) => { try { late.Stop(); Clipboard.SetText(Payload); } catch { } };
+      late.Start();
+    } catch { }
+  }
 }
 public static class CopyWindow {
   static Form form;
@@ -372,13 +387,13 @@ try {
   $inside = $null -ne $sel.rect -and $sel.rect.width -gt 0 -and $sel.rect.x -ge $box.Left - 1 -and $sel.rect.y -ge $box.Top - 1 -and
     ($sel.rect.x + $sel.rect.width) -le $box.Right + 1 -and ($sel.rect.y + $sel.rect.height) -le $box.Bottom + 1
   Check '选区位置在记事本窗口里' $inside "选区 $(Show $sel.rect)，窗口 $box"
-  # 什么都没选：UIA 拿到空的，再试模拟复制也没变化，回 reason none；剪贴板原样不动
+  # 什么都没选：记事本有 TextPattern、选区是空的，就是没选中，不再模拟复制（via 还是 uia）；剪贴板原样不动
   Press $Ctrl $true; Press $End $true; Press $End $false; Press $Ctrl $false
   Start-Sleep -Milliseconds 300
   Set-Clipboard -Value '取选区之前的剪贴板'
   Send $helper @{ cmd = 'selection'; id = 12 }
   $sel = Next-Event $helper 4000
-  Check '什么都没选：text 空的、reason none' ($sel.event -eq 'selection' -and $sel.id -eq 12 -and $sel.text -eq '' -and $sel.reason -eq 'none' -and $null -eq $sel.rect) (Show $sel)
+  Check '什么都没选：text 空的、reason none，没模拟复制' ($sel.event -eq 'selection' -and $sel.id -eq 12 -and $sel.text -eq '' -and $sel.reason -eq 'none' -and $sel.via -eq 'uia' -and $null -eq $sel.rect) (Show $sel)
   Check '取选区以后剪贴板还是原来的' ((Get-Clipboard -Raw) -eq '取选区之前的剪贴板') (Get-Clipboard -Raw)
   Check 'selection 只回一条，没报 error' ($null -eq (Next-Event $helper 300)) ''
 
@@ -415,10 +430,45 @@ try {
     Check '模拟复制拿到的：不带位置' ($null -eq $sel.rect) ''
     Check '模拟复制以后剪贴板还原了' ((Get-Clipboard -Raw) -eq '取选区之前的剪贴板') (Get-Clipboard -Raw)
     Check '模拟复制那次没报 error' ($null -eq (Next-Event $helper 300)) ''
+    # 应用慢了：过了 400ms 才写剪贴板。先回没选中，晚到的那份写进来以后剪贴板还原成原来的
+    [CopyOnly]::Delay = 800
+    Set-Clipboard -Value '取选区之前的剪贴板'
+    Drain $helper
+    Send $helper @{ cmd = 'selection'; id = 32 }
+    $sel = Next-Event $helper 4000
+    Check '复制慢了：先回没选中' ($sel.event -eq 'selection' -and $sel.id -eq 32 -and $sel.text -eq '' -and $sel.reason -eq 'none' -and $sel.via -eq 'copy') (Show $sel)
+    Start-Sleep -Milliseconds 1500
+    Check '晚到的复制写进来以后，剪贴板还原成原来的' ((Get-Clipboard -Raw) -eq '取选区之前的剪贴板') (Get-Clipboard -Raw)
+    [CopyOnly]::Delay = 0
   }
   [CopyWindow]::Close()
 
-  # 网页（有 Edge 才查）：正文选中不能改，输入框里的能改。临时的用户目录，不碰他的 Edge 资料
+  # 终端里没选中：不发 Ctrl+C（发了就是中断正在跑的 ping）。conhost.exe 直接开经典控制台，不管默认终端是不是 Windows Terminal
+  $consoleStarted = Get-Date
+  $console = Start-Process conhost.exe -ArgumentList 'ping -t 127.0.0.1' -PassThru
+  $consoleWindow = [IntPtr]::Zero
+  for ($i = 0; $i -lt 25 -and $consoleWindow -eq [IntPtr]::Zero; $i++) {
+    Start-Sleep -Milliseconds 200
+    $console.Refresh()
+    $consoleWindow = $console.MainWindowHandle
+  }
+  $ping = Get-Process PING -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -ge $consoleStarted } | Select-Object -First 1
+  Check '经典控制台开起来了、ping 在跑' ($consoleWindow -ne [IntPtr]::Zero -and $null -ne $ping) ''
+  if ($consoleWindow -ne [IntPtr]::Zero -and $ping) {
+    [Fake]::SetForegroundWindow($consoleWindow) | Out-Null
+    Start-Sleep -Milliseconds 500
+    Drain $helper
+    Send $helper @{ cmd = 'selection'; id = 41 }
+    $sel = Next-Event $helper 4000
+    Check '终端里没选中：回没选中' ($sel.event -eq 'selection' -and $sel.id -eq 41 -and $sel.text -eq '' -and $sel.reason -eq 'none') (Show $sel)
+    Start-Sleep -Milliseconds 800
+    Check '终端里跑着的 ping 没被中断' (-not $ping.HasExited) ''
+  }
+  if ($ping) { Stop-Process -Id $ping.Id -Force -ErrorAction SilentlyContinue }
+  if ($console -and -not $console.HasExited) { Stop-Process -Id $console.Id -Force -ErrorAction SilentlyContinue }
+
+  # 网页（有 Edge 才查）：正文和输入框里选中的字都拿得到，输入框的位置在窗口里。头一次按的时候 Edge 还没建无障碍树，
+  # 也要拿得到（有 TextPattern、选区为空时不再模拟复制，要是第一次问到的是空的，这里就会漏）。临时的用户目录，不碰他的 Edge 资料
   $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") |
     Where-Object { Test-Path $_ } | Select-Object -First 1
   if (-not $edge) {
@@ -440,6 +490,20 @@ try {
     Check 'Edge 打开了本地网页' ($edgeWindow -ne 0) ''
     if ($edgeWindow -ne 0) {
       [Fake]::SetForegroundWindow($edgeWindow) | Out-Null
+      # 第一次按：先不问 UIA，点窗口中间、全选，直接要 selection
+      Start-Sleep -Milliseconds 1500
+      $frame = New-Object Fake+RECT
+      [Fake]::GetWindowRect($edgeWindow, [ref]$frame) | Out-Null
+      $mx = [int](($frame.Left + $frame.Right) / 2); $my = [int](($frame.Top + $frame.Bottom) / 2)
+      [Fake]::Click($mx, $my, $true); [Fake]::Click($mx, $my, $false)
+      Start-Sleep -Milliseconds 200
+      Press $Ctrl $true; Press $KeyA $true; Press $KeyA $false; Press $Ctrl $false
+      Start-Sleep -Milliseconds 300
+      Drain $helper
+      Send $helper @{ cmd = 'selection'; id = 20 }
+      $sel = Next-Event $helper 4000
+      Check '网页头一次按：也拿到正文' ($sel.event -eq 'selection' -and $sel.id -eq 20 -and "$($sel.text)".Contains($paragraph)) (Show $sel)
+      Drain $helper
       $edgeRoot = [System.Windows.Automation.AutomationElement]::FromHandle($edgeWindow)
       # Chromium 有 UIA 客户端来问才建无障碍树，头几次可能找不到：多等几轮
       # 只认有位置的（没排版好的、看不见的元素 BoundingRectangle 是空的）

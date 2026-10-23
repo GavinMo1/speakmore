@@ -173,21 +173,36 @@ func (c *clipboard) writeText(text string, transient bool) error {
 	return nil
 }
 
-// 读出剪贴板里的文字（自检用）
-func (c *clipboard) readText() (string, bool) {
+// 读出剪贴板里的文字（自检、取选区的模拟复制用）。没有文字格式是空的、err 是 nil；打不开、锁不住是 err
+func (c *clipboard) readText() (string, error) {
 	if err := c.open(); err != nil {
-		return "", false
+		return "", err
 	}
 	defer c.close()
 	handle, _, _ := procGetClipboardData.Call(cfUnicodeText)
 	if handle == 0 {
-		return "", false
+		return "", nil
 	}
 	data, ok := globalBytes(handle)
-	if !ok || len(data) < 2 {
-		return "", false
+	if !ok {
+		return "", errors.New("剪贴板里的文字锁不住（GlobalLock 失败）")
 	}
-	return syscall.UTF16ToString(unsafe.Slice((*uint16)(unsafe.Pointer(&data[0])), len(data)/2)), true
+	if len(data) < 2 {
+		return "", nil
+	}
+	return syscall.UTF16ToString(unsafe.Slice((*uint16)(unsafe.Pointer(&data[0])), len(data)/2)), nil
+}
+
+// 碰剪贴板的活一件一件来：贴字、取选区的模拟复制都是"存下 → 改 → 等 → 还原"，两件交叠的话剪贴板会被还原成
+// 另一件存下的东西，还可能把用户原来复制的字当成选区。排在一个 goroutine 上，按交进来的顺序做，不在钩子线程上等
+var clipboardJobs = make(chan func(), 16)
+
+func startClipboardJobs() {
+	go func() {
+		for job := range clipboardJobs {
+			job()
+		}
+	}()
 }
 
 func (c *clipboard) hasFormat(format uint32) bool {

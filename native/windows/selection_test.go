@@ -69,3 +69,29 @@ func TestUnionOfBoundingRectangles(t *testing.T) {
 		t.Fatalf("got %+v %v", got, ok)
 	}
 }
+
+func TestCopyFallbackOnlyWhereCtrlCMeansCopy(t *testing.T) {
+	cases := []struct {
+		pattern bool
+		class   string
+		want    bool
+	}{
+		// 没有 TextPattern 的普通窗口：UIA 问不到，模拟复制兜底
+		{false, "Chrome_WidgetWin_1", true},
+		{false, "SunAwtFrame", true},
+		// 有 TextPattern、选区是空的：应用认得选区，就是没选中（VS Code 里没选中时 Ctrl+C 复制整行）
+		{true, "Chrome_WidgetWin_1", false},
+		{true, "Notepad", false},
+		// 终端：没选中时 Ctrl+C 是中断正在跑的程序，有没有 TextPattern 都不发
+		{false, "ConsoleWindowClass", false},
+		{false, "CASCADIA_HOSTING_WINDOW_CLASS", false},
+		{false, "mintty", false},
+		{false, "PuTTY", false},
+		{false, "VirtualConsoleClass", false},
+	}
+	for _, c := range cases {
+		if got := copyFallbackAllowed(c.pattern, c.class); got != c.want {
+			t.Errorf("copyFallbackAllowed(%v, %q) = %v, want %v", c.pattern, c.class, got, c.want)
+		}
+	}
+}

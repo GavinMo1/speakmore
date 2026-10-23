@@ -2,9 +2,11 @@ package main
 
 // selection 命令：取前台应用里选中的文字，给划词翻译。先问 UI Automation（uia_windows.go）：记事本、Word、
 // Edge 和 Chrome 的网页与输入框都支持，还能给出选区在屏幕上的位置。问不到（应用不支持 TextPattern、
-// 选区是空的）再模拟一次 Ctrl+C，从剪贴板里拿，拿完把剪贴板原样还回去；这条路拿不到位置。
+// 没有 TextPattern）再模拟一次 Ctrl+C，从剪贴板里拿，拿完把剪贴板原样还回去；这条路拿不到位置。
+// 有 TextPattern、选区是空的，或者前台是终端，就是没选中，不发 Ctrl+C（selection.go 的 copyFallbackAllowed）。
 // 都不在钩子线程上等：问 UIA 在它自己的线程上，等修饰键松开、等剪贴板变化在一个 goroutine 里轮询，
 // 只有碰剪贴板和发按键那几下交给钩子线程（剪贴板要消息窗口当主人，和贴字一样）。
+// 模拟复制和贴字排在同一条剪贴板的活里（clipboard_windows.go 的 clipboardJobs）。
 
 import (
 	"fmt"
@@ -19,7 +21,9 @@ const (
 	modifierWait = time.Second
 	// 发了 Ctrl+C 以后最多等多久剪贴板变：应用一般几十毫秒内就写好了
 	copyWait = 400 * time.Millisecond
-	pollStep = 15 * time.Millisecond
+	// 到点没变先回没选中，再多盯这么久：慢的应用（远程桌面、正忙的 IDE）过了点才写进剪贴板，写了就还原
+	lateCopyWait = 1500 * time.Millisecond
+	pollStep     = 15 * time.Millisecond
 
 	vkC = 0x43
 )
@@ -28,7 +32,7 @@ var (
 	procGetClipboardSequenceNumber = user32.NewProc("GetClipboardSequenceNumber")
 )
 
-// 同一时间只取一次：两次的模拟复制交叠的话，剪贴板会被还原成另一次存下的东西
+// 同一时间只取一次：UIA 一次问一个（模拟复制另外排在剪贴板的活里）
 var selectionTurn = make(chan struct{}, 1)
 
 // 在一个 goroutine 里取，取完回一条 selection。不挡着读标准输入，也不挡着钩子线程
@@ -57,8 +61,8 @@ func readSelection() selection {
 		return selection{Via: "uia", Reason: "failed"}
 	}
 	if err != nil {
-		// 意料之外的失败照实报，再走模拟复制，不让这一次白按
-		emit(event{"event": "error", "message": "取选区时 UI Automation 出错，改用模拟复制：" + err.Error()})
+		// 意料之外的失败照实报，能模拟复制的再试一次，不让这一次白按
+		emit(event{"event": "error", "message": "取选区时 UI Automation 出错：" + err.Error()})
 	}
 	if reading.text != "" {
 		result := selection{Text: reading.text, Via: "uia"}
@@ -67,67 +71,86 @@ func readSelection() selection {
 		}
 		return result
 	}
+	if !copyFallbackAllowed(err == nil && reading.pattern, foregroundClass()) {
+		return selection{Via: "uia", Reason: "none"}
+	}
 	return copySelection()
 }
 
 // ---------- 模拟复制 ----------
 
-// 模拟复制取选区：拿不到位置
+// 模拟复制取选区：拿不到位置。排在剪贴板的活里，回了结果以后可能还占着一会儿（等晚到的复制好还原）
 func copySelection() selection {
 	waitModifiersReleased()
-	type started struct {
-		saved    []clipboardEntry
-		sequence uintptr
-		result   *selection
-	}
-	begin := make(chan started, 1)
-	onUIThread(func() {
+	reply := make(chan selection, 1)
+	clipboardJobs <- func() { copyInTurn(reply) }
+	return <-reply
+}
+
+func copyInTurn(reply chan<- selection) {
+	var saved []clipboardEntry
+	var sequence uintptr
+	var stopped *selection
+	onUIThreadWait(func() {
 		if foregroundBlocksInput() {
-			begin <- started{result: &selection{Via: "copy", Reason: "elevated"}}
+			stopped = &selection{Via: "copy", Reason: "elevated"}
 			return
 		}
-		saved, err := board.snapshot()
-		if err != nil {
+		var err error
+		if saved, err = board.snapshot(); err != nil {
 			// 存不下就还原不了：不能为了取个选区把用户剪贴板里的东西换掉
 			emit(event{"event": "error", "message": "取选区：存不下剪贴板，不模拟复制：" + err.Error()})
-			begin <- started{result: &selection{Via: "copy", Reason: "failed"}}
+			stopped = &selection{Via: "copy", Reason: "failed"}
 			return
 		}
-		sequence, _, _ := procGetClipboardSequenceNumber.Call()
+		sequence, _, _ = procGetClipboardSequenceNumber.Call()
 		if !sendKeys([]uint16{vkControl, vkC, vkC, vkControl}, []bool{true, true, false, false}) {
 			emit(event{"event": "error", "message": "取选区：模拟 Ctrl+C 没发出去"})
-			begin <- started{result: &selection{Via: "copy", Reason: "failed"}}
-			return
+			stopped = &selection{Via: "copy", Reason: "failed"}
 		}
-		begin <- started{saved: saved, sequence: sequence}
 	})
-	first := <-begin
-	if first.result != nil {
-		return *first.result
+	if stopped != nil {
+		reply <- *stopped
+		return
 	}
-
-	changed := false
-	for waited := time.Duration(0); waited < copyWait; waited += pollStep {
-		time.Sleep(pollStep)
-		if now, _, _ := procGetClipboardSequenceNumber.Call(); now != first.sequence {
-			changed = true
-			break
-		}
-	}
-	if !changed {
-		// 没选中（大多数应用这时 Ctrl+C 什么都不做），或者应用不认 Ctrl+C。剪贴板没动过，不用还原
-		return selection{Via: "copy", Reason: "none"}
-	}
-
-	finish := make(chan selection, 1)
-	onUIThread(func() {
-		text, _ := board.readText()
-		if err := board.restore(first.saved); err != nil {
+	restore := func() {
+		if err := board.restore(saved); err != nil {
 			emit(event{"event": "error", "message": "取选区：还原不了剪贴板：" + err.Error()})
 		}
-		finish <- selection{Text: text, Via: "copy", Reason: "none"}
+	}
+
+	if !clipboardChanges(sequence, copyWait) {
+		// 没选中（大多数应用这时 Ctrl+C 什么都不做），或者应用不认 Ctrl+C、慢了
+		reply <- selection{Via: "copy", Reason: "none"}
+		if clipboardChanges(sequence, lateCopyWait) {
+			onUIThreadWait(restore)
+		}
+		return
+	}
+	var result selection
+	onUIThreadWait(func() {
+		text, err := board.readText()
+		restore()
+		if err != nil {
+			emit(event{"event": "error", "message": "取选区：复制出来了，但读不出剪贴板：" + err.Error()})
+			result = selection{Via: "copy", Reason: "failed"}
+			return
+		}
+		// 复制出来的不是文字（图片、文件）也算没选中字
+		result = selection{Text: text, Via: "copy", Reason: "none"}
 	})
-	return <-finish
+	reply <- result
+}
+
+// 剪贴板在 limit 以内变没变（序号和 sequence 不一样了）
+func clipboardChanges(sequence uintptr, limit time.Duration) bool {
+	for waited := time.Duration(0); waited < limit; waited += pollStep {
+		time.Sleep(pollStep)
+		if now, _, _ := procGetClipboardSequenceNumber.Call(); now != sequence {
+			return true
+		}
+	}
+	return false
 }
 
 // 等 Alt、Ctrl、Shift、Win 都松开，最多等 modifierWait；等不到也照发（用户一直按着，只能这样）

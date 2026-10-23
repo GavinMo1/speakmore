@@ -132,6 +132,8 @@ func takeDoubles(array uintptr) []float64 {
 type uiaReading struct {
 	text  string
 	rects []float64
+	// 焦点元素（或它的祖先）有 TextPattern、问到了选区：这时 text 是空的就是没选中
+	pattern bool
 }
 
 // 焦点元素上取一种模式（GetCurrentPatternAs 顺带做了 QueryInterface）；不支持是 0
@@ -145,8 +147,8 @@ func patternOf(element comPtr, patternID uintptr, iid *guid) comPtr {
 	return pattern
 }
 
-// 读一次焦点元素上的选区。前台应用不支持 TextPattern 时 text 是空的、err 是 nil（交给模拟复制）；
-// err 只给意料之外的失败
+// 读一次焦点元素上的选区。前台应用不支持 TextPattern 时 text 是空的、pattern 是 false、err 是 nil（交给模拟复制）；
+// 支持、选区是空的时 pattern 是 true。err 只给意料之外的失败
 func readFocused(automation comPtr) (uiaReading, error) {
 	var reading uiaReading
 	var focused comPtr
@@ -167,6 +169,7 @@ func readFocused(automation comPtr) (uiaReading, error) {
 	if hr, _, _ := syscall.SyscallN(text.method(5), uintptr(text), uintptr(unsafe.Pointer(&ranges))); failed(hr) {
 		return reading, hresultError{"TextPattern.GetSelection", hr}
 	}
+	reading.pattern = true
 	if ranges == 0 {
 		return reading, nil
 	}

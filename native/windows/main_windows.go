@@ -60,6 +60,16 @@ func onUIThread(task func()) {
 	procPostMessageW.Call(window, wmTask, 0, 0)
 }
 
+// 交给钩子线程做，等它做完（别在钩子线程上调）
+func onUIThreadWait(task func()) {
+	done := make(chan struct{})
+	onUIThread(func() {
+		defer close(done)
+		task()
+	})
+	<-done
+}
+
 // 系统说这个键还按着没有（matcher 核对按住的普通键时问）。钩子回调发生在系统更新键的状态之前，
 // 查不准正触发回调的这个键；matcher 只拿它查早先按下的别的键。vk 为 0 的键查不了，当它还按着，只靠 10 秒清
 func keyStillDown(_ keyID, key heldKey) bool {
@@ -294,15 +304,27 @@ func probe(id int, combo binding) []event {
 	return events
 }
 
-// 存剪贴板 → 写入文字 → 模拟 Ctrl+V → 等一会儿 → 还原剪贴板。只有粘贴这一条路，同 macOS 版
+// 存剪贴板 → 写入文字 → 模拟 Ctrl+V → 等一会儿 → 还原剪贴板。只有粘贴这一条路，同 macOS 版。
+// 排在剪贴板的活里（clipboardJobs）：等的那一会儿也占着，取选区的模拟复制插不进来
 func paste(id int, text string) {
+	var finish func()
+	onUIThreadWait(func() { finish = startPaste(id, text) })
+	if finish == nil {
+		return
+	}
+	time.Sleep(restoreDelay)
+	onUIThreadWait(finish)
+}
+
+// 贴字的前半段（钩子线程上）：发了 Ctrl+V 的交回后半段（还原、报 pasted），没发出去的当场报完、交回 nil
+func startPaste(id int, text string) func() {
 	if foregroundBlocksInput() {
 		// 系统不让模拟的按键进管理员窗口，而且不报错。把文字留在剪贴板里，让用户自己按 Ctrl+V
 		if err := board.writeText(text, false); err != nil {
 			emit(event{"event": "error", "message": err.Error()})
 		}
 		emit(event{"event": "pasted", "id": id, "ok": false, "reason": "elevated"})
-		return
+		return nil
 	}
 	saved, err := board.snapshot()
 	restorable := err == nil
@@ -314,23 +336,21 @@ func paste(id int, text string) {
 	if err := board.writeText(text, restorable); err != nil {
 		emit(event{"event": "error", "message": err.Error()})
 		emit(event{"event": "pasted", "id": id, "ok": false, "reason": "clipboard"})
-		return
+		return nil
 	}
 	if !sendKeys([]uint16{vkControl, vkV, vkV, vkControl}, []bool{true, true, false, false}) {
 		// 文字已经在剪贴板里了：不还原，让用户自己按
 		emit(event{"event": "pasted", "id": id, "ok": false, "reason": "send_input"})
-		return
+		return nil
 	}
-	time.AfterFunc(restoreDelay, func() {
-		onUIThread(func() {
-			if restorable {
-				if err := board.restore(saved); err != nil {
-					emit(event{"event": "error", "message": "还原不了剪贴板：" + err.Error()})
-				}
+	return func() {
+		if restorable {
+			if err := board.restore(saved); err != nil {
+				emit(event{"event": "error", "message": "还原不了剪贴板：" + err.Error()})
 			}
-			emit(event{"event": "pasted", "id": id, "ok": true})
-		})
-	})
+		}
+		emit(event{"event": "pasted", "id": id, "ok": true})
+	}
 }
 
 func handle(line []byte) {
@@ -359,7 +379,7 @@ func handle(line []byte) {
 			return
 		}
 		id, text := *cmd.ID, *cmd.Text
-		onUIThread(func() { paste(id, text) })
+		clipboardJobs <- func() { paste(id, text) }
 	case "capture":
 		regions, outside, err := parseCapture(cmd)
 		if err != nil {
@@ -452,8 +472,8 @@ func selfTest() bool {
 	}
 	const probe = "speakmore 自检"
 	wrote := board.writeText(probe, true) == nil
-	text, _ := board.readText()
-	wroteText := wrote && text == probe
+	text, readErr := board.readText()
+	wroteText := wrote && readErr == nil && text == probe
 	markedTransient := wrote && board.hasFormat(board.exclude)
 	restored := board.restore(before) == nil
 	after, _ := board.snapshot()
@@ -525,6 +545,7 @@ func main() {
 		exit(1)
 	}
 	board = newClipboard(window)
+	startClipboardJobs()
 	if has("--selftest") {
 		if selfTest() {
 			exit(0)

@@ -35,6 +35,7 @@ var (
 	procIsClipboardFormatAvail            = user32.NewProc("IsClipboardFormatAvailable")
 	procRegisterClipboardFormat           = user32.NewProc("RegisterClipboardFormatW")
 	procGetForegroundWindow               = user32.NewProc("GetForegroundWindow")
+	procGetClassNameW                     = user32.NewProc("GetClassNameW")
 	procGetWindowThreadProcess            = user32.NewProc("GetWindowThreadProcessId")
 	procMapVirtualKeyW                    = user32.NewProc("MapVirtualKeyW")
 	procMapVirtualKeyExW                  = user32.NewProc("MapVirtualKeyExW")
@@ -218,6 +219,17 @@ func foregroundBlocksInput() bool {
 	window, _, _ := procGetForegroundWindow.Call()
 	blocked, _ := windowBlocksInput(window)
 	return blocked
+}
+
+// 前台窗口的类名；没有前台窗口、拿不到时是空的
+func foregroundClass() string {
+	window, _, _ := procGetForegroundWindow.Call()
+	if window == 0 {
+		return ""
+	}
+	var name [256]uint16
+	length, _, _ := procGetClassNameW.Call(window, uintptr(unsafe.Pointer(&name[0])), uintptr(len(name)))
+	return syscall.UTF16ToString(name[:length])
 }
 
 // 这个窗口所在的进程是不是以管理员身份运行（不管我们自己是不是），和它的进程号。
