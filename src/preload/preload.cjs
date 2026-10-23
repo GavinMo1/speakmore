@@ -96,7 +96,6 @@ contextBridge.exposeInMainWorld("speakmore", {
   deleteModel: (id) => ipcRenderer.invoke("setup:delete-model", id),
   // 检查本机模型：念一句交给它转，看能不能正常出字
   checkTranscriber: (id) => ipcRenderer.invoke("setup:check-transcriber", id),
-  readClipboard: () => ipcRenderer.invoke("setup:read-clipboard"),
   openKeyPage: (provider) => ipcRenderer.invoke("setup:open-key-page", provider),
   openPrivacySettings: (permission) => ipcRenderer.invoke("setup:open-privacy", permission),
   recheckPermissions: () => ipcRenderer.invoke("setup:recheck"),
@@ -116,10 +115,11 @@ contextBridge.exposeInMainWorld("speakmore", {
   saveLookupCustom: (form) => ipcRenderer.invoke("setup:save-lookup-custom", form),
   forgetLookupCustomKey: () => ipcRenderer.invoke("setup:forget-lookup-custom-key"),
 
-  // 首次引导
+  // 首次引导：测快捷键时让主进程把三个功能的热键转到这里（{ action, event, down }），不去开悬浮条；
+  // 走完了关掉引导、打开主窗口，target.engine 是去引擎页并弹出推荐组合
   captureHotkey: (capturing) => ipcRenderer.send("onboarding:capture-hotkey", capturing),
   onOnboardingHotkey: (callback) => ipcRenderer.on("onboarding:hotkey", (_event, key) => callback(key)),
-  finishOnboarding: () => ipcRenderer.invoke("onboarding:finish"),
+  finishOnboarding: (target) => ipcRenderer.invoke("onboarding:finish", target),
   setTheme: (theme) => ipcRenderer.invoke("setup:set-theme", theme),
   setLanguage: (language) => ipcRenderer.invoke("setup:set-language", language),
 });

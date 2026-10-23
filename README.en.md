@@ -547,4 +547,5 @@ flowchart LR
 
 - [MIT](LICENSE).
 - Files under `.claude/skills/` are from [REA](https://github.com/morluto/rea) and are covered by its own MIT license.
+- The three avatars in the onboarding demo (`src/renderer/onboarding/avatars/`) are free stock photos: [Pexels 7705905](https://www.pexels.com/photo/7705905/) (ShotPot), [Pexels 3936894](https://www.pexels.com/photo/3936894/) (Татьяна Танатова) and [Unsplash 0-LBoX_pAiA](https://unsplash.com/photos/0-LBoX_pAiA) (Adi Probo), under the Pexels and Unsplash licenses.
 - The name pays tribute to Typeless. SpeakMore is an independent implementation based on reverse-engineering notes and is not affiliated with Typeless.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { test } from "node:test";
 import { THEME_CSS_VARIABLES } from "../../src/themes/contract.mjs";
 
@@ -54,10 +54,10 @@ test("样式里不写死颜色：只有阴影用的半透明黑例外", () => {
 });
 
 test("每个页面都引入共用的 token，而且排在别的样式前面", () => {
-  // 悬浮条、主窗口、首次引导三个页面，少了说明目录没扫全
+  // 悬浮条、主窗口、首次引导三个页面，少了说明目录没扫全。首次引导演示用的页面在再下一层（onboarding/demo/）
   assert.ok(pages.length >= 3);
   for (const { name, html } of pages) {
     const links = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((match) => match[1]);
-    assert.equal(links[0], "../shared/tokens.css", name);
+    assert.equal(links[0], relative(dirname(name), "shared/tokens.css").replaceAll("\\", "/"), name);
   }
 });

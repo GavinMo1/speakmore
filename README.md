@@ -547,4 +547,5 @@ flowchart LR
 
 - [MIT](LICENSE)。
 - `.claude/skills/` 下的文件来自 [REA](https://github.com/morluto/rea)，适用其自身的 MIT 许可。
+- 首次引导演示里的三张头像（`src/renderer/onboarding/avatars/`）是免费商用的图库照片：[Pexels 7705905](https://www.pexels.com/photo/7705905/)（ShotPot）、[Pexels 3936894](https://www.pexels.com/photo/3936894/)（Татьяна Танатова）、[Unsplash 0-LBoX_pAiA](https://unsplash.com/photos/0-LBoX_pAiA)（Adi Probo），分别适用 Pexels 和 Unsplash 的许可。
 - 名称致敬 Typeless。SpeakMore 依据逆向分析笔记独立实现，与 Typeless 无隶属关系。
