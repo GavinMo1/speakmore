@@ -144,8 +144,9 @@ export function createHome() {
       renderStats(insights);
       renderHeatmap();
       spend.render(usage);
+      // 清空了键的功能（划词翻译能清空）不列
       $("home-actions").replaceChildren(
-        ...FEATURES.map(({ id }) =>
+        ...FEATURES.filter(({ id }) => app.hotkeys[id]?.length > 0).map(({ id }) =>
           h(
             "span",
             { class: "home-action" },

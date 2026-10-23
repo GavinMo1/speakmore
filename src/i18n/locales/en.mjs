@@ -1261,7 +1261,7 @@ export default {
   speakmore update              Update to the latest version (on a Mac, SpeakMore.app too if you have it). Settings, keys, the dictionary, history, and recordings are kept
 
   speakmore history [-n count] [--json]
-                                What you said, grouped by day, newest first (latest {limit} by default)
+                                What you said and looked up, grouped by day, newest first (latest {limit} by default)
   speakmore dict [--json]       The dictionary: names, products and terms you say often, spelled as written. Stored on this device only
   speakmore dict add|remove <word>…
                                 Add or delete words, several at once (quote words with spaces)

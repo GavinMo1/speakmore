@@ -1214,7 +1214,7 @@ export default {
   speakmore update              更新到最新版本（Mac 上装着 SpeakMore.app 的话连它一起）。设置、key、词典、历史和录音不动
 
   speakmore history [-n 条数] [--json]
-                                看说过的话，按天分组，新的在前（默认最近 {limit} 条）
+                                看说过的话和划词翻译，按天分组，新的在前（默认最近 {limit} 条）
   speakmore dict [--json]       看词典：常说的人名、产品名和术语，识别时按这里的写法。只存在本机
   speakmore dict add|remove <词>…
                                 加词、删词，几个词一次给（有空格的词加引号）

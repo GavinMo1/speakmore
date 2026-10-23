@@ -1,4 +1,4 @@
-import { ACTIONS } from "../../hotkeys/actions.mjs";
+import { ACTIONS, SPOKEN_ACTIONS } from "../../hotkeys/actions.mjs";
 import { formatSeconds, formatTokens, formatUsd } from "../../usage/format.mjs";
 import { h } from "../shared/dom.mjs";
 import { t } from "../shared/i18n.mjs";
@@ -37,9 +37,11 @@ function formatDuration(seconds) {
     : t("units.minutesSeconds", { minutes: Math.floor(whole / 60), seconds: whole % 60 });
 }
 
-/** 详情：录音多长、等了模型多久、花了多少，token 细节 */
+/** 详情：录音多长（说话的功能才有录音，划词没有）、等了模型多久、花了多少，token 细节 */
 function detailsOf(row) {
-  const lines = [t("history.recording", { duration: formatDuration(row.duration) })];
+  const lines = SPOKEN_ACTIONS.includes(row.kind)
+    ? [t("history.recording", { duration: formatDuration(row.duration) })]
+    : [];
   if (row.usage) {
     const cost = row.usage.costUsd === null ? t("history.unpriced") : formatUsd(row.usage.costUsd);
     lines.push(t("history.model", { latency: formatSeconds(row.usage.latencyMs, t), cost }));
