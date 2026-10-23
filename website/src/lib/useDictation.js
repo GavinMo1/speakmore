@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /** 一轮演示的节奏（毫秒）：边说边出字 → 整理 → 打勾 → 删掉的淡出、成品出来 → 停一会儿 */
-export const DICTATION_MS = { type: 3200, finish: 1300, done: 600, hold: 4200 };
+export const DICTATION_MS = { type: 1800, finish: 700, done: 350, hold: 2800 };
 
 /**
  * 口述演示放一轮：phase 依次是 talk（边说边出字，progress 从 0 走到 1）、finishing（整理中）、done（打勾）、

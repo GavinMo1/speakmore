@@ -7,7 +7,7 @@ import { DICTATION_MS, useDictation } from "../lib/useDictation.js";
 import { useOnScreen, useReducedMotion } from "../lib/usePageMotion.js";
 
 /** 这一句比语音输入的例子长，说得慢一点；译文落进输入框后多停一会儿 */
-const MS = { ...DICTATION_MS, type: 3800, hold: 5200 };
+const MS = { ...DICTATION_MS, type: 2200, hold: 3400 };
 
 /**
  * 语音翻译：左边是用中文回的那句口述（边说边出现，悬浮条上写着这次译成哪种语言），右边一个群聊窗口，
