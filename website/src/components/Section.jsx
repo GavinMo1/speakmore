@@ -15,7 +15,7 @@ const TONES = {
 export function Section({ id, tone = "canvas", className = "", children, labelledBy }) {
   return (
     <section id={id} aria-labelledby={labelledBy} className={`${TONES[tone]} text-ink overflow-clip ${className}`}>
-      <div className="mx-auto max-w-6xl px-5 py-[clamp(5.5rem,13vw,10rem)] sm:px-8">{children}</div>
+      <div className="mx-auto max-w-6xl px-5 py-[clamp(7rem,17vw,13rem)] sm:px-8">{children}</div>
     </section>
   );
 }
@@ -75,7 +75,7 @@ export function Heading({ id, title, lead, align = "split" }) {
       <Inline text={title} />
     </h2>
   );
-  if (!lead) return <header className="reveal">{heading}</header>;
+  if (!lead) return <header className="reveal mb-[clamp(0.75rem,2vw,1.75rem)]">{heading}</header>;
   return (
     <header className="reveal grid gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-end lg:gap-16">
       {heading}

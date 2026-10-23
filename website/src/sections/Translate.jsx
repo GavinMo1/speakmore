@@ -88,7 +88,7 @@ export function Translate() {
         </div>
       </div>
 
-      <ul className="reveal mt-[clamp(3rem,7vw,4.5rem)] grid gap-y-8 border-t border-line pt-10 md:grid-cols-3 md:divide-x md:divide-line">
+      <ul className="reveal mt-[clamp(4rem,9vw,6.5rem)] grid gap-y-8 border-t border-line pt-10 md:grid-cols-3 md:divide-x md:divide-line">
         {text.points.map((point) => (
           <li key={point.title} className="md:px-8 md:first:pl-0 md:last:pr-0">
             <h3 className="text-lg font-semibold text-ink">{point.title}</h3>
