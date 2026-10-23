@@ -53,7 +53,7 @@ export default {
   },
   // 语音翻译的演示：群聊里回外国同事一句。口述和译文是 App 的真实输出（混合方式，DeepSeek V4.1 Flash）
   translate: {
-    title: "中文口述\n英文成文",
+    title: "开口即译\n语言任选",
     chat: {
       contact: "Emma",
       incoming: "Could you send me the revised schedule this week?",
