@@ -81,6 +81,7 @@ import { createLookupSetup } from "./lookup/setup.mjs";
 import { describePlaza, loadPriceBook } from "./model-plaza.mjs";
 import { createModeSwitch } from "./modes.mjs";
 import { MOVE_TO, startMoveWindow } from "./move-window.mjs";
+import { floatAboveAll, showAboveAll } from "./on-top.mjs";
 import { startService } from "./service.mjs";
 import { createSessionGate } from "./session-gate.mjs";
 import { summarizeSetup, summaryAsText } from "./setup-state.mjs";
@@ -656,7 +657,6 @@ async function main() {
       hasShadow: false,
       resizable: false,
       skipTaskbar: true,
-      alwaysOnTop: true,
       // 不能抢焦点：焦点一旦离开用户正在用的输入框，文字就贴不进去了
       focusable: false,
       webPreferences,
@@ -667,6 +667,8 @@ async function main() {
     // 鼠标移动照样转给页面（forward）：语音翻译的语言胶囊要靠悬停展开，点选项还是小帮手截
     bar.setIgnoreMouseEvents(true, { forward: true });
     bar.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    // 浮在一切之上，露出来时再顶一次（on-top.mjs，GitHub issue #16）
+    floatAboveAll(bar, { mac: !WINDOWS });
     bar.loadFile(join(sourceDir, "renderer", "bar", "bar.html"));
     return bar;
   }
@@ -695,7 +697,7 @@ async function main() {
   }
   ipcMain.on("bar:set-visible", (_event, visible) => {
     if (visible) {
-      bar.showInactive();
+      showAboveAll(bar);
       return;
     }
     bar.hide();
