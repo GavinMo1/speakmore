@@ -6,6 +6,8 @@ import { Converter as toSimplifiedConverter } from "opencc-js/t2cn";
 // 用户消息里写上"已经是就译成英语"，英文原文、目标日语时又译成了英语），所以在代码里判断：
 //   文字系统分得清的（中文、日文假名、韩文、俄文、阿拉伯文、泰文）发请求前就认出来；繁简另看，繁体选给简体是要转写。
 //   英语看虚词（the、you、of……）占的比例；别的拉丁字母语言分不出，先照常译，译出来和原文几乎一样再改译（looksUntranslated）。
+//   中文目标遇上以汉字为主的原文，认出"不是"也作数：繁简转写、日文汉字转简体，译文和原文本来就有八成字相同，
+//   再拿重合率判会当成照抄、改译成英文（10-23 审查实测"我想去北京看看天安門"被改成了英文）。
 
 const toSimplified = toSimplifiedConverter({ from: "t", to: "cn" });
 const toTraditional = toTraditionalConverter({ from: "cn", to: "tw" });
@@ -21,25 +23,22 @@ const SCRIPTS = {
   latin: /\p{Script=Latin}/u,
 };
 
-/** 每个字母是哪种文字系统，数一数 */
+/** 比占比用的单位：中日韩、泰文一个字一个，别的文字一个词一个（中文里夹的 API、response 各算一个，不按字母数） */
+const LETTER_UNITS = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}]|[^\P{L}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}]+/gu;
+
+/** 每个单位是哪种文字系统，数一数（数字、标点不算） */
 function countScripts(text) {
   const counts = Object.fromEntries(Object.keys(SCRIPTS).map((name) => [name, 0]));
-  let letters = 0;
-  for (const char of text) {
-    if (!/\p{L}/u.test(char)) continue;
-    letters++;
-    for (const [name, pattern] of Object.entries(SCRIPTS)) {
-      if (pattern.test(char)) {
-        counts[name]++;
-        break;
-      }
-    }
+  const units = text.match(LETTER_UNITS) ?? [];
+  for (const unit of units) {
+    const name = Object.keys(SCRIPTS).find((script) => SCRIPTS[script].test(unit));
+    if (name) counts[name]++;
   }
-  return { counts, letters };
+  return { counts, letters: units.length };
 }
 
-/** 这种文字系统占了字母的大半（拉丁字母夹在中文里的 bug、API 这种不算数） */
-const mostly = ({ counts, letters }, name) => letters > 0 && counts[name] / letters >= 0.6;
+/** 这种文字系统的单位过半 */
+const mostly = ({ counts, letters }, name) => letters > 0 && counts[name] / letters > 0.5;
 
 /** 英文里最常见的虚词：一段话里占到四分之一以上，多半是英文 */
 const ENGLISH_WORDS = new Set(
@@ -71,14 +70,27 @@ const RECOGNIZERS = {
   en: (text, scripts) => mostly(scripts, "latin") && looksEnglish(text),
 };
 
+/** 中文的两种写法各自怎么转 */
+const CONVERTERS = { "zh-CN": toSimplified, "zh-TW": toTraditional };
+
+/** 中文目标遇上以汉字为主、没有假名、转成目标写法会改字的原文：是另一种写法（繁简、日文汉字），要转写，"不是"作数 */
+const decidesNo = (text, language, scripts) =>
+  language in CONVERTERS &&
+  mostly(scripts, "han") &&
+  scripts.counts.kana === 0 &&
+  CONVERTERS[language](text) !== text;
+
 /**
- * 选中的字是不是已经是这种语言（认得出才说是；认不出的一律不是）
+ * 选中的字是不是已经是这种语言
  * @param {string} text
  * @param {string} language 语言 id（src/languages.mjs）
+ * @returns {boolean | null} true 已经是；false 肯定不是；null 认不出，译完再看像不像原文（looksUntranslated）
  */
 export function sourceIs(text, language) {
   const recognize = RECOGNIZERS[language];
-  return recognize ? recognize(text, countScripts(text)) : false;
+  const scripts = countScripts(text);
+  if (recognize?.(text, scripts)) return true;
+  return decidesNo(text, language, scripts) ? false : null;
 }
 
 /** 拆成比较用的单位：拉丁、西里尔这类按词，中日韩、泰文按字 */

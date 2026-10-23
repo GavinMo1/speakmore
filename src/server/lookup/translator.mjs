@@ -52,7 +52,7 @@ export function createTranslator({
 
     /**
      * 译成目标语言；选中的已经是目标语言时改译成另一种（prompt.mjs 的 fallbackOf）：认得出的直接改，
-     * 认不出、译回来和原文几乎一样的再译一遍（source.mjs）。两遍都记在这一次的 id 上
+     * 认不出的、译回来和原文几乎一样的再译一遍（source.mjs）。两遍都记在这一次的 id 上
      * @param {string} text 选中的字
      * @param {{ language: { id: string, prompt: string }, lookupId: string, signal?: AbortSignal }} options
      *   language：目标语言（src/languages.mjs 的一项）；lookupId：这一次的 id，记账和历史按它对上
@@ -75,7 +75,7 @@ export function createTranslator({
         const already = sourceIs(text, language.id);
         const target = already ? fallbackOf(language) : language;
         const translated = await once(target);
-        if (already || !looksUntranslated(text, translated)) return { text: translated, language: target.id };
+        if (already !== null || !looksUntranslated(text, translated)) return { text: translated, language: target.id };
         log.info("lookup_retargeted", { lookup_id: lookupId, from: language.id, to: fallbackOf(language).id });
         return { text: await once(fallbackOf(language)), language: fallbackOf(language).id };
       } catch (error) {

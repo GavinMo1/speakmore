@@ -89,6 +89,16 @@ test("认不出、模型照抄回来（拉丁字母的语言）：再按另一�
   );
 });
 
+test("繁体选给简体：模型转写成简体就是结果，不因为和原文字多半相同就改译成英文", async () => {
+  const { client, requests } = fakeClient({ text: "我想去北京看看天安门，然后去吃烤鸭。", problem: null, usage: USAGE });
+  const result = await translatorWith(client).translate("我想去北京看看天安門，然後去吃烤鴨。", {
+    language: zhCN,
+    lookupId: "l",
+  });
+  assert.deepEqual(result, { text: "我想去北京看看天安门，然后去吃烤鸭。", language: "zh-CN" });
+  assert.equal(requests.length, 1);
+});
+
 test("收尾：去掉首尾空白和模型多写的标签；译成简体中文时繁体字转简体，别的语言照写的", () => {
   assert.equal(translationOf("  模型把音频留在你的设备上。\n", zhCN), "模型把音频留在你的设备上。");
   assert.equal(translationOf("<译文>\n這個模型\n</译文>", zhCN), "这个模型");
