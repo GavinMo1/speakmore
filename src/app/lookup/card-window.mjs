@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { placeCard } from "./place.mjs";
 
 // 划词卡片的窗口（主进程这一头）：做法同悬浮条——透明、不抢焦点、整个窗口点不到，卡片上按钮的点击由小帮手截下来
-// （点击一旦落在我们的窗口上，系统会把我们切到前面，用户选中文字的那个应用就丢了焦点，替换就贴不回去了）。
+// （点击一旦落在我们的窗口上，系统会把我们切到前面，用户正在看、正在写的那个应用就丢了焦点和选区）。
 // 页面（renderer/lookup/card.mjs）按交来的样子画卡片，量好大小和按钮的位置报回来；这里按选区摆窗口、把按钮交给小帮手截，
 // 块外的按下另报 outside（点别处收起）。
 // 坐标：Electron 用 DIP；小帮手在 Mac 上用点（和 DIP 一样），在 Windows 上用物理像素，进出都换算。
@@ -48,7 +48,7 @@ export function createCardWindow({
     resizable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
-    // 不能抢焦点：替换要贴回用户选中文字的那个输入框
+    // 不抢焦点：用户正在用的那个应用留着焦点和选区，看完接着用
     focusable: false,
     webPreferences,
   });

@@ -469,7 +469,6 @@ export default {
     card: {
       copy: "Copy",
       copied: "Copied",
-      replace: "Replace selection",
       pin: "Pin",
       unpin: "Unpin",
       close: "Close",

@@ -1,7 +1,7 @@
 // 划词卡片的页面：主进程交来这一次的样子（app/lookup/controller.mjs 的 view），这里画出来，量好卡片多高、
 // 每个按钮在窗口里的哪一块，报回去（app/lookup/card-window.mjs 摆窗口、交给小帮手截）。
 // 窗口点不到：点击是小帮手截下来、经主进程转过来的（onLookupClick）。展开语言选单这种只在页面里的事这里自己办，
-// 别的（复制、替换、换语言、固定、关闭、重试、配置密钥）报给主进程。
+// 别的（复制、换语言、固定、关闭、重试、配置密钥）报给主进程。
 
 import { languageName } from "../../languages.mjs";
 import { $, h } from "../shared/dom.mjs";
@@ -22,7 +22,7 @@ let copiedTimer = null;
 function render() {
   document.body.dataset.phase = view ? view.phase : "hidden";
   if (!view) return;
-  const { phase, language, languages, text, problem, action, editable, pinned } = view;
+  const { phase, language, languages, text, problem, action, pinned } = view;
   $("language-name").textContent = t.text(languageName(language));
   $("language").setAttribute("aria-expanded", String(menuOpen));
   $("pin").setAttribute("aria-pressed", String(pinned));
@@ -51,9 +51,6 @@ function render() {
   $("problem-text").textContent = phase === "error" ? t.text(problem) : "";
   $("foot").hidden = phase === "loading";
   $("copy").hidden = phase !== "done";
-  $("replace").hidden = !(phase === "done" && editable);
-  // 能替换时替换是主要的那个，复制退成次要
-  $("copy").classList.toggle("primary", !editable);
   $("keys").hidden = !(phase === "error" && action === "keys");
   $("retry").hidden = !(phase === "error" && action === "retry");
   report();

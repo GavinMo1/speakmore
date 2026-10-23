@@ -11,7 +11,7 @@ const QUERY_TIMEOUT_MS = 1_500;
  */
 const SELECTION_TIMEOUT_MS = 3_500;
 /** 取选区没有回执时的样子：reason 说为什么（timeout 到点了、gone 小帮手不在） */
-const noSelection = (reason) => ({ text: "", editable: false, rect: null, via: null, reason, ms: null });
+const noSelection = (reason) => ({ text: "", rect: null, via: null, reason, ms: null });
 
 /**
  * 小帮手的源码、编好的可执行文件、指纹文件在哪。App 启动时要用，所以放在这一层：
@@ -211,7 +211,7 @@ export function startHelper(command, { args = [], onEvent, log }) {
     },
     /**
      * 取前台应用里选中的字（划词翻译）。回执不来（超时、小帮手不在）时按没取到算，reason 写 timeout 或 gone
-     * @returns {Promise<{ text: string, editable: boolean, rect: { x: number, y: number, width: number, height: number } | null,
+     * @returns {Promise<{ text: string, rect: { x: number, y: number, width: number, height: number } | null,
      *   via: string | null, reason: string | null, ms: number | null }>}
      *   rect 是屏幕坐标（Mac 是点，Windows 是物理像素）；text 为空时 reason 说为什么：none 没选中、not_trusted 没有辅助功能权限、
      *   elevated 前台是管理员窗口、failed 出错了
@@ -231,7 +231,6 @@ export function startHelper(command, { args = [], onEvent, log }) {
           const valid = rect && ["x", "y", "width", "height"].every((key) => Number.isFinite(rect[key]));
           resolve({
             text,
-            editable: text !== "" && event.editable === true,
             rect: text !== "" && valid ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
             via: typeof event.via === "string" ? event.via : null,
             reason: text === "" ? (event.reason ?? "none") : null,

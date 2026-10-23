@@ -12,14 +12,11 @@ const RECT = { x: 240, y: 352, width: 560, height: 56 };
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 /**
- * 假的周边：选区、翻译、卡片、贴字、剪贴板、历史、提醒。translate 默认回"译：原文"；
+ * 假的周边：选区、翻译、卡片、剪贴板、历史、提醒。translate 默认回"译：原文"；
  * 给 replies 的话按顺序回（Error 就抛，"wait" 就一直等到 release）
  */
-function setup({
-  picked = { text: "hello", editable: true, rect: RECT, via: "ax", reason: null, ms: 5 },
-  busy = false,
-} = {}) {
-  const calls = { card: [], translate: [], paste: [], copied: [], notices: [], history: [], keys: 0 };
+function setup({ picked = { text: "hello", rect: RECT, via: "ax", reason: null, ms: 5 }, busy = false } = {}) {
+  const calls = { card: [], translate: [], copied: [], notices: [], history: [], keys: 0 };
   const replies = [];
   let ids = 0;
   const lookup = createLookup({
@@ -41,10 +38,6 @@ function setup({
       show: (view, anchor) => calls.card.push({ show: view, anchor }),
       update: (view) => calls.card.push({ update: view }),
       hide: () => calls.card.push({ hide: true }),
-    },
-    paste: async (text) => {
-      calls.paste.push(text);
-      return calls.pasteResult ?? { ok: true, reason: null };
     },
     copy: (text) => calls.copied.push(text),
     notify: (message) => calls.notices.push(message),
@@ -76,8 +69,8 @@ test("按下：取选区，在选区下方弹卡片（先是翻译中），译�
   await settle();
   assert.deepEqual(calls.translate, [{ text: "hello", language: "zh-CN", lookupId: "id-1" }]);
   assert.deepEqual(
-    { phase: last().phase, text: last().text, editable: last().editable, pinned: last().pinned },
-    { phase: "done", text: "译：hello", editable: true, pinned: false },
+    { phase: last().phase, text: last().text, pinned: last().pinned },
+    { phase: "done", text: "译：hello", pinned: false },
   );
   assert.deepEqual(calls.history, [
     {
@@ -106,7 +99,7 @@ test("原文已经是目标语言、改译成了另一种：卡片上写实际�
 });
 
 test("选中的字统一成 \\n 换行（Windows 记事本里是 \\r），首尾空白去掉", async () => {
-  const { lookup, calls } = setup({ picked: { text: "  a\r\nb\rc \n", editable: false, rect: null, reason: null } });
+  const { lookup, calls } = setup({ picked: { text: "  a\r\nb\rc \n", rect: null, reason: null } });
   await lookup.press();
   await settle();
   assert.equal(calls.translate[0].text, "a\nb\nc");
@@ -123,19 +116,19 @@ test("没取到字：不弹卡片，在悬浮条上说为什么", async () => {
     ["gone", "lookup.selectionFailed"],
   ];
   for (const [reason, key] of cases) {
-    const { lookup, calls } = setup({ picked: { text: "", editable: false, rect: null, reason } });
+    const { lookup, calls } = setup({ picked: { text: "", rect: null, reason } });
     await lookup.press();
     assert.deepEqual(calls.card, [], reason);
     assert.deepEqual(calls.notices, [msg(key)], reason);
   }
   // 只有空白也算没选中
-  const blank = setup({ picked: { text: " \r\n ", editable: true, rect: RECT, reason: null } });
+  const blank = setup({ picked: { text: " \r\n ", rect: RECT, reason: null } });
   await blank.lookup.press();
   assert.deepEqual(blank.calls.notices, [msg("lookup.noSelection")]);
 });
 
 test("选得太长：不弹卡片，说一次最多多少字", async () => {
-  const { lookup, calls } = setup({ picked: { text: "x".repeat(MAX_LOOKUP_CHARS + 1), editable: false, rect: null } });
+  const { lookup, calls } = setup({ picked: { text: "x".repeat(MAX_LOOKUP_CHARS + 1), rect: null } });
   await lookup.press();
   assert.deepEqual(calls.card, []);
   assert.deepEqual(calls.notices, [msg("lookup.tooLong", { max: MAX_LOOKUP_CHARS })]);
@@ -206,56 +199,30 @@ test("卡片上换语言：只管这一次，按新的语言再译、另记一�
   assert.equal(calls.translate.length, 2);
 });
 
-test("复制：译文进剪贴板，卡片留着；替换：收起卡片，把译文贴回原处", async () => {
-  const { lookup, calls } = setup();
+test("复制：译文进剪贴板，卡片留着；没译好时不理。卡片上没有替换（10-23 砍掉了）", async () => {
+  const { lookup, calls, last } = setup();
   await lookup.press();
   await settle();
   lookup.act("copy");
   assert.deepEqual(calls.copied, ["译：hello"]);
   assert.equal(lookup.open, true);
+  assert.equal("editable" in last(), false);
   lookup.act("replace");
-  assert.deepEqual(calls.card.at(-1), { hide: true });
-  await settle();
-  assert.deepEqual(calls.paste, ["译：hello"]);
-  assert.equal(lookup.open, false);
-});
-
-test("替换贴不进去：译文放进剪贴板，说清楚", async () => {
-  const { lookup, calls } = setup();
-  calls.pasteResult = { ok: false, reason: "not_trusted" };
-  await lookup.press();
-  await settle();
-  lookup.act("replace");
-  await settle();
-  assert.deepEqual(calls.copied, ["译：hello"]);
-  assert.deepEqual(calls.notices, [msg("delivery.noAccessibility")]);
-});
-
-test("选区不能改、还没译好时：替换不理；复制在没译好时也不理", async () => {
-  const readOnly = setup({ picked: { text: "hello", editable: false, rect: RECT } });
-  await readOnly.lookup.press();
-  await settle();
-  readOnly.lookup.act("replace");
-  assert.deepEqual(readOnly.calls.paste, []);
+  assert.equal(lookup.open, true);
   const pending = setup();
   pending.replies.push({ wait: new Promise(() => {}) });
   await pending.lookup.press();
   pending.lookup.act("copy");
-  pending.lookup.act("replace");
-  assert.deepEqual([pending.calls.copied, pending.calls.paste], [[], []]);
+  assert.deepEqual(pending.calls.copied, []);
 });
 
-test("点别处收起；固定了的不收，但之后不再给替换（焦点可能已经换了地方）", async () => {
-  const { lookup, calls, last } = setup();
+test("点别处收起；固定了的不收，取消固定后再点别处才收", async () => {
+  const { lookup } = setup();
   await lookup.press();
   await settle();
   lookup.act("pin");
-  assert.equal(last().pinned, true);
   lookup.outside();
   assert.equal(lookup.open, true);
-  assert.equal(last().editable, false);
-  lookup.act("replace");
-  assert.deepEqual(calls.paste, []);
   lookup.act("pin");
   lookup.outside();
   assert.equal(lookup.open, false);

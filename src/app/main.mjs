@@ -1032,7 +1032,6 @@ async function main() {
     selection: () => helper.selection(),
     engine: lookupEngine,
     card,
-    paste: (text) => helper.paste(text),
     copy: (text) => clipboard.writeText(text),
     notify,
     record: (entry) => {

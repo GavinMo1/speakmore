@@ -397,20 +397,20 @@ func testSelection() {
     check(usableRect(CGRect(x: 0, y: 0, width: 0, height: 10)) == nil, "宽是 0 的框不要")
     check(usableRect(CGRect(x: 10, y: 20, width: 30, height: 12)) == CGRect(x: 10, y: 20, width: 30, height: 12), "像样的框原样")
 
-    let found = selectionEvent(id: 7, text: "hello", editable: true, rect: CGRect(x: 1, y: 2, width: 3, height: 4),
+    let found = selectionEvent(id: 7, text: "hello", rect: CGRect(x: 1, y: 2, width: 3, height: 4),
                                via: "ax", reason: nil, ms: 12)
     check(found["event"] as? String == "selection" && found["id"] as? Int == 7, "回执的名字和 id")
-    check(found["text"] as? String == "hello" && found["editable"] as? Bool == true, "字和能不能改")
+    check(found["text"] as? String == "hello" && found["editable"] == nil, "带着字；不报能不能改（10-23 砍掉了替换）")
     check((found["rect"] as? [String: CGFloat])?["width"] == 3, "带上位置")
     check(found["reason"] == nil && found["via"] as? String == "ax" && found["ms"] as? Int == 12, "有字时不带 reason")
 
-    let empty = selectionEvent(id: 8, text: "", editable: true, rect: CGRect(x: 1, y: 2, width: 3, height: 4),
+    let empty = selectionEvent(id: 8, text: "", rect: CGRect(x: 1, y: 2, width: 3, height: 4),
                                via: "copy", reason: nil, ms: 400)
-    check(empty["editable"] as? Bool == false && empty["rect"] == nil, "没字时不能改、不带位置")
+    check(empty["rect"] == nil, "没字时不带位置")
     check(empty["reason"] as? String == "none", "没字时说为什么：默认是没选中")
-    let denied = selectionEvent(id: 9, text: "", editable: false, rect: nil, via: "ax", reason: "not_trusted", ms: 0)
+    let denied = selectionEvent(id: 9, text: "", rect: nil, via: "ax", reason: "not_trusted", ms: 0)
     check(denied["reason"] as? String == "not_trusted", "没权限照实说")
-    let noRect = selectionEvent(id: 10, text: "x", editable: false, rect: nil, via: "copy", reason: nil, ms: 30)
+    let noRect = selectionEvent(id: 10, text: "x", rect: nil, via: "copy", reason: nil, ms: 30)
     check(noRect["rect"] == nil, "复制拿不到位置就不带")
 
     check(parseOutside(nil) == false, "outside 不写是 false")

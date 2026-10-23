@@ -1,7 +1,7 @@
 package main
 
 // selection 命令：取前台应用里选中的文字，给划词翻译。先问 UI Automation（uia_windows.go）：记事本、Word、
-// Edge 和 Chrome 的网页与输入框都支持，还能给出选区在屏幕上的位置、在不在能改的地方。问不到（应用不支持 TextPattern、
+// Edge 和 Chrome 的网页与输入框都支持，还能给出选区在屏幕上的位置。问不到（应用不支持 TextPattern、
 // 选区是空的）再模拟一次 Ctrl+C，从剪贴板里拿，拿完把剪贴板原样还回去；这条路拿不到位置。
 // 都不在钩子线程上等：问 UIA 在它自己的线程上，等修饰键松开、等剪贴板变化在一个 goroutine 里轮询，
 // 只有碰剪贴板和发按键那几下交给钩子线程（剪贴板要消息窗口当主人，和贴字一样）。
@@ -9,7 +9,6 @@ package main
 import (
 	"fmt"
 	"time"
-	"unsafe"
 )
 
 const (
@@ -27,7 +26,6 @@ const (
 
 var (
 	procGetClipboardSequenceNumber = user32.NewProc("GetClipboardSequenceNumber")
-	procGetGUIThreadInfo           = user32.NewProc("GetGUIThreadInfo")
 )
 
 // 同一时间只取一次：两次的模拟复制交叠的话，剪贴板会被还原成另一次存下的东西
@@ -41,7 +39,7 @@ func handleSelection(id int) {
 		started := time.Now()
 		result := readSelection()
 		e := selectionEvent(id, result)
-		// 用了多久：父进程记日志用（选中的文字不进日志，长度、位置有没有、能不能改、用时都在这一条里）
+		// 用了多久：父进程记日志用（选中的文字不进日志，长度、位置有没有、用时都在这一条里）
 		e["ms"] = time.Since(started).Milliseconds()
 		emit(e)
 	}()
@@ -63,24 +61,23 @@ func readSelection() selection {
 		emit(event{"event": "error", "message": "取选区时 UI Automation 出错，改用模拟复制：" + err.Error()})
 	}
 	if reading.text != "" {
-		result := selection{Text: reading.text, Editable: judgeEditable(reading.clues), Via: "uia"}
+		result := selection{Text: reading.text, Via: "uia"}
 		if rect, ok := unionRects(reading.rects); ok {
 			result.Rect = &rect
 		}
 		return result
 	}
-	return copySelection(reading.clues)
+	return copySelection()
 }
 
 // ---------- 模拟复制 ----------
 
-// 模拟复制取选区。clues 是 UIA 在焦点元素上问到的那几样（可能什么都没有），再加上有没有系统光标，判能不能改
-func copySelection(clues editableClues) selection {
+// 模拟复制取选区：拿不到位置
+func copySelection() selection {
 	waitModifiersReleased()
 	type started struct {
 		saved    []clipboardEntry
 		sequence uintptr
-		caret    bool
 		result   *selection
 	}
 	begin := make(chan started, 1)
@@ -97,13 +94,12 @@ func copySelection(clues editableClues) selection {
 			return
 		}
 		sequence, _, _ := procGetClipboardSequenceNumber.Call()
-		caret := foregroundHasCaret()
 		if !sendKeys([]uint16{vkControl, vkC, vkC, vkControl}, []bool{true, true, false, false}) {
 			emit(event{"event": "error", "message": "取选区：模拟 Ctrl+C 没发出去"})
 			begin <- started{result: &selection{Via: "copy", Reason: "failed"}}
 			return
 		}
-		begin <- started{saved: saved, sequence: sequence, caret: caret}
+		begin <- started{saved: saved, sequence: sequence}
 	})
 	first := <-begin
 	if first.result != nil {
@@ -129,8 +125,7 @@ func copySelection(clues editableClues) selection {
 		if err := board.restore(first.saved); err != nil {
 			emit(event{"event": "error", "message": "取选区：还原不了剪贴板：" + err.Error()})
 		}
-		clues.caret = first.caret
-		finish <- selection{Text: text, Editable: judgeEditable(clues), Via: "copy", Reason: "none"}
+		finish <- selection{Text: text, Via: "copy", Reason: "none"}
 	})
 	return <-finish
 }
@@ -151,35 +146,4 @@ func waitModifiersReleased() {
 		}
 		time.Sleep(pollStep)
 	}
-}
-
-// GUITHREADINFO 在 x64 上的布局（WinUser.h）
-type guiThreadInfo struct {
-	size        uint32
-	flags       uint32
-	active      uintptr
-	focus       uintptr
-	capture     uintptr
-	menuOwner   uintptr
-	moveSize    uintptr
-	caret       uintptr
-	caretLeft   int32
-	caretTop    int32
-	caretRight  int32
-	caretBottom int32
-}
-
-// 前台窗口的线程有没有系统光标：Win32 的输入框、记事本有，网页正文、资源管理器没有。粗判"能不能改"
-func foregroundHasCaret() bool {
-	foreground, _, _ := procGetForegroundWindow.Call()
-	if foreground == 0 {
-		return false
-	}
-	thread, _, _ := procGetWindowThreadProcess.Call(foreground, 0)
-	info := guiThreadInfo{}
-	info.size = uint32(unsafe.Sizeof(info))
-	if ok, _, _ := procGetGUIThreadInfo.Call(thread, uintptr(unsafe.Pointer(&info))); ok == 0 {
-		return false
-	}
-	return info.caret != 0
 }

@@ -8,9 +8,9 @@
 //	          {"event":"interrupted","id":"dictate#0","to":"x#0"}            升级成了另一个绑定，紧接着报 x#0 的按下
 //	          {"event":"pasted","id":1,"ok":true}     ok 为 false 时文字留在剪贴板里，reason 说为什么
 //	          {"event":"click","id":"cancel"}            截着时点了某一块；capture 带 outside 时块外的按下报 {"event":"click","id":"outside"}
-//	          {"event":"selection","id":7,"text":"…","editable":true,"rect":{"x":10,"y":20,"width":300,"height":40},"via":"uia","ms":35}
+//	          {"event":"selection","id":7,"text":"…","rect":{"x":10,"y":20,"width":300,"height":40},"via":"uia","ms":35}
 //	                                                  selection 的答复，一定回一条（selection_windows.go）：rect 是选区的外接矩形（物理像素），
-//	                                                  不知道就不带；via 是 uia 或 copy；ms 是用了多久；text 是空的时 editable 是 false、
+//	                                                  不知道就不带；via 是 uia 或 copy；ms 是用了多久；text 是空的时
 //	                                                  不带 rect，带 reason：none（没选中）、elevated（前台是管理员窗口）、failed（出错了，另报 error）
 //	          {"event":"relistened","reason":"resume"}            睡眠唤醒（resume）、解锁或切回这个用户（unlock）以后重装了键盘钩子
 //	          {"event":"elevated_foreground","on":true,"pid":42}   前台换成了以管理员身份运行的窗口（换走了是 on:false，不带 pid）

@@ -15,7 +15,7 @@
 //             {"event":"interrupted","id":"dictate#0","to":"x#0"}    升级成了另一个绑定，紧接着报它的按下
 //             {"event":"click","id":"cancel"}                        截着的时候点了某一块
 //             {"event":"click","id":"outside"}                       截着、并且说了 outside 时，点在所有块之外（这一下照常放行）
-//             {"event":"selection","id":7,"text":"…","editable":true,"rect":{"x":…,"y":…,"width":…,"height":…},"via":"ax","ms":12}
+//             {"event":"selection","id":7,"text":"…","rect":{"x":…,"y":…,"width":…,"height":…},"via":"ax","ms":12}
 //                                         selection 的答复（Selection.swift）：前台应用里选中的字、在屏幕上的位置（没有就不带）、
 //                                         能不能改；via 是 ax（辅助功能）或 copy（模拟 ⌘C）。text 为空时带 reason：
 //                                         none 没选中 / not_trusted 没有辅助功能权限 / failed

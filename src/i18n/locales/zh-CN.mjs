@@ -451,7 +451,6 @@ export default {
     card: {
       copy: "复制",
       copied: "已复制",
-      replace: "替换选中文字",
       pin: "固定",
       unpin: "取消固定",
       close: "关闭",

@@ -4,12 +4,11 @@ package main
 // 下标照 mingw-w64 的 uiautomationclient.h（2026-10-22 的 master）里各接口的 Vtbl 结构数的，前三个是 IUnknown 的
 // QueryInterface、AddRef、Release：
 //   IUIAutomation                 8 GetFocusedElement、14 get_ControlViewWalker
-//   IUIAutomationElement          14 GetCurrentPatternAs、35 get_CurrentIsPassword
+//   IUIAutomationElement          14 GetCurrentPatternAs
 //   IUIAutomationTreeWalker       3 GetParentElement
 //   IUIAutomationTextPattern      5 GetSelection
 //   IUIAutomationTextRangeArray   3 get_Length、4 GetElement
-//   IUIAutomationTextRange        9 GetAttributeValue、10 GetBoundingRectangles、12 GetText
-//   IUIAutomationValuePattern     5 get_CurrentIsReadOnly
+//   IUIAutomationTextRange        10 GetBoundingRectangles、12 GetText
 // 调用都在一个专门的线程上（uiaWorker）：跨进程问前台应用，应用卡住时会跟着卡，不能放在键盘钩子的线程上。
 // 应用卡死、到点没回的，那个线程就丢下不管（它回来以后自己退出），下一次另起一个。
 
@@ -38,7 +37,6 @@ var (
 	procSafeArrayAccessData   = oleaut32.NewProc("SafeArrayAccessData")
 	procSafeArrayUnaccessData = oleaut32.NewProc("SafeArrayUnaccessData")
 	procSafeArrayDestroy      = oleaut32.NewProc("SafeArrayDestroy")
-	procVariantClear          = oleaut32.NewProc("VariantClear")
 )
 
 type guid struct {
@@ -50,10 +48,9 @@ type guid struct {
 
 // 照 uiautomationclient.h 的 DEFINE_GUID
 var (
-	clsidCUIAutomation           = guid{0xff48dba4, 0x60ef, 0x4201, [8]byte{0xaa, 0x87, 0x54, 0x10, 0x3e, 0xef, 0x59, 0x4e}}
-	iidIUIAutomation             = guid{0x30cbe57d, 0xd9d0, 0x452a, [8]byte{0xab, 0x13, 0x7a, 0xc5, 0xac, 0x48, 0x25, 0xee}}
-	iidIUIAutomationTextPattern  = guid{0x32eba289, 0x3583, 0x42c9, [8]byte{0x9c, 0x59, 0x3b, 0x6d, 0x9a, 0x1e, 0x9b, 0x6a}}
-	iidIUIAutomationValuePattern = guid{0xa94cd8b1, 0x0844, 0x4cd6, [8]byte{0x9d, 0x2d, 0x64, 0x05, 0x37, 0xab, 0x39, 0xe9}}
+	clsidCUIAutomation          = guid{0xff48dba4, 0x60ef, 0x4201, [8]byte{0xaa, 0x87, 0x54, 0x10, 0x3e, 0xef, 0x59, 0x4e}}
+	iidIUIAutomation            = guid{0x30cbe57d, 0xd9d0, 0x452a, [8]byte{0xab, 0x13, 0x7a, 0xc5, 0xac, 0x48, 0x25, 0xee}}
+	iidIUIAutomationTextPattern = guid{0x32eba289, 0x3583, 0x42c9, [8]byte{0x9c, 0x59, 0x3b, 0x6d, 0x9a, 0x1e, 0x9b, 0x6a}}
 )
 
 const (
@@ -61,11 +58,7 @@ const (
 	clsctxInprocServer  = 0x1
 	rpcEChangedMode     = 0x80010106
 
-	uiaTextPatternID       = 10014
-	uiaValuePatternID      = 10002
-	uiaIsReadOnlyAttribute = 40015
-
-	vtBool = 11
+	uiaTextPatternID = 10014
 
 	// 选中的文字往上找几层祖先去找 TextPattern：网页里焦点停在链接上、选的却是旁边正文时，TextPattern 在文档上
 	maxTextPatternHops = 4
@@ -95,14 +88,6 @@ type hresultError struct {
 
 func (e hresultError) Error() string {
 	return fmt.Sprintf("%s 失败（HRESULT 0x%08X）", e.what, uint32(e.hr))
-}
-
-// VARIANT 在 x64 上 24 字节：类型、三个保留字段、16 字节的值
-type variant struct {
-	vt  uint16
-	_   [3]uint16
-	val int64
-	_   int64
 }
 
 // BSTR 读成字符串，读完释放。BSTR 前面记着长度，里面可能有 NUL，不能按 NUL 结尾读
@@ -143,11 +128,10 @@ func takeDoubles(array uintptr) []float64 {
 	return append([]float64(nil), unsafe.Slice((*float64)(unsafe.Pointer(data)), count)...)
 }
 
-// UIA 读到的：选中的文字、各段的外接矩形、判能不能改的线索
+// UIA 读到的：选中的文字、各段的外接矩形
 type uiaReading struct {
 	text  string
 	rects []float64
-	clues editableClues
 }
 
 // 焦点元素上取一种模式（GetCurrentPatternAs 顺带做了 QueryInterface）；不支持是 0
@@ -174,19 +158,6 @@ func readFocused(automation comPtr) (uiaReading, error) {
 	}
 	defer focused.release()
 
-	var password int32
-	if hr, _, _ := syscall.SyscallN(focused.method(35), uintptr(focused), uintptr(unsafe.Pointer(&password))); !failed(hr) {
-		reading.clues.password = password != 0
-	}
-	if value := patternOf(focused, uiaValuePatternID, &iidIUIAutomationValuePattern); value != 0 {
-		var readOnly int32
-		if hr, _, _ := syscall.SyscallN(value.method(5), uintptr(value), uintptr(unsafe.Pointer(&readOnly))); !failed(hr) {
-			reading.clues.valuePattern = true
-			reading.clues.valueReadOnly = readOnly != 0
-		}
-		value.release()
-	}
-
 	text := textPatternNear(automation, focused)
 	if text == 0 {
 		return reading, nil
@@ -210,17 +181,13 @@ func readFocused(automation comPtr) (uiaReading, error) {
 		if hr, _, _ := syscall.SyscallN(ranges.method(4), uintptr(ranges), uintptr(i), uintptr(unsafe.Pointer(&item))); failed(hr) || item == 0 {
 			continue
 		}
-		part, rects, readOnly := readRange(item)
+		part, rects := readRange(item)
 		item.release()
 		if part == "" {
 			continue
 		}
 		parts = append(parts, part)
 		reading.rects = append(reading.rects, rects...)
-		// 几段里有一段是只读的，替换就不安全
-		if readOnly == yes || reading.clues.rangeReadOnly == unknown {
-			reading.clues.rangeReadOnly = readOnly
-		}
 	}
 	for i, part := range parts {
 		if i > 0 {
@@ -263,36 +230,24 @@ func textPatternNear(automation, focused comPtr) comPtr {
 	return 0
 }
 
-// 一段选区的文字、外接矩形、只读与否。文字最多读 maxSelectionUnits 再多两个单元：
+// 一段选区的文字、外接矩形。文字最多读 maxSelectionUnits 再多两个单元：
 // 截的时候按字符截（clipUTF16），多读的两个单元保证劈开的代理对落在截掉的那头
-func readRange(item comPtr) (string, []float64, tristate) {
+func readRange(item comPtr) (string, []float64) {
 	var bstr uintptr
 	hr, _, _ := syscall.SyscallN(item.method(12), uintptr(item), uintptr(maxSelectionUnits+2), uintptr(unsafe.Pointer(&bstr)))
 	if failed(hr) {
-		return "", nil, unknown
+		return "", nil
 	}
 	text := takeBSTR(bstr)
 	if text == "" {
-		return "", nil, unknown
+		return "", nil
 	}
 	var array uintptr
 	var rects []float64
 	if hr, _, _ := syscall.SyscallN(item.method(10), uintptr(item), uintptr(unsafe.Pointer(&array))); !failed(hr) {
 		rects = takeDoubles(array)
 	}
-	readOnly := unknown
-	var value variant
-	if hr, _, _ := syscall.SyscallN(item.method(9), uintptr(item), uiaIsReadOnlyAttribute, uintptr(unsafe.Pointer(&value))); !failed(hr) {
-		// 不支持、几段不一样时回的是 VT_UNKNOWN 的哨兵对象，按没拿到算
-		if value.vt == vtBool {
-			readOnly = no
-			if int16(value.val) != 0 {
-				readOnly = yes
-			}
-		}
-		procVariantClear.Call(uintptr(unsafe.Pointer(&value)))
-	}
-	return text, rects, readOnly
+	return text, rects
 }
 
 // ---------- 专门的线程 ----------

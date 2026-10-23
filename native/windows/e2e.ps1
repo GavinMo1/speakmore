@@ -357,7 +357,7 @@ try {
   $inNotepad = Get-Clipboard -Raw
   Check '记事本里是贴进去的那段字' ($inNotepad -eq $text) ($inNotepad)
 
-  # 划词翻译取选区（selection）。记事本里全选：UIA 拿到那段字，能改，位置在记事本窗口里。换行各家写法不一，比之前统一成 \n
+  # 划词翻译取选区（selection）。记事本里全选：UIA 拿到那段字，位置在记事本窗口里。换行各家写法不一，比之前统一成 \n
   $lines = { param($value) ("$value" -replace "`r`n", "`n") -replace "`r", "`n" }
   $box = [System.Windows.Automation.AutomationElement]::FromHandle($window).Current.BoundingRectangle
   [Fake]::SetForegroundWindow($window) | Out-Null
@@ -368,7 +368,7 @@ try {
   Send $helper @{ cmd = 'selection'; id = 11 }
   $sel = Next-Event $helper 4000
   Check '记事本全选：selection 拿到那段字（UIA）' ($sel.event -eq 'selection' -and $sel.id -eq 11 -and (& $lines $sel.text) -eq (& $lines $text) -and $sel.via -eq 'uia') (Show $sel)
-  Check '记事本里能改' ($sel.editable -eq $true) ''
+  Check '回执里不报能不能改（10-23 砍掉了替换）' ($null -eq $sel.editable) ''
   $inside = $null -ne $sel.rect -and $sel.rect.width -gt 0 -and $sel.rect.x -ge $box.Left - 1 -and $sel.rect.y -ge $box.Top - 1 -and
     ($sel.rect.x + $sel.rect.width) -le $box.Right + 1 -and ($sel.rect.y + $sel.rect.height) -le $box.Bottom + 1
   Check '选区位置在记事本窗口里' $inside "选区 $(Show $sel.rect)，窗口 $box"
@@ -378,7 +378,7 @@ try {
   Set-Clipboard -Value '取选区之前的剪贴板'
   Send $helper @{ cmd = 'selection'; id = 12 }
   $sel = Next-Event $helper 4000
-  Check '什么都没选：text 空的、reason none' ($sel.event -eq 'selection' -and $sel.id -eq 12 -and $sel.text -eq '' -and $sel.reason -eq 'none' -and $sel.editable -eq $false -and $null -eq $sel.rect) (Show $sel)
+  Check '什么都没选：text 空的、reason none' ($sel.event -eq 'selection' -and $sel.id -eq 12 -and $sel.text -eq '' -and $sel.reason -eq 'none' -and $null -eq $sel.rect) (Show $sel)
   Check '取选区以后剪贴板还是原来的' ((Get-Clipboard -Raw) -eq '取选区之前的剪贴板') (Get-Clipboard -Raw)
   Check 'selection 只回一条，没报 error' ($null -eq (Next-Event $helper 300)) ''
 
@@ -398,7 +398,7 @@ try {
   [Fake]::Click($cx, $cy, $true); [Fake]::Click($cx, $cy, $false)
   Check '不截了之后块外点击不报' ($null -eq (Next-Event $helper 400)) ''
 
-  # 模拟复制兜底：UIA 拿不到（没有 TextPattern），发 Ctrl+C 从剪贴板拿，拿完剪贴板还原；拿不到位置，不能改
+  # 模拟复制兜底：UIA 拿不到（没有 TextPattern），发 Ctrl+C 从剪贴板拿，拿完剪贴板还原；拿不到位置
   $payload = 'Copied by the fallback 复制兜底'
   [CopyWindow]::Open('SpeakMore copy fallback', $payload)
   Check '复制兜底的窗口开起来了' ([CopyWindow]::Handle -ne [IntPtr]::Zero) ''
@@ -412,7 +412,7 @@ try {
     Send $helper @{ cmd = 'selection'; id = 31 }
     $sel = Next-Event $helper 4000
     Check '没有 TextPattern 的地方：模拟复制拿到字' ($sel.event -eq 'selection' -and $sel.id -eq 31 -and $sel.text -eq $payload -and $sel.via -eq 'copy' -and $null -eq $sel.reason) (Show $sel)
-    Check '模拟复制拿到的：不能改、不带位置' ($sel.editable -eq $false -and $null -eq $sel.rect) ''
+    Check '模拟复制拿到的：不带位置' ($null -eq $sel.rect) ''
     Check '模拟复制以后剪贴板还原了' ((Get-Clipboard -Raw) -eq '取选区之前的剪贴板') (Get-Clipboard -Raw)
     Check '模拟复制那次没报 error' ($null -eq (Next-Event $helper 300)) ''
   }
@@ -427,7 +427,7 @@ try {
     $edgeProfile = "$env:TEMP\speakmore-e2e-edge"
     $page = "$env:TEMP\speakmore-e2e-selection.html"
     $paragraph = 'The model keeps the audio on your device.'
-    $typed = 'Editable words here'
+    $typed = 'Typed words here'
     Set-Content -Path $page -Encoding UTF8 -Value "<!doctype html><meta charset=`"utf-8`"><title>SpeakMore selection</title><body style=`"font:28px sans-serif;margin:40px`"><p>$paragraph</p><textarea rows=`"2`" cols=`"24`">$typed</textarea></body>"
     # InPrivate：新的用户目录会被 Edge 拿系统登录的微软账号自动登录，弹"同步浏览数据"的框抢焦点（10-22 实测），InPrivate 不登录
     Start-Process $edge -ArgumentList "--user-data-dir=`"$edgeProfile`"", '--no-first-run', '--no-default-browser-check', '--inprivate', '--new-window', "file:///$($page -replace '\\', '/')"
@@ -469,7 +469,7 @@ try {
         Drain $helper
         Send $helper @{ cmd = 'selection'; id = 21 }
         $sel = Next-Event $helper 4000
-        Check '网页正文：selection 拿到正文、不能改' ($sel.event -eq 'selection' -and $sel.id -eq 21 -and "$($sel.text)".Contains($paragraph) -and $sel.editable -eq $false) (Show $sel)
+        Check '网页正文：selection 拿到正文' ($sel.event -eq 'selection' -and $sel.id -eq 21 -and "$($sel.text)".Contains($paragraph)) (Show $sel)
         $at = $edit.Current.BoundingRectangle
         [Fake]::Click([int](($at.Left + $at.Right) / 2), [int](($at.Top + $at.Bottom) / 2), $true); [Fake]::Click([int](($at.Left + $at.Right) / 2), [int](($at.Top + $at.Bottom) / 2), $false)
         Start-Sleep -Milliseconds 200
@@ -480,7 +480,7 @@ try {
         $sel = Next-Event $helper 4000
         $inside = $null -ne $sel.rect -and $sel.rect.x -ge $edgeBox.Left - 1 -and $sel.rect.y -ge $edgeBox.Top - 1 -and
           ($sel.rect.x + $sel.rect.width) -le $edgeBox.Right + 1 -and ($sel.rect.y + $sel.rect.height) -le $edgeBox.Bottom + 1
-        Check '网页输入框：selection 拿到框里的字、能改、位置在窗口里' ($sel.event -eq 'selection' -and $sel.id -eq 22 -and $sel.text -eq $typed -and $sel.editable -eq $true -and $inside) "$(Show $sel)，窗口 $edgeBox"
+        Check '网页输入框：selection 拿到框里的字、位置在窗口里' ($sel.event -eq 'selection' -and $sel.id -eq 22 -and $sel.text -eq $typed -and $inside) "$(Show $sel)，窗口 $edgeBox"
       }
     }
   }

@@ -1,10 +1,10 @@
-// 划词翻译要的选区：选中的字、它在屏幕上的位置、能不能改（App 据此在卡片上给不给"替换选中文字"，替换就是 paste 往原处贴）。
+// 划词翻译要的选区：选中的字和它在屏幕上的位置（App 按它在选区下方摆卡片）。
 // 先问辅助功能：焦点元素的 AXSelectedText，位置是 AXSelectedTextRange 的 AXBoundsForRange（全局坐标，左上角为原点，
 // 和 CGEvent、capture 的 regions 同一套）。原生控件、Safari 都问得到；问不到字的（多数 Electron 应用、没开辅助功能树的
 // Chrome）再模拟 ⌘C 从剪贴板取，取完把剪贴板还原，这条路拿不到位置。
 // 和 Windows 版（native/windows/selection*.go）的回执一字不差：
-//   {"event":"selection","id":7,"text":"…","editable":true,"rect":{…},"via":"ax","ms":12}
-//   text 为空时带 reason（none 没选中 / not_trusted 没有辅助功能权限 / failed），editable 是 false、不带 rect
+//   {"event":"selection","id":7,"text":"…","rect":{…},"via":"ax","ms":12}
+//   text 为空时带 reason（none 没选中 / not_trusted 没有辅助功能权限 / failed），不带 rect
 
 import AppKit
 
@@ -17,8 +17,6 @@ private let releaseWait: TimeInterval = 1.0
 /// 模拟 ⌘C 之后等剪贴板变化最多多久
 private let copyWait: TimeInterval = 0.4
 private let cKeyCode: CGKeyCode = 8
-/// 能改的控件：这几种角色、并且值能写
-private let editableRoles: Set<String> = [kAXTextFieldRole, kAXTextAreaRole, kAXComboBoxRole, "AXSearchField"]
 
 // MARK: - 纯逻辑（tests/main.swift 测）
 
@@ -42,17 +40,13 @@ func usableRect(_ rect: CGRect?) -> CGRect? {
     return rect
 }
 
-/// 拼出回执。text 为空时 editable 一定是 false、不带 rect（App 不拿没意义的位置摆卡片）
-func selectionEvent(id: Int, text: String, editable: Bool, rect: CGRect?, via: String, reason: String?, ms: Int)
-    -> [String: Any]
-{
+/// 拼出回执。text 为空时不带 rect（App 不拿没意义的位置摆卡片）
+func selectionEvent(id: Int, text: String, rect: CGRect?, via: String, reason: String?, ms: Int) -> [String: Any] {
     var event: [String: Any] = ["event": "selection", "id": id, "text": clipSelection(text), "via": via, "ms": ms]
     if text.isEmpty {
-        event["editable"] = false
         event["reason"] = reason ?? "none"
         return event
     }
-    event["editable"] = editable
     if let rect = usableRect(rect) {
         event["rect"] = ["x": rect.origin.x, "y": rect.origin.y, "width": rect.width, "height": rect.height]
     }
@@ -92,16 +86,6 @@ private func selectionBounds(_ element: AXUIElement) -> CGRect? {
     var rect = CGRect.zero
     guard AXValueGetValue(bounds as! AXValue, .cgRect, &rect) else { return nil }
     return rect
-}
-
-/// 能不能改：输入框一类的角色，值能写。密码框不算（AXSecureTextField 不在角色里）
-private func isEditable(_ element: AXUIElement) -> Bool {
-    guard let role = attribute(element, kAXRoleAttribute) as? String, editableRoles.contains(role) else { return false }
-    var settable: DarwinBoolean = false
-    guard AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable) == .success else {
-        return false
-    }
-    return settable.boolValue
 }
 
 // MARK: - 模拟 ⌘C
@@ -158,18 +142,15 @@ func selection(id: Int) {
     let elapsed = { Int(Date().timeIntervalSince(started) * 1000) }
     guard AXIsProcessTrusted() else {
         // 没有辅助功能权限：问不了，也发不了 ⌘C
-        emit(selectionEvent(id: id, text: "", editable: false, rect: nil, via: "ax", reason: "not_trusted", ms: 0))
+        emit(selectionEvent(id: id, text: "", rect: nil, via: "ax", reason: "not_trusted", ms: 0))
         return
     }
-    let focused = focusedElement()
-    if let focused, let text = selectedText(focused), !text.isEmpty {
-        emit(selectionEvent(id: id, text: text, editable: isEditable(focused), rect: selectionBounds(focused),
-                            via: "ax", reason: nil, ms: elapsed()))
+    if let focused = focusedElement(), let text = selectedText(focused), !text.isEmpty {
+        emit(selectionEvent(id: id, text: text, rect: selectionBounds(focused), via: "ax", reason: nil, ms: elapsed()))
         return
     }
     copySelection { text in
-        // 复制拿不到位置；能不能改还按焦点元素看（问得到的话）
-        let editable = !text.isEmpty && focused.map(isEditable) == true
-        emit(selectionEvent(id: id, text: text, editable: editable, rect: nil, via: "copy", reason: nil, ms: elapsed()))
+        // 复制拿不到位置
+        emit(selectionEvent(id: id, text: text, rect: nil, via: "copy", reason: nil, ms: elapsed()))
     }
 }

@@ -26,7 +26,7 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
   if (command.cmd === "info") return emit({ event: "info", fnUsage: 2 });
   if (command.cmd === "selection") {
     if (command.id === 2) return;
-    return emit({ event: "selection", id: command.id, text: "picked", editable: true,
+    return emit({ event: "selection", id: command.id, text: "picked",
       rect: { x: 10, y: 20, width: 300, height: 18 }, via: "ax", ms: 9 });
   }
   const { id, text } = command;
@@ -197,7 +197,6 @@ test("取选区：按 id 认回各自的回执，不往上转；回执不来时�
   const { helper, seen } = start();
   assert.deepEqual(await helper.selection(), {
     text: "picked",
-    editable: true,
     rect: { x: 10, y: 20, width: 300, height: 18 },
     via: "ax",
     reason: null,
@@ -205,7 +204,6 @@ test("取选区：按 id 认回各自的回执，不往上转；回执不来时�
   });
   assert.deepEqual(await helper.selection({ timeoutMs: 50 }), {
     text: "",
-    editable: false,
     rect: null,
     via: null,
     reason: "timeout",

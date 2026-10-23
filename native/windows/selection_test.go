@@ -8,9 +8,9 @@ import (
 	"unicode/utf16"
 )
 
-func TestSelectionEventCarriesTextRectAndEditable(t *testing.T) {
-	got := selectionEvent(7, selection{Text: "你好", Rect: &screenRect{X: 10, Y: 20, Width: 300, Height: 40}, Editable: true, Via: "uia"})
-	want := event{"event": "selection", "id": 7, "text": "你好", "editable": true, "via": "uia",
+func TestSelectionEventCarriesTextAndRect(t *testing.T) {
+	got := selectionEvent(7, selection{Text: "你好", Rect: &screenRect{X: 10, Y: 20, Width: 300, Height: 40}, Via: "uia"})
+	want := event{"event": "selection", "id": 7, "text": "你好", "via": "uia",
 		"rect": map[string]float64{"x": 10, "y": 20, "width": 300, "height": 40}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v", got)
@@ -22,8 +22,8 @@ func TestSelectionEventCarriesTextRectAndEditable(t *testing.T) {
 }
 
 func TestEmptySelectionSaysWhyAndCarriesNoRect(t *testing.T) {
-	got := selectionEvent(3, selection{Rect: &screenRect{Width: 1, Height: 1}, Editable: true, Via: "copy", Reason: "none"})
-	want := event{"event": "selection", "id": 3, "text": "", "editable": false, "via": "copy", "reason": "none"}
+	got := selectionEvent(3, selection{Rect: &screenRect{Width: 1, Height: 1}, Via: "copy", Reason: "none"})
+	want := event{"event": "selection", "id": 3, "text": "", "via": "copy", "reason": "none"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v", got)
 	}
@@ -67,28 +67,5 @@ func TestUnionOfBoundingRectangles(t *testing.T) {
 	// 不是 4 的倍数的尾巴不管
 	if got, ok := unionRects([]float64{1, 2, 3, 4, 9}); !ok || got != (screenRect{X: 1, Y: 2, Width: 3, Height: 4}) {
 		t.Fatalf("got %+v %v", got, ok)
-	}
-}
-
-func TestEditableFollowsTheMostSpecificClue(t *testing.T) {
-	cases := []struct {
-		name  string
-		clues editableClues
-		want  bool
-	}{
-		// 选中那段文字自己说的只读与否最准：网页正文是只读的，即使所在元素有可写的 ValuePattern 也不算
-		{"文字说只读", editableClues{rangeReadOnly: yes, valuePattern: true}, false},
-		{"文字说可写", editableClues{rangeReadOnly: no}, true},
-		{"文字没说，ValuePattern 可写", editableClues{valuePattern: true}, true},
-		{"文字没说，ValuePattern 只读", editableClues{valuePattern: true, valueReadOnly: true}, false},
-		{"都没有，只有光标", editableClues{caret: true}, true},
-		{"什么都没有", editableClues{}, false},
-		// 密码框不给替换：贴进去的东西用户看不见
-		{"密码框", editableClues{rangeReadOnly: no, password: true}, false},
-	}
-	for _, c := range cases {
-		if got := judgeEditable(c.clues); got != c.want {
-			t.Errorf("%s：got %v", c.name, got)
-		}
 	}
 }

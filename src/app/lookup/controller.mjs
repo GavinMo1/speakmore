@@ -2,12 +2,13 @@ import { msg, problemOf } from "../../i18n/index.mjs";
 import { findLanguage, LANGUAGES } from "../../languages.mjs";
 
 // 划词翻译的流程：按下划词的键 → 取选区（小帮手）→ 在选区下方弹卡片（先是翻译中）→ 译好换上译文、记进历史。
-// 卡片上能复制、换语言（只管这一次）、固定；选区能改时还能替换（收起卡片，把译文贴回原处）。esc、关闭按钮、点别处收起。
+// 卡片上能复制、换语言（只管这一次）、固定。esc、关闭按钮、点别处收起。
 // 他定的：不贴字、只弹卡片；进历史，首页的口述统计不算它，花费照记（记账在 server/lookup/translator.mjs）。
+// 也不替换原文（10-23 砍掉了"替换选中文字"）：选区多在网页、App 里，不一定能改，往原处贴会出各种问题，只给复制。
 // 这里只管流程和状态，不碰 Electron：卡片窗口、小帮手、剪贴板、历史都由主进程按下面的接口交进来，测试时换成假的。
 //
 // 交给卡片画的样子（view）：
-//   { id, phase: loading | done | error, language, languages, text, problem, action: keys | retry | null, editable, pinned }
+//   { id, phase: loading | done | error, language, languages, text, problem, action: keys | retry | null, pinned }
 //   id 每次按键换一个（卡片据此收起上一次展开的语言选单）；text 是译文；problem 是出错时的那句话（msg 或原话）；
 //   action 是出错时那一个按钮：缺 key、key 不对、自定义服务没配好时去配置密钥，别的重试
 
@@ -24,9 +25,6 @@ const NO_TEXT = {
 /** 出错时给哪个按钮：缺东西、key 不对的去配置密钥，别的重试 */
 const KEY_PROBLEMS = new Set(["missing", "unreadable", "setup", "key"]);
 
-/** 替换贴不进去时说什么（同语音输入的交付，app/delivery.mjs） */
-const PASTE_PROBLEMS = { not_trusted: "delivery.noAccessibility", elevated: "delivery.elevated" };
-
 const LANGUAGE_IDS = Object.freeze(LANGUAGES.map(({ id }) => id));
 
 /** 选中的字：换行统一成 \n（Windows 记事本里是 \r，有的应用是 \r\n），首尾空白去掉 */
@@ -34,12 +32,11 @@ const normalize = (text) => text.replace(/\r\n?/g, "\n").trim();
 
 /**
  * @param {object} deps
- * @param {() => Promise<{ text: string, editable: boolean, rect: object | null, via?: string | null, reason?: string | null, ms?: number | null }>} deps.selection
+ * @param {() => Promise<{ text: string, rect: object | null, via?: string | null, reason?: string | null, ms?: number | null }>} deps.selection
  *   取选区（app/helper.mjs 的 selection）；rect 是屏幕坐标、原样交给卡片
  * @param {{ current(): { to: string }, translate(text: string, o: { language: string, lookupId: string, signal: AbortSignal }): Promise<{ text: string }> }} deps.engine
  *   app/lookup/engine.mjs
  * @param {{ show(view: object, anchor: { rect: object | null }): void, update(view: object): void, hide(): void }} deps.card 卡片窗口
- * @param {(text: string) => Promise<{ ok: boolean, reason: string | null }>} deps.paste 贴回原处（小帮手的 paste）
  * @param {(text: string) => void} deps.copy 放进剪贴板
  * @param {(message: object) => void} deps.notify 在悬浮条上说一句
  * @param {(entry: object) => void} deps.record 记进历史（storage/history.mjs 的 add 的样子）
@@ -53,7 +50,6 @@ export function createLookup({
   selection,
   engine,
   card,
-  paste,
   copy,
   notify,
   record,
@@ -64,7 +60,7 @@ export function createLookup({
   log,
 }) {
   /**
-   * 开着的那一张：{ source, editable, language, produced, pinned, phase, text, problem, action, lookupId, abort }；没开是 null。
+   * 开着的那一张：{ source, language, produced, pinned, phase, text, problem, action, lookupId, abort }；没开是 null。
    * language 是要译成的（设置里的、卡片上换的），produced 是实际译成的
    */
   let session = null;
@@ -80,7 +76,6 @@ export function createLookup({
     text: current.text,
     problem: current.problem,
     action: current.action,
-    editable: current.editable,
     pinned: current.pinned,
   });
 
@@ -149,32 +144,12 @@ export function createLookup({
     }
   }
 
-  async function replace(current) {
-    const { text } = current;
-    close("replace");
-    try {
-      const result = await paste(text);
-      log.info("lookup_replaced", { ok: result.ok, reason: result.reason });
-      if (result.ok) return;
-      // 小帮手贴不进去时文字多半已经在剪贴板里，再放一次保险（同语音输入的交付）
-      copy(text);
-      notify(msg(PASTE_PROBLEMS[result.reason] ?? "delivery.pasteFailed"));
-    } catch (error) {
-      log.error("lookup_replace_failed", { error: String(error?.message ?? error) });
-      copy(text);
-      notify(msg("delivery.pasteFailed"));
-    }
-  }
-
   const ACTIONS = {
     close: () => close("button"),
     copy: (current) => {
       if (current.phase !== "done") return;
       copy(current.text);
       log.info("lookup_copied", { lookup_id: current.lookupId });
-    },
-    replace: (current) => {
-      if (current.phase === "done" && current.editable) replace(current);
     },
     pin: (current) => {
       current.pinned = !current.pinned;
@@ -201,7 +176,7 @@ export function createLookup({
         log.info("lookup_ignored", { reason: "busy" });
         return;
       }
-      close("replaced");
+      close("pressed_again");
       const press = ++presses;
       const picked = await selection();
       // 只记长度和方式，不记选中的字
@@ -210,7 +185,6 @@ export function createLookup({
         ms: picked.ms ?? null,
         length: picked.text.length,
         rect: picked.rect !== null,
-        editable: picked.editable,
         reason: picked.reason ?? null,
       });
       if (press !== presses) return;
@@ -226,7 +200,6 @@ export function createLookup({
       const current = {
         pressId: press,
         source,
-        editable: picked.editable,
         language: engine.current().to,
         produced: null,
         pinned: false,
@@ -243,7 +216,7 @@ export function createLookup({
     },
 
     /**
-     * 卡片上点了什么：close、copy、replace、pin、retry、keys，或者 pick:<语言 id>（换语言，只管这一次）
+     * 卡片上点了什么：close、copy、pin、retry、keys，或者 pick:<语言 id>（换语言，只管这一次）
      * @param {string} action
      */
     act(action) {
@@ -260,19 +233,9 @@ export function createLookup({
       ACTIONS[action]?.(current);
     },
 
-    /**
-     * 点了卡片以外的地方：收起。固定了的不收，但从此不再给替换：焦点、选区可能已经换了地方，贴回去会贴错
-     */
+    /** 点了卡片以外的地方：收起，固定了的不收 */
     outside() {
-      const current = session;
-      if (!current) return;
-      if (!current.pinned) {
-        close("outside");
-        return;
-      }
-      if (!current.editable) return;
-      current.editable = false;
-      card.update(view(current));
+      if (session && !session.pinned) close("outside");
     },
 
     /** esc */
