@@ -173,7 +173,8 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
      GROUP BY recent.id
      ORDER BY recent.created_at DESC`,
   );
-  // kinds 是 JSON 数组，只数这几个功能的；为空时全数。entries 不管功能，是这段时间里所有记录的条数
+  // kinds 是 JSON 数组，只数这几个功能的；为空时全数。entries 不管功能，是这段时间里所有记录的条数。
+  // 字数按他说的那段数（翻译的是原文），和下面的 dictations() 一个口径：译成英文按字母数，语速会虚高三倍
   const summarize = db.prepare(
     `WITH picked AS (
        SELECT * FROM history
@@ -181,7 +182,7 @@ export function openHistory(dbPath, { readOnly = false } = {}) {
      )
      SELECT (SELECT count(*) FROM history WHERE created_at >= :since) AS entries,
             count(*) FILTER (WHERE status = 'completed') AS dictations,
-            coalesce(sum(length(refined_text)) FILTER (WHERE status = 'completed'), 0) AS characters,
+            coalesce(sum(length(coalesce(source_text, refined_text))) FILTER (WHERE status = 'completed'), 0) AS characters,
             coalesce(sum(duration) FILTER (WHERE status = 'completed'), 0) AS seconds,
             count(*) FILTER (WHERE status = 'failed') AS failed,
             (SELECT coalesce(sum(cost_usd), 0) FROM model_calls WHERE created_at >= :since) AS costUsd,

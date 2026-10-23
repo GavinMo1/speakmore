@@ -173,6 +173,16 @@ test('统计可以只数某几个功能的（命令行的"今天几次听写"只
   history.close();
 });
 
+test("统计的字数按他说的那段数：翻译的是原文，和首页的口径一样", () => {
+  const history = openHistory(join(dir, "history.db"));
+  history.add(entry({ id: "d", refinedText: "老的听写", duration: 3 }));
+  history.add(
+    entry({ id: "t", kind: "translate", refinedText: "Hello", sourceText: "你好", outputLanguage: "en", duration: 2 }),
+  );
+  assert.equal(history.stats({ kinds: ["dictate", "translate"] }).characters, 6);
+  history.close();
+});
+
 test("首页统计要的：所有完成了的听写，只带时间、文字、时长，老的在前；失败的、没听到声音的不算", () => {
   const history = openHistory(join(dir, "history.db"));
   history.add(entry({ id: "b", createdAt: "2026-10-13T09:00:00.000Z", refinedText: "第二句", duration: 2 }));
