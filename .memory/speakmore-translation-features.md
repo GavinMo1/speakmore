@@ -1,6 +1,6 @@
 ---
 name: speakmore-translation-features
-description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格）；分支 translate-features，三段都做完（10-23），等他点头再起对抗性审查，之后问合并
+description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格）；分支 translate-features，三段都做完（10-23），审查一轮修完、#16 合进来了，等他点头合并 main
 metadata:
   node_type: memory
   type: project
@@ -135,10 +135,14 @@ metadata:
   - 单测 Mac 1487 过、Windows 1429 过（65 跳过），都 0 失败。Windows 开发机上替换、只读只给复制、点别处收起都验过
 - 10-23 他定了砍掉"替换选中文字"（`17d5e6d`）：划词多半在网页、App 里，选区不一定能改，往原处贴出问题；卡片上只留复制。
   小帮手判断能不能改的代码一起删了（回执不再有 editable），Windows e2e.ps1 61/61
-- 10-23 他点头后起了对抗性审查（workflow wf_5f699c5a-321，5 块各一个审查加一个反驳，10 个 agent，一轮）；结果回来就修，修完问合并
-- 10-23 顺手修了 issue #16（Windows 上悬浮条被别家置顶窗口盖住）：分支 `bar-on-top`（从 translate-features 拉的，提交 `99abae9`），
-  工作副本在 scratchpad 的 bar-on-top 目录；`app/on-top.mjs` 照原版用 screen-saver 层级、不进调度中心、每次露出来再顶一次。
-  审查修完后合回 translate-features。issue 里已回复进度，发版后再回、再关。两台开发版现在跑的是这个工作副本的代码
+- 10-23 他点头后起了对抗性审查（workflow wf_5f699c5a-321，10 个 agent，一轮）：报 38 条、核实成立 36 条，当天修完
+  （`1e82ea0`…`de083e5`，12 个提交）。最要紧的：Windows 没选中时也模拟 Ctrl+C，终端里会中断跑着的程序（旧小帮手真机复现
+  ping -t 被打断）；改成有 TextPattern 选区空、或前台是终端就不发。两个小帮手的模拟复制和贴字排成一队、晚到的复制也还原；
+  Mac 问辅助功能挪出主线程。没改代码的一条：安全输入开着时 Carbon 把左⌥回车也吞掉，写进 hotkey-research.md 4.1 当已知限制
+- 10-23 issue #16（Windows 上悬浮条被别家置顶窗口盖住）修在 `bar-on-top`（`99abae9`），审查修完已合回（`8875e91`），
+  分支和工作副本删了。issue 里已回复进度，发版后再回、再关
+- 10-23 修完后：单测 Mac 1492 过、Windows 1434 过（65 跳过），都 0 失败；Windows e2e.ps1 67/67；两台开发版从主仓库重启了。
+  Mac 取选区挪线程以后还没真按过（等他划一次）
 - 他 Mac 上 10-23 说话"音频无声"：录音比前一天小约 20 dB，系统输入音量是 50，让他自己调高（我们录音关了自动增益）
 - 还开着：他验悬浮条选单的修复（b867af2）、中文选区译英文；Windows 真键盘按一次右 Alt+回车；
   README、官网改叫法和加划词（memory 里"留到最后改 README 时一起改"那两条）
