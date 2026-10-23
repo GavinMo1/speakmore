@@ -1,4 +1,4 @@
-/* 快捷键编辑（shared/hotkey-editor.mjs），设置页和首次引导共用。每个动作一行：左边名字，右边每个组合一个胶囊框，
+/* 快捷键编辑（shared/hotkey-editor.mjs），设置页用。每个动作一行：左边名字，右边每个组合一个胶囊框，
    里面一排键帽（.keycap 在 window.css）；录着的那个亮一圈主题色。颜色、尺寸只用 token。 */
 
 .hotkey-row {

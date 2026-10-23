@@ -1228,6 +1228,22 @@
   font-weight: var(--weight-medium);
 }
 
+/* 权限：一项一行，名字 · 状态 · 按钮 */
+.permissions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.permissions li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
 .recheck-row {
   margin-top: 1rem;
 }

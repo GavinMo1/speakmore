@@ -1,7 +1,7 @@
 import { t } from "./i18n.mjs";
 import { providerIcon } from "./provider-icons.mjs";
 
-// 用代码画的几块（主窗口的模型页、识别方式选单，首次引导的选方式、准备）共用的小工具：拼节点、取图标、按界面语言写厂商名。
+// 用代码画的几块（主窗口的引擎页、推荐组合，首次引导）共用的小工具：拼节点、取图标、按界面语言写厂商名。
 
 const NS = "http://www.w3.org/2000/svg";
 

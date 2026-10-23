@@ -4,7 +4,7 @@ import { t } from "./i18n.mjs";
 import { keycapRow as keycaps } from "./keycaps.mjs";
 import { describeError } from "./setup-text.mjs";
 
-// 快捷键编辑（docs/hotkey-research.md 5.6、D4），设置页和首次引导共用：动作目录里每个动作一行，每个组合一个胶囊框
+// 快捷键编辑（docs/hotkey-research.md 5.6、D4），设置页用：动作目录里每个动作一行，每个组合一个胶囊框
 // （点它换掉、× 删掉），"添加另一个"（至多 4 个），和默认不一样时"恢复默认"。
 // 录键在主进程和小帮手那边：这里点了告诉主进程（recordHotkey），主进程经 onHotkeyRecording 报回现在按着什么、存没存上。
 // 页面只画，不判断合不合规矩：存的时候主进程查，被拒了说原因，人直接重按。
@@ -21,10 +21,9 @@ export function recordBlocker(setup) {
 
 /**
  * @param {HTMLElement} root 画在这里面
- * @param {{ onChanged: () => Promise<void>, savedNote?: (actionId: string) => string }} options onChanged：存好、删掉、
- *   恢复默认之后，让页面重新要一份状态；savedNote：存好以后那一行写什么（按动作给文案的名字），默认"已保存"
+ * @param {{ onChanged: () => Promise<void> }} options onChanged：存好、删掉、恢复默认之后，让页面重新要一份状态
  */
-export function createHotkeyEditor(root, { onChanged, savedNote = () => "hotkeyRecord.saved" }) {
+export function createHotkeyEditor(root, { onChanged }) {
   /** 主进程给的每个动作一行（setup:get 的 hotkeyActions） */
   let actions = [];
   /** 录不了的原因（文案的名字）；录得了是 null */
@@ -57,7 +56,7 @@ export function createHotkeyEditor(root, { onChanged, savedNote = () => "hotkeyR
   function start(actionId, index) {
     const action = actions.find((item) => item.id === actionId);
     if (!action || action.env) return;
-    // 录不了时照实说为什么（引导页"换个键"在编辑器外面，不说的话点了没有任何反应）
+    // 录不了时照实说为什么，不然点了没有任何反应
     if (blocker !== null) {
       say(actionId, t(blocker), "problem");
       draw();
@@ -100,7 +99,7 @@ export function createHotkeyEditor(root, { onChanged, savedNote = () => "hotkeyR
       recording = { ...recording, codes: payload.codes, unknown: false, tooMany: false, reason: payload.reason };
     } else if (payload.state === "saved") {
       recording = null;
-      say(payload.action, payload.note ?? t(savedNote(payload.action)), payload.note ? "" : "ok");
+      say(payload.action, payload.note ?? t("hotkeyRecord.saved"), payload.note ? "" : "ok");
       onChanged();
     } else {
       recording = null;
@@ -264,9 +263,5 @@ export function createHotkeyEditor(root, { onChanged, savedNote = () => "hotkeyR
       if (blocker !== null && recording !== null) stop("unavailable");
       draw();
     },
-    /** 直接开始给某个动作录（引导页的"换个键"）。index 同上 */
-    record: start,
-    /** 不录了（换页、收起时） */
-    stop: () => stop("left"),
   };
 }
