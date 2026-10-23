@@ -55,9 +55,11 @@
 </picture>
 
 - Speak in English and the text arrives in Chinese; 16 target languages are available.
+- Suited to group chats with colleagues and clients abroad, and to emails and commit messages in another language: the translation goes straight into the input box, with no separate translation tool.
 - Set target languages in Settings › Voice translation; several can be listed, and the first is the default.
 - Switch the target on the voice bar while speaking; the choice applies to that dictation only.
 - Speech is cleaned up before translation, so fillers and self-corrections stay out; history keeps both the original and the translation.
+- Median model time: 2.6 seconds with Direct, 1.3 seconds with Hybrid.
 
 ### 📖 Selection translation
 
@@ -74,7 +76,8 @@
   </tr>
 </table>
 
-- Select text in any app and press Right ⌥ + Return; the translation appears in a card just below the selection. Web pages, PDFs, terminals and other apps all work.
+- Select text in any app and press Right ⌥ + Return; the translation appears in a card just below the selection.
+- No plug-ins to install and no app restrictions: web pages, PDFs, terminals, documents and chat apps all work.
 - The card never takes focus, so the app being read or edited stays as it was; it offers copy, a one-off change of target language, and pinning.
 - When the text is already in the target language, it is translated into English instead (into Simplified Chinese when the target is English); the card shows the language actually used.
 - Uses its own text model, independent of voice: DeepSeek V4.1 Flash by default, about 0.9 seconds per request; change it in the Selection section of the Engine page, including OpenAI-compatible services.
@@ -85,8 +88,8 @@
 - 🧩 **[Model freedom](#-model-freedom)**: 29 models, plus OpenAI-compatible services; selection translation takes its own text model.
 - 🔀 **[Mode freedom](#-mode-freedom)**: three recognition modes for voice input and voice translation; recommended setups in one click.
 - 💻 **[Hardware freedom](#-hardware-freedom)**: Mac and Windows; on-device models on Metal, Vulkan or the CPU.
-- 🔒 **[Privacy freedom](#-privacy-freedom)**: Offline mode uploads nothing; no API key or account.
-- 💸 **[Cost freedom](#-cost-freedom)**: free software; recommended setups cost $0–5.29 a month at 100 dictations a day.
+- 🔒 **[Privacy freedom](#-privacy-freedom)**: voice input can run fully offline, with no uploads, API key or account.
+- 💸 **[Cost freedom](#-cost-freedom)**: free software; at 100 uses a day, recommended voice setups cost $0–5.29 a month and selection translation about $0.36.
 
 ## 🚀 Installation
 
@@ -242,7 +245,7 @@ The **Engine** page has two sections, Voice and Selection. Voice lays out modes,
 
 - Voice input and voice translation have three recognition modes of equal standing.
 - Each mode keeps its own model configuration; switching requires no reconfiguration.
-- Switch in the first column of the Engine page; the home window shows the active mode below the title.
+- Switch in the first column of the Engine page; the home window shows the active mode to the right of the title.
 
 | Mode | Pipeline | Data uploaded | API key | Voice translation |
 | --- | --- | --- | --- | --- |
@@ -297,12 +300,13 @@ The **Engine** page has two sections, Voice and Selection. Voice lays out modes,
 
 ## 🔒 Privacy freedom
 
-- **No uploads in Offline mode**: speech is transcribed by an on-device model.
-- **No API key or account required.**
+- **Fully offline voice input**: in Offline mode, speech is transcribed by an on-device model and nothing is uploaded.
+- **No API key in Offline mode**; no account in any mode.
+- **Translation sends only what it needs**: voice and selection translation call the selected model; the former sends the recording or its transcript, the latter only the selected text.
 - **One-click download**: on-device models are served from ModelScope, a mirror in mainland China.
 - **Automatic fallback**: Hugging Face is used if the mirror is unavailable; interrupted downloads resume where they stopped.
 - **Integrity check**: every download is verified against SHA-256.
-- **No intermediary servers**: audio or text goes directly to the selected vendor with the user's own key; selection translation sends only the selected text.
+- **No intermediary servers**: audio or text goes directly to the selected vendor with the user's own key.
 - **No analytics.**
 - **Encrypted keys**: protected by the macOS Keychain or Windows DPAPI.
 - **Local data**: history, recordings and the dictionary remain on the local machine.
@@ -316,6 +320,7 @@ The **Engine** page has two sections, Voice and Selection. Voice lays out modes,
 
 - SpeakMore is free.
 - Model usage is billed directly by each vendor, according to actual use.
+- Selection translation costs about $0.00012 per request, or about $0.36 a month at 100 a day (DeepSeek V4.1 Flash, median of 15 real requests).
 - The home window tracks spending for today, this month and all time: bars and a trend line show the course, with each model's cost and share below; voice translation and selection translation are included.
 
 <img src="https://media.speakmore.zephyrxiang.com/readme/spend.en.5801d33c.webp" alt="Home window spending card: daily spending this month as bars with a trend line, and each model's cost and share below" />
