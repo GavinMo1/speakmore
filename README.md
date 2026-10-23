@@ -297,7 +297,7 @@ macOS 上读取选中的文字需要辅助功能权限，首次引导中一并�
     <td align="center"><sub>划词：单独选择文字模型</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="https://media.speakmore.zephyrxiang.com/readme/keys.zh-CN.9c509220.webp" alt="密钥面板：八个平台的配置状态及各自可调用的模型数量" /></td>
+    <td colspan="2"><img src="https://media.speakmore.zephyrxiang.com/readme/keys.zh-CN.9c509220.webp?v=2" alt="密钥面板：八个平台的配置状态及各自可调用的模型数量" /></td>
   </tr>
   <tr>
     <td colspan="2" align="center"><sub>按平台管理密钥</sub></td>

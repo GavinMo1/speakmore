@@ -55,7 +55,7 @@ All three start from Right ⌥ (Right Alt on Windows): on its own for voice inpu
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/translate-dark.en.04741ca4.webp" />
-  <img src="https://media.speakmore.zephyrxiang.com/readme/translate-light.en.e9eaa6ec.webp" width="880" alt="Voice translation: English speech written into the text field in Chinese, with a language menu on the voice bar" />
+  <img src="https://media.speakmore.zephyrxiang.com/readme/translate-light.en.e9eaa6ec.webp?v=2" width="880" alt="Voice translation: English speech written into the text field in Chinese, with a language menu on the voice bar" />
 </picture>
 
 - Speak in English and the text arrives in Chinese; 16 target languages are available.
@@ -377,7 +377,7 @@ The **Engine** page has two sections: voice input and voice translation share th
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://media.speakmore.zephyrxiang.com/readme/download-speed-dark.en.abab8fdd.webp" />
-  <img src="https://media.speakmore.zephyrxiang.com/readme/download-speed-light.en.fa83e4e5.webp" width="720" alt="Download time for the 850 MB on-device model: China mirror (ModelScope) at 9.8 MB/s, about 1.4 minutes; hf-mirror.com about 9 minutes; Hugging Face about 20 minutes" />
+  <img src="https://media.speakmore.zephyrxiang.com/readme/download-speed-light.en.fa83e4e5.webp?v=2" width="720" alt="Download time for the 850 MB on-device model: China mirror (ModelScope) at 9.8 MB/s, about 1.4 minutes; hf-mirror.com about 9 minutes; Hugging Face about 20 minutes" />
 </picture>
 
 ## 💸 Cost freedom
