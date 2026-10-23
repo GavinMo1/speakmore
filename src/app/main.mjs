@@ -515,7 +515,7 @@ async function main() {
   let startupChecked = false;
   let hubWindow = null;
   let onboardingWindow = null;
-  /** 首次引导正在测快捷键：热键送到引导窗口，不去开悬浮条 */
+  /** 首次引导正在测快捷键：三个功能的热键都送到引导窗口，不去开悬浮条、不弹划词卡片 */
   let hotkeyToOnboarding = false;
   /** 小帮手问来的系统设置（Mac：按下地球仪键时做什么），录键存的时候按它说提醒；小帮手每次起来再问一遍 */
   let systemInfo = {};
@@ -592,9 +592,7 @@ async function main() {
     if (summary.missing.length === 0 && summary.degraded === null) return;
     offeredSettings = true;
     log.info("settings_offered", { missing: summary.missing, degraded: summary.degraded !== null });
-    // 缺的是路线里另一家（第一跳交给的云端）的 key：首次引导只认正在用的那一家，在那里填会填错。去模型页的密钥表
-    if (setup.key.vendor) showHub({ pane: "auto" });
-    else showOnboarding();
+    showOnboarding();
   }
 
   /** 上面任何一样变了都调一次：菜单栏和主窗口跟着更新 */
@@ -867,7 +865,7 @@ async function main() {
       case "binding":
       case "interrupted":
         // 引导页正在测快捷键：不压，按下就亮。压着的话点按右⌥ 的按下和松开同一刻送到，键帽看不出变色
-        if (onboardingTestsHotkey()) onBindingEvent(event);
+        if (onboardingTestsHotkey()) toOnboarding(event);
         else sessionGate.accept(event);
         break;
       case "recording":
@@ -932,20 +930,23 @@ async function main() {
   };
 
   /**
-   * 首次引导正在测快捷键、人也正看着它：听写的按下松开只送到引导窗口。
+   * 首次引导正在测快捷键、人也正看着它：三个功能的按下、松开、被打断只送到引导窗口。
    * 切到别的应用了就照常听写，不然热键在哪都按不出来，还没有任何提示；
    * 悬浮条在屏幕上（切出去开了一段听写又切回来）时也给条，不然这一段停不下来
    */
   const onboardingTestsHotkey = () => hotkeyToOnboarding && onboardingWindow?.isFocused() && !bar.isVisible();
 
+  /** 测快捷键时的绑定事件：带上是哪个动作，引导页按它认"按到了哪个功能"（onboarding/key-check.mjs）。取消键不送 */
+  function toOnboarding(event) {
+    const action = actionOfBinding(event.id);
+    if (action === null || action.handler === "cancel") return;
+    const sent = { action: action.id, event: event.event, down: event.event === "binding" && event.down };
+    log.info("key_event", { event: event.event, id: event.id, down: event.down, to: "onboarding" });
+    onboardingWindow.webContents.send("onboarding:hotkey", sent);
+  }
+
   /** 录音会话的动作（语音输入、语音翻译）：交给悬浮条开始、结束、升级 */
   function onSessionKey({ event, action, fields, input }) {
-    // 被打断（按着时碰了别的键）以后小帮手不再报松开：也当松开送过去，不然大键帽一直亮着
-    if ((event.event === "binding" || event.event === "interrupted") && onboardingTestsHotkey()) {
-      log.info("key_event", { ...fields, to: "onboarding" });
-      onboardingWindow.webContents.send("onboarding:hotkey", { down: event.event === "binding" && event.down });
-      return;
-    }
     log.info("key_event", fields);
     const blocker = summarizeSetup(currentSetup()).blocker ?? featureProblem(action);
     // 升级到另一个说话的功能（按着右⌥又按了空格）：带上是哪个，悬浮条把这一次直接换过去。
@@ -1412,7 +1413,6 @@ async function main() {
   handle("setup:delete-model", (_event, id) => viaModes((m) => m.removeModel(id)));
   // 检查本机模型：按界面语言念一句交给它转
   handle("setup:check-transcriber", (_event, id) => viaModes((m) => m.checkTranscriber(id, { locale })));
-  handle("setup:read-clipboard", () => clipboard.readText());
   handle("setup:open-key-page", (_event, id) => {
     // 自定义服务没有申请 key 的页面
     const { keyPage } = findVendor(id) ?? provider() ?? {};
@@ -1734,7 +1734,9 @@ async function main() {
         title: "SpeakMore",
         backgroundColor: windowBackground(),
         ...frame({ x: 20, y: 16 }),
-        webPreferences,
+        // 功能演示里嵌着悬浮条、划词卡片的真页面（onboarding/demo/，iframe）：预加载脚本在 iframe 里也跑，
+        // 它们才有主题的颜色和界面语言。iframe 里只有我们自己的页面，跳转、开新窗口照样拦着
+        webPreferences: { ...webPreferences, nodeIntegrationInSubFrames: true },
       });
       onboardingWindow.loadFile(join(sourceDir, "renderer", "onboarding", "onboarding.html"));
       onboardingWindow.on("focus", () => {
@@ -1764,10 +1766,11 @@ async function main() {
   ipcMain.on("onboarding:capture-hotkey", (_event, capturing) => {
     hotkeyToOnboarding = capturing === true;
   });
-  handle("onboarding:finish", () => {
-    log.info("onboarding_finished");
+  // 走完了、跳过了：关掉引导，打开主窗口。engine：点的是"前往引擎"，打开引擎页并弹出推荐组合
+  handle("onboarding:finish", (_event, { engine = false } = {}) => {
+    log.info("onboarding_finished", { engine });
     onboardingWindow?.close();
-    showHub({ route: "home" });
+    showHub(engine ? { route: "models", presets: true } : { route: "home" });
   });
 
   /** 菜单栏、双击图标要打开 SpeakMore 时：引导还没走完就回到引导，走完了是主窗口 */

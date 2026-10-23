@@ -135,11 +135,13 @@ content.addEventListener("scroll", () => content.toggleAttribute("data-scrolled"
 
 window.speakmore.onHistoryChanged(refreshData);
 window.speakmore.onSetupChanged(refreshSetup);
-// 菜单栏、命令行要打开某一页（"显示历史记录"、"设置…"）
-window.speakmore.onNavigate(({ route, pane, engine: section }) => {
+// 菜单栏、命令行、首次引导要打开某一页（"显示历史记录"、"设置…"、"前往引擎"）
+window.speakmore.onNavigate(({ route, pane, engine: section, presets }) => {
   if (route) navigate(route);
   // 引擎页的哪一段（划词卡片上的"配置密钥"要划词那一段）
   if (section) engine.show({ section });
+  // 首次引导的"前往引擎"：弹出推荐组合，一套一套直接启用
+  if (presets) presetPicker.open();
   if (pane === "auto") openFix();
   else if (pane) settings.open(pane);
 });
@@ -149,5 +151,6 @@ const params = new URLSearchParams(location.search);
 navigate(params.get("route") ?? "home");
 await Promise.all([refreshSetup(), refreshData()]);
 if (params.get("engine")) engine.show({ section: params.get("engine") });
+if (params.get("presets")) presetPicker.open();
 if (params.get("pane") === "auto") openFix();
 else if (params.get("pane")) settings.open(params.get("pane"));

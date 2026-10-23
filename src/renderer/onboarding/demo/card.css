@@ -1,0 +1,10 @@
+/* 演示里的划词卡片（真样式是 lookup/card.css）：从选区下方浮出来。真卡片只淡入；演示里画面小，加一点位移让人看见它是新出来的 */
+.card {
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    translate var(--dur-slow) var(--ease-out);
+}
+
+body[data-phase="hidden"] .card {
+  translate: 0 -6px;
+}

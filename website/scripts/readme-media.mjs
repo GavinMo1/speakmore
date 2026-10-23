@@ -237,8 +237,10 @@ app.whenReady().then(async () => {
     .filter((f) => f.endsWith(".png"))
     .sort()) {
     const [, lang, rest] = file.match(/^(en|zh)-\d+-(.+)\.png$/);
-    const lights = /^(en|zh)-0\d-/.test(file) ? ONBOARDING : HUB;
-    const name = `${/^(way|prepare|permissions|microphone|hotkey|try|done)/.test(rest) ? "onboarding-" : ""}${rest}.${LOCALE[lang]}`;
+    // 序号 01–09 是首次引导的窗口：红绿灯的位置不同，名字前面加 onboarding-
+    const onboarding = /^(en|zh)-0\d-/.test(file);
+    const lights = onboarding ? ONBOARDING : HUB;
+    const name = `${onboarding ? "onboarding-" : ""}${rest}.${LOCALE[lang]}`;
     const png = readFileSync(join(shotsDir, file));
     const { body, width, height } = await framed(png, lights);
     save(name, body, width, height);

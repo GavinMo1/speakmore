@@ -58,7 +58,7 @@ export async function start(args, io) {
   const status = (await io.daemon.status({ recheck: true })) ?? started;
 
   const openSettings = io.interactive && !status.starting && permissionMissing(status);
-  // 第一次用的人走一遍首次引导（授权、测麦克风和热键、真说一句）；用过的人只是缺了权限，打开设置就够了。
+  // 第一次用的人走一遍首次引导（看功能、查快捷键、开权限）；用过的人只是缺了权限，打开设置就够了。
   // 请求名沿用 show-settings：老版本的后台不认识 onboarding 这个参数，照样打开设置
   if (openSettings) await io.daemon.request("show-settings", firstRun ? { onboarding: true } : {});
   io.out("");

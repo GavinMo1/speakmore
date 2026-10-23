@@ -1,530 +1,384 @@
-import { h, progressBadge, svg } from "../shared/dom.mjs";
-import { createHotkeyEditor, recordBlocker } from "../shared/hotkey-editor.mjs";
-import { hotkeyText, localize, t } from "../shared/i18n.mjs";
-import { keycapRow } from "../shared/keycaps.mjs";
+import { chordKeycaps, sortChord } from "../../hotkeys/chord.mjs";
+import { h, svg } from "../shared/dom.mjs";
+import { recordBlocker } from "../shared/hotkey-editor.mjs";
+import { localize, t } from "../shared/i18n.mjs";
 import { meterLevels, openMicrophone } from "../shared/level-meter.mjs";
-import { providerIcon } from "../shared/provider-icons.mjs";
 import { describeError, permissionGranted } from "../shared/setup-text.mjs";
-import { createKeyPanel } from "./key-panel.mjs";
-import { changesOf, hasKey, inEffect, localModelOf, needsOf, planOf, readinessOf, vendorsFor, WAYS } from "./plan.mjs";
-import { firstStepOf, groupStates, STEPS, startStep, stepDone } from "./steps.mjs";
+import { engineReady, FEATURES, PERMISSIONS, permissionsOff, stepDone, stepsFor } from "./flow.mjs";
+import { actionOfChord, createGesture, helperPassed } from "./key-check.mjs";
+import { createScene, PLAY_MS } from "./scene.mjs";
 
-// 首次引导：选识别方式 → 准备（下本机模型、填密钥）→ 授权 → 测麦克风 → 测快捷键 → 真说一句 → 完成。
-// 哪一步都能退回去、往前跳，没做完的也能跳过，进去再配：数据隐私不要密钥，什么都不配也能先进去看看。
-// 点了哪种方式、哪一家就当场换上（app/modes.mjs 的 switchMode 不验 key、不等下载）；还差的照实写出来，补齐了自己就能用。
-// 状态都在主进程；这里管走到哪一步、每一步怎么画。走完了主进程关掉这个窗口、打开主窗口。
+// 首次引导：开屏 → 功能 → 快捷键 → 权限（只有 Mac）→ 引擎（flow.mjs）。哪一步都能退回去、往前跳、跳过。
+// 引导里不选识别方式、不填密钥、不下模型：最后一步把人送到主窗口的引擎页（弹出推荐组合），在那里配。
+// 快捷键那一步两路都认（key-check.mjs）：窗口自己收到的按键，和小帮手转来的（主进程的 onboarding:hotkey）。
+// 状态都在主进程，这里管走到哪一步、每一步怎么画。走完了主进程关掉这个窗口、打开主窗口。
 
 const $ = (id) => document.getElementById(id);
-/** 测麦克风时画几根条，中间的高、两边的矮 */
-const METER_BARS = [0.45, 0.7, 0.9, 1, 0.9, 0.7, 0.45];
+const STEPS = stepsFor(window.speakmore.platform);
+/** 顶上那几段：开屏不算 */
+const GROUPS = STEPS.filter((step) => step !== "splash");
+/** 麦克风那一行几根电平条，中间的高、两边的矮 */
+const LEVEL_SHAPE = [0.5, 0.8, 1, 0.8, 0.5];
 
-// 页面上写死的字先按界面语言填上
 localize();
 
 let setup = null;
 let step = null;
-/** 现在用的这一套：{ mode, native, polish }（plan.mjs）。照设置；正在换的时候先画成点的那一套 */
-let plan = null;
-/** 正在换的有几次（连着点了好几下时一次一次排着换） */
-let applying = 0;
-/** 点了第几次：只有最后点的那次说成没成 */
-let attempts = 0;
-/** 最后点的那次没换成：{ plan, problem }。点"重试"再换一次；换了别的、存了新密钥就不再说 */
-let failure = null;
-/** 准备那一步的密钥那一块：{ mode, section, panel }，换了方式就换一块 */
-let keySlot = null;
-/** 下载没发起成（磁盘不够这类）：{ model, problem }。下载中途失败的由主进程记在模型的状态里 */
-let downloadProblem = null;
-/** 选识别方式那三行：只建一次，之后只改状态 */
-const wayRows = new Map();
+/** 快捷键那一步按到了哪几个功能 */
+const passed = new Set();
+/** 输入监控开了以后，小帮手转来过按键没有 */
+let listenTested = false;
 
 async function refresh() {
   setup = await window.speakmore.getSetup();
-  if (applying === 0) plan = planOf(setup);
   render();
-  return setup;
 }
 
-// ---------- 换上点的那一套 ----------
+/** 这个功能现在装着的组合：画键帽、演示按的都是第一个；一个都没有（划词翻译能清空）是 [] */
+const chordOf = (feature) => setup.hotkeyActions.find((action) => action.id === feature)?.inEffect[0] ?? [];
+const actionName = (feature) => t(`actions.${feature}.name`);
 
+/** 一个组合的一排键帽，每块记着自己是哪个键（按下时让对应的那块亮） */
+const keycaps = (codes) =>
+  sortChord(codes).map((code) =>
+    h("kbd", { class: "keycap", "data-code": code, text: t.text(chordKeycaps([code])[0]) }),
+  );
+
+/** 结论：一个勾加一句 */
+const done = (text) => h("span", { class: "done" }, svg("i-check"), h("span", { text }));
+
+// ---------- 顶上几段 ----------
+
+function renderGroups() {
+  const index = GROUPS.indexOf(step);
+  $("groups").replaceChildren(
+    ...GROUPS.map((each, i) =>
+      h(
+        "li",
+        {},
+        h("button", {
+          type: "button",
+          "data-state": i < index ? "done" : i === index ? "current" : "todo",
+          "aria-current": i === index ? "step" : "false",
+          text: t(`onboarding.groups.${each}`),
+          onclick: () => go(each),
+        }),
+      ),
+    ),
+  );
+}
+
+// ---------- 功能：只演示 ----------
+
+const scene = createScene($("scene"), {
+  platform: window.speakmore.platform,
+  chords: () => Object.fromEntries(FEATURES.map((feature) => [feature, chordOf(feature)])),
+});
+/** 正在放哪一项 */
+let playing = FEATURES[0];
+let loopRun = 0;
+
+function renderFeatures() {
+  $("key-tests").replaceChildren(
+    ...FEATURES.map((feature) => {
+      const current = feature === playing;
+      return h(
+        "li",
+        {
+          class: "key-test",
+          "data-feature": feature,
+          "aria-current": current ? "true" : null,
+          "data-playing": current ? "" : null,
+          style: current ? `--dur: ${PLAY_MS[feature]}ms` : null,
+          onclick: () => loop(feature, { pinned: true }),
+        },
+        h("span", { class: "key-test-line", "aria-hidden": "true" }),
+        h("span", { class: "key-test-name", text: actionName(feature) }),
+        h("span", { class: "keycaps" }, ...keycaps(chordOf(feature))),
+      );
+    }),
+  );
+}
+
+/** 没人动时三项一项接一项轮着放；点了哪一项就只循环放那一项。离开这一步就停 */
+async function loop(start, { pinned = false } = {}) {
+  const ticket = ++loopRun;
+  await scene.ready;
+  let index = FEATURES.indexOf(start);
+  while (ticket === loopRun && step === "features") {
+    const feature = FEATURES[index];
+    playing = feature;
+    renderFeatures();
+    const finished = await scene.play(feature, { onPress: () => flash(feature) });
+    if (!finished || ticket !== loopRun) return;
+    if (!pinned) index = (index + 1) % FEATURES.length;
+  }
+}
+
+/** 时间线上按下快捷键的那一下：这一项的键帽亮一下 */
+function flash(feature) {
+  const node = $("key-tests").querySelector(`[data-feature="${feature}"]`);
+  node?.setAttribute("data-pressed", "");
+  setTimeout(() => node?.removeAttribute("data-pressed"), 260);
+}
+
+// ---------- 快捷键 ----------
+
+/** 窗口自己收到的按键 */
+const gesture = createGesture();
+/** 小帮手说正按着的那个功能 */
+let helperHeld = null;
 /**
- * 点了一种方式或一家：当场换上，带着那种方式的设置（plan.mjs 的 changesOf）。已经是这一套就什么都不做；
- * 前一下还在换时照样发：手里的状态还没跟上，看不出是不是已经是这一套
+ * 正在重录的那一个：{ feature, token, codes, reason }；没在录是 null。录键在主进程和小帮手那边（app/hotkey-recording.mjs），
+ * 和设置页同一路：存的时候查冲突、两键以内这些规矩
  */
-async function changePlan(next) {
-  const wanted = { ...plan, ...next };
-  const ticket = ++attempts;
-  failure = null;
-  plan = wanted;
-  if (applying === 0 && inEffect(wanted, setup)) {
-    render();
+let recording = null;
+let lastToken = 0;
+/** 每个功能那一行下面的一句话（重录被拒的原因、录不了的原因） */
+const notes = new Map();
+
+/** 小帮手听不听得到键：听得到时空格、回车会被它吞掉，窗口收不全，只认它转来的 */
+const helperHears = () => setup.helper === "running" && setup.permissions.listen === true;
+
+function renderKeys() {
+  // 还没按到的头一个：键帽一明一暗，等人按
+  const next = FEATURES.find((feature) => !passed.has(feature));
+  $("key-rows").replaceChildren(
+    ...FEATURES.map((feature) => {
+      const live = recording?.feature === feature ? recording : null;
+      const chord = chordOf(feature);
+      const note = live?.reason ?? notes.get(feature);
+      let caps;
+      if (live) {
+        caps =
+          live.codes.length > 0
+            ? h("span", { class: "keycaps big" }, ...keycaps(live.codes))
+            : h("span", { class: "chord-prompt", text: t("onboarding.keys.record") });
+      } else if (chord.length > 0) caps = h("span", { class: "keycaps big" }, ...keycaps(chord));
+      else caps = h("span", { class: "hint-text", text: t("onboarding.engine.unset") });
+      return h(
+        "li",
+        {
+          "data-feature": feature,
+          "data-await": feature === next && !live && chord.length > 0 ? "" : null,
+          "data-held": helperHeld === feature ? "" : null,
+        },
+        h("span", { class: "key-row-name", text: actionName(feature) }),
+        caps,
+        h(
+          "span",
+          { class: "key-row-state" },
+          passed.has(feature)
+            ? done(t("onboarding.keys.passed"))
+            : h("span", { class: "hint-text", text: t("onboarding.keys.press") }),
+        ),
+        h("button", {
+          type: "button",
+          class: "button ghost small",
+          "data-recording": live ? "" : null,
+          text: t("onboarding.keys.change"),
+          onclick: () => (live ? stopRecording("reclick") : startRecording(feature)),
+        }),
+        note ? h("p", { class: "key-row-note", role: "status", text: t.text(note) }) : null,
+      );
+    }),
+  );
+  lightHeld();
+}
+
+/** 按着的键：同一个键的键帽一起亮；小帮手说正按着哪个功能，那一行的键帽全亮（被它吞掉的键窗口看不到） */
+function lightHeld() {
+  for (const cap of document.querySelectorAll(":is(.key-rows, .grants) kbd[data-code]")) {
+    const row = cap.closest("[data-feature], [data-permission]");
+    const byHelper = row?.dataset.feature ? row.dataset.feature === helperHeld : helperHeld !== null;
+    cap.toggleAttribute("data-down", gesture.held.has(cap.dataset.code) || byHelper);
+  }
+}
+
+function startRecording(feature) {
+  notes.delete(feature);
+  const blocker = recordBlocker(setup);
+  if (blocker !== null) {
+    notes.set(feature, t(blocker));
+    renderKeys();
     return;
   }
-  applying += 1;
-  render();
-  let result;
-  try {
-    result = await window.speakmore.setMode(wanted.mode, changesOf(wanted, setup));
-  } catch (error) {
-    result = { ok: false, problem: describeError(error) };
-  }
-  applying -= 1;
-  if (ticket === attempts) failure = result.ok ? null : { plan: wanted, problem: result.problem };
-  await refresh();
+  const token = ++lastToken;
+  recording = { feature, token, codes: [], reason: null };
+  syncCapture();
+  renderKeys();
+  window.speakmore.recordHotkey(feature, 0, token).catch((error) => {
+    if (recording?.token !== token) return;
+    recording = null;
+    notes.set(feature, describeError(error));
+    syncCapture();
+    renderKeys();
+  });
 }
 
-// ---------- 走到哪一步 ----------
-
-/** 离开某一步时要收拾的：关麦克风、不再截热键 */
-const leave = {
-  microphone: () => stopMeter(),
-  hotkey: () => {
-    window.speakmore.captureHotkey(false);
-    hotkeyEditor.stop();
-  },
-};
-/** 进入某一步时要做的 */
-const enter = {
-  microphone: () => startMeter(),
-  // 测快捷键时热键不去开悬浮条，只送到这里
-  hotkey: () => window.speakmore.captureHotkey(true),
-  try: () => $("try-text").focus(),
-};
-
-function go(next) {
-  if (next === step) return;
-  leave[step]?.();
-  step = next;
-  for (const section of document.querySelectorAll(".step")) section.hidden = section.dataset.step !== step;
-  $("stage").scrollTop = 0;
-  enter[step]?.();
-  render();
+/** reason 记进日志（app/hotkey-recording.mjs 的 PAGE_REASONS） */
+function stopRecording(reason) {
+  if (recording === null) return;
+  recording = null;
+  window.speakmore.stopRecordingHotkey(reason);
+  syncCapture();
+  renderKeys();
 }
 
-const goBy = (offset) => go(STEPS[Math.min(STEPS.length - 1, Math.max(0, STEPS.indexOf(step) + offset))]);
-
-// ---------- 画 ----------
-
-const hotkeyEditor = createHotkeyEditor($("hotkey-editor"), {
-  onChanged: refresh,
-  // 只有听写在这一步按得出效果（大键帽亮）；取消要说话时才有用，存好了就只说"已保存"
-  savedNote: (actionId) => (actionId === "dictate" ? "onboarding.hotkey.switched" : "hotkeyRecord.saved"),
-});
-/** 听写现在装着的组合（大键帽、完成页、体验一下的提示里写的） */
-const dictateChords = () => setup.hotkeyActions.find((action) => action.id === "dictate").inEffect;
-
-const modeName = (mode) => t(`plaza.modes.${mode}`);
-const transcriber = (id) => setup.local.transcribers.find((model) => model.id === id);
-
-/** 体积：1 GB 以上写一位小数的 GB，以下写整数 MB */
-const sizeText = (bytes) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`);
-
-/** "Qwen3-ASR 0.6B (Q8_0)" 拆成型号和量化档 */
-function nameParts(name) {
-  const match = /^(.*?) \((.+)\)$/.exec(name);
-  return match ? [match[1], match[2]] : [name, null];
-}
-
-/** 品牌图标的底座：认识的家用它的图标，本机模型用笔记本，不认识的用一朵云 */
-const tile = (id, className = "logo-tile") =>
-  h("span", { class: className }, (id && providerIcon(id)) ?? svg(id === "local" ? "i-laptop" : "i-cloud"));
-
-/** 一行里要什么：带图标的短语 */
-const need = (icon, text) => h("span", { class: "need" }, svg(icon), h("span", { text }));
-
-function renderWays() {
-  if (wayRows.size === 0) {
-    for (const mode of WAYS) {
-      const needs = h("span", { class: "needs" });
-      const button = h(
-        "button",
-        { type: "button", class: "choice", role: "radio", onclick: () => changePlan({ mode }) },
-        // 同引擎页第一列：左边一个小号的单选标记，不垫图标方砖（界面规范第 3、5 节）
-        h("span", { class: "radio-mark", "aria-hidden": "true" }, svg("i-check")),
-        h(
-          "span",
-          { class: "choice-body" },
-          h("span", { class: "choice-name", text: modeName(mode) }),
-          h("span", { class: "choice-desc", text: t(`home.mode.desc.${mode}`) }),
-          needs,
-        ),
-        h(
-          "span",
-          {
-            class: "brands",
-            title: vendorsFor(setup, mode)
-              .map(({ id }) => t(`providers.${id}.name`))
-              .join(" · "),
-          },
-          ...(mode === "private"
-            ? [tile("local", "mini-tile")]
-            : vendorsFor(setup, mode).map(({ id }) => tile(id, "mini-tile"))),
-        ),
-      );
-      wayRows.set(mode, { button, needs });
-    }
-    $("ways").replaceChildren(...[...wayRows.values()].map(({ button }) => button));
-  }
-  for (const [mode, { button, needs }] of wayRows) {
-    button.setAttribute("aria-checked", String(plan.mode === mode));
-    button.disabled = !setup.switchable;
-    const local = mode === "native" ? null : transcriber(localModelOf(setup, mode));
-    const size = local && (local.installed ? t("onboarding.prepare.model.ready") : sizeText(local.bytes));
-    needs.replaceChildren(
-      ...(local ? [need("i-laptop", t("onboarding.way.local", { size }))] : []),
-      mode === "private" ? need("i-lock", t("onboarding.way.offline")) : need("i-key-round", t("onboarding.way.key")),
-    );
-  }
-  // 只在换不了时说一句（识别方式由单独启动的服务端决定）
-  $("way-note").hidden = setup.switchable;
-  $("way-note").replaceChildren(svg("i-circle-alert"), t("home.mode.locked"));
-}
-
-/**
- * 正在用的这种方式第一跳交给云端（只能在模型页配）：那一跳 { maker, platform, name }（app/model-plaza.mjs 的 hops）；
- * 否则是 null，第一跳是本机模型
- */
-function cloudFirstHop() {
-  if (plan.mode === "native" || plan.mode !== setup.mode.value) return null;
-  const first = setup.plaza.ways[plan.mode]?.hops?.[0];
-  return first && first.platform !== "local" ? first : null;
-}
-
-/** 一路经过谁：录音 → 各个模型 → 文字 */
-function renderRoute() {
-  const arrow = () => h("li", { class: "route-arrow", "aria-hidden": "true" }, svg("i-chevron-right"));
-  const end = (icon, text) => h("li", { class: "route-end" }, svg(icon), h("span", { text }));
-  const hop = (id, text, local) =>
-    h(
-      "li",
-      { class: "route-hop" },
-      tile(id, "mini-tile"),
-      h("span", { text }),
-      local && h("span", { class: "tag", "data-tone": "accent", text: t("onboarding.prepare.route.local") }),
-    );
-  const hops = [];
-  const cloud = cloudFirstHop();
-  if (cloud) hops.push(hop(cloud.maker ?? cloud.platform, cloud.name, false));
-  else if (plan.mode !== "native") {
-    const model = transcriber(localModelOf(setup, plan.mode));
-    hops.push(hop(model.maker ?? "local", nameParts(model.name)[0], true));
-  }
-  if (plan.mode === "native") hops.push(hop(plan.native, t(`providers.${plan.native}.name`), false));
-  if (plan.mode === "local") hops.push(hop(plan.polish, t(`providers.${plan.polish}.name`), false));
-  $("route").replaceChildren(
-    end("i-mic", t("onboarding.prepare.route.audio")),
-    ...hops.flatMap((item) => [arrow(), item]),
-    arrow(),
-    end("i-letter-text", t("onboarding.prepare.route.text")),
-  );
-}
-
-/** 这一套现在怎样：启用中、没换成（带重试）、已启用；已经换上但还差东西时说一句，差的下面各块自己写着 */
-function renderStatus() {
-  const box = $("plan-status");
-  const badge = (tone, icon, text) =>
-    h(
-      "span",
-      { class: "badge", "data-tone": tone },
-      svg(icon, icon === "i-loader-circle" ? "icon spin" : "icon"),
-      h("span", { text }),
-    );
-  let content = null;
-  if (applying) content = badge("progress", "i-loader-circle", t("onboarding.prepare.status.enabling"));
-  else if (failure) {
-    content = h(
-      "div",
-      { class: "callout", role: "alert" },
-      svg("i-circle-alert"),
-      h("span", {}, h("b", { text: t("onboarding.prepare.status.failed") }), ` · ${t.text(failure.problem)}`),
-      h("button", {
-        type: "button",
-        class: "button small retry",
-        text: t("onboarding.prepare.status.retry"),
-        onclick: () => changePlan(failure.plan),
-      }),
-    );
-  } else if (needsOf(plan, setup).length === 0)
-    content = badge("ok", "i-check", t("onboarding.prepare.status.enabled", { mode: modeName(plan.mode) }));
-  else content = badge("", "i-circle-alert", t("onboarding.prepare.status.switched", { mode: modeName(plan.mode) }));
-  box.replaceChildren(...(content ? [content] : []));
-  box.hidden = content === null;
-}
-
-/** 本机模型那一行：名字、量化档、多大、从哪下；右边是下载、进度或已下载 */
-function modelSection() {
-  const model = transcriber(localModelOf(setup, plan.mode));
-  const [base, variant] = nameParts(model.name);
-  let action;
-  if (model.installed) {
-    action = h(
-      "span",
-      { class: "state-box", "data-tone": "accent" },
-      svg("i-check"),
-      t("onboarding.prepare.model.ready"),
-    );
-  } else if (model.download) {
-    action = progressBadge(model.download);
+window.speakmore.onHotkeyRecording((payload) => {
+  if (recording === null || payload.token !== recording.token) return;
+  const { feature } = recording;
+  if (payload.state === "recording") {
+    // 被拒的原因留到下一次按下：全部松开时的那份空快照不能把它冲掉
+    recording = { ...recording, codes: payload.codes, reason: payload.codes.length > 0 ? null : recording.reason };
+  } else if (payload.state === "rejected") {
+    recording = { ...recording, codes: payload.codes, reason: payload.reason };
   } else {
-    action = h(
-      "button",
-      {
-        type: "button",
-        class: "button",
-        disabled: !setup.switchable,
-        onclick: async (event) => {
-          event.currentTarget.disabled = true;
-          const result = await window.speakmore.downloadModel(model.id).catch((error) => ({
-            ok: false,
-            problem: describeError(error),
-          }));
-          if (!result.ok) downloadProblem = { model: model.id, problem: result.problem };
-          await refresh();
-        },
-      },
-      svg("i-download"),
-      t(
-        model.problem || downloadProblem?.model === model.id
-          ? "onboarding.prepare.model.retry"
-          : "onboarding.prepare.model.download",
-      ),
-    );
+    recording = null;
+    // 存好了：换了键，得重新按一下
+    if (payload.state === "saved") {
+      passed.delete(feature);
+      if (payload.note) notes.set(feature, payload.note);
+      refresh();
+    }
+    syncCapture();
   }
-  const problem = model.download ? null : downloadProblem?.model === model.id ? downloadProblem.problem : model.problem;
-  const source = t(`onboarding.prepare.model.sources.${setup.local.source.value}`);
-  return h(
-    "section",
-    { class: "prepare-section model-section" },
-    h("h2", { class: "section-label", text: t("onboarding.prepare.sections.model") }),
-    h(
-      "div",
-      { class: "model-row" },
-      tile(model.maker ?? "local"),
-      h(
-        "span",
-        { class: "model-text" },
-        h(
-          "span",
-          { class: "model-name" },
-          h("span", { text: base }),
-          variant && h("span", { class: "tag", "data-tone": "outline", text: variant }),
-        ),
-        h("span", { class: "model-meta", text: `${sizeText(model.bytes)} · ${source}` }),
-      ),
-      h("span", { class: "model-action" }, action),
-    ),
-    problem &&
-      h(
-        "p",
-        { class: "callout", role: "alert" },
-        svg("i-circle-alert"),
-        h("span", {}, h("b", { text: t("plaza.actionFailed") }), ` · ${t.text(problem)}`),
-      ),
+  renderKeys();
+});
+
+/** 按的这一下认成了哪个功能：快捷键那一步算它按到了；权限那一步算小帮手那一路通了 */
+function pressed(feature) {
+  if (step === "keys") {
+    passed.add(feature);
+    notes.delete(feature);
+  } else if (step === "permissions") listenTested = true;
+  render();
+}
+
+/** 窗口收键的时候：快捷键那一步（没在重录） */
+const windowListens = () => step === "keys" && recording === null;
+
+window.addEventListener("keydown", (event) => {
+  if (!windowListens() || event.repeat) return;
+  // 组合里的空格、回车不让它点到按钮（单按照常，键盘还能用来点"继续"）
+  if (gesture.held.size > 0 || event.code.startsWith("Alt")) event.preventDefault();
+  gesture.down(event.code);
+  lightHeld();
+});
+
+window.addEventListener("keyup", (event) => {
+  if (!windowListens()) return;
+  const chord = gesture.up(event.code);
+  lightHeld();
+  if (chord === null || helperHears()) return;
+  const feature = actionOfChord(setup.hotkeyActions, chord);
+  if (feature) pressed(feature);
+});
+
+// 切走了窗口：按着的都算松开，免得键帽一直亮着
+window.addEventListener("blur", () => {
+  gesture.reset();
+  helperHeld = null;
+  lightHeld();
+});
+
+// 小帮手转来的：{ action, event, down }。主进程只在这个窗口要了（captureHotkey）、人正看着它时才转
+window.speakmore.onOnboardingHotkey((event) => {
+  if (event.event === "binding" && event.down) helperHeld = event.action;
+  else if (helperHeld === event.action) helperHeld = null;
+  lightHeld();
+  const feature = helperPassed(event);
+  if (feature) pressed(feature);
+});
+
+/** 要不要主进程把热键转到这里（不去开悬浮条、不弹卡片）：快捷键那一步，和权限那一步输入监控开了以后 */
+let capturing = false;
+function syncCapture() {
+  const wanted =
+    (step === "keys" && recording === null) ||
+    (step === "permissions" && permissionGranted("listen", setup.permissions.listen) === true);
+  if (wanted === capturing) return;
+  capturing = wanted;
+  window.speakmore.captureHotkey(wanted);
+}
+
+// ---------- 权限 ----------
+
+const PERMISSION_ICONS = { microphone: "i-mic", listen: "i-keyboard", trusted: "i-person-standing" };
+
+function renderGrants() {
+  $("grants").replaceChildren(
+    ...PERMISSIONS.map((name) => {
+      const granted = permissionGranted(name, setup.permissions[name]);
+      let state;
+      if (granted === null) state = h("span", { class: "hint-text", text: t("permissions.checking") });
+      else if (!granted) {
+        state = h("button", {
+          type: "button",
+          class: "button",
+          text: t("onboarding.permissions.allow"),
+          onclick: () => window.speakmore.openPrivacySettings(name),
+        });
+      } else
+        state = done(name === "listen" && listenTested ? t("onboarding.keys.passed") : t("onboarding.permissions.on"));
+      return h(
+        "li",
+        { "data-permission": name, "data-granted": String(granted === true) },
+        svg(PERMISSION_ICONS[name], "icon row-icon"),
+        h("p", { class: "grant-primary", text: t(`permissions.${name}`) }),
+        granted === true ? check(name) : h("span"),
+        state,
+      );
+    }),
   );
+  lightHeld();
 }
 
-/** 选哪家、填密钥那一块：同一种方式里一直是同一个节点（挪动会让输入框丢焦点），换了方式才换一块 */
-function keySection() {
-  const mode = plan.mode;
-  if (keySlot?.mode !== mode) {
-    const host = h("div", { class: "key-panel" });
-    keySlot = {
-      mode,
-      section: h(
-        "section",
-        { class: "prepare-section key-section" },
-        h("h2", { class: "section-label", text: t(`onboarding.prepare.sections.${mode}`) }),
-        host,
-      ),
-      panel: createKeyPanel(host, {
-        mode,
-        label: t(`onboarding.prepare.sections.${mode}`),
-        vendors: (current) => vendorsFor(current, mode),
-        hasKey: (current, id) => hasKey(current, mode, id),
-        picked: () => (mode === "native" ? plan.native : plan.polish),
-        pick: (id) => changePlan(mode === "native" ? { native: id } : { polish: id }),
-        // 检测时只看这一家：原生换成它的默认模型，润色只验它（第一跳用本机模型，见 app/modes.mjs 的 check）
-        checkChanges: (id) => (mode === "native" ? changesOf({ ...plan, native: id }, setup) : { polish: id }),
-        refresh,
-        onSaved: () => {
-          failure = null;
-        },
-      }),
-    };
+/** 开了以后当场测的那一块：麦克风出电平；输入监控请人按一下语音输入的键，按过了键帽保持亮着 */
+function check(name) {
+  if (name === "microphone") {
+    return h("span", { class: "level", id: "level", "aria-hidden": "true" }, ...LEVEL_SHAPE.map(() => h("i")));
   }
-  keySlot.panel.render(setup);
-  return keySlot.section;
-}
-
-function renderPrepare() {
-  $("prepare-title").replaceChildren(
-    h("span", { class: "soft", text: t(`onboarding.prepare.${plan.mode}.soft`) }),
-    h("span", { text: t(`onboarding.prepare.${plan.mode}.title`) }),
-  );
-  renderRoute();
-  renderStatus();
-  // 第一跳交给云端时没有要下的本机模型
-  const model = plan.mode === "native" || cloudFirstHop() ? null : modelSection();
-  const key = plan.mode === "private" ? null : keySection();
-  const host = $("prepare-sections");
-  // 密钥那一块已经在页面上就不挪（挪了输入框丢焦点），只换本机模型那一块
-  if (key && key.parentNode === host) {
-    const old = host.querySelector(":scope > .model-section");
-    if (model && old) old.replaceWith(model);
-    else if (model) host.prepend(model);
-    else old?.remove();
-  } else host.replaceChildren(...[model, key].filter(Boolean));
-}
-
-/**
- * 体验一下、完成两步说一句现在能不能说（plan.mjs 的 readinessOf）：能说是 null；
- * 否则 { tone, icon, text }：还差什么一样一样写出来，在下的写到百分之几
- */
-function readiness() {
-  const state = readinessOf(setup);
-  if (state === null) return null;
-  const needText = (need) => {
-    if (need.kind === "url") return t("home.mode.needs.url");
-    if (need.kind === "key") return t("onboarding.try.needKey", { vendor: t(`providers.${need.vendor}.name`) });
-    const model = transcriber(need.model);
-    const name = nameParts(model.name)[0];
-    if (!model.download) return t("onboarding.try.needDownload", { model: name, size: sizeText(model.bytes) });
-    const percent = Math.round((model.download.received / (model.download.total || 1)) * 100);
-    return t("onboarding.try.downloading", { model: name, percent });
-  };
-  const text = state.problem
-    ? t.text(state.problem)
-    : state.needs.length > 0
-      ? state.needs.map(needText).join(" · ")
-      : t("onboarding.try.preparing");
-  const icon =
-    state.tone === "progress" ? (state.needs.length > 0 ? "i-download" : "i-loader-circle") : "i-circle-alert";
-  // 只是在等（下载、验证、装载）就没什么要去做的，不给按钮
-  return { tone: state.tone, icon, text, fixable: state.tone === "problem" };
-}
-
-function renderTry() {
-  const state = readiness();
-  const box = $("try-readiness");
-  box.hidden = state === null;
-  if (state) {
-    box.dataset.tone = state.tone;
-    const fix =
-      state.fixable && setup.switchable
-        ? // 差的在准备那一步补：缺密钥填密钥，没下载点下载
-          [
-            h("button", {
-              type: "button",
-              class: "button small readiness-fix",
-              text: t("onboarding.try.fix"),
-              onclick: () => go("prepare"),
-            }),
-          ]
-        : [];
-    box.replaceChildren(
-      svg(state.icon, state.icon === "i-loader-circle" ? "icon spin" : "icon"),
-      h("span", { text: state.text }),
-      ...fix,
+  if (name === "listen") {
+    return h(
+      "span",
+      { class: "press", "data-await": listenTested ? null : "", "data-tested": listenTested ? "" : null },
+      listenTested ? null : h("span", { text: t("onboarding.permissions.press") }),
+      h("span", { class: "keycaps" }, ...keycaps(chordOf("dictate"))),
     );
   }
+  return h("span");
 }
-
-/** 完成：三样各是什么样，带图标 */
-function renderSummary() {
-  const item = (icon, label, value, tone) =>
-    h(
-      "li",
-      { class: "summary-item", "data-tone": tone },
-      h("span", { class: "logo-tile" }, svg(icon)),
-      h("span", { class: "summary-label", text: label }),
-      h("span", { class: "summary-value", text: value }),
-    );
-  const state = readiness();
-  const mode = state ? state.text : t("onboarding.prepare.status.enabled", { mode: modeName(plan.mode) });
-  const mic = permissionGranted("microphone", setup.permissions.microphone);
-  $("summary").replaceChildren(
-    item("i-audio-lines", t("onboarding.done.mode"), mode, state ? state.tone : "ok"),
-    item("i-keyboard", t("onboarding.done.hotkey"), hotkeyText(dictateChords()), "ok"),
-    item(
-      "i-mic",
-      t("permissions.microphone"),
-      t(mic ? "permissions.granted" : "permissions.denied"),
-      mic ? "ok" : "problem",
-    ),
-  );
-}
-
-function render() {
-  if (setup === null || step === null) return;
-  const states = groupStates(step);
-  for (const button of document.querySelectorAll("[data-group]")) {
-    button.dataset.state = states[button.dataset.group];
-    button.setAttribute("aria-current", states[button.dataset.group] === "current" ? "step" : "false");
-  }
-
-  if (step === "way") renderWays();
-  if (step === "prepare") renderPrepare();
-  if (step === "try") renderTry();
-  if (step === "done") renderSummary();
-
-  for (const row of document.querySelectorAll("[data-permission]")) {
-    const granted = permissionGranted(row.dataset.permission, setup.permissions[row.dataset.permission]);
-    row.dataset.granted = String(granted === true);
-    const button = row.querySelector("button");
-    button.replaceChildren(
-      ...(granted ? [svg("i-check"), t("onboarding.permissions.on")] : [t("onboarding.permissions.allow")]),
-    );
-    button.classList.toggle("primary", granted !== true);
-    button.disabled = granted === true;
-  }
-
-  const keycap = hotkeyText(dictateChords());
-  // 大键帽：听写的第一个组合，一个键一块
-  $("big-keycap").replaceChildren(...keycapRow(dictateChords()[0] ?? [], "big-keycap"));
-  hotkeyEditor.render(setup.hotkeyActions, { blocker: recordBlocker(setup) });
-  $("try-text").placeholder = t("onboarding.try.placeholder", { keycap });
-
-  // 底下：返回（第一步没有）、跳过引导、继续。这一步做完了"继续"是主按钮，没做完是次要的（照样能往下走）
-  $("back").hidden = step === STEPS[0];
-  $("skip-all").hidden = step === "done";
-  const next = $("next");
-  next.hidden = step === "done";
-  const done = stepDone(step, { setup, said: $("try-text").value.trim() !== "" });
-  next.classList.toggle("primary", done);
-}
-
-// ---------- 测麦克风 ----------
 
 let meter = null;
 let stream = null;
-/** 第几次打开麦克风。每次进出这一步都加一，等麦克风回来时对不上号的就是过时了的 */
+/** 第几次打开麦克风：等麦克风回来时对不上号的就是过时了的（人已经离开了这一步） */
 let meterRun = 0;
 
+/** 权限那一步、麦克风开着：那一行的几根条跟着音量动 */
 async function startMeter() {
+  if (meter !== null || stream !== null) return;
   const run = ++meterRun;
-  $("microphone-error").hidden = true;
-  const bars = METER_BARS.map(() => document.createElement("span"));
-  $("meter").replaceChildren(...bars);
   let opened;
   try {
     opened = await openMicrophone();
   } catch (error) {
-    if (run !== meterRun) return;
-    $("microphone-error").textContent = t("onboarding.microphone.error", { reason: describeError(error) });
-    $("microphone-error").hidden = false;
+    // 开不了不拦着往下走：那一行照样写着"已开启"，原因记下来
+    console.warn("测麦克风时打不开", describeError(error));
     return;
   }
-  // 等麦克风的这一小会儿里人可能已经走开了，甚至又回来了：那一趟有自己的一路，这一路关掉
   if (run !== meterRun) {
     for (const track of opened.getTracks()) track.stop();
     return;
   }
   stream = opened;
   meter = meterLevels(stream, (level) => {
+    const bars = $("level")?.children;
+    if (!bars) return;
     // 说话的音量一般只到满格的一两成，放大一点才看得出在动
     const loud = Math.min(1, level * 4);
-    bars.forEach((bar, index) => {
-      bar.style.height = `${0.75 + loud * METER_BARS[index] * 7}rem`;
+    [...bars].forEach((bar, i) => {
+      bar.style.setProperty("--h", (0.18 + loud * LEVEL_SHAPE[i] * (0.7 + Math.random() * 0.3)).toFixed(3));
     });
   });
 }
@@ -537,42 +391,135 @@ function stopMeter() {
   stream = null;
 }
 
+// ---------- 引擎 ----------
+
+function renderSummary() {
+  const off = permissionsOff(setup);
+  const untested = FEATURES.filter((feature) => !passed.has(feature)).length;
+  const row = (icon, name, ok, text, target) =>
+    h(
+      "li",
+      { "data-ok": String(ok) },
+      svg(icon, "icon row-icon"),
+      h("span", { class: "summary-name", text: name }),
+      ok
+        ? done(text)
+        : target
+          ? h("button", { type: "button", class: "link", text, onclick: () => go(target) })
+          : h("span", { class: "status-dot", text }),
+    );
+  const ready = engineReady(setup);
+  $("summary").replaceChildren(
+    row(
+      "i-keyboard",
+      t("preferences.hotkey"),
+      untested === 0,
+      untested === 0 ? t("onboarding.keys.passed") : t("onboarding.engine.untested", { count: untested }),
+      "keys",
+    ),
+    STEPS.includes("permissions")
+      ? row(
+          "i-shield-check",
+          t("preferences.permissions"),
+          off === 0,
+          off === 0 ? t("onboarding.permissions.on") : t("onboarding.engine.missing", { count: off }),
+          "permissions",
+        )
+      : null,
+    row("i-workflow", t("hub.models"), ready, t(ready ? "onboarding.engine.ready" : "onboarding.engine.unset"), null),
+  );
+}
+
+// ---------- 走到哪一步 ----------
+
+/** 这一步配的东西在主窗口哪里随时能改：图标和主窗口里那个入口一样（设置是齿轮，引擎是侧栏那个图标） */
+const WHERE = {
+  keys: { icon: "i-settings", path: () => [t("hub.settings"), t("preferences.hotkey")] },
+  permissions: { icon: "i-settings", path: () => [t("hub.settings"), t("preferences.permissions")] },
+  engine: { icon: "i-workflow", path: () => [t("hub.models")] },
+};
+
+function renderWhere() {
+  const where = WHERE[step];
+  if (!where) {
+    $("where").replaceChildren();
+    return;
+  }
+  const place = h("span", { class: "where-path" }, svg(where.icon), where.path().join(" › "));
+  $("where").replaceChildren(...t.parts("onboarding.where", { place }));
+}
+
+/** 离开、进入某一步时要做的 */
+const leave = {
+  features: () => {
+    loopRun += 1;
+    scene.stop();
+  },
+  keys: () => {
+    stopRecording("left");
+    gesture.reset();
+  },
+  permissions: () => stopMeter(),
+};
+const enter = {
+  features: () => loop(playing),
+};
+
+function go(next) {
+  if (next === step) return;
+  if (step) leave[step]?.();
+  step = next;
+  helperHeld = null;
+  document.body.dataset.step = step;
+  for (const section of document.querySelectorAll(".step")) section.hidden = section.dataset.step !== step;
+  $("stage").scrollTop = 0;
+  // 换语言时页面重新加载：记在地址里，回到的还是这一步
+  history.replaceState(null, "", `?step=${step}`);
+  enter[step]?.();
+  render();
+}
+
+const goBy = (offset) => go(STEPS[Math.min(STEPS.length - 1, Math.max(0, STEPS.indexOf(step) + offset))]);
+
+function render() {
+  if (setup === null || step === null) return;
+  syncCapture();
+  renderGroups();
+  renderWhere();
+  if (step === "features") renderFeatures();
+  if (step === "keys") renderKeys();
+  if (step === "permissions") {
+    renderGrants();
+    if (permissionGranted("microphone", setup.permissions.microphone)) startMeter();
+    else stopMeter();
+  }
+  if (step === "engine") renderSummary();
+
+  // 底下：返回（开屏没有）、跳过引导、继续。开屏有自己的"开始"，引擎页有自己的"前往引擎"
+  $("back").style.visibility = step === STEPS[0] ? "hidden" : "visible";
+  $("skip-all").hidden = step === "engine";
+  const next = $("next");
+  next.hidden = step === "splash" || step === "engine";
+  // 这一步做完了"继续"是主按钮，没做完写"跳过"（照样能往下走）
+  const finished = stepDone(step, { passed, setup });
+  next.textContent = t(finished ? "onboarding.next" : "onboarding.skip");
+  next.classList.toggle("primary", finished);
+}
+
 // ---------- 用户的操作 ----------
 
-for (const button of document.querySelectorAll("[data-group]")) {
-  button.addEventListener("click", () => go(firstStepOf(button.dataset.group)));
-}
+$("start").addEventListener("click", () => go("features"));
 $("back").addEventListener("click", () => goBy(-1));
 $("next").addEventListener("click", () => goBy(1));
 $("skip-all").addEventListener("click", () => window.speakmore.finishOnboarding());
-$("finish").addEventListener("click", () => window.speakmore.finishOnboarding());
-
-for (const row of document.querySelectorAll("[data-permission]")) {
-  row
-    .querySelector("button")
-    .addEventListener("click", () => window.speakmore.openPrivacySettings(row.dataset.permission));
-}
-
-$("microphone-yes").addEventListener("click", () => goBy(1));
-$("microphone-no").addEventListener("click", () => {
-  $("microphone-help").hidden = false;
-});
-$("microphone-settings").addEventListener("click", () => window.speakmore.openPrivacySettings("microphone"));
-
-$("hotkey-yes").addEventListener("click", () => goBy(1));
-// 没变：换掉听写的第一个组合，录的是和设置页同一个控件。"测快捷键"本身仍走真实的匹配（5.6）
-$("hotkey-no").addEventListener("click", () => hotkeyEditor.record("dictate", 0));
-
-// 说完的话贴进笔记里了："继续"变成主按钮
-$("try-text").addEventListener("input", render);
+$("later").addEventListener("click", () => window.speakmore.finishOnboarding());
+// 去引擎页：主窗口打开引擎页，弹出推荐组合
+$("go-engine").addEventListener("click", () => window.speakmore.finishOnboarding({ engine: true }));
 
 // ---------- 主进程来的 ----------
 
 window.speakmore.onSetupChanged(refresh);
-window.speakmore.onOnboardingHotkey(({ down }) => {
-  if (down) $("big-keycap").dataset.pressed = "";
-  else delete $("big-keycap").dataset.pressed;
-});
 
 await refresh();
-go(startStep(setup));
+const wanted = new URLSearchParams(location.search).get("step");
+go(STEPS.includes(wanted) ? wanted : STEPS[0]);

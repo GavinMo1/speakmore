@@ -1,7 +1,6 @@
-/* 首次引导。和主窗口一样大、一样藏起标题栏。
-   选识别方式、准备两步是一栏表单：一项一行的列表（几项都排得齐），选中的那一行就地展开，样子同主窗口的密钥表；
-   后面几步左边一列字和操作，右边一块示意。标题前半句淡一点，照原版（"<0>现在，</0>开始语音输入"那种写法）。
-   观感和主窗口一家：背后的光晕、半透明的面、主题渐变（shared/window.css）。 */
+/* 首次引导。和主窗口一样大、一样藏起标题栏。标题前半句淡一点，照原版（"<0>现在，</0>开始语音输入"那种写法）。
+   不套框：列表不装卡片，一行一行用细线分开；图标不垫方块；结论是带勾的字，不垫底色。
+   页面上的框只剩按钮、键帽，和演示画面里那一个窗口（scene.css）。字号、圆角、颜色只用 token。 */
 
 /* 图标表只供 <use> 引用，不占位置 */
 .sprite {
@@ -14,7 +13,7 @@ body {
   height: 100vh;
 }
 
-/* ---------- 顶上三段：进度条加名字，都能点 ---------- */
+/* ---------- 顶上几段：进度条加名字，都能点；开屏不出 ---------- */
 
 /* 标题栏藏起来了：最上面这一条用来拖窗口，按钮本身不拖 */
 .steps {
@@ -22,6 +21,10 @@ body {
   justify-content: center;
   padding: 1.1rem 2rem 0;
   -webkit-app-region: drag;
+}
+
+body[data-step="splash"] .steps {
+  visibility: hidden;
 }
 
 .step-groups {
@@ -36,19 +39,15 @@ body {
   position: relative;
   min-width: 6.5rem;
   padding: 0.6rem 0 0.2rem;
-  font: inherit;
   font-size: var(--text-small);
   font-weight: var(--weight-medium);
   color: var(--ink-2);
-  background: none;
-  border: none;
-  border-radius: 0;
   cursor: pointer;
   -webkit-app-region: no-drag;
   transition: color var(--dur-base) var(--ease-out);
 }
 
-/* 灰的底条上盖一条主题渐变，走到哪段亮到哪段 */
+/* 灰的底条上盖一条主题色，走到哪段亮到哪段 */
 .step-groups button::before,
 .step-groups button::after {
   content: "";
@@ -79,17 +78,17 @@ body {
   outline-offset: 4px;
 }
 
+/* ---------- 每一步 ---------- */
+
 .stage {
   overflow-y: auto;
   padding: 2rem 3.5rem;
 }
 
 .step {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 3rem;
-  align-items: center;
-  max-width: 62rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   min-height: 100%;
   margin: 0 auto;
   animation: step-in var(--dur-slow) var(--ease-out);
@@ -103,8 +102,8 @@ body {
 }
 
 .step-title {
-  margin: 0 0 1.5rem;
-  /* 中文标题只在标点和空格处换行，不把"设置"拆成两行 */
+  margin: 0 0 1rem;
+  /* 中文标题只在标点和空格处换行 */
   word-break: keep-all;
   font-size: var(--text-display);
   font-weight: var(--weight-bold);
@@ -117,484 +116,426 @@ body {
   color: var(--ink-2);
 }
 
-.visual {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 19rem;
-  padding: 2rem;
-  background: var(--surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--edge), var(--lift);
-}
-
-/* ---------- 一栏的表单：选识别方式、准备 ---------- */
-
-.step.form-step {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: stretch;
-  gap: 0;
-  max-width: 42rem;
-  padding-top: 0.5rem;
-}
-
-.form-step .step-title {
-  margin-bottom: 1.25rem;
-}
-
-/* 页底的一句：识别方式换不了时说为什么 */
-.footnote {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  font-size: var(--text-small);
-  color: var(--ink-2);
-}
-
-.footnote .icon {
-  width: 0.875rem;
-  height: 0.875rem;
-  margin-top: 0.2rem;
-}
-
-/* ---------- 选识别方式：一种一行，左边单选标记、中间名字和要什么、右边经过谁家 ---------- */
-
-.choices {
-  display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
-}
-
-.choice {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 1rem;
-  width: 100%;
-  padding: 1rem 1.125rem;
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
-  background: var(--surface);
-  border: none;
-  border-radius: var(--radius-card);
-  box-shadow: var(--edge);
-  cursor: pointer;
-  transition:
-    background-color var(--dur-base) var(--ease-out),
-    box-shadow var(--dur-base) var(--ease-out);
-}
-
-.choice:hover {
-  background: var(--surface-solid);
-  box-shadow: var(--ring-strong), var(--lift);
-}
-
-.choice[aria-checked="true"] {
-  background: color-mix(in oklch, var(--primary) 6%, var(--surface-solid));
-  box-shadow:
-    0 0 0 1.5px color-mix(in oklch, var(--primary) 55%, transparent),
-    var(--lift);
-}
-
-.choice:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 3px;
-}
-
-.choice:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.choice-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  min-width: 0;
-}
-
-.choice-name {
+/* 开屏的"开始"、引擎页的"前往引擎"：大一号，宽一些 */
+.button.big {
+  min-width: 13rem;
+  height: var(--control-lg);
   font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
 }
 
-.choice-desc {
-  font-size: var(--text-small);
-  color: var(--ink-2);
-}
-
-.needs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.875rem;
-  margin-top: 0.375rem;
-}
-
-.need {
+/* 结论：一个勾加一句，不垫底色 */
+.done {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: var(--text-micro);
-  font-weight: var(--weight-medium);
-  color: var(--ink-2);
-}
-
-.need .icon {
-  width: 0.8125rem;
-  height: 0.8125rem;
-}
-
-/* 小号的品牌图标底座：一路经过谁、经过谁家 */
-.mini-tile {
-  display: inline-grid;
-  flex: none;
-  place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  color: var(--ink);
-  background: var(--surface-solid);
-  border-radius: var(--radius-control);
-  box-shadow: 0 0 0 1px var(--line);
-}
-
-.mini-tile > :is(.provider-icon, .icon) {
-  width: 0.9375rem;
-  height: 0.9375rem;
-}
-
-/* 经过谁家：一排小图标，悬停看名字 */
-.brands {
-  display: flex;
-  gap: 0.25rem;
-}
-
-/* ---------- 准备：一路经过谁 ---------- */
-
-.route {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0.625rem 0.875rem;
-  list-style: none;
-  font-size: var(--text-small);
-  background: var(--surface);
-  border-radius: var(--radius-block);
-  box-shadow: var(--edge);
-}
-
-.route li {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.route-end {
-  color: var(--ink-2);
-}
-
-.route-end .icon {
-  width: 0.9375rem;
-  height: 0.9375rem;
-}
-
-.route-hop {
-  font-weight: var(--weight-semibold);
-}
-
-.route-arrow {
-  color: var(--ink-2);
-}
-
-.route-arrow .icon {
-  width: 0.875rem;
-  height: 0.875rem;
-  opacity: 0.6;
-}
-
-.plan-status {
-  margin-top: 0.75rem;
-}
-
-.plan-status > .callout {
-  align-items: center;
-}
-
-.plan-status .retry {
-  margin-left: auto;
-}
-
-/* ---------- 准备：本机模型、选哪家 ---------- */
-
-.prepare-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  margin-top: 1.5rem;
-}
-
-.section-label {
-  margin: 0 0 0.625rem;
+  gap: 0.375rem;
   font-size: var(--text-small);
   font-weight: var(--weight-semibold);
-  color: var(--ink-2);
-}
-
-.prepare-section > .callout {
-  margin-top: 0.625rem;
-}
-
-/* 本机模型：一行，左图标、中间名字和体积、右边下载 / 进度 / 已下载 */
-.model-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  background: var(--surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--edge);
-}
-
-.model-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  min-width: 0;
-}
-
-.model-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
-}
-
-.model-meta {
-  font-size: var(--text-small);
-  color: var(--ink-2);
-}
-
-/* 右边那一格定宽：下载、进度、已下载换来换去时左边不跟着动 */
-.model-action {
-  display: flex;
-  justify-content: flex-end;
-  width: 7.5rem;
-}
-
-.model-action > * {
-  width: 100%;
-  height: var(--control-md);
-}
-
-/* 选哪家：一家一行，选中的那行展开填密钥 */
-.vendor-list {
-  background: var(--surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--edge);
-}
-
-/* 圆角跟着整块：第一行、最后一行的悬停底色不出角 */
-.vendor {
-  overflow: hidden;
-}
-
-.vendor + .vendor {
-  border-top: 1px solid var(--line);
-}
-
-.vendor:first-child {
-  border-radius: var(--radius-card) var(--radius-card) 0 0;
-}
-
-.vendor:last-child {
-  border-radius: 0 0 var(--radius-card) var(--radius-card);
-}
-
-.vendor[data-open] {
-  background: color-mix(in oklch, var(--primary) 4%, transparent);
-}
-
-.vendor-head {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  min-height: 3.25rem;
-  padding: 0.5rem 1rem;
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
-  background: none;
-  border: none;
-  border-radius: 0;
-  cursor: pointer;
-}
-
-.vendor:not([data-open]) .vendor-head:hover {
-  background: var(--fill-hover);
-}
-
-.vendor-head:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: -2px;
-}
-
-.vendor-name {
-  font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
-}
-
-/* 有没有密钥：配好的带一个绿点 */
-.vendor-key {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: var(--text-small);
-  color: var(--ink-2);
+  color: var(--ok);
   white-space: nowrap;
 }
 
-.vendor-key[data-tone="ok"] {
-  color: var(--ok);
-}
-
-.vendor-key[data-tone="ok"]::before {
-  content: "";
-  width: 0.4rem;
-  height: 0.4rem;
-  background: currentColor;
-  border-radius: 50%;
-}
-
-/* 展开的那一块和名字对齐：让出图标那一列（2rem 加间距） */
-.vendor-body {
-  padding: 0 1rem 1rem 3.75rem;
-}
-
-.vendor-body .key-state-row {
-  min-height: var(--control-sm);
-}
-
-.vendor-body .state[data-tone="pending"] {
-  color: var(--ink-2);
-}
-
-.vendor-body .key-form {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.625rem;
-}
-
-/* 密钥输入：一整块，前面钥匙图标、后面粘贴按钮；获得焦点时整块亮一圈主题色 */
-.key-field {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-  height: var(--control-md);
-  padding: 0 0.125rem 0 0.625rem;
-  color: var(--ink-2);
-  background: var(--surface-solid);
-  border-radius: var(--radius-control);
-  box-shadow: var(--ring), var(--shadow-control);
-  cursor: text;
-  transition: box-shadow var(--dur-fast) var(--ease-out);
-}
-
-.key-field:hover {
-  box-shadow: var(--ring-strong), var(--shadow-control);
-}
-
-.key-field:focus-within {
-  box-shadow:
-    0 0 0 1px color-mix(in oklch, var(--primary) 70%, transparent),
-    0 0 0 4px color-mix(in oklch, var(--primary) 16%, transparent);
-}
-
-.key-field > .icon {
+.done .icon {
   width: 0.875rem;
   height: 0.875rem;
+  stroke-width: 2.5;
 }
 
-.key-input {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  font: inherit;
-  font-family: var(--font-mono);
+.hint-text {
   font-size: var(--text-small);
-  color: var(--ink);
-  background: none;
-  border: none;
-  outline: none;
-}
-
-.key-input::placeholder {
-  font-family: var(--font);
   color: var(--ink-2);
 }
 
-.paste-key {
-  width: var(--control-sm);
-  height: var(--control-sm);
+/* 键帽按下去（演示里按快捷键的那一下、真按着的键）：换成实色主题色，往下沉一点 */
+.keycap {
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    translate var(--dur-fast) var(--ease-out);
 }
 
-.paste-key .icon {
-  width: 0.875rem;
-  height: 0.875rem;
+.key-test[data-pressed] .keycap,
+.keycap[data-down],
+.press[data-tested] .keycap {
+  color: var(--on-primary);
+  background: var(--primary);
+  box-shadow: none;
 }
 
-.vendor-body .save-key {
-  min-width: 5rem;
+.key-test[data-pressed] .keycap,
+.keycap[data-down] {
+  translate: 0 1px;
 }
 
-.vendor-body .key-problem {
-  margin-top: 0.5rem;
+/* 等人按：键帽一明一暗 */
+.key-rows [data-await] .keycap:not([data-down]),
+.press[data-await] .keycap:not([data-down]) {
+  animation: await 1.6s ease-in-out infinite;
 }
 
-.vendor-body .links {
-  gap: 1rem;
-  margin-top: 0.625rem;
+@keyframes await {
+  50% {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--primary) 70%, transparent),
+      0 0 0 3px color-mix(in oklch, var(--primary) 16%, transparent);
+  }
 }
 
-.key-link {
-  display: inline-flex;
+/* ---------- 开屏：图标、名字、口号、一行介绍、开始 ---------- */
+
+.step.splash {
   align-items: center;
-  gap: 0.3rem;
-  padding: 0;
-  font: inherit;
-  font-size: var(--text-small);
-  font-weight: var(--weight-medium);
+  text-align: center;
+  animation: none;
+}
+
+/* 依次浮上来：图标先到，字跟着，按钮最后 */
+.splash > * {
+  animation: rise-in var(--dur-slow) var(--ease-out) backwards;
+}
+
+.splash > :nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.splash > :nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.splash > :nth-child(4) {
+  animation-delay: 180ms;
+}
+
+.splash > :nth-child(5) {
+  animation-delay: 260ms;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+  }
+}
+
+.splash-icon {
+  width: 112px;
+  height: 112px;
+  margin-bottom: 1.25rem;
+  filter: drop-shadow(0 20px 32px color-mix(in oklch, var(--primary) 26%, transparent));
+}
+
+.splash-name {
+  margin: 0 0 0.75rem;
+  font-size: var(--text-heading);
+  font-weight: var(--weight-semibold);
   color: var(--ink-2);
-  background: none;
-  border: none;
+}
+
+.splash .step-title {
+  margin-bottom: 0.75rem;
+}
+
+.splash-line {
+  margin: 0 0 2.25rem;
+  color: var(--ink-2);
+}
+
+/* ---------- 功能：标题、演示、底下三个功能一排 ---------- */
+
+.step.stacked {
+  align-items: center;
+}
+
+.stacked .step-title {
+  margin-bottom: 0.75rem;
+  text-align: center;
+}
+
+.stage-scene {
+  width: min(100%, 55rem);
+}
+
+/* 三个功能一排：上沿一条线跟着正在放的那一遍走完；名字，下面写着它的键（只是告诉人，按了没反应） */
+.key-tests {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  width: min(100%, 55rem);
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.key-test {
+  /* 放一遍多久：正在放的那一项由页面按时间线写上（scene.mjs 的 PLAY_MS） */
+  --dur: 8s;
+  position: relative;
+  display: grid;
+  gap: 0.375rem;
+  padding: 0.85rem 0.25rem 0.25rem;
   cursor: pointer;
 }
 
-.key-link:hover {
+.key-test-line {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  overflow: hidden;
+  background: var(--fill-selected);
+  border-radius: var(--radius-full);
+}
+
+.key-test-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--gradient);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+}
+
+.key-test[data-playing] .key-test-line::after {
+  animation: progress var(--dur) linear forwards;
+}
+
+@keyframes progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.key-test-name {
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  color: var(--ink-2);
+  transition: color var(--dur-base) var(--ease-out);
+}
+
+.key-test:hover .key-test-name,
+.key-test[aria-current="true"] .key-test-name {
   color: var(--ink);
 }
 
-.key-link:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
+/* ---------- 一栏的几步：快捷键、权限 ---------- */
+
+.step.single {
+  width: min(100%, 30rem);
 }
 
-.key-link .icon {
-  width: 0.8125rem;
-  height: 0.8125rem;
+.step.single.keys-wide {
+  width: min(100%, 36rem);
 }
 
-/* ---------- 底下的返回、跳过引导、继续 ---------- */
+/* 快捷键：一行一个功能。名字 · 键帽（大一号） · 状态 · 更换，四列用 subgrid 对齐；重录被拒的原因写在这一行下面 */
+.key-rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto var(--col-status) auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.key-rows li {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  min-height: 4rem;
+  padding: 0.5rem 0;
+}
+
+.key-row-name {
+  font-weight: var(--weight-semibold);
+}
+
+.keycaps.big {
+  gap: 0.375rem;
+}
+
+.keycaps.big .keycap {
+  min-width: 2.5rem;
+  padding: 0.3rem 0.75rem 0.4rem;
+  font-size: var(--text-body);
+}
+
+.key-row-state {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.key-row-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--problem);
+}
+
+/* 重录：键帽换成一句提示，底下一道一明一暗的主题色线 */
+.chord-prompt {
+  justify-self: start;
+  padding: 0.125rem 0;
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  color: var(--primary);
+  border-bottom: 2px solid var(--primary);
+  animation: breathe-line 1.4s ease-in-out infinite;
+}
+
+@keyframes breathe-line {
+  50% {
+    border-bottom-color: color-mix(in oklch, var(--primary) 25%, transparent);
+  }
+}
+
+/* 权限：一行一项；麦克风那一行多一排电平，输入监控那一行多一句"按一下"和键帽 */
+.grants {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grants li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto var(--col-status);
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.5rem;
+  padding: 0.5rem 0;
+}
+
+/* 行首的图标：不垫方块，淡一点 */
+.row-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--ink-2);
+}
+
+.grant-primary {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+}
+
+.grants .button {
+  justify-self: stretch;
+}
+
+.grants .done,
+.grants .hint-text {
+  justify-self: end;
+}
+
+.level {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 1.25rem;
+}
+
+.level i {
+  width: 3px;
+  height: calc(var(--h, 0.18) * 1.25rem);
+  background: var(--gradient);
+  border-radius: var(--radius-full);
+  transition: height 80ms linear;
+}
+
+.press {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+/* 三条隐私说明：一个图标一句话 */
+.privacy {
+  display: grid;
+  gap: 0.5rem;
+  margin: 2.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.privacy li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--text-small);
+  color: var(--ink-2);
+}
+
+.privacy .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* ---------- 引擎：哪些齐了，去引擎页 ---------- */
+
+.step.engine-step {
+  align-items: center;
+  text-align: center;
+}
+
+.summary {
+  width: min(100%, 26rem);
+  margin: 0 0 2rem;
+  padding: 0;
+  list-style: none;
+}
+
+.summary li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.25rem;
+  padding: 0.5rem 0;
+  text-align: left;
+}
+
+.summary-name {
+  font-weight: var(--weight-semibold);
+}
+
+.summary .link {
+  color: var(--problem);
+  text-decoration-color: color-mix(in oklch, var(--problem) 40%, transparent);
+}
+
+/* 未配置：一个小圆点加字 */
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--text-small);
+  font-weight: var(--weight-semibold);
+  color: var(--problem);
+}
+
+.status-dot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.engine-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* 快捷键、权限、引擎三张列表：行与行之间一道细线，不装卡片 */
+.key-rows > li + li,
+.grants > li + li,
+.summary > li + li {
+  border-top: 1px solid var(--line);
+}
+
+/* ---------- 底下：返回、角落一行、跳过引导、继续 ---------- */
 
 .nav {
   display: flex;
@@ -607,306 +548,46 @@ body {
   min-width: 6rem;
 }
 
-/* 第一步没有"返回"：跳过引导和继续还是待在右边 */
-#skip-all {
-  margin-left: auto;
-}
-
-/* ---------- 权限 ---------- */
-
-.grants {
-  display: flex;
-  flex-direction: column;
-  margin: 0.5rem 0 0;
-  padding: 0;
-  list-style: none;
-  background: var(--surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--edge);
-}
-
-.grants li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.75rem;
-  min-height: 3.5rem;
-  padding: 0.5rem 1rem;
-}
-
-.grants li + li {
-  border-top: 1px solid var(--line);
-}
-
-.grant-primary {
-  font-weight: var(--weight-semibold);
-}
-
-.grants .button {
-  min-width: 6rem;
-}
-
-/* 给了以后按钮换成一个勾，不再能点 */
-.grants [data-granted="true"] > .button {
-  color: var(--ok);
-  background: color-mix(in oklch, var(--ok) 12%, transparent);
-  box-shadow: none;
-}
-
-.privacy {
-  gap: 1.25rem;
-}
-
-.privacy-name {
+/* 这一步配的东西在主窗口哪里随时能改 */
+.where {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  font-weight: var(--weight-semibold);
-}
-
-/* 和左边权限那几行一样的小方砖 */
-.privacy-name .logo-tile {
-  color: var(--primary);
-}
-
-/* ---------- 测麦克风、测快捷键 ---------- */
-
-.question {
-  margin: 0.5rem 0 0.75rem;
-  font-weight: var(--weight-semibold);
-}
-
-.answers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.meter-panel,
-.keycap-panel {
-  align-items: center;
-}
-
-.meter {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  height: 8rem;
-}
-
-.meter span {
-  width: 0.75rem;
-  height: 0.75rem;
-  background: var(--gradient);
-  border-radius: var(--radius-full);
-  transition: height 80ms linear;
-}
-
-.big-keycap {
-  display: inline-grid;
-  place-items: center;
-  min-width: 7rem;
-  height: 5.5rem;
-  padding: 0 1.5rem;
-  font: inherit;
-  font-size: var(--text-figure);
-  font-family: var(--font-rounded);
-  font-weight: var(--weight-semibold);
-  background: var(--surface-solid);
-  border-radius: var(--radius-card);
-  box-shadow:
-    0 0 0 1px var(--line),
-    0 4px 0 var(--line);
-  transition:
-    color var(--dur-fast) var(--ease-out),
-    translate var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
-}
-
-/* 按下去：换成主题渐变，往下沉一点，底下透出同色的光 */
-/* 一个组合的几个键并排；按下时一起亮 */
-.big-keycaps {
-  display: flex;
-  gap: 1rem;
-}
-
-.big-keycaps[data-pressed] .big-keycap {
-  color: var(--on-primary);
-  background: var(--gradient);
-  translate: 0 3px;
-  box-shadow:
-    0 0 0 1px transparent,
-    0 10px 30px -8px var(--primary);
-}
-
-/* 每个动作和它的键：和设置页同一个控件（shared/hotkey-editor.css），这里只收一收上下的空 */
-.hotkey-list {
-  margin-top: 1.25rem;
-  max-width: 34rem;
-}
-
-.hotkey-list .hotkey-row:last-child {
-  border-bottom: none;
-}
-
-/* 引导页左栏窄：名字和说明在上，组合在下，都靠左 */
-.hotkey-list .hotkey-row {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.hotkey-list .hotkey-chords {
-  justify-content: flex-start;
-}
-
-.hotkey-list .hotkey-note {
-  text-align: left;
-}
-
-/* ---------- 体验一下 ---------- */
-
-.sample {
-  margin: 0 0 1.25rem;
-  padding: 0.9rem 1.1rem;
-  background: var(--surface);
-  border-radius: var(--radius-block);
-  box-shadow: var(--edge);
-}
-
-/* 还没接上模型、模型还在下：说一句 */
-.readiness {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  gap: 0.375rem;
+  margin: 0 auto 0 0.5rem;
   font-size: var(--text-small);
-  border-radius: var(--radius-control);
-  background: var(--fill-hover);
+  color: var(--ink-2);
 }
 
-.readiness .icon {
+.where-path {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+}
+
+.where-path .icon {
   width: 0.875rem;
   height: 0.875rem;
 }
 
-.readiness[data-tone="problem"] {
-  background: color-mix(in oklch, var(--problem) 9%, transparent);
-}
-
-.readiness[data-tone="problem"] .icon {
-  color: var(--problem);
-}
-
-.readiness-fix {
-  margin-left: auto;
-}
-
-.notes {
-  justify-content: flex-start;
-  padding: 1.5rem;
-}
-
-.notes-text {
-  flex: 1;
-  transition: box-shadow var(--dur-fast) var(--ease-out);
-  min-height: 14rem;
-  padding: 1rem;
-  font: inherit;
-  color: var(--ink);
-  background: var(--surface-solid);
-  border: none;
-  border-radius: var(--radius-block);
-  box-shadow: 0 0 0 1px var(--line);
-  resize: none;
-}
-
-.notes-text::placeholder {
-  color: var(--ink-2);
-}
-
-.notes-text:focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 1px color-mix(in oklch, var(--primary) 70%, transparent),
-    0 0 0 4px color-mix(in oklch, var(--primary) 16%, transparent);
-}
-
-/* ---------- 完成 ---------- */
-
-.step.done {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-
-.done .step-title {
-  margin-bottom: 1.5rem;
-}
-
-/* 三样现在怎样：识别方式、快捷键、麦克风 */
-.summary {
-  width: min(100%, 28rem);
-  margin: 0 0 2rem;
-  padding: 0;
-  list-style: none;
-  text-align: left;
-  background: var(--surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--edge);
-}
-
-.summary-item {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  align-items: center;
-  gap: 0.75rem;
-  min-height: 3.25rem;
-  padding: 0.5rem 1rem;
-}
-
-.summary-item + .summary-item {
-  border-top: 1px solid var(--line);
-}
-
-.summary-label {
-  font-size: var(--text-small);
-  color: var(--ink-2);
-}
-
-.summary-value {
-  justify-self: end;
-  font-size: var(--text-small);
-  font-weight: var(--weight-semibold);
-  text-align: right;
-}
-
-.summary [data-tone="problem"] .summary-value {
-  color: var(--problem);
-}
-
-.summary [data-tone="progress"] .summary-value {
-  color: var(--ink-2);
-}
-
-.button.big {
-  min-width: 10rem;
-  height: var(--control-lg);
-  padding: 0 1.75rem;
-  font-size: var(--text-body);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .step {
+  .step-groups button,
+  .step-groups button::after,
+  .keycap {
+    transition: none;
+  }
+
+  .step,
+  .splash > *,
+  .key-rows [data-await] .keycap,
+  .press[data-await] .keycap,
+  .chord-prompt {
     animation: none;
   }
 
-  .step-groups button,
-  .step-groups button::after,
-  .choice,
-  .key-field,
-  .meter span,
-  .big-keycap {
-    transition: none;
+  .key-test[data-playing] .key-test-line::after {
+    animation: none;
+    transform: scaleX(1);
   }
 }

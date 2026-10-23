@@ -29,7 +29,7 @@
 }
 
 .picker-trigger[aria-expanded="true"] {
-  background: var(--surface-solid);
+  background: var(--fill-strong);
 }
 
 .picker-trigger:focus-visible {
@@ -244,8 +244,9 @@
   gap: 0.75rem;
 }
 
+/* 右边的按钮至少一列宽，各行对齐；字长的（英文的"Download 850 MB"）跟着撑开，不溢出胶囊 */
 .preset-row-side > :last-child {
-  width: var(--col-action);
+  min-width: var(--col-action);
 }
 
 @media (prefers-reduced-motion: reduce) {

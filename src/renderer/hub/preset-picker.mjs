@@ -219,5 +219,9 @@ export function createPresetPicker({ refresh, configureKey }) {
       setup = next;
       draw();
     },
+    /** 打开那一列（首次引导点了"前往引擎"）。还没有推荐组合可列时不开 */
+    open() {
+      if (!trigger.hidden && !isOpen()) panel.showPopover({ source: trigger });
+    },
   };
 }

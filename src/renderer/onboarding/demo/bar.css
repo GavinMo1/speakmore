@@ -1,0 +1,9 @@
+/* 演示里的悬浮条（真样式是 bar/bar.css）。color-scheme 和引导页一样，不然深色下 iframe 会垫一块不透明的底 */
+:root {
+  color-scheme: light dark;
+}
+
+/* 窗口贴着演示画面的底边，比真窗口离底边近一点 */
+body {
+  padding-bottom: 14px;
+}

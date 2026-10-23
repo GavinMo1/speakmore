@@ -1,11 +1,11 @@
 // 划词卡片的页面：主进程交来这一次的样子（app/lookup/controller.mjs 的 view），这里画出来，量好卡片多高、
 // 每个按钮在窗口里的哪一块，报回去（app/lookup/card-window.mjs 摆窗口、交给小帮手截）。
 // 窗口点不到：点击是小帮手截下来、经主进程转过来的（onLookupClick）。展开语言选单这种只在页面里的事这里自己办，
-// 别的（复制、换语言、固定、关闭、重试、配置密钥）报给主进程。
+// 别的（复制、换语言、固定、关闭、重试、配置密钥）报给主进程。画面在 card-ui.mjs。
 
-import { languageName } from "../../languages.mjs";
-import { $, h } from "../shared/dom.mjs";
+import { $ } from "../shared/dom.mjs";
 import { localize, setLocale, t } from "../shared/i18n.mjs";
+import { drawCard } from "./card-ui.mjs";
 
 /** "已复制"留多久 */
 const COPIED_MS = 1500;
@@ -20,39 +20,7 @@ let menuOpen = false;
 let copiedTimer = null;
 
 function render() {
-  document.body.dataset.phase = view ? view.phase : "hidden";
-  if (!view) return;
-  const { phase, language, languages, text, problem, action, pinned } = view;
-  $("language-name").textContent = t.text(languageName(language));
-  $("language").setAttribute("aria-expanded", String(menuOpen));
-  $("pin").setAttribute("aria-pressed", String(pinned));
-  $("pin").setAttribute("aria-label", t(pinned ? "lookup.card.unpin" : "lookup.card.pin"));
-
-  const menu = $("menu");
-  menu.hidden = !menuOpen;
-  if (menuOpen) {
-    menu.replaceChildren(
-      ...languages.map((id) =>
-        h("span", {
-          class: "menu-item",
-          role: "option",
-          "aria-selected": String(id === language),
-          "data-region": `pick:${id}`,
-          text: t.text(languageName(id)),
-        }),
-      ),
-    );
-  }
-
-  $("loading").hidden = phase !== "loading";
-  $("text").hidden = phase !== "done";
-  $("text").textContent = phase === "done" ? text : "";
-  $("problem").hidden = phase !== "error";
-  $("problem-text").textContent = phase === "error" ? t.text(problem) : "";
-  $("foot").hidden = phase === "loading";
-  $("copy").hidden = phase !== "done";
-  $("keys").hidden = !(phase === "error" && action === "keys");
-  $("retry").hidden = !(phase === "error" && action === "retry");
+  drawCard(view, { menuOpen });
   report();
 }
 

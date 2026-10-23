@@ -16,14 +16,14 @@
 - [SpeakMore 按真实产品打磨](typeless-clone-as-real-product.md) — 从用户层面考虑，不用"玩具"当理由省环节
 - [SpeakMore 还在内测](speakmore-only-user-in-beta.md) — 只有他一个人在用；兼容旧版本、迁移按一个人的量来权衡，不做重
 - [SpeakMore 的方向](typeless-clone-open-source-panel.md) — 仿刻定名 SpeakMore，代码在仓库根，已公开（MIT）；一行命令安装并启动，装的和产生的东西全在 ~/.speakmore、能一次删干净；先做 CLI，桌面端以后用 Electron（同 Typeless，不用 Tauri）
-- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship，挂后台），GitHub 不再发；最新 0.15.0（10-22，本机模型空闲释放 PR #14、BOM；0.11.0 起换成 channel.json + store/ 按块更新）；安装包公证会自己重交三次，再断就只补那一步、别重打包；发过的版本不覆盖；证书 2027-01-12 到期要续
+- [SpeakMore 的发布走 COS](speakmore-release-on-cos.md) — 包在 dl.zephyrxiang.com/speakmore/，只从本机发（npm run ship，挂后台），GitHub 不再发；最新 0.16.0（10-23，语音翻译、划词翻译；0.11.0 起换成 channel.json + store/ 按块更新）；安装包公证会自己重交三次，再断就只补那一步、别重打包；发过的版本不覆盖；证书 2027-01-12 到期要续
 - [SpeakMore 官网](speakmore-website.md) — 代码在 website/，图片在单独的桶加 media 子域名（证书 2027-01-13 到期要续），Docker 部署、npm run deploy；README 的图在同一个桶的 readme/ 下；10-17 重做已上线（费用并进模型、开发者终端、costs.json 对账）；发新版后要再部署
 - [issue 等他点名再建](issues-on-user-cue.md) — 不主动提议把待办转成 issue，待办留在 README；别人报的修好发版回复完就直接关
 - [没改东西就别重跑测试](dont-rerun-tests-without-changes.md) — 压缩对话前跑过的不重跑，只在改了代码后跑相关的那一组
 - [验收要端到端闭环](acceptance-end-to-end.md) — 沿用户路径走一遍；没什么可验的也要把打好的包真启动一次；Windows 包先出先验、不干等；issue 全验完再回
 - [审查一轮就够](one-review-round-is-enough.md) — 对抗性审查派一轮、放在全部步骤做完之后统一审（中途不审），改完就收，不再派第二轮，除非他点名
 - [workflow 子 agent 控制在十个上下](workflow-agent-budget.md) — 派之前算总数；复核按组批量判，不按条乘人数；10-21 一次起了 73 个他嫌多
-- [桌面端的文案和观感](desktop-copy-and-look.md) — 书面语、短词短句；配色走自己的主题；按钮一律胶囊（共用一条样式）；图标不垫色块、不用星光魔杖；改样式后真窗口逐个查按钮；只留必要的字，说明小字全砍、不套胶囊（10-22）
+- [桌面端的文案和观感](desktop-copy-and-look.md) — 书面语、短词短句；配色走自己的主题；按钮一律胶囊；图标不垫色块；只留必要的字；不要框套框（10-23）
 - [README 中文为主](readme-chinese-default.md) — 中文 README.md 默认、英文 README.en.md 切换；书面语像报告，五个自由、讲好不讲坏、多配图，图放图片桶
 - [客户端多语言](speakmore-i18n-next.md) — 已随 0.6.0 发布：英文和简体中文、跟随系统、命令行和内核报的话也跟着换，提示词不动；加语言照 docs/development.md
 - [官网文案用书面语](website-copy-formal.md) — 简洁但不口语、不俏皮；第一版他嫌像小孩子写的，中英都收敛
@@ -59,4 +59,4 @@
 - [热键敢做减法](hotkey-subtract-boldly.md) — 和系统按键、组合键冲突或实验里离谱的，直接不让绑，不用问；改方向才问
 - [他 Mac 上被占的键](mac-keys-taken.md) — Typeless 占着左 fn、右 ⌘，键盘没有右 Ctrl；开发版热键用右 ⌥（正式版不开时）
 - [PR #14 按需装载](speakmore-pr14-on-demand-model.md) — 外部贡献；自定义服务的空闲释放交给 customParams 的 keep_alive/ttl，本机转写合成一项 localModelMemory；10-22 已合并，跟下个版本发
-- [翻译功能的形态](speakmore-translation-features.md) — 语音输入、语音翻译、划词翻译；规格在 .playwright-mcp/translate-proto/README.md；分支 translate-features，三段做完、审查一轮修完、#16 合进来（10-23），等他点头合并 main
+- [翻译功能的形态](speakmore-translation-features.md) — 语音输入、语音翻译、划词翻译；规格在 .playwright-mcp/translate-proto/README.md；随 0.16.0 发布（10-23）；README 改三位一体进行中（分支 readme-three-in-one），引导要重做、再发版，先和他讨论
