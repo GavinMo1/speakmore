@@ -1,202 +1,292 @@
 {
-  "onboarding-way.en": {
-    "path": "readme/onboarding-way.en.61065828.webp",
-    "width": 1160,
-    "height": 830
-  },
-  "onboarding-prepare-local.en": {
-    "path": "readme/onboarding-prepare-local.en.805b2018.webp",
-    "width": 1160,
-    "height": 830
-  },
-  "onboarding-prepare-private.en": {
-    "path": "readme/onboarding-prepare-private.en.19caea51.webp",
-    "width": 1160,
-    "height": 830
-  },
   "onboarding-permissions.en": {
-    "path": "readme/onboarding-permissions.en.9d77bee8.webp",
-    "width": 1160,
-    "height": 830
-  },
-  "onboarding-microphone.en": {
-    "path": "readme/onboarding-microphone.en.e2c1ebb7.webp",
-    "width": 1160,
-    "height": 830
-  },
-  "onboarding-hotkey.en": {
-    "path": "readme/onboarding-hotkey.en.7da0acf9.webp",
-    "width": 1160,
-    "height": 830
-  },
-  "onboarding-try.en": {
-    "path": "readme/onboarding-try.en.75c07314.webp",
-    "width": 1160,
-    "height": 830
-  },
-  "onboarding-done.en": {
-    "path": "readme/onboarding-done.en.33a16029.webp",
+    "path": "readme/onboarding-permissions.en.ab43c801.webp",
     "width": 1160,
     "height": 830
   },
   "home-dark.en": {
-    "path": "readme/home-dark.en.3dacaeb8.webp",
+    "path": "readme/home-dark.en.8c295077.webp",
     "width": 1160,
     "height": 830
   },
   "home.en": {
-    "path": "readme/home.en.96b8c4aa.webp",
+    "path": "readme/home.en.41aea329.webp",
     "width": 1160,
     "height": 830
   },
   "transcribe.en": {
-    "path": "readme/transcribe.en.f017b686.webp",
+    "path": "readme/transcribe.en.5bfd3426.webp",
     "width": 1160,
-    "height": 880
+    "height": 830
   },
   "polish.en": {
-    "path": "readme/polish.en.fa538439.webp",
+    "path": "readme/polish.en.c5692c7a.webp",
     "width": 1160,
-    "height": 880
+    "height": 830
   },
   "keys.en": {
-    "path": "readme/keys.en.b731b2b7.webp",
+    "path": "readme/keys.en.a2697758.webp",
     "width": 1160,
-    "height": 880
+    "height": 830
   },
   "presets.en": {
-    "path": "readme/presets.en.1cf49fcf.webp",
-    "width": 1160,
-    "height": 880
-  },
-  "onboarding-way.zh-CN": {
-    "path": "readme/onboarding-way.zh-CN.35071dc4.webp",
-    "width": 1160,
-    "height": 830
-  },
-  "onboarding-prepare-local.zh-CN": {
-    "path": "readme/onboarding-prepare-local.zh-CN.24539a27.webp",
-    "width": 1160,
-    "height": 830
-  },
-  "onboarding-prepare-private.zh-CN": {
-    "path": "readme/onboarding-prepare-private.zh-CN.2e780e36.webp",
+    "path": "readme/presets.en.539f3b19.webp",
     "width": 1160,
     "height": 830
   },
   "onboarding-permissions.zh-CN": {
-    "path": "readme/onboarding-permissions.zh-CN.3c2e9993.webp",
-    "width": 1160,
-    "height": 830
-  },
-  "onboarding-microphone.zh-CN": {
-    "path": "readme/onboarding-microphone.zh-CN.ce912b28.webp",
-    "width": 1160,
-    "height": 830
-  },
-  "onboarding-hotkey.zh-CN": {
-    "path": "readme/onboarding-hotkey.zh-CN.4a7ab798.webp",
-    "width": 1160,
-    "height": 830
-  },
-  "onboarding-try.zh-CN": {
-    "path": "readme/onboarding-try.zh-CN.c707b20b.webp",
-    "width": 1160,
-    "height": 830
-  },
-  "onboarding-done.zh-CN": {
-    "path": "readme/onboarding-done.zh-CN.64e131f9.webp",
+    "path": "readme/onboarding-permissions.zh-CN.e74eee4b.webp",
     "width": 1160,
     "height": 830
   },
   "home-dark.zh-CN": {
-    "path": "readme/home-dark.zh-CN.16f1a72d.webp",
+    "path": "readme/home-dark.zh-CN.a8dce461.webp",
     "width": 1160,
     "height": 830
   },
   "home.zh-CN": {
-    "path": "readme/home.zh-CN.4154445f.webp",
+    "path": "readme/home.zh-CN.aa9c9d24.webp",
     "width": 1160,
     "height": 830
   },
   "transcribe.zh-CN": {
-    "path": "readme/transcribe.zh-CN.5c94af6b.webp",
+    "path": "readme/transcribe.zh-CN.4a0d027f.webp",
     "width": 1160,
-    "height": 880
+    "height": 830
   },
   "polish.zh-CN": {
-    "path": "readme/polish.zh-CN.3c017769.webp",
+    "path": "readme/polish.zh-CN.ae87c68b.webp",
     "width": 1160,
-    "height": 880
+    "height": 830
   },
   "keys.zh-CN": {
-    "path": "readme/keys.zh-CN.8399cdb3.webp",
+    "path": "readme/keys.zh-CN.34f05711.webp",
     "width": 1160,
-    "height": 880
+    "height": 830
   },
   "presets.zh-CN": {
-    "path": "readme/presets.zh-CN.620f1ad4.webp",
+    "path": "readme/presets.zh-CN.9e5e1226.webp",
     "width": 1160,
-    "height": 880
+    "height": 830
   },
   "download-speed-light.en": {
-    "path": "readme/download-speed-light.en.4f6c3453.webp",
+    "path": "readme/download-speed-light.en.fa83e4e5.webp",
     "width": 720,
     "height": 247
   },
   "vendors-light.en": {
-    "path": "readme/vendors-light.en.f7b899f9.webp",
+    "path": "readme/vendors-light.en.021e7bdf.webp",
     "width": 860,
     "height": 221
   },
   "download-speed-dark.en": {
-    "path": "readme/download-speed-dark.en.53211f05.webp",
+    "path": "readme/download-speed-dark.en.abab8fdd.webp",
     "width": 720,
     "height": 247
   },
   "vendors-dark.en": {
-    "path": "readme/vendors-dark.en.51093b18.webp",
+    "path": "readme/vendors-dark.en.2ca87638.webp",
     "width": 860,
     "height": 221
   },
   "download-speed-light.zh-CN": {
-    "path": "readme/download-speed-light.zh-CN.a196c1b6.webp",
+    "path": "readme/download-speed-light.zh-CN.4f965cd2.webp",
     "width": 720,
     "height": 264
   },
   "vendors-light.zh-CN": {
-    "path": "readme/vendors-light.zh-CN.89418227.webp",
+    "path": "readme/vendors-light.zh-CN.f8b32f94.webp",
     "width": 860,
     "height": 228
   },
   "download-speed-dark.zh-CN": {
-    "path": "readme/download-speed-dark.zh-CN.64649557.webp",
+    "path": "readme/download-speed-dark.zh-CN.42b8405b.webp",
     "width": 720,
     "height": 264
   },
   "vendors-dark.zh-CN": {
-    "path": "readme/vendors-dark.zh-CN.4bf2ba43.webp",
+    "path": "readme/vendors-dark.zh-CN.fe7d3f86.webp",
     "width": 860,
     "height": 228
   },
   "engine.en": {
-    "path": "readme/engine.en.632a006b.webp",
+    "path": "readme/engine.en.5a34762c.webp",
     "width": 1160,
-    "height": 880
+    "height": 830
   },
   "spend.en": {
-    "path": "readme/spend.en.204d8f4f.webp",
+    "path": "readme/spend.en.5801d33c.webp",
     "width": 1160,
     "height": 830
   },
   "engine.zh-CN": {
-    "path": "readme/engine.zh-CN.060309dc.webp",
-    "width": 1160,
-    "height": 880
-  },
-  "spend.zh-CN": {
-    "path": "readme/spend.zh-CN.fad0fb5c.webp",
+    "path": "readme/engine.zh-CN.208ea144.webp",
     "width": 1160,
     "height": 830
+  },
+  "spend.zh-CN": {
+    "path": "readme/spend.zh-CN.847246f5.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-splash.en": {
+    "path": "readme/onboarding-splash.en.0a17114d.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-features.en": {
+    "path": "readme/onboarding-features.en.72bf00f4.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-keys.en": {
+    "path": "readme/onboarding-keys.en.db18f6ae.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-engine.en": {
+    "path": "readme/onboarding-engine.en.ecf5c820.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "engine-lookup.en": {
+    "path": "readme/engine-lookup.en.8f439c69.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "settings-hotkeys.en": {
+    "path": "readme/settings-hotkeys.en.57c45b90.webp",
+    "width": 912,
+    "height": 688
+  },
+  "settings-translate.en": {
+    "path": "readme/settings-translate.en.b0477293.webp",
+    "width": 912,
+    "height": 688
+  },
+  "settings-lookup.en": {
+    "path": "readme/settings-lookup.en.5bb630a7.webp",
+    "width": 912,
+    "height": 688
+  },
+  "history.en": {
+    "path": "readme/history.en.4a08e91d.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-splash.zh-CN": {
+    "path": "readme/onboarding-splash.zh-CN.e8c93b45.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-features.zh-CN": {
+    "path": "readme/onboarding-features.zh-CN.1f25940b.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-keys.zh-CN": {
+    "path": "readme/onboarding-keys.zh-CN.9bdf50d3.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "onboarding-engine.zh-CN": {
+    "path": "readme/onboarding-engine.zh-CN.0c125326.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "engine-lookup.zh-CN": {
+    "path": "readme/engine-lookup.zh-CN.7260778e.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "settings-hotkeys.zh-CN": {
+    "path": "readme/settings-hotkeys.zh-CN.3977aafd.webp",
+    "width": 912,
+    "height": 688
+  },
+  "settings-translate.zh-CN": {
+    "path": "readme/settings-translate.zh-CN.1b1ef8c0.webp",
+    "width": 912,
+    "height": 688
+  },
+  "settings-lookup.zh-CN": {
+    "path": "readme/settings-lookup.zh-CN.f889fbfe.webp",
+    "width": 912,
+    "height": 688
+  },
+  "history.zh-CN": {
+    "path": "readme/history.zh-CN.0dfd6dba.webp",
+    "width": 1160,
+    "height": 830
+  },
+  "dictate-light.zh-CN": {
+    "path": "readme/dictate-light.zh-CN.75e27234.webp",
+    "width": 880,
+    "height": 305
+  },
+  "translate-light.zh-CN": {
+    "path": "readme/translate-light.zh-CN.5eb551f3.webp",
+    "width": 880,
+    "height": 367
+  },
+  "dictate-dark.zh-CN": {
+    "path": "readme/dictate-dark.zh-CN.8b70e026.webp",
+    "width": 880,
+    "height": 305
+  },
+  "translate-dark.zh-CN": {
+    "path": "readme/translate-dark.zh-CN.55998031.webp",
+    "width": 880,
+    "height": 367
+  },
+  "dictate-light.en": {
+    "path": "readme/dictate-light.en.cc5a1d95.webp",
+    "width": 880,
+    "height": 329
+  },
+  "translate-light.en": {
+    "path": "readme/translate-light.en.e9eaa6ec.webp",
+    "width": 880,
+    "height": 391
+  },
+  "dictate-dark.en": {
+    "path": "readme/dictate-dark.en.9365162e.webp",
+    "width": 880,
+    "height": 329
+  },
+  "translate-dark.en": {
+    "path": "readme/translate-dark.en.04741ca4.webp",
+    "width": 880,
+    "height": 391
+  },
+  "lookup-web.zh-CN": {
+    "path": "readme/lookup-web.zh-CN.0b2822d8.webp",
+    "width": 1309,
+    "height": 510
+  },
+  "lookup-pdf.zh-CN": {
+    "path": "readme/lookup-pdf.zh-CN.4e3446a2.webp",
+    "width": 1093,
+    "height": 563.5
+  },
+  "lookup-terminal.zh-CN": {
+    "path": "readme/lookup-terminal.zh-CN.29430237.webp",
+    "width": 1020,
+    "height": 711.5
+  },
+  "lookup-terminal.en": {
+    "path": "readme/lookup-terminal.en.c99c357d.webp",
+    "width": 1020,
+    "height": 711.5
+  },
+  "lookup-web.en": {
+    "path": "readme/lookup-web.en.8c0273fa.webp",
+    "width": 850,
+    "height": 596
+  },
+  "lookup-app.en": {
+    "path": "readme/lookup-app.en.dc494575.webp",
+    "width": 617.5,
+    "height": 292.5
   }
 }
