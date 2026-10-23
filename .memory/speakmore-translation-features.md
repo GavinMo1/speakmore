@@ -1,6 +1,6 @@
 ---
 name: speakmore-translation-features
-description: 语音翻译和划词翻译：10-22 原型定稿（.playwright-mcp/translate-proto/ 的 README 是规格）；分支 translate-features，三段都做完（10-23），审查一轮修完、#16 合进来了，等他点头合并 main
+description: 语音翻译和划词翻译：已合并 main、随 0.16.0 发布（10-23）；在做三位一体的 README（分支 readme-three-in-one），引导要按三项功能重做、再发一版，压缩后先和他讨论引导
 metadata:
   node_type: memory
   type: project
@@ -142,7 +142,25 @@ metadata:
 - 10-23 issue #16（Windows 上悬浮条被别家置顶窗口盖住）修在 `bar-on-top`（`99abae9`），审查修完已合回（`8875e91`），
   分支和工作副本删了。issue 里已回复进度，发版后再回、再关
 - 10-23 修完后：单测 Mac 1492 过、Windows 1434 过（65 跳过），都 0 失败；Windows e2e.ps1 67/67；两台开发版从主仓库重启了。
-  Mac 取选区挪线程以后还没真按过（等他划一次）
+  Mac 取选区挪线程以后他真按过，没问题
+- 10-23 他点头合并：translate-features 合进 main（`2121cad`，打 v0.16.0），0.16.0 已发布
+- **README、官网改成三位一体**（10-23 他定的，进行中，分支 `readme-three-in-one`）：
+  - 口号"口述成文，划词即译"，副行"开源、免费的语音输入与翻译工具，支持 macOS 与 Windows"。第一层讲三项功能
+    （语音输入打头，划词篇幅最大），第二层保留五项自由、写清各管哪几项（离线只有语音输入；划词是另选文字模型）
+  - 他的要求：多配图、少文字；能真截就不模拟；语音输入、语音翻译没法截就用代码按 App 风格画；文案一律书面语；
+    "跟外国人聊天"这种场景放视频，README 只讲"说一种语言、直接写出另一种"
+  - 已做：`website/scripts/readme-scenes.mjs`（`3e0d04d`）画两张示意图（悬浮条是真页面离屏渲染）、裁划词真截图；
+    他在 Mac 上截了六张划词图（中文：arXiv 网页、arXiv PDF、终端 git help push；英文：终端 speakmore help、
+    MDN 中文页、备忘录——备忘录那张是全屏、看不出应用，最后提一句），原图在 scratchpad 的 shots-raw，裁切框在 photos.json
+  - 主窗口的新截图（中文 13 张：首页浅深、花费、引擎、转文字、整理、密钥、推荐组合、划词段、设置三栏、历史）
+    在 scratchpad 的 shots-zh，用 shoot-hub.mjs（CDP，端口 9341，家目录 /tmp/smcz 由 seed-home.mjs 造）截的；
+    英文版还没截（家目录 /tmp/smce，截密钥前先切回语音段）。截图 App 带小帮手，会和开发版抢热键，截完就停
+  - 引导的图作废，等引导重做完再截（shoot-onboarding.mjs 能截八步）
+  - 还没做：README 正文中英两份、上传图片（upload-media.mjs）、GitHub 简介和标签（加 translation、llm、speech-translation）、
+    官网。他说改完 README 直接推，他去 GitHub 看
+- **引导要重做**（10-23 他发现的）：引导只改了叫法，流程还是只讲语音输入——模型一步不管划词的模型和 key
+  （选直出 Gemini 的人走完引导，划词还缺 DeepSeek 的 key）、试一下只能试语音输入、完成页还是"说话，别打字"。
+  他有初步想法，压缩回来先讨论再动手；改完必须再发一版（"onboarding 是门面，前后对不上"）
 - 他 Mac 上 10-23 说话"音频无声"：录音比前一天小约 20 dB，系统输入音量是 50，让他自己调高（我们录音关了自动增益）
 - 还开着：他验悬浮条选单的修复（b867af2）、中文选区译英文；Windows 真键盘按一次右 Alt+回车；
   README、官网改叫法和加划词（memory 里"留到最后改 README 时一起改"那两条）
