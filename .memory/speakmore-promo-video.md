@@ -21,7 +21,13 @@ metadata:
 - **划词必须做成动画演示**，不能贴静态图。他的原话："你只有把这个动画真正做出来了才有感染力"。要演出来：选区拖出、热键按下、卡片从选区下方长出。
 - 语音输入：老生常谈，收尾一笔带过。
 - 收尾讲简单：设置里自由换翻译的目标语言、自由绑热键、模型任选；App 开着，粘一把 key 验证就能用。
-- 他的点子：演示时配合热键按下做动画。我提的是让键帽当全片的节拍器，按键落在重拍上（对上纲领里的"抽空→砸下"），还没定。素材可用：README 那批图（docs/media.json，主窗口、三项功能示意图、划词实拍、新引导）、官网的三段演示、引导里的演示画面（src/renderer/onboarding/scene.mjs）。
+- 他的点子：演示时配合热键按下做动画。我提的是让键帽当全片的节拍器，按键落在重拍上（对上纲领里的"抽空→砸下"），还没定。
+- **8 秒冒烟片（10-23，kineto 分支 `feat/speakmore-promo-3`，提交 849da32，未推送）**：https://kineto.zephyrxiang.com/renders/speakmore-promo-3/speakmore-promo-3-0dca62f4f115.mp4
+  - 他要的："先出 8s 的冒烟短片，我看看风格"。
+  - 画面依次是：淡雾底；"一段外文"逐字出现，四周浮着 git 的英文词；推穿这句话，进到一扇斜放的深色终端（git help push）；拖选 DESCRIPTION 第一段；右⌥在抽空的三拍按下，回车落在砸下那一拍上，划词卡片弹出（先显示加载条，再整段换上译文，和真卡片一样）；译文的字散开，SpeakMore 聚拢落定；最后出"划词 即译"，"即译"用朱砂色。
+  - 键帽放在右下，不挡卡片。
+  - 实测：卡片弹出那一帧和低音回来的时间差在 4 帧以内；三帧内亮度最大升幅 40.9；最长的近乎静止段 1.67 秒；npm run verify 全过（133 个测试，132 过、1 跳过）。
+  - 代码在 `videos/speakmore-promo-3/`：theme（拍点）、Fog、Keycaps、Terminal、LookupCard、scenes/Smoke。素材可用：README 那批图（docs/media.json，主窗口、三项功能示意图、划词实拍、新引导）、官网的三段演示、引导里的演示画面（src/renderer/onboarding/scene.mjs）。
 
 2026-10-15 定下的宣传片。视频在 kineto 仓库（他自己的开源项目，基于 Remotion）里做，视频 id `speakmore-promo`（当初在 `feat/speakmore-promo` 分支做，已合进 main、分支已删）。照 kineto 的 AGENTS.md：素材只经 `./kineto asset add` 带授权登记，导出只用 `./kineto render`，收尾跑 `npm run verify`。
 
