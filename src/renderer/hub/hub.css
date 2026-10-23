@@ -1154,6 +1154,15 @@
   animation: dialog-in var(--dur-slow) var(--ease-out);
 }
 
+/* 英文的分栏名长（Selection translation、On-device models）：左栏宽一些，名字不折行 */
+:root:lang(en) .settings[open] {
+  grid-template-columns: 15rem minmax(0, 1fr);
+}
+
+.settings-menu .menu-item {
+  white-space: nowrap;
+}
+
 .settings::backdrop {
   background: oklch(0 0 0 / 0.18);
   backdrop-filter: blur(6px);
