@@ -32,7 +32,7 @@ test("没有空着的文案", () => {
 
 test("演示里的口述标记成对，删掉的部分不是整句", () => {
   for (const messages of [en, zh]) {
-    for (const { said } of messages.demo.examples) {
+    for (const { said } of [...messages.demo.examples, messages.translate.chat]) {
       const parts = cutMarks(said);
       assert.ok(parts.some((part) => part.cut));
       assert.ok(parts.some((part) => !part.cut));

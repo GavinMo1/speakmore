@@ -11,7 +11,7 @@ export function Download() {
   const { m, switchLocale } = useI18n();
   return (
     <section id="download" className="bg-canvas text-ink" aria-labelledby="download-title">
-      <div className="mx-auto flex max-w-6xl flex-col items-center px-5 pt-[clamp(5.5rem,13vw,10rem)] text-center sm:px-8">
+      <div className="mx-auto flex max-w-6xl flex-col items-center px-5 pt-[clamp(7rem,17vw,13rem)] text-center sm:px-8">
         <img src={seal} alt="" width="80" height="80" className="reveal size-20" />
         <h2 id="download-title" className="display reveal mt-8 text-[clamp(2.75rem,7vw,5rem)]">
           <Lines text={m.download.title} />

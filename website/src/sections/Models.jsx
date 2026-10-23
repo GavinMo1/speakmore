@@ -24,7 +24,7 @@ export function Models() {
   const items = VENDORS.map((id) => ({ id, name: m.models.vendors[id] }));
   return (
     <Section id="models" labelledBy="models-title">
-      <Heading id="models-title" title={m.models.title} lead={m.models.lead} />
+      <Heading id="models-title" title={m.models.title} />
 
       {/* 标志那一排撑满整个页面宽：从屏幕边上走进来、走出去 */}
       <div className="reveal mx-[calc(50%-50vw)] mt-[clamp(3.5rem,8vw,6rem)]">

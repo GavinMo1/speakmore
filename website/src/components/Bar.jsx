@@ -1,6 +1,7 @@
 /**
  * 说话时屏幕底部的那条悬浮条，照 App 里的样子（src/renderer/bar/bar.css）用朱砂主题的颜色画出来，会动。
  * state：recording（声波跟着说话起伏）、finishing（整理中，一道匀速滚过的波）、done（打一个勾）
+ * chip：语音翻译时这一次译成哪种语言，画在提示行左边的小胶囊里（同 App 的 bar-ui.mjs 的 drawChip）
  */
 const SURFACE = "oklch(0.17 0.008 32)";
 const EDGE = "oklch(0.34 0.012 32)";
@@ -10,17 +11,32 @@ const LIVE = "oklch(0.74 0.17 32)";
 // 每根竖条说话时最高到多高：中间高、两头低
 const PEAKS = [0.3, 0.42, 0.55, 0.7, 0.82, 0.92, 1, 0.95, 1, 0.9, 0.8, 0.66, 0.52, 0.4, 0.28];
 
-export function Bar({ state = "recording", hint, className = "" }) {
+export function Bar({ state = "recording", hint, chip, className = "" }) {
   const recording = state === "recording";
   return (
     <div className={`flex flex-col items-center gap-1.5 ${className}`} aria-hidden="true">
-      {hint ? (
-        <p
-          className="rounded-full px-2.5 py-0.5 text-[11px] leading-normal whitespace-nowrap text-[oklch(0.75_0.012_32)]"
-          style={{ background: SURFACE, boxShadow: `0 0 0 1px ${EDGE}` }}
-        >
-          {hint}
-        </p>
+      {hint || chip ? (
+        <div className="flex items-center gap-1.5">
+          {chip ? (
+            <p
+              className="flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] leading-normal font-semibold whitespace-nowrap text-[oklch(0.97_0.004_32)]"
+              style={{ background: SURFACE, boxShadow: `0 0 0 1px ${EDGE}` }}
+            >
+              {chip}
+              <svg aria-hidden="true" viewBox="0 0 10 10" className="size-2 opacity-70" fill="none">
+                <path d="M2.5 4l2.5 2.5L7.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </p>
+          ) : null}
+          {hint ? (
+            <p
+              className="rounded-full px-2.5 py-0.5 text-[11px] leading-normal whitespace-nowrap text-[oklch(0.75_0.012_32)]"
+              style={{ background: SURFACE, boxShadow: `0 0 0 1px ${EDGE}` }}
+            >
+              {hint}
+            </p>
+          ) : null}
+        </div>
       ) : null}
       <div
         className="flex h-10 items-center gap-2 rounded-[20px] p-1.5"

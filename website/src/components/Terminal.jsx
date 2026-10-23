@@ -4,11 +4,11 @@ import { useOnScreen, useReducedMotion } from "../lib/usePageMotion.js";
 /** 一拍多长：时间按拍往前走，不在屏幕上时不走，回来接着放 */
 const TICK = 40;
 /** 敲一个字、出一行输出、敲完到出结果、一条做完到下一条、一组放完到换下一组 */
-const CHAR_MS = 42;
-const LINE_MS = 140;
-const RUN_MS = 420;
-const NEXT_MS = 1100;
-const SWAP_MS = 2600;
+const CHAR_MS = 26;
+const LINE_MS = 90;
+const RUN_MS = 260;
+const NEXT_MS = 700;
+const SWAP_MS = 1800;
 
 /**
  * 一组命令排成时间线：每条先出注释，再一个字一个字敲出命令，停一下，输出一行接一行出来

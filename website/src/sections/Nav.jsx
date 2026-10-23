@@ -37,6 +37,7 @@ export function Nav() {
 
   // 和页面上的先后一样。识别方式和模型隔开放：英文的 Modes、Models 长得像，挨着容易看错
   const items = [
+    ["trio", m.nav.trio],
     ["ways", m.nav.ways],
     ["speed", m.nav.speed],
     ["models", m.nav.models],

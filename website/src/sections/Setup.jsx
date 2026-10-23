@@ -5,22 +5,14 @@ import { useI18n } from "../i18n/index.jsx";
 import { Icon } from "../icons/Icon.jsx";
 import { fillText } from "../lib/text.js";
 
-/** 首次引导的七步截图（README 那批），和文案里 setup.steps 一一对应 */
-const SHOTS = [
-  "onboarding-way",
-  "onboarding-prepare-local",
-  "onboarding-permissions",
-  "onboarding-microphone",
-  "onboarding-hotkey",
-  "onboarding-try",
-  "onboarding-done",
-];
+/** 首次引导的四步截图和最后弹出的推荐组合（README 那批），和文案里 setup.steps 一一对应 */
+const SHOTS = ["onboarding-features", "onboarding-keys", "onboarding-permissions", "onboarding-engine", "presets"];
 
 /** 这一段内容的左边离屏幕边多远：内容最宽 72rem（max-w-6xl），两边留 1.25rem，宽屏 2rem */
 const GUTTER = "max(1.25rem, calc((100vw - 72rem) / 2 + 2rem))";
 
 /**
- * 首次引导：七步截图横着排，左右滑（触控板、手指）或点箭头一张一张翻，每张停在左边对齐。
+ * 首次引导：几步截图横着排，左右滑（触控板、手指）或点箭头一张一张翻，每张停在左边对齐。
  * 这里的序号是真的先后，所以标出来
  */
 export function Setup() {
@@ -36,7 +28,7 @@ export function Setup() {
   };
   return (
     <Section id="setup" tone="surface" labelledBy="setup-title">
-      <Heading id="setup-title" title={m.setup.title} lead={m.setup.lead} />
+      <Heading id="setup-title" title={m.setup.title} />
 
       <div className="reveal mt-[clamp(3rem,7vw,5rem)]">
         {/* 这一排撑满整个页面宽：左边和这一段的内容对齐，右边一直延伸到屏幕边上，看得出还能往右滑 */}

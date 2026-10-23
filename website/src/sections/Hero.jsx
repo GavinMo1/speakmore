@@ -1,11 +1,13 @@
 import seal from "../../../assets/icon.svg";
 import { DownloadButtons } from "../components/DownloadButtons.jsx";
-import { Lines } from "../components/Section.jsx";
 import { Shot } from "../components/Shot.jsx";
 import { shot } from "../config.js";
 import { useI18n } from "../i18n/index.jsx";
 
-/** 首屏：图标、一句话、下载，一张主窗口的图（跟着系统深浅换），说话时的悬浮条浮在窗口正下方 */
+/**
+ * 首屏：图标、口号一行、副标题一行、下载，一张主窗口的图（跟着系统深浅换），说话时的悬浮条浮在窗口正下方。
+ * 口号和副标题各只占一行（窄屏才折），不再两行大字压两行小字地往下摞
+ */
 export function Hero() {
   const { m, locale } = useI18n();
   // 主窗口的图是靛青主题（README 那批），悬浮条也用靛青的
@@ -15,14 +17,18 @@ export function Hero() {
     <section id="top" className="overflow-clip bg-canvas text-ink" aria-labelledby="hero-title">
       <div className="mx-auto flex max-w-6xl flex-col items-center px-5 pt-[clamp(7rem,13vw,9.5rem)] text-center sm:px-8">
         <img src={seal} alt="" width="80" height="80" className="rise size-[clamp(4rem,7vw,5rem)]" />
-        <h1 id="hero-title" className="display rise mt-8 text-[clamp(3rem,9vw,5.75rem)]" style={{ "--d": "80ms" }}>
-          <Lines text={m.hero.title} />
+        <h1
+          id="hero-title"
+          className="display rise mt-8 text-[clamp(2.5rem,6.5vw,4.75rem)] break-keep"
+          style={{ "--d": "80ms" }}
+        >
+          {m.hero.title}
         </h1>
         <p
-          className="rise mt-6 max-w-xl text-[clamp(1.125rem,2.2vw,1.5rem)] leading-snug font-medium text-balance text-ink-2"
+          className="rise mt-5 text-[clamp(1.0625rem,1.9vw,1.375rem)] leading-snug font-medium text-balance break-keep text-ink-2"
           style={{ "--d": "160ms" }}
         >
-          <Lines text={m.hero.lead} />
+          {m.hero.lead}
         </p>
         <DownloadButtons className="rise mt-10" style={{ "--d": "240ms" }} />
       </div>

@@ -1,3 +1,5 @@
+import { useI18n } from "../i18n/index.jsx";
+
 /**
  * 一整段：底色、上下留白、内容的最大宽度。
  * tone：canvas（跟着系统深浅）、surface（跟着系统、比底色深一点）、ink（近黑，固定深色）
@@ -13,7 +15,7 @@ const TONES = {
 export function Section({ id, tone = "canvas", className = "", children, labelledBy }) {
   return (
     <section id={id} aria-labelledby={labelledBy} className={`${TONES[tone]} text-ink overflow-clip ${className}`}>
-      <div className="mx-auto max-w-6xl px-5 py-[clamp(5.5rem,13vw,10rem)] sm:px-8">{children}</div>
+      <div className="mx-auto max-w-6xl px-5 py-[clamp(7rem,17vw,13rem)] sm:px-8">{children}</div>
     </section>
   );
 }
@@ -36,10 +38,27 @@ export function Lines({ text, muted = false }) {
 }
 
 /**
- * 每段的大标题和一句话。
- * split（默认）：标题靠左，那句话放在右边一栏、和标题的底边对齐；窄屏上下排，都靠左。标题第一行浅、第二行深。
- * 不再是"两行大字、两行小字全部居中往下摞"：主次靠位置和深浅分开，不只靠字号
- * center：居中，给只有一行标题、没有那句话的段落（隐私与开放）
+ * 一行排开的标题：文案里 \n 前后两半，前半浅、后半深（"口述随意"浅、"成文规整"深），中文用逗号接上、英文用空格。
+ * 不再两行大字往下摞：只占一行（窄屏才折，中文只在标点处折），右边不空出一大块
+ */
+function Inline({ text }) {
+  const { locale } = useI18n();
+  const joiner = locale === "zh-CN" ? "，" : " ";
+  const parts = text.split("\n");
+  return parts.map((part, index) => {
+    const last = index === parts.length - 1;
+    return (
+      <span key={part} className={last ? "" : "text-ink-2"}>
+        {part}
+        {last ? null : joiner}
+      </span>
+    );
+  });
+}
+
+/**
+ * 每段的大标题，靠左一行（见 Inline）；给了 lead 时那句话放在右边一栏、和标题的底边对齐，窄屏上下排。
+ * center：居中，给只有一行标题、没有那句话的段落
  */
 export function Heading({ id, title, lead, align = "split" }) {
   if (align === "center") {
@@ -51,17 +70,19 @@ export function Heading({ id, title, lead, align = "split" }) {
       </header>
     );
   }
+  const heading = (
+    <h2 id={id} className="display text-[clamp(2.125rem,4.6vw,3.75rem)] break-keep">
+      <Inline text={title} />
+    </h2>
+  );
+  if (!lead) return <header className="reveal mb-[clamp(0.75rem,2vw,1.75rem)]">{heading}</header>;
   return (
     <header className="reveal grid gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-end lg:gap-16">
-      <h2 id={id} className="display text-[clamp(2.4rem,6vw,4.5rem)]">
-        <Lines text={title} muted />
-      </h2>
-      {lead ? (
-        // 中文只在标点和空格处换行，不把一个词拆到两行；几行尽量一样长，不剩一个短尾巴
-        <p className="max-w-[30rem] text-[clamp(1.0625rem,1.6vw,1.3125rem)] leading-relaxed text-balance break-keep wrap-anywhere text-ink-2 lg:justify-self-end lg:pb-[0.3em]">
-          {lead}
-        </p>
-      ) : null}
+      {heading}
+      {/* 中文只在标点和空格处换行，不把一个词拆到两行；几行尽量一样长，不剩一个短尾巴 */}
+      <p className="max-w-[30rem] text-[clamp(1.0625rem,1.6vw,1.3125rem)] leading-relaxed text-balance break-keep wrap-anywhere text-ink-2 lg:justify-self-end lg:pb-[0.3em]">
+        {lead}
+      </p>
     </header>
   );
 }
