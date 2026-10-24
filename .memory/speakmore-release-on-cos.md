@@ -1,6 +1,6 @@
 ---
 name: speakmore-release-on-cos
-description: SpeakMore 的发布包在腾讯云 COS + CDN（dl.zephyrxiang.com/speakmore/），只从本机用 npm run ship 发，GitHub 上的发布流程已删；最新 0.17.0（10-23）；证书 2027-01-12 到期要续
+description: SpeakMore 的发布包在腾讯云 COS + CDN（dl.zephyrxiang.com/speakmore/），只从本机用 npm run ship 发，GitHub 上的发布流程已删；最新 0.17.1（10-24）；证书 2027-01-12 到期要续
 metadata:
   node_type: memory
   type: project
@@ -33,6 +33,7 @@ SpeakMore 的发布包放在用户自己的腾讯云 COS，前面是 CDN 域名 
 - 0.15.0 在 2026-10-22 发布（本机转写模型可空闲释放 PR #14、设置文件带 BOM 也能读、status --json 删掉 0.13 以前的旧字段；7126 个对象加 15 个文件，新传 99 块 3.7 MB），照惯例先只推标签（这次先打成了轻量标签，他同意后删远端标签、重打成带说明的再推；以前的版本都是带说明的标签，打标签用 `git tag -a`），ship 由他挂后台一次跑通（约 27 分钟，Intel 的 dmg 公证慢），传完推 main。验收：线上四个安装包 200、channel.json 是 0.15.0；线上 Apple 芯片 dmg 校验值对、公证有效、隔离家目录真启动（started 0.15.0、helper_ready、零报错）；他的游戏电脑先被桌面上 10-17 的旧安装程序（0.9.0-rc.2）铺回了顶层 app、runtime 和旧快捷方式，在桌面会话里照 README 的 irm 那一行重装 0.14.0（旧文件、快捷方式都被安装脚本收拾好），再 `speakmore update` 升到 0.15.0，起来正常。官网同一天部署（线上提交 3f31bf4，页面脚本里的版本号是 0.15.0）。
 - 0.16.0 在 2026-10-23 发布（语音翻译、划词翻译、改叫法、设置分栏、悬浮条置顶 #16；7158 个对象加 15 个文件），版本号他在选项里定的（没用 1.0）。照惯例先只推标签，ship 由他在会话里挂后台一次跑通（日志写在 scratchpad），传完推 main。验收：线上三个安装包 200、channel.json 是 0.16.0；线上 Apple 芯片 dmg 和本机校验值一致、公证有效、隔离家目录真启动（started 0.16.0、helper_ready、零报错）。官网这次没部署（他要先定 README、官网怎么改）；#16 发版后要回复、关闭。引导还是只讲语音输入的老流程，他定了要改、再发一版。
 - 0.17.0 在 2026-10-23 发布（首次引导照原型重做、按钮改苹果风格、README 三位一体；7169 个对象加 15 个文件），先只推标签，ship 由他在会话里挂后台一次跑通（约 27 分钟，日志在 scratchpad）。这次他点名先推 main 看 README，下载按钮在包传完前 404 了二十几分钟，是他要的。验收：线上三个安装包 200、channel.json 是 0.17.0；线上 Apple 芯片 dmg 和本机校验值一致、公证有效、隔离家目录真启动（started 0.17.0、helper_ready、零报错）。ship 跑的时候改 README 用的是另开的 git worktree，不碰发版那份工作区，推的是 `<分支>:main`，传完再在本机 main 上快进。
+- 0.17.1 在 2026-10-24 发布（百炼的 qwen-audio、fun-asr 转写没认出字当成空原文，PR #17；7168 个对象加 15 个文件），先只推标签，ship 由他在会话里挂后台。第一次断在应用本身那次公证：notarytool 报 appstoreconnect.apple.com 的证书无效（NSURLErrorDomain -1202），什么都还没传；本机连苹果走代理（域名解析到 198.18.x 的假地址），事后查证书是苹果签的、notarytool history 连三次都通，判定为代理临时出错，整个重跑 ship 一次跑通。传完合进 main、部署官网（线上提交 601b660，页面脚本里的版本号是 0.17.1）。验收照 0.13.1 那两份脚本（会话临时目录的 accept-mac.sh、accept-win.ps1，只改版本号）：Mac 线上 dmg 校验值对、公证有效、隔离家目录真启动零报错，终端安装加 update 正常；Windows 开发机经 SSH 在隔离用户目录装 0.17.0 开着、irm 升到 0.17.1、update 已是最新、真启动零报错，Path 还原。开发机禁止直接运行 .ps1，要 `powershell -NoProfile -ExecutionPolicy Bypass -File`。
 - ship 开头报"标签 vX 还没推到 GitHub"时先看日志上一行：是 `SSL_ERROR_SYSCALL` 之类的网络错误，就用 `git ls-remote origin refs/tags/vX^{}` 确认标签指着 HEAD，直接重跑，不用动标签。
 - 从 ssh 远程跑 Windows 的 `speakmore update`：旧版本目录要等旧进程退出后由后台删，那个后台进程随 ssh 会话一起没了，旧目录会留着（桌面上点更新不会）。确认 current 已指向新版本、没有进程在用旧目录，再手动删。
 - 发版前本机自测打的包在 dist/release，ship 的打包第一步会整个清掉，不会被传上去。

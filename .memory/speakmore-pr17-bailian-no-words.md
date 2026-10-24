@@ -1,6 +1,6 @@
 ---
 name: speakmore-pr17-bailian-no-words
-description: "PR #17（外部贡献）百炼转写没认出字回 400，10-24 合并并补成\"当空原文\"，跟下个版本发；智谱、MiniMax、OpenAI 的静音检测真 key 测过都正常"
+description: "PR #17（外部贡献）百炼转写没认出字回 400，10-24 合并并补成\"当空原文\"，随 0.17.1 发布；智谱、MiniMax、OpenAI 的静音检测真 key 测过都正常"
 metadata:
   node_type: memory
   type: project
@@ -8,7 +8,7 @@ metadata:
   modified: 2026-10-24T07:38:26.637Z
 ---
 
-2026-10-24 合并外部 PR #17，跟下一个版本发布（0.17.0 之后）。
+2026-10-24 合并外部 PR #17，同一天随 0.17.1 发布。
 
 - **问题：** 百炼的 qwen-audio-3.1、qwen-audio-3.0、fun-asr 没认出字（静音、只有杂音）时不回空原文，回 400 CLIENT_ERROR "ASR_RESPONSE_HAVE_NO_WORDS"。验 key 用的就是静音，所以检测失败，热键录不了音。qwen3-asr-flash 不受影响，它会回"。"。
 - **PR 的改法：** 只在验 key 时接受这条回话。
