@@ -78,6 +78,54 @@ test("qwen-audio、fun-asr 走百炼自己的接口：写明格式和采样率�
   assert.deepEqual(body.parameters, { format: "wav", sample_rate: "16000" });
 });
 
+test("百炼回 400 说没认出字：当成原文是空的，检测照样通过，录音交出空文字（上面报“没有听到声音”）", async () => {
+  for (const model of ["qwen-audio-3.1-asr-flash", "fun-asr-flash-2026-06-15"]) {
+    for (const body of [
+      { code: "CLIENT_ERROR", message: "ASR_RESPONSE_HAVE_NO_WORDS" },
+      { code: "ASR_RESPONSE_HAVE_NO_WORDS", message: "没有识别文字" },
+    ]) {
+      const { fetch } = fakeFetch(400, body);
+      const transcriber = await createCloudTranscriber({
+        choice: { vendor: "bailian", model },
+        apiKey: "k",
+        log,
+        fetch,
+      });
+      await transcriber.warmUp();
+      assert.deepEqual(await transcriber.transcribe(new Float32Array(16_000).fill(0.1)), { text: "" });
+    }
+  }
+});
+
+test("百炼的其他报错：密钥、权限、欠费、模型、限流、别的 400，检测和录音都照常往上抛", async () => {
+  for (const [status, code, message] of [
+    [401, "InvalidApiKey", "invalid key"],
+    [403, "Forbidden", "forbidden"],
+    [400, "Arrearage", "no quota"],
+    [404, "ModelNotFound", "missing model"],
+    [429, "Throttling", "rate limit"],
+    [500, "InternalError", "server error"],
+    [400, "CLIENT_ERROR", "other error"],
+    [401, "ASR_RESPONSE_HAVE_NO_WORDS", "unauthorized"],
+  ]) {
+    const { fetch } = fakeFetch(status, { code, message });
+    const client = createClient({ apiKey: "k", model: "qwen-audio-3.1-asr-flash", fetch });
+    await assert.rejects(client.ping({}), { status, code });
+    await assert.rejects(client.transcribe({ wav: encodeWav(new Float32Array(16_000).fill(0.1), 16_000) }), {
+      status,
+      code,
+    });
+  }
+  const client = createClient({
+    apiKey: "k",
+    model: "qwen-audio-3.1-asr-flash",
+    fetch: async () => {
+      throw new Error("network unavailable");
+    },
+  });
+  await assert.rejects(client.ping({}), /network unavailable/);
+});
+
 test("转写器：录音编成 wav 交出去、记一笔账；报错分好类往上交", async () => {
   const calls = [];
   const ok = fakeFetch(200, { output: { text: "  好的  " }, usage: { duration: 1 } });
@@ -131,6 +179,21 @@ function fakeUpload(status, reply, delay = () => 0) {
   };
   return { fetch, requests };
 }
+
+test("智谱和 MiniMax 静音检测：接受空文本成功响应，鉴权和无文字错误仍向上抛", async () => {
+  for (const [adapter, model] of [
+    [zhipu, "glm-asr-2512"],
+    [minimax, "asr-1.0"],
+  ]) {
+    const ok = fakeUpload(200, { text: "", duration: 0.1 });
+    await adapter.createClient({ apiKey: "k", model, fetch: ok.fetch }).ping({});
+    assert.equal(ok.requests[0].file.size, 44 + 1_600 * 2);
+    for (const status of [400, 401]) {
+      const bad = fakeUpload(status, { error: { code: "test-error", message: "no speech or unauthorized" } });
+      await assert.rejects(adapter.createClient({ apiKey: "k", model, fetch: bad.fetch }).ping({}));
+    }
+  }
+});
 
 const wavOf = (seconds) => encodeWav(new Float32Array(seconds * 16_000).fill(0.1), 16_000);
 
