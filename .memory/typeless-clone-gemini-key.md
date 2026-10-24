@@ -1,6 +1,6 @@
 ---
 name: typeless-clone-gemini-key
-description: 开发和评估时调模型的 key 经 scripts/dev/with-key.sh <gemini|openai|deepseek|bailian|moonshot> 加载，各家用哪把凭据写在本机配置 .machine.env；产品里的 key 由用户自己填
+description: 开发和评估时调模型的 key 经 scripts/dev/with-key.sh <gemini|openai|deepseek|bailian|moonshot|zhipu|minimax>（以脚本里的 case 为准） 加载，各家用哪把凭据写在本机配置 .machine.env；产品里的 key 由用户自己填
 metadata:
   type: project
 ---

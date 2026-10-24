@@ -9,7 +9,7 @@
 - [Ghidra 在项目内](ghidra-project-local.md) — 装在 .tools/，MCP 没带路径，原生分析走 REA 命令行并先 lipo 切单架构
 - [SpeakMore 的范围](typeless-clone-scope-dictation.md) — 语音输入（热键听写加历史）；之后的方向是同声传译和翻译；会议纪要不做（#15 已关）
 - [请用户配合时只给步骤](user-action-requests-plain-steps.md) — 需要他动手时列两三步动作，技术细节留到事后总结
-- [开发用的模型 key](typeless-clone-gemini-key.md) — 要真调模型的命令写成 scripts/dev/with-key.sh <gemini|openai|deepseek|bailian|moonshot> <命令>，用哪把凭据在 .machine.env；产品里的 key 由用户自己填
+- [开发用的模型 key](typeless-clone-gemini-key.md) — 要真调模型的命令写成 scripts/dev/with-key.sh <gemini|openai|deepseek|bailian|moonshot|zhipu|minimax>（以脚本里的 case 为准） <命令>，用哪把凭据在 .machine.env；产品里的 key 由用户自己填
 - [模型厂商由他点名](speakmore-model-providers.md) — 只接他点名的；DeepSeek 不收音频已放弃，OpenAI 已接（默认 gpt-audio-mini），通义 Qwen-Omni 是候选；发布包不带 GPL/LGPL，只转 WebM
 - [本机情况不进仓库](machine-facts-stay-local.md) — 凭据名、路径、账号、姓名邮箱只放 .machine.env，仓库里只认变量名；提交前跑 scripts/checks/check-no-machine-facts.sh
 - [可以用真实录音调提示词](typeless-clone-real-recordings-ok.md) — 录音发给任何云端厂商都不用再问（10-16 他说别再提隐私）；再调时用 eval-prompt.mjs 对比，别把温度设回 0
@@ -60,5 +60,5 @@
 - [热键敢做减法](hotkey-subtract-boldly.md) — 和系统按键、组合键冲突或实验里离谱的，直接不让绑，不用问；改方向才问
 - [他 Mac 上被占的键](mac-keys-taken.md) — Typeless 占着左 fn、右 ⌘，键盘没有右 Ctrl；开发版热键用右 ⌥（正式版不开时）
 - [PR #14 按需装载](speakmore-pr14-on-demand-model.md) — 外部贡献；自定义服务的空闲释放交给 customParams 的 keep_alive/ttl，本机转写合成一项 localModelMemory；10-22 已合并，跟下个版本发
-- [PR #17 百炼没认出字](speakmore-pr17-bailian-no-words.md) — 外部贡献；qwen-audio、fun-asr 没认出字回 400，10-24 合并并补成当空原文，跟下个版本发；智谱、MiniMax 的静音检测没 key 未复测
+- [PR #17 百炼没认出字](speakmore-pr17-bailian-no-words.md) — 外部贡献；qwen-audio、fun-asr 没认出字回 400，10-24 合并并补成当空原文，跟下个版本发
 - [翻译功能的形态](speakmore-translation-features.md) — 语音输入、语音翻译、划词翻译；规格在 .playwright-mcp/translate-proto/README.md；随 0.16.0 发布；引导重做随 0.17.0 发布、README 三位一体、#16、官网都在 10-23 做完
