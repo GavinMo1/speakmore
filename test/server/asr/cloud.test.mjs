@@ -78,24 +78,26 @@ test("qwen-audio、fun-asr 走百炼自己的接口：写明格式和采样率�
   assert.deepEqual(body.parameters, { format: "wav", sample_rate: "16000" });
 });
 
-test("百炼静音检测：无识别文字不阻止预热，但真实录音仍然报错", async () => {
-  for (const body of [
-    { code: "CLIENT_ERROR", message: "ASR_RESPONSE_HAVE_NO_WORDS" },
-    { code: "ASR_RESPONSE_HAVE_NO_WORDS", message: "没有识别文字" },
-  ]) {
-    const { fetch } = fakeFetch(400, body);
-    const transcriber = await createCloudTranscriber({
-      choice: { vendor: "bailian", model: "qwen-audio-3.1-asr-flash" },
-      apiKey: "k",
-      log,
-      fetch,
-    });
-    await transcriber.warmUp();
-    await assert.rejects(transcriber.transcribe(new Float32Array(16_000).fill(0.1)));
+test("百炼回 400 说没认出字：当成原文是空的，检测照样通过，录音交出空文字（上面报“没有听到声音”）", async () => {
+  for (const model of ["qwen-audio-3.1-asr-flash", "fun-asr-flash-2026-06-15"]) {
+    for (const body of [
+      { code: "CLIENT_ERROR", message: "ASR_RESPONSE_HAVE_NO_WORDS" },
+      { code: "ASR_RESPONSE_HAVE_NO_WORDS", message: "没有识别文字" },
+    ]) {
+      const { fetch } = fakeFetch(400, body);
+      const transcriber = await createCloudTranscriber({
+        choice: { vendor: "bailian", model },
+        apiKey: "k",
+        log,
+        fetch,
+      });
+      await transcriber.warmUp();
+      assert.deepEqual(await transcriber.transcribe(new Float32Array(16_000).fill(0.1)), { text: "" });
+    }
   }
 });
 
-test("百炼静音检测：密钥、权限、欠费、模型及其他错误仍向上抛", async () => {
+test("百炼的其他报错：密钥、权限、欠费、模型、限流、别的 400，检测和录音都照常往上抛", async () => {
   for (const [status, code, message] of [
     [401, "InvalidApiKey", "invalid key"],
     [403, "Forbidden", "forbidden"],
@@ -109,6 +111,10 @@ test("百炼静音检测：密钥、权限、欠费、模型及其他错误仍�
     const { fetch } = fakeFetch(status, { code, message });
     const client = createClient({ apiKey: "k", model: "qwen-audio-3.1-asr-flash", fetch });
     await assert.rejects(client.ping({}), { status, code });
+    await assert.rejects(client.transcribe({ wav: encodeWav(new Float32Array(16_000).fill(0.1), 16_000) }), {
+      status,
+      code,
+    });
   }
   const client = createClient({
     apiKey: "k",

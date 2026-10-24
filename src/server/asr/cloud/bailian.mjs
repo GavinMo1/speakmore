@@ -14,7 +14,9 @@ import { cloudModelOf, findCloudTranscriber } from "./vendors.mjs";
 //              原文在 choices[0].message.content，用量的 prompt_tokens 是音频 token、seconds 是时长
 //   dashscope  qwen-audio、fun-asr：/services/aigc/multimodal-generation/generation，要写明 format 和 sample_rate，
 //              关掉流式（X-DashScope-SSE: disable）。整段原文在 output.text（output.output.sentence 是带时间戳的分词，用不上），
-//              用量是 usage.duration（秒），qwen-audio-3.1 另报 input_tokens、output_tokens
+//              用量是 usage.duration（秒），qwen-audio-3.1 另报 input_tokens、output_tokens。
+//              没认出字（静音、只有杂音）时不回空原文，回 400 CLIENT_ERROR "ASR_RESPONSE_HAVE_NO_WORDS"
+//              （2026-10-24 实测这三个型号都这样，PR #17 报的），当成原文是空的
 // 价目和记账在 prices/bailian.mjs。
 //
 // 用户词典：每个型号怎么收写在清单里（vendors.mjs 的 vocabulary），这里按做法把挑好的词放进请求（VOCABULARY）。
@@ -26,6 +28,14 @@ const NAME = "Bailian";
 
 /** 验证 key 用的 0.1 秒静音。转出来是空的，key、模型名、开没开通都会在这里暴露 */
 const SILENCE = encodeWav(new Float32Array(1_600), 16_000);
+
+const NO_WORDS = "ASR_RESPONSE_HAVE_NO_WORDS";
+
+/** 百炼自己那套接口说没认出字：错误码是 CLIENT_ERROR、原话是这一句，或者错误码直接就是这一句 */
+const heardNoWords = (error) =>
+  error instanceof DashScopeError &&
+  error.status === 400 &&
+  (error.code === NO_WORDS || (error.code === "CLIENT_ERROR" && error.said.trim() === NO_WORDS));
 
 const dataUri = (wav) => `data:audio/wav;base64,${wav.toString("base64")}`;
 
@@ -87,17 +97,24 @@ const WIRES = {
   },
 
   async dashscope({ apiKey, model, wav, signal, fetch, extra }) {
-    const payload = await post(`${DASHSCOPE_URL}/services/aigc/multimodal-generation/generation`, {
-      apiKey,
-      headers: { "X-DashScope-SSE": "disable" },
-      body: {
-        model,
-        input: { messages: [...(extra.messages ?? []), audioMessage(wav)] },
-        parameters: { format: "wav", sample_rate: "16000", ...extra.parameters },
-      },
-      signal,
-      fetch,
-    });
+    let payload;
+    try {
+      payload = await post(`${DASHSCOPE_URL}/services/aigc/multimodal-generation/generation`, {
+        apiKey,
+        headers: { "X-DashScope-SSE": "disable" },
+        body: {
+          model,
+          input: { messages: [...(extra.messages ?? []), audioMessage(wav)] },
+          parameters: { format: "wav", sample_rate: "16000", ...extra.parameters },
+        },
+        signal,
+        fetch,
+      });
+    } catch (error) {
+      // 验 key 的静音、用户按了热键没说话都会碰到：原文是空的，不是出错
+      if (heardNoWords(error)) return { text: "", usage: usage(model, { seconds: 0 }) };
+      throw error;
+    }
     const reported = payload?.usage ?? {};
     return {
       text: payload?.output?.text ?? payload?.output?.output?.text,
@@ -127,22 +144,8 @@ export function createClient({ apiKey, model, fetch = globalThis.fetch }) {
   if (listed?.vocabulary && !place)
     throw new Error(`百炼的 ${wireId} 接口不会放 ${listed.vocabulary.kind} 这种词表（${model}）`);
   return {
-    async ping({ signal }) {
-      try {
-        return await wire({ apiKey, model, wav: SILENCE, signal, fetch, extra: {} });
-      } catch (error) {
-        // 静音探测可能被当成“无识别文字”拒绝；只在这里接受，真实录音仍按原样报错。
-        if (
-          error instanceof DashScopeError &&
-          error.status === 400 &&
-          (error.code === "ASR_RESPONSE_HAVE_NO_WORDS" ||
-            (error.code === "CLIENT_ERROR" && error.said.trim() === "ASR_RESPONSE_HAVE_NO_WORDS"))
-        ) {
-          return { usage: usage(model, { seconds: 0 }) };
-        }
-        throw error;
-      }
-    },
+    // 验 key 只看回没回 2xx：拿静音去问，原文是空的、没有都正常（没认出字的 400 在接口那层已经当成空原文）
+    ping: ({ signal }) => wire({ apiKey, model, wav: SILENCE, signal, fetch, extra: {} }),
     async transcribe({ wav, signal, vocabulary = [] }) {
       const extra = place && vocabulary.length > 0 ? place(vocabulary) : {};
       const reply = await wire({ apiKey, model, wav, signal, fetch, extra });
