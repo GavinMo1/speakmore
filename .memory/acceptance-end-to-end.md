@@ -17,7 +17,7 @@ metadata:
 - 能自动化的就接进流程（比如 ship 里加一步启动冒烟），不靠记得。
 - 不同步干等（2026-10-18 他说的："打 Windows 会快……打出来的时候你就直接并行地……去验证，不要同步阻塞"）：ship 里 Windows 包先打好，一出来就拷到 Windows 开发机上跑端到端；Mac 的 dmg 公证完一出来就挂载验，都在后台挂着，和上传并行。
 - Mac 上启动验证的 SPEAKMORE_HOME 要短：会话临时目录的路径太长，超过控制套接字 103 字节的上限，App 照设计报错退出、不写日志。用 `mktemp -d "$TMPDIR/sm.XXXX"`，验完删掉。
-- **发版验收先找现成的脚本，别重写**（10-24 他问"为啥你要再写一份"）：0.13.1 写过两份，在那次后台会话的临时目录（job 4b3f4054 的 tmp）下的 `accept-mac.sh`、`accept-win.ps1`，0.17.1 拷了一份只改版本号照用（job abb1c590 的 tmp；找不到就按文件名在家目录里搜）。Windows 那份整个经 SSH 跑、不碰桌面会话，不用为它问他；开发机要 `powershell -NoProfile -ExecutionPolicy Bypass -File` 才跑得起来。临时目录会被清掉，要长期留着得挪进仓库（还没挪，等他定）。
+- **发版验收用仓库里的两份脚本，别重写**（10-24 他问"为啥你要再写一份"，之后挪进了仓库）：`scripts/release/accept-mac.sh`、`scripts/release/accept-win.sh`（后者把 accept-win.ps1 加上 BOM 传到开发机、用 `-ExecutionPolicy Bypass -File` 跑，从前一个发过的版本升上来）。部署完官网就跑，ship 结尾也会提示。Windows 那份整个经 SSH 跑、不碰桌面会话，不用为它问他。
 - issue 等正式版发出、各平台验收都过了再回复并关闭，中途不回（10-18 他说的）。
 
 相关：[[speakmore-release-on-cos]]、[[typeless-clone-as-real-product]]

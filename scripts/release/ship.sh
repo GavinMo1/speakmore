@@ -89,3 +89,4 @@ for manifest in $(node -p 'Object.values(require("./dist/release/channel.json").
     fail "下载地址上的清单 store/${manifest} 和本机的不一样"
 done
 echo "发好了：${tag}。下载地址上的 channel.json、五份更新清单、Mac 两个包、两个安装包、Windows 的包和两个安装脚本都对得上。"
+echo "接着部署官网（cd website && npm run deploy），再验收线上的包：scripts/release/accept-mac.sh、scripts/release/accept-win.sh"
