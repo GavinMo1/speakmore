@@ -1,5 +1,11 @@
 import { encodeWav } from "../../audio/pcm.mjs";
-import { COMPATIBLE_URL, classifyError as classifyDashScope, DASHSCOPE_URL, post } from "../../providers/dashscope.mjs";
+import {
+  COMPATIBLE_URL,
+  classifyError as classifyDashScope,
+  DASHSCOPE_URL,
+  DashScopeError,
+  post,
+} from "../../providers/dashscope.mjs";
 import { costOf } from "./prices/bailian.mjs";
 import { cloudModelOf, findCloudTranscriber } from "./vendors.mjs";
 
@@ -121,8 +127,22 @@ export function createClient({ apiKey, model, fetch = globalThis.fetch }) {
   if (listed?.vocabulary && !place)
     throw new Error(`百炼的 ${wireId} 接口不会放 ${listed.vocabulary.kind} 这种词表（${model}）`);
   return {
-    // 验 key 只看回没回 2xx：拿静音去问，原文是空的、没有都正常
-    ping: ({ signal }) => wire({ apiKey, model, wav: SILENCE, signal, fetch, extra: {} }),
+    async ping({ signal }) {
+      try {
+        return await wire({ apiKey, model, wav: SILENCE, signal, fetch, extra: {} });
+      } catch (error) {
+        // 静音探测可能被当成“无识别文字”拒绝；只在这里接受，真实录音仍按原样报错。
+        if (
+          error instanceof DashScopeError &&
+          error.status === 400 &&
+          (error.code === "ASR_RESPONSE_HAVE_NO_WORDS" ||
+            (error.code === "CLIENT_ERROR" && error.said.trim() === "ASR_RESPONSE_HAVE_NO_WORDS"))
+        ) {
+          return { usage: usage(model, { seconds: 0 }) };
+        }
+        throw error;
+      }
+    },
     async transcribe({ wav, signal, vocabulary = [] }) {
       const extra = place && vocabulary.length > 0 ? place(vocabulary) : {};
       const reply = await wire({ apiKey, model, wav, signal, fetch, extra });
